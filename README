@@ -1,44 +1,70 @@
 Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
-This file is part of Latproc
+See the LICENCES file for license information.
 
-Latproc is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-Latproc is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Latproc; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-Latproc was sponsored by O'Connor Wooltech Pty Ltd 
+Martin Leadbeater,  martin.leadbeater@gmail.com
 
 
 
 
+   Latproc - Language and Tools for Process Control
+
+   Introduction (TBD)
+
+This software provides a high level, finite statemachine-based language 
+that can be used to describe process control systems. Currently, the
+system only supports one hardware interface; the Beckhoff EtherCat
+system (http://www.beckhoff.de/) through the IgH EtherCAT Master for Linux
+(http://www.etherlab.org/en/ethercat/index.php)
 
 
-Latproc - Language and Tools for Process Control
+   Instructions
 
-Introduction (TBD)
+   Note: this software requires that the following software be installed:
+
+	libmodbus (http://libmodbus.org/)  - for communication with modbus/tcp terminals
+
+	zeromq (http://www.zeromq.org/) - for inter-program messaging
 
 
-Instructions
+   Part A - Building Latproc tools for standalone experimentation
+
+The instructions in this part build the Clockwork programming language interpreter
+without the need for the IgH EtherCAT Master.
+
+Note, the Makefile used here assumes libzmq is installed in /usr/local/
+
 
 * pull the latproc project from git
 
-  git clone..
+  git clone git://github.com/latproc/iod.git latproc
 
-* extract the etherlab kit to the same location
+* change to the latproc directory and build the interpreter
 
-  tar xjf etherlab-bundle-...
+  cd latproc/iod
+  make -f Makefile.cw
   
-configure and build etherlabs ethercat component
+
+
+   Part B - Setting up the IgH EtherCAT software to be used but the Latproc software
+
+
+The following instructions are brutally terse at present and we apologise
+for that. Please watch this space for more precise instructions.
+
+* pull the latproc project from git
+
+  git clone git://github.com/latproc/iod.git latproc
+
+* extract the etherlab kit from the EtherLab website:
+    see http://www.etherlab.org/en/ethercat/index.php
+
+  tar/hg/... etc
+
+  Note: The following instructions assume your extract was placed into 
+	etherlab-bundle-1.10/ethercat-1.5.1
+  
+* configure and build etherlabs ethercat component
 
   cd etherlab-bundle.../ethercat-...
   ./configure --enable-generic --enable-e1000e=no --enable-8139too=no
@@ -46,23 +72,33 @@ configure and build etherlabs ethercat component
 
   (your configure options may be different from ours)
 
-create a build directory for a local build of the etherlab bits we need.
+* create a build directory for a local build of the etherlab bits we need.
+  Once built, we link against the IgH EtherCAT Master tool files and these do not
+  need to be rebuilt until you update the IgH software.
 
   mkdir tool
   cd tool
+
+* create a makefile to build object files for the tool bits we need
+
   EL=../etherlab-bundle-1.10/ethercat-1.5.1 \
   CFLAGS="-I$EL/include -I$EL/master -I$EL/tool" ../createmake $EL/tool
+
+* build the object files
+
   make
   
-change to the latproc directory and make a symbolic link that points to
-the ethercat master and tools from the etherlab kit
+* change to the latproc directory and make a symbolic link that points 
+to the ethercat master and tools from the etherlab kit
 
   cd latproc
   ln -s ../../etherlab-bundle-1.10/ethercat-1.5.1/ ethercat
 
-build the latproc tools
+* build the latproc tools
 
+  cd iod
   make
   
+
 
 

@@ -17,11 +17,12 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = iod beckhoffd iosh persistd modbusd cw
+APPS = iosh persistd cw   # modbusd 
+SIMULATED=-DEC_SIMULATOR=1
+#SIMULATED = -I/usr/local/include -Iethercat/include/ -Lethercat/lib/.libs -lethercat
+#SIMULATED = $(SIMULATED) -Iethercat -Iethercat/master -Iethercat/include -Iethercat/tool 
 
-#SIMULATED=-DEC_SIMULATOR=1
-SIMULATED=-I/usr/local/include -Iethercat/include/ -Lethercat/lib/.libs -lethercat
-CFLAGS = $(SIMULATED) -Iethercat -Iethercat/master -Iethercat/include -Iethercat/tool -g -pedantic -Wall #-pg
+CFLAGS = $(SIMULATED) -g -pedantic -Wall #-pg
 CC = g++ $(CFLAGS)
 LDFLAGS = -L/usr/local/lib  #-pg
 TOOLLIB = ../../tool/build/*.o
