@@ -1,0 +1,109 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+Light MACHINE bulb, controller {
+
+	OPTION tab Outputs;
+	OPTION startup_enabled false;
+
+    #on WHEN controller IS a OR controller IS c;
+    on WHEN controller.status IS On;
+    off DEFAULT;
+
+    ENTER on { SET bulb TO on; }
+    ENTER off { SET bulb TO off; }
+}
+
+Cycle MACHINE input {
+
+a INITIAL;
+b STATE;
+c STATE;
+
+RECEIVE input.on_enter { SEND next TO SELF; }
+ENTER a { LOG "ENTER a"; status := "On"; }
+ENTER b { status := "Off"; }
+ENTER c { status := "On"; }
+
+stepping DURING next { LOG "a->b"; }
+
+TRANSITION a TO b USING next;
+TRANSITION b TO c USING next;
+TRANSITION c TO a USING next;
+}
+
+cycle Cycle (tab:Outputs) flash1;
+light Light EL2008_OUT_2, cycle;
+
+MODULES {
+    Beckhoff_EK1100 (position:0) ;
+    Beckhoff_EK1814 (position:3) ;#6000 7000;  # 4 IN, 4 OUT 
+    Beckhoff_EL1008 (position:1) ;#6000;  # 8 IN
+    Beckhoff_EL2008 (position:2) ;#7000;  # 8 OUT 
+}
+
+EL2008_OUT_1    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
+EL2008_OUT_2    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 2;
+
+Timer MACHINE {
+	started FLAG;
+	
+	running WHEN started IS on;
+	idle DEFAULT;
+
+	RECEIVE stop { timer := TIMER; }
+}
+
+Flash MACHINE output(delay:500) {
+	OPTION tab Outputs;
+
+	timer Timer(tab:Outputs);
+
+    started_flag FLAG (type:FLAG, tab:Outputs);
+    error_flag FLAG (type:FLAG, tab:Outputs);
+
+#    timed_out WHEN started_flag IS on && TIMER >= 1000;
+    on WHEN started_flag != off && output IS on;
+    off WHEN started_flag != off && output IS off;
+    error WHEN error_flag IS on;
+
+    ready DEFAULT;
+
+    starting DURING start { SET started_flag TO on; }
+    stopping DURING stop { SET started_flag TO off; }
+
+    TRANSITION ready TO on USING start;
+    TRANSITION on,off TO ready USING stop;
+
+    RECEIVE on_enter { 
+		LOG "on"; 
+		WAIT output.delay; 
+		SET output TO off ;
+		SEND stop TO timer;
+	}
+    RECEIVE off_enter { LOG "off"; WAIT output.delay; SET output TO on; time := timer.timer; SEND start TO Timer; }
+}
+
+#flash1 Flash O_GrabNo1JawOpen;
+flash1 Flash EL2008_OUT_1;
+#flash2 Flash EL2008_OUT_2;
+#flash3 Flash EL2008_OUT_3;
+#flash4 Flash EL2008_OUT_4;
+#flash5 Flash EL2008_OUT_5;
+#flash6 Flash EL2008_OUT_6;
+

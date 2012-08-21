@@ -1,0 +1,45 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+val VARIABLE 7;
+ 
+ExprTest  MACHINE  {
+    y WHEN val.VALUE % 2 == 1 && 1==1 && 1==2 || 2==2 && 3==2;
+    w WHEN 4*3 == val+4;
+    x WHEN (2*3) == (val+4);
+    a WHEN val IS 1;
+    b WHEN  val IS  last +1;
+    
+    ENTER a { 
+        LOG "ENTER state a"; 
+        last := 2;
+        val := val + 1;
+		x := 5 / 2;
+    }
+    ENTER x { 
+        LOG "ENTER state x";
+        val := val + 1; 
+    }
+    ENTER b { LOG "ENTER state b" }
+
+    ENTER INIT { last := 1; val := 1; }
+}
+expr_test 
+ExprTest
+(tab:Tests)
+;

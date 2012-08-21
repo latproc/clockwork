@@ -1,0 +1,47 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+ONTIMER MACHINE (timeout:1000) trigger {
+	timer_flag FLAG;
+	expired WHEN timer_flag IS on && TIMER >= timeout;
+
+	running WHEN timer_flag IS on;
+	stopped WHEN timer_flag IS off;
+
+
+	resetting DURING reset {
+		SET timer_flag TO off;
+	}
+
+	RECEIVE	tigger_on {
+		SET timer_flag TO on;	
+	}
+
+	TRANSITION expired,running TO stopped USING reset;
+}
+
+TIMER MACHINE (timeout:1) {
+	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);
+	running STATE;
+	stopped INITIAL;
+
+	starting DURING start { }
+
+	TRANSITION expired,stopped TO running USING start;
+}
+

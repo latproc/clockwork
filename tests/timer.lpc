@@ -1,0 +1,65 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+#../tests/timer.lpc /opt/latproc/config/trunk/Lib/generic_timers.lpc
+
+Timer MACHINE (timeout:1) {
+	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);
+	running STATE;
+	stopped INITIAL;
+
+	COMMAND start { }
+	TRANSITION expired,stopped TO running ON start;
+	TRANSITION running,expired,stopped TO stopped ON reset;
+}
+
+s_timer Timer(tab:Test, timeout:2500);
+SimpleTest MACHINE timer {
+    Start STATE;
+    Done WHEN timer IS expired;
+    TRANSITION INIT TO Start ON go;
+    COMMAND go { SEND start TO timer }
+}
+
+s_test SimpleTest(tab:Test) s_timer;
+
+Tester MACHINE {
+
+timer Timer(tab:Test,timeout:1);
+
+	one WHEN timer IS running && timer.TIMER < 1000;
+	two WHEN timer IS running && timer.TIMER < 2000;
+	three WHEN timer IS running && timer.TIMER < 3000;
+	done WHEN timer IS  expired;
+    Ready DEFAULT;
+	COMMAND start { 
+		timer.timeout := 3000;
+		SEND start TO timer;
+	}
+    ENTER one { LOG "one"; }
+    ENTER two { LOG "two"; }
+    ENTER three { LOG "three"; }
+	RECEIVE timer.expired_enter { LOG "expired"; }
+	RECEIVE timer.running_enter { LOG "running"; }
+    ENTER Ready { LOG "ready";  }
+	TRANSITION Ready TO Ready ON start;
+    ENTER done { LOG "done"; }
+}
+
+test Tester(tab:Test);
+

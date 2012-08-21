@@ -1,0 +1,90 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+MODULES {
+    Beckhoff_EK1100 (position:0) ;
+    Beckhoff_EK1814 (position:3) ;#6000 7000;  # 4 IN, 4 OUT 
+    Beckhoff_EL1008 (position:1) ;#6000;  # 8 IN
+    Beckhoff_EL2008 (position:2) ;#7000;  # 8 OUT 
+}
+
+EL2008_OUT_1    POINT (type:Output, export, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
+EL2008_OUT_2    POINT (type:Output, export:rw, tab:Outputs, image:output64x64) Beckhoff_EL2008, 2;
+
+#EL2008_OUT_1 FLAG(tab:Outputs);
+#EL2008_OUT_2 FLAG(tab:Outputs);
+
+A CONSTANT(tab:Tests, export:reg) 123;
+B VARIABLE(tab:Tests, export:rw_reg) 456;
+C CONSTANT(tab:Tests, export:reg32) 554343;
+D VARIABLE(tab:Tests, export:rw_reg32) 2345264;
+E CONSTANT(tab:Tests, export:str) "This is a message";
+
+Monitor MACHINE other {
+
+	on WHEN other.started_flag IS on;
+	off DEFAULT;
+
+}
+monitor Monitor(tab:Outputs) flash1;
+
+Flash MACHINE (delay:500)output {
+
+	EXPORT STATES on,off,error,ready;
+	EXPORT COMMANDS start, stop;
+	EXPORT READWRITE 32BIT delay;
+	OPTION export rw;
+	OPTION delay 500;
+
+    started_flag FLAG(tab:Outputs, export:ro);
+    error_flag FLAG(tab:Outputs, export:ro);
+
+#    timed_out WHEN started_flag IS on && TIMER >= 1000;
+    on WHEN started_flag != off && output IS on;
+    off WHEN started_flag != off && output IS off;
+    error WHEN error_flag IS on;
+
+    ready DEFAULT;
+
+    starting DURING start { SET started_flag TO on; }
+    stopping DURING stop { SET started_flag TO off; }
+
+    TRANSITION ready TO on USING start;
+    TRANSITION on,off TO ready USING stop;
+
+    RECEIVE on_enter FROM SELF { 
+		LOG "on"; 
+		WAIT delay; 
+		SET output TO off ;
+	}
+    RECEIVE off_enter FROM SELF { LOG "off"; WAIT delay; t := started_flag.TIMER; SET output TO on; }
+
+	ENTER INIT {
+		started_flag.tab := tab;
+		error_flag.tab := tab;
+	}
+}
+
+#flash1 Flash (type:Light, tab:Outputs) O_GrabNo1JawOpen;
+flash1 Flash (type:Light, tab:Outputs) EL2008_OUT_1;
+#flash2 Flash (type:Light, tab:Outputs) EL2008_OUT_2;
+#flash3 Flash (type:Light, tab:Outputs) EL2008_OUT_3;
+#flash4 Flash (type:Light, tab:Outputs) EL2008_OUT_4;
+#flash5 Flash (type:Light, tab:Outputs) EL2008_OUT_5;
+#flash6 Flash (type:Light, tab:Outputs) EL2008_OUT_6;
+

@@ -1,0 +1,3 @@
+#!/bin/sh
+killall mini_httpd
+/opt/latproc/bin/mini_httpd -C /opt/latproc/www/mini_httpd.conf

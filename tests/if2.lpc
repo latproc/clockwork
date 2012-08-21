@@ -1,0 +1,114 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+# this test checks whether a transition completes to a final
+# state when the test command is received
+
+# a stable state test is used to move to the error state with a state lock to hold the program in the state.
+
+TransitionCompleteTest MACHINE (val:0){
+
+	done WHEN x == 1;
+	error WHEN SELF IS testing || SELF IS error;
+
+	ENTER INIT { x := 0; }
+	TRANSITION INIT TO done USING test;
+
+	testing DURING test { LOG "testing"; x := val;}
+
+}
+
+ift1 TransitionCompleteTest(tab:Tests, note:"expect state error");
+ift2 TransitionCompleteTest(tab:Tests, val:1, note:"expect state done");
+
+IfElseTest1 MACHINE {
+
+    ENTER INIT { 
+        IF ( 1 == 2) {
+            result := "1==2";
+        }
+        ELSE {
+            result := "1!=2";
+        }
+    }
+}
+
+IfElseTest2 MACHINE {
+
+    ENTER INIT {
+        # result_a should never be set
+        IF (1==2) {
+            result_a := "1==2"
+        };
+        #if following an if
+        IF (1!=2) { result_b := "1!=2" };
+        # if with an else clause, following an if
+        IF (2==3) {
+            result_c := "2==3"
+        }
+        ELSE {
+            result_c := "2!=3"
+        }
+    }
+}
+
+NestedIf MACHINE {
+    ENTER INIT {
+        IF (1==1) {
+            IF ("a" == "b") {
+                result := "'a'=='b'"
+            }
+            ELSE {
+                result := "'a'!='b'"
+            }
+        }
+    }
+
+}
+
+a IfElseTest1(tab:Tests);
+b IfElseTest2(tab:Tests);
+c NestedIf(tab:Tests);
+
+# the follow checks that global variables can be used in IF statements
+
+gx VARIABLE (tab:Tests) 7;
+gy VARIABLE (tab:Tests) 4;
+
+IfGlobal MACHINE {
+    GLOBAL gx, gy;
+    a WHEN gx % gy IS 2;
+    b DEFAULT;
+    c STATE;
+    
+    stepping DURING next { gx := gx + 1 }
+    ENTER c { 
+        IF (gx % gy == 2) {
+            msg := "Should move to state 'a'"
+        }
+        ELSE {
+            msg := ""
+        }
+    }
+    TRANSITION b TO c USING next;
+}
+ifglobal IfGlobal (tab:Tests, msg:"");
+
+
+
+

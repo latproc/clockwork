@@ -1,0 +1,77 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+# This examples defines a shared machine that can only be
+# allocated to a single machine at a time. 
+
+Shared MACHINE {
+	free INITIAL;
+	in_use STATE;
+}
+shared Shared(tab:Tests);
+
+# the master machine takes two user machines that use the shared object
+# and attempts to get them both to engages simultaneously
+
+user1 User (tab:Tests) shared;
+user2 User (tab:Tests) shared;
+
+master Master (tab:Tests) user1, user2;
+
+Master MACHINE a, b {
+
+	idle DEFAULT;
+
+	starting DURING go {
+		SEND start TO a;
+		SEND start TO b;
+	}
+	TRANSITION idle TO idle USING go;
+}
+
+User MACHINE shared {
+
+	action FLAG;
+	locked WHEN action != on && shared != free;
+	idle WHEN action IS off;
+	busy WHEN action IS on;
+
+	starting DURING start {
+		LOG "starting";
+		LOCK shared;
+		SET shared TO in_use;
+		SET action TO on; 
+		WAIT 200;
+	}
+
+	finishing DURING stop {
+		LOG "finishing";
+		SET shared TO free;
+		SET action TO off;
+		UNLOCK shared;
+	}
+		
+	ENTER busy { LOG "busy"; }
+	ENTER idle { LOG "idle"; }
+	ENTER locked { LOG "locked" }
+
+	TRANSITION idle TO busy USING start;
+	TRANSITION busy TO idle USING stop;
+}
+
+

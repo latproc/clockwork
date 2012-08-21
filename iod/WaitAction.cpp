@@ -1,0 +1,122 @@
+/*
+  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+
+  This file is part of Latproc
+
+  Latproc is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version 2
+  of the License, or (at your option) any later version.
+  
+  Latproc is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with Latproc; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+
+#include "WaitAction.h"
+#include "DebugExtra.h"
+#include "Logger.h"
+#include "IOComponent.h"
+#include "Scheduler.h"
+#include "FireTriggerAction.h"
+#include "MachineInstance.h"
+
+WaitAction::WaitAction(MachineInstance *mi, WaitActionTemplate &wat) 
+: Action(mi), wait_time(wat.wait_time), property_name(wat.property_name) {
+}
+
+Action *WaitActionTemplate::factory(MachineInstance *mi) { 
+  return new WaitAction(mi, *this); 
+}
+
+Action *WaitForActionTemplate::factory(MachineInstance *mi) { 
+    return new WaitForAction(mi, *this); 
+}
+
+Action::Status WaitAction::run() {
+	
+	Value v;
+	owner->start(this);
+    if (wait_time == -1) {
+        // lookup property
+		if (property_name.find('.') != std::string::npos) {
+			v = owner->getValue(property_name);
+			DBG_M_PROPERTIES << "looking up property " << property_name << " " << ": " << v << "\n";
+		}
+		else
+	        v = owner->getValue(property_name.c_str());
+        if (v.kind != Value::t_integer) {
+            wait_time = 0;
+            DBG_M_PROPERTIES << "Error: expected an integer value for wait_time, got: " << v << "\n";
+        }
+        else
+            wait_time = v.iValue;
+    }
+    gettimeofday(&start_time, 0);
+    if (wait_time == 0) {
+		status = Complete;
+		owner->stop(this);
+	}
+	else {
+		status = Running;
+		trigger = Trigger("Timer");
+		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, &trigger)));
+		assert(!trigger.fired());
+	}
+    DBG_M_PROPERTIES << "waiting " << wait_time << "\n";
+    return status;
+}
+
+Action::Status WaitAction::checkComplete() {
+/*
+    struct timeval now;
+    gettimeofday(&now, 0);
+    long delta = get_diff_in_microsecs(&now, &start_time);
+	if (delta >= wait_time * 1000) { status = Complete; owner->stop(this); }
+//    else DBG_M_ACTIONS << "still waiting " << (wait_time*1000-delta) << "\n";
+*/
+	if (trigger.fired()) {
+		status = Complete;
+		owner->stop(this);
+	}
+    return status;
+}
+
+std::ostream &WaitAction::operator<<(std::ostream &out) const {
+    return out << "WaitAction " << wait_time;
+}
+
+
+Action::Status WaitForAction::run() {
+	owner->start(this);
+    machine = owner->lookup(target.get());
+    if (!machine) {
+        //DBG_M_ACTIONS << "failed to find machine " << target.get() << "\n";
+		status = Failed;
+		owner->stop(this);
+        return status;
+    }
+	status = Running;
+	return checkComplete();
+}
+
+Action::Status WaitForAction::checkComplete() {
+    if (status == Complete || status == Failed) return status;
+	if ( machine->getCurrent().getName() == state.getName()) {
+		status = Complete;
+		owner->stop(this);
+	}
+	else
+		status = Running;
+    return status;
+}
+
+std::ostream &WaitForAction::operator<<(std::ostream &out) const {
+    return out << "WaitForAction " << state.getName();
+}
+

@@ -1,0 +1,162 @@
+%{
+#include <stdlib.h>
+#include "latprocc.h"
+#include "y.tab.h"
+void yyerror(const char *);
+static char *buf;
+static int buflen = 0;
+static char *bufp;
+extern YYSTYPE yylval;
+    int yycharno;
+
+void append_char(int ch);
+%}
+%x STRING
+%x COMMENT
+%x HASHCOMMENT
+
+%%
+
+\n              { yylineno++; yycharno = 1; }
+
+"<<"                return CONCAT;
+16BIT               return WORD;
+32BIT               return DOUBLEWORD;
+AND                 return AND;
+AT                  return AT;
+BECOMES             return BECOMES;
+BY                  return BY;
+CALL				return CALL;
+COMMAND				return COMMAND;
+COMMANDS			return COMMANDS;
+CONDITION           return CONDITION;
+DEC                 return DEC;
+DEFAULT             return DEFAULT;
+DEFAULTS            return DEFAULTS;
+DISABLE             return DISABLE;
+DURING              return DURING;
+ELSE				return ELSE;
+ENABLE              return ENABLE;
+ENTER               return ENTER;
+EXECUTE				return EXECUTE;
+EXPORT              return EXPORT;
+FROM				return FROM;
+GLOBAL              return GLOBAL;
+GROUP               return GROUP;
+INC                 return INC;
+IF					return IF;
+INITIAL             return INITSTATE;
+IS                  return EQ;
+LOCK				return LOCK;
+LOG                 return LOG;
+MACHINE             return STATEMACHINE;
+MODULE              return MODULE;
+MODULES             return MODULES;
+NOT                 return NOT;
+ON					return ON;
+OPTION              return OPTION;
+OR                  return OR;
+PROPERTY			return PROPERTY;
+READONLY            return READONLY;
+READWRITE          return READWRITE;
+RO                  return READONLY;
+RW                  return READWRITE;
+RECEIVE             return RECEIVE;
+RESUME              return RESUME;
+SEND                return SEND;
+SET                 return SET;
+SHUTDOWN			return SHUTDOWN;
+STATE               return STATE;
+STATES              return STATES;
+STRING              return STRINGTYPE;
+TAG					return TAG;
+TO                  return TO;
+TRANSITION          return TRANSITION;
+UNLOCK				return UNLOCK;
+USING               return USING;
+WAIT                return WAIT;
+WAITFOR             return WAITFOR;
+WHEN                return WHEN;
+
+[A-Za-z][A-Za-z0-9_.]*       { 
+    yylval.sVal = strdup(yytext);
+    return SYMBOL;
+}
+
+0           {
+    yylval.iVal = atoi(yytext);
+    return INTEGER;
+}
+
+[1-9][0-9]* {
+    yylval.iVal = atoi(yytext);
+    return INTEGER;
+}
+
+"/*"			BEGIN COMMENT;
+<COMMENT>"*/"	BEGIN 0;
+<COMMENT>\n		{yylineno++; yycharno=1; }
+<COMMENT>.		;
+
+"#"             BEGIN HASHCOMMENT;
+<HASHCOMMENT>\n     { yylineno++; yycharno=1; BEGIN 0; }
+<HASHCOMMENT>.		;
+
+\"			    {  /*"*/	
+                    BEGIN STRING; 
+					if (!buf) 
+					{ 
+					     buf = (char *)malloc(20); 
+					     /*fprintf(stderr, "malloced %lx\n", (long)buf);*/ 
+					     buflen = 20; 
+					}
+					bufp = buf;
+					*bufp = 0;
+ 				}
+<STRING>\\n		{ append_char('\n'); }
+<STRING>\\r		{ append_char('\r'); }
+<STRING>\\t		{ append_char('\t'); }
+<STRING>\\\"	{ /*"*/ append_char('\"'); }
+<STRING>\"		{ /*"*/ BEGIN 0; yylval.sVal = buf; buf = NULL; return STRINGVAL; }
+<STRING>\n		{ append_char('\n'); yylineno++; yycharno=1; }
+<STRING>.		{ append_char(*yytext); }
+
+[-()=+*/;{}.%] {
+    return *yytext;
+}
+
+"["             return BEGINPROP;
+"]"             return ENDPROP;
+":"             return PROPSEP;
+","             return COMMA;
+">="            return GE;
+"<="            return LE;
+"<"             return LT;
+">"             return GT;
+"=="            return EQ;
+"!="            return NE;
+"&&"            return AND;
+"||"            return OR;
+":="            return BECOMES;
+
+[ \t]+        ;       /* ignore whitespace */
+
+\'              /*' ignore single quotes */
+.               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); } 
+
+%%
+int yywrap(void) {
+    return 1;
+}
+
+void append_char(int ch)
+{
+	if (bufp - buf == buflen-1) {
+		buf = (char *)realloc(buf, buflen + 20);
+		bufp = buf + buflen-1;
+		buflen += 20;
+	}
+	*bufp++ = ch;
+	*bufp = 0;
+}
+

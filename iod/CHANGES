@@ -1,0 +1,54 @@
+2012-08-12 added machine specific debug (can be set in the iod.conf file)
+2012-08-02 fixed bug that didn't reset subcondition triggers when transitions set the state
+2012-08-02 when a machine is enabled, all of its local machines are also enabled
+2012-08-02 added optional EXECUTE clause for stable states 
+2012-08-02 added support for STRINGVAL properties as distinct from symbols
+2012-08-02 added resume capability to continue after disabling a machine
+2012-08-02 fixed incorrect modbus address allocation for discretes and coils
+2012-08-01 fixed bug with use of local VARIABLEs
+2012-08-01 fixed dbug with use of VARIABLEs in IF actions
+2012-08-01 added debug settings loaded from config file
+2012-08-01 point type is now determined by the sync manager direction
+2012-07-23 added if-else
+2012-07-23 Value can now have type t_symbol as well as t_string
+2012-07-21 added the ability to initialise persistent variables from a file
+2012-07-21 fixed a bug with setting integer properties from the io shell
+2012-07-20 added a control shell to interact with the daemon from the commandline
+2012-07-19 added persistent variables (persistent not implemented yet)
+2012-07-16 
+- added support for NOT a OP b and for a NOT op b
+- replaced scheduler priority queue with a list
+- added support for enable/disable by the statements:
+	ENABLE machine_name;
+	DISABLE machine_name;
+   there is a checkbox on the web tool to disable and enable machines.
+   When a machine is enabled it is placed into its initial state but 
+	local variables are not reset unless they are initialised 
+	in the ENTER handler for the state.
+- notify dependant machine when properties change
+2012-07-11 added IF, sending events from dependant machines
+2012-07-09 several changes due to inter-machine messaging issues
+2012-07-03 added support for ENTER state { }
+2012-07-03 machines announce state changes to zmq
+2012-07-03 added support for setting, incrementing and decrementing properties
+2012-06-30 lots of changes in the last week, mostly performance related...
+2012-06-21 added support for setting default properties on parameters to a class
+2012-06-21 added instance message queue so incoming messages do not conflict with existing handlers
+2012-06-21 added a display method for machineclass
+2012-06-21 prevent logger from executing stream methods that won't display
+2012-06-21 cleanup post-parsing code for setting up parameters etc
+2012-06-21 fix bug where active state changes were ignored in checking for machine being busy
+2012-06-21 fix bug where active receive handlers were ignored in checking for machine busy
+2012-06-20 extra debug message when SetStateAction fails to start
+2012-06-20 added code to execute commands linked to transitions
+2012-06-20 changed transition state change logic to use a state change action
+2012-06-20 added error message if setstate action can't find a machine or no such state exists
+2012-06-20 update status text when javascript reploy arrives
+2012-06-20 fixed bug in return of errors from actions
+2012-06-20 fixed bug that cause transitions to ignore commands
+2012-06-20 added command buttons and message buttons to web page
+2012-06-19 added transition support
+2012-06-19 removed MachineInstance::_name because base has a perfectly good name field
+2012-06-18 added timeout state for cylinder sample program
+2012-06-18 added TIMER to predicate evaluation
+2012-06-18 removed unused clause for commas between predicates

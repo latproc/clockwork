@@ -1,0 +1,47 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+Table MACHINE {
+    OPTION mark1 9;
+    OPTION mark2 12;
+    OPTION mark3 15;
+    EXPORT RW 16BIT mark1, mark2, mark3;
+    
+	GLOBAL index;
+	a WHEN index IS 1;
+	b WHEN index IS 2;
+	c WHEN index IS 3;
+	out_of_rante DEFAULT;
+
+	ENTER a { value := mark1; ok := "no" }
+	ENTER b { value := mark2; ok := "yes" }
+	ENTER c { value := mark3; ok := "no" }
+}
+index VARIABLE (tab:Tests) 0;
+table Table (tab:Tests);
+
+Test MACHINE {
+	GLOBAL index;
+	ENTER INIT { index := 1; }
+
+	display WHEN index > 0;
+	ENTER display { result := table.value }
+	stepping DURING next { index := index + 1 }
+	TRANSITION display TO display USING next;
+}
+test Test(tab:Tests);

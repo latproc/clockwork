@@ -1,0 +1,69 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+IfTest MACHINE timer, output {
+
+	Error WHEN SELF IS Running AND TIMER >= 1500;
+	Done WHEN timer IS expired;
+    Running WHEN timer IS running;
+    
+    ENTER Error { LOG "Delay did not complete in 1500ms"; }
+
+	ENTER Done { SET output TO off; LOG "done"; }
+	RECEIVE timer.running_enter{ LOG "timer is running"; }
+	RECEIVE timer.expired_enter{ LOG "timer has expired"; }
+
+	ENTER Running {
+	    LOG "before first if";
+		IF ( timer IS running ) {
+			SET output TO on;
+			LOG "First Test";
+		};
+		LOG "after first if";
+		IF ( timer IS expired ) {
+			SET output TO off;
+			LOG "Second Test";
+		};
+		LOG "after second if";
+	}
+	
+	ENTER INIT { SEND start TO timer ;}
+}
+
+Timer MACHINE {
+
+	expired WHEN SELF IS expired || (SELF IS running && TIMER >=3000);
+	running STATE;
+	stopped INITIAL;
+
+	starting DURING start { }
+	TRANSITION stopped TO running USING start;
+
+}
+
+iftest IfTest (tab:Tests) global_timer, EL2008_OUT_1;
+global_timer Timer(tab:Tests) ;
+#EL2008_OUT_1    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
+EL2008_OUT_1    FLAG (tab:Outputs);
+
+#MODULES {
+#    Beckhoff_EK1100 (position:0) ;
+#    Beckhoff_EK1814 (position:3) ;#6000 7000;  # 4 IN, 4 OUT 
+#    Beckhoff_EL1008 (position:1) ;#6000;  # 8 IN
+#    Beckhoff_EL2008 (position:2) ;#7000;  # 8 OUT 
+#}

@@ -1,0 +1,178 @@
+/*
+  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+
+  This file is part of Latproc
+
+  Latproc is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version 2
+  of the License, or (at your option) any later version.
+  
+  Latproc is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with Latproc; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+
+#include <iostream>
+#include <iterator>
+#include <stdio.h>
+#include <boost/program_options.hpp>
+#include <zmq.hpp>
+#include <sstream>
+#include <string.h>
+#include "Logger.h"
+#include <inttypes.h>
+#include <fstream>
+#include "symboltable.h"
+#include <list>
+#include <utility>
+#include <boost/foreach.hpp>
+
+
+namespace po = boost::program_options;
+
+class PersistentStore {
+
+public:
+	typedef std::pair<std::string, Value> PropertyPair;
+
+	PersistentStore(const std::string &filename) : file_name(filename), is_dirty(false) { 
+	}
+
+	bool dirty() { return is_dirty; }
+	void load();
+	void save();
+	std::ostream &operator<<(std::ostream &out) const;
+	void insert(std::string, std::string);
+	
+private:
+	std::map<std::string, Value>init_values;
+	std::string file_name;
+	bool is_dirty;
+};
+const char *persistent_store = "persist.dat";
+
+void PersistentStore::insert(std::string key, std::string value) {
+	init_values[key] = value;
+	is_dirty = true;
+}
+
+void PersistentStore::load() {
+	// load the store into a map
+	std::ifstream store(file_name.c_str());
+	char buf[200];
+	while (store.getline(buf, 200, '\n')) {
+		std::istringstream in(buf);
+		std::string name, property, value_str;
+		try {
+			in >> name >> property >> value_str;
+			std::string full_name = name + "." + property;
+			init_values[full_name] = value_str;
+		}
+		catch (std::exception e) {
+			std::cerr << "persistd: " << e.what() << "\n";
+		}
+	}
+	is_dirty = false;
+}
+
+std::ostream &PersistentStore::operator<<(std::ostream &out) const {
+	std::pair<std::string, Value>prop;
+	BOOST_FOREACH(prop, init_values) {
+		std::string name = prop.first;
+		size_t pos = name.rfind('.');
+		name.erase(pos);
+		std::string property = prop.first.substr(prop.first.rfind('.') + 1);
+		out << name << " " << property << " " << prop.second << "\n";
+	}
+	return out;
+}
+
+std::ostream &operator<<(std::ostream &out, const PersistentStore &store) {
+	return store.operator<<(out);
+}
+
+void PersistentStore::save() {
+	const char * scratchfile = "persist_scratch.dat";
+	std::ofstream out(scratchfile);
+	if (!out) {
+		std::cerr << "failed to open " << scratchfile << " for write\n";
+	}
+	else {
+		try {
+			out << *this << std::flush;
+			out.close();
+		}
+		catch (std::exception e) {
+			std::cerr << "exception " << e.what() << " writing data store\n";
+		}
+	}
+	if (rename(scratchfile, file_name.c_str())) {
+		std::cerr << strerror(errno) << "\n";
+	}
+}
+
+int main(int argc, const char * argv[]) {
+
+    try {
+        
+        po::options_description desc("Allowed options");
+        desc.add_options()
+        ("help", "produce help message")
+        ;
+        po::variables_map vm;        
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        po::notify(vm);    
+        if (vm.count("help")) {
+            std::cout << desc << "\n";
+            return 1;
+        }
+		int port = 5557;
+		if (argc > 2 && strcmp(argv[1],"-p") == 0) {
+			port = strtol(argv[2], 0, 0);
+		}
+		
+		PersistentStore store("persist.dat");
+		store.load();
+		std::cout << "Listening on port " << port << "\n";
+        // client
+        int res;
+		std::stringstream ss;
+		ss << "tcp://localhost:" << port;
+        zmq::context_t context (1);
+        zmq::socket_t subscriber (context, ZMQ_SUB);
+        subscriber.connect(ss.str().c_str());
+        //subscriber.connect("ipc://ecat.ipc");
+        res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
+        assert (res == 0);
+        for (;;) {
+            zmq::message_t update;
+            subscriber.recv(&update);
+            std::istringstream iss(static_cast<char*>(update.data()));
+			try {
+            std::string property, op, value;
+            iss >> property >> op >> value;
+			store.insert(property, value.c_str());
+			store.save();
+			}
+			catch(std::exception e) {
+				std::cerr << "exception " <<e.what() << "processing: " << static_cast<char*>(update.data()) << "\n";
+			}
+        }
+    }
+    catch(std::exception& e) {
+        std::cerr << "error: " << e.what() << "\n";
+        return 1;
+    }
+    catch(...) {
+        std::cerr << "Exception of unknown type!\n";
+    }
+
+    return 0;
+}
+

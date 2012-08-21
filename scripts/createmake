@@ -1,0 +1,74 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+#!/bin/sh
+
+if [ "$1" = "" ] ; then
+	echo "usage: $0 path"
+	exit 1
+fi
+SRCROOT="$1"
+
+# include whatever you like in the makefile header
+cat <<EOD >Makefile
+APPS = iod
+#SIMULATED=-DEC_SIMULATOR=1
+SIMULATED=-I/usr/local/include -I../../ethercat/include/ -L../../ethercat/lib/ -lethercat
+CFLAGS = \$(SIMULATED) -g $CFLAGS
+CPP = g++ \$(CFLAGS)
+CC = g++ \$(CFLAGS)
+LDFLAGS = -L/usr/local/lib
+
+EOD
+
+# setup the target list
+echo "all:	build/.init \\" >>Makefile
+find $SRCROOT -name \*.cpp -o -name \*.c \
+	| egrep -v ./._ | sed 's@.*/@build/@; s/.cpp$/.o/; s/.c$/.o/' \
+	| sed 's/^/	/; s/$/\\/' >>Makefile 
+echo >>Makefile
+cat <<EOE >>Makefile
+
+build/.init:
+	[ -d build ] || mkdir build
+	touch build/.init
+
+EOE
+
+# create build linkes
+find $SRCROOT -name \*.cpp | while read a; do 
+  c=`basename $a .cpp`; d=`dirname $a`; 
+  echo "build/$c.o:	$d/$c.cpp"; 
+  echo "	\$(CPP) -c \$(CFLAGS) -o build/$c.o $d/$c.cpp -I /usr/local/include"; 
+  echo; 
+done >> Makefile
+
+find $SRCROOT -name \*.c | while read a; do 
+  c=`basename $a .c`; d=`dirname $a`; 
+  echo "build/$c.o:	$d/$c.c"; 
+  echo "	\$(CC) -c \$(CFLAGS) -o build/$c.o $d/$c.c -I /usr/local/include"; 
+  echo; 
+done >> Makefile
+
+# extra bits (TBD add dependencies)
+cat <<EOD >> Makefile
+
+clean:
+	rm -f \$(APPS)
+	rm -rf build
+

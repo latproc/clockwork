@@ -1,0 +1,52 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+MODULES {
+    Beckhoff_EK1100 (position:0) ;
+    Beckhoff_EK1814 (position:3) ;#6000 7000;  # 4 IN, 4 OUT
+    Beckhoff_EL1008 (position:1) ;#6000;  # 8 IN
+    Beckhoff_EL2008 (position:2) ;#7000;  # 8 OUT
+}
+
+EL1008_IN_0	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 0;
+EL1008_IN_1	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 1;
+EL1008_IN_2	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 2;
+EL1008_IN_3	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 3;
+EL1008_IN_4	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 4;
+EL1008_IN_5	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 5;
+EL1008_IN_6	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 6;
+EL1008_IN_7	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EL1008, 7;
+
+
+EL2008_OUT_0	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 0;
+EL2008_OUT_1	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
+EL2008_OUT_2	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 2;
+EL2008_OUT_3	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 3;
+EL2008_OUT_4	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 4;
+EL2008_OUT_5	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 5;
+EL2008_OUT_6	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 6;
+EL2008_OUT_7	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 7;
+
+EK1814_OUT_0	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 0;
+EK1814_OUT_1	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 1;
+EK1814_OUT_2	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 2;
+EK1814_OUT_3	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 3;
+EK1814_IN_0	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EK1814, 4;
+EK1814_IN_1	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EK1814, 5;
+EK1814_IN_2	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EK1814, 6;
+EK1814_IN_3	POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EK1814, 7;

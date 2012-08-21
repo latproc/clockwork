@@ -1,0 +1,60 @@
+# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+# 
+# This file is part of Latproc
+#
+# Latproc is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# Latproc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Latproc; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 
+m MODULE (position:1);
+p1 POINT (tab:All) m, 1;
+p2 POINT (tab:All) m, 2;
+
+x VARIABLE;
+
+# can a number be passed to a machine and used
+# to initialise a property?
+IntParamTest MACHINE val {
+    ENTER INIT { x := val }
+}
+int_param IntParamTest(tab:All) 3;
+
+ParamTest MACHINE (tab:All) val {
+GLOBAL default_value;
+local_value VARIABLE(tab:All,PERSISTENT:false) 9;
+    ENTER INIT {
+        a := val;
+        b := default_value;
+		x := local_value;
+        SET c TO PROPERTY val;
+		d := val;
+    }
+}
+
+ParamPropertyTest MACHINE (tab:All, a:3, b:"world") {
+    p_3 ParamTest (tab:All) a;
+    p_4 ParamTest (tab:All) b;
+}
+
+zero VARIABLE 0;
+default_value VARIABLE 7;
+
+# integer paramerter
+p_1 ParamTest (tab:All) 1;
+
+# string parameter
+p_hello ParamTest (tab:All) "hello";
+
+# variable name as parameter
+p_zero ParamTest (tab:All) zero;
+
