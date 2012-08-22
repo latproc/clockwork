@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -25,6 +25,9 @@
 #include <sstream>
 #include <stdio.h>
 #include <zmq.hpp>
+#include <sys/stat.h>
+#include "boost/filesystem/operations.hpp"
+#include "boost/filesystem/path.hpp"
 
 #include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
@@ -35,7 +38,7 @@
 #include <fstream>
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
-#include "MasterDevice.h"
+#include <MasterDevice.h>
 #endif
 
 #define __MAIN__
@@ -51,12 +54,6 @@
 #include "Scheduler.h"
 #include "PredicateAction.h"
 #include "ModbusInterface.h"
-
-#ifndef EX_SIMULATOR
-#include <master/globals.h>
-const ec_code_msg_t *soe_error_codes;
-std::string tool_main(int argc, char **argv);
-#endif
 
 extern int yylineno;
 extern int yycharno;
@@ -113,6 +110,29 @@ IOComponent* lookup_device(const std::string name) {
     return 0;
 }
 
+static void list_directory( const std::string &pathToCheck, std::list<std::string> &file_list)
+{
+    const boost::filesystem::directory_iterator endMarker;
+    
+    for (boost::filesystem::directory_iterator file (pathToCheck);
+         file != endMarker;
+         ++file)
+    {
+        struct stat file_stat;
+        int err = stat((*file).path().native().c_str(), &file_stat);
+        if (err == -1) {
+            std::cerr << "Error: " << strerror(errno) << " checking file type for " << (*file) << "\n";
+        }
+        else if (file_stat.st_mode & S_IFDIR){
+            list_directory((*file).path().native().c_str(), file_list);
+        }
+        else if (boost::filesystem::exists (*file) && (*file).path().extension() == ".lpc")
+        {
+            file_list.push_back( (*file).path().native() );
+        }
+    }
+}
+
 #ifdef EC_SIMULATOR
 
 // in a simulated environment, we provide a way to wire components together
@@ -146,6 +166,8 @@ void checkInputs() {
 }
 
 #else
+
+std::string tool_main(int argc, char **argv);
 
 // in a real environment we can look for devices on the bus
 
@@ -322,6 +344,31 @@ struct IODCommandSetStatus : public IODCommand {
 
 #ifndef EC_SIMULATOR
 
+struct IODCommandEtherCATTool : public IODCommand {
+    bool run(std::vector<std::string> &params) {
+        if (params.size() > 1) {
+            int argc = params.size();
+            char **argv = (char**)malloc((argc+1) * sizeof(char*));
+            for (int i=0; i<argc; ++i) {
+                argv[i] = strdup(params[i].c_str());
+            }
+            argv[argc] = 0;
+            std::string res = tool_main(argc, argv);
+            std::cout << res << "\n";
+            for (int i=0; i<argc; ++i) {
+                free(argv[i]);
+            }
+            free(argv);
+            result_str = res;
+            return true;
+        }
+        else {
+            error_str = "Usage: EC command [params]";
+            return false;
+        }
+    }
+};
+
 struct IODCommandGetSlaveConfig : public IODCommand {
     bool run(std::vector<std::string> &params) {
         char *res = collectSlaveConfig(false);
@@ -338,6 +385,7 @@ struct IODCommandGetSlaveConfig : public IODCommand {
 
 struct IODCommandMasterInfo : public IODCommand {
     bool run(std::vector<std::string> &params) {
+        //const ec_master_t *master = ECInterface::instance()->getMaster();
         const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();
         cJSON *root = cJSON_CreateObject();
         cJSON_AddNumberToObject(root, "slave_count", master_state->slaves_responding);
@@ -444,14 +492,24 @@ struct IODCommandToggle : public IODCommand {
 					return false;
 				}
 		  	 	if (m->_type != "POINT") {
-				     Message *msg;
-					 if (m->getCurrent().getName() == "on") 
-						msg = new Message("turnOff");
-					 else
-						msg = new Message("turnOn");
-				     m->send(msg, m);
-		             result_str = "OK";
-				     return true;
+					if (m->_type == "FLAG") {
+						if (m->getCurrent().getName() == "on")
+							m->setState("off");
+						else
+							m->setState("on");
+		            	result_str = "OK";
+				    	return true;
+					}
+					else {
+				    	Message *msg;
+						if (m->getCurrent().getName() == "on") 
+							msg = new Message("turnOff");
+						else
+							msg = new Message("turnOn");
+				    	m->send(msg, m);
+		            	result_str = "OK";
+				    	return true;
+					}
 				}
 			}
 			else {
@@ -618,13 +676,21 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 struct IODCommandListJSON : public IODCommand {
     bool run(std::vector<std::string> &params) {
         cJSON *root = cJSON_CreateArray();
+		Value tab("");
+		bool limited = false;
+		if (params.size() > 2) {
+			tab = params[2];
+			limited = true;
+		}
         std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
         while (iter != machines.end()) {
             MachineInstance *m = (*iter++).second;
-            cJSON_AddItemToArray(root, printMachineInstanceToJSON(m));
-	        BOOST_FOREACH(Parameter p, m->locals) {
-            	cJSON_AddItemToArray(root, printMachineInstanceToJSON(p.machine, m->getName()));
-	        }
+			if (!limited || (limited && m->properties.lookup("tab") == tab) ) {
+   		        cJSON_AddItemToArray(root, printMachineInstanceToJSON(m));
+		        BOOST_FOREACH(Parameter p, m->locals) {
+    	       		cJSON_AddItemToArray(root, printMachineInstanceToJSON(p.machine, m->getName()));
+	        	}
+			}
         }
         char *res = cJSON_Print(root);
         bool done;
@@ -942,6 +1008,11 @@ struct IODCommandThread {
 		                command =  new IODCommandSetStatus;
 		            }
 		#ifndef EC_SIMULATOR
+					else if (count > 1 && ds == "EC") {
+		                //std::cout << "EC: " << data << "\n";
+                
+		                command = new IODCommandEtherCATTool;
+		            }
 					else if (ds == "SLAVES") {
 		                command = new IODCommandGetSlaveConfig;
 					}
@@ -967,7 +1038,7 @@ struct IODCommandThread {
 		            else if (count == 1 && ds == "QUIT") {
 		                command = new IODCommandQuit;
 		            }
-		            else if (count == 2 && ds == "LIST" && params[1] == "JSON") {
+		            else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
 		                command = new IODCommandListJSON;
 		            }
 		            else if (count == 2 && ds == "ENABLE") {
@@ -1020,6 +1091,7 @@ struct IODCommandThread {
                //exit(1);
             }
         } 
+		socket.close();
     }
     IODCommandThread() : done(false) {
         
@@ -1030,7 +1102,7 @@ struct IODCommandThread {
 
 void usage(int argc, char const *argv[])
 {
-    fprintf(stderr, "Usage: %s [-v] [-l logfilename] [-s maxlogfilesize] \n", argv[0]);
+    fprintf(stderr, "Usage: %s [-v] [-l logfilename] [-i persistent_store] [-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize] \n", argv[0]);
 }
 
 int loadConfig(int argc, char const *argv[]) {
@@ -1045,7 +1117,7 @@ int loadConfig(int argc, char const *argv[]) {
 	boost::mutex::scoped_lock lock(q_mutex);
 
     
-    std::list<const char *> files;
+    std::list<std::string> files;
     /* check for commandline options, later we process config files in the order they are named */
     i=1;
     while ( i<argc)
@@ -1067,13 +1139,26 @@ int loadConfig(int argc, char const *argv[]) {
 		else if (strcmp(argv[i], "-m") == 0 && i < argc-1) { // modbus mapping file
 			set_modbus_map(argv[++i]);
 		}
+		else if (strcmp(argv[i], "-g") == 0 && i < argc-1) { // dependency graph file
+			set_dependency_graph(argv[++i]);
+		}
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {
             usage(argc, argv);
             exit(2);
         }
         else {
-            files.push_back(argv[i]);
+            struct stat file_stat;
+            int err = stat(argv[i], &file_stat);
+            if (err == -1) {
+                std::cerr << "Error: " << strerror(errno) << " checking file type for " << argv[i] << "\n";
+            }
+            else if (file_stat.st_mode & S_IFDIR){
+                list_directory(argv[i], files);
+            }
+            else {
+                files.push_back(argv[i]);
+            }
         }
         i++;
     }
@@ -1150,10 +1235,10 @@ int loadConfig(int argc, char const *argv[]) {
     std::cout << (argc-1) << " arguments\n";
     
     /* load configuration from files named on the commandline */
-    std::list<const char *>::iterator f_iter = files.begin();
+    std::list<std::string>::iterator f_iter = files.begin();
     while (f_iter != files.end())
     {
-        const char *filename = *f_iter;
+        const char *filename = (*f_iter).c_str();
         if (filename[0] != '-')
         {
             opened_file = 1;
@@ -1225,26 +1310,30 @@ int loadConfig(int argc, char const *argv[]) {
 	flag->default_state = State("off");
 	flag->initial_state = State("off");
 	flag->disableAutomaticStateChanges();
-	flag->transitions.push_back(Transition(State("on"),State("off"),Message("turnOff")));
-	flag->transitions.push_back(Transition(State("off"),State("on"),Message("turnOn")));
+//	flag->transitions.push_back(Transition(State("on"),State("off"),Message("turnOff")));
+//	flag->transitions.push_back(Transition(State("off"),State("on"),Message("turnOn")));
 	
 	MachineClass *mc_variable = new MachineClass("VARIABLE");
 	mc_variable->states.push_back("ready");
+	mc_variable->initial_state = State("ready");
 	mc_variable->disableAutomaticStateChanges();
 	mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
-	MachineCommandTemplate *mc_cmd = new MachineCommandTemplate("SYMBOL", "SYMBOL");
-	mc_cmd->setActionTemplate(new PredicateActionTemplate(
-		new Predicate(new Predicate("VALUE"), opAssign, new Predicate("VAL_PARAM1"))));
-	mc_variable->receives[Message(strdup("INIT_enter"))] = mc_cmd;
+	mc_variable->options["VALUE"] = "VAL_PARAM1";
+	//MachineCommandTemplate *mc_cmd = new MachineCommandTemplate("SYMBOL", "SYMBOL");
+	//mc_cmd->setActionTemplate(new PredicateActionTemplate(
+	//	new Predicate(new Predicate("VALUE"), opAssign, new Predicate("VAL_PARAM1"))));
+	//mc_variable->receives[Message(strdup("INIT_enter"))] = mc_cmd;
 	mc_variable->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
 	
 	MachineClass *mc_constant = new MachineClass("CONSTANT");
 	mc_constant->states.push_back("ready");
+	mc_constant->initial_state = State("ready");
 	mc_constant->disableAutomaticStateChanges();
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
-	mc_cmd = new MachineCommandTemplate("SYMBOL", "SYMBOL");
-	mc_cmd->setActionTemplate(new PredicateActionTemplate(new Predicate(new Predicate("VALUE"), opAssign, new Predicate("VAL_PARAM1"))));
-	mc_constant->receives[Message(strdup("INIT_enter"))] = mc_cmd;
+	mc_constant->options["VALUE"] = "VAL_PARAM1";
+	//mc_cmd = new MachineCommandTemplate("SYMBOL", "SYMBOL");
+	//mc_cmd->setActionTemplate(new PredicateActionTemplate(new Predicate(new Predicate("VALUE"), opAssign, new Predicate("VAL_PARAM1"))));
+	//mc_constant->receives[Message(strdup("INIT_enter"))] = mc_cmd;
 	mc_constant->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
 
 /*
@@ -1379,7 +1468,9 @@ int loadConfig(int argc, char const *argv[]) {
                 }
                 else {
 					std::stringstream ss;
-                    ss << "Warning: no instance " << p_i.sValue << " found for " << mi->getName();
+                    ss << "Warning: no instance " << p_i.sValue 
+						<< " (" << mi->parameters[i].real_name << ")"
+						<< " found for " << mi->getName();
 					error_messages.push_back(ss.str());
 				}
             }
@@ -1582,6 +1673,28 @@ int main (int argc, char const *argv[])
 	int load_result = loadConfig(argc, argv);
 	if (load_result)
 		return load_result;
+    if (dependency_graph()) {
+		std::cout << "writing dependency graph to " << dependency_graph() << "\n";
+        std::ofstream graph(dependency_graph());
+        if (graph) {
+            graph << "digraph G {\n";
+            std::list<MachineInstance *>::iterator m_iter;
+            m_iter = MachineInstance::begin();
+            while (m_iter != MachineInstance::end()) {
+                MachineInstance *mi = *m_iter++;
+				if (!mi->depends.empty()) {
+                	BOOST_FOREACH(MachineInstance *dep, mi->depends) {
+                		graph << mi->getName() << " -> " << dep->getName() << ";\n";
+					}
+				}
+            }
+            graph << "}\n";
+        }
+        else {
+            std::cerr << "not able to open " << dependency_graph() << " for write\n";
+        }
+    }
+
 	if (test_only() ) {
 		const char *backup_file_name = "modbus_mappings.bak";
 		rename(modbus_map(), backup_file_name);
@@ -1604,6 +1717,7 @@ int main (int argc, char const *argv[])
 	ECInterface::FREQUENCY=1000;
 
 #ifndef EC_SIMULATOR
+	/*std::cout << "init slaves: " << */
 	collectSlaveConfig(true) /*<< "\n"*/;
 	ECInterface::instance()->activate();
 #endif
@@ -1753,7 +1867,7 @@ int main (int argc, char const *argv[])
 		m_iter = MachineInstance::begin();
 	    while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
-			if (m && m->getValue("PERSISTENT") == "true") {
+			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")) {
 				std::string name("");
 				if (m->owner) name += m->owner->getName() + ".";
 				name += m->getName();
@@ -1772,6 +1886,23 @@ int main (int argc, char const *argv[])
 				}
 			}
 		}
+	}
+
+	// prepare the list of machines that will be processed at idle time
+	m_iter = MachineInstance::begin();
+	while (m_iter != MachineInstance::end()) {
+	    MachineInstance *mi = *m_iter++;
+	    if (!mi->receives_functions.empty() || mi->commands.size()
+			|| !mi->getStateMachine()->transitions.empty() 
+			|| mi->isModbusExported() 
+                	|| mi->uses_timer ) {
+	        mi->markActive();
+	        DBG_INITIALISATION << mi->getName() << " is active\n";
+	    }
+	    else {
+	        mi->markPassive();
+	        DBG_INITIALISATION << mi->getName() << " is passive\n";
+	    }
 	}
 
 	// enable all other machines
@@ -1814,7 +1945,8 @@ int main (int argc, char const *argv[])
 					delta = get_diff_in_microsecs(&start_t, &end_t);
 					cycle_delay_stat->add(delta);
 				}
-				if (ECInterface::sig_alarms != user_alarms) {
+				if (ECInterface::sig_alarms != user_alarms)
+				{
 					ECInterface::instance()->collectState();
 			
 					gettimeofday(&end_t, 0);
@@ -1851,6 +1983,7 @@ int main (int argc, char const *argv[])
 							statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
 						//} while (delta <100);
 						Scheduler::instance()->idle();
+						//MachineInstance::updateAllTimers(MachineInstance::NO_BUILTINS);
 						MachineInstance::checkStableStates();
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
