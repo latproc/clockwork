@@ -16,48 +16,49 @@
 # along with Latproc; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
-CorePerLotStandard VARIABLE (tab:Test) 20; 
-CorePerLotLengthStrength CONSTANT (tab:Test) 12; 
 
-Core_CurrentTotalBales VARIABLE (tab:Test) 1;
-Core_CurrentCoresPerBale VARIABLE (tab:Test) 0;
-OldNoBales VARIABLE (tab:Test) 0;
+base VARIABLE (tab:Test) 20; 
+length CONSTANT (tab:Test) 12; 
 
-CALCORESPERBALE MACHINE {
-    GLOBAL Core_CurrentTotalBales, Core_CurrentCoresPerBale, CorePerLotStandard, CorePerLotLengthStrength;
-    GLOBAL OldNoBales;
+total VARIABLE (tab:Test) 1;
+each VARIABLE (tab:Test) 0;
+last VARIABLE (tab:Test) 0;
 
-    stable WHEN Core_CurrentTotalBales.VALUE == OldNoBales.VALUE;
+Calculator MACHINE {
+    GLOBAL total, each, base, length;
+    GLOBAL last;
+
+    stable WHEN total.VALUE == last.VALUE;
     recalculate DEFAULT;
     
     ENTER stable { LOG "stable"; }
 
     ENTER recalculate {
 		tmp := 0;
-        IF (Core_CurrentTotalBales > 6) {
-            tmp := CorePerLotStandard / Core_CurrentTotalBales;
-           IF (CorePerLotStandard % Core_CurrentTotalBales != 0) { tmp := tmp + 1; };
+        IF (total > 6) {
+            tmp := base / total;
+           IF (base % total != 0) { tmp := tmp + 1; };
         };  
-        IF (Core_CurrentTotalBales <= 6) {
-           tmp := (CorePerLotLengthStrength / Core_CurrentTotalBales);
-           IF (CorePerLotLengthStrength % Core_CurrentTotalBales != 0) { tmp := tmp + 1; };
+        IF (total <= 6) {
+           tmp := (length / total);
+           IF (length % total != 0) { tmp := tmp + 1; };
         };  
-        Core_CurrentCoresPerBale := tmp;
-        OldNoBales := Core_CurrentTotalBales;   
+        each := tmp;
+        last := total;   
         LOG "recalculated";
     }   
 
 }
 
-calc CALCORESPERBALE (tab:Test);
+calc Calculator (tab:Test);
 
 Counter MACHINE {
-    GLOBAL Core_CurrentTotalBales;
-    GLOBAL OldNoBales;
+    GLOBAL total;
+    GLOBAL last;
 
     idle DEFAULT;
-    working WHEN Core_CurrentTotalBales.VALUE != OldNoBales.VALUE;
-    ENTER idle { Core_CurrentTotalBales := Core_CurrentTotalBales + 1; }
+    working WHEN total.VALUE != last.VALUE;
+    ENTER idle { total := total + 1; }
     ENTER working { LOG "working"; }
 }
 counter Counter(tab:Test);
