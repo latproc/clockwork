@@ -5,26 +5,34 @@ See the LICENCES file for license information.
 Martin Leadbeater,  martin.leadbeater@gmail.com
 
 
+PLEASE NOTE: 
+	This software is a work in progress and is not yet
+	likely to work on your equipment. 
+
+
+
 
 
    Latproc - Language and Tools for Process Control
 
-   Introduction (TBD)
+Introduction
 
 This software provides a high level, finite statemachine-based language 
-that can be used to describe process control systems. Currently, the
-system only supports one hardware interface; the Beckhoff EtherCat
+called Clockwork that can be used to describe process control systems. 
+Currently, this software only supports one hardware interface; the Beckhoff EtherCat
 system (http://www.beckhoff.de/) through the IgH EtherCAT Master for Linux
 (http://www.etherlab.org/en/ethercat/index.php)
 
 
-   Instructions
+Instructions
 
    Note: this software requires that the following software be installed:
 
-	libmodbus (http://libmodbus.org/)  - for communication with modbus/tcp terminals
+	* libmodbus (http://libmodbus.org/)  - for communication with modbus/tcp terminals
 
-	zeromq (http://www.zeromq.org/) - for inter-program messaging
+	* zeromq (http://www.zeromq.org/) - for inter-program messaging
+
+	* boost (http://boost.org/) - various c++ bits and pieces
 
 
    Part A - Building Latproc tools for standalone experimentation
