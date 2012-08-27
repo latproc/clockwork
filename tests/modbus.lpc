@@ -1,33 +1,7 @@
-# Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
-# 
-# This file is part of Latproc
-#
-# Latproc is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-# 
-# Latproc is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with Latproc; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-# 
-MODULES {
-    Beckhoff_EK1100 (position:0) ;
-    Beckhoff_EK1814 (position:3) ;#6000 7000;  # 4 IN, 4 OUT 
-    Beckhoff_EL1008 (position:1) ;#6000;  # 8 IN
-    Beckhoff_EL2008 (position:2) ;#7000;  # 8 OUT 
-}
+# various modbus interface tests
 
-EL2008_OUT_1    POINT (type:Output, export, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
-EL2008_OUT_2    POINT (type:Output, export:rw, tab:Outputs, image:output64x64) Beckhoff_EL2008, 2;
-
-#EL2008_OUT_1 FLAG(tab:Outputs);
-#EL2008_OUT_2 FLAG(tab:Outputs);
+OUT_1 FLAG(tab:Outputs);
+OUT_2 FLAG(tab:Outputs);
 
 A CONSTANT(tab:Tests, export:reg) 123;
 B VARIABLE(tab:Tests, export:rw_reg) 456;
@@ -36,6 +10,8 @@ D VARIABLE(tab:Tests, export:rw_reg32) 2345264;
 E CONSTANT(tab:Tests, export:str) "This is a message";
 
 Monitor MACHINE other {
+
+sample_flag FLAG (export:ro);
 
 	on WHEN other.started_flag IS on;
 	off DEFAULT;
@@ -50,6 +26,10 @@ Flash MACHINE (delay:500)output {
 	EXPORT READWRITE 32BIT delay;
 	OPTION export rw;
 	OPTION delay 500;
+    
+    OPTION a 20;
+    OPTION b 30;
+    EXPORT RW 16BIT a,b;
 
     started_flag FLAG(tab:Outputs, export:ro);
     error_flag FLAG(tab:Outputs, export:ro);
@@ -81,10 +61,10 @@ Flash MACHINE (delay:500)output {
 }
 
 #flash1 Flash (type:Light, tab:Outputs) O_GrabNo1JawOpen;
-flash1 Flash (type:Light, tab:Outputs) EL2008_OUT_1;
-#flash2 Flash (type:Light, tab:Outputs) EL2008_OUT_2;
-#flash3 Flash (type:Light, tab:Outputs) EL2008_OUT_3;
-#flash4 Flash (type:Light, tab:Outputs) EL2008_OUT_4;
-#flash5 Flash (type:Light, tab:Outputs) EL2008_OUT_5;
-#flash6 Flash (type:Light, tab:Outputs) EL2008_OUT_6;
+flash1 Flash (type:Light, tab:Outputs) OUT_1;
+#flash2 Flash (type:Light, tab:Outputs) OUT_2;
+#flash3 Flash (type:Light, tab:Outputs) OUT_3;
+#flash4 Flash (type:Light, tab:Outputs) OUT_4;
+#flash5 Flash (type:Light, tab:Outputs) OUT_5;
+#flash6 Flash (type:Light, tab:Outputs) OUT_6;
 

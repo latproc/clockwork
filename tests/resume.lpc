@@ -1,0 +1,74 @@
+Pulser2 MACHINE {
+    pulse FLAG;
+    on WHEN pulse IS on;
+    running WHEN TIMER >= 0, TAG pulse WHEN TIMER == 1000;
+}
+
+TimeClock MACHINE {
+    pulser Pulser2;
+    RECEIVE pulser.on_enter { LOG "tick" }
+}
+time_clock TimeClock(tab:Test);
+
+# test the enable/disable process via resume.
+
+Worker MACHINE {
+
+    have_work FLAG;
+    
+    working WHEN have_work IS on AND TIMER < 2000;
+    idle DEFAULT;
+    
+    ENTER idle { SET have_work TO off }
+    listening DURING new_work { SET have_work TO on }
+}
+
+Manager MACHINE {
+    lunch STATE;
+    idle INITIAL;
+    
+    ignore_worker FLAG;
+
+    worker Worker (tab:Test);
+    
+    ENTER idle { 
+        SET ignore_worker TO off;
+        SEND new_work TO worker; 
+    }
+    
+    RECEIVE worker.idle_enter {
+        LOG "worker is idle";
+        IF ( ignore_worker IS off ) {
+            LOG "Get back to work"; 
+            SEND new_work TO worker
+        }
+    }
+    
+    ENTER lunch { 
+        SET ignore_worker TO on;
+    }
+    
+    COMMAND return {
+        LOG "boss on deck";
+        IF (worker IS idle) {
+            SEND new_work TO worker;
+        }
+    }
+    TRANSITION lunch TO idle USING return;
+    
+    
+}
+manager Manager(tab:Test);
+
+STARTUP MACHINE {
+    ready INITIAL;
+    #ENTER ready { ENABLE time_clock }
+    
+    COMMAND start {
+        LOG "starting";
+        ENABLE manager;
+    }
+    COMMAND pause { DISABLE manager; }
+    COMMAND resume { RESUME manager AT lunch; }
+}
+startup STARTUP(tab:Test);
