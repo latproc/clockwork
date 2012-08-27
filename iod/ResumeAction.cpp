@@ -32,17 +32,28 @@ std::ostream &ResumeAction::operator<<(std::ostream &out) const {
 
 Action::Status ResumeAction::run() {
 	owner->start(this);
-	machine = owner->lookup(machine_name);
-	if (machine) {
-		if (resume_state.length() == 0)
-			machine->resume();
-		else
-			machine->resume(resume_state);
-	}
+    if (machine_name == "ALL") {
+        // this is actually a command to resume all local machines
+        owner->resume(machine_name);
+    }
+    else {
+        machine = owner->lookup(machine_name);
+        if (machine) {
+            if (resume_state.length() == 0)
+                machine->resume();
+            else
+                machine->resume(resume_state);
+        }
+        else {
+            std::string err("Error: cannot find machine: ");
+            err = err + machine_name;
+            error_str = strdup(err.c_str());
+            status = Failed;
+            return status;
+        }
+    }
 	status = Complete;
-	if (status == Complete || status == Failed) {
-		owner->stop(this);
-	}
+    owner->stop(this);
 	return status;
 }
 

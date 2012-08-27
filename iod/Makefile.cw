@@ -105,7 +105,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
-			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o
+			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
 	$(CC) -o $@ cw.o ECInterface.o IOComponent.o Message.o MessagingInterface.o -lzmq -lboost_thread \
 			-lboost_system -lboost_filesystem \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
@@ -113,7 +113,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
-			ExecuteMessageAction.o MachineCommandAction.o
+			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
 	$(CC) -o persistd persistd.cpp -lzmq -I. -L/usr/local/lib -lboost_program_options \
@@ -152,6 +152,9 @@ Expression.o:	Expression.cpp Expression.h
 
 ExpressionAction.o:	ExpressionAction.cpp ExpressionAction.h
 		$(CC) -c -o $@ ExpressionAction.cpp
+
+IODCommands.o:	IODCommands.cpp IODCommands.h
+		$(CC) -c -o $@ IODCommands.cpp
 
 IfCommandAction.o:	IfCommandAction.cpp IfCommandAction.h
 		$(CC) -c -o $@ IfCommandAction.cpp

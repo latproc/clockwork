@@ -55,7 +55,11 @@ public:
 #endif
 	static void add(Statistic*new_stat) { stats.push_back(new_stat); }
 	static void reportAll(std::ostream &out) {
-	 	BOOST_FOREACH(Statistic *stat, stats) stat->report(out);
+		std::list<Statistic*>::iterator iter = stats.begin();
+		while (iter != stats.end()) {
+	 		Statistic *stat = *iter++;
+			stat->report(out);
+		}
 	}
     
 private:

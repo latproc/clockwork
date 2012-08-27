@@ -20,6 +20,8 @@
 
 #ifndef latprocc_Command_h
 #define latprocc_Command_h
+#include <string.h>
+#include <stdlib.h>
 
 class IODString {
 public:

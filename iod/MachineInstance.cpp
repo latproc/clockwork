@@ -113,11 +113,15 @@ void Transmitter::send(Message *m, Receiver *r, bool expect_reply) {
 }
 
 bool TriggeredAction::active() {
-	BOOST_FOREACH(IOComponent *ioc, trigger_on) {
+    std::set<IOComponent*>::iterator iter = trigger_on.begin();
+    while (iter != trigger_on.end()) {
+        IOComponent *ioc = *iter++;
 		if (!ioc->isOn())
 			return false; 
 	}
-	BOOST_FOREACH(IOComponent *ioc, trigger_off) {
+	iter = trigger_off.begin();
+    while (iter != trigger_off.end()) {
+        IOComponent *ioc = *iter++;
 		if (!ioc->isOff())
 			return false; 
 	}
@@ -219,15 +223,17 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 		if (owner) found = owner;
 		goto cache_local_name;
 	}
-    BOOST_FOREACH(Parameter p, locals) {
+    for (unsigned int i=0; i<locals.size(); ++i) {
+        Parameter &p = locals[i];
         if (p.val.kind == Value::t_symbol && p.val.sValue == seek_machine_name) {
 			ss << "...local";
 			found = p.machine; 
 			goto cache_local_name;
         }
     }
-    BOOST_FOREACH(Parameter p, parameters) {
-        if (p.val.kind == Value::t_symbol && 
+    for (unsigned int i=0; i<parameters.size(); ++i) {
+        Parameter &p = parameters[i];
+        if (p.val.kind == Value::t_symbol &&
 			(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name) && p.machine) {
 			ss << "...parameter";
 			found = p.machine; 
@@ -437,8 +443,9 @@ void MachineInstance::processAll(PollType which) {
     if (which == BUILTINS)
 		builtins = true;
 	//MachineInstance::updateAllTimers(which);
-
-    BOOST_FOREACH(MachineInstance *m, active_machines) {
+    std::list<MachineInstance *>::iterator iter = active_machines.begin();
+    while (iter != active_machines.end()) {
+        MachineInstance *m = *iter++;
 		if ( (builtins && m->_type == "POINT") || (!builtins && m->_type != "POINT") ) {
 			m->idle();
 		}
@@ -484,7 +491,9 @@ void MachineInstance::updateAllTimers(PollType which) {
 */
 
 void MachineInstance::checkStableStates() {
-	BOOST_FOREACH(MachineInstance *m, MachineInstance::automatic_machines) {
+    std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
+    while (iter != MachineInstance::automatic_machines.end()) {
+        MachineInstance *m = *iter++;
 		if ( m->enabled()  && (m->needsCheck() || m->_type == "CONDITION") ) 
 			m->setStableState();
 	}
@@ -617,7 +626,7 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
     DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << from->getName() << "\n";    
     return false;
 }
-Action::Status MachineInstance::setState(State new_state) {
+Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 	Action::Status stat = Action::Complete; 
 	// update the Modbus interface for self 
 	if (modbus_exported == discrete || modbus_exported == coil) {
@@ -640,9 +649,7 @@ Action::Status MachineInstance::setState(State new_state) {
 			}
 		}
 	}
-	if (current_state != new_state) {
-		//timer.tv_usec = 0L;
-		//timer.tv_sec = 0L;
+	if (reexecute || current_state != new_state) {
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);	
 		State last = current_state;
@@ -663,7 +670,8 @@ Action::Status MachineInstance::setState(State new_state) {
 			ma.update(1);
 		}
 		
-    	BOOST_FOREACH(StableState &s, stable_states) {
+        for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+            StableState &s = stable_states[ss_idx];
 			if (s.uses_timer) {
 				long timer_val;
 				// first disable any trigger that may still be enabled
@@ -693,7 +701,9 @@ Action::Status MachineInstance::setState(State new_state) {
 			}
 			if (s.subcondition_handlers) 
 			{
-				BOOST_FOREACH(ConditionHandler &ch, *s.subcondition_handlers) {
+                std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+                while (iter != s.subcondition_handlers->end()) {
+                    ConditionHandler &ch = *iter++;
 					//TBD setup triggers for subcondition handlers
 
 					if (ch.uses_timer) {
@@ -742,7 +752,10 @@ Action::Status MachineInstance::setState(State new_state) {
 		std::string txt = _name + "." + new_state.getName() + "_enter";
 		Message *msg = new Message(strdup(txt.c_str()));
 		stat = execute(msg, this);
-		BOOST_FOREACH(MachineInstance *dep, depends) {
+        
+        std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+        while (dep_iter != depends.end()) {
+            MachineInstance *dep = *dep_iter++;
 			if (this == dep) continue;
 			DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is " << current_state.getName() << " using " << *msg << "\n";
 			Action *act = dep->executingCommand();
@@ -776,11 +789,14 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					// find state condition
 						
 					bool found = false;
-    				BOOST_FOREACH(StableState &s, stable_states) {
+                    for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+                        StableState &s = stable_states[ss_idx];
 						if (s.state_name == t.dest.getName()) {
 							DBG_M_STATECHANGES << "found stable state condition test for " << t.dest.getName() << "\n";
 							if (s.subcondition_handlers) {
-								BOOST_FOREACH(ConditionHandler&ch, *s.subcondition_handlers) {
+                                std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+                                while (iter != s.subcondition_handlers->end()) {
+                                    ConditionHandler&ch = *iter++;
 									ch.triggered = false;
 								}
 							}
@@ -985,10 +1001,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	}
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
-//	DBG_M_MESSAGING << _name << " pushing (front) " << *hma << " at line " << __LINE__ << "\n";
 	active_actions.push_front(hma);
-//	Action::Status stat = (*hma)();
-//	if (stat != Action::Running) delete hma;
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"), name(class_name), allow_auto_states(true) {
@@ -1045,35 +1058,19 @@ void MachineInstance::displayActive() {
 void MachineInstance::stop(Action *a) { 
 	needs_check = true;
 	displayActive();
-	//DBG_M_ACTIONS << _name << " popping " << *a << "\n";
-	//assert(!active_actions.empty());
 	if (active_actions.back() != a) {
 		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 		return;
 	}
 	assert(active_actions.back() == a);
 	active_actions.pop_back();
-	if (!active_actions.empty()) { // TBD these tests are not strictly necessary, given the assertions 
+	if (!active_actions.empty()) {
 		Action *next = active_actions.back();
 		if (next) {
 			next->setBlocker(0);
 			if (next->suspended()) next->resume();
 		}
 	}
-	/*
-	std::list<Action*>::iterator iter = active_actions.begin();
-	bool found = false;
-	while (iter != active_actions.end()) {
-		Action *curr = *iter;
-		if (curr == a) found = true;
-		if(found) {
-				DBG_M_ACTIONS << _name << " removed action " << *curr << " from active queue\n";
-				iter = active_actions.erase(iter);
-				if (!curr->complete()) DBG_M_ACTIONS << " stopped a command that wasn't finished\n";
-		}
-		else iter++;
-	}
-	*/
 }
 
 void Action::suspend() {
@@ -1090,8 +1087,6 @@ void Action::resume() {
 	status = saved_status;
 	DBG_M_ACTIONS << "resumed: (status: " << status << ") " << *this << "\n";
 	if (status == Suspended) status = Running;
-	// TBD does this break when we use status = saved_status?
-	//status = Running;
 }
 
 void Action::recover() {
@@ -1148,10 +1143,11 @@ void MachineInstance::resume() {
 		// fix status
 		is_enabled = true; 
 		error_state = 0;
+        for (unsigned int i = 0; i<locals.size(); ++i) {
+            locals[i].machine->resume();
+        }
+        setState(current_state, true);
 	} 
-	for (unsigned int i = 0; i<locals.size(); ++i) {
-		locals[i].machine->resume();
-	}
 	needs_check = true;
 }
 
@@ -1160,10 +1156,10 @@ void MachineInstance::enable() {
 		is_enabled = true; 
 		error_state = 0; 
 		clearAllActions(); 
-		setInitialState(); 
 		for (unsigned int i = 0; i<locals.size(); ++i) {
 			locals[i].machine->enable();
 		}
+		setInitialState();
 	} 
 	needs_check = true;
 }
@@ -1186,13 +1182,23 @@ void MachineInstance::disable() {
 void MachineInstance::resume(const std::string &state_name) { 
 	if (!is_enabled) {		
 		// fix status
+		clearAllActions();
 		is_enabled = true; 
 		error_state = 0;
-		setState(state_name.c_str());
+        // resume all local machines first so that setState() can
+        // execute any necessary methods on local machines
+        for (unsigned int i = 0; i<locals.size(); ++i) {
+            locals[i].machine->resume();
+        }
+		setState(state_name.c_str(), true);
 	}
-	for (unsigned int i = 0; i<locals.size(); ++i) {
-		locals[i].machine->resume();
-	}
+    else if (state_name == "ALL") {
+        // resume all local machines that have not already been enabled
+        for (unsigned int i = 0; i<locals.size(); ++i) {
+            if (!locals[i].machine->enabled())
+                locals[i].machine->resume();
+        }
+    }
 	needs_check = true;
 }
 
@@ -1227,7 +1233,8 @@ void MachineInstance::setStableState() {
     else {
 	    //DBG_M_AUTOSTATES << " checking stable states " << _name << "\n";
 		bool found_match = false;
-	    BOOST_FOREACH(StableState &s, stable_states) {
+        for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+            StableState &s = stable_states[ss_idx];
 			// the following test should be enabled but there is currently a situation that 
 			// can cause the stable state to not be evaluated when a trigger is set. TBD
 			//		if ( (s.trigger && s.trigger->enabled() && s.trigger->fired() && s.condition(this) )
@@ -1237,7 +1244,9 @@ void MachineInstance::setStableState() {
                     DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
                     if (current_state.getName() != s.state_name) {
                         if (s.subcondition_handlers) {
-                            BOOST_FOREACH(ConditionHandler&ch, *s.subcondition_handlers) {
+                            std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+                            while (iter != s.subcondition_handlers->end()) {
+                                ConditionHandler&ch = *iter++;
                                 ch.triggered = false;
                             }
                         }
@@ -1258,7 +1267,9 @@ void MachineInstance::setStableState() {
                         //DBG_M_AUTOSTATES << " already there\n";
                     }
                     if (s.subcondition_handlers) {
-                        BOOST_FOREACH(ConditionHandler&ch, *s.subcondition_handlers) {
+                        std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+                        while (iter != s.subcondition_handlers->end()) {
+                            ConditionHandler&ch = *iter++;
                             if (ch.command_name == "FLAG" ) {
                                 MachineInstance *flag = lookup(ch.flag_name);
                                 if (!flag)
@@ -1286,7 +1297,9 @@ void MachineInstance::setStableState() {
             // this state is not active so ensure its subcondition flags are turned off
             {
 				if (s.subcondition_handlers) {
-					BOOST_FOREACH(ConditionHandler&ch, *s.subcondition_handlers) {
+                    std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+                    while (iter != s.subcondition_handlers->end()) {
+                        ConditionHandler&ch = *iter++;
 						if (ch.command_name == "FLAG" ) {
 							MachineInstance *flag = lookup(ch.flag_name);
 							if (flag) 
@@ -1364,9 +1377,9 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	            DBG_M_INITIALISATION <<"Warning: class " << newp.machine->_type << " not found\n"
 				;
 	        else if ((*c_iter).second) {
+				newp.machine->owner = this;
 				MachineClass *newsm = (*c_iter).second;
 	            newp.machine->setStateMachine(newsm);
-				newp.machine->owner = this;
 				if (newsm->parameters.size() != p.machine->parameters.size()) {
 					std::stringstream ss;
 					ss << "## - Error: Machine " << newsm->name << " requires " 
@@ -1487,7 +1500,14 @@ const Value &MachineInstance::getValue(std::string property) {
 			}
 		}
 		// use the global value if its name is mentioned in this machine's list of globals
-		if (state_machine->global_references.count(property)) {
+        if (!state_machine) {
+            std::stringstream ss;
+            ss << _name << " could not find a machine definition: " << _type;
+            DBG_PROPERTIES << ss.str() << "\n";
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+		else if (state_machine->global_references.count(property)) {
 			MachineInstance *m = state_machine->global_references[property];
 			if (m) {
 				DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from " << m->getName() << "\n";
@@ -1759,7 +1779,7 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 			default: data_type = "Unknown";
 		}
 		if (owner)
-			out << group << ":" << std::setfill('0') << std::setw(5) << addr 
+			out << group << ":" << std::setfill('0') << std::setw(5) << addr
 			<< "\t" << owner->getName() << "." << (*iter).second
 			<< "\t" << data_type
 			<< "\n";
@@ -1779,7 +1799,7 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 ModbusAddress MachineInstance::addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, 
 		ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name) {
 	if (ModbusAddress::preset_modbus_mapping.count(full_name) != 0) {
-		ModbusAddressDetails info = ModbusAddress::preset_modbus_mapping[name];
+		ModbusAddressDetails info = ModbusAddress::preset_modbus_mapping[full_name];
 		DBG_MODBUS << _name << " " << name << " has predefined address: " << info.group<<":"<<std::setfill('0')<<std::setw(5)<<info.address << "\n";
 		ModbusAddress addr(ModbusAddress::toGroup(info.group), info.address, info.len, owner, src, full_name);
 		modbus_exports[name] = addr;
@@ -1976,7 +1996,7 @@ void MachineInstance::setupModbusInterface() {
 		const ModbusAddress &ma = (*iter).second;
 		int index = ((int)ma.getGroup() << 16) + ma.getAddress();
 		if ( modbus_addresses.count(index) != 0) {
-			NB_MSG << _name << " " << (*iter).first << " address " << ma << " already recorded\n";
+			NB_MSG << _name << " " << (*iter).first << " address " << ma << " already recorded as " << modbus_addresses[index] << "\n";
 		}
 		assert(modbus_addresses.count(index) == 0);
 		modbus_addresses[index] = (*iter).first;
@@ -2051,7 +2071,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 		DBG_M_MODBUS << name << " holding register update\n";
 		std::string property_name = modbus_addresses[index];
 		DBG_M_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
-        if (name == _name)
+        if (property_name == _name)
             setValue("VALUE", new_value);
         else
             setValue(property_name, new_value);

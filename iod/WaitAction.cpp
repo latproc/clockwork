@@ -67,6 +67,7 @@ Action::Status WaitAction::run() {
 		trigger = Trigger("Timer");
 		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, &trigger)));
 		assert(!trigger.fired());
+        wait_time = -1; // next time, find the property value again
 	}
     DBG_M_PROPERTIES << "waiting " << wait_time << "\n";
     return status;

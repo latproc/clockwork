@@ -17,7 +17,6 @@
   along with Latproc; if not, write to the Free Software
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-
 #include "UnlockAction.h"
 #include "MachineInstance.h"
 #include "Logger.h"

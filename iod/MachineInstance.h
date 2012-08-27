@@ -328,7 +328,7 @@ protected:
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
-	Action::Status setState(State new_state);
+	Action::Status setState(State new_state, bool reexecute = false);
 	bool is_enabled;
 	Value timer_val;
 	MachineInstance *locked;

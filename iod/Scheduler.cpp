@@ -115,9 +115,11 @@ void Scheduler::idle() {
 			//item->package->receiver->enqueue(*(item->package));
 			item->package->receiver->handle(item->package->message, item->package->transmitter);
 			delete item->package;
+            delete item;
 		}
 		else if (item->action) {
 			item->action->getOwner()->push(item->action);
+            delete item;
 		}
 	}
 }

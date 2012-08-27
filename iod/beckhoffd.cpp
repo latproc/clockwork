@@ -39,13 +39,8 @@
 
 #include <stdio.h>
 #include "Logger.h"
-#include "IODCommand.h"
-
-#ifndef EX_SIMULATOR
-#include <master/globals.h>
-const ec_code_msg_t *soe_error_codes;
-#endif
-
+#include "IODCommands.h"
+#include "Statistics.h"
 
 int num_errors;
 std::list<std::string>error_messages;
@@ -66,6 +61,7 @@ IOComponent* lookup_device(const std::string name) {
     return 0;
 }
 
+Statistics statistics;
 
 
 #ifdef EC_SIMULATOR
@@ -103,6 +99,8 @@ void checkInputs() {
 }
 
 #else
+
+std::string tool_main(int argc, char **argv);
 
 // in a real environment we can look for devices on the bus
 
@@ -234,174 +232,34 @@ char *collectSlaveConfig(bool reconfigure)
 
 #endif
 
-struct CommandGetStatus : public IODCommand {
-    bool run(std::vector<std::string> &params) {
-        if (params.size() == 2) {
-            IOComponent *device = lookup_device(params[1]);
-            if (device) {
-                done = true;
-                result_str = strdup(device->getStateString());
-            }
-            else
-                error_str = strdup("Not Found");
-        }
-        return done;
-    }
-};
-
-struct CommandSetStatus : public IODCommand {
-    bool run(std::vector<std::string> &params) {
-        if (params.size() == 4) {
-            std::string ds = params[1];
-            Output *device = dynamic_cast<Output *>(lookup_device(ds));
-            if (device) {
-                if (params[3] == "on")
-                    device->turnOn();
-                else if (params[3] == "off")
-                    device->turnOff();
-                result_str = device->getStateString();
-                return true;
-            }
-            else {
-                //  Send reply back to client
-                const char *msg_text = "Not found: ";
-                size_t len = strlen(msg_text) + ds.length();
-                char *text = (char *)malloc(len+1);
-                sprintf(text, "%s%s", msg_text, ds.c_str());
-                error_str = text;
-                return false;
-            }
-        }
-        error_str = "Usage: SET device TO state";
-        return false;
-    }
-};
-
 #ifndef EC_SIMULATOR
 
-struct CommandGetSlaveConfig : public IODCommand {
+struct CommandEtherCATTool : public IODCommand {
     bool run(std::vector<std::string> &params) {
-        char *res = collectSlaveConfig(false);
-        if (res) {
+        if (params.size() > 1) {
+            int argc = params.size();
+            char **argv = (char**)malloc((argc+1) * sizeof(char*));
+            for (int i=0; i<argc; ++i) {
+                argv[i] = strdup(params[i].c_str());
+            }
+            argv[argc] = 0;
+            std::string res = tool_main(argc, argv);
+            std::cout << res << "\n";
+            for (int i=0; i<argc; ++i) {
+                free(argv[i]);
+            }
+            free(argv);
             result_str = res;
             return true;
         }
         else {
-            error_str = "JSON Error";
+            error_str = "Usage: EC command [params]";
             return false;
         }
-    }
-};
-
-struct CommandMasterInfo : public IODCommand {
-    bool run(std::vector<std::string> &params) {
-        //const ec_master_t *master = ECInterface::instance()->getMaster();
-        const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();
-        cJSON *root = cJSON_CreateObject();
-        cJSON_AddNumberToObject(root, "slave_count", master_state->slaves_responding);
-        cJSON_AddNumberToObject(root, "link_up", master_state->link_up);
-        
-        char *res = cJSON_Print(root);
-        bool done;
-        if (res) {
-            result_str = res;
-            done = true;
-        }
-        else {
-            error_str = "JSON error";
-            done = false;
-        }
-        cJSON_Delete(root);
-        return done;
     }
 };
 
 #endif
-
-struct CommandToggle : public IODCommand {
-    bool run(std::vector<std::string> &params) {
-        if (params.size() == 2) {
-            Output *device = dynamic_cast<Output *>(lookup_device(params[1]));
-            if (device) {
-                if (device->isOn()) device->turnOff();
-                else if (device->isOff()) device->turnOn();
-                result_str = "OK";
-                return true;
-            }
-            else {
-                error_str = "Unknown device";
-                return false;
-            }
-        }
-        else {
-            error_str = "Usage: toggle device_name";
-            return false;
-        }
-    }
-};
-
-cJSON *printIOComponentToJSON(IOComponent *m, std::string prefix = "") {
-    cJSON *node = cJSON_CreateObject();
-	std::stringstream ss;
-	ss << *m << std::flush;
-    std::string name_str = ss.str();
-    if (prefix.length()!=0) {
-        std::stringstream ss;
-        ss << prefix << '-' << *m;
-        name_str = ss.str();
-    }
-    cJSON_AddStringToObject(node, "name", name_str.c_str());
-    cJSON_AddStringToObject(node, "class", m->type());
-    cJSON_AddStringToObject(node, "type", m->type());
-    cJSON_AddStringToObject(node, "tab", m->type());
-    cJSON_AddStringToObject(node, "state", m->getStateString());
-    return node;
-}
-
-
-struct CommandListJSON : public IODCommand {
-    bool run(std::vector<std::string> &params) {
-        cJSON *root = cJSON_CreateArray();
-		
-		DeviceList::iterator iter = devices.begin();
-        while (iter != devices.end()) {
-			IOComponent* m = (*iter).second;
-            cJSON_AddItemToArray(root, printIOComponentToJSON(m));
-			iter++;
-        }
-        char *res = cJSON_Print(root);
-        bool done;
-        if (res) {
-            result_str = res;
-            done = true;
-        }
-        else {
-            error_str = "JSON error";
-            done = false;
-        }
-        cJSON_Delete(root);
-        return done;
-    }
-};
-
-struct CommandUnknown : public IODCommand {
-    bool run(std::vector<std::string> &params) {
-        std::stringstream ss;
-        ss << "Unknown command: ";
-        std::ostream_iterator<std::string> oi(ss, " ");
-        ss << std::flush;
-        error_str = strdup(ss.str().c_str());
-        return false;
-    }
-};
-
-void sendMessage(zmq::socket_t &socket, const char *message) {
-    const char *msg = (message) ? message : "";
-    size_t len = strlen(msg);
-    zmq::message_t reply (len);
-    memcpy ((void *) reply.data (), msg, len);
-    socket.send (reply);
-}
 
 struct CommandThread {
     void operator()() {
@@ -439,6 +297,11 @@ struct CommandThread {
 	                command =  new CommandSetStatus;
 	            }
 	#ifndef EC_SIMULATOR
+				else if (count > 1 && ds == "EC") {
+	                //std::cout << "EC: " << data << "\n";
+                
+	                command = new CommandEtherCATTool;
+	            }
 				else if (ds == "SLAVES") {
 	                command = new CommandGetSlaveConfig;
 				}
