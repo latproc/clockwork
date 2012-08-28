@@ -17,29 +17,18 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = iosh persistd cw   # modbusd 
+APPS = iosh persistd cw #modbusd 
 SIMULATED=-DEC_SIMULATOR=1
-#SIMULATED = -I/usr/local/include -Iethercat/include/ -Lethercat/lib/.libs -lethercat
-#SIMULATED = $(SIMULATED) -Iethercat -Iethercat/master -Iethercat/include -Iethercat/tool 
 
-CFLAGS = $(SIMULATED) -g -pedantic -Wall #-pg
+EXTRAINCS = -I/opt/latproc/include -I/usr/local/include
+EXTRALIBS = -L/opt/latproc/lib -L/usr/local/lib -lzmq
+
+CFLAGS = $(SIMULATED) -g -pedantic -Wall $(EXTRAINCS)
 CC = g++ $(CFLAGS)
-LDFLAGS = -L/usr/local/lib  #-pg
+LDFLAGS = $(EXTRALIBS)
 TOOLLIB = ../../tool/build/*.o
 
 all:	$(APPS)
-
-outputtest:	outputtest.cpp
-		$(CC) -o $@ $(LDFLAGS) -I ../ethercat/include/ -L ../ethercat/lib/ outputtest.cpp -l ethercat
-
-ex1:	ex1.c
-		gcc -o $@ -I ../ethercat/include/ -L ../ethercat/lib/ ex1.c -l ethercat
-
-ex2:	ex2.c
-		gcc -o $@ -I ../ethercat/include/ -L ../ethercat/lib/ ex2.c -l ethercat
-
-ex3:	ex3.c
-		gcc -o $@ -I ../ethercat/include/ -L ../ethercat/lib/ ex2.c -l ethercat
 
 DebugExtra.o:	DebugExtra.cpp DebugExtra.h Logger.h
 		$(CC) -c -o $@ DebugExtra.cpp
@@ -75,8 +64,9 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o
-	$(CC) -o $@ iod.o ECInterface.o IOComponent.o Message.o MessagingInterface.o -lzmq -lboost_thread \
-			-lboost_system -lboost_filesystem \
+	$(CC) -o $@ iod.o $(LDFLAGS) \
+			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
+			-lzmq -lboost_thread -lboost_system -lboost_filesystem \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o $(TOOLLIB) Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
@@ -87,10 +77,12 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
-			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
+			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
+			MachineCommandAction.o HandleMessageAction.o \
 			CallMethodAction.o
-	$(CC) -o $@ beckhoffd.cpp ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
+	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
 			-lzmq -lboost_thread \
+			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
 			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
@@ -106,8 +98,9 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
-	$(CC) -o $@ cw.o ECInterface.o IOComponent.o Message.o MessagingInterface.o -lzmq -lboost_thread \
-			-lboost_system -lboost_filesystem \
+	$(CC) -o $@ cw.o $(LDFLAGS) \
+			-lboost_system -lboost_filesystem -lzmq -lboost_thread \
+			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
@@ -116,15 +109,15 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
-	$(CC) -o persistd persistd.cpp -lzmq -I. -L/usr/local/lib -lboost_program_options \
+	$(CC) $(LDFLAGS) -o persistd persistd.cpp -lzmq -lboost_program_options \
 			symboltable.o Logger.o DebugExtra.o
 
 modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
-	$(CC) -o modbusd modbusd.cpp -lzmq -I. -L/usr/local/lib -lboost_program_options -lboost_thread \
+	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq -lboost_program_options -lboost_thread \
 			symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
 iosh:		iosh.cpp
-			g++ $(CFLAGS) -o iosh iosh.cpp -lzmq
+	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq
 
 CallMethodAction.o:	CallMethodAction.cpp CallMethodAction.h
 		$(CC) -c -o $@ CallMethodAction.cpp
