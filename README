@@ -23,6 +23,8 @@ Currently, this software only supports one hardware interface; the Beckhoff Ethe
 system (http://www.beckhoff.de/) through the IgH EtherCAT Master for Linux
 (http://www.etherlab.org/en/ethercat/index.php)
 
+Below are some instructions to help you build the program please
+see the documentation for details about the language itself.
 
 Instructions
 
