@@ -1,3 +1,4 @@
+<?php
 /*
   Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
@@ -18,7 +19,6 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-<?php
 /*
  *  iod client
  *  sends requests to the server to get the status of each point,
