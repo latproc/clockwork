@@ -119,14 +119,15 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
-	$(CC) $(LDFLAGS) -o persistd persistd.cpp -lzmq $(BOOST_PROGRAM_OPTIONS_LIB) \
-			symboltable.o Logger.o DebugExtra.o
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
+		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
+		symboltable.o Logger.o DebugExtra.o
 
 modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_THREAD_LIB) \
 			symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
-iosh:		iosh.cpp
+iosh: iosh.cpp
 	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq
 
 
