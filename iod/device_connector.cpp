@@ -234,6 +234,7 @@ struct ConnectionThread {
             if (listener == -1) {
                 std::cerr << msg_buffer << "...aborting\n";
                 device_status.status = DeviceStatus::e_failed;
+                iod_interface.setProperty(options.name(), "status", "failed");
                 done = true;
                 return;
             }
@@ -329,6 +330,8 @@ struct ConnectionThread {
                     }
                     else if (n) {
                         device_status.status = DeviceStatus::e_up;
+                        iod_interface.setProperty(options.name(), "status", "running");
+
                         buf[offset+n] = 0;
                         {
                             boost::mutex::scoped_lock lock(connection_mutex);
