@@ -27,6 +27,8 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include "boost/thread/mutex.hpp"
+
 
 class LogState {
 public:
@@ -81,6 +83,7 @@ private:
     Logger(const Logger&);
     Logger&operator=(const Logger&);
     std::ostream *log_stream;
+    boost::mutex mutex_;
 };
 
 #define LOGS(l) ( LogState::instance()->includes( (l) ))

@@ -26,6 +26,7 @@
 #include <sstream>
 #include <cassert>
 #include "Logger.h"
+#include "boost/thread/mutex.hpp"
 
 LogState* LogState::state_instance = 0;
 static std::string header;
@@ -54,6 +55,7 @@ void Logger::setLevel(std::string level_name){
 }
 
 std::ostream&Logger::log(Level l){
+    boost::mutex::scoped_lock lock(mutex_);
 	if (!dummy_output) dummy_output = new std::stringstream;
 	
     if(LogState::instance()->includes(l)){
