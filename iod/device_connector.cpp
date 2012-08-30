@@ -34,6 +34,8 @@
 #include <sys/socket.h>
 #include <zmq.hpp>
 #include "regular_expressions.h"
+#include <functional>
+#include <boost/bind.hpp>
 
 struct DeviceStatus {
     enum State {e_unknown, e_disconnected, e_connected, e_up, e_failed, e_timeout };
@@ -49,15 +51,17 @@ void usage(int argc, const char * argv[]) {
 }
 
 struct Options {
-    Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0),
-                got_host(false), got_port(true), got_property(false), got_pattern(false)  { }
+    Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
+                got_host(false), got_port(true), got_property(false), got_pattern(false)  {
+        setIODHost("localhost");
+    }
     ~Options() {
         if (host_) free(host_);
         if (name_) free(name_);
         if (machine_) free(machine_);
         if (property_) free(property_);
     }
-    bool valid() const { return got_port && got_host && got_property && got_pattern; }
+    bool valid() const { return got_port && got_host && got_property && got_pattern && name_ != 0 & iod_host_ != 0; }
     
     void clientMode(bool which = true) { is_server = !which; }
     void serverMode(bool which = true) { is_server = which; }
@@ -74,11 +78,14 @@ struct Options {
         host_ = strdup(h); got_host = true;
     }
     
-    const char *name() { return name_; }
+    const char *name() const { return name_; }
     void setName(const char *n) { if(name_) free(name_); name_ = strdup(n); }
     
-    const char *property() { return property_; }
-    const char *machine() { return machine_; }
+    const char *property() const { return property_; }
+    const char *machine() const { return machine_; }
+    
+    const char *iodHost() const { return iod_host_; }
+    void setIODHost(const char *h) { if (iod_host_) free(iod_host_); iod_host_ = strdup(h); }
     
     // properties are provided in dot form, we split it into machine and property for the iod
     void setProperty(const char* machine_property) {
@@ -97,7 +104,7 @@ struct Options {
                 return;
             }
             *dot++ = 0; // terminate the machine name at the dot
-            machine_ = strdup(machine_property);
+            machine_ = strdup(buf);
             property_ = strdup(dot);
             free(buf);
             got_property = true;
@@ -115,6 +122,7 @@ struct Options {
     
     }
     rexp_info *regexpInfo() { return compiled_pattern;}
+    rexp_info *regexpInfo() const { return compiled_pattern;}
 
     
 protected:
@@ -126,6 +134,7 @@ protected:
     char *property_;    // property in the iod fsm
     char *pattern_;     // pattern used to detect a complete message
     rexp_info *compiled_pattern;
+    char *iod_host_;
     
     // validation
     bool got_host;
@@ -134,19 +143,91 @@ protected:
     bool got_pattern;
 };
 
-static int my_match_func(const char *match, int index, void *data)
-{
-    std::cout << "match: " << index << " " << match << "\n";
-    if (index == 0) {
-        size_t *n = (size_t*)data;
-        *n += strlen(match);
+struct IODInterface{
+    
+    void sendMessage(const char *message) {
+        boost::mutex::scoped_lock lock(interface_mutex);
+
+        try {
+            const char *msg = (message) ? message : "";
+            size_t len = strlen(msg);
+            zmq::message_t request (len);
+            memcpy ((void *) request.data (), msg, len);
+            socket->send (request);
+            zmq::message_t reply;
+            socket->recv(&reply);
+            len = reply.size();
+            char *data = (char *)malloc(len+1);
+            memcpy(data, reply.data(), len);
+            data[len] = 0;
+            std::cout << data << "\n";
+            free(data);
+        }
+        catch(std::exception e) {
+            std::cerr <<e.what() << "\n";
+        }
     }
-    return 0;
-}
+    
+    void setProperty(const std::string &machine, const std::string &property, const std::string &val) {
+        std::stringstream ss;
+        ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
+        sendMessage(ss.str().c_str());
+    }
+    
+    IODInterface(const Options &opts) : context(0), socket(0), options(opts) {
+        try {
+            std::stringstream ss;
+            ss << "tcp://" << options.iodHost() << ":" << 5555;
+            context = new zmq::context_t(1);
+            socket = new zmq::socket_t (*context, ZMQ_REQ);
+            socket->connect(ss.str().c_str());
+        }
+        catch (std::exception e) {
+            std::cerr << e.what() << "\n";
+        }
+    }
+    
+    zmq::context_t *context;
+    zmq::socket_t *socket;
+    boost::mutex interface_mutex;
+    const Options &options;
+};
+
+
+struct MatchFunction {
+    MatchFunction(const Options &opts, IODInterface &iod) :options(opts), iod_interface(iod) {
+        instance_ = this;
+    }
+    static MatchFunction *instance() { return instance_; }
+    static int match_func(const char *match, int index, void *data)
+    {
+        std::cout << "match: " << index << " " << match << "\n";
+        if (index == 0) {
+            size_t *n = (size_t*)data;
+            *n += strlen(match);
+        }
+        if (numSubexpressions(instance()->options.regexpInfo()) == 0 || index>0) {
+            instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), match);
+        }
+        return 0;
+    }
+protected:
+    static MatchFunction *instance_;
+    const Options &options;
+    IODInterface &iod_interface;
+private:
+    MatchFunction(const MatchFunction&);
+    MatchFunction &operator=(const MatchFunction&);
+};
+MatchFunction *MatchFunction::instance_;
+
 
 struct ConnectionThread {
+
     void operator()() {
+        try {
         gettimeofday(&last_active, 0);
+        MatchFunction *match = new MatchFunction(options, iod_interface);
         
         if (options.server()) {
             listener = anetTcpServer(msg_buffer, options.port(), options.host());
@@ -163,6 +244,7 @@ struct ConnectionThread {
         size_t offset = 0;
         
         device_status.status = DeviceStatus::e_disconnected;
+        iod_interface.setProperty(options.name(), "status", "disconnected");
         while (!done) {
             
             // connect or accept connection
@@ -173,6 +255,7 @@ struct ConnectionThread {
                     continue;
                 }
                 device_status.status = DeviceStatus::e_connected;
+                iod_interface.setProperty(options.name(), "status", "connected");
             }
            
             fd_set read_ready;
@@ -201,6 +284,7 @@ struct ConnectionThread {
             else if (err == 0) {
                 if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
                     device_status.status = DeviceStatus::e_timeout;
+                    iod_interface.setProperty(options.name(), "status", "timeout");
                     std::cerr << "select timeout\n";
                 }
             }
@@ -230,6 +314,7 @@ struct ConnectionThread {
                     continue;
                 }
                 device_status.status = DeviceStatus::e_connected;
+                iod_interface.setProperty(options.name(), "status", "connected");
             }
             else if (connection != -1 && FD_ISSET(connection, &read_ready)) {
                 if (offset < buffer_size-1) {
@@ -239,6 +324,7 @@ struct ConnectionThread {
                             std::cerr << "error: " << strerror(errno) << " reading from connection\n";
                             close(connection);
                             device_status.status = DeviceStatus::e_disconnected;
+                            iod_interface.setProperty(options.name(), "status", "disconnected");
                         }
                     }
                     else if (n) {
@@ -248,19 +334,19 @@ struct ConnectionThread {
                             boost::mutex::scoped_lock lock(connection_mutex);
                             gettimeofday(&last_active, 0);
                             last_msg = buf;
-                            //std::cout << buf << std::flush;
                         }
                     }
                     else {
                         close(connection);
                         device_status.status = DeviceStatus::e_disconnected;
+                        iod_interface.setProperty(options.name(), "status", "disconnected");
                         std::cerr << "connection lost\n";
                         connection = -1;
                     }
                     
                     // recalculate offset as we step through matches
                     offset = 0;
-                    each_match(options.regexpInfo(), buf, my_match_func, &offset);
+                    each_match(options.regexpInfo(), buf, &MatchFunction::match_func, &offset);
                     size_t len = strlen(buf);
 #if 0
                         std::cout << "buf: ";
@@ -285,10 +371,13 @@ struct ConnectionThread {
                 }
             }
         }
+        }catch (std::exception e) {
+            std::cerr << e.what() << "\n";
+        }
     }
     
-    ConnectionThread(Options &opts, DeviceStatus &status)
-            : done(false), connection(-1), options(opts), device_status(status) {
+    ConnectionThread(Options &opts, DeviceStatus &status, IODInterface &iod)
+            : done(false), connection(-1), options(opts), device_status(status), iod_interface(iod) {
         assert(options.valid());
         msg_buffer =new char[ANET_ERR_LEN];
         gettimeofday(&last_active, 0);
@@ -313,6 +402,7 @@ struct ConnectionThread {
     std::string last_msg;
     Options &options;
     DeviceStatus &device_status;
+    IODInterface &iod_interface;
     char *msg_buffer;
     struct timeval last_active;
     boost::mutex connection_mutex;
@@ -344,24 +434,11 @@ bool setup_signals()
     return true;
 }
 
-struct IODInterface{
-    
-    void sendMessage(const char *message) {
-        const char *msg = (message) ? message : "";
-        size_t len = strlen(msg);
-        zmq::message_t request (len);
-        memcpy ((void *) request.data (), msg, len);
-        socket.send (request);
-        
-    }
-    
-    zmq::socket_t &socket;
-};
-
 
 int main(int argc, const char * argv[])
 {
     Options options;
+    try {
     
     for (int i=1; i<argc; i++) {
         if (strcmp(argv[i], "--port") == 0 && i < argc-1) {
@@ -395,8 +472,9 @@ int main(int argc, const char * argv[])
     }
     
     DeviceStatus device_status;
+    IODInterface iod_interface(options);
     
-	ConnectionThread connection_thread(options, device_status);
+	ConnectionThread connection_thread(options, device_status, iod_interface);
 	boost::thread monitor(boost::ref(connection_thread));
     
     struct timeval last_time;
@@ -428,6 +506,10 @@ int main(int argc, const char * argv[])
     
     connection_thread.stop();
     monitor.join();
+    }
+    catch (std::exception e) {
+        std::cerr << e.what() << "\n";
+    }
     return 0;
 }
 

@@ -36,6 +36,8 @@ typedef struct rexp_info
 
 rexp_info *create_pattern(const char *pat);
 
+size_t numSubexpressions(const rexp_info *info);
+
 int execute_pattern(rexp_info *info, const char *string);
 
 void release_pattern(rexp_info *info);

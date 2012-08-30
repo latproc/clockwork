@@ -51,6 +51,10 @@ rexp_info *create_pattern(const char *pat)
   return info;
 }
 
+size_t numSubexpressions(const rexp_info *info) {
+    return  (info && info->compilation_result == 0) ? info->regex.re_nsub : 0;
+}
+
 int execute_pattern(rexp_info *info, const char *string)
 {
 	int res = 0;
