@@ -38,7 +38,7 @@
 #include <fstream>
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
-#include "tool/MasterDevice.h"
+#include <tool/MasterDevice.h>
 #endif
 
 #define __MAIN__

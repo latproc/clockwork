@@ -17,55 +17,54 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = iod beckhoffd iosh persistd modbusd cw
+APPS = iod iosh persistd device_connector modbusd #cw
+SIMULATED=#-DEC_SIMULATOR=1
 
-#SIMULATED=-DEC_SIMULATOR=1
-SIMULATED=-I/usr/local/include -Iethercat/include/ -Lethercat/lib/.libs -lethercat
-CFLAGS = $(SIMULATED) -Iethercat -Iethercat/master -Iethercat/include -Iethercat/tool -g -pedantic -Wall #-pg
+# add any extra include or library directory paths as necessary
+
+EXTRAINCS = -I/opt/local/include -I/usr/local/include -I/opt/latproc/include -I/opt/latproc/ethercat/include -I..
+EXTRALIBS = -L/opt/local/lib -L/usr/local/lib -L/opt/latproc/lib -L/opt/latproc/ethercat/lib
+
+# adjust the following linker flags to set the boost libraries you 
+# would like to use.
+
+BOOST_LIB_EXTN = #-mt
+BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN)
+BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST_LIB_EXTN)
+BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
+BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
+
+CFLAGS = $(SIMULATED) -g -pedantic -Wall $(EXTRAINCS)
 CC = g++ $(CFLAGS)
-LDFLAGS = -L/usr/local/lib  #-pg
-TOOLLIB = ../../tool/build/*.o
+LDFLAGS = $(EXTRALIBS)
+TOOLLIB = ../tool/build/*.o
+
+SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
+	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
+	DisableAction.cpp		MachineCommandAction.cpp	cw.cpp \
+	Dispatcher.cpp			MachineInstance.cpp		iod.cpp \
+	ECInterface.cpp			Message.cpp			iosh.cpp \
+	EnableAction.cpp		MessagingInterface.cpp		latprocc.tab.cpp \
+	ExecuteMessageAction.cpp	ModbusInterface.cpp		latprocc.yy.cpp \
+	Expression.cpp			PredicateAction.cpp		modbusd.cpp \
+	ExpressionAction.cpp		ResumeAction.cpp		options.cpp \
+	FireTriggerAction.cpp		Scheduler.cpp			persistd.cpp \
+	HandleMessageAction.cpp		SendMessageAction.cpp		schedule.cpp \
+	IOComponent.cpp			SetStateAction.cpp		symboltable.cpp \
+	IODCommands.cpp			ShutdownAction.cpp		test_client.cpp \
+	IfCommandAction.cpp		State.cpp			zmq_ecat_monitor.cpp \
+	LockAction.cpp			UnlockAction.cpp
 
 all:	$(APPS)
 
-outputtest:	outputtest.cpp
-		$(CC) -o $@ $(LDFLAGS) -I ../ethercat/include/ -L ../ethercat/lib/ outputtest.cpp -l ethercat
+.cpp.o:	
+	$(CC) -c $<
 
-ex1:	ex1.c
-		gcc -o $@ -I ../ethercat/include/ -L ../ethercat/lib/ ex1.c -l ethercat
-
-ex2:	ex2.c
-		gcc -o $@ -I ../ethercat/include/ -L ../ethercat/lib/ ex2.c -l ethercat
-
-ex3:	ex3.c
-		gcc -o $@ -I ../ethercat/include/ -L ../ethercat/lib/ ex2.c -l ethercat
-
-DebugExtra.o:	DebugExtra.cpp DebugExtra.h Logger.h
-		$(CC) -c -o $@ DebugExtra.cpp
-
-ECInterface.o:	ECInterface.cpp ECInterface.h
-		$(CC) -c -o $@ ECInterface.cpp
-
-IOComponent.o:	IOComponent.cpp IOComponent.h
-		$(CC) -c -o $@ IOComponent.cpp
-
-Message.o:	Message.cpp Message.h
-		$(CC) -c -o $@ Message.cpp
-
-Scheduler.o:	Scheduler.cpp Scheduler.h
-		$(CC) -c -o $@ Scheduler.cpp
-
-MessagingInterface.o:	MessagingInterface.cpp MessagingInterface.h
-		$(CC) -c -o $@ MessagingInterface.cpp
-
-#Output.o:	Output.cpp Output.h
-#		$(CC) -c -o $@ Output.cpp
-#
-#Input.o:	Input.cpp Input.h RawInput.h SimulatedRawInput.h
-#		$(CC) -c -o $@ Input.cpp
+# warning: the following makedepend will not work at present
+#depend:
+#	makedepend -Y -fMakefile.cw -- -I /usr/include/c++/4.2.1/ $(CFLAGS) -- $(SRCS)
 
 iod.o:	iod.cpp	MessagingInterface.h
-		$(CC) -c -o $@ iod.cpp
 
 iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
@@ -74,10 +73,13 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
-	$(CC) -o $@ iod.o ECInterface.o IOComponent.o Message.o MessagingInterface.o -lzmq -lboost_thread \
-			-lboost_system -lboost_filesystem \
-			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
-			latprocc.tab.o latprocc.yy.o Scheduler.o $(TOOLLIB) Expression.o FireTriggerAction.o IfCommandAction.o \
+	$(CC) -o $@ iod.o $(LDFLAGS) \
+			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
+			-lethercat \
+			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
+			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
+			MachineInstance.o latprocc.tab.o latprocc.yy.o Scheduler.o $(TOOLLIB) \
+			Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
@@ -86,17 +88,19 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
-			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o IODCommands.o
-	$(CC) -o $@ beckhoffd.cpp ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
-			-lzmq -lboost_thread \
+			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
+			MachineCommandAction.o HandleMessageAction.o \
+			CallMethodAction.o
+	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
+			-lzmq $(BOOST_THREAD_LIB) -lethercat \
+			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
 			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o $(TOOLLIB) IODCommands.o
+			CallMethodAction.o $(TOOLLIB)
 
 cw.o:	cw.cpp	MessagingInterface.h
-		$(CC) -DEC_SIMULATOR -c -o $@ cw.cpp
+		$(CC) -c -o $@ cw.cpp
 
 cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
@@ -105,8 +109,9 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
-	$(CC) -o $@ cw.o ECInterface.o IOComponent.o Message.o MessagingInterface.o -lzmq -lboost_thread \
-			-lboost_system -lboost_filesystem \
+	$(CC) -o $@ cw.o $(LDFLAGS) \
+			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
+			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
@@ -115,96 +120,23 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
-	$(CC) -o persistd persistd.cpp -lzmq -I. -L/usr/local/lib -lboost_program_options \
-			symboltable.o Logger.o DebugExtra.o
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
+		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
+		symboltable.o Logger.o DebugExtra.o
 
 modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
-	$(CC) -o modbusd modbusd.cpp -lzmq -I. -L/usr/local/lib -lboost_program_options -lboost_thread \
+	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_THREAD_LIB) \
+			$(BOOST_PROGRAM_OPTIONS_LIB) \
 			symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
-iosh:		iosh.cpp
-			g++ $(CFLAGS) -o iosh iosh.cpp -lzmq
+iosh: iosh.cpp
+	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq
 
-CallMethodAction.o:	CallMethodAction.cpp CallMethodAction.h
-		$(CC) -c -o $@ CallMethodAction.cpp
 
-DisableAction.o:	DisableAction.cpp DisableAction.h
-		$(CC) -c -o $@ DisableAction.cpp
+device_connector:	device_connector.o regular_expressions.o anet.o
+	g++ $(CFLAGS) $(LDFLAGS) -o $@ $? $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
 
-Dispatcher.o:	Dispatcher.cpp Dispatcher.h
-		$(CC) -c -o $@ Dispatcher.cpp
-
-ExecuteMessageAction.o:	ExecuteMessageAction.cpp ExecuteMessageAction.h
-		$(CC) -c -o $@ ExecuteMessageAction.cpp
-
-EnableAction.o:	EnableAction.cpp EnableAction.h
-		$(CC) -c -o $@ EnableAction.cpp
-
-LockAction.o:	LockAction.cpp LockAction.h
-		$(CC) -c -o $@ LockAction.cpp
-
-UnlockAction.o:	UnlockAction.cpp UnlockAction.h
-		$(CC) -c -o $@ UnlockAction.cpp
-
-Expression.o:	Expression.cpp Expression.h
-		$(CC) -c -o $@ Expression.cpp
-
-ExpressionAction.o:	ExpressionAction.cpp ExpressionAction.h
-		$(CC) -c -o $@ ExpressionAction.cpp
-
-IfCommandAction.o:	IfCommandAction.cpp IfCommandAction.h
-		$(CC) -c -o $@ IfCommandAction.cpp
-
-FireTriggerAction.o:	FireTriggerAction.cpp FireTriggerAction.h Expression.h
-		$(CC) -c -o $@ FireTriggerAction.cpp
-
-HandleMessageAction.o:	HandleMessageAction.cpp HandleMessageAction.h
-		$(CC) -c -o $@ HandleMessageAction.cpp
-
-MachineCommandAction.o:	MachineCommandAction.cpp MachineCommandAction.h
-		$(CC) -c -o $@ MachineCommandAction.cpp
-
-PredicateAction.o:	PredicateAction.cpp PredicateAction.h Expression.h
-		$(CC) -c -o $@ PredicateAction.cpp
-
-SetStateAction.o:	SetStateAction.cpp SetStateAction.h
-		$(CC) -c -o $@ SetStateAction.cpp
-
-SendMessageAction.o:	SendMessageAction.cpp SendMessageAction.h
-		$(CC) -c -o $@ SendMessageAction.cpp
-
-symboltable.o:	symboltable.cpp symboltable.h
-		$(CC) -c -o $@ symboltable.cpp
-
-ModbusInterface.o:	ModbusInterface.cpp
-		$(CC) -c -o $@ ModbusInterface.cpp
-
-Logger.o:	Logger.cpp Logger.h
-		$(CC) -c -o $@ Logger.cpp
-
-ResumeAction.o:	ResumeAction.cpp ResumeAction.h
-		$(CC) -c -o $@ ResumeAction.cpp
-
-ShutdownAction.o:	ShutdownAction.cpp ShutdownAction.h
-		$(CC) -c -o $@ ShutdownAction.cpp
-
-WaitAction.o:	WaitAction.cpp WaitAction.h
-		$(CC) -c -o $@ WaitAction.cpp
-
-State.o:	State.cpp State.h
-		$(CC) -c -o $@ State.cpp
-
-cJSON.o:	cJSON.c cJSON.h
-		$(CC) -c -o $@ cJSON.c
-
-options.o:	options.cpp options.h
-		$(CC) -c -o $@ options.cpp
-
-MasterDevice.o:	MasterDevice.cpp MasterDevice.h
-		$(CC) -c -o $@ MasterDevice.cpp
-
-MachineInstance.o:	MachineInstance.cpp MachineInstance.h
-		$(CC) -c -o $@ MachineInstance.cpp
+device_connector.o:	device_connector.cpp regular_expressions.h anet.h
 
 latprocc.tab.cpp:	latprocc.ypp latprocc.lpp
 	yacc -o $@ -g -v -d latprocc.ypp
@@ -212,15 +144,521 @@ latprocc.tab.cpp:	latprocc.ypp latprocc.lpp
 latprocc.yy.cpp:	latprocc.lpp
 	lex -o $@ latprocc.lpp
 
-latprocc.tab.o:	latprocc.tab.cpp
-		$(CC) -c -o $@ latprocc.tab.cpp
-
-latprocc.yy.o:	latprocc.yy.cpp
-		$(CC) -c -o $@ latprocc.yy.cpp
-
-
 clean:
 	rm -f $(APPS) *.o latprocc.tab.cpp latprocc.tab.hpp latprocc.yy.cpp
 	rm -rf iod.dSYM
 
 # DO NOT DELETE
+
+CallMethodAction.o:	\
+		CallMethodAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		DebugExtra.h\
+		Logger.h\
+		IOComponent.h\
+		State.h\
+		ECInterface.h\
+		MachineInstance.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+LogAction.o:	\
+		LogAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		Logger.h\
+		MachineInstance.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+WaitAction.o:	\
+		WaitAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		State.h\
+		DebugExtra.h\
+		Logger.h\
+		IOComponent.h\
+		ECInterface.h\
+		Scheduler.h\
+		FireTriggerAction.h\
+		MachineInstance.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+DebugExtra.o:	\
+		Logger.h\
+		DebugExtra.h
+
+Logger.o:	\
+		Logger.h
+
+beckhoffd.o:	\
+		ECInterface.h\
+		IOComponent.h\
+		State.h\
+		Message.h\
+		symboltable.h\
+		ControlSystemMachine.h\
+		cJSON.h\
+		Logger.h\
+		IODCommands.h\
+		IODCommand.h\
+		Statistics.h\
+		Statistic.h
+
+DisableAction.o:	\
+		DisableAction.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h
+
+MachineCommandAction.o:	\
+		MachineCommandAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		DebugExtra.h\
+		Logger.h\
+		IOComponent.h\
+		State.h\
+		ECInterface.h\
+		MachineInstance.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h
+
+cw.o:	\
+		ECInterface.h\
+		ControlSystemMachine.h\
+		IOComponent.h\
+		State.h\
+		Message.h\
+		cJSON.h\
+		latprocc.h\
+		symboltable.h\
+		MachineInstance.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		options.h\
+		Logger.h\
+		IODCommand.h\
+		Dispatcher.h\
+		Statistic.h\
+		DebugExtra.h\
+		Scheduler.h\
+		PredicateAction.h\
+		IODCommands.h\
+		Statistics.h
+
+Dispatcher.o:	\
+		Dispatcher.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		DebugExtra.h\
+		Logger.h
+
+MachineInstance.o:	\
+		MachineInstance.h\
+		symboltable.h\
+		Message.h\
+		State.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Dispatcher.h\
+		IOComponent.h\
+		ECInterface.h\
+		Logger.h\
+		MessagingInterface.h\
+		DebugExtra.h\
+		Scheduler.h\
+		IfCommandAction.h\
+		FireTriggerAction.h\
+		HandleMessageAction.h\
+		ExecuteMessageAction.h\
+		CallMethodAction.h
+
+iod.o:	\
+		ECInterface.h\
+		ControlSystemMachine.h\
+		IOComponent.h\
+		State.h\
+		Message.h\
+		cJSON.h\
+		latprocc.h\
+		symboltable.h\
+		MachineInstance.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		options.h\
+		Logger.h\
+		IODCommand.h\
+		Dispatcher.h\
+		Statistic.h\
+		DebugExtra.h\
+		Scheduler.h\
+		PredicateAction.h\
+		Statistics.h\
+		IODCommands.h
+
+ECInterface.o:	\
+		ECInterface.h\
+		IOComponent.h\
+		State.h\
+		Message.h
+
+Message.o:	\
+		Message.h
+
+iosh.o:	\
+		Logger.h
+
+EnableAction.o:	\
+		EnableAction.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h
+
+MessagingInterface.o:	\
+		MessagingInterface.h\
+		Message.h
+
+latprocc.tab.o:	\
+		symboltable.h\
+		Logger.h\
+		MachineInstance.h\
+		Message.h\
+		State.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		IfCommandAction.h\
+		EnableAction.h\
+		ResumeAction.h\
+		DisableAction.h\
+		ExpressionAction.h\
+		LogAction.h\
+		PredicateAction.h\
+		DebugExtra.h\
+		LockAction.h\
+		UnlockAction.h\
+		ShutdownAction.h\
+		WaitAction.h\
+		SendMessageAction.h\
+		CallMethodAction.h\
+		latprocc.h
+
+ExecuteMessageAction.o:	\
+		ExecuteMessageAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		DebugExtra.h\
+		Logger.h\
+		IOComponent.h\
+		State.h\
+		ECInterface.h\
+		MachineInstance.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+ModbusInterface.o:	\
+		ModbusInterface.h\
+		Logger.h\
+		DebugExtra.h\
+		MessagingInterface.h\
+		Message.h
+
+latprocc.yy.o:	\
+		latprocc.h\
+		symboltable.h\
+		MachineInstance.h\
+		Message.h\
+		State.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+Expression.o:	\
+		Expression.h\
+		symboltable.h\
+		MachineInstance.h\
+		Message.h\
+		State.h\
+		Action.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h\
+		DebugExtra.h
+
+PredicateAction.o:	\
+		PredicateAction.h\
+		Expression.h\
+		symboltable.h\
+		Action.h\
+		Message.h\
+		Logger.h\
+		DebugExtra.h\
+		MachineInstance.h\
+		State.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+modbusd.o:	\
+		Logger.h\
+		DebugExtra.h\
+		symboltable.h\
+		IODCommand.h\
+		MessagingInterface.h\
+		Message.h
+
+ExpressionAction.o:	\
+		ExpressionAction.h\
+		Expression.h\
+		symboltable.h\
+		Action.h\
+		Message.h\
+		Logger.h\
+		MachineInstance.h\
+		State.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+ResumeAction.o:	\
+		ResumeAction.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h
+
+options.o:	\
+		options.h
+
+FireTriggerAction.o:	\
+		FireTriggerAction.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h\
+		DebugExtra.h
+
+Scheduler.o:	\
+		Logger.h\
+		Scheduler.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		DebugExtra.h
+
+persistd.o:	\
+		Logger.h\
+		symboltable.h
+
+HandleMessageAction.o:	\
+		HandleMessageAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		DebugExtra.h\
+		Logger.h\
+		IOComponent.h\
+		State.h\
+		ECInterface.h\
+		MachineInstance.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+SendMessageAction.o:	\
+		SendMessageAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		DebugExtra.h\
+		Logger.h\
+		IOComponent.h\
+		State.h\
+		ECInterface.h\
+		MachineInstance.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h
+
+schedule.o:	\
+		Scheduler.h\
+		Action.h\
+		Message.h
+
+IOComponent.o:	\
+		IOComponent.h\
+		State.h\
+		ECInterface.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		MessagingInterface.h
+
+SetStateAction.o:	\
+		SetStateAction.h\
+		Action.h\
+		Message.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		DebugExtra.h\
+		Logger.h\
+		IOComponent.h\
+		ECInterface.h\
+		MachineInstance.h\
+		ModbusInterface.h\
+		MachineCommandAction.h
+
+symboltable.o:	\
+		symboltable.h\
+		Logger.h\
+		DebugExtra.h
+
+IODCommands.o:	\
+		IODCommands.h\
+		IODCommand.h\
+		MachineInstance.h\
+		symboltable.h\
+		Message.h\
+		State.h\
+		Action.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		IOComponent.h\
+		ECInterface.h\
+		Logger.h\
+		DebugExtra.h\
+		cJSON.h\
+		options.h\
+		Statistic.h\
+		Statistics.h
+
+ShutdownAction.o:	\
+		ShutdownAction.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h
+
+test_client.o:	
+
+IfCommandAction.o:	\
+		IfCommandAction.h\
+		Expression.h\
+		symboltable.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		State.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h\
+		DebugExtra.h
+
+State.o:	\
+		State.h
+
+zmq_ecat_monitor.o:	\
+		Logger.h
+
+LockAction.o:	\
+		LockAction.h\
+		Action.h\
+		Message.h\
+		MachineInstance.h\
+		symboltable.h\
+		State.h\
+		Expression.h\
+		ModbusInterface.h\
+		SetStateAction.h\
+		MachineCommandAction.h\
+		Logger.h
+
