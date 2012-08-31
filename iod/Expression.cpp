@@ -283,11 +283,11 @@ ExprNode eval_stack(Stack &stack){
 void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left) {
     if (p->left_p) {
         prep(stack, p->left_p, m, true);   
-		if (p->left_p->mi)
-            std::cout << *(p->left_p) << " refers to a machine\n";
+		//if (p->left_p->mi)
+        //    std::cout << *(p->left_p) << " refers to a machine\n";
         prep(stack, p->right_p, m, false);
-		if (p->left_p->mi)
-            std::cout << *(p->right_p) << " refers to a state\n";
+		//if (p->left_p->mi)
+        //    std::cout << *(p->right_p) << " refers to a state\n";
         stack.push(p->op);
     }
     else {
