@@ -3,8 +3,10 @@ Test MACHINE {
 	even FLAG(tab:Tests);
 	odd FLAG(tab:Tests);
     b WHEN count %5 == 0;
-	a WHEN count > 0, TAG even WHEN count % 2 == 0, TAG odd WHEN count % 2 == 1;
+	a WHEN count > 0, TAG even WHEN count % 2 == 0, EXECUTE stop WHEN count%2 == 1, TAG odd WHEN count % 2 == 1;
 	idle DEFAULT;
+    
+    COMMAND stop { }
 
 	COMMAND next { count := count + 1; }
 }

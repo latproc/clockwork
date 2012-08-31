@@ -194,6 +194,9 @@ struct IODInterface{
 };
 
 
+static struct timeval last_send;
+static std::string last_message;
+
 struct MatchFunction {
     MatchFunction(const Options &opts, IODInterface &iod) :options(opts), iod_interface(iod) {
         instance_ = this;
@@ -207,7 +210,11 @@ struct MatchFunction {
             *n += strlen(match);
         }
         if (numSubexpressions(instance()->options.regexpInfo()) == 0 || index>0) {
-            instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), match);
+            struct timeval now;
+            gettimeofday(&now, 0);
+            if (last_message != match || last_send.tv_sec +5 <  now.tv_sec) {
+                instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), match);
+            }
         }
         return 0;
     }
@@ -234,7 +241,7 @@ struct ConnectionThread {
             if (listener == -1) {
                 std::cerr << msg_buffer << "...aborting\n";
                 device_status.status = DeviceStatus::e_failed;
-                iod_interface.setProperty(options.name(), "status", "failed");
+                updateProperty();
                 done = true;
                 return;
             }
@@ -245,7 +252,7 @@ struct ConnectionThread {
         size_t offset = 0;
         
         device_status.status = DeviceStatus::e_disconnected;
-        iod_interface.setProperty(options.name(), "status", "disconnected");
+        updateProperty();
         while (!done) {
             
             // connect or accept connection
@@ -256,7 +263,7 @@ struct ConnectionThread {
                     continue;
                 }
                 device_status.status = DeviceStatus::e_connected;
-                iod_interface.setProperty(options.name(), "status", "connected");
+                updateProperty();
             }
            
             fd_set read_ready;
@@ -285,7 +292,7 @@ struct ConnectionThread {
             else if (err == 0) {
                 if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
                     device_status.status = DeviceStatus::e_timeout;
-                    iod_interface.setProperty(options.name(), "status", "timeout");
+                    updateProperty();
                     std::cerr << "select timeout\n";
                 }
             }
@@ -315,7 +322,7 @@ struct ConnectionThread {
                     continue;
                 }
                 device_status.status = DeviceStatus::e_connected;
-                iod_interface.setProperty(options.name(), "status", "connected");
+                updateProperty();
             }
             else if (connection != -1 && FD_ISSET(connection, &read_ready)) {
                 if (offset < buffer_size-1) {
@@ -325,12 +332,12 @@ struct ConnectionThread {
                             std::cerr << "error: " << strerror(errno) << " reading from connection\n";
                             close(connection);
                             device_status.status = DeviceStatus::e_disconnected;
-                            iod_interface.setProperty(options.name(), "status", "disconnected");
+                            
                         }
                     }
                     else if (n) {
                         device_status.status = DeviceStatus::e_up;
-                        iod_interface.setProperty(options.name(), "status", "running");
+                        updateProperty();
 
                         buf[offset+n] = 0;
                         {
@@ -342,7 +349,7 @@ struct ConnectionThread {
                     else {
                         close(connection);
                         device_status.status = DeviceStatus::e_disconnected;
-                        iod_interface.setProperty(options.name(), "status", "disconnected");
+                        updateProperty();
                         std::cerr << "connection lost\n";
                         connection = -1;
                     }
@@ -380,10 +387,14 @@ struct ConnectionThread {
     }
     
     ConnectionThread(Options &opts, DeviceStatus &status, IODInterface &iod)
-            : done(false), connection(-1), options(opts), device_status(status), iod_interface(iod) {
+            : done(false), connection(-1), options(opts), device_status(status), iod_interface(iod)
+    {
         assert(options.valid());
         msg_buffer =new char[ANET_ERR_LEN];
         gettimeofday(&last_active, 0);
+        last_property_update.tv_sec = 0;
+        last_property_update.tv_usec = 0;
+        last_status = DeviceStatus::e_unknown;
     }
     
     void stop() {
@@ -399,6 +410,33 @@ struct ConnectionThread {
         msg = last_msg;
         msg_time = last_active;
     }
+    
+    void updateProperty() {
+        struct timeval now;
+        gettimeofday(&now, 0);
+        if (last_status.status != device_status.status || now.tv_sec >= last_property_update.tv_sec + 5) {
+            last_property_update.tv_sec = now.tv_sec;
+            last_property_update.tv_usec = now.tv_usec;
+            last_status.status = device_status.status;
+            switch(device_status.status) {
+                case DeviceStatue::e_disconnected:
+                    iod_interface.setProperty(options.name(), "status", "disconnected");
+                    break;
+                case DeviceStatue::e_connected:
+                    iod_interface.setProperty(options.name(), "status", "connected");
+                    break;
+                case DeviceStatue::e_unknown:
+                    iod_interface.setProperty(options.name(), "status", "unknown");
+                    break;
+                case DeviceStatue::e_up:
+                    iod_interface.setProperty(options.name(), "status", "running");
+                    break;
+                case DeviceStatue::e_failed:
+                    iod_interface.setProperty(options.name(), "status", "failed");
+                    break;
+            }
+        }
+    }
     bool done;
     int listener;
     int connection;
@@ -408,6 +446,8 @@ struct ConnectionThread {
     IODInterface &iod_interface;
     char *msg_buffer;
     struct timeval last_active;
+    DeviceStatus &last_status;
+    struct timeval last_property_update;
     boost::mutex connection_mutex;
 };
 
@@ -440,6 +480,9 @@ bool setup_signals()
 
 int main(int argc, const char * argv[])
 {
+    last_send.tv_sec = 0;
+    last_send.tv_usec = 0;
+    
     Options options;
     try {
     
