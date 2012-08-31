@@ -58,6 +58,7 @@ struct Transition {
 
 struct ConditionHandler {
 	ConditionHandler(const ConditionHandler &other);
+	ConditionHandler &operator=(const ConditionHandler &other);
 	ConditionHandler() : action(0), trigger(0), uses_timer(false), triggered(false) {}
 	Condition condition;
 	std::string command_name;
@@ -91,6 +92,7 @@ struct StableState : public TriggerOwner {
     };
     std::ostream &operator<< (std::ostream &out)const { return out << state_name; }
 	StableState& operator=(const StableState* other);
+    StableState (const StableState &other);
         
     void setOwner(MachineInstance *m) { owner = m; }
     void fired(Trigger *trigger);

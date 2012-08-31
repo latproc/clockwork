@@ -27,3 +27,28 @@ Test MACHINE {
 }
 
 test Test;
+
+Check MACHINE output {
+
+    seen_input FLAG (tab:Test);
+
+    on WHEN output IS on, EXECUTE stop WHEN seen_input IS on;
+    off DEFAULT;
+    
+    
+    RECEIVE seen_input.on_enter {
+        SET seen_input TO off;
+    }
+    
+    COMMAND stop {
+        SET output TO off;
+    }
+}
+
+out1 FLAG(tab:Test);
+out2 FLAG(tab:Test);
+check1 Check(tab:Test) out1;
+check2 Check(tab:Test) out2;
+    
+    
+    
