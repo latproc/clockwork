@@ -1172,7 +1172,10 @@ void MachineInstance::setDebug(bool which) {
 }
 
 void MachineInstance::disable() { 
-	is_enabled = false;  
+	is_enabled = false;
+    if (io_interface) {
+        io_interface->turnOff();
+    }
 	gettimeofday(&disabled_time, 0); 
 	for (unsigned int i = 0; i<locals.size(); ++i) {
 		locals[i].machine->disable();
