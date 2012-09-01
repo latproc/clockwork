@@ -27,7 +27,8 @@
 #include "MachineInstance.h"
 
 WaitAction::WaitAction(MachineInstance *mi, WaitActionTemplate &wat) 
-: Action(mi), wait_time(wat.wait_time), property_name(wat.property_name) {
+: Action(mi), wait_time(wat.wait_time), property_name(wat.property_name), use_property(false) {
+	if (wait_time == -1) use_property = true;
 }
 
 Action *WaitActionTemplate::factory(MachineInstance *mi) { 
@@ -67,7 +68,7 @@ Action::Status WaitAction::run() {
 		trigger = Trigger("Timer");
 		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, &trigger)));
 		assert(!trigger.fired());
-        wait_time = -1; // next time, find the property value again
+        if (use_property) wait_time = -1; // next time, find the property value again
 	}
     DBG_M_PROPERTIES << "waiting " << wait_time << "\n";
     return status;

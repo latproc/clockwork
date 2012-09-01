@@ -55,6 +55,7 @@ struct WaitAction : public Action {
     struct timeval start_time;
     long wait_time;
     std::string property_name;
+	bool use_property;
 };
 
 struct WaitForActionTemplate : public ActionTemplate {
