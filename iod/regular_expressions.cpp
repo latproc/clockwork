@@ -77,7 +77,7 @@ int find_matches(rexp_info *info, std::vector<std::string> &variables, const cha
     
     if (res == 0)
     {
-        int i;
+        unsigned int i;
         /* using length of entire match for a string buffer to avoid remallocing buf for each one */
         regoff_t len = info->matches[0].rm_eo - info->matches[0].rm_so + 1;
         char *match_buf = (char*)malloc(len);
@@ -170,7 +170,7 @@ int each_match(rexp_info *info, const char *text, match_func f, void *user_data)
         regoff_t eo = info->matches[0].rm_eo;
         if (eo != -1 && so != -1 && eo>so && result == 0)
         {  
-            for (int index = 0; index <= info->regex.re_nsub; ++index) {
+            for (unsigned int index = 0; index <= info->regex.re_nsub; ++index) {
                 regoff_t so_i = info->matches[index].rm_so;
                 regoff_t eo_i = info->matches[index].rm_eo;
                 match = (char*)malloc(eo_i - so_i + 1);
