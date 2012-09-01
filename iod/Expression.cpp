@@ -23,6 +23,7 @@
 #include "Logger.h"
 #include "DebugExtra.h"
 #include <iomanip>
+#include "regular_expressions.h"
 
 std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
     std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
@@ -45,6 +46,7 @@ std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.oper
 			case opDivide: opstr = "/"; break;
 			case opMod: opstr = "%"; break;
 			case opAssign: opstr = ":="; break;
+            case opMatch: opstr = "~"; break;
         }
         return out << opstr;
     }
@@ -210,28 +212,31 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 }
 
 Value eval(Predicate *p, MachineInstance *m, bool left){
-	if (p->left_p) { 
+	if (p->left_p) {
 		Value l(eval(p->left_p, m, true));
 		Value r(eval(p->right_p, m, false));
 		Value res;
 	    switch (p->op) {
-			case opGE: res = l >= r; break;
-			case opGT: res = l > r; break;
-			case opLE: res = l <= r; break;
-			case opLT: res = l < r; break;
-			case opEQ: res = l == r; break;
-			case opNE: res = l != r; break;
-			case opAND: res = l && r; break;
-			case opOR: res = l || r; break;
-			case opNOT: res = !r; break;
+			case opGE:     res = l >= r; break;
+			case opGT:     res = l > r; break;
+			case opLE:     res = l <= r; break;
+			case opLT:     res = l < r; break;
+			case opEQ:     res = l == r; break;
+			case opNE:     res = l != r; break;
+			case opAND:    res = l && r; break;
+			case opOR:     res = l || r; break;
+			case opNOT:    res = !r; break;
 			case opUnaryMinus: res = -r; break;
-			case opPlus: res = l + r; break;
-			case opMinus: res = l - r; break;
-			case opTimes: res = l * r; break;
+			case opPlus:   res = l + r; break;
+			case opMinus:  res = l - r; break;
+			case opTimes:  res = l * r; break;
 			case opDivide: res = l / r; break;
-			case opMod: res = l % r; break;
+			case opMod:    res = l % r; break;
 			case opAssign: res =l = r; break;
-	        case opNone: res = 0;
+            case opMatch:
+                res = matches(l.asString().c_str(), r.asString().c_str());
+                break;
+	        case opNone:   res = 0;
 	    }
 		
 		if (m && m->debug()) {
@@ -273,8 +278,9 @@ ExprNode eval_stack(Stack &stack){
 		case opMinus: return a.val - b.val;
 		case opTimes: return a.val * b.val;
 		case opDivide:return a.val / b.val;
-		case opMod:   return a.val % b.val;;
+		case opMod:   return a.val % b.val;
 		case opAssign:return b.val;
+        case opMatch: return matches(a.val.asString().c_str(), b.val.asString().c_str());
 		case opNone: return 0;
     }
     return o;

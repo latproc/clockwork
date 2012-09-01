@@ -14,14 +14,17 @@ void append_char(int ch);
 %x STRING
 %x COMMENT
 %x HASHCOMMENT
+%x PATTERNSTR
 
 %%
 
 \n              { yylineno++; yycharno = 1; }
 
 "<<"                return CONCAT;
+"~"                 return MATCHES;
 16BIT               return WORD;
 32BIT               return DOUBLEWORD;
+ALL                 return ALL;
 AND                 return AND;
 AT                  return AT;
 BECOMES             return BECOMES;
@@ -30,6 +33,7 @@ CALL				return CALL;
 COMMAND				return COMMAND;
 COMMANDS			return COMMANDS;
 CONDITION           return CONDITION;
+COPY                return COPY;
 DEC                 return DEC;
 DEFAULT             return DEFAULT;
 DEFAULTS            return DEFAULTS;
@@ -40,6 +44,7 @@ ENABLE              return ENABLE;
 ENTER               return ENTER;
 EXECUTE				return EXECUTE;
 EXPORT              return EXPORT;
+EXTRACT             return EXTRACT;
 FROM				return FROM;
 GLOBAL              return GLOBAL;
 GROUP               return GROUP;
@@ -50,6 +55,7 @@ IS                  return EQ;
 LOCK				return LOCK;
 LOG                 return LOG;
 MACHINE             return STATEMACHINE;
+MATCHES             return MATCHES;
 MODULE              return MODULE;
 MODULES             return MODULES;
 NOT                 return NOT;
@@ -59,6 +65,7 @@ OR                  return OR;
 PROPERTY			return PROPERTY;
 READONLY            return READONLY;
 READWRITE          return READWRITE;
+REPLACE             return REPLACE;
 RO                  return READONLY;
 RW                  return READWRITE;
 RECEIVE             return RECEIVE;
@@ -102,12 +109,26 @@ WHEN                return WHEN;
 <HASHCOMMENT>\n     { yylineno++; yycharno=1; BEGIN 0; }
 <HASHCOMMENT>.		;
 
+`               {
+                    BEGIN PATTERNSTR;
+					if (!buf) 
+					{ 
+					     buf = (char *)malloc(20); 
+					     buflen = 20; 
+					}
+					bufp = buf;
+					*bufp = 0;
+                }
+<PATTERNSTR>\\`    { append_char('`'); }
+<PATTERNSTR>`      { BEGIN 0; yylval.sVal = buf; buf = NULL; return PATTERN; }
+<PATTERNSTR>\n		{ append_char('\n'); yylineno++; yycharno=1; }
+<PATTERNSTR>.      { append_char( *yytext); }
+
 \"			    {  /*"*/	
                     BEGIN STRING; 
 					if (!buf) 
 					{ 
 					     buf = (char *)malloc(20); 
-					     /*fprintf(stderr, "malloced %lx\n", (long)buf);*/ 
 					     buflen = 20; 
 					}
 					bufp = buf;

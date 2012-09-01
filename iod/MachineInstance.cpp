@@ -1565,15 +1565,17 @@ const Value &MachineInstance::getValue(std::string property) {
 		}
 
 	    else if (!properties.exists(property.c_str())) {
-	        if (!state_machine->properties.exists(property.c_str())) {
-				DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
-				if (globals.exists(property.c_str()))
-			        return globals.lookup(property.c_str());
-			}
-			else {
-				DBG_M_PROPERTIES << "using property " << property << "from class\n";
-				return state_machine->properties.lookup(property.c_str()); 
-			}
+            if (state_machine) {
+                if (!state_machine->properties.exists(property.c_str())) {
+                    DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+                    if (globals.exists(property.c_str()))
+                        return globals.lookup(property.c_str());
+                }
+                else {
+                    DBG_M_PROPERTIES << "using property " << property << "from class\n";
+                    return state_machine->properties.lookup(property.c_str()); 
+                }
+            }
 	    }
 		else {
 			Value &x = properties.lookup(property.c_str());
@@ -1593,12 +1595,14 @@ const Value &MachineInstance::getValue(std::string property) {
 	}
 	//is this a state?
 	bool found = false;
-	BOOST_FOREACH(State &s, state_machine->states) {
-		if (s.getName() == property) {
-			found = true;
-			break;
-		}
-	}
+    if (state_machine) {
+        BOOST_FOREACH(State &s, state_machine->states) {
+            if (s.getName() == property) {
+                found = true;
+                break;
+            }
+        }
+    }
 //	if (!found) {
 //		std::stringstream ss;
 //		ss << _name << " could not find property " << property;

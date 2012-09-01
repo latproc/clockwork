@@ -1,0 +1,17 @@
+PatternTest MACHINE {
+
+	found WHEN message MATCHES `[^A-Za-z]*c..l[^A-Za-z]*`;
+	not_found DEFAULT;
+	
+	OPTION tab Test;
+
+	ENTER found {
+		single := COPY `[A-Za-z]` FROM message;
+		all := COPY ALL `[A-Za-z]` FROM message;
+	}
+    ENTER INIT {
+        message := "123 cool _+";
+    }
+}
+pattern_test PatternTest;
+

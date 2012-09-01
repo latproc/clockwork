@@ -26,6 +26,7 @@
 #include "SendMessageAction.h"
 #include "CallMethodAction.h"
 #include "MachineCommandAction.h"
+#include "PatternAction.h"
 
 #define COMPILER_MAIN
 #include "latprocc.h"
@@ -80,25 +81,25 @@ struct Subcondition {
 
 %}
 
-//%token SYMBOL INTEGER STRINGVAL
 %token MODULES MODULE DEFAULTS DEFAULT
 %token STATE ENTER NUMBER SEPARATOR OEXPR EEXPR OBRACE
 %token EBRACE QUOTE LE LT GE GT NE EQ ASSIGNED
 %token NOT SET AND OR SQUOTE LOG FLAG
 %token PROPERTY DEFINE COLLECT FROM TEST EXECUTE SPAWN RUN
 %token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
-%token JOINED EACH DO FUNCTION MATCHING VERSION
+%token VERSION 
 %token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO RECEIVE
 %token DURING WAIT WAITFOR TRANSITION TAG INC DEC BY CONCAT
 %token SEND CONDITION INITSTATE IF ELSE ENABLE DISABLE BECOMES
 %token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
-%token STATES COMMANDS
+%token STATES MATCHES COMMANDS COPY EXTRACT ALL
 
 %union {
 	int iVal;
 	const char *sVal;
 	const char *symbol;
+    const char *pVal;
 	Predicate *expr;
 	PredicateOperator opr;
 	Value *val;
@@ -109,6 +110,7 @@ struct Subcondition {
 %token <iVal> INTEGER
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
+%token <pVal> PATTERN
 
 %left BECOMES
 %left OR
@@ -449,13 +451,16 @@ value {
 | expression '*' expression { $$ = new Predicate($1, opTimes, $3);}
 | expression '/' expression { $$ = new Predicate($1, opDivide, $3);}
 | expression '%' expression { $$ = new Predicate($1, opMod, $3);}
+| expression MATCHES PATTERN { 
+    Value pat($3, Value::t_string);
+    $$ = new Predicate($1, opMatch, new Predicate( pat )); }
 ;
 
 value:
 INTEGER   { 
     $$ = new Value($1); 
 }
-| STRINGVAL { 
+| STRINGVAL {
     $$ = new Value($1, Value::t_string); 
 }
 | SYMBOL {
@@ -662,6 +667,30 @@ SET SYMBOL TO SYMBOL  {
 | SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SendMessageActionTemplate($2, $4);    
+}
+| SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new CopyPatternActionTemplate($1, $4, $6);    
+}
+| SYMBOL BECOMES COPY ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new CopyAllPatternActionTemplate($1, $5, $7);    
+}
+| SYMBOL BECOMES EXTRACT PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExtractPatternActionTemplate($1, $4, $6);    
+}
+| SYMBOL BECOMES EXTRACT ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExtractAllPatternActionTemplate($1, $5, $7);    
+}
+| REPLACE PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ReplacePatternActionTemplate($2, $4, $6);    
+}
+| REPLACE ALL PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ReplaceAllPatternActionTemplate($3, $5, $7);    
 }
 | LOG value /* log message to stdout */ { 
     if (current_action) current_actions->push_back(current_action);
