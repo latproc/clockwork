@@ -61,7 +61,7 @@ struct Options {
         if (machine_) free(machine_);
         if (property_) free(property_);
     }
-    bool valid() const { return got_port && got_host && got_property && got_pattern && name_ != 0 & iod_host_ != 0; }
+    bool valid() const { return got_port && got_host && got_property && got_pattern && name_ != 0 && iod_host_ != 0; }
     
     void clientMode(bool which = true) { is_server = !which; }
     void serverMode(bool which = true) { is_server = which; }
@@ -394,7 +394,7 @@ struct ConnectionThread {
         gettimeofday(&last_active, 0);
         last_property_update.tv_sec = 0;
         last_property_update.tv_usec = 0;
-        last_status = DeviceStatus::e_unknown;
+        last_status.status = DeviceStatus::e_unknown;
     }
     
     void stop() {
@@ -419,19 +419,22 @@ struct ConnectionThread {
             last_property_update.tv_usec = now.tv_usec;
             last_status.status = device_status.status;
             switch(device_status.status) {
-                case DeviceStatue::e_disconnected:
+                case DeviceStatus::e_disconnected:
                     iod_interface.setProperty(options.name(), "status", "disconnected");
                     break;
-                case DeviceStatue::e_connected:
+                case DeviceStatus::e_connected:
                     iod_interface.setProperty(options.name(), "status", "connected");
                     break;
-                case DeviceStatue::e_unknown:
+                case DeviceStatus::e_timeout:
+                    iod_interface.setProperty(options.name(), "status", "timeout");
+                    break;
+                case DeviceStatus::e_unknown:
                     iod_interface.setProperty(options.name(), "status", "unknown");
                     break;
-                case DeviceStatue::e_up:
+                case DeviceStatus::e_up:
                     iod_interface.setProperty(options.name(), "status", "running");
                     break;
-                case DeviceStatue::e_failed:
+                case DeviceStatus::e_failed:
                     iod_interface.setProperty(options.name(), "status", "failed");
                     break;
             }
@@ -446,7 +449,7 @@ struct ConnectionThread {
     IODInterface &iod_interface;
     char *msg_buffer;
     struct timeval last_active;
-    DeviceStatus &last_status;
+    DeviceStatus last_status;
     struct timeval last_property_update;
     boost::mutex connection_mutex;
 };
