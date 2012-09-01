@@ -17,12 +17,13 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = iod iosh persistd device_connector modbusd #cw
+APPS = iod iosh persistd device_connector modbusd zmq_ecat_monitor #cw
 SIMULATED=#-DEC_SIMULATOR=1
 
 # add any extra include or library directory paths as necessary
 
-EXTRAINCS = -I/opt/local/include -I/usr/local/include -I/opt/latproc/include -I/opt/latproc/ethercat/include -I..
+EXTRAINCS = -I/opt/local/include -I/usr/local/include -I/opt/latproc/include \
+	-I/opt/latproc/ethercat/include -I../ethercat
 EXTRALIBS = -L/opt/local/lib -L/usr/local/lib -L/opt/latproc/lib -L/opt/latproc/ethercat/lib
 
 # adjust the following linker flags to set the boost libraries you 
@@ -37,7 +38,7 @@ BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 CFLAGS = $(SIMULATED) -g -pedantic -Wall $(EXTRAINCS)
 CC = g++ $(CFLAGS)
 LDFLAGS = $(EXTRALIBS)
-TOOLLIB = ../tool/build/*.o
+TOOLLIB = ../ethercat/tool/build/*.o
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
@@ -132,6 +133,8 @@ modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 iosh: iosh.cpp
 	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq
 
+zmq_ecat_monitor: zmq_ecat_monitor.o
+	g++ $(CFLAGS) $(LDFLAGS) -o zmq_ecat_monitor zmq_ecat_monitor.o -lzmq
 
 device_connector:	device_connector.o regular_expressions.o anet.o
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ $? $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
