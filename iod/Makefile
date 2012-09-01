@@ -73,7 +73,8 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
-			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
+			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
+			PatternAction.o regular_expressions.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
 			-lethercat \
@@ -84,7 +85,8 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
-			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
+			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
+			PatternAction.o regular_expressions.o
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
@@ -109,7 +111,8 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
-			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
+			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
+			PatternAction.o regular_expressions.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
@@ -118,7 +121,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
-			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
+			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o PatternAction.o regular_expressions.o
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
