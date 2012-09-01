@@ -1034,7 +1034,7 @@ int main (int argc, char const *argv[])
     while (m_iter != MachineInstance::end()) {
         MachineInstance *mi = *m_iter++;
         if (!mi->receives_functions.empty() || mi->commands.size()
-            || !mi->getStateMachine()->transitions.empty()
+            || (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
             || mi->isModbusExported()
             || mi->uses_timer ) {
             mi->markActive();
