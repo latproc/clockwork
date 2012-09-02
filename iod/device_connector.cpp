@@ -296,6 +296,10 @@ struct ConnectionThread {
                     device_status.status = DeviceStatus::e_timeout;
                     updateProperty();
                     std::cerr << "select timeout\n";
+                    close(connection);
+                    device_status.status = DeviceStatus::e_disconnected;
+                    updateProperty();
+					continue;
                 }
             }
             
