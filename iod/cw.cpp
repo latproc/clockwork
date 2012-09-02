@@ -80,7 +80,7 @@ Statistics *statistics = NULL;
 std::list<Statistic *> Statistic::stats;
 
 
-static boost::mutex q_mutex;
+static boost::mutex thread_protection_mutex;
 static boost::condition_variable_any cond;
 
 
@@ -220,10 +220,12 @@ struct IODCommandThread {
         while (!done) {
             zmq::message_t request;
             try {
+                
 	            //  Wait for next request from client
 	            socket.recv (&request);
 				if (!machine_is_ready) {
 					sendMessage(socket, "Ignored during startup");
+                    continue;
 				}
 	            size_t size = request.size();
 	            char *data = (char *)malloc(size+1);
@@ -238,7 +240,8 @@ struct IODCommandThread {
 	                parts.push_back(ds);
 	                ++count;
 	            }
-            
+                boost::mutex::scoped_lock lock(thread_protection_mutex);
+
 	            std::vector<std::string> params(0);
 	            std::copy(parts.begin(), parts.end(), std::back_inserter(params));
 				if (params.empty()) {
@@ -273,7 +276,6 @@ struct IODCommandThread {
 		                command = new IODCommandQuit;
 		            }
 		            else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
-                        boost::mutex::scoped_lock lock(q_mutex);
 		                command = new IODCommandListJSON;
 		            }
 		            else if (count == 2 && ds == "ENABLE") {
@@ -356,7 +358,7 @@ int loadConfig(int argc, char const *argv[]) {
     tzset(); /* this initialises the tz info required by ctime().  */
     gettimeofday(&now_tv, NULL);
     srandom(now_tv.tv_usec);
-	boost::mutex::scoped_lock lock(q_mutex);
+	boost::mutex::scoped_lock lock(thread_protection_mutex);
 
     
     std::list<std::string> files;
@@ -959,7 +961,7 @@ int main (int argc, char const *argv[])
 
 	std::list<Output *> output_list;
 	{
-		boost::mutex::scoped_lock lock(q_mutex);
+		boost::mutex::scoped_lock lock(thread_protection_mutex);
 
 		size_t remaining = machines.size();
 		std::cout << remaining << " Machines\n";
@@ -1104,10 +1106,11 @@ int main (int argc, char const *argv[])
 	load_debug_config();
 	ModbusAddress::message("STARTUP");
 
-	while (!program_done) {
-			// Note: the use of pause here introduces a random variation of up to 500ns
-			//pause();
-			struct timeval start_t, end_t;
+	while (!program_done)
+    {
+        struct timeval start_t, end_t;
+        {
+            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
 			{
 				gettimeofday(&start_t, 0);
 				if (machine_is_ready) {
@@ -1117,7 +1120,6 @@ int main (int argc, char const *argv[])
 				//if (ECInterface::sig_alarms != user_alarms)
                 {
 					ECInterface::instance()->collectState();
-                    boost::mutex::scoped_lock lock(q_mutex);
 			
 					gettimeofday(&end_t, 0);
 					delta = get_diff_in_microsecs(&end_t, &start_t);
@@ -1169,6 +1171,8 @@ int main (int argc, char const *argv[])
 				//}
 				std::cout << std::flush;
 			}
+        }
+
         gettimeofday(&end_t, 0);
         delta = get_diff_in_microsecs(&end_t, &start_t);
         if (delta < 1000000/ECInterface::FREQUENCY)
