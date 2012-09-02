@@ -145,8 +145,8 @@ protected:
 
 struct IODInterface{
     
-    const int REQUEST_TIMEOUT =2000;
-    const int REQUEST_RETRIES = 3;
+    const int REQUEST_RETRIES;
+    const int REQUEST_TIMEOUT;
     
     void sendMessage(const char *message) {
         boost::mutex::scoped_lock lock(interface_mutex);
@@ -168,12 +168,13 @@ struct IODInterface{
                     if (items[0].revents & ZMQ_POLLIN) {
                         zmq::message_t reply;
                         socket->recv(&reply);
-                    len = reply.size();
-                    char *data = (char *)malloc(len+1);
-                    memcpy(data, reply.data(), len);
-                    data[len] = 0;
-                    std::cout << data << "\n";
-                    free(data);
+                    	len = reply.size();
+                    	char *data = (char *)malloc(len+1);
+                    	memcpy(data, reply.data(), len);
+                    	data[len] = 0;
+                    	std::cout << data << "\n";
+                    	free(data);
+						return;
                     }
                     else if (--retries == 0) {
                         // abandon
@@ -218,7 +219,7 @@ struct IODInterface{
         }
     }
     
-    IODInterface(const Options &opts) : context(0), socket(0), options(opts) {
+    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(2000), context(0), socket(0), options(opts) {
         connect();
     }
     
