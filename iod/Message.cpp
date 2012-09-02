@@ -73,6 +73,10 @@ Package::Package(const Package &other)
 	needs_receipt(other.needs_receipt) {	
 }
 
+Package::~Package() {
+    delete message;
+}
+
 Package &Package::operator=(const Package &other) {
 	transmitter = other.transmitter;
 	receiver = other.receiver;

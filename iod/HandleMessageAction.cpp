@@ -28,13 +28,19 @@ Action *HandleMessageActionTemplate::factory(MachineInstance *mi) {
 	return new HandleMessageAction(mi, *this);
 }
 
+HandleMessageAction::~HandleMessageAction() {
+    if (handler)
+        handler->release();
+}
+
+
 Action::Status HandleMessageAction::run() {
 	owner->start(this);
-	owner->displayActive();
-	DBG_M_MESSAGING << "Handling message " << *package.message << " from " 
+	DBG_M_MESSAGING << "Handling message " << *package.message << " from "
 		<< package.transmitter->getName() << " to " << owner->getName() << "\n";
 	handler = owner->findHandler(*package.message, package.transmitter, package.needs_receipt);
 	if (handler) {
+        handler->retain();
 		suspend();
 		Status stat = (*handler)();
 		if ( stat == Failed ) {
@@ -66,7 +72,6 @@ Action::Status HandleMessageAction::run() {
 	DBG_M_MESSAGING << s.c_str() << "\n";
 	result_str = strdup(ss.str().c_str());
 	status = Complete;
-	owner->displayActive();
 	owner->stop(this);
 	return status;
 }

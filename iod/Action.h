@@ -80,8 +80,12 @@ protected:
 // return true;
 struct Action {
 public:
-    Action(MachineInstance *m = 0)  : owner(m), error_str(""), result_str(""), status(New), saved_status(Running), blocked(0) {}
+    Action(MachineInstance *m = 0)  : refs(1), owner(m), error_str(""), result_str(""), status(New), saved_status(Running), blocked(0) {}
     virtual ~Action(){ }
+    
+    Action*retain() { ++refs; return this; }
+    void release() { --refs; if (refs == 0) delete this; }
+    
     const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
     const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
 
@@ -123,6 +127,7 @@ public:
 protected:
 	virtual Status run() = 0;
     virtual Status checkComplete() = 0;
+    int refs;
     MachineInstance *owner;
 	CStringHolder error_str;
 	CStringHolder result_str;

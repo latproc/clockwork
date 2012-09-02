@@ -77,7 +77,7 @@ std::ostream &MachineCommand::operator<<(std::ostream &out)const {
 
 Action::Status MachineCommand::runActions() {
     while (current_step < actions.size()) {
-        Action *a = actions[current_step];
+        Action *a = actions[current_step]->retain();
 		setBlocker(a);
 		suspend();
 		DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";

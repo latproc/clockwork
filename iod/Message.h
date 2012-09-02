@@ -42,6 +42,7 @@ public:
 		s_str = orig.s_str;
 		return *this;
 	}
+    ~CStringHolder() { if (str) free(str); }
     const char *get() const { return (str) ? str : s_str; }
     CStringHolder() { if (str) free( str ); }
     const char *s_str;
@@ -99,6 +100,7 @@ struct Package {
     Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false) 
 		: transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
 	Package(const Package &);
+    ~Package();
 	Package &operator=(const Package &);
 	std::ostream &operator<<(std::ostream &out) const;
 };

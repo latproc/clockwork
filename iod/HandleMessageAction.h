@@ -40,6 +40,7 @@ struct HandleMessageActionTemplate : public ActionTemplate {
 
 struct HandleMessageAction : public Action {
     HandleMessageAction(MachineInstance *mi, HandleMessageActionTemplate &hmt)  : Action(mi), package(hmt.package), handler(0) {}
+    ~HandleMessageAction();
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;

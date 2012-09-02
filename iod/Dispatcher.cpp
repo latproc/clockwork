@@ -149,7 +149,6 @@ void Dispatcher::idle() {
             }
 
         }
-        delete p->message;
         delete p;
         iter = local_to_deliver.erase(iter);
     }

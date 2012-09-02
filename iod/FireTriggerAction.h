@@ -28,6 +28,7 @@ class MachineInstance;
 
 struct FireTriggerAction : public Action {
 	FireTriggerAction(MachineInstance *m, Trigger *t);
+    ~FireTriggerAction();
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;

@@ -422,7 +422,8 @@ void MachineInstance::idle() {
 			DBG_M_ACTIONS << "Action " << *curr << " failed to remove itself when complete. doing so manually\n";
 			stop(curr);
 			curr = executingCommand();
-			assert(curr != last);	
+			assert(curr != last);
+            last->release();
 		}
 	}
 	if (!mail_queue.empty()){
@@ -828,7 +829,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 							//Action *ssa = new SetStateAction(this, temp);
 						    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "unnamed_command");
 						    mc->setActionTemplate(temp);
-							IfCommandActionTemplate ifcat(s.condition.predicate, mc); 
+							IfCommandActionTemplate ifcat(s.condition.predicate, mc);
 							this->push(new IfCommandAction(this, &ifcat));
 							found = true;
 						}
@@ -866,7 +867,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 						else {
 							DBG_M_MODBUS << _name << " " << t.trigger.getText() << " is not exported to modbus, no response sent\n";
 						}
-						return commands[t.trigger.getText()];
+						return commands[t.trigger.getText()]->retain();
 					}
 					else
 						return NULL;
@@ -887,7 +888,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 				ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
 				this->push(ema);
 			}
-			return commands[short_name];
+			return commands[short_name]->retain();
 		}
 	}
 	else {
@@ -914,7 +915,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
     if (receive_handler_i != receives_functions.end()) {
 		DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n";
 		DBG_M_MESSAGING << "handler: " << *((*receive_handler_i).second) << "\n";
-        return (*receive_handler_i).second;
+        return (*receive_handler_i).second->retain();
 	}
 	else if (from == this) {
 		if (short_name == m.getText()) { return NULL; } // no other alternatives
@@ -922,7 +923,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		if (receive_handler_i != receives_functions.end()) {
 				DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n";
 				DBG_M_MESSAGING << "handler: " << *((*receive_handler_i).second) << "\n";
-	       		return (*receive_handler_i).second;
+	       		return (*receive_handler_i).second->retain();
 		}
 	}
 	return NULL;
@@ -965,7 +966,9 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (executingCommand()) {
 		// tell any actions that are triggering on this that we have seen the event
 		DBG_M_MESSAGING << _name << " processing triggers for " << event_name << "\n";
-		BOOST_FOREACH(Action *a, active_actions) {
+        std::list<Action*>::iterator iter = active_actions.begin();
+        while (iter != active_actions.end()) {
+            Action *a = *iter++;
 			Trigger &trigger = a->getTrigger();
 			if (trigger.matches(m.getText())) {
 				SetStateAction *ssa = dynamic_cast<SetStateAction*>(a);
@@ -1058,13 +1061,11 @@ void MachineInstance::start(Action *a) {
 		}
 		if (b == a) { return; }
 	}
-	displayActive();
 	DBG_M_ACTIONS << _name << " pushing (state: " << a->getStatus() << ")" << *a << "\n";
-	active_actions.push_back(a);  
+	active_actions.push_back(a);
 }
 
 void MachineInstance::displayActive() {
-	return;
 	if (active_actions.empty()) return;
 	std::stringstream note;
 	note << _name << ':' << id << " stack: ";
@@ -1080,13 +1081,12 @@ void MachineInstance::displayActive() {
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
 	needs_check = true;
-	displayActive();
 	if (active_actions.back() != a) {
 		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 		return;
 	}
-	assert(active_actions.back() == a);
 	active_actions.pop_back();
+    a->release();
 	if (!active_actions.empty()) {
 		Action *next = active_actions.back();
 		if (next) {
@@ -1120,18 +1120,16 @@ void Action::recover() {
 
 void MachineInstance::clearAllActions() {
 	while (!active_actions.empty()) {
-		active_actions.front();
-		active_actions.pop_front();
+		Action *a = active_actions.front();
+ 		active_actions.pop_front();
 		
-#if 0
-		DBG_M_ACTIONS << "Deleting action " << *a << "\n";
+		DBG_M_ACTIONS << "Releasing action " << *a << "\n";
 		// note that we can't delete an action with active triggers, instead we disable the trigger
 		// and wait for the scheduler to delete the action
 		if (a->getTrigger().enabled() && !a->getTrigger().fired() ) 
 			a->disableTrigger();
-		else
-		 	delete a;
-#endif
+        else
+            a->release();
 	}
 
 	boost::mutex::scoped_lock(q_mutex);
@@ -1233,7 +1231,6 @@ void MachineInstance::push(Action *new_action) {
 	if (!active_actions.empty()) {
 		active_actions.back()->suspend();
 		active_actions.back()->setBlocker(new_action);
-		displayActive();
 	}
 	DBG_M_ACTIONS << _name << " pushing " << *new_action << "\n";
 	active_actions.push_back(new_action);
@@ -1244,7 +1241,6 @@ void MachineInstance::push(Action *new_action) {
 void MachineInstance::setStableState() {
 	if (!state_machine || !state_machine->allow_auto_states) return;
 	if ( executingCommand() || !mail_queue.empty() ) {
-		//DBG_M_AUTOSTATES << _name << " skipping check of stable states due to other work\n";
 		return;
 	}
 	DBG_M_AUTOSTATES << _name << " checking stable states\n";
@@ -1252,12 +1248,10 @@ void MachineInstance::setStableState() {
 	// we must not set our stable state if objects we depend on are still updating their own state
 	needs_check = false;
 
-	//DBG_M_AUTOSTATES << _name << ":" << id << " setting stable state\n";
     if (io_interface) {
 	 	setState(io_interface->getStateString());
     }
     else {
-	    //DBG_M_AUTOSTATES << " checking stable states " << _name << "\n";
 		bool found_match = false;
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             StableState &s = stable_states[ss_idx];
@@ -1282,7 +1276,6 @@ void MachineInstance::setStableState() {
                         state_change = new MoveStateAction(this, temp);
                         if (! (*state_change)()) {
                             stop(state_change);
-                            delete state_change;
                             state_change = 0;
                             DBG_M_AUTOSTATES << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
                         }
@@ -1362,15 +1355,21 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     std::pair<Message, MachineCommandTemplate*>handler;
     BOOST_FOREACH(handler, machine_class->receives) {
         //DBG_M_INITIALISATION << "setting receive handler for " << handler.first << "\n";
-        receives_functions[handler.first] = new MachineCommand(this, handler.second);
+        MachineCommand *mc = new MachineCommand(this, handler.second);
+        mc->retain();
+        receives_functions[handler.first] = mc;
     }
 	// Warning: enter_functions are not used. TBD
     BOOST_FOREACH(handler, machine_class->enter_functions) {
-        enter_functions[handler.first] = new MachineCommand(this, handler.second);
+        MachineCommand *mc = new MachineCommand(this, handler.second);
+        mc->retain();
+        enter_functions[handler.first] = mc;
     }
     std::pair<std::string, MachineCommandTemplate*> node;
     BOOST_FOREACH(node, state_machine->commands) {
-        commands[node.first] = new MachineCommand(this, node.second);
+        MachineCommand *mc = new MachineCommand(this, node.second);
+        mc->retain();
+        commands[node.first] = mc;
     }
 	std::pair<std::string,Value> option;
 	BOOST_FOREACH(option, machine_class->options) {
@@ -1433,7 +1432,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         locals.push_back(newp);
     }
 	// TBD check the parameter types
-	unsigned int num_class_params = state_machine->parameters.size();
+	size_t num_class_params = state_machine->parameters.size();
        for (unsigned int i=0; i<parameters.size(); ++i) {
            if (i<num_class_params) {
                if (parameters[i].val.kind == Value::t_symbol) {
@@ -1699,7 +1698,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 						long intVal;
 						if (ma.length() == 1 || ma.length() == 2) {
 							if (new_value.asInteger(intVal)) {
-								ma.update(intVal);
+								ma.update((int)intVal);
 							}	
 							else {
 								DBG_M_MODBUS << property_name << " does not have an integer value\n";
@@ -2132,7 +2131,7 @@ int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, in
 			const Value &v = getValue("VALUE");
 			long intVal;
 			if (v.asInteger(intVal))
-				return intVal;
+				return (int)intVal;
 			else
 				return 0;
 		}
