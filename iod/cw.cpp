@@ -577,6 +577,7 @@ int loadConfig(int argc, char const *argv[]) {
 	mc_variable->disableAutomaticStateChanges();
 	mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
     mc_variable->options["VALUE"] = "VAL_PARAM1";
+    //mc_variable->options["PERSISTENT"] = Value("true", Value::t_string);
 	mc_variable->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
 	
 	MachineClass *mc_constant = new MachineClass("CONSTANT");
@@ -585,6 +586,7 @@ int loadConfig(int argc, char const *argv[]) {
 	mc_constant->disableAutomaticStateChanges();
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
     mc_constant->options["VALUE"] = "VAL_PARAM1";
+    //mc_constant->options["PERSISTENT"] = Value("true", Value::t_string);
 
 	mc_constant->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
 
@@ -912,6 +914,7 @@ int main (int argc, char const *argv[])
 	IODCommandListJSON::no_display.insert("startup_enabled");
 	IODCommandListJSON::no_display.insert("NAME");
 	IODCommandListJSON::no_display.insert("STATE");
+	IODCommandListJSON::no_display.insert("PERSISTENT");
 
 	statistics = new Statistics;
 	int load_result = loadConfig(argc, argv);
@@ -1031,7 +1034,7 @@ int main (int argc, char const *argv[])
 		// enable all persistent variables and set their value to the 
 		// value in the map.
 		m_iter = MachineInstance::begin();
-	    	while (m_iter != MachineInstance::end()) {
+        while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
 			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
 				std::string name("");
@@ -1053,6 +1056,15 @@ int main (int argc, char const *argv[])
 			}
 		}
 	}
+    else {
+		m_iter = MachineInstance::begin();
+        while (m_iter != MachineInstance::end()) {
+			MachineInstance *m = *m_iter++;
+			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
+				m->enable();
+            }
+        }
+    }
     
     // prepare the list of machines that will be processed at idle time
     m_iter = MachineInstance::begin();
