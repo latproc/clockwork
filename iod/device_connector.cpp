@@ -214,6 +214,8 @@ struct MatchFunction {
             gettimeofday(&now, 0);
             if (last_message != match || last_send.tv_sec +5 <  now.tv_sec) {
                 instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), match);
+                last_send.tv_sec = now.tv_sec;
+                last_send.tv_usec = now.tv_usec;
             }
         }
         return 0;
