@@ -33,7 +33,7 @@ Action::Status FireTriggerAction::run() {
 	owner->start(this);
 	if (!trigger->enabled()) {
 		DBG_SCHEDULER << owner->getName() << " trigger fire after it was disabled; deleting it\n";
-		delete trigger;
+		//delete trigger;
         trigger = 0;
 		status = Complete;
 		owner->stop(this);
