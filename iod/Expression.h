@@ -67,7 +67,8 @@ struct Predicate {
         if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") priority = 1;
     }
     Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), cached_entry(0), priority(0) {}
-    Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r) {}
+    Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r), 	
+		mi(0), cached_entry(0), priority(0) {}
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);
     std::ostream &operator <<(std::ostream &out) const;
