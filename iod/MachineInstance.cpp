@@ -431,8 +431,8 @@ void MachineInstance::idle() {
 			curr = executingCommand();
 			assert(curr != last);
 		}
-        else
-            last->release();
+        //else
+        //    last->release();
 	}
 	if (!mail_queue.empty()){
 		boost::mutex::scoped_lock(q_mutex);
