@@ -1322,6 +1322,15 @@ int main (int argc, char const *argv[])
 			}
 		}
 	}
+    else {
+		m_iter = MachineInstance::begin();
+        while (m_iter != MachineInstance::end()) {
+			MachineInstance *m = *m_iter++;
+			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
+				m->enable();
+            }
+        }
+    }
 
 	// prepare the list of machines that will be processed at idle time
 	m_iter = MachineInstance::begin();
