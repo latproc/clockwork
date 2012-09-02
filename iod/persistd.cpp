@@ -32,6 +32,7 @@
 #include <list>
 #include <utility>
 #include <boost/foreach.hpp>
+#include <signal.h>
 
 
 namespace po = boost::program_options;
@@ -116,6 +117,31 @@ void PersistentStore::save() {
 		std::cerr << strerror(errno) << "\n";
 	}
 }
+bool done = false;
+
+static void finish(int sig)
+{
+    struct sigaction sa;
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, 0);
+    sigaction(SIGINT, &sa, 0);
+    done = true;
+}
+
+bool setup_signals()
+{
+    struct sigaction sa;
+    sa.sa_handler = finish;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) {
+        return false;
+    }
+    return true;
+}
+
 
 int main(int argc, const char * argv[]) {
 
@@ -137,6 +163,8 @@ int main(int argc, const char * argv[]) {
 			port = strtol(argv[2], 0, 0);
 		}
 		
+		setup_signals();
+
 		PersistentStore store("persist.dat");
 		store.load();
 		std::cout << "Listening on port " << port << "\n";
@@ -150,7 +178,7 @@ int main(int argc, const char * argv[]) {
         //subscriber.connect("ipc://ecat.ipc");
         res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
         assert (res == 0);
-        for (;;) {
+        while (!done) {
             zmq::message_t update;
             subscriber.recv(&update);
             std::istringstream iss(static_cast<char*>(update.data()));

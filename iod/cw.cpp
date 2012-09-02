@@ -36,6 +36,7 @@
 #include <sys/stat.h>
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
+#include <signal.h>
 
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
@@ -862,6 +863,30 @@ void load_debug_config() {
 	}
 }
 
+static void finish(int sig)
+{
+    struct sigaction sa;
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, 0);
+    sigaction(SIGINT, &sa, 0);
+    program_done = true;
+}
+
+bool setup_signals()
+{
+    struct sigaction sa;
+    sa.sa_handler = finish;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) {
+        return false;
+    }
+    return true;
+}
+
+
 int main (int argc, char const *argv[])
 {
 	unsigned int user_alarms = 0;
@@ -1065,7 +1090,8 @@ int main (int argc, char const *argv[])
 		}
 	}
 
-
+    setup_signals();
+    
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
 	boost::thread monitor(boost::ref(stateMonitor));

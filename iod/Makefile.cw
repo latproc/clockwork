@@ -28,7 +28,7 @@ EXTRALIBS = -L/opt/local/lib -L/usr/local/lib
 # adjust the following linker flags to set the boost libraries you 
 # would like to use.
 
-BOOST_LIB_EXTN = -mt
+BOOST_LIB_EXTN = #-mt
 BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN)
 BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST_LIB_EXTN)
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
@@ -72,7 +72,8 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
-			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o
+			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o \
+			regular_expressions.cpp PatternAction.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
@@ -82,21 +83,24 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
-			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o
+			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o \
+			regular_expressions.cpp PatternAction.o
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
 			MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o
+			CallMethodAction.o \
+			regular_expressions.cpp PatternAction.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
 			-lzmq $(BOOST_THREAD_LIB) \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
 			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o $(TOOLLIB)
+			CallMethodAction.o $(TOOLLIB) \
+			regular_expressions.cpp PatternAction.o
 
 cw.o:	cw.cpp	MessagingInterface.h
 		$(CC) -c -o $@ cw.cpp
@@ -107,7 +111,8 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
-			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
+			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
+			regular_expressions.cpp PatternAction.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
@@ -116,7 +121,8 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
-			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o
+			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
+			regular_expressions.cpp PatternAction.o
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
@@ -135,6 +141,8 @@ device_connector:	device_connector.o regular_expressions.o anet.o
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ $? $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h
+
+anet.o:	anet.c
 
 latprocc.tab.cpp:	latprocc.ypp latprocc.lpp
 	yacc -o $@ -g -v -d latprocc.ypp
