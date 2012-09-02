@@ -45,6 +45,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
+#include <signal.h>
 
 
 namespace po = boost::program_options;
@@ -338,6 +339,31 @@ void loadData(const char *initial_settings) {
 	}
 }
 
+bool done = false;
+
+static void finish(int sig)
+{
+    struct sigaction sa;
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, 0);
+    sigaction(SIGINT, &sa, 0);
+    done = true;
+}
+
+bool setup_signals()
+{
+    struct sigaction sa;
+    sa.sa_handler = finish;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) {
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, const char * argv[]) {
 
 	po::options_description desc("Allowed options");
@@ -392,6 +418,8 @@ int main(int argc, const char * argv[]) {
 
 	ModbusServerThread modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
+
+	setup_signals();
 	
     try {
         
@@ -406,7 +434,7 @@ int main(int argc, const char * argv[]) {
         //subscriber.connect("ipc://ecat.ipc");
         res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
         assert (res == 0);
-        for (;;) {
+        while (!done) {
             zmq::message_t update;
             subscriber.recv(&update);
 			//std::cout << "received: " << static_cast<char*>(update.data());
@@ -422,9 +450,14 @@ int main(int argc, const char * argv[]) {
 				insert(group, addr-1, value, len);
 			}
 			else if (cmd == "STARTUP") {
+#if 1
+				sleep(2);
+				break;		
+#else
 				char *initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
 				loadData(initial_settings);
 				free(initial_settings);
+#endif
 			}
 			else if (cmd == "DEBUG") {
 				std::string which;

@@ -328,13 +328,13 @@ struct ConnectionThread {
             }
             else if (connection != -1 && FD_ISSET(connection, &read_ready)) {
                 if (offset < buffer_size-1) {
-                    size_t n = read(connection, buf+offset, buffer_size - offset - 1);
+                    ssize_t n = read(connection, buf+offset, buffer_size - offset - 1);
                     if (n == -1) { 
                         if (!done && errno != EINTR && errno != EAGAIN) { // stop() may cause a read error that we ignore
                             std::cerr << "error: " << strerror(errno) << " reading from connection\n";
                             close(connection);
                             device_status.status = DeviceStatus::e_disconnected;
-                            
+ 							updateProperty();                           
                         }
                     }
                     else if (n) {
@@ -380,6 +380,9 @@ struct ConnectionThread {
                 }
                 else {
                     std::cerr << "buffer full\n";
+                    close(connection);
+                    device_status.status = DeviceStatus::e_disconnected;
+					updateProperty();                           
                 }
             }
         }

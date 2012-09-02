@@ -183,9 +183,11 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 
     bool IODCommandProperty::run(std::vector<std::string> &params) {
         if (params.size() == 4) {
-			DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
 		    MachineInstance *m = MachineInstance::find(params[1].c_str());
 		    if (m) {
+				if (m->debug()) {
+					DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
+				}
 				long x;
 				char *p;
 				x = strtol(params[3].c_str(), &p, 0);
@@ -203,7 +205,12 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 	        }
 		}
 		else {
-			error_str = "Usage: PROPERTY property_name value";
+			std::stringstream ss;
+			ss << "Unrecognised parameters in ";
+			std::ostream_iterator<std::string> out(ss, " ");
+			std::copy(params.begin(), params.end(), out);
+			ss << ".  Usage: PROPERTY property_name value";
+			error_str = ss.str();
 			return false;
 		}
 	}
