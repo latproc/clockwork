@@ -52,8 +52,9 @@ bool Action::debug() {
 
 void Action::release() { 
 	--refs; 
-	if (refs < 0) 
+	if (refs < 0) {
 		NB_MSG << "detected potential double delete of " << *this << "\n";
+	}
 }
 
 ConditionHandler::ConditionHandler(const ConditionHandler &other)
@@ -429,8 +430,9 @@ void MachineInstance::idle() {
 			stop(curr);
 			curr = executingCommand();
 			assert(curr != last);
-            last->release();
 		}
+        else
+            last->release();
 	}
 	if (!mail_queue.empty()){
 		boost::mutex::scoped_lock(q_mutex);
