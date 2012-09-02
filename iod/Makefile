@@ -23,8 +23,9 @@ SIMULATED=#-DEC_SIMULATOR=1
 # add any extra include or library directory paths as necessary
 
 EXTRAINCS = -I/opt/local/include -I/usr/local/include -I/opt/latproc/include \
-	-I/opt/latproc/ethercat/include -I../ethercat
-EXTRALIBS = -L/opt/local/lib -L/usr/local/lib -L/opt/latproc/lib -L/opt/latproc/ethercat/lib
+	-I/opt/etherlab/include -I/opt/etherlab/src
+EXTRALIBS = -L/opt/local/lib -L/usr/local/lib -L/opt/latproc/lib \
+	-L/opt/etherlab/lib
 
 # adjust the following linker flags to set the boost libraries you 
 # would like to use.
@@ -38,7 +39,7 @@ BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 CFLAGS = $(SIMULATED) -g -pedantic -Wall $(EXTRAINCS)
 CC = g++ $(CFLAGS)
 LDFLAGS = $(EXTRALIBS)
-TOOLLIB = ../ethercat/tool/build/*.o
+TOOLLIB = /opt/etherlab/src/tool/build/*.o
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
