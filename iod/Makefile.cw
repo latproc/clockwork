@@ -28,7 +28,7 @@ EXTRALIBS = -L/opt/local/lib -L/usr/local/lib
 # adjust the following linker flags to set the boost libraries you 
 # would like to use.
 
-BOOST_LIB_EXTN = #-mt
+BOOST_LIB_EXTN = -mt
 BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN)
 BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST_LIB_EXTN)
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
@@ -130,7 +130,7 @@ persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
 		symboltable.o Logger.o DebugExtra.o
 
 modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
-	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_THREAD_LIB) \
+	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) \
 			symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
 iosh: iosh.cpp

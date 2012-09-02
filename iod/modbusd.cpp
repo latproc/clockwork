@@ -133,11 +133,9 @@ struct IODInterfaceThread {
 };
 
 struct IODCommandInterface {
-	IODCommandInterface() : context(0), socket(0){
+	IODCommandInterface() : REQUEST_TIMEOUT(2000), REQUEST_RETRIES(3), context(0), socket(0){
 	    context = new zmq::context_t(1);
-	    if (!socket)
-			socket = new zmq::socket_t(*context, ZMQ_REQ);
-	    socket->connect ("tcp://localhost:5555");
+		connect();
 	}
 	~IODCommandInterface() { 
 		if (socket) delete socket;
@@ -146,21 +144,62 @@ struct IODCommandInterface {
 		context = 0;
 	}
 
-	char *sendMessage(const char *message) {
-		if (!socket) return strdup("No connection");;
-		const char *msg = (message) ? message : "";
-		size_t len = strlen(msg);
-		zmq::message_t request (len);
-		memcpy ((void *) request.data (), msg, len);
-		socket->send (request);
+    const int REQUEST_TIMEOUT;
+    const int REQUEST_RETRIES;
+    
+    char *sendMessage(const char *message) {
+        try {
+            const char *msg = (message) ? message : "";
 
-        zmq::message_t reply;
-        socket->recv(&reply);
-        size_t size = reply.size();
-        char *data = (char *)malloc(size+1);
-        memcpy(data, reply.data(), size);
-        data[size] = 0;
-		return data;
+            int retries = REQUEST_RETRIES;
+            while (retries) {
+                size_t len = strlen(msg);
+                zmq::message_t request (len);
+                memcpy ((void *) request.data (), msg, len);
+                socket->send (request);
+                bool expect_reply = true;
+                
+                while (expect_reply) {
+                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
+                    zmq::poll( &items[0], 1, REQUEST_TIMEOUT*1000);
+                    if (items[0].revents & ZMQ_POLLIN) {
+                        zmq::message_t reply;
+                        socket->recv(&reply);
+	                    len = reply.size();
+	                    char *data = (char *)malloc(len+1);
+	                    memcpy(data, reply.data(), len);
+	                    data[len] = 0;
+	                    std::cout << data << "\n";
+						return data;
+                    }
+                    else if (--retries == 0) {
+                        // abandon
+                        expect_reply = false;
+                        std::cerr << "abandoning message " << msg << "\n";
+                        delete socket;
+                        connect();
+                    }
+                    else {
+                        // retry
+                        std::cerr << "retrying message " << msg << "\n";
+                        delete socket;
+                        connect();
+                        socket->send (request);
+                    }
+                }
+            }
+        }
+        catch(std::exception e) {
+            std::cerr <<e.what() << "\n";
+        }
+		return 0;
+    }
+
+	void connect() {
+		socket = new zmq::socket_t(*context, ZMQ_REQ);
+	    socket->connect ("tcp://localhost:5555");
+        int linger = 0; // do not wait at socket close time
+        socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 	}
 
     zmq::context_t *context;
@@ -270,14 +309,16 @@ struct ModbusServerThread {
 						}
 						else if (fc == 5) {
 							if (!ignore_coil_change) {
-								free(sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0));
+								char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
+								if (res) free(res);
 								if (debug) std::cout << " Updating coil " << addr << " from connection " << conn 
 										<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
 							}
 						}
 						else if (fc == 6) {
 							int val = getInt( &query[function_code_offset+5]);
-							free( sendIOD(4, addr+1, modbus_mapping->tab_registers[addr]) );
+							char *res = sendIOD(4, addr+1, modbus_mapping->tab_registers[addr]);
+							if (res) free(res);
 							if (debug) std::cout << " Updating register " << addr << " to " << val << " from connection " << conn << "\n";
 						}
 						else 
@@ -403,10 +444,17 @@ int main(int argc, const char * argv[]) {
 	
 	// initialise memory
 	{
-	std::cout << "-------- Collecting IO Status ---------\n";	
-	char *initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
-	loadData(initial_settings);
-	free(initial_settings);
+		std::cout << "-------- Collecting IO Status ---------\n";
+		char *initial_settings;
+		do {	
+			initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
+			if (initial_settings) {
+				loadData(initial_settings);
+				free(initial_settings);
+			}
+			else
+				sleep(2);
+		} while (!initial_settings);
 	}
 
 	std::cout << "-------- Starting to listen to IOD ---------\n";	
