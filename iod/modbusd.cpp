@@ -61,10 +61,10 @@ time_t last = 0;
 time_t now;
 #define OUT (time(&now) == last) ? dummy : std::cout
 
-class IODInterfaceThread;
+//class IODInterfaceThread;
 class IODCommandInterface;
 
-IODInterfaceThread *g_iod_interface;
+//IODInterfaceThread *g_iod_interface;
 IODCommandInterface *g_iodcmd;
 static modbus_mapping_t *modbus_mapping = 0;
 static modbus_t *modbus_context = 0;
@@ -106,6 +106,7 @@ struct IODCommandUnknown : public IODCommand {
     }
 };
 
+#if 0
 struct IODInterfaceThread {
     void operator()() {
 		std::cout << "------------------ IOD Interface Thread Started -----------------\n";
@@ -131,6 +132,7 @@ struct IODInterfaceThread {
     zmq::context_t *context;
     zmq::socket_t *socket;
 };
+#endif
 
 struct IODCommandInterface {
 	IODCommandInterface() : REQUEST_TIMEOUT(2000), REQUEST_RETRIES(3), context(0), socket(0){
@@ -175,13 +177,13 @@ struct IODCommandInterface {
                     else if (--retries == 0) {
                         // abandon
                         expect_reply = false;
-                        std::cerr << "abandoning message " << msg << "\n";
+                        std::cerr << "abandoning message " << msg << "\n" << std::flush;
                         delete socket;
                         connect();
                     }
                     else {
                         // retry
-                        std::cerr << "retrying message " << msg << "\n";
+                        std::cerr << "retrying message " << msg << "\n" << std::flush;
                         delete socket;
                         connect();
                         socket->send (request);
@@ -220,7 +222,7 @@ void display(uint8_t *p, int len) {
 struct ModbusServerThread {
 	
     void operator()() {
-		std::cout << "------------------ Modbus Server Thread Started -----------------\n";
+		std::cout << "------------------ Modbus Server Thread Started -----------------\n" << std::flush;
 
 		if ( LogState::instance()->includes(DebugExtra::instance()->DEBUG_MODBUS) )
 			modbus_set_debug(modbus_context, TRUE);
@@ -228,7 +230,7 @@ struct ModbusServerThread {
 		int function_code_offset = modbus_get_header_length(modbus_context);
 
 		int socket = modbus_tcp_listen(modbus_context, 3);
-		if (debug) std::cout << "Modbus listen socket: " << socket << "\n";
+		if (debug) std::cout << "Modbus listen socket: " << socket << "\n" << std::flush;
 		FD_ZERO(&connections);
 		FD_SET(socket, &connections);
 		max_fd = socket;
@@ -359,7 +361,7 @@ char *sendIOD(int group, int addr, int new_value) {
 	std::stringstream ss;
 	ss << "MODBUS " << group << " " << addr << " " << new_value;
 	std::string s(ss.str());
-	if (g_iod_interface) 
+	if (g_iodcmd) 
 		return g_iodcmd->sendMessage(s.c_str());
 	else 	
 		return strdup("IOD interface not ready\n");
@@ -439,16 +441,16 @@ int main(int argc, const char * argv[]) {
 		return 1;
 	}
 
-	std::cout << "-------- Starting Command Interface ---------\n";	
+	std::cout << "-------- Starting Command Interface ---------\n" << std::flush;	
 	g_iodcmd = new IODCommandInterface;
 	
 	// initialise memory
 	{
-		std::cout << "-------- Collecting IO Status ---------\n";
+		std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
 		char *initial_settings;
 		do {	
 			initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
-			if (initial_settings) {
+			if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0) {
 				loadData(initial_settings);
 				free(initial_settings);
 			}
@@ -457,12 +459,12 @@ int main(int argc, const char * argv[]) {
 		} while (!initial_settings);
 	}
 
-	std::cout << "-------- Starting to listen to IOD ---------\n";	
-	IODInterfaceThread iod_interface;
-	g_iod_interface = &iod_interface;
-	boost::thread monitor(boost::ref(iod_interface));
+	//std::cout << "-------- Starting to listen to IOD ---------\n" << std::flush;	
+	//IODInterfaceThread iod_interface;
+	//g_iod_interface = &iod_interface;
+	//boost::thread monitor(boost::ref(iod_interface));
 
-	std::cout << "-------- Starting Modbus Interface ---------\n";	
+	std::cout << "-------- Starting Modbus Interface ---------\n" << std::flush;	
 
 	ModbusServerThread modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
@@ -523,8 +525,8 @@ int main(int argc, const char * argv[]) {
         std::cerr << "Exception of unknown type!\n";
     }
 
-    iod_interface.stop();
-    monitor.join();
+//    iod_interface.stop();
+//   monitor.join();
 	modbus_interface.stop(); // may hang if clients are connected
 	monitor_modbus.join();
     return 0;
