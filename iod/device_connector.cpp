@@ -145,23 +145,52 @@ protected:
 
 struct IODInterface{
     
+    const int REQUEST_TIMEOUT =2000;
+    const int REQUEST_RETRIES = 3;
+    
     void sendMessage(const char *message) {
         boost::mutex::scoped_lock lock(interface_mutex);
 
         try {
             const char *msg = (message) ? message : "";
-            size_t len = strlen(msg);
-            zmq::message_t request (len);
-            memcpy ((void *) request.data (), msg, len);
-            socket->send (request);
-            zmq::message_t reply;
-            socket->recv(&reply);
-            len = reply.size();
-            char *data = (char *)malloc(len+1);
-            memcpy(data, reply.data(), len);
-            data[len] = 0;
-            std::cout << data << "\n";
-            free(data);
+
+            int retries = REQUEST_RETRIES;
+            while (retries) {
+                size_t len = strlen(msg);
+                zmq::message_t request (len);
+                memcpy ((void *) request.data (), msg, len);
+                socket->send (request);
+                bool expect_reply = true;
+                
+                while (expect_reply) {
+                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
+                    zmq::poll( &items[0], 1, REQUEST_TIMEOUT*1000);
+                    if (items[0].revents & ZMQ_POLLIN) {
+                        zmq::message_t reply;
+                        socket->recv(&reply);
+                    len = reply.size();
+                    char *data = (char *)malloc(len+1);
+                    memcpy(data, reply.data(), len);
+                    data[len] = 0;
+                    std::cout << data << "\n";
+                    free(data);
+                    }
+                    else if (--retries == 0) {
+                        // abandon
+                        expect_reply = false;
+                        std::cerr << "abandoning message " << msg << "\n";
+                        delete socket;
+                        connect();
+                    }
+                    else {
+                        // retry
+                        std::cerr << "retrying message " << msg << "\n";
+                        delete socket;
+                        connect();
+                        socket->send (request);
+                    }
+                }
+            }
         }
         catch(std::exception e) {
             std::cerr <<e.what() << "\n";
@@ -174,23 +203,30 @@ struct IODInterface{
         sendMessage(ss.str().c_str());
     }
     
-    IODInterface(const Options &opts) : context(0), socket(0), options(opts) {
+    void connect() {
         try {
             std::stringstream ss;
             ss << "tcp://" << options.iodHost() << ":" << 5555;
             context = new zmq::context_t(1);
             socket = new zmq::socket_t (*context, ZMQ_REQ);
             socket->connect(ss.str().c_str());
+            int linger = 0; // do not wait at socket close time
+            socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         }
         catch (std::exception e) {
             std::cerr << e.what() << "\n";
         }
     }
     
+    IODInterface(const Options &opts) : context(0), socket(0), options(opts) {
+        connect();
+    }
+    
     zmq::context_t *context;
     zmq::socket_t *socket;
     boost::mutex interface_mutex;
     const Options &options;
+
 };
 
 
