@@ -50,6 +50,12 @@ bool Action::debug() {
 	return owner && owner->debug();
 }
 
+void Action::release() { 
+	--refs; 
+	if (refs < 0) 
+		NB_MSG << "detected potential double delete of " << *this << "\n";
+}
+
 ConditionHandler::ConditionHandler(const ConditionHandler &other)
 : condition(other.condition),
 command_name(other.command_name),

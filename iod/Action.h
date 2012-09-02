@@ -46,9 +46,9 @@ struct TriggerOwner {
 };
 
 struct Trigger {
-	Trigger() : name("inactive"), seen(false), is_active(false), owner(0) {}
-	Trigger(const std::string &n) : name(n), seen(false), is_active(true), owner(0) {}
-	Trigger(const Trigger &o) : name(o.name), seen(o.seen), is_active(o.is_active), owner(o.owner) {}
+	Trigger() : name("inactive"), seen(false), is_active(false), owner(0), deleted(false) {}
+	Trigger(const std::string &n) : name(n), seen(false), is_active(true), owner(0), deleted(false) {}
+	Trigger(const Trigger &o) : name(o.name), seen(o.seen), is_active(o.is_active), owner(o.owner), deleted(false) {}
 	Trigger &operator=(const Trigger &o) { 
 		name = o.name;
 		seen = o.seen;
@@ -73,6 +73,7 @@ protected:
 	bool seen;
 	bool is_active;
     TriggerOwner *owner;
+	bool deleted;
 };
 
 // an action is started by operator(). If the action successfully starts, 
@@ -84,7 +85,7 @@ public:
     virtual ~Action(){ }
     
     Action*retain() { ++refs; return this; }
-    void release() { --refs; if (refs == 0) delete this; }
+    void release();
     
     const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
     const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
