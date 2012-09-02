@@ -6,12 +6,23 @@ OUT_2 FLAG(tab:Outputs);
 A CONSTANT(tab:Tests, export:reg) 123;
 B VARIABLE(tab:Tests, export:rw_reg) 456;
 C CONSTANT(tab:Tests, export:reg32) 554343;
-D VARIABLE(tab:Tests, export:rw_reg32) 2345264;
+D VARIABLE(tab:Tests, export:rw_reg32) 10;
 E CONSTANT(tab:Tests, export:str) "This is a message";
+
+Calc MACHINE {
+
+    GLOBAL D;
+    go DEFAULT;
+    ENTER go { offdelay := D * 60000; }
+    ENTER INIT { offdelay := D * 60000; }
+    OPTION tab Tests;
+}
+calc Calc;
 
 Monitor MACHINE other {
 
-sample_flag FLAG (export:ro);
+sample_flag FLAG (export:ro, tab:Tests);
+sample_flag2 FLAG (export:rw, tab:Tests);
 
 	on WHEN other.started_flag IS on;
 	off DEFAULT;
@@ -67,4 +78,11 @@ flash1 Flash (type:Light, tab:Outputs) OUT_1;
 #flash4 Flash (type:Light, tab:Outputs) OUT_4;
 #flash5 Flash (type:Light, tab:Outputs) OUT_5;
 #flash6 Flash (type:Light, tab:Outputs) OUT_6;
+
+STARTUP MACHINE {
+
+    ENTER INIT {
+        
+    }
+}
 
