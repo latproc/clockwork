@@ -4,7 +4,11 @@ BasicTimer MACHINE {
     on INITIAL;
 }
 basicTimer BasicTimer(tab:Test);
-
+basicTimer1 BasicTimer(tab:Test);
+basicTimer2 BasicTimer(tab:Test);
+f1 FLAG(tab:Test);
+f2 FLAG(tab:Test);
+f3 FLAG(tab:Test);
 
 Timer MACHINE (timeout:1) {
 	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);

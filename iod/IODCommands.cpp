@@ -148,7 +148,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
                     if (m->getCurrent().getName() == "on") {
                         if (m->receives(Message("turnOff"), 0)) {
                             msg = new Message("turnOff");
-                            m->send(msg);
+                            m->send(msg, m);
                         }
                         else
                             m->setState("off");
@@ -156,7 +156,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
                     else if (m->getCurrent().getName() == "off") {
                         if (m->receives(Message("turnOn"), 0)) {
                             msg = new Message("turnOn");
-                            m->send(msg);
+                            m->send(msg, m);
                         }
                         else
                             m->setState("on");

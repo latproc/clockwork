@@ -568,8 +568,8 @@ int loadConfig(int argc, char const *argv[]) {
 	flag->default_state = State("off");
 	flag->initial_state = State("off");
 	flag->disableAutomaticStateChanges();
-	flag->transitions.push_back(Transition(State("on"),State("off"),Message("turnOff")));
-	flag->transitions.push_back(Transition(State("off"),State("on"),Message("turnOn")));
+	//flag->transitions.push_back(Transition(State("on"),State("off"),Message("turnOff")));
+	//flag->transitions.push_back(Transition(State("off"),State("on"),Message("turnOn")));
 	
 	MachineClass *mc_variable = new MachineClass("VARIABLE");
 	mc_variable->states.push_back("ready");
