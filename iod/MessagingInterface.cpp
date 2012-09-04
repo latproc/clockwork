@@ -70,6 +70,8 @@ void MessagingInterface::connect() {
     socket = new zmq::socket_t(*context, ZMQ_REQ);
     is_publisher = false;
     socket->connect(url.c_str());
+    int linger = 0;
+    socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
 }
 
 MessagingInterface::~MessagingInterface() {
@@ -91,7 +93,7 @@ void MessagingInterface::send(const char *txt) {
             bool expect_reply = true;
             while (expect_reply) {
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                zmq::poll( &items[0], 1, 2000000);
+                zmq::poll( &items[0], 1, 5000);
                 if (items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
                     socket->recv(&reply);
