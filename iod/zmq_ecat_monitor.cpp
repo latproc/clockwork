@@ -81,7 +81,12 @@ int main(int argc, const char * argv[])
 	        for (;;) {
 	            zmq::message_t update;
 	            subscriber.recv(&update);
-	            std::istringstream iss(static_cast<char*>(update.data()));
+				long len = update.size();
+                char *data = (char *)malloc(len+1);
+                memcpy(data, update.data(), len);
+                data[len] = 0;
+	            std::istringstream iss(data);
+				delete data;
 	            //iss >> count;
 	            std::string point, op, state;
 	            iss >> point >> op;
@@ -90,7 +95,7 @@ int main(int argc, const char * argv[])
 	            	std::cout << point << " "<< op;
 	                std::cout << " " << state << "\n";
 	            }
-	            else std::cout << static_cast<char*>(update.data()) << "\n";
+	            else std::cout << data << "\n";
 	        }
 	    }
     }

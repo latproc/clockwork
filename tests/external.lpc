@@ -1,0 +1,11 @@
+camera EXTERNAL(HOST:"192.168.4.24", PORT:5600, tab:Test);
+
+Test MACHINE camera {
+
+    test WHEN TIMER > 5000;
+    idle DEFAULT;
+
+    ENTER test { SEND CapturePhoto TO camera; }
+}
+test Test(tab:Test) camera;
+

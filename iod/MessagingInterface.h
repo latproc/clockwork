@@ -26,22 +26,24 @@
 
 class MessagingInterface {
 public:
-    MessagingInterface(int num_threads, int port) : context(num_threads), publisher(context, ZMQ_PUB) { 
-		std::stringstream ss;
-		ss << "tcp://*:" << port;
-        publisher.bind(ss.str().c_str());
-    }
-    ~MessagingInterface() { if (current == this) current = 0; }
+    MessagingInterface(int num_threads, int port);
+    MessagingInterface(std::string host, int port);
+    ~MessagingInterface();
     void send(const char *msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent() {
         if (current == 0) current = new MessagingInterface(1, 5556);
         return current; 
     }
+    static MessagingInterface *create(std::string host, int port);
 private:
+    void connect();
     static MessagingInterface *current;
-    zmq::context_t context;
-    zmq::socket_t publisher;
+    zmq::context_t *context;
+    zmq::socket_t *socket;
+    static std::map<std::string, MessagingInterface *>interfaces;
+    bool is_publisher;
+    std::string url;
 };
 
 #endif

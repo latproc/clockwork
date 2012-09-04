@@ -589,6 +589,10 @@ int loadConfig(int argc, char const *argv[]) {
     //mc_constant->options["PERSISTENT"] = Value("true", Value::t_string);
 
 	mc_constant->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
+    
+    MachineClass *mc_external = new MachineClass("EXTERNAL");
+    mc_external->options["HOST"] = "localhost";
+    mc_external->options["PORT"] = 5600;
 
     std::map<std::string, MachineInstance*> machine_instances;
 

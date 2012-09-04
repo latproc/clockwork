@@ -181,15 +181,20 @@ int main(int argc, const char * argv[]) {
         while (!done) {
             zmq::message_t update;
             subscriber.recv(&update);
-            std::istringstream iss(static_cast<char*>(update.data()));
+			long len = update.size();
+           	char *data = (char *)malloc(len+1);
+           	memcpy(data, update.data(), len);
+           	data[len] = 0;
+            std::istringstream iss(data);
 			try {
-            std::string property, op, value;
-            iss >> property >> op >> value;
-			store.insert(property, value.c_str());
-			store.save();
+            	std::string property, op, value;
+            	iss >> property >> op >> value;
+				store.insert(property, value.c_str());
+				store.save();
+				free(data);
 			}
 			catch(std::exception e) {
-				std::cerr << "exception " <<e.what() << "processing: " << static_cast<char*>(update.data()) << "\n";
+				std::cerr << "exception " <<e.what() << "processing: " << data << "\n";
 			}
         }
     }

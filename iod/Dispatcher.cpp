@@ -25,6 +25,8 @@
 #include "MachineInstance.h"
 #include "DebugExtra.h"
 #include "Logger.h"
+#include "MessagingInterface.h"
+#include "symboltable.h"
 
 Dispatcher *Dispatcher::instance_ = NULL;
 
@@ -113,19 +115,32 @@ void Dispatcher::idle() {
         Receiver *to = p->receiver;
         Transmitter *from = p->transmitter;
         Message m(p->message->getText().c_str());
-//        std::cout << "Dispatcher is attempting to deliver " 
-//        << m << " from " << ( (from)?from->getName():"unknown") 
-//        << " to " << ( (to) ? to->getName():"all") << "\n";
         if (to) {
-			DBG_DISPATCHER << "Dispatcher queued " << *p << " to " << to->getName() <<  "\n";
-            to->enqueue(*p);
-			MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
+            MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
+            if (mi && mi->_type == "EXTERNAL") {
+                DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to " << to->getName() <<  "\n";
+                {
+                    Value host = mi->getValue("HOST");
+                    Value port_val = mi->getValue("PORT");
+                    long port;
+                    if (port_val.asInteger(port)) {
+                        MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port);
+                        std::stringstream ss;
+                        mif->send(m.getText().c_str());
+                    }
+                }
+            }
+            else {
+                DBG_DISPATCHER << "Dispatcher queued " << *p << " to " << to->getName() <<  "\n";
+                to->enqueue(*p);
+                MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
 				if (mi) {
 					Action *curr = mi->executingCommand();
 					if (curr) {
 						DBG_DISPATCHER << mi->getName() << " currently executing " << *curr << "\n";
 					}
 				}
+            }
         } else {
             // since acting on a message may cause new machines to 
             // be generated, and thus alter the reciever list,

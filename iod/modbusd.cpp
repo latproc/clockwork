@@ -487,8 +487,11 @@ int main(int argc, const char * argv[]) {
         while (!done) {
             zmq::message_t update;
             subscriber.recv(&update);
-			//std::cout << "received: " << static_cast<char*>(update.data());
-            std::istringstream iss(static_cast<char*>(update.data()));
+			long len = update.size()
+           	char *data = (char *)malloc(len+1);
+           	memcpy(data, update.data(), len);
+           	data[len] = 0;
+            std::istringstream iss(data);
 			std::string cmd;
 			iss >> cmd;
 			if (cmd == "UPDATE") {
