@@ -145,13 +145,24 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 				}
 		  	 	if (m->_type != "POINT") {
 				     Message *msg;
-					 if (m->getCurrent().getName() == "on") 
-						msg = new Message("turnOff");
-					 else
-						msg = new Message("turnOn");
-				     m->send(msg, m);
-		             result_str = "OK";
-				     return true;
+                    if (m->getCurrent().getName() == "on") {
+                        if (m->receives(Message("turnOff"), 0)) {
+                            msg = new Message("turnOff");
+                            m->send(msg);
+                        }
+                        else
+                            m->setState("off");
+                    }
+                    else if (m->getCurrent().getName() == "off") {
+                        if (m->receives(Message("turnOn"), 0)) {
+                            msg = new Message("turnOn");
+                            m->send(msg);
+                        }
+                        else
+                            m->setState("on");
+                    }
+                    result_str = "OK";
+                    return true;
 				}
 			}
 			else {

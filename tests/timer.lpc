@@ -1,4 +1,11 @@
 
+BasicTimer MACHINE {
+    off WHEN TIMER>3000;
+    on INITIAL;
+}
+basicTimer BasicTimer(tab:Test);
+
+
 Timer MACHINE (timeout:1) {
 	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);
 	running STATE;

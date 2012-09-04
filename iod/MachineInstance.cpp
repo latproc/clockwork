@@ -647,15 +647,17 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
         DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from " << from->getName() << "\n";
         return true;
     }
+    if (commands.count(m.getText()) != 0) {
+        return true;    // items in the command table are public and can be sent by anyone
+    }
 
 	// commands in the transition table are public and can be sent by anyone
     std::list<Transition>::const_iterator iter = state_machine->transitions.begin();
-    std::string msg_str = from->getName() + "_" + m.getText();
     while (iter != state_machine->transitions.end()) {
         Transition t = *iter++;
         if (t.trigger == m) return true;
     }
-    DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << from->getName() << "\n";    
+    DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
     return false;
 }
 Action::Status MachineInstance::setState(State new_state, bool reexecute) {
