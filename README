@@ -54,6 +54,12 @@ Note, the Makefile used here assumes libzmq is installed in /usr/local/
   cd latproc/iod
   make -f Makefile.cw
   
+   Part B - setting up the user database for the web interface
+
+   The user database can be created using scripts/create_webiodb.
+
+   By default it will be created in www/app with the name 'webio.db' these
+     settings can be changed in settings.php
 
 
    Part B - Setting up the IgH EtherCAT software to be used but the Latproc software
