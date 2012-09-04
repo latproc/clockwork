@@ -1,4 +1,4 @@
-<?php
+<?php require_once('settings.php');
 /*
   Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
@@ -25,8 +25,33 @@
  *  displays the result in user-defined tabs, along with control buttons
  */
 
+
+if ((!isset($user))) {
+	// not logged in, show a link to the login page
+	header('Location: index.php');
+
+print <<<EOD
+<!DOCTYPE html PUBLIC 
+  "-//W3C//DTD HTML 4.01 Transitional//EN" 
+  "http://www.w3.org/TR/html4/loose.dtd" >
+
+<html> <head> 
+</head>
+<body>
+<div>Please <a href="login.php">Login</a></div>
+</body></html>
+EOD;
+}
+else {
+	
 $debug_messages = "";
 $use_ajax = true; // the 'false' version of this may not actually work
+
+$banner = "<p>Logged in as " . $user->getName() . "."
+	. " <a href=\"index.php?m=logout\">Logout</a>";
+if ($user->isAdministrator()) {
+	$banner .= ' <a href="index.php?registration">Administration</a>';
+}
 
 // static image generator
 function image_html($name, $filename) {
@@ -540,6 +565,7 @@ print <<<EOD
 	$header_extras 
 </head>
 <body>
+<div>$banner</div>
 <fieldset><legend>IO Control</legend>
 $page_body
 <br/>
@@ -558,3 +584,4 @@ $debug_messages
 </div>
 </body></html>
 EOD;
+}
