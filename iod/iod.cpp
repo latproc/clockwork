@@ -749,6 +749,11 @@ int loadConfig(int argc, char const *argv[]) {
 	//mc_constant->receives[Message(strdup("INIT_enter"))] = mc_cmd;
 	mc_constant->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
 
+    MachineClass *mc_external = new MachineClass("EXTERNAL");
+    mc_external->options["HOST"] = "localhost";
+    mc_external->options["PORT"] = 5600;
+
+
 /*
 	flag->stable_states.push_back(StableState("on", new Predicate(new Predicate("SELF"), opEQ, new Predicate("on"))));
 	flag->stable_states.push_back(StableState("off", new Predicate(new Predicate("SELF"), opEQ, new Predicate("off"))));
