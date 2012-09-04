@@ -1,0 +1,13 @@
+#!/bin/sh
+
+[ -d www ] && cd www;
+[ -d app ] && cd app;
+
+sqlite3 webio.db << EOF
+CREATE TABLE Users
+  (id integer primary key autoincrement not null,
+  username varchar(80),
+  encrypted_password varchar(40), administrator int(1), email varchar(255));
+CREATE TABLE notes(id integer primary key autoincrement, note varchar(500));
+CREATE UNIQUE INDEX i_username on users(username);
+EOF
