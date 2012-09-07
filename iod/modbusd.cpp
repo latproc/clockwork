@@ -487,7 +487,7 @@ int main(int argc, const char * argv[]) {
         while (!done) {
             zmq::message_t update;
             subscriber.recv(&update);
-			long len = update.size()
+			long len = update.size();
            	char *data = (char *)malloc(len+1);
            	memcpy(data, update.data(), len);
            	data[len] = 0;
