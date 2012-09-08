@@ -103,7 +103,7 @@ void PersistentStore::save() {
 	std::stringstream ss;
 	struct timeval now;
 	gettimeofday(&now, 0);
-	ss << "/tmp/persist_scratch_" <<now.tv_usec;
+	ss << "persist_scratch_" <<now.tv_usec;
 	std::string scratchfile = ss.str();
 	std::ofstream out(scratchfile.c_str());
 	if (!out) {
@@ -119,8 +119,12 @@ void PersistentStore::save() {
 		}
 	}
 	if (rename(scratchfile.c_str(), file_name.c_str())) {
-		std::cerr << strerror(errno) << "\n";
+		std::cerr << "rename: " << strerror(errno) << "\n";
 	}
+	if (unlink(scratchfile.c_str())) {
+		std::cerr << "unlink: " << strerror(errno) << "\n";
+	}
+	
 }
 bool done = false;
 
