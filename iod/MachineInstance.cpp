@@ -808,6 +808,9 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 	if (short_name.find('.')) {
 		short_name = short_name.substr(short_name.find('.')+1);
 	}
+	if (from) {
+		DBG_M_MESSAGING << "received message " << m << " from " << from->getName() << "\n";
+	}
 	if (from == this || m.getText() == short_name) {
 	    std::list<Transition>::const_iterator iter = state_machine->transitions.begin();
 		while (iter != state_machine->transitions.end()) {
@@ -960,7 +963,12 @@ void MachineInstance::collect(const Package &package) {
 
 Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (!enabled()) {
-		DBG_M_MESSAGING << _name << " dropped message " << m << " while disabled\n";
+		if (from) {
+			DBG_M_MESSAGING << _name << " dropped message " << m << " from " << from->getName() << " while disabled\n";
+		}
+		else {
+			DBG_M_MESSAGING << _name << " dropped message " << m << " while disabled\n";
+		}
 		return Action::Failed;
 	}
 

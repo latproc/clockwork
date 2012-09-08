@@ -33,6 +33,7 @@
 #include <utility>
 #include <boost/foreach.hpp>
 #include <signal.h>
+#include <sys/time.h>
 
 
 namespace po = boost::program_options;
@@ -99,8 +100,12 @@ std::ostream &operator<<(std::ostream &out, const PersistentStore &store) {
 }
 
 void PersistentStore::save() {
-	const char * scratchfile = "persist_scratch.dat";
-	std::ofstream out(scratchfile);
+	std::stringstream ss;
+	struct timeval now;
+	gettimeofday(&now, 0);
+	ss << "/tmp/persist_scratch_" <<now.tv_usec;
+	std::string scratchfile = ss.str();
+	std::ofstream out(scratchfile.c_str());
 	if (!out) {
 		std::cerr << "failed to open " << scratchfile << " for write\n";
 	}
@@ -113,7 +118,7 @@ void PersistentStore::save() {
 			std::cerr << "exception " << e.what() << " writing data store\n";
 		}
 	}
-	if (rename(scratchfile, file_name.c_str())) {
+	if (rename(scratchfile.c_str(), file_name.c_str())) {
 		std::cerr << strerror(errno) << "\n";
 	}
 }
