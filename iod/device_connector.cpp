@@ -201,8 +201,7 @@ struct IODInterface{
     void setProperty(const std::string &machine, const std::string &property, const std::string &val) {
         std::stringstream ss;
         ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
-	std::cout << ss.str();
-//        sendMessage(ss.str().c_str());
+        sendMessage(ss.str().c_str());
     }
     
     void connect() {
@@ -434,8 +433,8 @@ struct ConnectionThread {
 					updateProperty();                           
                 }
             }
-			delete match;
         }
+		delete match;
         }catch (std::exception e) {
             std::cerr << e.what() << "\n";
         }
