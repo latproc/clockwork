@@ -113,16 +113,16 @@ bool Value::operator>=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
-
-	if (a != b && (a == t_integer || b == t_integer) ) {
+	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x >= y;
 		else 
 			return false;
 	}
+
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
 
 	if (a != b) return false;
     switch (kind) {
@@ -144,16 +144,16 @@ bool Value::operator<=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
-
-	if (a != b && (a == t_integer || b == t_integer) ) {
+	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x <= y;
 		else 
 			return false;
 	}
+
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
 
 	if (a != b) return false;
     switch (kind) {
@@ -176,16 +176,16 @@ bool Value::operator==(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
-
-	if (a != b && (a == t_integer || b == t_integer) ) {
+	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x == y;
 		else 
 			return false;
 	}
+
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
 
     if (a != b) return false; // different types cannot be equal (yet)
     switch (kind) {
@@ -209,16 +209,16 @@ bool Value::operator!=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
-
-	if (a != b && (a == t_integer || b == t_integer) ) {
+	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x != y;
 		else 
 			return false;
 	}
+
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
 
 	if (a != b) return true;
     switch (kind) {
