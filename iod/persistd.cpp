@@ -137,6 +137,7 @@ static void finish(int sig)
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGINT, &sa, 0);
     done = true;
+	exit(0);
 }
 
 bool setup_signals()
