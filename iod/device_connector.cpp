@@ -201,7 +201,8 @@ struct IODInterface{
     void setProperty(const std::string &machine, const std::string &property, const std::string &val) {
         std::stringstream ss;
         ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
-        sendMessage(ss.str().c_str());
+	std::cout << ss.str();
+//        sendMessage(ss.str().c_str());
     }
     
     void connect() {
@@ -254,9 +255,9 @@ struct MatchFunction {
 				MatchFunction::instance()->result = match;
 			else 
 				MatchFunction::instance()->result += match;
-            if (index == num_sub && (last_message != match || last_send.tv_sec +5 <  now.tv_sec)) {
-                instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), 
-					MatchFunction::instance()->result.c_str());
+			std::string res = MatchFunction::instance()->result;
+            if (index == num_sub && (last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
+                instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), res.c_str());
                 last_send.tv_sec = now.tv_sec;
                 last_send.tv_usec = now.tv_usec;
             }
