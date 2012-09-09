@@ -118,7 +118,7 @@ bool Value::operator>=(const Value &other) const {
 
 	if (a != b && (a == t_integer || b == t_integer) ) {
 		long x,y;
-		if (asInteger(x) && asInteger(y)) 
+		if (asInteger(x) && other.asInteger(y)) 
 			return x >= y;
 		else 
 			return false;
@@ -149,7 +149,7 @@ bool Value::operator<=(const Value &other) const {
 
 	if (a != b && (a == t_integer || b == t_integer) ) {
 		long x,y;
-		if (asInteger(x) && asInteger(y)) 
+		if (asInteger(x) && other.asInteger(y)) 
 			return x <= y;
 		else 
 			return false;
@@ -181,7 +181,7 @@ bool Value::operator==(const Value &other) const {
 
 	if (a != b && (a == t_integer || b == t_integer) ) {
 		long x,y;
-		if (asInteger(x) && asInteger(y)) 
+		if (asInteger(x) && other.asInteger(y)) 
 			return x == y;
 		else 
 			return false;
@@ -214,7 +214,7 @@ bool Value::operator!=(const Value &other) const {
 
 	if (a != b && (a == t_integer || b == t_integer) ) {
 		long x,y;
-		if (asInteger(x) && asInteger(y)) 
+		if (asInteger(x) && other.asInteger(y)) 
 			return x != y;
 		else 
 			return false;
@@ -274,7 +274,7 @@ bool Value::operator!() const {
             break;
         case t_bool: return !bValue;
             break; 
-		 case t_symbol:
+		case t_symbol:
 		case t_string: return false;
 			break;
         default:
