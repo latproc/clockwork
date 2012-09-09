@@ -1,0 +1,22 @@
+Constants MACHINE {
+
+OPTION OverWeight 2040;
+OPTION UnderWeight 1800;
+}
+Weights Constants;
+
+Weight MACHINE {
+   OPTION weight 0;
+   ENTER INIT { weight := 1999; }
+}
+weight Weight;
+
+Test MACHINE w {
+
+    done WHEN Weights.OverWeight >= w.weight && Weights.UnderWeight  <= w.weight;
+    waiting DEFAULT;
+
+    ENTER done{ LOG "done"; }
+}
+test Test weight;
+
