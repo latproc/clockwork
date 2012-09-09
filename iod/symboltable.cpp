@@ -29,7 +29,7 @@
 #include <utility>
 #include "DebugExtra.h"
 
-Value SymbolTable::Null(-4325);
+Value SymbolTable::Null(-432576);
 Value SymbolTable::True(true);
 Value SymbolTable::False(false);
 
@@ -217,7 +217,7 @@ bool Value::operator!=(const Value &other) const {
 		if (asInteger(x) && other.asInteger(y)) 
 			return x != y;
 		else 
-			return false;
+			return true;
 	}
 
 	if (a != b) return true;
