@@ -113,6 +113,9 @@ bool Value::operator>=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
+
 	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
@@ -120,9 +123,6 @@ bool Value::operator>=(const Value &other) const {
 		else 
 			return false;
 	}
-
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
 
 	if (a != b) return false;
     switch (kind) {
@@ -144,6 +144,9 @@ bool Value::operator<=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
+
 	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
@@ -151,9 +154,6 @@ bool Value::operator<=(const Value &other) const {
 		else 
 			return false;
 	}
-
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
 
 	if (a != b) return false;
     switch (kind) {
@@ -176,6 +176,9 @@ bool Value::operator==(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
+
 	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
@@ -183,9 +186,6 @@ bool Value::operator==(const Value &other) const {
 		else 
 			return false;
 	}
-
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
 
     if (a != b) return false; // different types cannot be equal (yet)
     switch (kind) {
@@ -209,6 +209,9 @@ bool Value::operator!=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
+	if (a == t_symbol) a = t_string;
+	if (b == t_symbol) b = t_string;
+
 	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
@@ -216,9 +219,6 @@ bool Value::operator!=(const Value &other) const {
 		else 
 			return false;
 	}
-
-	if (a == t_symbol) a = t_string;
-	if (b == t_symbol) b = t_string;
 
 	if (a != b) return true;
     switch (kind) {
@@ -476,7 +476,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
     switch(kind) {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
-		case t_symbol:
+        case t_symbol: out << sValue; break;
         case t_string: out << sValue; break;
 #if 0
         case t_list:   { 
