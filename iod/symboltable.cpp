@@ -113,7 +113,7 @@ bool Value::operator>=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
+	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x >= y;
@@ -144,7 +144,7 @@ bool Value::operator<=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
+	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x <= y;
@@ -176,7 +176,7 @@ bool Value::operator==(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
+	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x == y;
@@ -209,7 +209,7 @@ bool Value::operator!=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
-	if (false && a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
+	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
 		long x,y;
 		if (asInteger(x) && other.asInteger(y)) 
 			return x != y;
