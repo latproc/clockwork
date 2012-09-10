@@ -47,12 +47,17 @@ Note, the Makefile used here assumes libzmq is installed in /usr/local/
 
 * pull the latproc project from git
 
-  git clone git://github.com/latproc/iod.git latproc
+  git clone git://github.com/latproc/latproc.git latproc
 
 * change to the latproc directory and build the interpreter
 
   cd latproc/iod
   make -f Makefile.cw
+
+
+
+
+
   
    Part B - setting up the user database for the web interface
 
@@ -62,7 +67,10 @@ Note, the Makefile used here assumes libzmq is installed in /usr/local/
      settings can be changed in settings.php
 
 
-   Part B - Setting up the IgH EtherCAT software to be used but the Latproc software
+
+
+   Part C - Setting up the IgH EtherCAT software to be used but the Latproc software
+
 
 
 The following instructions are brutally terse at present and we apologise
@@ -70,7 +78,9 @@ for that. Please watch this space for more precise instructions.
 
 * pull the latproc project from git
 
-  git clone git://github.com/latproc/iod.git latproc
+  git clone git://github.com/latproc/latproc.git latproc
+
+  please do not cd into the latproc directory yet.
 
 * extract the etherlab kit from the EtherLab website:
     see http://www.etherlab.org/en/ethercat/index.php
@@ -78,43 +88,42 @@ for that. Please watch this space for more precise instructions.
   tar/hg/... etc
 
   Note: The following instructions assume your extract was placed into 
-	etherlab-bundle-1.10/ethercat-1.5.1
+        a directory called 'ethercat' next to the latproc directory.
   
 * configure and build etherlabs ethercat component
 
-  cd etherlab-bundle.../ethercat-...
+  cd ethercat
   ./configure --enable-generic --enable-e1000e=no --enable-8139too=no
   make
 
   (your configure options may be different from ours)
 
-* create a build directory for a local build of the etherlab bits we need.
-  Once built, we link against the IgH EtherCAT Master tool files and these do not
-  need to be rebuilt until you update the IgH software.
-
-  mkdir tool
-  cd tool
-
-* create a makefile to build object files for the tool bits we need
-
-  EL=../etherlab-bundle-1.10/ethercat-1.5.1 \
-  CFLAGS="-I$EL/include -I$EL/master -I$EL/tool" ../createmake $EL/tool
-
-* build the object files
-
-  make
-  
-* change to the latproc directory and make a symbolic link that points 
-to the ethercat master and tools from the etherlab kit
+* the latproc io daemon (iod) uses some parts from ethercat that are 
+  not built into the ethercat library; the following script prepares
+  a build area for these bits (ec_tool). 
 
   cd latproc
-  ln -s ../../etherlab-bundle-1.10/ethercat-1.5.1/ ethercat
+  scripts/prepare_ec_tool
 
-* build the latproc tools
+* build the object files in the ec_tool build area
 
-  cd iod
+  cd ec_tool
   make
   
+* build the latproc tools (in the iod directory)
 
+  cd ../iod
+  make
+  
+At this point, the following tools should have been created:
+
+  iod  : a daemon that talks to EtherCAT to interact with io
+  iosh : a shell to interact with iod
+  zmq_monitor : a program to monitor zmq messages published by iod
+  persistd : a basic persistence daemon to record state changes from iod
+
+You may also like to install libmodbus and edit the makefile to build:
+
+  modbusd : a modbus interface to iod
 
 

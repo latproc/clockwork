@@ -17,15 +17,17 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = iod iosh persistd device_connector modbusd zmq_ecat_monitor #cw
+APPS = iod iosh persistd device_connector zmq_ecat_monitor beckhoffd #modbusd cw
 SIMULATED=#-DEC_SIMULATOR=1
 
 # add any extra include or library directory paths as necessary
 
+ETHERCAT = ../ethercat
+TOOLLIB = ../ec_tool/build/*.o
 EXTRAINCS = -I/opt/local/include -I/usr/local/include -I/opt/latproc/include \
-	-I/opt/etherlab/include -I/opt/etherlab/src
+	-I$(ETHERCAT)/include -I$(ETHERCAT) -I$(ETHERCAT)/master
 EXTRALIBS = -L/opt/local/lib -L/usr/local/lib -L/opt/latproc/lib \
-	-L/opt/etherlab/lib
+	-L$(ETHERCAT)/lib/.libs
 
 # adjust the following linker flags to set the boost libraries you 
 # would like to use.
@@ -39,7 +41,6 @@ BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 CFLAGS = $(SIMULATED) -g -pedantic -Wall $(EXTRAINCS)
 CC = g++ $(CFLAGS)
 LDFLAGS = $(EXTRALIBS)
-TOOLLIB = /opt/etherlab/src/tool/build/*.o
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
@@ -78,30 +79,29 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			PatternAction.o regular_expressions.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
-			-lethercat \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
-			MachineInstance.o latprocc.tab.o latprocc.yy.o Scheduler.o $(TOOLLIB) \
+			MachineInstance.o latprocc.tab.o latprocc.yy.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			PatternAction.o regular_expressions.o
+			PatternAction.o regular_expressions.o \
+			$(TOOLLIB) -lethercat 
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
 			MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o
+			CallMethodAction.o IODCommands.o regular_expressions.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
-			-lzmq $(BOOST_THREAD_LIB) -lethercat \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
 			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o symboltable.o Scheduler.o \
-			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o \
+			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o IODCommands.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o $(TOOLLIB)
+			CallMethodAction.o regular_expressions.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) -lethercat \
 
 cw.o:	cw.cpp	MessagingInterface.h
 		$(CC) -c -o $@ cw.cpp
