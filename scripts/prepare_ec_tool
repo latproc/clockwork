@@ -1,6 +1,10 @@
 #!/bin/sh
 
-ETHERCAT_ROOT=../ethercat
+if [ "$1" = "" ]; then
+    echo "usage: $0 ethercat-root-directory"
+    exit 1;
+fi
+ETHERCAT_ROOT="$1"
 
 # check the above configuration
 if [ ! -d "$ETHERCAT_ROOT" ] ; then
