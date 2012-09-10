@@ -1,0 +1,32 @@
+#!/bin/sh
+
+ETHERCAT_ROOT=../ethercat
+
+# check the above configuration
+if [ ! -d "$ETHERCAT_ROOT" ] ; then
+  echo "Cannot find directory $ETHERCAT_ROOT"
+  exit 1
+fi
+
+# check we are running from the latproc directory
+[ -d latproc ] && cd latproc;
+if [ -d iod -a -d www ]; then
+
+  # create a symbolic link if it hasn't already been done
+  [ -L ethercat ] || ln -s "$ETHERCAT_ROOT" ethercat
+  TOOLDIR=ec_tool
+
+  test -d $TOOLDIR || mkdir $TOOLDIR
+  if [ -d $TOOLDIR ]; then
+    cd $TOOLDIR
+  else
+    echo "Error $? creating the work directory for the ethercat tool"
+    exit 1
+  fi
+  cat ../ethercat/tool/main.cpp  | sed 's/int main/int tool_main/' >tool_main.cpp
+  cat ../ethercat/tool/SoeCommand.cpp \
+        | sed 's/extern const ec_code_msg_t soe_error_codes.*/#include "..\/ethercat\/master\/soe_errors.c"/' > SoeCommand.cpp
+  CFLAGS="-I../ethercat/include -I../ethercat/master -I../ethercat/tool" ../scripts/createmake ../ethercat/tool .
+else
+  echo "Please run $0 from the latproc directory"
+fi
