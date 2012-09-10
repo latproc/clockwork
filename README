@@ -100,10 +100,11 @@ for that. Please watch this space for more precise instructions.
 
 * the latproc io daemon (iod) uses some parts from ethercat that are 
   not built into the ethercat library; the following script prepares
-  a build area for these bits (ec_tool). 
+  a build area for these bits (ec_tool). The script needs to know
+  the location of the ethercat extract, passed as the first parameter. 
 
   cd latproc
-  scripts/prepare_ec_tool
+  scripts/prepare_ec_tool ethercat-path
 
 * build the object files in the ec_tool build area
 
