@@ -69,7 +69,7 @@ int main(int argc, const char * argv[])
 			}
 			std::cout << "Listening on port " << port << "\n";
 	        // client
-	        int res, count;
+	        int res;
 			std::stringstream ss;
 			ss << "tcp://localhost:" << port;
 	        zmq::context_t context (1);
