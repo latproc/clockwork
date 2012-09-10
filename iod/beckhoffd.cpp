@@ -61,8 +61,8 @@ IOComponent* lookup_device(const std::string name) {
     return 0;
 }
 
-Statistics statistics;
-
+Statistics *statistics = NULL;
+std::list<Statistic *> Statistic::stats;
 
 #ifdef EC_SIMULATOR
 
@@ -234,7 +234,7 @@ char *collectSlaveConfig(bool reconfigure)
 
 #ifndef EC_SIMULATOR
 
-struct CommandEtherCATTool : public IODCommand {
+struct IODCommandEtherCATTool : public IODCommand {
     bool run(std::vector<std::string> &params) {
         if (params.size() > 1) {
             int argc = params.size();
@@ -256,6 +256,52 @@ struct CommandEtherCATTool : public IODCommand {
             error_str = "Usage: EC command [params]";
             return false;
         }
+    }
+};
+
+struct IODCommandGetSlaveConfig : public IODCommand {
+    bool run(std::vector<std::string> &params) {
+        char *res = collectSlaveConfig(false);
+        if (res) {
+            result_str = res;
+            return true;
+        }
+        else {
+            error_str = "JSON Error";
+            return false;
+        }
+    }
+};
+
+struct IODCommandMasterInfo : public IODCommand {
+    bool run(std::vector<std::string> &params) {
+        //const ec_master_t *master = ECInterface::instance()->getMaster();
+        const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddNumberToObject(root, "slave_count", master_state->slaves_responding);
+        cJSON_AddNumberToObject(root, "link_up", master_state->link_up);
+		std::stringstream ss;
+		statistics->io_scan_time.report(ss);
+		statistics->points_processing.report(ss);
+		statistics->machine_processing.report(ss);
+		statistics->dispatch_processing.report(ss);
+		statistics->auto_states.report(ss);
+		Statistic::reportAll(ss);
+		ss << std::flush;
+		cJSON_AddStringToObject(root, "statistics", ss.str().c_str());	
+        
+        char *res = cJSON_Print(root);
+        bool done;
+        if (res) {
+            result_str = res;
+            done = true;
+        }
+        else {
+            error_str = "JSON error";
+            done = false;
+        }
+        cJSON_Delete(root);
+        return done;
     }
 };
 
@@ -291,32 +337,32 @@ struct CommandThread {
 	            std::copy(parts.begin(), parts.end(), std::back_inserter(params));
 	            ds = params[0];
 	            if (ds == "GET" && count>1) {
-	                command = new CommandGetStatus;
+	                command = new IODCommandGetStatus;
 	            }
 	            else if (count == 4 && ds == "SET" && params[2] == "TO") {
-	                command =  new CommandSetStatus;
+	                command =  new IODCommandSetStatus;
 	            }
 	#ifndef EC_SIMULATOR
 				else if (count > 1 && ds == "EC") {
 	                //std::cout << "EC: " << data << "\n";
                 
-	                command = new CommandEtherCATTool;
+	                command = new IODCommandEtherCATTool;
 	            }
 				else if (ds == "SLAVES") {
-	                command = new CommandGetSlaveConfig;
+	                command = new IODCommandGetSlaveConfig;
 				}
 	            else if (count == 1 && ds == "MASTER") {
-	                command = new CommandMasterInfo;
+	                command = new IODCommandMasterInfo;
 	            }
 	#endif
 	            else if (count == 2 && ds == "TOGGLE") {
-	                command = new CommandToggle;
+	                command = new IODCommandToggle;
 	            }
 	            else if (count == 2 && ds == "LIST" && params[1] == "JSON") {
-	                command = new CommandListJSON;
+	                command = new IODCommandListJSON;
 	            }
 	            else {
-	                command = new CommandUnknown;
+	                command = new IODCommandUnknown;
 	            }
 	            if ((*command)(params))
 	                sendMessage(socket, command->result());
@@ -345,9 +391,12 @@ void usage(int argc, char const *argv[])
     fprintf(stderr, "Usage: %s\n", argv[0]);
 }
 
+bool program_done = false;
+
 int main (int argc, char const *argv[])
 {
 	unsigned int user_alarms = 0;
+	statistics = new Statistics;
 	ControlSystemMachine machine;
     Logger::instance()->setLevel(Logger::Debug);
 	ECInterface::FREQUENCY=1000;
@@ -472,7 +521,7 @@ int main (int argc, char const *argv[])
         CommandThread stateMonitor;
         boost::thread monitor(boost::ref(stateMonitor));
 
-		while (1) {
+		while (! program_done) {
 			// Note: the use of pause here introduces a random variation of up to 500ns
 			struct timeval start_t, end_t;
 			gettimeofday(&start_t, 0);
