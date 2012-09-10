@@ -8,11 +8,14 @@ MODULES {
 Total_Counts VARIABLE (tab:Globals) 0;
 One_Thousand CONSTANT (tab:Globals) 1000;
 
-EL2008_OUT_1    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
-EL2008_OUT_2    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 2;
+#OUT_1    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
+#OUT_2    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 2;
 
-EK1814_OUT_1    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 1;
-EK1814_OUT_2    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 2; # buzzer
+#OUT_1    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 1;
+#OUT_2    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 2; # buzzer
+OUT_1 FLAG(tab:Outputs);
+OUT_2 FLAG(tab:Outputs);
+
 
 Cond MACHINE enabled, guard {
   true WHEN enabled IS on AND guard IS on;
@@ -40,10 +43,10 @@ enable_counter Enabler (tab:Outputs) counter;
 
 Counter MACHINE (target:10, timeout:4000) input, buzzer {
 
-	GLOBAL Total_Counts,One_Thousand;
+    GLOBAL Total_Counts,One_Thousand;
 
 #    c_enabled CONDITION enabled, counter { enabled IS on AND counter < target; }
-    c_enabled Cond (tab:Outputs) enabled, EK1814_OUT_1;
+    c_enabled Cond (tab:Outputs) enabled, OUT_1;
     enabled FLAG (tab:Outputs); 
     error_flag FLAG (tab:Outputs); 
 
@@ -122,13 +125,13 @@ Flash MACHINE (delay:500) output {
     RECEIVE off_enter { LOG "off"; WAIT delay; SET output TO on; }
 }
 
-counter Counter (tab:Outputs, target:4) flash1, EK1814_OUT_2;
+counter Counter (tab:Outputs, target:4) flash1, OUT_2;
 
 #flash1 Flash (type:Light, tab:Outputs) O_GrabNo1JawOpen;
-flash1 Flash (type:Light, tab:Outputs,delay:1000) EL2008_OUT_1;
-#flash2 Flash (type:Light, tab:Outputs) EL2008_OUT_2;
-#flash3 Flash (type:Light, tab:Outputs) EL2008_OUT_3;
-#flash4 Flash (type:Light, tab:Outputs) EL2008_OUT_4;
-#flash5 Flash (type:Light, tab:Outputs) EL2008_OUT_5;
-#flash6 Flash (type:Light, tab:Outputs) EL2008_OUT_6;
+flash1 Flash (type:Light, tab:Outputs,delay:1000) OUT_1;
+#flash2 Flash (type:Light, tab:Outputs) OUT_2;
+#flash3 Flash (type:Light, tab:Outputs) OUT_3;
+#flash4 Flash (type:Light, tab:Outputs) OUT_4;
+#flash5 Flash (type:Light, tab:Outputs) OUT_5;
+#flash6 Flash (type:Light, tab:Outputs) OUT_6;
 
