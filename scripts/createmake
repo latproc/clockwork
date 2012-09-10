@@ -22,23 +22,25 @@ if [ "$1" = "" ] ; then
 	echo "usage: $0 path"
 	exit 1
 fi
-SRCROOT="$1"
+
+# spaces in filenames or directories will be a problem...
+while [ ! "$1" = "" ]; do 
+    CPPFILES="$CPPFILES `find $1 -name \*.cpp -a ! -name main.cpp `"
+    CFILES="$CFILES `find $1 -name \*.c -a ! -name main.c`"
+    shift
+done
 
 # include whatever you like in the makefile header
 cat <<EOD >Makefile
-APPS = iod
-#SIMULATED=-DEC_SIMULATOR=1
-SIMULATED=-I/usr/local/include -I../../ethercat/include/ -L../../ethercat/lib/ -lethercat
-CFLAGS = \$(SIMULATED) -g $CFLAGS
+CFLAGS = -g $CFLAGS
 CPP = g++ \$(CFLAGS)
 CC = g++ \$(CFLAGS)
-LDFLAGS = -L/usr/local/lib
 
 EOD
 
 # setup the target list
 echo "all:	build/.init \\" >>Makefile
-find $SRCROOT -name \*.cpp -o -name \*.c \
+ls $CPPFILES $CFILES \
 	| egrep -v ./._ | sed 's@.*/@build/@; s/.cpp$/.o/; s/.c$/.o/' \
 	| sed 's/^/	/; s/$/\\/' >>Makefile 
 echo >>Makefile
@@ -50,15 +52,15 @@ build/.init:
 
 EOE
 
-# create build linkes
-find $SRCROOT -name \*.cpp | while read a; do 
+# create build links
+ls $CPPFILES | while read a; do 
   c=`basename $a .cpp`; d=`dirname $a`; 
   echo "build/$c.o:	$d/$c.cpp"; 
   echo "	\$(CPP) -c \$(CFLAGS) -o build/$c.o $d/$c.cpp -I /usr/local/include"; 
   echo; 
 done >> Makefile
 
-find $SRCROOT -name \*.c | while read a; do 
+ls $CFILES | while read a; do 
   c=`basename $a .c`; d=`dirname $a`; 
   echo "build/$c.o:	$d/$c.c"; 
   echo "	\$(CC) -c \$(CFLAGS) -o build/$c.o $d/$c.c -I /usr/local/include"; 
@@ -72,3 +74,4 @@ clean:
 	rm -f \$(APPS)
 	rm -rf build
 
+EOD
