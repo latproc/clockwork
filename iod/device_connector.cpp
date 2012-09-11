@@ -257,6 +257,7 @@ struct MatchFunction {
 			std::string res = MatchFunction::instance()->result;
             if (index == num_sub && (last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
                 instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), res.c_str());
+				last_message = res;
                 last_send.tv_sec = now.tv_sec;
                 last_send.tv_usec = now.tv_usec;
             }
