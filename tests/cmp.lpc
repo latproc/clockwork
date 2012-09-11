@@ -2,18 +2,20 @@ Constants MACHINE {
 
 OPTION OverWeight 2040;
 OPTION UnderWeight 1800;
+OPTION Scale "G";
 }
 Weights Constants;
 
 Weight MACHINE {
    OPTION weight 0;
-   ENTER INIT { weight := 1999; }
+   OPTION raw "x1999";
+   ENTER INIT { weight := COPY ALL `[0-9]` FROM raw; code := "G"; }
 }
 weight Weight;
 
 Test MACHINE w {
 
-    done WHEN Weights.OverWeight >= w.weight && Weights.UnderWeight  <= w.weight;
+    done WHEN weight.code == Weights.Scale && w.weight <= Weights.OverWeight && w.weight >= Weights.UnderWeight;
     waiting DEFAULT;
 
     ENTER done{ LOG "done"; }

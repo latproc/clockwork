@@ -7,7 +7,7 @@ IF=eth1
 else
 IF=$2
 fi
-MAC=`ifconfig $IF | awk '{print $NF}' | head -1`
+MAC=`ifconfig $IF |grep -E -o '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'`
 
 
 echo "using interface $IF, hwaddr $MAC"
