@@ -79,10 +79,3 @@ flash1 Flash (type:Light, tab:Outputs) OUT_1;
 #flash5 Flash (type:Light, tab:Outputs) OUT_5;
 #flash6 Flash (type:Light, tab:Outputs) OUT_6;
 
-STARTUP MACHINE {
-
-    ENTER INIT {
-        
-    }
-}
-

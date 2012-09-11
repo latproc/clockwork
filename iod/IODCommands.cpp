@@ -125,19 +125,34 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 
     bool IODCommandDescribe::run(std::vector<std::string> &params) {
         std::cout << "received iod command Describe " << params[1] << "\n";
-        if (params.size() == 2) {
+        bool use_json = false;
+        if (params.size() == 3 && params[2] != "JSON") {
+            error_str = "Usage: DESCRIBE machine [JSON]";
+            return false;
+        }
+        if (params.size() == 2 || params.size() == 3) {
             MachineInstance *m = MachineInstance::find(params[1].c_str());
-            cJSON *root = cJSON_CreateObject();
+            cJSON *root;
+            if (use_json)
+                root = cJSON_CreateArray();
             std::stringstream ss;
             if (m)
                     m->describe(ss);
             else
                 ss << "Failed to describe unknown machine " << params[1];
-            cJSON_AddStringToObject(root, "description", ss.str().c_str());
-            char *res = cJSON_Print(root);
-            cJSON_Delete(root);
-            
-            result_str = "OK";
+            if (use_json) {
+                std::istringstream iss(ss.str());
+                char buf[500];
+                while (iss.getline(buf, 500, '\n')) {
+                    cJSON_AddItemToArray(root, cJSON_CreateString(buf));                
+                }
+                char *res = cJSON_Print(root);
+                cJSON_Delete(root);
+                result_str = res;
+                delete res;
+            }
+            else
+                result_str = ss.str();
             return true;
         }
         error_str = "Failed to find machine";

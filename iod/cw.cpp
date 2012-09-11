@@ -290,6 +290,9 @@ struct IODCommandThread {
 		            else if (count == 2 && ds == "DISABLE") {
 		                command = new IODCommandDisable;
 		            }
+		            else if ( (count == 2 || count == 3) && ds == "DESCRIBE") {
+		                command = new IODCommandDescribe;
+		            }
                     else if (ds == "SLAVES") {
                         command = new IODCommandGetSlaveConfig;
                     }

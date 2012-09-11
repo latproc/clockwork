@@ -496,7 +496,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         }
 #endif
         case t_bool: {
-            out << bValue;
+            out << ((bValue) ? "true" : "false");
         }
     }
     return out;

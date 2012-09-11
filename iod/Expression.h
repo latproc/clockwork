@@ -86,6 +86,8 @@ std::ostream &operator <<(std::ostream &out, const Predicate &p);
 struct Condition {
     Predicate *predicate;
 	Stack stack;
+    std::string last_evaluation;
+    Value last_result;
     bool operator()(MachineInstance *m);
 	Condition() : predicate(0) {}
 	Condition(Predicate*p) : predicate(p) {}

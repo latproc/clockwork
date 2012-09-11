@@ -352,7 +352,10 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::describe(std::ostream &out) {
-    
+    for (unsigned int i=0; i<stable_states.size(); ++i) {
+        out << _name << "." << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
+        if (stable_states[i].condition.last_result == true) break;
+    }
 }
 
 void MachineInstance::listenTo(MachineInstance *m) {

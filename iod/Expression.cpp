@@ -341,8 +341,11 @@ bool Condition::operator()(MachineInstance *m) {
 //		if (m && m->debug()) {
 //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
 //		}
-	    Value res = eval_stack(stack).val;
-	    if (res.kind == Value::t_bool) return res.bValue;
+	    last_result = eval_stack(stack).val;
+        std::stringstream ss;
+        ss << last_result << " " << *predicate;
+        last_evaluation = ss.str();
+	    if (last_result.kind == Value::t_bool) return last_result.bValue;
 #else
 		Value res(eval(predicate, m, false));
 	    if (res.kind == Value::t_bool) return res.bValue;

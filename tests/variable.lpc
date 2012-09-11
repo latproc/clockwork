@@ -1,4 +1,13 @@
-VARIABLE MACHINE (PERSISTENT:true) val {
+# variables are implemented like this
+Variable MACHINE val {
+	OPTION PERSISTENT true;
 	ENTER INIT { VALUE := val; }
 }
+
+a VARIABLE (tab:Test) 3;
+b VARIABLE (tab:Test) 4;
+VariableTest MACHINE {
+	COMMAND go { a := b }
+}
+test VariableTest(tab:Test);
 
