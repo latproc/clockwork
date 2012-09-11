@@ -487,7 +487,7 @@ struct IODCommandThread {
             }
             catch (std::exception e) {
                 //std::cout << e.what() << "\n";
-				usleep(10000);
+				usleep(1000);
                //exit(1);
             }
         } 
@@ -547,6 +547,9 @@ int loadConfig(int argc, char const *argv[]) {
             usage(argc, argv);
             exit(2);
         }
+		else if (*(argv[i]) == '-') {
+			files.push_back(argv[i]);
+		}
         else {
             struct stat file_stat;
             int err = stat(argv[i], &file_stat);
