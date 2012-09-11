@@ -320,13 +320,19 @@ namespace ValueOperations {
 
 	struct Divide : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const { 
-			return a.iValue / b.iValue; 
+			if (b.iValue == 0) 
+				return 0;
+			else 
+				return a.iValue / b.iValue; 
 		}
 	};
 
 	struct Modulus : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const { 
-			return a.iValue % b.iValue; 
+			if (b.iValue == 0)
+				return 0;
+			else
+				return a.iValue % b.iValue; 
 		}
 	};
 
@@ -438,7 +444,7 @@ Value &Value::operator/(const Value &other) {
 		return *this;
 	}
 	switch(kind) {
-		case t_integer: iValue /= other.iValue; break;
+		case t_integer: if (other.iValue == 0) iValue = 0; else iValue /= other.iValue; break;
 		case t_bool: bValue &= other.bValue;
 		default: ;
 	}
@@ -453,7 +459,7 @@ Value &Value::operator%(const Value &other) {
 		return *this;
 	}
 	switch(kind) {
-		case t_integer: iValue = iValue % other.iValue; break;
+		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue % other.iValue; break;
 		case t_bool: bValue ^= other.bValue;
 		default: ;
 	}

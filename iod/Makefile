@@ -101,7 +101,7 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o IODCommands.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o regular_expressions.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) -lethercat \
+			CallMethodAction.o regular_expressions.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) -lethercat
 
 cw.o:	cw.cpp	MessagingInterface.h
 		$(CC) -c -o $@ cw.cpp
