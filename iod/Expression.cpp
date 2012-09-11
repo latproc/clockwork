@@ -89,6 +89,7 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
     }
     else {
         out << " " << entry << " ";
+        if (cached_entry) out <<"(" << *cached_entry << ") ";
 	}
     return out;
 }
@@ -134,13 +135,42 @@ std::ostream &operator<<(std::ostream&out, const Stack &s) {
 }
 
 std::ostream &Stack::operator<<(std::ostream&out) const {
+#if 1
+    // prefix
     BOOST_FOREACH(ExprNode n, stack) {
 		if (n.kind == ExprNode::t_op) {
 			out << n.op << " "; 
 		}
 		else {
-			out << n.val << " ";
+            if (n.node) out << *n.node;
+			out << " (" << n.val<< ") ";
 		}
+    }
+    return out;
+#else
+    // disabled due to error
+    std::list<ExprNode>::const_iterator iter = stack.begin();
+    std::list<ExprNode>::const_iterator end = stack.end();
+    return traverse(out, iter, end);
+#endif
+}
+
+std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iterator &iter, std::list<ExprNode>::const_iterator &end) const
+{
+    // note current error with display of rhs before lhs
+    if (iter == end) return out;
+    const ExprNode &n = *iter++;
+    if (n.kind == ExprNode::t_op) {
+        out << "(";
+        if (n.op != opNOT) // ignore lhs for the not operator
+            traverse(out, iter, end);
+        out <<" " << n.op << " " ;
+        traverse(out, iter, end);
+        out << ")";
+    }
+    else {
+        if (n.node) out << *n.node;
+        out << " ("<< n.val << ") ";
     }
     return out;
 }
@@ -298,7 +328,7 @@ void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left) {
     }
     else {
         const Value *result = resolve(p, m, left);
-		stack.push(*result);
+		stack.push(ExprNode(*result, &p->entry));
     }
 }
 

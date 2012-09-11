@@ -32,11 +32,12 @@ enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
 struct ExprNode {
-    ExprNode(Value a) : val(a), kind(t_int) {  }
-	ExprNode(bool a) : val(a), kind(t_int) {  }
+    ExprNode(Value a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
+	ExprNode(bool a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
     ExprNode(PredicateOperator o) : op(o), kind(t_op) { } 
-    ExprNode(const ExprNode &other) : val(other.val), op(other.op), kind(other.kind) {  }
+    ExprNode(const ExprNode &other) : val(other.val), node(other.node), op(other.op), kind(other.kind) {  }
     Value val;
+    const Value *node;
     PredicateOperator op;
     enum { t_int, t_op } kind;
 };
@@ -46,6 +47,7 @@ struct Stack {
     void push(ExprNode v) { stack.push_front(v); }
     std::list<ExprNode>stack;
     std::ostream &operator<<(std::ostream &out)const;
+    std::ostream &traverse(std::ostream &out, std::list<ExprNode>::const_iterator &iter, std::list<ExprNode>::const_iterator &end) const;
 };
 
 struct Predicate {
