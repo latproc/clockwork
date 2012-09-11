@@ -351,6 +351,10 @@ MachineInstance::~MachineInstance() {
     Dispatcher::instance()->removeReceiver(this);
 }
 
+void MachineInstance::describe(std::ostream &out) {
+    
+}
+
 void MachineInstance::listenTo(MachineInstance *m) {
     if (!listens.count(m)) listens.insert(m);
 }

@@ -198,6 +198,7 @@ public:
     //void addReferenceLocation(const char *file, int line_no);
     
     std::ostream &operator<<(std::ostream &out)const;
+    void describe(std::ostream& out);
 
 	static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
 

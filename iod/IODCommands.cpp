@@ -123,6 +123,28 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 	}
 
 
+    bool IODCommandDescribe::run(std::vector<std::string> &params) {
+        std::cout << "received iod command Describe " << params[1] << "\n";
+        if (params.size() == 2) {
+            MachineInstance *m = MachineInstance::find(params[1].c_str());
+            cJSON *root = cJSON_CreateObject();
+            std::stringstream ss;
+            if (m)
+                    m->describe(ss);
+            else
+                ss << "Failed to describe unknown machine " << params[1];
+            cJSON_AddStringToObject(root, "description", ss.str().c_str());
+            char *res = cJSON_Print(root);
+            cJSON_Delete(root);
+            
+            result_str = "OK";
+            return true;
+        }
+        error_str = "Failed to find machine";
+        return false;
+    }
+
+
     bool IODCommandToggle::run(std::vector<std::string> &params) {
         if (params.size() == 2) {
 			DBG_MSG << "toggling " << params[1] << "\n";

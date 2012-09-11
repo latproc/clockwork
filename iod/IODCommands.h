@@ -56,6 +56,10 @@ struct IODCommandProperty : public IODCommand {
 	bool run(std::vector<std::string> &params);
 };
 
+struct IODCommandDescribe : public IODCommand {
+	bool run(std::vector<std::string> &params);
+};
+
 struct IODCommandList : public IODCommand {
 	bool run(std::vector<std::string> &params);
 };
