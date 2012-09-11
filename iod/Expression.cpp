@@ -338,9 +338,9 @@ bool Condition::operator()(MachineInstance *m) {
 #if 1
 		stack.stack.clear();
 	    prep(stack, predicate, m, true);
-		if (m && m->debug()) {
-			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
-		}
+//		if (m && m->debug()) {
+//			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
+//		}
 	    Value res = eval_stack(stack).val;
 	    if (res.kind == Value::t_bool) return res.bValue;
 #else
