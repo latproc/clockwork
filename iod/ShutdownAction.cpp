@@ -37,6 +37,7 @@ Action::Status ShutdownAction::run() {
 	program_done = true;
 	status = Complete;
 	result_str = "OK";
+	owner->stop(this);
 	return status;
 }
 
