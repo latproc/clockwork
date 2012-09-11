@@ -847,14 +847,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 							found = true;
 						}
 					}
-					if (!found) {
-						DBG_M_STATECHANGES << "no stable state condition test for " << t.dest.getName() << " pushing state change\n";
-						MoveStateActionTemplate msat("SELF", t.dest);
-						MoveStateAction *msa = new MoveStateAction(this, msat);
-						DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus() << ") " << *msa << "\n";
-						this->push(msa);
-					}
 					// the CALL method waits for a response once the executed command is complete
+					// the response will be sent after the transition to the next state is done
 					if (response_required && from) {
 						DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
 						std::string response = _name + "." + t.trigger.getText() + "_done";
@@ -865,9 +859,16 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 						//HandleMessageActionTemplate hmat(this, from->asReceiver(), m, false);
 						//HandleMessageAction *hma = new HandleMessageAction(this, hmat);
 					}
+					if (!found) {
+						DBG_M_STATECHANGES << "no stable state condition test for " << t.dest.getName() << " pushing state change\n";
+						MoveStateActionTemplate msat("SELF", t.dest);
+						MoveStateAction *msa = new MoveStateAction(this, msat);
+						DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus() << ") " << *msa << "\n";
+						this->push(msa);
+					}
 					if (commands.count(t.trigger.getText()) ) {
 						// if a modbus command, make sure it is turned off again in modbus
-						if (modbus_exports.count(t.trigger.getText())) {
+						if (modbus_exports.count(_name + "." + t.trigger.getText())) {
 							ModbusAddress addr = modbus_exports[_name + "." + t.trigger.getText()];
 							if (addr.getSource() == ModbusAddress::command) {
 								DBG_MODBUS << _name << " turning off command coil " << addr << "\n";
