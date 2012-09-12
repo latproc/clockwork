@@ -371,6 +371,16 @@ void MachineInstance::describe(std::ostream &out) {
         }
         out << "\n";
     }
+    if (!active_actions.empty()) {
+        if (debug() && LogState::instance()->includes(DebugExtra::instance()->DEBUG_ACTIONS)) {
+            out << "active actions:\n";
+            displayActive(out);
+        }
+    }
+    if (properties.size()) {
+        out << "properties:\n  ";
+        out << properties << "\n\n";
+    }
     if (stable_states.size()) {
         out << "Last stable state evaluation:\n";
         for (unsigned int i=0; i<stable_states.size(); ++i) {
@@ -1114,17 +1124,14 @@ void MachineInstance::start(Action *a) {
 	active_actions.push_back(a);
 }
 
-void MachineInstance::displayActive() {
+void MachineInstance::displayActive(std::ostream &note) {
 	if (active_actions.empty()) return;
-	std::stringstream note;
 	note << _name << ':' << id << " stack: ";
 	const char *delim = "";
 	BOOST_FOREACH(Action *act, active_actions) {
 		note << delim << " " << *act << " (status=" << act->getStatus() << ")";
 		delim = ", ";
 	}
-	note << std::flush;
-	DBG_M_ACTIONS << note.str() << "\n";
 }
 
 // stop removes the action

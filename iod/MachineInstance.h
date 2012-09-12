@@ -234,7 +234,7 @@ public:
     std::set<Transmitter *> listens;
     Action *executingCommand(); // returns the action currently executing
 	std::list<Action*>active_actions;
-	void displayActive();
+	void displayActive(std::ostream &out);
 	void start(Action *a);
 	void stop(Action *a);
 	void push(Action *new_action);
