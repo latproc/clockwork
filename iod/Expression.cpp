@@ -90,6 +90,7 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
     else {
         out << " " << entry << " ";
         if (cached_entry) out <<"(" << *cached_entry << ") ";
+        else if (last_calculation) out << "(" << *last_calculation << ") ";
 	}
     return out;
 }
@@ -105,6 +106,8 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
 	priority = other.priority;
 	mi = 0;
     cached_entry = 0;
+    lookup_error = false;
+    last_calculation = 0;
 }
 
 Predicate &Predicate::operator=(const Predicate &other) {
@@ -116,6 +119,8 @@ Predicate &Predicate::operator=(const Predicate &other) {
 	priority = other.priority;
 	mi = 0;
     cached_entry = 0; // do not preserve cached the value pointer
+    lookup_error = false;
+    last_calculation = 0;
 	return *this;
 }
 
@@ -193,7 +198,8 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 				return p->cached_entry;
 				}
 			if (v->sValue == "TIMER") {
-				return m->getTimerVal();
+                p->last_calculation = (m->getTimerVal());
+                return p->last_calculation;
 			}
 			else if (v->sValue == "SELF") {
 				//v = m->getCurrent().getName();
@@ -206,6 +212,8 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 	                // do not cache timer values. TBD subclass Value for dynamic values..
 	                if ( !stringEndsWith(v->sValue, ".TIMER"))
 	                    p->cached_entry = prop;
+                    else
+                        p->last_calculation = prop;
 					return prop;
 				}
 			}

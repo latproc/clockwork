@@ -352,6 +352,16 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::describe(std::ostream &out) {
+    out << _name << ": " << current_state.getName() <<  "\n";
+    if (parameters.size()) {
+        for (unsigned int i=0; i<parameters.size(); i++) {
+            Value p_i = parameters[i].val;
+            if (p_i.kind == Value::t_symbol) {
+                out << "  parameter " << i << " " << p_i.sValue << " (" << parameters[i].real_name << ")\n";
+            }
+        }
+        out << "\n";
+    }
     for (unsigned int i=0; i<stable_states.size(); ++i) {
         out << _name << "." << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
         if (stable_states[i].condition.last_result == true) break;
@@ -1199,15 +1209,13 @@ void MachineInstance::resume() {
 }
 
 void MachineInstance::enable() { 
-	if (!is_enabled) {
-		is_enabled = true; 
-		error_state = 0; 
-		clearAllActions(); 
-		for (unsigned int i = 0; i<locals.size(); ++i) {
-			locals[i].machine->enable();
-		}
-		setInitialState();
-	} 
+    is_enabled = true; 
+    error_state = 0; 
+    clearAllActions(); 
+    for (unsigned int i = 0; i<locals.size(); ++i) {
+        locals[i].machine->enable();
+    }
+    setInitialState();
 	needs_check = true;
 }
 
