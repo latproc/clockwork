@@ -352,20 +352,33 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::describe(std::ostream &out) {
-    out << _name << ": " << current_state.getName() <<  "\n";
+    out << "---------------\n" << _name << ": " << current_state.getName() <<  "\n";
     if (parameters.size()) {
         for (unsigned int i=0; i<parameters.size(); i++) {
             Value p_i = parameters[i].val;
             if (p_i.kind == Value::t_symbol) {
-                out << "  parameter " << i << " " << p_i.sValue << " (" << parameters[i].real_name << ")\n";
+                out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name << ")\n";
             }
         }
         out << "\n";
     }
-    for (unsigned int i=0; i<stable_states.size(); ++i) {
-        out << _name << "." << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
-        if (stable_states[i].condition.last_result == true) break;
+    if (listens.size()) {
+        out << "Lisening to: \n";
+        std::set<Transmitter *>::iterator iter = listens.begin();
+        while (iter != listens.end()) {
+            Transmitter *t = *iter++;
+            if (t) out << "  " << t->getName() << "\n";
+        }
+        out << "\n";
     }
+    if (stable_states.size()) {
+        out << "Last stable state evaluation:\n";
+        for (unsigned int i=0; i<stable_states.size(); ++i) {
+            out << "  " << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
+            if (stable_states[i].condition.last_result == true) break;
+        }
+    }
+    
 }
 
 void MachineInstance::listenTo(MachineInstance *m) {
