@@ -380,6 +380,7 @@ Value &Value::operator+(const Value &other) {
 		Sum op;
 		TypeFix tf;
 		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
 		return *this;
 	}
 	switch(kind) {
@@ -411,6 +412,7 @@ Value &Value::operator-(const Value &other) {
 		Minus op;
 		TypeFix tf;
 		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
 		return *this;
 	}
 	switch(kind) {
@@ -426,6 +428,7 @@ Value &Value::operator*(const Value &other) {
 		Multiply op;
 		TypeFix tf;
 		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
 		return *this;
 	}
 	switch(kind) {
@@ -441,6 +444,7 @@ Value &Value::operator/(const Value &other) {
 		Divide op;
 		TypeFix tf;
 		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
 		return *this;
 	}
 	switch(kind) {
@@ -456,6 +460,7 @@ Value &Value::operator%(const Value &other) {
 		Modulus op;
 		TypeFix tf;
 		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
 		return *this;
 	}
 	switch(kind) {
