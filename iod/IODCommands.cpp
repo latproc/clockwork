@@ -463,8 +463,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         std::stringstream ss;
         ss 
 		 << "Commands: \n"
-		 << "DEBUG machine on|off"
-		 << "DEBUG debug_group on|off"
+		 << "DEBUG machine on|off\n"
+		 << "DEBUG debug_group on|off\n"
+         << "DESCRIBE machine_name [JSON]\n"
 		 << "DISABLE machine_name\n"
 		 << "EC command\n"
 		 << "ENABLE machine_name\n"
@@ -473,7 +474,8 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		 << "LIST\n"
 		 << "MASTER\n"
 		 << "MODBUS EXPORT\n"
-		 << "MODBUS group address new_value\n" 
+		 << "MODBUS group address new_value\n"
+         << "MODBUS REFRESH\n"
 		 << "PROPERTY machine_name property new_value\n"
 		 << "QUIT\n"
 		 << "RESUME machine_name\n"
