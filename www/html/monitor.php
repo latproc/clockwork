@@ -180,6 +180,12 @@ if (isset($_REQUEST["setproperty"])) {
 	echo $reply;
 	return;
 }
+if (isset($_REQUEST["describe"])) {
+	$requester->send('DESCRIBE ' . $_REQUEST["describe"] . " JSON");
+	$reply = $requester->recv();
+	echo $reply;
+	return;
+}
 // note: below is ignored if an AJAX request was received
 
 /*

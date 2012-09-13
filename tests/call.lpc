@@ -36,6 +36,23 @@ Calc MACHINE {
 	TRANSITION a TO b USING calc;
 }
 
+# this transition test should permit a CALL next without
+# hanging. The question is whether the transition should
+# occur. 
+TranstionTest MACHINE {
+  OPTION tab Tests;
+
+  TRANSITION a TO b USING next;
+  TRANSITION b TO c USING next;
+  TRANSITION c TO a USING next;
+  
+  a INITIAL;
+  b STATE;
+  c STATE;
+}
+transtest TranstionTest(tab:Tests);
+
+
 Test MACHINE {
   
 	calculator Calc(tab:Tests);
@@ -47,6 +64,8 @@ Test MACHINE {
     ENTER done {
         CALL next ON stepper;
     }
+    
+    COMMAND StepTransition { CALL next ON transtest }
 
 	working DURING go {  
 		LOG "about to calculate";

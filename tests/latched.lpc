@@ -1,0 +1,26 @@
+GenericLatch MACHINE input {
+    on STATE;
+    off INITIAL;
+    RECEIVE input.on_enter { SET SELF TO on }
+    TRANSITION on TO off ON reset;
+}
+GenericInvertedLatch MACHINE input {
+    off STATE;
+    on INITIAL;
+    RECEIVE input.off_enter { SET SELF TO off }
+    TRANSITION off TO on ON reset;
+}
+
+input FLAG(tab:Test);
+latch GenericLatch(tab:Test) input;
+inverted GenericInvertedLatch(tab:Test) input;
+
+Test MACHINE input, latch{
+    COMMAND on { SET input TO on; }
+    COMMAND off { SET input TO off; }
+    COMMAND reset { SEND reset TO latch; }
+}
+test1 Test(tab:Test) input,latch;
+test2 Test(tab:Test) input,inverted;
+
+
