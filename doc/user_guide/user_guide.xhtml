@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0//EN" "http://www.w3.org/TR/MathML2/dtd/xhtml-math11-f.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta name="GENERATOR" content="LyX 2.0.1" />
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Latproc Tools User Guide</title>
+
+<!-- Text Class Preamble -->
+<style type="text/css">
+div.toc {
+margin: 2em 0em;
+border-style: solid;
+border-width: 2px 0px;
+padding: 1em 0em;
+}
+div.tochead { font-size: x-large; font-weight: bold; }
+div.lyxtoc-0 {
+margin: 2em 0em 0em 0em;
+font-size: xx-large;
+font-weight: bold;
+}
+div.lyxtoc-1 {
+margin: 1em 0em 0em 0em;
+font-size: x-large;
+font-weight: bold;
+}
+div.lyxtoc-2 {
+margin: 0em 0em 0em 1em;
+font-size: large;
+font-weight: normal;
+}
+div.lyxtoc-3 { margin: 0em 0em 0em 0.5em; font-size: medium; }
+div.lyxtoc-4 { margin: 0em 0em 0em 0.5em; }
+div.lyxtoc-5 { margin: 0em 0em 0em 0.5em; }
+div.lyxtoc-6 { margin: 0em 0em 0em 0.5em; }
+a.tocentry {
+text-decoration: none;
+color: black;
+}
+a.tocentry:visited { color: black; }
+a.tocarrow {
+font-weight: bold;
+text-decoration: none;
+color: #909090;
+}
+a.tocarrow:visited { color: #C0C0C0; }
+</style>
+
+<!-- Preamble Snippets -->
+
+<!-- Layout-provided Styles -->
+<style type='text/css'>
+h1.title {
+font-size: x-large;
+margin-bottom: 1ex;
+text-align: center;
+
+}
+h2.section {
+font-weight: bold;
+font-size: x-large;
+margin-top: 1.3ex;
+margin-bottom: 0.7ex;
+text-align: left;
+
+}
+div.standard {
+margin-bottom: 2ex;
+}
+dl.description dt { font-weight: bold; }
+h3.subsection {
+font-weight: bold;
+font-size: large;
+margin-top: 0.9ex;
+margin-bottom: 0.5ex;
+text-align: left;
+
+}
+ul.itemize {
+margin-top: 0.7ex;
+margin-bottom: 0.7ex;
+margin-left: 3ex;
+text-align: left;
+
+}
+ol.enumerate {
+margin-top: 0.7ex;
+margin-bottom: 0.7ex;
+margin-left: 3ex;
+text-align: left;
+
+}
+div.lyx_code {
+font-family: monospace;
+margin-top: 0.5ex;
+margin-bottom: 0.5ex;
+margin-left: 3ex;
+margin-right: 3ex;
+text-align: left;
+
+}
+h4.subsubsection {
+font-weight: bold;
+font-size: medium;
+margin-top: 0.7ex;
+margin-bottom: 0.4ex;
+text-align: left;
+
+}
+</style>
+</head>
+<body>
+<h1 class="title"><a id='magicparlabel-715' />
+Latproc Tools User Guide</h1>
+<h2 class="section"><span class="section_label">1</span> <a id='magicparlabel-716' />
+Preface</h2>
+<div class="standard"><a id='magicparlabel-717' />
+Please note that this is a very early draft.</div>
+<h2 class="section"><span class="section_label">2</span> <a id='magicparlabel-718' />
+Introduction</h2>
+<div class="standard"><a id='magicparlabel-719' />
+This guide describes the tools that come with the Latproc project (https://github.com/latproc); the programs include:</div>
+
+<dl class='description'><dt class="description_label">beckhoffd</dt>
+<dd class="description_item"><a id='magicparlabel-720' />
+ a program to provide a zmq interface to an EtherCAT installation. <em>Not currently working</em></dd>
+<dt class="description_label">cw</dt>
+<dd class="description_item"><a id='magicparlabel-721' />
+ a daemon that runs clockwork programs</dd>
+<dt class="description_label">iod</dt>
+<dd class="description_item"><a id='magicparlabel-722' />
+ a daemon that talks to EtherCAT to interact with io hardware using the clockwork language</dd>
+<dt class="description_label">iosh</dt>
+<dd class="description_item"><a id='magicparlabel-723' />
+ a shell to interact with iod</dd>
+<dt class="description_label">modbusd</dt>
+<dd class="description_item"><a id='magicparlabel-724' />
+ an interface between iod and modbus</dd>
+<dt class="description_label">persistd</dt>
+<dd class="description_item"><a id='magicparlabel-725' />
+ a basic persistence daemon to record state changes from iod </dd>
+<dt class="description_label">zmq_monitor</dt>
+<dd class="description_item"><a id='magicparlabel-726' />
+ a program to monitor zmq messages published by iod </dd>
+</dl>
+<div class="standard"><a id='magicparlabel-727' />
+For the remainder of this guide, the above programs are split between those that run clockwork (`Language') and those that provide interfaces (`Tools').</div>
+<h3 class="subsection"><span class="subsection_label">2.1</span> <a id='magicparlabel-728' />
+Acknowledgements</h3>
+<div class="standard"><a id='magicparlabel-729' />
+The language and tools making up Latproc are built using a variety of open source tools and platforms, including;</div>
+
+<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-730' />
+anet tcp wrappers (part of redis - http://redis.io)</li>
+<li class="itemize_item"><a id='magicparlabel-731' />
+boost (http://boost.org/) - various c++ bits and pieces</li>
+<li class="itemize_item"><a id='magicparlabel-732' />
+IgH EtherCAT Master for Linux (http://www.etherlab.org/en/ethercat/index.php)</li>
+<li class="itemize_item"><a id='magicparlabel-733' />
+libmodbus (http://libmodbus.org/) - for communication with modbus/tcp terminals</li>
+<li class="itemize_item"><a id='magicparlabel-734' />
+zeromq (http://www.zeromq.org/) - for inter-program messaging</li>
+</ul>
+<div class="standard"><a id='magicparlabel-735' />
+We developed the software using open source development tools: GNU gcc, bison and flex and used Linux and MacOSX workstations.</div>
+<h2 class="section"><span class="section_label">3</span> <a id='magicparlabel-736' />
+Language</h2>
+<div class="standard"><a id='magicparlabel-737' />
+There are two language drivers at present, cw and iod. The difference between them is that iod includes facilities to talk to I/O hardware via the IgH EtherCAT Master for Linux and cw does not. We will discuss the use of cw first and discuss the extensions that iod provides afterwards.</div>
+<h3 class="subsection"><span class="subsection_label">3.1</span> <a id='magicparlabel-738' />
+Getting started</h3>
+<div class="standard"><a id='magicparlabel-739' />
+The file: README, that comes with the latproc distribution explains how to build the cw program:</div>
+
+<ol class="enumerate"><li class="enumerate_item"><a id='magicparlabel-740' />
+pull the latproc project from git
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-741' />
+git clone git://github.com/latproc/latproc.git latproc</div>
+</div>
+</li><li class="enumerate_item"><a id='magicparlabel-742' />
+change to the latproc directory and build the interpreter
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-743' />
+cd latproc/iod</div>
+<div class="lyx_code_item"><a id='magicparlabel-744' />
+make -f Makefile.cw </div>
+</div>
+</li></ol>
+<div class="standard"><a id='magicparlabel-745' />
+The `make' process should produce a file latproc/iod/cw that can be copied to a convenient location (eg /usr/local/bin)</div>
+<h4 class="subsubsection"><span class="subsubsection_label">3.1.1</span> <a id='magicparlabel-746' />
+Hello World</h4>
+<div class="standard"><a id='magicparlabel-747' />
+Here is a program that will display a message on the terminal:</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-748' />
+Hello MACHINE { </div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-749' />
+ENTER INIT { </div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-750' />
+LOG "Hello World"; </div>
+<div class="lyx_code_item"><a id='magicparlabel-751' />
+SHUTDOWN</div>
+</div>
+<div class="lyx_code_item"><a id='magicparlabel-752' />
+}</div>
+</div>
+<div class="lyx_code_item"><a id='magicparlabel-753' />
+} </div>
+<div class="lyx_code_item"><a id='magicparlabel-754' />
+hello Hello;</div>
+</div>
+<div class="standard"><a id='magicparlabel-755' />
+The program defines a class of state machine called 'Hello' and provides instructions that the machine will execute when it enters a state called INIT.</div>
+
+<div class="standard"><a id='magicparlabel-756' />
+In Clockwork, instructions can only be executed inside event handlers, so to log a simple message first requires that we define a class of state machine and then an event handler within that state machine. Every state machine enters a state called 'INIT' when it is enabled and our machine, 'Hello', thus, our LOG statment is executed when an instance of the 'Hello' class of machine is started.</div>
+
+<div class="standard"><a id='magicparlabel-757' />
+The last line makes an instance of the Hello machine and calls it 'hello'. Note that case is important in Clockwork.</div>
+
+<div class="standard"><a id='magicparlabel-758' />
+The above program can be executed by saving it into a file (eg hello.cw) and running cw:</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-759' />
+cw hello.cw</div>
+</div>
+<div class="standard"><a id='magicparlabel-760' />
+The output should be displayed as:</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-761' />
+&mdash;&mdash;- hello: Hello World &mdash;&mdash;-</div>
+</div>
+<div class="standard"><a id='magicparlabel-762' />
+Note that after the LOG statement, our program has a SHUTDOWN statement; Clockwork is intended to be used to monitor system states or provide ongoing control functions so it normally does not exit; the SHUTDOWN statement tells it to.</div>
+<h4 class="subsubsection"><span class="subsubsection_label">3.1.2</span> <a id='magicparlabel-763' />
+Light Sensor</h4>
+<div class="standard"><a id='magicparlabel-764' />
+Here is an example of how Clockwork can be used to define a monitor that turns a light on or off once there is not activity in a room. We start with a sensor and a switch, with the idea that when the sensor comes on there is activity so we turn the light on. When the sensor goes off, we turn off the light. For the time being, we use the builtin statemachine called 'FLAG' to simulate the sensor and the switch. A FLAG has two states, <em>on</em> and <em>off</em>.</div>
+
+<div class="standard"><a id='magicparlabel-765' />
+We can generally define things in any order, so lets define our light controller first.</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-766' />
+LightController MACHINE sensor, light_switch {</div>
+<div class="lyx_code_item"><a id='magicparlabel-767' />
+    active WHEN sensor IS on;</div>
+<div class="lyx_code_item"><a id='magicparlabel-768' />
+    inactive DEFAULT;</div>
+<div class="lyx_code_item"><a id='magicparlabel-769' />
+    ENTER active { SET light_switch TO on }</div>
+<div class="lyx_code_item"><a id='magicparlabel-770' />
+    ENTER inactive { SET light_switch TO off } </div>
+<div class="lyx_code_item"><a id='magicparlabel-771' />
+}</div>
+</div>
+<div class="standard"><a id='magicparlabel-772' />
+The definition simply says that when the sensor is on, the light controller is active and the light should be turned on. Otherwise, the light controller is inactive and the light should be turned off. The ENTER methods are executed each time the MACHINE enters a given state. Notice that we do not initialise the light, when the program starts, the LightController will determine what to do from the rules we have supplied.</div>
+
+<div class="standard"><a id='magicparlabel-773' />
+The LightController needs two parameters; a sensor and a light switch. For the time being, we instantiate our Flags and our controller as follows:</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-774' />
+sensor FLAG; </div>
+<div class="lyx_code_item"><a id='magicparlabel-775' />
+switch FLAG;</div>
+<div class="lyx_code_item"><a id='magicparlabel-776' />
+controller LightController sensor, switch;</div>
+</div>
+<div class="standard"><a id='magicparlabel-777' />
+Note that these entries can be given in any order.</div>
+<h3 class="subsection"><span class="subsection_label">3.2</span> <a id='magicparlabel-778' />
+Communicating with Clockwork servers</h3>
+<div class="standard"><a id='magicparlabel-779' />
+When a Clockwork program is being run, you can interact with it using a command interface or via a web page. The simplest method got get started with is the command interface, the web interface needs some extra configuration for the web server. Refer to section <a href="#sub_iosh">4.1</a> for further information about iosh.</div>
+
+<div class="standard"><a id='magicparlabel-780' />
+The latproc source includes some PHP code that provides a simple web view of the state machines in the executing program. The program requires PHP version 5.3 and has been tested with apache and with minihttpd. [further explanation of the setup to be done].</div>
+<h3 class="subsection"><span class="subsection_label">3.3</span> <a id='magicparlabel-781' />
+Soure code conventions and file structure</h3>
+<div class="standard"><a id='magicparlabel-782' />
+When writing programs for Clockwork, program source can be split between any number of files within a user-nominated directory structure. Files and directories are provided to cw on the commandline and the program scans all files in the directories to build a consistent set of definitions from the fragments found within the files. There is no requirement to list the files in any particular order but it is an error if a definition is used but not provided or if a definition is provided more than once.</div>
+
+<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-783' />
+Program text is freeform, where line breaks, tabs and spaces are all treated equally. </li>
+<li class="itemize_item"><a id='magicparlabel-784' />
+Comments can be started with `#' and continue to the end-of-line or can be started by `/*' and ended by `*/'.</li>
+<li class="itemize_item"><a id='magicparlabel-785' />
+Statements must be separated by semicolon (`;') but the semicolon before the closing brace (`}') that ends a group of statements may still be given.</li>
+</ul>
+<h2 class="section"><span class="section_label">4</span> <a id='magicparlabel-786' />
+Tools</h2>
+<h3 class="subsection"><span class="subsection_label">4.1</span> <a id='magicparlabel-787' />
+iosh<a id="sub_iosh" />
+</h3>
+<div class="standard"><a id='magicparlabel-788' />
+Clockwork and iod both provide support for a simple shell, called iosh via the Ømq (zeromq) network library. To connect to the clockwork server, simply run iosh:</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-789' />
+$ iosh</div>
+<div class="lyx_code_item"><a id='magicparlabel-790' />
+Connecting to tcp://127.0.0.1:5555</div>
+<div class="lyx_code_item"><a id='magicparlabel-791' />
+Enter HELP; for help. Note that ';' is required at the end of each command   use exit; or ctrl-D to exit this program </div>
+<div class="lyx_code_item"><a id='magicparlabel-792' />
+&gt; </div>
+</div>
+<div class="standard"><a id='magicparlabel-793' />
+at the prompt, enter any supported command, as follows:</div>
+
+<dl class='description'><dt class="description_label">DEBUG&nbsp;machine&nbsp;on|off</dt>
+<dd class="description_item"><a id='magicparlabel-794' />
+ start/stops debug messages for the device</dd>
+<dt class="description_label">DEBUG&nbsp;debug_group&nbsp;on|off</dt>
+<dd class="description_item"><a id='magicparlabel-795' />
+ starts/stops debug messages for all the devices in the given group</dd>
+<dt class="description_label">DISABLE&nbsp;machine</dt>
+<dd class="description_item"><a id='magicparlabel-796' />
+ disables a machine; in the case of a POINT, it is turned off, other machines simply sit in the current state and do not process events or monitor states</dd>
+<dt class="description_label">EC&nbsp;command</dt>
+<dd class="description_item"><a id='magicparlabel-797' />
+ send a command to the ethercat tool (iod only)</dd>
+<dt class="description_label">ENABLE&nbsp;machine_name</dt>
+<dd class="description_item"><a id='magicparlabel-798' />
+ enable a machine; set the machine state to its initial state and have it begin processing events and monitoring states</dd>
+<dt class="description_label">GET&nbsp;machine_name</dt>
+<dd class="description_item"><a id='magicparlabel-799' />
+ display the state of the names machine</dd>
+<dt class="description_label">LIST</dt>
+<dd class="description_item"><a id='magicparlabel-800' />
+ show a list of all machines</dd>
+<dt class="description_label">LIST&nbsp;[group_name]</dt>
+<dd class="description_item"><a id='magicparlabel-801' />
+ show a list of machines and their current state and properties in JSON format, optionally limit the list to the named group.</dd>
+<dt class="description_label">MASTER</dt>
+<dd class="description_item"><a id='magicparlabel-802' />
+ display the ethercat master state (iod only)</dd>
+<dt class="description_label">MODBUS&nbsp;export</dt>
+<dd class="description_item"><a id='magicparlabel-803' />
+ write the modbus export configuration to the export file (the file name is configured on the commandline when cw or iod is started</dd>
+<dt class="description_label">MODBUS&nbsp;group&nbsp;address&nbsp;new_value</dt>
+<dd class="description_item"><a id='magicparlabel-804' />
+ simulate a modbus event to change the given element to the new value</dd>
+<dt class="description_label">PROPERTY&nbsp;machine_name&nbsp;property_name&nbsp;new_value</dt>
+<dd class="description_item"><a id='magicparlabel-805' />
+ set the value of the given property</dd>
+<dt class="description_label">QUIT</dt>
+<dd class="description_item"><a id='magicparlabel-806' />
+ exit the program</dd>
+<dt class="description_label">RESUME&nbsp;machine_name</dt>
+<dd class="description_item"><a id='magicparlabel-807' />
+ enable a machine by reentering the state it was in when it was disabled.</dd>
+<dt class="description_label">SEND&nbsp;command</dt>
+<dd class="description_item"><a id='magicparlabel-808' />
+ send the event, given in target_machine_name '.' event_name form.</dd>
+<dt class="description_label">SET&nbsp;machine_name&nbsp;TO&nbsp;state_name</dt>
+<dd class="description_item"><a id='magicparlabel-809' />
+ attempt to set the named machine to the given state</dd>
+<dt class="description_label">SLAVES</dt>
+<dd class="description_item"><a id='magicparlabel-810' />
+ display information about the known EtherCAT slaves</dd>
+<dt class="description_label">TOGGLE&nbsp;machine_name</dt>
+<dd class="description_item"><a id='magicparlabel-811' />
+ changes from the on state to off or vice-versa, only usable on machines with both an on and off state.</dd>
+</dl>
+<h3 class="subsection"><span class="subsection_label">4.2</span> <a id='magicparlabel-812' />
+persistd</h3>
+<h3 class="subsection"><span class="subsection_label">4.3</span> <a id='magicparlabel-813' />
+beckhoffd</h3>
+<h3 class="subsection"><span class="subsection_label">4.4</span> <a id='magicparlabel-814' />
+modbusd</h3>
+</body>
+</html>

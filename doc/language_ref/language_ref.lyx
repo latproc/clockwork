@@ -1,0 +1,830 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 1cm
+\rightmargin 2cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Clockwork Language Reference (draft)
+\end_layout
+
+\begin_layout Author
+Martin Leadbeater
+\end_layout
+
+\begin_layout Section
+Preface
+\end_layout
+
+\begin_layout Standard
+Please note that this is a very early draft.
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Standard
+Clockwork is a language intended to be used to describe systems of interacting
+ components using state machines.
+ The purpose of the language is to provide a platform for monitoring and
+ control and it has been implemented as a control system using the Beckhoff
+ EtherCAT®.
+\end_layout
+
+\begin_layout Standard
+The language provides the programmer with a means to 
+\end_layout
+
+\begin_layout Itemize
+define the states of a machine in terms of conditions
+\end_layout
+
+\begin_layout Itemize
+define commands that can be invoked on the machine
+\end_layout
+
+\begin_layout Itemize
+define transition rules that determine what actions can be performed and
+ what state transtions are allowable
+\end_layout
+
+\begin_layout Standard
+Conditions on a machine are generally defined in terms of the state and
+ properties of other machines.
+\end_layout
+
+\begin_layout Section
+Details
+\end_layout
+
+\begin_layout Subsection
+Instances of machines
+\end_layout
+
+\begin_layout Standard
+Clockwork deals primarily with definitions of finite state machines (referred
+ to as MACHINES in the language) and instance of those definitions.
+ There is a common pattern for declaring an instance of a machine; providing
+ the name and then the machine class.
+\end_layout
+
+\begin_layout Standard
+Names can be given for new instances of objects, by first providing the
+ name, then the object and its properties and parameters, i.e.,
+\end_layout
+
+\begin_layout Quotation
+name machine-class [ '(' property-name ':' property-value ...
+ ')'] parameters
+\end_layout
+
+\begin_layout Standard
+For example, given machine classes called `MODULE' and `POINT', an instance
+ can be declared in the following way.
+\end_layout
+
+\begin_layout LyX-Code
+Beckhoff_2008 MODULE 2
+\end_layout
+
+\begin_layout LyX-Code
+NG_Output POINT Beckhoff_2008 5
+\end_layout
+
+\begin_layout Standard
+define a Module and a point within that module.
+ In the example, the number `2' indicates the position of the module on
+ the bus and the number `5' defines the particular output id of the point
+ that we want to call `NG_Output'.
+ After the object-class, a list of property key,value pairs may be given.,
+ for example
+\end_layout
+
+\begin_layout LyX-Code
+NG_Output POINT (tab:Outputs) Beckhoff_2008 5
+\end_layout
+
+\begin_layout Standard
+describes the same point but sets a property called `tab'
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+The web interface to cw and iod happen to use this property to group various
+ items into tabs on the web page
+\end_layout
+
+\end_inset
+
+ to the value `Outputs'.
+\end_layout
+
+\begin_layout Subsection
+Properties and states
+\end_layout
+
+\begin_layout Standard
+We make a distinction between the state of a machine and the properties
+ of the machine, in fact, we regard the state of the machine as one of its
+ properties although more strictly, we should actually include the value
+ of a machine's properties as part of its state.
+ The definitions are 
+\end_layout
+
+\begin_layout Subsection
+Properties and parameters
+\end_layout
+
+\begin_layout Standard
+As shown, the declaration of a machine may have parameters and machines
+ may also have properties.
+ Properties and parameters are distinguished as follows:
+\end_layout
+
+\begin_layout Itemize
+properties have default values and do not have to be predeclared unless
+ they are used in stable state conditions
+\end_layout
+
+\begin_layout Itemize
+parameters generally refer to objects that the machine manipulates and serve
+ to provide an internal alias for a globally defined object.
+ Use of parameters provides for the reuse of machines for different parts
+ of the system.
+\end_layout
+
+\begin_layout Itemize
+when a parameter changes state, the machine receives an event that it may
+ act on to perform an action.
+\end_layout
+
+\begin_layout Itemize
+when a property of a machine or one of its parameters or local variables
+ is changed, the machine reevaluates its stable states.
+\end_layout
+
+\begin_layout Section
+Vocabulary
+\end_layout
+
+\begin_layout Standard
+Within the program text, reserved words are presented in all capitals to
+ distinguish them from user defined values.
+ The language is case sensitive.
+\end_layout
+
+\begin_layout Subsection
+Glossary of Reserved Words 
+\end_layout
+
+\begin_layout Description
+16BIT defines an exported modbus property as a 16bit integer
+\end_layout
+
+\begin_layout Description
+32BIT defines an exported modbus property as a 32bit integer
+\end_layout
+
+\begin_layout Description
+ALL used with COPY and EXTRACT to collect all matches from a property
+\end_layout
+
+\begin_layout Description
+AND (also &&) used to join expressions within a condition
+\end_layout
+
+\begin_layout Description
+AT used with RESUME to cause execution to resume at a nominated state
+\end_layout
+
+\begin_layout Description
+BECOMES (also :=) used to assign values to properties
+\end_layout
+
+\begin_layout Description
+BY used with INC and DEC to change the step size
+\end_layout
+
+\begin_layout Description
+CATCH marks the beginning of an operation to be performed if any sends a
+ particular message.
+ [not implemented]
+\end_layout
+
+\begin_layout Description
+COMMAND defined a method that does not change the state of its machine while
+ it is executing.
+\end_layout
+
+\begin_layout Description
+CONSTANT a predefined machine class that acts like a constant from a syntactic
+ viewpoint
+\end_layout
+
+\begin_layout Description
+COPY copies substrings matching a pattern from a given property
+\end_layout
+
+\begin_layout Description
+DEC decrement a property
+\end_layout
+
+\begin_layout Description
+DEFAULT a stable state that is evaluated last and that always matches
+\end_layout
+
+\begin_layout Description
+DISABLE
+\end_layout
+
+\begin_layout Description
+DURING used to define a transitional state that occurs during the exectuion
+ of a command
+\end_layout
+
+\begin_layout Description
+EXECUTE extends the definition of a stable state to specify a command that
+ should be executed when a special sub-condition becomes active.
+\end_layout
+
+\begin_layout Description
+ELSE marks the beginning of the code that is executed when the IF condition
+ evaluates to false
+\end_layout
+
+\begin_layout Description
+ENABLE
+\end_layout
+
+\begin_layout Description
+ENTER defines an operation that must be performed during entry to a state.
+ The ENTER function may be restricted to performing functions that are atomic,
+ such as sending message.
+ Currently, these operations are not restricted but cause the machine to
+ enter an invisible substate of the target state.
+\end_layout
+
+\begin_layout Description
+EXPORT indicates that a property should be exported to modbus
+\end_layout
+
+\begin_layout Description
+FIND returns a list of objects that are in the given state, options may
+ be added to restrict the range of items found [not implemented]
+\end_layout
+
+\begin_layout Description
+FOREACH performs an operation for each object within the given list that
+ are in a particular state [not implemented]
+\end_layout
+
+\begin_layout Description
+GLOBALS lists machines, external to the current class that the current machine
+ is monitoring.
+ State changes on the machines listed as GLOBAL cause a reevaluation of
+ stable states and generate events that can be received.
+\end_layout
+
+\begin_layout Description
+INC increment a property
+\end_layout
+
+\begin_layout Description
+IF used within operations (Commands and Enter functions) to provide for
+ conditional behaviour
+\end_layout
+
+\begin_layout Description
+INIT a predefined state that statemachines enter as soon as they are enabled.
+\end_layout
+
+\begin_layout Description
+INITIAL defines a state as the state to use for the initial state of the
+ machine.
+\end_layout
+
+\begin_layout Description
+LOG emit a text string in the log
+\end_layout
+
+\begin_layout Description
+LOCK provides a way to mark a protected section to prevent, for example,
+ multiple machines simultaneously changing the state of a machine.
+\end_layout
+
+\begin_layout Description
+MATCHES used in an expression to test for a property matching a given pattern
+\end_layout
+
+\begin_layout Description
+MACHINE defines a programmed component within the system.
+ All control functionality is implemented within these objects.
+ Machines are based on finite statemachine concept and include both monitoring
+ (automatic state switching) and control (forced state changes to cause
+ actions).
+\end_layout
+
+\begin_layout Description
+MODULE defines an addressable module that sits on the EtherCAT cabling
+\end_layout
+
+\begin_layout Description
+NOT (also !)used to invert expressions within a condition
+\end_layout
+
+\begin_layout Description
+OR (also ||) used to join expressions within a condition
+\end_layout
+
+\begin_layout Description
+PERSISTENT a property that indicates that state changes on this machine
+ will be published and at startup, this machine will be automatically enabled
+ and initialised from its last known state.
+\end_layout
+
+\begin_layout Description
+POINT refers to an addressable port within a module
+\end_layout
+
+\begin_layout Description
+RAISE send a message that any machine may catch.
+ It is an error if a message is raised but not caught.
+ [not implemented]
+\end_layout
+
+\begin_layout Description
+READONLY used in an EXPORT specification to mark the property as read only
+\end_layout
+
+\begin_layout Description
+READWRITE used in an EXPORT specification to mark the property as read/write
+\end_layout
+
+\begin_layout Description
+RESULT the returned value after an expression has been evaluated [not implemente
+d]
+\end_layout
+
+\begin_layout Description
+RESUME resumes execution of the disabled machine from the beginning of its
+ current state
+\end_layout
+
+\begin_layout Description
+RECEIVE indicates that a machine should be informed when a specific object
+ sends a particular message.
+ The RECEIVE statement has an associated set of actions that are acted when
+ the event is collected.
+\end_layout
+
+\begin_layout Description
+REQUIRES indicates that the associated condition must evaluate to True in
+ order that the transition can occur or that a command can be executed [not
+ implemented]
+\end_layout
+
+\begin_layout Description
+SELF used in expressions to refer 
+\end_layout
+
+\begin_layout Description
+SEND is used to send a message to a machine, this message must be captured
+ by the machine, using a RECEIVE statement
+\end_layout
+
+\begin_layout Description
+SET causes a machine to move to a given state after executing the optional
+ command associated with the transition
+\end_layout
+
+\begin_layout Description
+SHUTDOWN cause the clockwork daemon to exit
+\end_layout
+
+\begin_layout Description
+SOURCE is a variable that holds a reference to the object that send the
+ current message or issued the current command [not implemented]
+\end_layout
+
+\begin_layout Description
+STATE defines a state name so that this state can be used in a transition
+ or can be set by other machines.
+\end_layout
+
+\begin_layout Description
+TAG links a FLAG to a sub-condition on a stable state so that the FLAG is
+ automatically turned on and off to trak whether the subcondition is true
+ or not.
+\end_layout
+
+\begin_layout Description
+THEN marks the beginning of the code that is executed when the IF condition
+ evaluates to true
+\end_layout
+
+\begin_layout Description
+TIMER
+\end_layout
+
+\begin_layout Description
+TO used within a transition to indicate the destination state, used within
+ a message operation to indicate the target of the message
+\end_layout
+
+\begin_layout Description
+TRANSITION describes the command that can be used to move the machine from
+ one state to another
+\end_layout
+
+\begin_layout Description
+UNLOCK reverses the effect of LOCK, to permit other instances execute code
+ in a critical section.
+\end_layout
+
+\begin_layout Description
+USING as part of the transition statement, the Using clause indicates the
+ command that is used for the transition
+\end_layout
+
+\begin_layout Description
+VARIABLE a predefined machine class that is persistent and acts like a variable
+ from a syntactic viewpoint
+\end_layout
+
+\begin_layout Description
+WAIT pauses execution of the current method for the set amount of time
+\end_layout
+
+\begin_layout Description
+WAITFOR pauses execution of the current method until the given machine enters
+ the given state
+\end_layout
+
+\begin_layout Description
+WHEN defines a set of conditions that indicate a machine is in a particular,
+ stable state.
+ These conditions are not evaluated when the machine is in a transitional
+ state.
+\end_layout
+
+\begin_layout Subsection
+Conditions
+\end_layout
+
+\begin_layout Standard
+Conditions are lists of boolean expressions that are generally used to determine
+ the current state of various parts of the machine.
+ Conditions are implemented by the use of separate state machines.
+ that contain a state (normally called 'true') that indicates the condition
+ is true and a state (normally called 'false') that is the default.
+\end_layout
+
+\begin_layout Subsection
+Notes
+\end_layout
+
+\begin_layout Standard
+An action is a list of steps, such that each step requests that a machine
+ enters a state or waits for a message.
+ Regardless of the action, there are two components: sending a message and
+ waiting for a response.
+ On receipt of the response, the action transitions to the next step in
+ the list.
+\end_layout
+
+\begin_layout Standard
+When a state change request is received, the transitions on the target machine
+ are searched for an action that will satisfy the requested state change.
+ That action causes a further sequence of actions to be queued by having
+ the machine enter a substate with each action sending a message and waiting
+ for a response.
+ 
+\end_layout
+
+\begin_layout Section
+Machines
+\end_layout
+
+\begin_layout Standard
+Machines are the processing component of the latproc programming system.
+ They are defined as finite state machines that are interconnected by message
+ passing.
+ A machine will automatically detect its state by polling input conditions
+ that are defined to match certain configurations.
+ By issuing commands, a machine can change the state of other machines and
+ these changes can trigger further state changes.
+\end_layout
+
+\begin_layout Subsection
+Components and scope
+\end_layout
+
+\begin_layout Standard
+The language deals with Finite State Machines, which the language simply
+ calls 'Machines' and their states.
+ The program defines a machine as having certain states and provides conditions
+ and scripts that can identify the current state and change states.
+\end_layout
+
+\begin_layout Standard
+some predefined objects; Modules, Points, Machines, Values, Conditions and
+ States.
+ These objects may have parameters and may also have properties.
+ Properties and parameters are distinguished as follows:
+\end_layout
+
+\begin_layout Itemize
+properties have default values and do not have to be provided
+\end_layout
+
+\begin_layout Itemize
+parameters generally refer to objects that the machine manipulates and serve
+ to provide an internal alias for a globally defined object.
+ Use of parameters provides for the reuse of machines for different parts
+ of the system.
+\end_layout
+
+\begin_layout Subsection
+Parameters
+\end_layout
+
+\begin_layout Standard
+When a machine is instantiated, parameters are resolved by providing either
+ a symbol name or a symbol value.
+ The Machine Instance retains a list of ParameterReferences and for parameters
+ passed by value, a local symbol table allocates a local name
+\end_layout
+
+\begin_layout Subsection
+States
+\end_layout
+
+\begin_layout Standard
+A state is defined by a particular configuration of inputs or execution
+ of an action.
+\end_layout
+
+\begin_layout Subsection
+Actions
+\end_layout
+
+\begin_layout Standard
+An action is a sequence of steps that are executed in response to the receipt
+ of a message, including steps taken dugin an entry function.
+\end_layout
+
+\begin_layout Subsection
+Transitions
+\end_layout
+
+\begin_layout Standard
+Transitions occur automatically when a machine is idle, when it detects
+ a change of state.
+ When a transition occurs:
+\end_layout
+
+\begin_layout Itemize
+the timer is reset, 
+\end_layout
+
+\begin_layout Itemize
+the state variable 'CURRENT' is updated
+\end_layout
+
+\begin_layout Itemize
+a state change message is queued for delivery to interested parties
+\end_layout
+
+\begin_layout Itemize
+the entry function for the state is executed
+\end_layout
+
+\begin_layout Subsection
+Events
+\end_layout
+
+\begin_layout Standard
+An event corresponds to the sending of a message.
+ Examples of events include timers and changes in input levels or analogue
+ or counter values.
+ Timer events are intented to trigger reasonably precisely, based on a fixed
+ time after the message was sent.
+\end_layout
+
+\begin_layout Subsection
+Message Passing
+\end_layout
+
+\begin_layout Standard
+Machines can send and receive messages directly, using the commands SEND
+ and CALL and the handler RECEIVE or it can send messages indirectly by
+ attempting to change the state of the target machine.
+\end_layout
+
+\begin_layout Subsubsection
+RECEIVE and RECEIVE..FROM
+\end_layout
+
+\begin_layout Standard
+Each machine can listen for messages from any entity it knows of.
+ Messages are sent when entities change state or when a script deliberately
+ sends one.
+ To listen for a message, use:
+\end_layout
+
+\begin_layout Quotation
+RECEIVE objname.message '{' actions '}'
+\end_layout
+
+\begin_layout Standard
+or
+\end_layout
+
+\begin_layout Quotation
+RECEIVE message FROM objname '{' actions '}'
+\end_layout
+
+\begin_layout Standard
+This identifies the sending entity from its local name and registers a listener
+ for the 
+\emph on
+entiyname_statename_enter
+\emph default
+ message.
+ In a future release, the current machine will also registered as a dependant
+ of the sender.
+ Currently, messages are only received from parameters, local instances
+ and machine instances that are specifically listed in GLOBALS.
+\end_layout
+
+\begin_layout Subsubsection
+SEND and SEND..TO
+\end_layout
+
+\begin_layout Subsection
+Exceptions
+\end_layout
+
+\begin_layout Standard
+[Note: not implemented]An exception is a message sent using the 'THROW'
+ command.
+ It is similar to a message sent with 'SEND' except that there is no requirement
+ that there is a machine listening for the message.
+ Messages that are thrown are caught using the 'CATCH' command.
+\end_layout
+
+\begin_layout Subsection
+Statements
+\end_layout
+
+\begin_layout Subsection
+Properties
+\end_layout
+
+\begin_layout Standard
+Machine instances share some standard properties
+\end_layout
+
+\begin_layout Description
+current the current state of the instance
+\end_layout
+
+\begin_layout Description
+referers a list of machinesthat refer to this machine
+\end_layout
+
+\begin_layout Description
+references a list of machines this one refers to
+\end_layout
+
+\begin_layout Description
+sends a list of messages this machine sends
+\end_layout
+
+\begin_layout Description
+receives a list of messages this machine receives
+\end_layout
+
+\begin_layout Subsection
+Builtin classes
+\end_layout
+
+\begin_layout Standard
+Builtin classes such as FLAG and BOOLEAN are readily implemented using the
+ language itself.
+ The POINT class, however is special as it provides an interface to hardware.
+ Integers are currnetly implemented through properties.
+\end_layout
+
+\begin_layout Description
+VARIABLE
+\end_layout
+
+\begin_layout Description
+MODULE
+\end_layout
+
+\begin_layout Description
+CONSTANT
+\end_layout
+
+\begin_layout Description
+FLAG two state machine with states 'on' and 'off'
+\end_layout
+
+\begin_layout Description
+POINT a machine that links to a IO Point
+\end_layout
+
+\begin_layout Section
+Other features
+\end_layout
+
+\begin_layout Subsection
+Expressions
+\end_layout
+
+\begin_layout Section
+Syntax
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{eqnarray*}
+program & = & \mathit{definition}\, program\,|\,Ø\\
+\mathcal{\mathit{definition}} & = & name\, object\, parameterlist\\
+parameters & = & parameter\,|\, parameter\,','\, parameter\\
+parameter & = & value\, parameter\,|\,Ø
+\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

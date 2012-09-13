@@ -1,0 +1,661 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Latproc Tools User Guide
+\end_layout
+
+\begin_layout Section
+Preface
+\end_layout
+
+\begin_layout Standard
+Please note that this is a very early draft.
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Standard
+This guide describes the tools that come with the Latproc project (https://githu
+b.com/latproc); the programs include:
+\end_layout
+
+\begin_layout Description
+beckhoffd a program to provide a zmq interface to an EtherCAT installation.
+ 
+\emph on
+Not currently working
+\end_layout
+
+\begin_layout Description
+cw a daemon that runs clockwork programs
+\end_layout
+
+\begin_layout Description
+iod a daemon that talks to EtherCAT to interact with io hardware using the
+ clockwork language
+\end_layout
+
+\begin_layout Description
+iosh a shell to interact with iod
+\end_layout
+
+\begin_layout Description
+modbusd an interface between iod and modbus
+\end_layout
+
+\begin_layout Description
+persistd a basic persistence daemon to record state changes from iod 
+\end_layout
+
+\begin_layout Description
+zmq_monitor a program to monitor zmq messages published by iod 
+\end_layout
+
+\begin_layout Standard
+For the remainder of this guide, the above programs are split between those
+ that run clockwork (`Language') and those that provide interfaces (`Tools').
+\end_layout
+
+\begin_layout Subsection
+Acknowledgements
+\end_layout
+
+\begin_layout Standard
+The language and tools making up Latproc are built using a variety of open
+ source tools and platforms, including;
+\end_layout
+
+\begin_layout Itemize
+anet tcp wrappers (part of redis - http://redis.io)
+\end_layout
+
+\begin_layout Itemize
+boost (http://boost.org/) - various c++ bits and pieces
+\end_layout
+
+\begin_layout Itemize
+IgH EtherCAT Master for Linux (http://www.etherlab.org/en/ethercat/index.php)
+\end_layout
+
+\begin_layout Itemize
+libmodbus (http://libmodbus.org/) - for communication with modbus/tcp terminals
+\end_layout
+
+\begin_layout Itemize
+zeromq (http://www.zeromq.org/) - for inter-program messaging
+\end_layout
+
+\begin_layout Standard
+We developed the software using open source development tools: GNU gcc,
+ bison and flex and used Linux and MacOSX workstations.
+\end_layout
+
+\begin_layout Section
+Language
+\end_layout
+
+\begin_layout Standard
+There are two language drivers at present, cw and iod.
+ The difference between them is that iod includes facilities to talk to
+ I/O hardware via the IgH EtherCAT Master for Linux and cw does not.
+ We will discuss the use of cw first and discuss the extensions that iod
+ provides afterwards.
+\end_layout
+
+\begin_layout Subsection
+Getting started
+\end_layout
+
+\begin_layout Standard
+The file: README, that comes with the latproc distribution explains how
+ to build the cw program:
+\end_layout
+
+\begin_layout Enumerate
+pull the latproc project from git
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+git clone git://github.com/latproc/latproc.git latproc
+\end_layout
+
+\end_deeper
+\begin_layout Enumerate
+change to the latproc directory and build the interpreter
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+cd latproc/iod
+\end_layout
+
+\begin_layout LyX-Code
+make -f Makefile.cw 
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+The `make' process should produce a file latproc/iod/cw that can be copied
+ to a convenient location (eg /usr/local/bin)
+\end_layout
+
+\begin_layout Subsubsection
+Hello World
+\end_layout
+
+\begin_layout Standard
+Here is a program that will display a message on the terminal:
+\end_layout
+
+\begin_layout LyX-Code
+Hello MACHINE { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+ENTER INIT { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+LOG "Hello World"; 
+\end_layout
+
+\begin_layout LyX-Code
+SHUTDOWN
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+} 
+\end_layout
+
+\begin_layout LyX-Code
+hello Hello;
+\end_layout
+
+\begin_layout Standard
+The program defines a class of state machine called 'Hello' and provides
+ instructions that the machine will execute when it enters a state called
+ INIT.
+\end_layout
+
+\begin_layout Standard
+In Clockwork, instructions can only be executed inside event handlers, so
+ to log a simple message first requires that we define a class of state
+ machine and then an event handler within that state machine.
+ Every state machine enters a state called 'INIT' when it is enabled and
+ our machine, 'Hello', thus, our LOG statment is executed when an instance
+ of the 'Hello' class of machine is started.
+\end_layout
+
+\begin_layout Standard
+The last line makes an instance of the Hello machine and calls it 'hello'.
+ Note that case is important in Clockwork.
+\end_layout
+
+\begin_layout Standard
+The above program can be executed by saving it into a file (eg hello.cw)
+ and running cw:
+\end_layout
+
+\begin_layout LyX-Code
+cw hello.cw
+\end_layout
+
+\begin_layout Standard
+The output should be displayed as:
+\end_layout
+
+\begin_layout LyX-Code
+------- hello: Hello World -------
+\end_layout
+
+\begin_layout Standard
+Note that after the LOG statement, our program has a SHUTDOWN statement;
+ Clockwork is intended to be used to monitor system states or provide ongoing
+ control functions so it normally does not exit; the SHUTDOWN statement
+ tells it to.
+\end_layout
+
+\begin_layout Subsubsection
+Light Sensor
+\end_layout
+
+\begin_layout Standard
+Here is an example of how Clockwork can be used to define a monitor that
+ turns a light on or off once there is not activity in a room.
+ We start with a sensor and a switch, with the idea that when the sensor
+ comes on there is activity so we turn the light on.
+ When the sensor goes off, we turn off the light.
+ For the time being, we use the builtin statemachine called 'FLAG' to simulate
+ the sensor and the switch.
+ A FLAG has two states, 
+\emph on
+on
+\emph default
+ and 
+\emph on
+off
+\emph default
+.
+\end_layout
+
+\begin_layout Standard
+We can generally define things in any order, so lets define our light controller
+ first.
+\end_layout
+
+\begin_layout LyX-Code
+LightController MACHINE sensor, light_switch {
+\end_layout
+
+\begin_layout LyX-Code
+    active WHEN sensor IS on;
+\end_layout
+
+\begin_layout LyX-Code
+    inactive DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+    ENTER active { SET light_switch TO on }
+\end_layout
+
+\begin_layout LyX-Code
+    ENTER inactive { SET light_switch TO off } 
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+The definition simply says that when the sensor is on, the light controller
+ is active and the light should be turned on.
+ Otherwise, the light controller is inactive and the light should be turned
+ off.
+ The ENTER methods are executed each time the MACHINE enters a given state.
+ Notice that we do not initialise the light, when the program starts, the
+ LightController will determine what to do from the rules we have supplied.
+\end_layout
+
+\begin_layout Standard
+The LightController needs two parameters; a sensor and a light switch.
+ For the time being, we instantiate our Flags and our controller as follows:
+\end_layout
+
+\begin_layout LyX-Code
+sensor FLAG; 
+\end_layout
+
+\begin_layout LyX-Code
+switch FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+controller LightController sensor, switch;
+\end_layout
+
+\begin_layout Standard
+Note that these entries can be given in any order.
+\end_layout
+
+\begin_layout Subsection
+Communicating with Clockwork servers
+\end_layout
+
+\begin_layout Standard
+When a Clockwork program is being run, you can interact with it using a
+ command interface or via a web page.
+ The simplest method got get started with is the command interface, the
+ web interface needs some extra configuration for the web server.
+ Refer to section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sub:iosh"
+
+\end_inset
+
+ for further information about iosh.
+\end_layout
+
+\begin_layout Standard
+The latproc source includes some PHP code that provides a simple web view
+ of the state machines in the executing program.
+ The program requires PHP version 5.3 and has been tested with apache and
+ with minihttpd.
+ [further explanation of the setup to be done].
+\end_layout
+
+\begin_layout Subsection
+Soure code conventions and file structure
+\end_layout
+
+\begin_layout Standard
+When writing programs for Clockwork, program source can be split between
+ any number of files within a user-nominated directory structure.
+ Files and directories are provided to cw on the commandline and the program
+ scans all files in the directories to build a consistent set of definitions
+ from the fragments found within the files.
+ There is no requirement to list the files in any particular order but it
+ is an error if a definition is used but not provided or if a definition
+ is provided more than once.
+\end_layout
+
+\begin_layout Itemize
+Program text is freeform, where line breaks, tabs and spaces are all treated
+ equally.
+ 
+\end_layout
+
+\begin_layout Itemize
+Comments can be started with `#' and continue to the end-of-line or can
+ be started by `/*' and ended by `*/'.
+\end_layout
+
+\begin_layout Itemize
+Statements must be separated by semicolon (`;') but the semicolon before
+ the closing brace (`}') that ends a group of statements may still be given.
+\end_layout
+
+\begin_layout Section
+Tools
+\end_layout
+
+\begin_layout Subsection
+iosh
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:iosh"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Clockwork and iod both provide support for a simple shell, called iosh via
+ the Ømq (zeromq) network library.
+ To connect to the clockwork server, simply run iosh:
+\end_layout
+
+\begin_layout LyX-Code
+$ iosh
+\end_layout
+
+\begin_layout LyX-Code
+Connecting to tcp://127.0.0.1:5555
+\end_layout
+
+\begin_layout LyX-Code
+Enter HELP; for help.
+ Note that ';' is required at the end of each command   use exit; or ctrl-D
+ to exit this program 
+\end_layout
+
+\begin_layout LyX-Code
+> 
+\end_layout
+
+\begin_layout Standard
+at the prompt, enter any supported command, as follows:
+\end_layout
+
+\begin_layout Description
+DEBUG
+\begin_inset space ~
+\end_inset
+
+machine
+\begin_inset space ~
+\end_inset
+
+on|off start/stops debug messages for the device
+\end_layout
+
+\begin_layout Description
+DEBUG
+\begin_inset space ~
+\end_inset
+
+debug_group
+\begin_inset space ~
+\end_inset
+
+on|off starts/stops debug messages for all the devices in the given group
+\end_layout
+
+\begin_layout Description
+DISABLE
+\begin_inset space ~
+\end_inset
+
+machine disables a machine; in the case of a POINT, it is turned off, other
+ machines simply sit in the current state and do not process events or monitor
+ states
+\end_layout
+
+\begin_layout Description
+EC
+\begin_inset space ~
+\end_inset
+
+command send a command to the ethercat tool (iod only)
+\end_layout
+
+\begin_layout Description
+ENABLE
+\begin_inset space ~
+\end_inset
+
+machine_name enable a machine; set the machine state to its initial state
+ and have it begin processing events and monitoring states
+\end_layout
+
+\begin_layout Description
+GET
+\begin_inset space ~
+\end_inset
+
+machine_name display the state of the names machine
+\end_layout
+
+\begin_layout Description
+LIST show a list of all machines
+\end_layout
+
+\begin_layout Description
+LIST
+\begin_inset space ~
+\end_inset
+
+[group_name] show a list of machines and their current state and properties
+ in JSON format, optionally limit the list to the named group.
+\end_layout
+
+\begin_layout Description
+MASTER display the ethercat master state (iod only)
+\end_layout
+
+\begin_layout Description
+MODBUS
+\begin_inset space ~
+\end_inset
+
+export write the modbus export configuration to the export file (the file
+ name is configured on the commandline when cw or iod is started
+\end_layout
+
+\begin_layout Description
+MODBUS
+\begin_inset space ~
+\end_inset
+
+group
+\begin_inset space ~
+\end_inset
+
+address
+\begin_inset space ~
+\end_inset
+
+new_value simulate a modbus event to change the given element to the new
+ value
+\end_layout
+
+\begin_layout Description
+PROPERTY
+\begin_inset space ~
+\end_inset
+
+machine_name
+\begin_inset space ~
+\end_inset
+
+property_name
+\begin_inset space ~
+\end_inset
+
+new_value set the value of the given property
+\end_layout
+
+\begin_layout Description
+QUIT exit the program
+\end_layout
+
+\begin_layout Description
+RESUME
+\begin_inset space ~
+\end_inset
+
+machine_name enable a machine by reentering the state it was in when it
+ was disabled.
+\end_layout
+
+\begin_layout Description
+SEND
+\begin_inset space ~
+\end_inset
+
+command send the event, given in target_machine_name '.' event_name form.
+\end_layout
+
+\begin_layout Description
+SET
+\begin_inset space ~
+\end_inset
+
+machine_name
+\begin_inset space ~
+\end_inset
+
+TO
+\begin_inset space ~
+\end_inset
+
+state_name attempt to set the named machine to the given state
+\end_layout
+
+\begin_layout Description
+SLAVES display information about the known EtherCAT slaves
+\end_layout
+
+\begin_layout Description
+TOGGLE
+\begin_inset space ~
+\end_inset
+
+machine_name changes from the on state to off or vice-versa, only usable
+ on machines with both an on and off state.
+\end_layout
+
+\begin_layout Subsection
+persistd
+\end_layout
+
+\begin_layout Subsection
+beckhoffd
+\end_layout
+
+\begin_layout Subsection
+modbusd
+\end_layout
+
+\end_body
+\end_document
