@@ -926,8 +926,17 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					else
 						return NULL;
 				}
-				else
+				else {
 				 	DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
+                }
+                if (response_required && from) {
+                    DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
+                    std::string response = _name + "." + t.trigger.getText() + "_done";
+                    ExecuteMessageActionTemplate emat(strdup(response.c_str()), strdup(from->getName().c_str()));
+                    ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
+                    this->push(ema);
+                }
+
 				MoveStateActionTemplate temp(strdup(_name.c_str()), strdup(t.dest.getName().c_str()) );
 				return new MoveStateAction(this, temp);
 			}
