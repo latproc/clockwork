@@ -77,7 +77,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			    // first look through the transitions to see if a state change should be triggered
 			    // by command
 			    if (machine->state_machine) {
-					BOOST_FOREACH(Transition t, machine->state_machine->transitions) {
+					BOOST_FOREACH(Transition t, machine->transitions) {
 						if (t.source == machine->getCurrent() && t.dest == value) {
 							DBG_M_ACTIONS << machine->_name << " has a transition from " << t.source << " to " << t.dest << " using it\n";
 						    status = machine->execute(new Message(t.trigger), machine);

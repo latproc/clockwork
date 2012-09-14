@@ -57,6 +57,20 @@ void Action::release() {
 	}
 }
 
+
+Transition::Transition(const Transition &other) : source(other.source), dest(other.dest), trigger(other.trigger) {
+    
+}
+
+Transition &Transition::operator=(const Transition &other) {
+    source = other.source;
+    dest = other.dest;
+    trigger = other.trigger;
+    return *this;
+}
+
+
+
 ConditionHandler::ConditionHandler(const ConditionHandler &other)
 : condition(other.condition),
 command_name(other.command_name),
@@ -692,8 +706,8 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
     }
 
 	// commands in the transition table are public and can be sent by anyone
-    std::list<Transition>::const_iterator iter = state_machine->transitions.begin();
-    while (iter != state_machine->transitions.end()) {
+    std::list<Transition>::const_iterator iter = transitions.begin();
+    while (iter != transitions.end()) {
         Transition t = *iter++;
         if (t.trigger == m) return true;
     }
@@ -852,8 +866,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		DBG_M_MESSAGING << "received message " << m << " from " << from->getName() << "\n";
 	}
 	if (from == this || m.getText() == short_name) {
-	    std::list<Transition>::const_iterator iter = state_machine->transitions.begin();
-		while (iter != state_machine->transitions.end()) {
+	    std::list<Transition>::const_iterator iter = transitions.begin();
+		while (iter != transitions.end()) {
    		 	Transition t = *iter++;
    		 	if (t.trigger.getText() == short_name && current_state == t.source) {
    	        	// found match, if there is a command defined for this transition, we
@@ -955,8 +969,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		}
 	}
 	else {
-	   	std::list<Transition>::const_iterator iter = state_machine->transitions.begin();
-		while (iter != state_machine->transitions.end()) {
+	   	std::list<Transition>::const_iterator iter = transitions.begin();
+		while (iter != transitions.end()) {
    	 		Transition t = *iter++;
    	 		if ( (t.trigger.getText() == m.getText() || t.trigger.getText() == short_name) && current_state == t.source) {
 				DBG_M_MESSAGING << _name << " received message" << m.getText() << "; pushing state change\n";
@@ -1534,6 +1548,26 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			}
 		}
 	}
+    // copy transitions to support transtions on receipt of events from other machines
+    BOOST_FOREACH(Transition &transition, state_machine->transitions) {
+        transitions.push_back(transition);
+        
+        // copy this transition with the real name of the machine for the trigger
+        std::string machine = transition.trigger.getText();
+        if (machine.find('.') != std::string::npos) {
+            machine.erase((machine.find('.')));
+            // if this is a parameter, copy the transition to use the real name
+            for (unsigned int i = 0; i < state_machine->parameters.size(); ++i) {
+                if (parameters[i].val == machine) {
+                    std::string evt = transition.trigger.getText();
+                    evt = evt.substr(evt.find('.')+1);
+                    std::string trigger = parameters[i].real_name + "." + evt;
+                    transitions.push_back(Transition(transition.source, transition.dest,Message(trigger.c_str())));
+                }
+            }
+        }
+    }
+
 	setupModbusInterface();
 }
 

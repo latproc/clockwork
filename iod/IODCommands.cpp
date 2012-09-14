@@ -64,8 +64,14 @@ bool IODCommandSetStatus::run(std::vector<std::string> &params) {
         else {
             MachineInstance *mi = MachineInstance::find(ds.c_str());
             if (mi) {
-				SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), State(params[3].c_str()) );
-				mi->active_actions.push_front(ssat.factory(mi)); // execute this state change once all other actions are complete
+                /* it would be safer to push the requested state change onto the machine's
+                    action list but some machines do not poll their action list because they
+                    do not expect to receive events
+                
+				   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), State(params[3].c_str()) );
+				   mi->active_actions.push_front(ssat.factory(mi)); // execute this state change once all other actions are complete
+                */
+                mi->setState(params[3].c_str());
                 return true;
             }
         }

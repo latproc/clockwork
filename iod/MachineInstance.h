@@ -54,6 +54,8 @@ struct Transition {
     State dest;
     Message trigger;
     Transition(State s, State d, Message t) : source(s), dest(d), trigger(t) {}
+    Transition(const Transition &other);
+    Transition &operator=(const Transition &other);
 };
 
 struct ConditionHandler {
@@ -232,6 +234,8 @@ public:
     std::map<Message, MachineCommand*> enter_functions;
     std::map<Message, MachineCommand*> receives_functions;
     std::set<Transmitter *> listens;
+    std::list<Transition> transitions;
+
     Action *executingCommand(); // returns the action currently executing
 	std::list<Action*>active_actions;
 	void displayActive(std::ostream &out);
@@ -357,6 +361,7 @@ private:
 	friend class SetIOStateAction;
 	friend class ExpressionAction;
 	friend class IODCommandToggle;
+    friend class IODCommandSetStatus;
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);

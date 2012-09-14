@@ -574,8 +574,6 @@ int loadConfig(int argc, char const *argv[]) {
 	flag->default_state = State("off");
 	flag->initial_state = State("off");
 	flag->disableAutomaticStateChanges();
-	//flag->transitions.push_back(Transition(State("on"),State("off"),Message("turnOff")));
-	//flag->transitions.push_back(Transition(State("off"),State("on"),Message("turnOn")));
 	
 	MachineClass *mc_variable = new MachineClass("VARIABLE");
 	mc_variable->states.push_back("ready");
@@ -583,7 +581,6 @@ int loadConfig(int argc, char const *argv[]) {
 	mc_variable->disableAutomaticStateChanges();
 	mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
     mc_variable->options["VALUE"] = "VAL_PARAM1";
-    //mc_variable->options["PERSISTENT"] = Value("true", Value::t_string);
 	mc_variable->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
 	
 	MachineClass *mc_constant = new MachineClass("CONSTANT");
@@ -592,7 +589,6 @@ int loadConfig(int argc, char const *argv[]) {
 	mc_constant->disableAutomaticStateChanges();
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
     mc_constant->options["VALUE"] = "VAL_PARAM1";
-    //mc_constant->options["PERSISTENT"] = Value("true", Value::t_string);
 
 	mc_constant->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
     
