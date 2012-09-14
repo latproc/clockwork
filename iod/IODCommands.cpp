@@ -62,14 +62,20 @@ bool IODCommandSetStatus::run(std::vector<std::string> &params) {
             return true;
         }
         else {
-            //  Send reply back to client
-            const char *msg_text = "Not found: ";
-            size_t len = strlen(msg_text) + ds.length();
-            char *text = (char *)malloc(len+1);
-            sprintf(text, "%s%s", msg_text, ds.c_str());
-            error_str = text;
-            return false;
+            MachineInstance *mi = MachineInstance::find(ds.c_str());
+            if (mi) {
+				SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), State(params[3].c_str()) );
+				mi->active_actions.push_front(ssat.factory(mi)); // execute this state change once all other actions are complete
+                return true;
+            }
         }
+        //  Send reply back to client
+        const char *msg_text = "Not found: ";
+        size_t len = strlen(msg_text) + ds.length();
+        char *text = (char *)malloc(len+1);
+        sprintf(text, "%s%s", msg_text, ds.c_str());
+        error_str = text;
+        return false;
     }
     error_str = "Usage: SET device TO state";
     return false;
