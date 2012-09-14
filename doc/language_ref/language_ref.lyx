@@ -112,9 +112,145 @@ define transition rules that determine what actions can be performed and
  what state transtions are allowable
 \end_layout
 
+\begin_layout Itemize
+define state entry functions that execute when a machine enters a state
+\end_layout
+
 \begin_layout Standard
-Conditions on a machine are generally defined in terms of the state and
- properties of other machines.
+Conditions on a machine are defined in terms of the state of other machines
+ and properties of itself and other machines.
+ Machines continuously evaluate these conditions and automatically switch
+ to the first state found that matches the condition, executing its state
+ entry function as it does so.
+\end_layout
+
+\begin_layout Standard
+A machine definition can be instantiated by providing a name, the name of
+ the machine definition, also called the machine `class', and a list or
+ parameters that are required by the definition.
+ For example, following is a machine that monitors two inputs and turns
+ on when both inputs are on:
+\end_layout
+
+\begin_layout LyX-Code
+AndGate MACHINE input1, input2
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN input1 IS on AND input2 IS on;
+\end_layout
+
+\begin_layout LyX-Code
+off DEFAULT
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+a FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+b FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGate a,b;
+\end_layout
+
+\begin_layout Standard
+The machine definition for AndGate requires two parameters for the two inputs
+ and defines a condition on state `on' to activate when both inputs are
+ on.
+ The statement 
+\noun on
+off
+\noun default
+ 
+\noun on
+DEFAULT
+\noun default
+ defines a default condition on the 
+\noun on
+off
+\noun default
+ state that always returns true.
+ There can be only one DEFAULT state in each machine but it is not required.
+\end_layout
+
+\begin_layout Standard
+The above machine is not particularly useful; after detecting an issue,
+ we may want to do something about it.
+ The above can be adjusted to, for example, turn on a light when the two
+ inputs are on, to do this, we add an ENTER method for the on state:
+\end_layout
+
+\begin_layout LyX-Code
+AndGate MACHINE input1, input2, output
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN input1 IS on AND input2 IS on;
+\end_layout
+
+\begin_layout LyX-Code
+off DEFAULT
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+ENTER on { SET output TO on; }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER off { SET output TO off; }
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+light FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+a FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+b FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGate a,b;
+\end_layout
+
+\begin_layout Standard
+So far we have been using FLAG machines as placeholders for machines that
+ have an interface to hardware.
+ For the sake of describing the language, this is sufficient and has the
+ advantage that a command interface or web page can be used to alter the
+ flags for test purposes.
+ Please refer to the user manual for information about the command interface
+ and the web interface.
 \end_layout
 
 \begin_layout Section
