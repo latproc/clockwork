@@ -891,8 +891,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 									ch.triggered = false;
 								}
 							}
-							SetStateActionTemplate *temp 
-								= new SetStateActionTemplate(strdup(_name.c_str()), strdup(t.dest.getName().c_str()) );
+							MoveStateActionTemplate *temp
+								= new MoveStateActionTemplate(strdup(_name.c_str()), strdup(t.dest.getName().c_str()) );
 							//Action *ssa = new SetStateAction(this, temp);
 						    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "unnamed_command");
 						    mc->setActionTemplate(temp);
