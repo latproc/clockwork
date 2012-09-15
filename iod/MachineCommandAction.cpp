@@ -83,7 +83,7 @@ Action::Status MachineCommand::runActions() {
 		DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
 		Action::Status stat = (*a)();
         if (stat == Action::Failed) {
-            DBG_M_ACTIONS << " action: " << *a << " failed to start (" << a->error() << ")\n";
+            NB_MSG << " action: " << *a << " failed to start (" << a->error() << ")\n";
 			error_str = a->error() ;
             return Failed; // action failed to start
         }
@@ -100,7 +100,7 @@ Action::Status MachineCommand::runActions() {
 //		if (x==a) { DBG_M_ACTIONS << "stop doesn't work\n"; exit(2); }
 		if (owner->executingCommand() != this) {
 			DBG_M_ACTIONS << "ERROR: command executing (" << *owner->executingCommand() <<") is not " << *this << "\n"
-			; }
+        ; }
 		setBlocker(0);
         ++current_step;
         DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
@@ -126,7 +126,7 @@ Action::Status MachineCommand::run() {
 	Action::Status stat = runActions();
     if (stat  == Failed) {
         error_str = "Failed to start an action";
-		//DBG_M_ACTIONS << command_name.get() << " " << error_str.get() << "\n";
+		NB_MSG << command_name.get() << " " << error_str.get() << "\n";
 		status = stat;
 		owner->stop(this);
         return Failed;
@@ -146,7 +146,7 @@ Action::Status MachineCommand::run() {
 }
 
 Action::Status MachineCommand::checkComplete() {
-	//DBG_M_ACTIONS << "MachineCommand::checkComplete " << owner->getName() << "\n";
+	DBG_M_ACTIONS << "MachineCommand::checkComplete " << owner->getName() << "\n";
 	if (status != Running) return status;
     while (current_step < actions.size()) {
         // currently running, attempt to move through the actions
