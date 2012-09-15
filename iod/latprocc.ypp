@@ -93,7 +93,7 @@ struct Subcondition {
 %token SEND CONDITION INITSTATE IF ELSE ENABLE DISABLE BECOMES
 %token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
-%token STATES MATCHES COMMANDS COPY EXTRACT ALL
+%token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 
 %union {
 	int iVal;
@@ -985,6 +985,32 @@ TRANSITION name_list /* list of source states */ TO SYMBOL /* destination state 
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
         current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+    }
+    current_name_list.clear();
+}
+| TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */
+USING SYMBOL /* received event */ REQUIRES predicate /* rule */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+    }
+    current_name_list.clear();
+}
+| TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */
+    ON SYMBOL /* received event */ REQUIRES predicate /* rule */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+    }
+    current_name_list.clear();
+}
+| TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */ REQUIRES predicate /* rule */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6));
     }
     current_name_list.clear();
 }

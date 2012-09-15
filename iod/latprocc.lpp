@@ -69,6 +69,7 @@ REPLACE             return REPLACE;
 RO                  return READONLY;
 RW                  return READWRITE;
 RECEIVE             return RECEIVE;
+REQUIRES            return REQUIRES;
 RESUME              return RESUME;
 SEND                return SEND;
 SET                 return SET;

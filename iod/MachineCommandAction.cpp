@@ -155,6 +155,7 @@ Action::Status MachineCommand::checkComplete() {
             ++current_step;
         }
 		else if (a->getStatus() == Failed) {
+            NB_MSG << command_name.get() << " " << a->error() << "\n";
 			owner->stop(this);
 			return status; // an action failed
 		}

@@ -53,7 +53,8 @@ struct Transition {
     State source;
     State dest;
     Message trigger;
-    Transition(State s, State d, Message t) : source(s), dest(d), trigger(t) {}
+    Condition *condition;
+    Transition(State s, State d, Message t, Predicate *p=0);
     Transition(const Transition &other);
     Transition &operator=(const Transition &other);
 };

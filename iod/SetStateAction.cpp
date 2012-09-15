@@ -76,23 +76,36 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			if (use_transitions) {
 			    // first look through the transitions to see if a state change should be triggered
 			    // by command
-			    if (machine->state_machine) {
+                if (! machine->transitions.empty()) {
 					BOOST_FOREACH(Transition t, machine->transitions) {
-						if (t.source == machine->getCurrent() && t.dest == value) {
-							DBG_M_ACTIONS << machine->_name << " has a transition from " << t.source << " to " << t.dest << " using it\n";
-						    status = machine->execute(new Message(t.trigger), machine);
-						    if (status == Action::Failed) {
-								error_str = "failed to execute transition\n";
-							}
-							else
-								result_str = "OK";
-							if (status != Action::Running && status != Action::Suspended && owner->executingCommand() == this) {
-								owner->stop(this);
-							}
-						    return status;
+						if ( (t.source == machine->getCurrent() || t.source.getName() == "ANY")
+                                && (t.dest == value || t.dest.getName() == "ANY") ) {
+                            if (!t.condition || (*t.condition)(owner)) {
+                                if (t.trigger.getText() == "NOTRIGGER")  break; // no trigger command for this transition
+                                DBG_M_ACTIONS << machine->_name << " has a transition from "
+                                    << t.source << " to " << value << " using it\n";
+                                status = machine->execute(new Message(t.trigger.getText().c_str()), machine);
+                                if (status == Action::Failed) {
+                                    error_str = "failed to execute transition\n";
+                                }
+                                else
+                                    result_str = "OK";
+                                if (status != Action::Running && status != Action::Suspended && owner->executingCommand() == this) {
+                                    owner->stop(this);
+                                }
+                                return status;
+                            }
+                            else {
+                                std::stringstream ss;
+                                ss << "Transition from " << t.source << " to "
+                                << value << " denied due to condition " << *(t.condition->predicate);
+                                error_str = ss.str().c_str();
+                                status = Failed;
+                                return status;
+                            }
 						}
 				    }
-				}
+                }
 				//DBG_M_ACTIONS << "SetStateAction didn't find a transition for " << machine->getCurrent() << " to " << value << "; manually setting\n";
 			}
 			status = machine->setState( value );

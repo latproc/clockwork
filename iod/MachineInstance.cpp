@@ -51,21 +51,34 @@ bool Action::debug() {
 }
 
 void Action::release() { 
-	--refs; 
-	if (refs < 0) {
-		NB_MSG << "detected potential double delete of " << *this << "\n";
-	}
+	--refs;
+    //if (refs < 0) {
+	//	NB_MSG << "detected potential double delete of " << *this << "\n";
+	//}
+    //if (refs == 0)
+    //    delete this;
 }
 
+Transition::Transition(State s, State d, Message t, Predicate *p) : source(s), dest(d), trigger(t), condition(0) {
+    if (p) {
+        condition = new Condition(p);
+    }
+}
 
-Transition::Transition(const Transition &other) : source(other.source), dest(other.dest), trigger(other.trigger) {
-    
+Transition::Transition(const Transition &other) : source(other.source), dest(other.dest), trigger(other.trigger), condition(0) {
+    if (other.condition) {
+        condition = new Condition(other.condition->predicate);
+    }
 }
 
 Transition &Transition::operator=(const Transition &other) {
     source = other.source;
     dest = other.dest;
     trigger = other.trigger;
+    if (other.condition) {
+        delete condition;
+        condition = new Condition(other.condition->predicate);
+    }
     return *this;
 }
 
@@ -470,7 +483,7 @@ void MachineInstance::idle() {
 		if (curr->getStatus() == Action::New) { 
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
-				DBG_M_ACTIONS << "Action " << *curr << " failed\n";
+				NB_MSG << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
 			}
 		}
 		else if (!curr->complete())  {
@@ -854,9 +867,11 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 			//TBD execute the message on the dependant machine
 			dep->execute(*msg, this);
 		}
+        delete msg;
 	}
 	return stat;
 }
+
 Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response_required) {
 	std::string short_name(m.getText());
 	if (short_name.find('.')) {
