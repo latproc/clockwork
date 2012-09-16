@@ -98,10 +98,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
                             else {
                                 std::stringstream ss;
                                 ss << "Transition from " << t.source << " to "
-                                << value << " denied due to condition " << *(t.condition->predicate);
+                                << value << " denied due to condition " << t.condition->last_evaluation;
                                 error_str = ss.str().c_str();
-                                status = Failed;
-                                return status;
+                                DBG_M_ACTIONS << owner->getName() << " "  << ss.str() << "\n";
+                                status = New;
+                                return NeedsRetry;
                             }
 						}
 				    }
@@ -144,6 +145,7 @@ Action::Status SetStateAction::run() {
 }
 
 Action::Status SetStateAction::checkComplete() {
+    if (status == New || status == NeedsRetry) executeStateChange(true);
 	if (status == Suspended) resume();
     if (status != Running) return status;
 	if (trigger.enabled()) {

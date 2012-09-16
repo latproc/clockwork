@@ -90,7 +90,7 @@ public:
     const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
     const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
 
-	enum Status { New, Running, Complete, Failed, Suspended };
+	enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
     
     Status operator()() {
 		if (status == New) status = Running;

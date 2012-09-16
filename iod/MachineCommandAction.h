@@ -44,7 +44,7 @@ class MachineInstance;
 	
 struct MachineCommandTemplate : public ActionTemplate {
     MachineCommandTemplate(CStringHolder cmd_name, CStringHolder state)
-    : command_name(cmd_name), state_name(state) { }
+    : command_name(cmd_name), state_name(state), timeout(0) { }
     virtual Action *factory(MachineInstance *mi);
 
     std::ostream &operator<<(std::ostream &out) const {
@@ -52,9 +52,11 @@ struct MachineCommandTemplate : public ActionTemplate {
     }
     void setActionTemplates(std::list<ActionTemplate*> &new_actions);
     void setActionTemplate(ActionTemplate *action);
+    
     std::vector<ActionTemplate*> action_templates;
     CStringHolder command_name;
     CStringHolder state_name;
+    long timeout;
 };
 
 class MachineCommand : public Action {
@@ -75,6 +77,8 @@ private:
     unsigned int current_step;
     CStringHolder command_name;
     CStringHolder state_name;
+    long timeout;
+    Trigger timout_trigger;
 };
 
 #endif

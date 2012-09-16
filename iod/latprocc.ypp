@@ -328,11 +328,32 @@ stable_state:
 state_definition ';' 
 
 transitory_state:
-SYMBOL /*state name */ DURING SYMBOL /* command */ action {
+SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
     current_machineclass->states.push_back($1);
 
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1);
+    MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
+    mc->action_templates.push_back(state_change);
+    current_machineclass->commands[$3] = mc;
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+}
+| SYMBOL /*state name */ DURING SYMBOL /* command */ property_block action  {
+    DBG_PARSER << "command handler for command " << $3 << "\n";
+    current_machineclass->states.push_back($1);
+    
+    MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    if (properties.exists("TIMEOUT")) {
+        Value &t = properties.lookup("TIMEOUT");
+        long timeout;
+        if (t.asInteger(timeout)) {
+            mc->timeout = timeout;
+        }
+    }
+    properties.clear();
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
     current_machineclass->commands[$3] = mc;
@@ -477,6 +498,29 @@ enter_command
 
 basic_command:
 COMMAND SYMBOL /* command name */ action {
+	// commands are essentially messages
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
+    mc->setActionTemplates(*current_actions);
+    if (current_machineclass->receives.count(Message($2)) == 0) {
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+    	    DBG_PARSER << *at << " ";
+    	}
+    	DBG_PARSER << "\n";
+        
+	    current_machineclass->receives[Message($2)] = mc;
+	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+	}
+    else {
+        std::stringstream ss;
+        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	current_actions->clear();
+}
+| COMMAND SYMBOL /* command name */ property_block action {
 	// commands are essentially messages
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
     mc->setActionTemplates(*current_actions);
@@ -989,10 +1033,10 @@ TRANSITION name_list /* list of source states */ TO SYMBOL /* destination state 
     current_name_list.clear();
 }
 | TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */
-USING SYMBOL /* received event */ REQUIRES predicate /* rule */
+    USING SYMBOL /* received event */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
-        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "using " << $6 << "requiring " << *($8) << "\n";
         current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
     }
     current_name_list.clear();
@@ -1001,7 +1045,7 @@ USING SYMBOL /* received event */ REQUIRES predicate /* rule */
     ON SYMBOL /* received event */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
-        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "requiring " << *($8) << "\n";
         current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
     }
     current_name_list.clear();
@@ -1009,7 +1053,7 @@ USING SYMBOL /* received event */ REQUIRES predicate /* rule */
 | TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
-        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "requiring " << *($6) << "\n";
         current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6));
     }
     current_name_list.clear();

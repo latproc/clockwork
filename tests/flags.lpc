@@ -2,12 +2,15 @@ Test MACHINE {
 	OPTION count 0;
 	even FLAG(tab:Tests);
 	odd FLAG(tab:Tests);
-    b WHEN count %5 == 0;
-	a WHEN count > 0, TAG even WHEN count % 2 == 0, EXECUTE stop WHEN count%2 == 1, TAG odd WHEN count % 2 == 1;
+    #b WHEN count %5 == 0;
+	a WHEN count > 0, 
+            TAG even WHEN count % 2 == 0, 
+            EXECUTE stop WHEN count == 3, 
+            TAG odd WHEN count % 2 == 1;
+	COMMAND next { count := count + 1; }
 	idle DEFAULT;
     
-    COMMAND stop { }
+    COMMAND stop { LOG "STOP" }
 
-	COMMAND next { count := count + 1; }
 }
 test Test(tab:Tests);

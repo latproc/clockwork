@@ -293,6 +293,7 @@ public:
 	// basic lock functionality 
 	bool lock(MachineInstance *requester) { if (locked && locked != requester) return false; else {locked = requester; return true; } }
 	bool unlock(MachineInstance *requester) { if (locked != requester) return false; else { locked = 0; return true; } }
+    MachineInstance *locker() const { return locked; }
 	
 	// basic modbus interface
 	ModbusAddress addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name);

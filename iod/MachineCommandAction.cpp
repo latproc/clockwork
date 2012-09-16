@@ -35,7 +35,7 @@ void MachineCommandTemplate::setActionTemplate(ActionTemplate *at) {
 
 
 MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
-: Action(mi), command_name(mct->command_name), state_name(mct->state_name) {
+: Action(mi), command_name(mct->command_name), state_name(mct->state_name), timeout(0) {
     BOOST_FOREACH(ActionTemplate *t, mct->action_templates) {
         //DBG_M_ACTIONS << "copying action " << (*t) << " for machine " << mi->_name << "\n";
         actions.push_back(t->factory(mi));
@@ -86,6 +86,12 @@ Action::Status MachineCommand::runActions() {
             NB_MSG << " action: " << *a << " failed to start (" << a->error() << ")\n";
 			error_str = a->error() ;
             return Failed; // action failed to start
+        }
+        if (stat == Action::NeedsRetry) {
+            NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
+            owner->stop(a);
+            status = Running;
+            return status; // action failed to start
         }
         if (!a->complete()) {
 			DBG_M_ACTIONS << "leaving action: " << *a << " to run for a while\n";
@@ -151,6 +157,11 @@ Action::Status MachineCommand::checkComplete() {
     while (current_step < actions.size()) {
         // currently running, attempt to move through the actions
         Action *a = actions[current_step];
+        if (a->getStatus() == New || a->getStatus() == NeedsRetry) {
+            if ((*a)() == NeedsRetry) {
+                return Running;
+            }
+        }
         if (a->getStatus() == Complete) {
             ++current_step;
         }

@@ -389,6 +389,12 @@ void MachineInstance::describe(std::ostream &out) {
         }
         out << "\n";
     }
+    if (locals.size()) {
+        out << "Locals:\n";
+        for (unsigned int i = 0; i<locals.size(); ++i) {
+            out << "  " << (locals[i].machine ? locals[i].machine->getName() : "Missing machine") << "\n";
+        }
+    }
     if (listens.size()) {
         out << "Lisening to: \n";
         std::set<Transmitter *>::iterator iter = listens.begin();
@@ -408,11 +414,25 @@ void MachineInstance::describe(std::ostream &out) {
         out << "properties:\n  ";
         out << properties << "\n\n";
     }
+    if (locked) {
+        out << "locked: " << locked->getName() << "\n";
+    }
     if (stable_states.size()) {
         out << "Last stable state evaluation:\n";
         for (unsigned int i=0; i<stable_states.size(); ++i) {
             out << "  " << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
-            if (stable_states[i].condition.last_result == true) break;
+            if (stable_states[i].condition.last_result == true) {
+                if (stable_states[i].subcondition_handlers && !stable_states[i].subcondition_handlers->empty()) {
+                    std::list<ConditionHandler>::iterator iter = stable_states[i].subcondition_handlers->begin();
+                    while (iter != stable_states[i].subcondition_handlers->end()) {
+                        ConditionHandler &ch = *iter++;
+                        out << "      " << ch.command_name <<" ";
+                        if (ch.command_name != "FLAG" && ch.trigger) out << (ch.trigger->fired() ? "fired" : "not fired");
+                        out << " last: " << ch.condition.last_evaluation << "\n";
+                    }
+                }
+                break;
+            }
         }
     }
     
@@ -480,14 +500,18 @@ void MachineInstance::idle() {
 
 	Action *curr = executingCommand();
 	while (curr) {
-		if (curr->getStatus() == Action::New) { 
+		if (curr->getStatus() == Action::New || curr->getStatus() == Action::NeedsRetry) {
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
 				NB_MSG << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
 			}
+            else if (res != Action::Complete) {
+                DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
+                return;
+            }
 		}
 		else if (!curr->complete())  {
-			//DBG_M_ACTIONS << "Action " << *curr << " is not complete\n";
+			DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
 			return;
 		}
 		Action *last = curr;
@@ -614,11 +638,23 @@ void MachineInstance::displayAll() {
 
 // linear search through the machine list, tbd performance..
 MachineInstance *MachineInstance::find(const char *name) {
-    std::list<MachineInstance*>::iterator iter = all_machines.begin();
-    while (iter != all_machines.end()) {
-		MachineInstance *m = *iter++;
-		if (m->_name == name) return m;
-	}
+    std::string machine(name);
+    if (machine.find('.') != std::string::npos) {
+        machine.erase(machine.find('.'));
+        MachineInstance *mi = find(machine.c_str());
+        if (mi) {
+            std::string shortname(name);
+            shortname = shortname.substr(shortname.find('.')+1);
+            return mi->lookup(shortname);
+        }
+    }
+    else {
+        std::list<MachineInstance*>::iterator iter = all_machines.begin();
+        while (iter != all_machines.end()) {
+            MachineInstance *m = *iter++;
+            if (m->_name == name) return m;
+        }
+    }
 	return 0;
 }
 
