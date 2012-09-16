@@ -21,13 +21,19 @@
 #include "LockAction.h"
 #include "MachineInstance.h"
 #include "Logger.h"
+#include "DebugExtra.h"
 
 Action *LockActionTemplate::factory(MachineInstance *mi) {
 	return new LockAction(mi, this);
 }
 
 std::ostream &LockAction::operator<<(std::ostream &out) const {
-	return out << "Lock Action " << machine_name << "\n";
+    MachineInstance *machine = owner->lookup(machine_name);
+
+    out << "Lock Action " << machine_name;
+	if (machine && machine->locker()) out << " lock held by " << machine->locker()->getName();
+    out << "\n";
+    return out;
 }
 
 Action::Status LockAction::run() {
@@ -36,8 +42,10 @@ Action::Status LockAction::run() {
 	if (machine) 
 		if ( machine->lock(owner)) 
 			status = Complete;
-		else
+		else {
+            DBG_M_ACTIONS << owner->getName() << " waiting for lock: " << *this;
 			status = Running;
+        }
 	else
 		status = Failed;
 	
