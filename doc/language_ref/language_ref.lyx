@@ -253,6 +253,38 @@ So far we have been using FLAG machines as placeholders for machines that
  and the web interface.
 \end_layout
 
+\begin_layout Subsection
+Parts of a machine
+\end_layout
+
+\begin_layout Standard
+The definition of a machine includes several parts these
+\end_layout
+
+\begin_layout Itemize
+declaration of states
+\end_layout
+
+\begin_layout Itemize
+definition of stable states
+\end_layout
+
+\begin_layout Itemize
+definition of transitions
+\end_layout
+
+\begin_layout Itemize
+definition of event handlers
+\end_layout
+
+\begin_layout Itemize
+definition of commands
+\end_layout
+
+\begin_layout Itemize
+export declarations
+\end_layout
+
 \begin_layout Section
 Details
 \end_layout
