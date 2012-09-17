@@ -714,7 +714,9 @@ int loadConfig(int argc, char const *argv[]) {
                 }
                 else {
 					std::stringstream ss;
-                    ss << "Warning: no instance " << p_i.sValue << " found for " << mi->getName();
+                    ss << "Warning: no instance " << p_i.sValue
+                    << " (" << mi->parameters[i].real_name << ")"
+                    << " found for " << mi->getName();
 					error_messages.push_back(ss.str());
 				}
             }
@@ -936,8 +938,10 @@ int main (int argc, char const *argv[])
             m_iter = MachineInstance::begin();
             while (m_iter != MachineInstance::end()) {
                 MachineInstance *mi = *m_iter++;
-                BOOST_FOREACH(MachineInstance *dep, mi->depends) {
-                    graph << mi->getName() << " -> " << dep->getName()<< ";\n";
+                if (!mi->depends.empty()) {
+                    BOOST_FOREACH(MachineInstance *dep, mi->depends) {
+                        graph << mi->getName() << " -> " << dep->getName()<< ";\n";
+                    }
                 }
             }
             graph << "}\n";
