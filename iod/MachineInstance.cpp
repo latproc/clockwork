@@ -135,7 +135,7 @@ StableState::StableState (const StableState &other)
 }
 
 void StableState::fired(Trigger *trig) {
-    if (owner) owner->needs_check = true;
+    if (owner) ++owner->needs_check;
 }
 
 std::map<std::string, MachineInstance*> machines;
@@ -328,7 +328,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 _type("Undefined"), 
 io_interface(0), 
 owner(0), 
-needs_check(true), 
+needs_check(1),
 uses_timer(false),
 my_instance_type(instance_type),
 state_change(0), 
@@ -355,7 +355,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 _type(type), 
 io_interface(0), 
 owner(0), 
-needs_check(true), 
+needs_check(1),
 uses_timer(false),
 my_instance_type(instance_type),
 state_change(0), 
@@ -489,7 +489,7 @@ bool MachineInstance::needsCheck() {
         }
     }
 #endif
-	return needs_check;
+	return needs_check != 0;
 }
 
 void MachineInstance::idle() {
@@ -1101,7 +1101,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		NB_MSG << _name << " error: dropping empty message\n";
 		return Action::Failed;
 	}
-	needs_check = true;
+	++needs_check;
 	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
 	std::string event_name(m.getText());
 	if (from && event_name.find('.') == std::string::npos)
@@ -1223,7 +1223,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
-	needs_check = true;
+	++needs_check;
 	if (active_actions.back() != a) {
 		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 		return;
@@ -1313,7 +1313,7 @@ void MachineInstance::resume() {
         }
         setState(current_state, true);
 	} 
-	needs_check = true;
+	++needs_check;
 }
 
 void MachineInstance::enable() { 
@@ -1324,7 +1324,7 @@ void MachineInstance::enable() {
         locals[i].machine->enable();
     }
     setInitialState();
-	needs_check = true;
+	++needs_check;
 }
 
 void MachineInstance::setDebug(bool which) {
@@ -1365,7 +1365,7 @@ void MachineInstance::resume(const std::string &state_name) {
                 locals[i].machine->resume();
         }
     }
-	needs_check = true;
+	++needs_check;
 }
 
 
@@ -1388,7 +1388,7 @@ void MachineInstance::setStableState() {
 	DBG_M_AUTOSTATES << _name << " checking stable states\n";
 	
 	// we must not set our stable state if objects we depend on are still updating their own state
-	needs_check = false;
+	--needs_check;
 
     if (io_interface) {
 	 	setState(io_interface->getStateString());
@@ -1818,7 +1818,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 				return;
 			}
 		}
-		needs_check = true;
+		++needs_check;
 	    // try the current instance ofthe machine, then the machine class and finally the global symbols
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
 
@@ -1882,7 +1882,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 				DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
 		}
 		BOOST_FOREACH(MachineInstance *dep, depends) {
-			dep->needs_check = true; // make sure dependant machines update when a property changes
+			++dep->needs_check; // make sure dependant machines update when a property changes
 		}
 	}
 }
@@ -2273,7 +2273,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 	else {
 		NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
 	}
-	needs_check = true;
+	++needs_check;
 }
 
 int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {

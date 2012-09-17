@@ -330,7 +330,7 @@ public:
 
 	static void sort();
 
-	bool needs_check;
+	int needs_check;
 	bool uses_timer;
 	
 protected:
