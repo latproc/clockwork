@@ -60,8 +60,8 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 }
 
 Condition::~Condition() {
-    if (predicate)
-        std::cout << "DELETING predicate " << *predicate << "\n";
+//    if (predicate)
+//       std::cout << "DELETING predicate " << *predicate << "\n";
     delete predicate;
 }
 

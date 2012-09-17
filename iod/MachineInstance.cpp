@@ -506,6 +506,7 @@ void MachineInstance::idle() {
 
 	Action *curr = executingCommand();
 	while (curr) {
+		curr->retain();
 		if (curr->getStatus() == Action::New || curr->getStatus() == Action::NeedsRetry) {
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
@@ -513,11 +514,13 @@ void MachineInstance::idle() {
 			}
             else if (res != Action::Complete) {
                 DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
+				curr->release();
                 return;
             }
 		}
 		else if (!curr->complete())  {
 			DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
+			curr->release();
 			return;
 		}
 		Action *last = curr;
@@ -525,11 +528,12 @@ void MachineInstance::idle() {
 		if (curr && curr == last) {
 			DBG_M_ACTIONS << "Action " << *curr << " failed to remove itself when complete. doing so manually\n";
 			stop(curr);
+			curr->release();
 			curr = executingCommand();
 			assert(curr != last);
 		}
-        //else
-        //    last->release();
+        else
+            last->release();
 	}
 	if (!mail_queue.empty()){
 		boost::mutex::scoped_lock(q_mutex);
@@ -1203,7 +1207,7 @@ void MachineInstance::start(Action *a) {
 		if (b == a) { return; }
 	}
 	DBG_M_ACTIONS << _name << " pushing (state: " << a->getStatus() << ")" << *a << "\n";
-    std::cout << "STARTING: " << *a << "\n";
+//    std::cout << "STARTING: " << *a << "\n";
 	active_actions.push_back(a->retain());
 }
 
@@ -1225,7 +1229,7 @@ void MachineInstance::stop(Action *a) {
 		return;
 	}
 	active_actions.pop_back();
-    std::cout << "STOPPING: " << *a << "\n";
+//    std::cout << "STOPPING: " << *a << "\n";
     a->release();
 	if (!active_actions.empty()) {
 		Action *next = active_actions.back();
