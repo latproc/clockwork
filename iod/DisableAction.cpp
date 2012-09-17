@@ -22,9 +22,35 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 
+DisableActionTemplate::DisableActionTemplate(const std::string &name, const char *property, const Value *val)
+        : machine_name(name), property_name(0), property_value(0) {
+    if (property && val) {
+        property_name = strdup(property);
+        property_value = strdup(val->asString().c_str());
+    }
+}
+
+DisableActionTemplate::~DisableActionTemplate() {
+    delete property_name;
+    delete property_value;
+}
+
 Action *DisableActionTemplate::factory(MachineInstance *mi) {
 	return new DisableAction(mi, this);
 }
+
+DisableAction::DisableAction(MachineInstance *m, const DisableActionTemplate *dat)
+    : Action(m), machine_name(dat->machine_name), machine(0), property_name(0), property_value(0){
+        if (dat->property_name) property_name = strdup(dat->property_name);
+        if (dat->property_value) property_value = strdup(dat->property_value);
+}
+
+
+DisableAction::~DisableAction() {
+    delete property_name;
+    delete property_value;
+}
+
 
 std::ostream &DisableAction::operator<<(std::ostream &out) const {
 	return out << "Disable Action " << machine_name << "\n";

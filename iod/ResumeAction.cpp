@@ -22,8 +22,32 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 
+ResumeActionTemplate::ResumeActionTemplate(const std::string &name, const std::string &state, const char *property, const Value *val)
+: machine_name(name), resume_state(state), property_name(0), property_value(0) {
+    if (property && val) {
+        property_name = strdup(property);
+        property_value = strdup(val->asString().c_str());
+    }
+}
+
+ResumeActionTemplate::~ResumeActionTemplate() {
+    delete property_name;
+    delete property_value;
+}
+
 Action *ResumeActionTemplate::factory(MachineInstance *mi) {
 	return new ResumeAction(mi, this);
+}
+
+ResumeAction::ResumeAction(MachineInstance *m, const ResumeActionTemplate *dat)
+: Action(m), machine_name(dat->machine_name), resume_state(dat->resume_state), machine(0), property_name(0), property_value(0) {
+    if (dat->property_name) property_name = strdup(dat->property_name);
+    if (dat->property_value) property_value = strdup(dat->property_value);
+}
+
+ResumeAction::~ResumeAction() {
+    delete property_name;
+    delete property_value;
 }
 
 std::ostream &ResumeAction::operator<<(std::ostream &out) const {

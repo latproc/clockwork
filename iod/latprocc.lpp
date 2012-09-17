@@ -85,6 +85,7 @@ USING               return USING;
 WAIT                return WAIT;
 WAITFOR             return WAITFOR;
 WHEN                return WHEN;
+WHERE               return WHERE;
 
 [A-Za-z][A-Za-z0-9_.]*       { 
     yylval.sVal = strdup(yytext);

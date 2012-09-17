@@ -23,27 +23,34 @@
 
 #include <iostream>
 #include "Action.h"
+#include "symboltable.h"
 
 class MachineInstance;
 
 struct EnableActionTemplate : public ActionTemplate {
-	EnableActionTemplate(const std::string &name) : machine_name(name){ }
+	EnableActionTemplate(const std::string &name, const char *property = 0, const Value *val = 0);
+    ~EnableActionTemplate();
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
        return out << "EnableAction template "  << machine_name<< "\n";
     }
 
 	std::string machine_name;
+    const char *property_name;
+    const char *property_value;
 };
 
 struct EnableAction : public Action {
-	EnableAction(MachineInstance *m, const EnableActionTemplate *dat) : Action(m), machine_name(dat->machine_name), machine(0) { }
+	EnableAction(MachineInstance *m, const EnableActionTemplate *dat);
+    EnableAction();
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
 
 	std::string machine_name;
 	MachineInstance *machine;
+    const char *property_name;
+    const char *property_value;
 };
 
 #endif

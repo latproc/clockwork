@@ -23,12 +23,13 @@
 
 #include <iostream>
 #include "Action.h"
+#include "symboltable.h"
 
 class MachineInstance;
 
 struct ResumeActionTemplate : public ActionTemplate {
-	ResumeActionTemplate(const std::string &name, const std::string &state) 
-	  : machine_name(name), resume_state(state){ }
+	ResumeActionTemplate(const std::string &name, const std::string &state, const char *property = 0, const Value *val = 0);
+    ~ResumeActionTemplate();
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
        return out << "ResumeAction template "  << machine_name<< "\n";
@@ -36,11 +37,13 @@ struct ResumeActionTemplate : public ActionTemplate {
 
 	std::string machine_name;
 	std::string resume_state;
+    const char *property_name;
+    const char *property_value;
 };
 
 struct ResumeAction : public Action {
-	ResumeAction(MachineInstance *m, const ResumeActionTemplate *dat)
-	  : Action(m), machine_name(dat->machine_name), resume_state(dat->resume_state), machine(0) { }
+	ResumeAction(MachineInstance *m, const ResumeActionTemplate *dat);
+    ~ResumeAction();
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
@@ -48,6 +51,8 @@ struct ResumeAction : public Action {
 	std::string machine_name;
 	std::string resume_state;
 	MachineInstance *machine;
+    const char *property_name;
+    const char *property_value;
 };
 
 #endif

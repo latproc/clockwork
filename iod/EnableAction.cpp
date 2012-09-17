@@ -22,8 +22,32 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 
+EnableActionTemplate::EnableActionTemplate(const std::string &name, const char *property, const Value *val)
+: machine_name(name), property_name(0), property_value(0) {
+    if (property && val) {
+        property_name = strdup(property);
+        property_value = strdup(val->asString().c_str());
+    }
+}
+
+EnableActionTemplate::~EnableActionTemplate() {
+    delete property_name;
+    delete property_value;
+}
+                                           
 Action *EnableActionTemplate::factory(MachineInstance *mi) {
 	return new EnableAction(mi, this);
+}
+
+EnableAction::EnableAction(MachineInstance *m, const EnableActionTemplate *dat)
+    : Action(m), machine_name(dat->machine_name), machine(0), property_name(0), property_value(0) {
+        if (dat->property_name) property_name = strdup(dat->property_name);
+        if (dat->property_value) property_value = strdup(dat->property_value);
+}
+
+EnableAction::EnableAction() {
+    delete property_name;
+    delete property_value;
 }
 
 std::ostream &EnableAction::operator<<(std::ostream &out) const {

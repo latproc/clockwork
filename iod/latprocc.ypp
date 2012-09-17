@@ -94,6 +94,7 @@ struct Subcondition {
 %token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
+%token WHERE
 
 %union {
 	int iVal;
@@ -657,10 +658,20 @@ SET SYMBOL TO SYMBOL  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new EnableActionTemplate($2); 
 }
+| ENABLE SYMBOL WHERE SYMBOL EQ value /* enable a machine */ {
+    DBG_PARSER << " enable action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new EnableActionTemplate($2, $4, $6); 
+}
 | RESUME SYMBOL /* resume a machine */ { 
     DBG_PARSER << " resume action: " << $2 << "\n"; 
     if (current_action) current_actions->push_back(current_action);
     current_action = new ResumeActionTemplate($2, ""); 
+}
+| RESUME SYMBOL WHERE SYMBOL EQ value /* resume a machine */ {
+    DBG_PARSER << " resume action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ResumeActionTemplate($2, "", $4, $6); 
 }
 | RESUME SYMBOL AT SYMBOL /* resume a machine from a given state */ { 
     DBG_PARSER << " resume action: " << $2 << "\n"; 
@@ -671,6 +682,11 @@ SET SYMBOL TO SYMBOL  {
     DBG_PARSER << " disable action: " << $2 << "\n"; 
     if (current_action) current_actions->push_back(current_action);
     current_action = new DisableActionTemplate($2); 
+}
+| DISABLE SYMBOL WHERE SYMBOL EQ value  /* enable a machine */ { 
+    DBG_PARSER << " disable action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new DisableActionTemplate($2, $4, $6);
 }
 | SHUTDOWN /* cause the interpreter to exit */ {
     DBG_PARSER << " shutdown action " << "\n"; 
