@@ -41,6 +41,7 @@ struct IfCommandActionTemplate : public ActionTemplate {
 
 struct IfCommandAction : public Action {
 	IfCommandAction(MachineInstance *mi, IfCommandActionTemplate *t);
+	~IfCommandAction();
     Status runActions();
     Status run();
     Status checkComplete();
@@ -63,6 +64,7 @@ struct IfElseCommandActionTemplate : public  ActionTemplate {
 
 struct IfElseCommandAction : public Action {
 	IfElseCommandAction(MachineInstance *mi, IfElseCommandActionTemplate *t);
+	~IfElseCommandAction();
     Status runActions();
     Status run();
     Status checkComplete();

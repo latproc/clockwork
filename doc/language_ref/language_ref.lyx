@@ -91,8 +91,8 @@ Introduction
 Clockwork is a language intended to be used to describe systems of interacting
  components using state machines.
  The purpose of the language is to provide a platform for monitoring and
- control and it has been implemented as a control system using the Beckhoff
- EtherCAT®.
+ control and it has currently been implemented as a control system using
+ the Beckhoff EtherCAT®.
 \end_layout
 
 \begin_layout Standard
@@ -122,6 +122,15 @@ Conditions on a machine are defined in terms of the state of other machines
  Machines continuously evaluate these conditions and automatically switch
  to the first state found that matches the condition, executing its state
  entry function as it does so.
+ When a state includes a condition, we tend to refer to that as a 
+\emph on
+stable 
+\emph default
+state but these could also be called 
+\emph on
+automatic
+\emph default
+ states.
 \end_layout
 
 \begin_layout Standard
@@ -163,7 +172,7 @@ b FLAG;
 \end_layout
 
 \begin_layout LyX-Code
-and_gate AndGate a,b;
+and_gate AndGate a, b;
 \end_layout
 
 \begin_layout Standard
@@ -240,7 +249,7 @@ b FLAG;
 \end_layout
 
 \begin_layout LyX-Code
-and_gate AndGate a,b;
+and_gate AndGate a, b, light;
 \end_layout
 
 \begin_layout Standard
@@ -258,7 +267,7 @@ Parts of a machine
 \end_layout
 
 \begin_layout Standard
-The definition of a machine includes several parts these
+The definition of a machine includes several sections:
 \end_layout
 
 \begin_layout Itemize
@@ -283,6 +292,34 @@ definition of commands
 
 \begin_layout Itemize
 export declarations
+\end_layout
+
+\begin_layout Standard
+These sections can be mixed but the order that stable states are declared
+ is important.
+ Please refer to section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sec:Machines"
+
+\end_inset
+
+ for more information about the definition of machines.
+\end_layout
+
+\begin_layout Section
+Machines
+\begin_inset CommandInset label
+LatexCommand label
+name "sec:Machines"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+To define a machine use:
 \end_layout
 
 \begin_layout Section

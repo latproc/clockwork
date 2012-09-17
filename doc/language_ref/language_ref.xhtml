@@ -82,6 +82,15 @@ margin-left: 3ex;
 text-align: left;
 
 }
+div.lyx_code {
+font-family: monospace;
+margin-top: 0.5ex;
+margin-bottom: 0.5ex;
+margin-left: 3ex;
+margin-right: 3ex;
+text-align: left;
+
+}
 h3.subsection {
 font-weight: bold;
 font-size: large;
@@ -91,15 +100,6 @@ text-align: left;
 
 }
 blockquote.quotation {
-margin-top: 0.5ex;
-margin-bottom: 0.5ex;
-margin-left: 3ex;
-margin-right: 3ex;
-text-align: left;
-
-}
-div.lyx_code {
-font-family: monospace;
 margin-top: 0.5ex;
 margin-bottom: 0.5ex;
 margin-left: 3ex;
@@ -144,403 +144,488 @@ padding: 1em;
 </style>
 </head>
 <body>
-<h1 class="title"><a id='magicparlabel-275' />
+<h1 class="title"><a id='magicparlabel-1' />
 Clockwork Language Reference (draft)</h1>
-<div class="author"><a id='magicparlabel-276' />
+<div class="author"><a id='magicparlabel-2' />
 Martin Leadbeater</div>
-<h2 class="section"><span class="section_label">1</span> <a id='magicparlabel-104' />
+<h2 class="section"><span class="section_label">1</span> <a id='magicparlabel-3' />
 Preface</h2>
-<div class="standard"><a id='magicparlabel-283' />
+<div class="standard"><a id='magicparlabel-4' />
 Please note that this is a very early draft.</div>
-<h2 class="section"><span class="section_label">2</span> <a id='magicparlabel-280' />
+<h2 class="section"><span class="section_label">2</span> <a id='magicparlabel-5' />
 Introduction</h2>
-<div class="standard"><a id='magicparlabel-105' />
-Clockwork is a language intended to be used to describe systems of interacting components using state machines. The purpose of the language is to provide a platform for monitoring and control and it has been implemented as a control system using the Beckhoff EtherCAT®.</div>
+<div class="standard"><a id='magicparlabel-6' />
+Clockwork is a language intended to be used to describe systems of interacting components using state machines. The purpose of the language is to provide a platform for monitoring and control and it has currently been implemented as a control system using the Beckhoff EtherCAT®.</div>
 
-<div class="standard"><a id='magicparlabel-106' />
+<div class="standard"><a id='magicparlabel-7' />
 The language provides the programmer with a means to </div>
 
-<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-107' />
+<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-8' />
 define the states of a machine in terms of conditions</li>
-<li class="itemize_item"><a id='magicparlabel-108' />
+<li class="itemize_item"><a id='magicparlabel-9' />
 define commands that can be invoked on the machine</li>
-<li class="itemize_item"><a id='magicparlabel-109' />
+<li class="itemize_item"><a id='magicparlabel-10' />
 define transition rules that determine what actions can be performed and what state transtions are allowable</li>
+<li class="itemize_item"><a id='magicparlabel-11' />
+define state entry functions that execute when a machine enters a state</li>
 </ul>
-<div class="standard"><a id='magicparlabel-110' />
-Conditions on a machine are generally defined in terms of the state and properties of other machines.</div>
-<h2 class="section"><span class="section_label">3</span> <a id='magicparlabel-111' />
+<div class="standard"><a id='magicparlabel-12' />
+Conditions on a machine are defined in terms of the state of other machines and properties of itself and other machines. Machines continuously evaluate these conditions and automatically switch to the first state found that matches the condition, executing its state entry function as it does so. When a state includes a condition, we tend to refer to that as a <em>stable </em>state but these could also be called <em>automatic</em> states.</div>
+
+<div class="standard"><a id='magicparlabel-13' />
+A machine definition can be instantiated by providing a name, the name of the machine definition, also called the machine `class', and a list or parameters that are required by the definition. For example, following is a machine that monitors two inputs and turns on when both inputs are on:</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-14' />
+AndGate MACHINE input1, input2</div>
+<div class="lyx_code_item"><a id='magicparlabel-15' />
+{</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-16' />
+on WHEN input1 IS on AND input2 IS on;</div>
+<div class="lyx_code_item"><a id='magicparlabel-17' />
+off DEFAULT</div>
+</div>
+<div class="lyx_code_item"><a id='magicparlabel-18' />
+}</div>
+<div class="lyx_code_item"><a id='magicparlabel-19' />
+a FLAG;</div>
+<div class="lyx_code_item"><a id='magicparlabel-20' />
+b FLAG;</div>
+<div class="lyx_code_item"><a id='magicparlabel-21' />
+and_gate AndGate a, b;</div>
+</div>
+<div class="standard"><a id='magicparlabel-22' />
+The machine definition for AndGate requires two parameters for the two inputs and defines a condition on state `on' to activate when both inputs are on. The statement off DEFAULT defines a default condition on the off state that always returns true. There can be only one DEFAULT state in each machine but it is not required.</div>
+
+<div class="standard"><a id='magicparlabel-23' />
+The above machine is not particularly useful; after detecting an issue, we may want to do something about it. The above can be adjusted to, for example, turn on a light when the two inputs are on, to do this, we add an ENTER method for the on state:</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-24' />
+AndGate MACHINE input1, input2, output</div>
+<div class="lyx_code_item"><a id='magicparlabel-25' />
+{</div>
+
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-26' />
+on WHEN input1 IS on AND input2 IS on;</div>
+<div class="lyx_code_item"><a id='magicparlabel-27' />
+off DEFAULT</div>
+</div>
+<div class="lyx_code_item"><a id='magicparlabel-28' />
+}</div>
+<div class="lyx_code_item"><a id='magicparlabel-29' />
+ENTER on { SET output TO on; }</div>
+<div class="lyx_code_item"><a id='magicparlabel-30' />
+ENTER off { SET output TO off; }</div>
+<div class="lyx_code_item"><a id='magicparlabel-31' />
+</div>
+<div class="lyx_code_item"><a id='magicparlabel-32' />
+light FLAG;</div>
+<div class="lyx_code_item"><a id='magicparlabel-33' />
+a FLAG;</div>
+<div class="lyx_code_item"><a id='magicparlabel-34' />
+b FLAG;</div>
+<div class="lyx_code_item"><a id='magicparlabel-35' />
+and_gate AndGate a, b, light;</div>
+</div>
+<div class="standard"><a id='magicparlabel-36' />
+So far we have been using FLAG machines as placeholders for machines that have an interface to hardware. For the sake of describing the language, this is sufficient and has the advantage that a command interface or web page can be used to alter the flags for test purposes. Please refer to the user manual for information about the command interface and the web interface.</div>
+<h3 class="subsection"><span class="subsection_label">2.1</span> <a id='magicparlabel-37' />
+Parts of a machine</h3>
+<div class="standard"><a id='magicparlabel-38' />
+The definition of a machine includes several sections:</div>
+
+<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-39' />
+declaration of states</li>
+<li class="itemize_item"><a id='magicparlabel-40' />
+definition of stable states</li>
+<li class="itemize_item"><a id='magicparlabel-41' />
+definition of transitions</li>
+<li class="itemize_item"><a id='magicparlabel-42' />
+definition of event handlers</li>
+<li class="itemize_item"><a id='magicparlabel-43' />
+definition of commands</li>
+<li class="itemize_item"><a id='magicparlabel-44' />
+export declarations</li>
+</ul>
+<div class="standard"><a id='magicparlabel-198' />
+These sections can be mixed but the order that stable states are declared is important. Please refer to section <a href="#sec_Machines">3</a> for more information about the definition of machines.</div>
+<h2 class="section"><span class="section_label">3</span> <a id='magicparlabel-230' />
+Machines<a id="sec_Machines" />
+</h2>
+<div class="standard"><a id='magicparlabel-713' />
+To define a machine use:</div>
+<h2 class="section"><span class="section_label">4</span> <a id='magicparlabel-45' />
 Details</h2>
-<h3 class="subsection"><span class="subsection_label">3.1</span> <a id='magicparlabel-112' />
+<h3 class="subsection"><span class="subsection_label">4.1</span> <a id='magicparlabel-46' />
 Instances of machines</h3>
-<div class="standard"><a id='magicparlabel-113' />
+<div class="standard"><a id='magicparlabel-47' />
 Clockwork deals primarily with definitions of finite state machines (referred to as MACHINES in the language) and instance of those definitions. There is a common pattern for declaring an instance of a machine; providing the name and then the machine class.</div>
 
-<div class="standard"><a id='magicparlabel-114' />
+<div class="standard"><a id='magicparlabel-48' />
 Names can be given for new instances of objects, by first providing the name, then the object and its properties and parameters, i.e.,</div>
 
-<blockquote class="quotation"><div class="quotation_item"><a id='magicparlabel-115' />
+<blockquote class="quotation"><div class="quotation_item"><a id='magicparlabel-49' />
 name machine-class [ '(' property-name ':' property-value ... ')'] parameters</div>
 </blockquote>
-<div class="standard"><a id='magicparlabel-116' />
+<div class="standard"><a id='magicparlabel-50' />
 For example, given machine classes called `MODULE' and `POINT', an instance can be declared in the following way.</div>
 
-<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-117' />
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-51' />
 Beckhoff_2008 MODULE 2</div>
-<div class="lyx_code_item"><a id='magicparlabel-118' />
+<div class="lyx_code_item"><a id='magicparlabel-52' />
 NG_Output POINT Beckhoff_2008 5</div>
 </div>
-<div class="standard"><a id='magicparlabel-119' />
+<div class="standard"><a id='magicparlabel-53' />
 define a Module and a point within that module. In the example, the number `2' indicates the position of the module on the bus and the number `5' defines the particular output id of the point that we want to call `NG_Output'. After the object-class, a list of property key,value pairs may be given., for example</div>
 
-<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-120' />
+<div class="lyx_code"><div class="lyx_code_item"><a id='magicparlabel-54' />
 NG_Output POINT (tab:Outputs) Beckhoff_2008 5</div>
 </div>
-<div class="standard"><a id='magicparlabel-121' />
-describes the same point but sets a property called `tab'<div class="foot"><span class="foot_label">1</span><div class="foot_inner"><div class="plain_layout"><a id='magicparlabel-125' />
+<div class="standard"><a id='magicparlabel-55' />
+describes the same point but sets a property called `tab'<div class="foot"><span class="foot_label">1</span><div class="foot_inner"><div class="plain_layout"><a id='magicparlabel-59' />
 The web interface to cw and iod happen to use this property to group various items into tabs on the web page</div>
 </div></div> to the value `Outputs'.</div>
-<h3 class="subsection"><span class="subsection_label">3.2</span> <a id='magicparlabel-126' />
+<h3 class="subsection"><span class="subsection_label">4.2</span> <a id='magicparlabel-60' />
 Properties and states</h3>
-<div class="standard"><a id='magicparlabel-127' />
+<div class="standard"><a id='magicparlabel-61' />
 We make a distinction between the state of a machine and the properties of the machine, in fact, we regard the state of the machine as one of its properties although more strictly, we should actually include the value of a machine's properties as part of its state. The definitions are </div>
-<h3 class="subsection"><span class="subsection_label">3.3</span> <a id='magicparlabel-128' />
+<h3 class="subsection"><span class="subsection_label">4.3</span> <a id='magicparlabel-62' />
 Properties and parameters</h3>
-<div class="standard"><a id='magicparlabel-129' />
+<div class="standard"><a id='magicparlabel-63' />
 As shown, the declaration of a machine may have parameters and machines may also have properties. Properties and parameters are distinguished as follows:</div>
 
-<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-130' />
+<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-64' />
 properties have default values and do not have to be predeclared unless they are used in stable state conditions</li>
-<li class="itemize_item"><a id='magicparlabel-131' />
+<li class="itemize_item"><a id='magicparlabel-65' />
 parameters generally refer to objects that the machine manipulates and serve to provide an internal alias for a globally defined object. Use of parameters provides for the reuse of machines for different parts of the system.</li>
-<li class="itemize_item"><a id='magicparlabel-132' />
+<li class="itemize_item"><a id='magicparlabel-66' />
 when a parameter changes state, the machine receives an event that it may act on to perform an action.</li>
-<li class="itemize_item"><a id='magicparlabel-133' />
+<li class="itemize_item"><a id='magicparlabel-67' />
 when a property of a machine or one of its parameters or local variables is changed, the machine reevaluates its stable states.</li>
 </ul>
-<h2 class="section"><span class="section_label">4</span> <a id='magicparlabel-134' />
+<h2 class="section"><span class="section_label">5</span> <a id='magicparlabel-68' />
 Vocabulary</h2>
-<div class="standard"><a id='magicparlabel-135' />
+<div class="standard"><a id='magicparlabel-69' />
 Within the program text, reserved words are presented in all capitals to distinguish them from user defined values. The language is case sensitive.</div>
-<h3 class="subsection"><span class="subsection_label">4.1</span> <a id='magicparlabel-136' />
+<h3 class="subsection"><span class="subsection_label">5.1</span> <a id='magicparlabel-70' />
 Glossary of Reserved Words </h3>
 
 <dl class='description'><dt class="description_label">16BIT</dt>
-<dd class="description_item"><a id='magicparlabel-137' />
+<dd class="description_item"><a id='magicparlabel-71' />
  defines an exported modbus property as a 16bit integer</dd>
 <dt class="description_label">32BIT</dt>
-<dd class="description_item"><a id='magicparlabel-138' />
+<dd class="description_item"><a id='magicparlabel-72' />
  defines an exported modbus property as a 32bit integer</dd>
 <dt class="description_label">ALL</dt>
-<dd class="description_item"><a id='magicparlabel-139' />
+<dd class="description_item"><a id='magicparlabel-73' />
  used with COPY and EXTRACT to collect all matches from a property</dd>
 <dt class="description_label">AND</dt>
-<dd class="description_item"><a id='magicparlabel-140' />
+<dd class="description_item"><a id='magicparlabel-74' />
  (also &amp;&amp;) used to join expressions within a condition</dd>
 <dt class="description_label">AT</dt>
-<dd class="description_item"><a id='magicparlabel-141' />
+<dd class="description_item"><a id='magicparlabel-75' />
  used with RESUME to cause execution to resume at a nominated state</dd>
 <dt class="description_label">BECOMES</dt>
-<dd class="description_item"><a id='magicparlabel-142' />
+<dd class="description_item"><a id='magicparlabel-76' />
  (also :=) used to assign values to properties</dd>
 <dt class="description_label">BY</dt>
-<dd class="description_item"><a id='magicparlabel-143' />
+<dd class="description_item"><a id='magicparlabel-77' />
  used with INC and DEC to change the step size</dd>
 <dt class="description_label">CATCH</dt>
-<dd class="description_item"><a id='magicparlabel-144' />
+<dd class="description_item"><a id='magicparlabel-78' />
  marks the beginning of an operation to be performed if any sends a particular message. [not implemented]</dd>
 <dt class="description_label">COMMAND</dt>
-<dd class="description_item"><a id='magicparlabel-145' />
+<dd class="description_item"><a id='magicparlabel-79' />
  defined a method that does not change the state of its machine while it is executing.</dd>
 <dt class="description_label">CONSTANT</dt>
-<dd class="description_item"><a id='magicparlabel-146' />
+<dd class="description_item"><a id='magicparlabel-80' />
  a predefined machine class that acts like a constant from a syntactic viewpoint</dd>
 <dt class="description_label">COPY</dt>
-<dd class="description_item"><a id='magicparlabel-147' />
+<dd class="description_item"><a id='magicparlabel-81' />
  copies substrings matching a pattern from a given property</dd>
 <dt class="description_label">DEC</dt>
-<dd class="description_item"><a id='magicparlabel-148' />
+<dd class="description_item"><a id='magicparlabel-82' />
  decrement a property</dd>
 <dt class="description_label">DEFAULT</dt>
-<dd class="description_item"><a id='magicparlabel-149' />
+<dd class="description_item"><a id='magicparlabel-83' />
  a stable state that is evaluated last and that always matches</dd>
 <dt class="description_label">DISABLE</dt>
-<dd class="description_item"><a id='magicparlabel-150' />
+<dd class="description_item"><a id='magicparlabel-84' />
 </dd>
 <dt class="description_label">DURING</dt>
-<dd class="description_item"><a id='magicparlabel-151' />
+<dd class="description_item"><a id='magicparlabel-85' />
  used to define a transitional state that occurs during the exectuion of a command</dd>
 <dt class="description_label">EXECUTE</dt>
-<dd class="description_item"><a id='magicparlabel-152' />
+<dd class="description_item"><a id='magicparlabel-86' />
  extends the definition of a stable state to specify a command that should be executed when a special sub-condition becomes active.</dd>
 <dt class="description_label">ELSE</dt>
-<dd class="description_item"><a id='magicparlabel-153' />
+<dd class="description_item"><a id='magicparlabel-87' />
  marks the beginning of the code that is executed when the IF condition evaluates to false</dd>
 <dt class="description_label">ENABLE</dt>
-<dd class="description_item"><a id='magicparlabel-154' />
+<dd class="description_item"><a id='magicparlabel-88' />
 </dd>
 <dt class="description_label">ENTER</dt>
-<dd class="description_item"><a id='magicparlabel-155' />
+<dd class="description_item"><a id='magicparlabel-89' />
  defines an operation that must be performed during entry to a state. The ENTER function may be restricted to performing functions that are atomic, such as sending message. Currently, these operations are not restricted but cause the machine to enter an invisible substate of the target state.</dd>
 <dt class="description_label">EXPORT</dt>
-<dd class="description_item"><a id='magicparlabel-156' />
+<dd class="description_item"><a id='magicparlabel-90' />
  indicates that a property should be exported to modbus</dd>
 <dt class="description_label">FIND</dt>
-<dd class="description_item"><a id='magicparlabel-157' />
+<dd class="description_item"><a id='magicparlabel-91' />
  returns a list of objects that are in the given state, options may be added to restrict the range of items found [not implemented]</dd>
 <dt class="description_label">FOREACH</dt>
-<dd class="description_item"><a id='magicparlabel-158' />
+<dd class="description_item"><a id='magicparlabel-92' />
  performs an operation for each object within the given list that are in a particular state [not implemented]</dd>
 <dt class="description_label">GLOBALS</dt>
-<dd class="description_item"><a id='magicparlabel-159' />
+<dd class="description_item"><a id='magicparlabel-93' />
  lists machines, external to the current class that the current machine is monitoring. State changes on the machines listed as GLOBAL cause a reevaluation of stable states and generate events that can be received.</dd>
 <dt class="description_label">INC</dt>
-<dd class="description_item"><a id='magicparlabel-160' />
+<dd class="description_item"><a id='magicparlabel-94' />
  increment a property</dd>
 <dt class="description_label">IF</dt>
-<dd class="description_item"><a id='magicparlabel-161' />
+<dd class="description_item"><a id='magicparlabel-95' />
  used within operations (Commands and Enter functions) to provide for conditional behaviour</dd>
 <dt class="description_label">INIT</dt>
-<dd class="description_item"><a id='magicparlabel-162' />
+<dd class="description_item"><a id='magicparlabel-96' />
  a predefined state that statemachines enter as soon as they are enabled.</dd>
 <dt class="description_label">INITIAL</dt>
-<dd class="description_item"><a id='magicparlabel-163' />
+<dd class="description_item"><a id='magicparlabel-97' />
  defines a state as the state to use for the initial state of the machine.</dd>
 <dt class="description_label">LOG</dt>
-<dd class="description_item"><a id='magicparlabel-164' />
+<dd class="description_item"><a id='magicparlabel-98' />
  emit a text string in the log</dd>
 <dt class="description_label">LOCK</dt>
-<dd class="description_item"><a id='magicparlabel-165' />
+<dd class="description_item"><a id='magicparlabel-99' />
  provides a way to mark a protected section to prevent, for example, multiple machines simultaneously changing the state of a machine.</dd>
 <dt class="description_label">MATCHES</dt>
-<dd class="description_item"><a id='magicparlabel-166' />
+<dd class="description_item"><a id='magicparlabel-100' />
  used in an expression to test for a property matching a given pattern</dd>
 <dt class="description_label">MACHINE</dt>
-<dd class="description_item"><a id='magicparlabel-167' />
+<dd class="description_item"><a id='magicparlabel-101' />
  defines a programmed component within the system. All control functionality is implemented within these objects. Machines are based on finite statemachine concept and include both monitoring (automatic state switching) and control (forced state changes to cause actions).</dd>
 <dt class="description_label">MODULE</dt>
-<dd class="description_item"><a id='magicparlabel-168' />
+<dd class="description_item"><a id='magicparlabel-102' />
  defines an addressable module that sits on the EtherCAT cabling</dd>
 <dt class="description_label">NOT</dt>
-<dd class="description_item"><a id='magicparlabel-169' />
+<dd class="description_item"><a id='magicparlabel-103' />
  (also !)used to invert expressions within a condition</dd>
 <dt class="description_label">OR</dt>
-<dd class="description_item"><a id='magicparlabel-170' />
+<dd class="description_item"><a id='magicparlabel-104' />
  (also ||) used to join expressions within a condition</dd>
 <dt class="description_label">PERSISTENT</dt>
-<dd class="description_item"><a id='magicparlabel-171' />
+<dd class="description_item"><a id='magicparlabel-105' />
  a property that indicates that state changes on this machine will be published and at startup, this machine will be automatically enabled and initialised from its last known state.</dd>
 <dt class="description_label">POINT</dt>
-<dd class="description_item"><a id='magicparlabel-172' />
+<dd class="description_item"><a id='magicparlabel-106' />
  refers to an addressable port within a module</dd>
 <dt class="description_label">RAISE</dt>
-<dd class="description_item"><a id='magicparlabel-173' />
+<dd class="description_item"><a id='magicparlabel-107' />
  send a message that any machine may catch. It is an error if a message is raised but not caught. [not implemented]</dd>
 <dt class="description_label">READONLY</dt>
-<dd class="description_item"><a id='magicparlabel-174' />
+<dd class="description_item"><a id='magicparlabel-108' />
  used in an EXPORT specification to mark the property as read only</dd>
 <dt class="description_label">READWRITE</dt>
-<dd class="description_item"><a id='magicparlabel-175' />
+<dd class="description_item"><a id='magicparlabel-109' />
  used in an EXPORT specification to mark the property as read/write</dd>
 <dt class="description_label">RESULT</dt>
-<dd class="description_item"><a id='magicparlabel-176' />
+<dd class="description_item"><a id='magicparlabel-110' />
  the returned value after an expression has been evaluated [not implemented]</dd>
 <dt class="description_label">RESUME</dt>
-<dd class="description_item"><a id='magicparlabel-177' />
+<dd class="description_item"><a id='magicparlabel-111' />
  resumes execution of the disabled machine from the beginning of its current state</dd>
 <dt class="description_label">RECEIVE</dt>
-<dd class="description_item"><a id='magicparlabel-178' />
+<dd class="description_item"><a id='magicparlabel-112' />
  indicates that a machine should be informed when a specific object sends a particular message. The RECEIVE statement has an associated set of actions that are acted when the event is collected.</dd>
 <dt class="description_label">REQUIRES</dt>
-<dd class="description_item"><a id='magicparlabel-179' />
+<dd class="description_item"><a id='magicparlabel-113' />
  indicates that the associated condition must evaluate to True in order that the transition can occur or that a command can be executed [not implemented]</dd>
 <dt class="description_label">SELF</dt>
-<dd class="description_item"><a id='magicparlabel-180' />
+<dd class="description_item"><a id='magicparlabel-114' />
  used in expressions to refer </dd>
 <dt class="description_label">SEND</dt>
-<dd class="description_item"><a id='magicparlabel-181' />
+<dd class="description_item"><a id='magicparlabel-115' />
  is used to send a message to a machine, this message must be captured by the machine, using a RECEIVE statement</dd>
 <dt class="description_label">SET</dt>
-<dd class="description_item"><a id='magicparlabel-182' />
+<dd class="description_item"><a id='magicparlabel-116' />
  causes a machine to move to a given state after executing the optional command associated with the transition</dd>
 <dt class="description_label">SHUTDOWN</dt>
-<dd class="description_item"><a id='magicparlabel-183' />
+<dd class="description_item"><a id='magicparlabel-117' />
  cause the clockwork daemon to exit</dd>
 <dt class="description_label">SOURCE</dt>
-<dd class="description_item"><a id='magicparlabel-184' />
+<dd class="description_item"><a id='magicparlabel-118' />
  is a variable that holds a reference to the object that send the current message or issued the current command [not implemented]</dd>
 <dt class="description_label">STATE</dt>
-<dd class="description_item"><a id='magicparlabel-185' />
+<dd class="description_item"><a id='magicparlabel-119' />
  defines a state name so that this state can be used in a transition or can be set by other machines.</dd>
 <dt class="description_label">TAG</dt>
-<dd class="description_item"><a id='magicparlabel-186' />
+<dd class="description_item"><a id='magicparlabel-120' />
  links a FLAG to a sub-condition on a stable state so that the FLAG is automatically turned on and off to trak whether the subcondition is true or not.</dd>
 <dt class="description_label">THEN</dt>
-<dd class="description_item"><a id='magicparlabel-187' />
+<dd class="description_item"><a id='magicparlabel-121' />
  marks the beginning of the code that is executed when the IF condition evaluates to true</dd>
 <dt class="description_label">TIMER</dt>
-<dd class="description_item"><a id='magicparlabel-188' />
+<dd class="description_item"><a id='magicparlabel-122' />
 </dd>
 <dt class="description_label">TO</dt>
-<dd class="description_item"><a id='magicparlabel-189' />
+<dd class="description_item"><a id='magicparlabel-123' />
  used within a transition to indicate the destination state, used within a message operation to indicate the target of the message</dd>
 <dt class="description_label">TRANSITION</dt>
-<dd class="description_item"><a id='magicparlabel-190' />
+<dd class="description_item"><a id='magicparlabel-124' />
  describes the command that can be used to move the machine from one state to another</dd>
 <dt class="description_label">UNLOCK</dt>
-<dd class="description_item"><a id='magicparlabel-191' />
+<dd class="description_item"><a id='magicparlabel-125' />
  reverses the effect of LOCK, to permit other instances execute code in a critical section.</dd>
 <dt class="description_label">USING</dt>
-<dd class="description_item"><a id='magicparlabel-192' />
+<dd class="description_item"><a id='magicparlabel-126' />
  as part of the transition statement, the Using clause indicates the command that is used for the transition</dd>
 <dt class="description_label">VARIABLE</dt>
-<dd class="description_item"><a id='magicparlabel-193' />
+<dd class="description_item"><a id='magicparlabel-127' />
  a predefined machine class that is persistent and acts like a variable from a syntactic viewpoint</dd>
 <dt class="description_label">WAIT</dt>
-<dd class="description_item"><a id='magicparlabel-194' />
+<dd class="description_item"><a id='magicparlabel-128' />
  pauses execution of the current method for the set amount of time</dd>
 <dt class="description_label">WAITFOR</dt>
-<dd class="description_item"><a id='magicparlabel-195' />
+<dd class="description_item"><a id='magicparlabel-129' />
  pauses execution of the current method until the given machine enters the given state</dd>
 <dt class="description_label">WHEN</dt>
-<dd class="description_item"><a id='magicparlabel-196' />
+<dd class="description_item"><a id='magicparlabel-130' />
  defines a set of conditions that indicate a machine is in a particular, stable state. These conditions are not evaluated when the machine is in a transitional state.</dd>
 </dl>
-<h3 class="subsection"><span class="subsection_label">4.2</span> <a id='magicparlabel-197' />
+<h3 class="subsection"><span class="subsection_label">5.2</span> <a id='magicparlabel-131' />
 Conditions</h3>
-<div class="standard"><a id='magicparlabel-198' />
+<div class="standard"><a id='magicparlabel-132' />
 Conditions are lists of boolean expressions that are generally used to determine the current state of various parts of the machine. Conditions are implemented by the use of separate state machines. that contain a state (normally called 'true') that indicates the condition is true and a state (normally called 'false') that is the default.</div>
-<h3 class="subsection"><span class="subsection_label">4.3</span> <a id='magicparlabel-199' />
+<h3 class="subsection"><span class="subsection_label">5.3</span> <a id='magicparlabel-133' />
 Notes</h3>
-<div class="standard"><a id='magicparlabel-200' />
+<div class="standard"><a id='magicparlabel-134' />
 An action is a list of steps, such that each step requests that a machine enters a state or waits for a message. Regardless of the action, there are two components: sending a message and waiting for a response. On receipt of the response, the action transitions to the next step in the list.</div>
 
-<div class="standard"><a id='magicparlabel-201' />
+<div class="standard"><a id='magicparlabel-135' />
 When a state change request is received, the transitions on the target machine are searched for an action that will satisfy the requested state change. That action causes a further sequence of actions to be queued by having the machine enter a substate with each action sending a message and waiting for a response. </div>
-<h2 class="section"><span class="section_label">5</span> <a id='magicparlabel-202' />
+<h2 class="section"><span class="section_label">6</span> <a id='magicparlabel-136' />
 Machines</h2>
-<div class="standard"><a id='magicparlabel-203' />
+<div class="standard"><a id='magicparlabel-137' />
 Machines are the processing component of the latproc programming system. They are defined as finite state machines that are interconnected by message passing. A machine will automatically detect its state by polling input conditions that are defined to match certain configurations. By issuing commands, a machine can change the state of other machines and these changes can trigger further state changes.</div>
-<h3 class="subsection"><span class="subsection_label">5.1</span> <a id='magicparlabel-204' />
+<h3 class="subsection"><span class="subsection_label">6.1</span> <a id='magicparlabel-138' />
 Components and scope</h3>
-<div class="standard"><a id='magicparlabel-205' />
+<div class="standard"><a id='magicparlabel-139' />
 The language deals with Finite State Machines, which the language simply calls 'Machines' and their states. The program defines a machine as having certain states and provides conditions and scripts that can identify the current state and change states.</div>
 
-<div class="standard"><a id='magicparlabel-206' />
+<div class="standard"><a id='magicparlabel-140' />
 some predefined objects; Modules, Points, Machines, Values, Conditions and States. These objects may have parameters and may also have properties. Properties and parameters are distinguished as follows:</div>
 
-<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-207' />
+<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-141' />
 properties have default values and do not have to be provided</li>
-<li class="itemize_item"><a id='magicparlabel-208' />
+<li class="itemize_item"><a id='magicparlabel-142' />
 parameters generally refer to objects that the machine manipulates and serve to provide an internal alias for a globally defined object. Use of parameters provides for the reuse of machines for different parts of the system.</li>
 </ul>
-<h3 class="subsection"><span class="subsection_label">5.2</span> <a id='magicparlabel-209' />
+<h3 class="subsection"><span class="subsection_label">6.2</span> <a id='magicparlabel-143' />
 Parameters</h3>
-<div class="standard"><a id='magicparlabel-210' />
+<div class="standard"><a id='magicparlabel-144' />
 When a machine is instantiated, parameters are resolved by providing either a symbol name or a symbol value. The Machine Instance retains a list of ParameterReferences and for parameters passed by value, a local symbol table allocates a local name</div>
-<h3 class="subsection"><span class="subsection_label">5.3</span> <a id='magicparlabel-211' />
+<h3 class="subsection"><span class="subsection_label">6.3</span> <a id='magicparlabel-145' />
 States</h3>
-<div class="standard"><a id='magicparlabel-212' />
+<div class="standard"><a id='magicparlabel-146' />
 A state is defined by a particular configuration of inputs or execution of an action.</div>
-<h3 class="subsection"><span class="subsection_label">5.4</span> <a id='magicparlabel-213' />
+<h3 class="subsection"><span class="subsection_label">6.4</span> <a id='magicparlabel-147' />
 Actions</h3>
-<div class="standard"><a id='magicparlabel-214' />
+<div class="standard"><a id='magicparlabel-148' />
 An action is a sequence of steps that are executed in response to the receipt of a message, including steps taken dugin an entry function.</div>
-<h3 class="subsection"><span class="subsection_label">5.5</span> <a id='magicparlabel-215' />
+<h3 class="subsection"><span class="subsection_label">6.5</span> <a id='magicparlabel-149' />
 Transitions</h3>
-<div class="standard"><a id='magicparlabel-216' />
+<div class="standard"><a id='magicparlabel-150' />
 Transitions occur automatically when a machine is idle, when it detects a change of state. When a transition occurs:</div>
 
-<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-217' />
+<ul class="itemize"><li class="itemize_item"><a id='magicparlabel-151' />
 the timer is reset, </li>
-<li class="itemize_item"><a id='magicparlabel-218' />
+<li class="itemize_item"><a id='magicparlabel-152' />
 the state variable 'CURRENT' is updated</li>
-<li class="itemize_item"><a id='magicparlabel-219' />
+<li class="itemize_item"><a id='magicparlabel-153' />
 a state change message is queued for delivery to interested parties</li>
-<li class="itemize_item"><a id='magicparlabel-220' />
+<li class="itemize_item"><a id='magicparlabel-154' />
 the entry function for the state is executed</li>
 </ul>
-<h3 class="subsection"><span class="subsection_label">5.6</span> <a id='magicparlabel-221' />
+<h3 class="subsection"><span class="subsection_label">6.6</span> <a id='magicparlabel-155' />
 Events</h3>
-<div class="standard"><a id='magicparlabel-222' />
+<div class="standard"><a id='magicparlabel-156' />
 An event corresponds to the sending of a message. Examples of events include timers and changes in input levels or analogue or counter values. Timer events are intented to trigger reasonably precisely, based on a fixed time after the message was sent.</div>
-<h3 class="subsection"><span class="subsection_label">5.7</span> <a id='magicparlabel-223' />
+<h3 class="subsection"><span class="subsection_label">6.7</span> <a id='magicparlabel-157' />
 Message Passing</h3>
-<div class="standard"><a id='magicparlabel-224' />
+<div class="standard"><a id='magicparlabel-158' />
 Machines can send and receive messages directly, using the commands SEND and CALL and the handler RECEIVE or it can send messages indirectly by attempting to change the state of the target machine.</div>
-<h4 class="subsubsection"><span class="subsubsection_label">5.7.1</span> <a id='magicparlabel-225' />
+<h4 class="subsubsection"><span class="subsubsection_label">6.7.1</span> <a id='magicparlabel-159' />
 RECEIVE and RECEIVE..FROM</h4>
-<div class="standard"><a id='magicparlabel-226' />
+<div class="standard"><a id='magicparlabel-160' />
 Each machine can listen for messages from any entity it knows of. Messages are sent when entities change state or when a script deliberately sends one. To listen for a message, use:</div>
 
-<blockquote class="quotation"><div class="quotation_item"><a id='magicparlabel-227' />
+<blockquote class="quotation"><div class="quotation_item"><a id='magicparlabel-161' />
 RECEIVE objname.message '{' actions '}'</div>
 </blockquote>
-<div class="standard"><a id='magicparlabel-228' />
+<div class="standard"><a id='magicparlabel-162' />
 or</div>
 
-<blockquote class="quotation"><div class="quotation_item"><a id='magicparlabel-229' />
+<blockquote class="quotation"><div class="quotation_item"><a id='magicparlabel-163' />
 RECEIVE message FROM objname '{' actions '}'</div>
 </blockquote>
-<div class="standard"><a id='magicparlabel-230' />
+<div class="standard"><a id='magicparlabel-164' />
 This identifies the sending entity from its local name and registers a listener for the <em>entiyname_statename_enter</em> message. In a future release, the current machine will also registered as a dependant of the sender. Currently, messages are only received from parameters, local instances and machine instances that are specifically listed in GLOBALS.</div>
-<h4 class="subsubsection"><span class="subsubsection_label">5.7.2</span> <a id='magicparlabel-231' />
+<h4 class="subsubsection"><span class="subsubsection_label">6.7.2</span> <a id='magicparlabel-165' />
 SEND and SEND..TO</h4>
-<h3 class="subsection"><span class="subsection_label">5.8</span> <a id='magicparlabel-232' />
+<h3 class="subsection"><span class="subsection_label">6.8</span> <a id='magicparlabel-166' />
 Exceptions</h3>
-<div class="standard"><a id='magicparlabel-233' />
+<div class="standard"><a id='magicparlabel-167' />
 [Note: not implemented]An exception is a message sent using the 'THROW' command. It is similar to a message sent with 'SEND' except that there is no requirement that there is a machine listening for the message. Messages that are thrown are caught using the 'CATCH' command.</div>
-<h3 class="subsection"><span class="subsection_label">5.9</span> <a id='magicparlabel-234' />
+<h3 class="subsection"><span class="subsection_label">6.9</span> <a id='magicparlabel-168' />
 Statements</h3>
-<h3 class="subsection"><span class="subsection_label">5.10</span> <a id='magicparlabel-235' />
+<h3 class="subsection"><span class="subsection_label">6.10</span> <a id='magicparlabel-169' />
 Properties</h3>
-<div class="standard"><a id='magicparlabel-236' />
+<div class="standard"><a id='magicparlabel-170' />
 Machine instances share some standard properties</div>
 
 <dl class='description'><dt class="description_label">current</dt>
-<dd class="description_item"><a id='magicparlabel-237' />
+<dd class="description_item"><a id='magicparlabel-171' />
  the current state of the instance</dd>
 <dt class="description_label">referers</dt>
-<dd class="description_item"><a id='magicparlabel-238' />
+<dd class="description_item"><a id='magicparlabel-172' />
  a list of machinesthat refer to this machine</dd>
 <dt class="description_label">references</dt>
-<dd class="description_item"><a id='magicparlabel-239' />
+<dd class="description_item"><a id='magicparlabel-173' />
  a list of machines this one refers to</dd>
 <dt class="description_label">sends</dt>
-<dd class="description_item"><a id='magicparlabel-240' />
+<dd class="description_item"><a id='magicparlabel-174' />
  a list of messages this machine sends</dd>
 <dt class="description_label">receives</dt>
-<dd class="description_item"><a id='magicparlabel-241' />
+<dd class="description_item"><a id='magicparlabel-175' />
  a list of messages this machine receives</dd>
 </dl>
-<h3 class="subsection"><span class="subsection_label">5.11</span> <a id='magicparlabel-242' />
+<h3 class="subsection"><span class="subsection_label">6.11</span> <a id='magicparlabel-176' />
 Builtin classes</h3>
-<div class="standard"><a id='magicparlabel-243' />
+<div class="standard"><a id='magicparlabel-177' />
 Builtin classes such as FLAG and BOOLEAN are readily implemented using the language itself. The POINT class, however is special as it provides an interface to hardware. Integers are currnetly implemented through properties.</div>
 
 <dl class='description'><dt class="description_label">VARIABLE</dt>
-<dd class="description_item"><a id='magicparlabel-244' />
+<dd class="description_item"><a id='magicparlabel-178' />
 </dd>
 <dt class="description_label">MODULE</dt>
-<dd class="description_item"><a id='magicparlabel-245' />
+<dd class="description_item"><a id='magicparlabel-179' />
 </dd>
 <dt class="description_label">CONSTANT</dt>
-<dd class="description_item"><a id='magicparlabel-246' />
+<dd class="description_item"><a id='magicparlabel-180' />
 </dd>
 <dt class="description_label">FLAG</dt>
-<dd class="description_item"><a id='magicparlabel-247' />
+<dd class="description_item"><a id='magicparlabel-181' />
  two state machine with states 'on' and 'off'</dd>
 <dt class="description_label">POINT</dt>
-<dd class="description_item"><a id='magicparlabel-248' />
+<dd class="description_item"><a id='magicparlabel-182' />
  a machine that links to a IO Point</dd>
 </dl>
-<h2 class="section"><span class="section_label">6</span> <a id='magicparlabel-249' />
+<h2 class="section"><span class="section_label">7</span> <a id='magicparlabel-183' />
 Other features</h2>
-<h3 class="subsection"><span class="subsection_label">6.1</span> <a id='magicparlabel-250' />
+<h3 class="subsection"><span class="subsection_label">7.1</span> <a id='magicparlabel-184' />
 Expressions</h3>
-<h2 class="section"><span class="section_label">7</span> <a id='magicparlabel-251' />
+<h2 class="section"><span class="section_label">8</span> <a id='magicparlabel-185' />
 Syntax</h2>
-<div class="standard"><a id='magicparlabel-252' />
+<div class="standard"><a id='magicparlabel-186' />
 <math display="block" xmlns="http://www.w3.org/1998/Math/MathML">
  <mtable>
   <mtr>

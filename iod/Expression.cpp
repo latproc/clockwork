@@ -59,6 +59,15 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 	return false;
 }
 
+Condition::~Condition() {
+    delete predicate;
+}
+
+Predicate::~Predicate() {
+    delete left_p;
+    delete right_p;
+}
+
 bool Predicate::usesTimer(Value &timer_val) const {
 	if (left_p) {
 		if (!left_p->left_p) {
@@ -340,11 +349,19 @@ void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left) {
     }
 }
 
+ExprNode::~ExprNode() {
+    
+}
+
+void Stack::clear() {
+    stack.clear();
+}
+
 
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
 #if 1
-		stack.stack.clear();
+        stack.stack.clear();
 	    prep(stack, predicate, m, true);
 //		if (m && m->debug()) {
 //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";

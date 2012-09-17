@@ -49,7 +49,8 @@ MachineCommand::~MachineCommand() {
 			a->disableTrigger();
 		else {
             DBG_MESSAGING << "deleting " << *a<< "\n";
-			delete a;
+			//delete a;
+            a->release();
         }
 	}
 }

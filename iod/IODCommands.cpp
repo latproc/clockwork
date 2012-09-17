@@ -393,7 +393,8 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             MachineInstance *m = (*iter++).second;
 			if (!limited || (limited && m->properties.lookup("tab") == tab) ) {
    		        cJSON_AddItemToArray(root, printMachineInstanceToJSON(m));
-		        BOOST_FOREACH(Parameter p, m->locals) {
+                for (unsigned int idx = 0; idx < m->locals.size(); ++idx) {
+                    const Parameter &p = m->locals[idx];
     	       		cJSON_AddItemToArray(root, printMachineInstanceToJSON(p.machine, m->getName()));
 	        	}
 			}

@@ -36,6 +36,7 @@ struct ExprNode {
 	ExprNode(bool a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
     ExprNode(PredicateOperator o) : op(o), kind(t_op) { } 
     ExprNode(const ExprNode &other) : val(other.val), node(other.node), op(other.op), kind(other.kind) {  }
+    ~ExprNode();
     Value val;
     const Value *node;
     PredicateOperator op;
@@ -45,6 +46,7 @@ struct ExprNode {
 struct Stack {
     ExprNode pop() { ExprNode v = stack.front(); stack.pop_front(); return v; }
     void push(ExprNode v) { stack.push_front(v); }
+    void clear();
     std::list<ExprNode>stack;
     std::ostream &operator<<(std::ostream &out)const;
     std::ostream &traverse(std::ostream &out, std::list<ExprNode>::const_iterator &iter, std::list<ExprNode>::const_iterator &end) const;
@@ -72,6 +74,7 @@ struct Predicate {
     Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {}
     Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r), 	
 		mi(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {}
+    ~Predicate();
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);
     std::ostream &operator <<(std::ostream &out) const;
@@ -94,6 +97,7 @@ struct Condition {
 	Condition(Predicate*p) : predicate(p) {}
 	Condition(const Condition &other);
 	Condition &operator=(const Condition &other);
+    ~Condition();
 };
 
 #endif

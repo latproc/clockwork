@@ -52,11 +52,11 @@ bool Action::debug() {
 
 void Action::release() { 
 	--refs;
-    //if (refs < 0) {
-	//	NB_MSG << "detected potential double delete of " << *this << "\n";
-	//}
-    //if (refs == 0)
-    //    delete this;
+    if (refs < 0) {
+		NB_MSG << "detected potential double delete of " << *this << "\n";
+	}
+    if (refs == 0)
+        delete this;
 }
 
 Transition::Transition(State s, State d, Message t, Predicate *p) : source(s), dest(d), trigger(t), condition(0) {
@@ -66,9 +66,13 @@ Transition::Transition(State s, State d, Message t, Predicate *p) : source(s), d
 }
 
 Transition::Transition(const Transition &other) : source(other.source), dest(other.dest), trigger(other.trigger), condition(0) {
-    if (other.condition) {
-        condition = new Condition(other.condition->predicate);
+    if (other.condition && other.condition->predicate) {
+        condition = new Condition(new Predicate(*other.condition->predicate));
     }
+}
+
+Transition::~Transition() {
+    delete condition;
 }
 
 Transition &Transition::operator=(const Transition &other) {
@@ -1024,7 +1028,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 	else {
 	   	std::list<Transition>::const_iterator iter = transitions.begin();
 		while (iter != transitions.end()) {
-   	 		Transition t = *iter++;
+   	 		const Transition &t = *iter++;
    	 		if ( (t.trigger.getText() == m.getText() || t.trigger.getText() == short_name) && current_state == t.source) {
 				DBG_M_MESSAGING << _name << " received message" << m.getText() << "; pushing state change\n";
 				MoveStateActionTemplate msat("SELF", t.dest);
@@ -1074,7 +1078,7 @@ void MachineInstance::collect(const Package &package) {
 			DBG_M_MESSAGING <<_name<< "Interrupted " << *curr << "\n";
 		}
 		DBG_M_MESSAGING << _name << " pushed " << *hma << "\n";
-		active_actions.push_back(hma);
+		active_actions.push_back(hma->retain());
 	}
 }
 
@@ -1143,7 +1147,9 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	DBG_M_MESSAGING << _name<< " executing " << event_name << "\n";
 	HandleMessageActionTemplate hmat(Package(from, this, new Message(event_name.c_str())));
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
-	return (*hma)();
+    Action::Status res =  (*hma)();
+	hma->release();
+    return res;
 }
 
 void MachineInstance::handle(const Message&m, Transmitter *from, bool send_receipt) {
@@ -1162,7 +1168,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	}
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
-	active_actions.push_front(hma);
+	active_actions.push_front(hma->retain());
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"), name(class_name), allow_auto_states(true) {
@@ -1197,7 +1203,8 @@ void MachineInstance::start(Action *a) {
 		if (b == a) { return; }
 	}
 	DBG_M_ACTIONS << _name << " pushing (state: " << a->getStatus() << ")" << *a << "\n";
-	active_actions.push_back(a);
+    std::cout << "STARTING: " << *a << "\n";
+	active_actions.push_back(a->retain());
 }
 
 void MachineInstance::displayActive(std::ostream &note) {
@@ -1218,6 +1225,7 @@ void MachineInstance::stop(Action *a) {
 		return;
 	}
 	active_actions.pop_back();
+    std::cout << "STOPPING: " << *a << "\n";
     a->release();
 	if (!active_actions.empty()) {
 		Action *next = active_actions.back();
@@ -1404,13 +1412,16 @@ void MachineInstance::setStableState() {
                             << " due to condition: " << *s.condition.predicate << "\n";
                         MoveStateActionTemplate temp(strdup(_name.c_str()), strdup(s.state_name.c_str()) );
                         state_change = new MoveStateAction(this, temp);
-                        if (! (*state_change)()) {
-                            stop(state_change);
-                            state_change = 0;
+                        Action::Status action_status;
+                        if ( (action_status = (*state_change)()) == Action::Failed) {
                             DBG_M_AUTOSTATES << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
                         }
-                        else
+                        else {
                             DBG_M_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
+                        }
+                        state_change->release();
+                        if (action_status == Action::Complete || action_status == Action::Failed)
+                            state_change = 0;
                     }
                     else {
                         //DBG_M_AUTOSTATES << " already there\n";

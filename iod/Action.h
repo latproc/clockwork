@@ -85,7 +85,7 @@ public:
     virtual ~Action(){ }
     
     Action*retain() { ++refs; return this; }
-    void release();
+    virtual void release();
     
     const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
     const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }

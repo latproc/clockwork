@@ -88,8 +88,6 @@ void MessagingInterface::send(const char *txt) {
 	    strncpy ((char *) msg.data(), txt, len);
 	    socket->send(msg);
         if (!is_publisher) {
-            zmq::message_t response;
-            
             bool expect_reply = true;
             while (expect_reply) {
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };

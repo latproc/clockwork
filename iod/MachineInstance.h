@@ -57,6 +57,7 @@ struct Transition {
     Transition(State s, State d, Message t, Predicate *p=0);
     Transition(const Transition &other);
     Transition &operator=(const Transition &other);
+    ~Transition();
 };
 
 struct ConditionHandler {

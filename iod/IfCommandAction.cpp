@@ -38,7 +38,11 @@ std::ostream &IfCommandAction::operator<<(std::ostream &out) const {
 }
 
 IfCommandAction::IfCommandAction(MachineInstance *mi, IfCommandActionTemplate *t) : Action(mi), condition(t->condition)  { 
-	command = dynamic_cast<MachineCommand*>(t->command->factory(mi)->retain());
+	command = dynamic_cast<MachineCommand*>(t->command->factory(mi));
+}
+
+IfCommandAction::~IfCommandAction() {
+
 }
 
 Action::Status IfCommandAction::run() {
@@ -85,8 +89,12 @@ std::ostream &IfElseCommandAction::operator<<(std::ostream &out) const {
 }
 
 IfElseCommandAction::IfElseCommandAction(MachineInstance *mi, IfElseCommandActionTemplate *t) : Action(mi), condition(t->condition)  { 
-	command = dynamic_cast<MachineCommand*>(t->command->factory(mi)->retain());
-	else_command = dynamic_cast<MachineCommand*>(t->else_command->factory(mi)->retain());
+	command = dynamic_cast<MachineCommand*>(t->command->factory(mi));
+	else_command = dynamic_cast<MachineCommand*>(t->else_command->factory(mi));
+}
+
+IfElseCommandAction::~IfElseCommandAction() {
+
 }
 
 Action::Status IfElseCommandAction::run() {
