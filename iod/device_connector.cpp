@@ -208,7 +208,6 @@ struct IODInterface{
         try {
             std::stringstream ss;
             ss << "tcp://" << options.iodHost() << ":" << 5555;
-            context = new zmq::context_t(1);
             socket = new zmq::socket_t (*context, ZMQ_REQ);
             socket->connect(ss.str().c_str());
             int linger = 0; // do not wait at socket close time
@@ -220,6 +219,7 @@ struct IODInterface{
     }
     
     IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(2000), context(0), socket(0), options(opts) {
+        context = new zmq::context_t(1);
         connect();
     }
     
