@@ -245,10 +245,8 @@ MachineInstance *MachineInstance::lookup(const char *name) {
 }
 
 MachineInstance *MachineInstance::lookup(const std::string &seek_machine_name)  {
-//DBG_M_MACHINELOOKUPS << _name << " seeking " << seek_machine_name << "\n";
 	std::map<std::string, MachineInstance *>::iterator iter = localised_names.find(seek_machine_name);
 	if (iter != localised_names.end()) {
-//		DBG_M_MACHINELOOKUPS << _name << "found the machine in a localised cache " << (*iter).second->getName() << "\n";
 		return (*iter).second;
 	}
 	return lookup_cache_miss(seek_machine_name);
@@ -767,7 +765,7 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	// commands in the transition table are public and can be sent by anyone
     std::list<Transition>::const_iterator iter = transitions.begin();
     while (iter != transitions.end()) {
-        Transition t = *iter++;
+        const Transition &t = *iter++;
         if (t.trigger == m) return true;
     }
     DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
@@ -929,7 +927,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 	if (from == this || m.getText() == short_name) {
 	    std::list<Transition>::const_iterator iter = transitions.begin();
 		while (iter != transitions.end()) {
-   		 	Transition t = *iter++;
+   		 	const Transition &t = *iter++;
    		 	if (t.trigger.getText() == short_name && current_state == t.source) {
    	        	// found match, if there is a command defined for this transition, we
    	        	// execute the command, otherwise we just do the state change
@@ -959,6 +957,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 						    mc->setActionTemplate(temp);
 							IfCommandActionTemplate ifcat(s.condition.predicate, mc);
 							this->push(new IfCommandAction(this, &ifcat));
+                            delete mc;
 							found = true;
 						}
 					}
@@ -1089,10 +1088,10 @@ void MachineInstance::collect(const Package &package) {
 Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (!enabled()) {
 		if (from) {
-			DBG_M_MESSAGING << _name << " dropped message " << m << " from " << from->getName() << " while disabled\n";
+			DBG_MESSAGING << _name << " dropped message " << m << " from " << from->getName() << " while disabled\n";
 		}
 		else {
-			DBG_M_MESSAGING << _name << " dropped message " << m << " while disabled\n";
+			DBG_MESSAGING << _name << " dropped message " << m << " while disabled\n";
 		}
 		return Action::Failed;
 	}
@@ -1101,7 +1100,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		NB_MSG << _name << " error: dropping empty message\n";
 		return Action::Failed;
 	}
-	++needs_check;
+	++needs_check; // TBD is this necessary?
 	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
 	std::string event_name(m.getText());
 	if (from && event_name.find('.') == std::string::npos)
