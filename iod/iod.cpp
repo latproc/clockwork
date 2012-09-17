@@ -278,7 +278,9 @@ char *collectSlaveConfig(bool reconfigure)
 		m.getSlave(&slave, i);
         cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave, reconfigure));
     }
-	return cJSON_Print(root);
+	char *res = cJSON_Print(root);
+	cJSON_Delete(root);
+	return res;
 }
 
 #endif
@@ -316,6 +318,7 @@ struct IODCommandGetSlaveConfig : public IODCommand {
         char *res = collectSlaveConfig(false);
         if (res) {
             result_str = res;
+			free(res);
             return true;
         }
         else {
@@ -346,7 +349,7 @@ struct IODCommandMasterInfo : public IODCommand {
         bool done;
         if (res) {
             result_str = res;
-			delete res;
+			free(res);
             done = true;
         }
         else {
