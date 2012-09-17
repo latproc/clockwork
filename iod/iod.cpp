@@ -346,6 +346,7 @@ struct IODCommandMasterInfo : public IODCommand {
         bool done;
         if (res) {
             result_str = res;
+			delete res;
             done = true;
         }
         else {
@@ -569,7 +570,7 @@ int loadConfig(int argc, char const *argv[]) {
         i++;
     }
     
-    if (logfilename)
+    if (logfilename && strcmp(logfilename, "-") != 0)
     {
         int ferr;
         ferr = fflush(stdout);
@@ -1114,7 +1115,8 @@ int main (int argc, char const *argv[])
 	IODCommandListJSON::no_display.insert("startup_enabled");
 	IODCommandListJSON::no_display.insert("NAME");
 	IODCommandListJSON::no_display.insert("STATE");
-
+	IODCommandListJSON::no_display.insert("PERSISTENT");
+	
 	statistics = new Statistics;
 	int load_result = loadConfig(argc, argv);
 	if (load_result)
@@ -1298,7 +1300,7 @@ int main (int argc, char const *argv[])
 		// load the store into a map
 		typedef std::pair<std::string, Value> PropertyPair;
 		std::map<std::string, std::list<PropertyPair> >init_values;
-		ifstream store(persistent_store());
+		std::ifstream store(persistent_store());
 		char buf[200];
 		while (store.getline(buf, 200, '\n')) {
 			std::istringstream in(buf);
@@ -1344,22 +1346,27 @@ int main (int argc, char const *argv[])
     }
 
 	// prepare the list of machines that will be processed at idle time
-	m_iter = MachineInstance::begin();
+    int num_passive = 0;
+    int num_active = 0;
+ 	m_iter = MachineInstance::begin();
 	while (m_iter != MachineInstance::end()) {
 	    MachineInstance *mi = *m_iter++;
 	    if (!mi->receives_functions.empty() || mi->commands.size()
-			|| !mi->getStateMachine()->transitions.empty() 
+			|| (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
 			|| mi->isModbusExported() 
                 	|| mi->uses_timer ) {
 	        mi->markActive();
 	        DBG_INITIALISATION << mi->getName() << " is active\n";
+			++num_active;
 	    }
 	    else {
 	        mi->markPassive();
 	        DBG_INITIALISATION << mi->getName() << " is passive\n";
+			++num_passive;
 	    }
 	}
-
+	std::cout << num_passive << " passive and " << num_active << " active machines\n";
+	
 	// enable all other machines
 
 	bool only_startup = machine_classes.count("STARTUP") > 0;
@@ -1427,22 +1434,24 @@ int main (int argc, char const *argv[])
 								std::cerr << error << "\n";
 							}
 					    }
-						//do {
-				            MachineInstance::processAll(MachineInstance::NO_BUILTINS);
+						{
+							//do {
+					            MachineInstance::processAll(MachineInstance::NO_BUILTINS);
+								gettimeofday(&end_t, 0);
+								delta = get_diff_in_microsecs(&end_t, &start_t);
+								statistics->machine_processing.add(delta - delta2); delta2 = delta;
+							    Dispatcher::instance()->idle();
+								gettimeofday(&end_t, 0);
+								delta = get_diff_in_microsecs(&end_t, &start_t);
+								statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
+							//} while (delta <100);
+							Scheduler::instance()->idle();
+							//MachineInstance::updateAllTimers(MachineInstance::NO_BUILTINS);
+							MachineInstance::checkStableStates();
 							gettimeofday(&end_t, 0);
 							delta = get_diff_in_microsecs(&end_t, &start_t);
-							statistics->machine_processing.add(delta - delta2); delta2 = delta;
-						    Dispatcher::instance()->idle();
-							gettimeofday(&end_t, 0);
-							delta = get_diff_in_microsecs(&end_t, &start_t);
-							statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
-						//} while (delta <100);
-						Scheduler::instance()->idle();
-						//MachineInstance::updateAllTimers(MachineInstance::NO_BUILTINS);
-						MachineInstance::checkStableStates();
-						gettimeofday(&end_t, 0);
-						delta = get_diff_in_microsecs(&end_t, &start_t);
-						statistics->auto_states.add(delta - delta2); delta2 = delta;
+							statistics->auto_states.add(delta - delta2); delta2 = delta;
+						}
 					}
 					ECInterface::instance()->sendUpdates();
 					++user_alarms;			
