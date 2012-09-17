@@ -1419,7 +1419,7 @@ void MachineInstance::setStableState() {
                         else {
                             DBG_M_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
                         }
-                        state_change->release();
+                        //state_change->release();
                         if (action_status == Action::Complete || action_status == Action::Failed)
                             state_change = 0;
                     }

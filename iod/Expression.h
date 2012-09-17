@@ -94,7 +94,7 @@ struct Condition {
     Value last_result;
     bool operator()(MachineInstance *m);
 	Condition() : predicate(0) {}
-	Condition(Predicate*p) : predicate(p) {}
+	Condition(Predicate*p);
 	Condition(const Condition &other);
 	Condition &operator=(const Condition &other);
     ~Condition();

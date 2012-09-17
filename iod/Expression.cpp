@@ -60,6 +60,8 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 }
 
 Condition::~Condition() {
+    if (predicate)
+        std::cout << "DELETING predicate " << *predicate << "\n";
     delete predicate;
 }
 
@@ -133,14 +135,18 @@ Predicate &Predicate::operator=(const Predicate &other) {
 	return *this;
 }
 
+Condition::Condition(Predicate*p) : predicate(0) {
+    if (p) predicate = new Predicate(*p);
+}
+
 Condition::Condition(const Condition &other) : predicate(0) {
-	if (other.predicate) predicate = new Predicate( *(other.predicate) );
+	if (other.predicate)
+        predicate = new Predicate( *(other.predicate) );
 }
 
 Condition &Condition::operator=(const Condition &other) {
-	if (other.predicate) {
+	if (other.predicate)
 		predicate = new Predicate( *(other.predicate) );
-	}
 	return *this;
 }
 
