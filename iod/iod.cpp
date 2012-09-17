@@ -265,7 +265,6 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 
 char *collectSlaveConfig(bool reconfigure)
 {
-	std::stringstream res;
 	cJSON *root = cJSON_CreateArray();
     MasterDevice m(0);
     m.open(MasterDevice::Read);
