@@ -86,8 +86,11 @@ Package &Package::operator=(const Package &other) {
 }
 
 std::ostream& Package::operator<<(std::ostream &out) const {
-	return out << "Package: " << *message << " from " << transmitter->getName() << " to " << receiver->getName() 
-		<< " needs receipt: " << needs_receipt;
+    if (receiver)
+        return out << "Package: " << *message << " from " << transmitter->getName() << " to " << receiver->getName() 
+            << " needs receipt: " << needs_receipt;
+    else
+        return out << "Package: " << *message << " from " << transmitter->getName() << " needs receipt: " << needs_receipt;
 }
 
 std::ostream &operator<<(std::ostream &out, const Package &package) {
