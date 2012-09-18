@@ -12,4 +12,4 @@ Test MACHINE camera {
 }
 test Test(tab:Test) camera;
 
-ROUTE "TestMessage" TO test
+ROUTE "TestMessage" TO test;

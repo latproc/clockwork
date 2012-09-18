@@ -177,7 +177,7 @@ SYMBOL value {
 }
 
 route_declaration:
-ROUTE STRINGVAL TO SYMBOL {
+ROUTE STRINGVAL TO SYMBOL ';' {
     message_handlers[$2] = $4;
 }
 ;
