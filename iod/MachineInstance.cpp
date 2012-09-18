@@ -128,8 +128,8 @@ StableState::~StableState() {
     if (trigger && trigger->enabled()) {
         trigger->disable();
     }
-    else
-        delete trigger;
+    //else
+    //    delete trigger;
     if (subcondition_handlers) {
         subcondition_handlers->clear();
         delete subcondition_handlers;
@@ -873,7 +873,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 							ch.trigger->disable();
 						}
                         else {
-                            delete ch.trigger;
+                            //delete ch.trigger;
                             ch.trigger = 0;
                         }
 						if (s.state_name == current_state.getName()) {
@@ -915,7 +915,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 		}
 
 		std::string txt = _name + "." + new_state.getName() + "_enter";
-		Message *msg = new Message(strdup(txt.c_str()));
+		Message *msg = new Message(txt.c_str());
 		stat = execute(msg, this);
         
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
@@ -1444,7 +1444,7 @@ void MachineInstance::setStableState() {
                         else {
                             DBG_M_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
                         }
-                        state_change->release();
+                        //state_change->release();
                         if (action_status == Action::Complete || action_status == Action::Failed)
                             state_change = 0;
                     }
