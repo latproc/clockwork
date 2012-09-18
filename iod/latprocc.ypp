@@ -27,6 +27,7 @@
 #include "CallMethodAction.h"
 #include "MachineCommandAction.h"
 #include "PatternAction.h"
+#include "IODCommands.h"
 
 #define COMPILER_MAIN
 #include "latprocc.h"
@@ -94,7 +95,7 @@ struct Subcondition {
 %token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
-%token WHERE
+%token WHERE ROUTE
 
 %union {
 	int iVal;
@@ -144,6 +145,7 @@ program_section:
 |module_def 
 |machine_definition 
 |machine_instantiation 
+|route_declaration
 | error ';'
 | error '}'
 ;
@@ -173,6 +175,12 @@ SYMBOL value {
     DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$2 << "\n";
     delete $2;
 }
+
+route_declaration:
+ROUTE STRINGVAL TO SYMBOL {
+    message_handlers[$2] = $4;
+}
+;
 
 machine_definition:
 definition_header '{' definition_body '}' { 

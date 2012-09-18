@@ -67,6 +67,7 @@ READONLY            return READONLY;
 READWRITE          return READWRITE;
 REPLACE             return REPLACE;
 RO                  return READONLY;
+ROUTE               return ROUTE;
 RW                  return READWRITE;
 RECEIVE             return RECEIVE;
 REQUIRES            return REQUIRES;

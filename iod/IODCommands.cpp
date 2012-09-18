@@ -34,6 +34,9 @@ typedef std::map<std::string, IOComponent*> DeviceList;
 extern DeviceList devices;
 IOComponent* lookup_device(const std::string name);
 
+std::map<std::string, std::string>message_handlers;
+
+
 extern bool program_done;
 
 bool IODCommandGetStatus::run(std::vector<std::string> &params) {
@@ -638,9 +641,19 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 
     bool IODCommandUnknown::run(std::vector<std::string> &params) {
         std::stringstream ss;
-        ss << "Unknown command: ";
-        std::ostream_iterator<std::string> oi(ss, " ");
-        ss << std::flush;
+        std::ostream_iterator<std::string> oi(ss, "");
+        std::copy(params.begin(), params.end(), oi);
+        
+        if (message_handlers.count(ss.str())) {
+            const std::string &name = message_handlers[ss.str()];
+            MachineInstance *m = MachineInstance::find(name.c_str());
+            if (m) {
+                m->send(new Message(ss.str().c_str()));
+                result_str = "OK";
+                return true;
+            }
+        }
+        ss << ": Unknown command";
         error_str = ss.str();
         return false;
     }

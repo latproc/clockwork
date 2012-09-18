@@ -657,5 +657,45 @@ beckhoffd
 modbusd
 \end_layout
 
+\begin_layout Section
+Other Features
+\end_layout
+
+\begin_layout Subsection
+Connecting other devices
+\end_layout
+
+\begin_layout Standard
+Currently external devices can be connected to cw and iod by use of the
+ EXTERNAL machine class.
+ To define a connection:
+\end_layout
+
+\begin_layout Itemize
+instantiate an EXTERNAL machine
+\end_layout
+
+\begin_layout Itemize
+set parameters on that machine:
+\end_layout
+
+\begin_deeper
+\begin_layout Description
+HOST a string with the name or ip address of the host.
+ The sepecial host name `*' indicates that the program should use a publisher/su
+bscriber messaging model and not expect any replies.
+\end_layout
+
+\begin_layout Description
+PORT a number with the port to connect to on the remote machine
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+When a message is sent to the machine defined in this way, a connection
+ is made via ØMQ and the message is sent.
+ The connection is help open, ready for more messages.
+\end_layout
+
 \end_body
 \end_document
