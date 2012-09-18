@@ -124,6 +124,18 @@ std::ostream &operator<<(std::ostream &out, const StableState &ss) {
     return ss.operator<<(out);
 }
 
+StableState::~StableState() {
+    if (trigger && trigger->enabled()) {
+        trigger->disable();
+    }
+    else
+        delete trigger;
+    if (subcondition_handlers) {
+        subcondition_handlers->clear();
+        delete subcondition_handlers;
+    }
+}
+
 StableState::StableState (const StableState &other)
     : state_name(other.state_name), condition(other.condition),
         uses_timer(other.uses_timer), timer_val(0), trigger(0), subcondition_handlers(0), owner(other.owner)
@@ -824,6 +836,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					DBG_M_SCHEDULER << _name << " disabling " << s.trigger->getName() << "\n";
 					s.trigger->disable();
 				}
+                else if (s.trigger)
+                    delete s.trigger;
 				// prepare a new trigger
 				s.trigger = new Trigger("Timer");
 				if (s.timer_val.kind == Value::t_symbol) {
@@ -1413,7 +1427,7 @@ void MachineInstance::setStableState() {
                         }
                         DBG_M_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name 
                             << " due to condition: " << *s.condition.predicate << "\n";
-                        MoveStateActionTemplate temp(strdup(_name.c_str()), strdup(s.state_name.c_str()) );
+                        MoveStateActionTemplate temp(_name.c_str(), s.state_name.c_str() );
                         state_change = new MoveStateAction(this, temp);
                         Action::Status action_status;
                         if ( (action_status = (*state_change)()) == Action::Failed) {
@@ -1422,7 +1436,7 @@ void MachineInstance::setStableState() {
                         else {
                             DBG_M_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
                         }
-                        //state_change->release();
+                        state_change->release();
                         if (action_status == Action::Complete || action_status == Action::Failed)
                             state_change = 0;
                     }

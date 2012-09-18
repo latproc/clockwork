@@ -89,6 +89,8 @@ struct StableState : public TriggerOwner {
 		: state_name(s), condition(p), uses_timer(false), timer_val(0), trigger(0), subcondition_handlers(0), owner(0) { 
 		uses_timer = p->usesTimer(timer_val); 
 	}
+    
+    ~StableState();
 
     bool operator<(const StableState &other) const {  // used for std::sort
         if (!condition.predicate || !other.condition.predicate) return false;
