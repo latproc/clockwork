@@ -1101,12 +1101,14 @@ void MachineInstance::collect(const Package &package) {
 
 Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (!enabled()) {
+#if 0
 		if (from) {
 			DBG_MESSAGING << _name << " dropped message " << m << " from " << from->getName() << " while disabled\n";
 		}
 		else {
 			DBG_MESSAGING << _name << " dropped message " << m << " while disabled\n";
 		}
+#endif
 		return Action::Failed;
 	}
 
