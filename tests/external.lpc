@@ -6,6 +6,10 @@ Test MACHINE camera {
     idle DEFAULT;
 
     ENTER test { SEND CapturePhoto TO camera; }
+    RECEIVE TestMessage {
+        LOG "Got test message";
+    }
 }
 test Test(tab:Test) camera;
 
+ROUTE "TestMessage" TO test

@@ -26,7 +26,11 @@
 #include <set>
 #include "IODCommand.h"
 #include <zmq.hpp>
+#include <map>
+
 void sendMessage(zmq::socket_t &socket, const char *message);
+
+extern std::map<std::string, std::string> message_handlers;
 
 struct IODCommandGetStatus : public IODCommand {
 	bool run(std::vector<std::string> &params);
@@ -104,5 +108,6 @@ struct IODCommandModbusRefresh : public IODCommand {
 struct IODCommandUnknown : public IODCommand {
 	bool run(std::vector<std::string> &params);
 };
+
 
 #endif

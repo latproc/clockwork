@@ -836,8 +836,10 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					DBG_M_SCHEDULER << _name << " disabling " << s.trigger->getName() << "\n";
 					s.trigger->disable();
 				}
-                else if (s.trigger)
+                else if (s.trigger) {
                     delete s.trigger;
+                    s.trigger = 0;
+                }
 				// prepare a new trigger
 				s.trigger = new Trigger("Timer");
 				if (s.timer_val.kind == Value::t_symbol) {
@@ -870,6 +872,10 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 						if (ch.trigger && ch.trigger->enabled()) {
 							ch.trigger->disable();
 						}
+                        else {
+                            delete ch.trigger;
+                            ch.trigger = 0;
+                        }
 						if (s.state_name == current_state.getName()) {
 							ch.trigger = new Trigger("Timer");
 							if (ch.timer_val.kind == Value::t_symbol) {
@@ -949,9 +955,9 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					DBG_M_MESSAGING << "Transition on machine " << getName() << " has a linked command; using it\n";
 					// at the end of the transition, we expect to have moved to the designated state
 					// so we ensure that happens by pushing a state change
-					// but first, we chack the stablestate condition for that state.
+					// but first, we check the stablestate condition for that state.
+                    
 					// find state condition
-						
 					bool found = false;
                     for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
                         StableState &s = stable_states[ss_idx];
@@ -965,7 +971,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 								}
 							}
 							MoveStateActionTemplate *temp
-								= new MoveStateActionTemplate(strdup(_name.c_str()), strdup(t.dest.getName().c_str()) );
+								= new MoveStateActionTemplate(_name.c_str(), t.dest.getName().c_str() );
 							//Action *ssa = new SetStateAction(this, temp);
 						    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "unnamed_command");
 						    mc->setActionTemplate(temp);
@@ -2246,11 +2252,11 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 			assert(addr.getOffset() == 0);
 
 			if (new_value) {
-				SetStateActionTemplate ssat(CStringHolder(strdup("SELF")), State("on") );
+				SetStateActionTemplate ssat(CStringHolder("SELF"), State("on") );
 				active_actions.push_front(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			else {
-				SetStateActionTemplate ssat(CStringHolder(strdup("SELF")), State("off") );
+				SetStateActionTemplate ssat(CStringHolder("SELF"), State("off") );
 				active_actions.push_front(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			return;
@@ -2288,7 +2294,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 	else {
 		NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
 	}
-	++needs_check;
+	//++needs_check;
 }
 
 int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {

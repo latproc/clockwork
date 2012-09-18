@@ -7,19 +7,33 @@ Chopstick MACHINE {
 
 Philosopher MACHINE left, right {
 	OPTION tab Test;
+    OPTION eat_time 1000;
+    
+    full FLAG;
+    okToStart FLAG;
+    okToStop FLAG;
 
-	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME && TIMER < 3000;
-	finished WHEN left.owner == SELF.NAME && right.owner == SELF.NAME ;
+	finished WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  && TIMER >= eat_time;
+	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
+        TAG full WHEN TIMER > 100;
 	starting WHEN left.owner == "noone" && right.owner == "noone";
 	waiting DEFAULT;
+    
+    ENTER INIT {
+        eat_time := (NOW % 400) * 10;
+        SET okToStart TO on;
+        SET okToStop TO on;
+    }
 
 	ENTER starting {
 		LOCK left;
 		IF (left.owner == "noone") {
+            LOG "got left";
 			left.owner := SELF.NAME;
 			LOCK right;
 			IF (right.owner == "noone") {
 				right.owner := SELF.NAME;
+                LOG "got right";
 			}
 			ELSE {
 				UNLOCK left;
@@ -31,6 +45,7 @@ Philosopher MACHINE left, right {
 		}
 	}
 	ENTER finished {
+        LOG "finished";
 		left.owner := "noone";
 		right.owner := "noone";
 		UNLOCK right;
@@ -38,6 +53,9 @@ Philosopher MACHINE left, right {
 		timer := 100 * TIMER;
 		WAIT timer;
 	}
+    
+    TRANSITION INIT TO starting REQUIRES okToStart IS on;
+    TRANSITION eating TO finished REQUIRES okToStop IS on;
 }
 c01 Chopstick;
 c02 Chopstick;

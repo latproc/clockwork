@@ -2,7 +2,7 @@ m MODULE (position:1);
 p1 POINT (tab:All) m, 1;
 p2 POINT (tab:All) m, 2;
 
-x VARIABLE;
+x VARIABLE 0;
 
 # can a number be passed to a machine and used
 # to initialise a property?
@@ -11,9 +11,12 @@ IntParamTest MACHINE val {
 }
 int_param IntParamTest(tab:All) 3;
 
+
 ParamTest MACHINE (tab:All) val {
-GLOBAL default_value;
-local_value VARIABLE(tab:All,PERSISTENT:false) 9;
+
+    GLOBAL default_value;
+    local_value VARIABLE(tab:All,PERSISTENT:false) 9;
+
     ENTER INIT {
         a := val;
         b := default_value;
@@ -22,6 +25,7 @@ local_value VARIABLE(tab:All,PERSISTENT:false) 9;
 		d := val;
     }
 }
+
 
 ParamPropertyTest MACHINE (tab:All, a:3, b:"world") {
     p_3 ParamTest (tab:All) a;
@@ -39,4 +43,19 @@ p_hello ParamTest (tab:All) "hello";
 
 # variable name as parameter
 p_zero ParamTest (tab:All) zero;
+
+# can a local machine be passed as a parameter to another local machine
+
+Follow MACHINE other {
+    on WHEN other IS on;
+    off WHEN other IS off;
+}
+
+LocalPassingTest MACHINE {
+
+local1 FLAG (tab:Test);
+local2 Follow (tab:Test) local1;
+
+}
+locals LocalPassingTest(tab:Test);
 

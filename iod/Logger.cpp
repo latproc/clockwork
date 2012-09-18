@@ -78,7 +78,8 @@ std::ostream&Logger::log(Level l){
         return *log_stream;
     }
     else{
-		dummy_output->str("");
+        dummy_output->clear();
+        dummy_output->seekp(0);
         return*dummy_output;
     }
 }
