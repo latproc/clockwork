@@ -60,7 +60,7 @@ Action::Status CallMethodAction::run() {
 	}
 	else {
 		owner->send(new Message(message.get()), target_machine, true);
-		trigger = owner->setupTrigger(target_machine->getName(), message.get(), "_done");
+		setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
 	}
 	status = Action::Running;
 	return status;
@@ -68,7 +68,7 @@ Action::Status CallMethodAction::run() {
 
 Action::Status CallMethodAction::checkComplete() {
     if (status == Complete || status == Failed) return status;
-	if ( trigger.fired()) {
+	if ( trigger->fired()) {
 		status = Action::Complete;
 		owner->stop(this);
 		return status;

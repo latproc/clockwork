@@ -61,7 +61,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				machine->io_interface->turnOff();
 			}
 			status = Running;
-			trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
+            setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
 			return status;
 		}
 		else if ( (value.getName() == "INTEGER" && machine->getCurrent().getName() == "INTEGER")
@@ -126,7 +126,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		 }
 		result_str = "OK";
 		status = Running;
-		trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
+		setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
 		return status;
     }
     else {
@@ -148,8 +148,8 @@ Action::Status SetStateAction::checkComplete() {
     if (status == New || status == NeedsRetry) executeStateChange(true);
 	if (status == Suspended) resume();
     if (status != Running) return status;
-	if (trigger.enabled()) {
-		if (trigger.fired()) {
+	if (trigger && trigger->enabled()) {
+		if (trigger->fired()) {
 			DBG_M_MESSAGING << owner->getName() << " Set State Action " << *this << " has triggered, cleaning up\n";
 			status = Complete;
 			owner->stop(this);

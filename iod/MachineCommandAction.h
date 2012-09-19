@@ -78,7 +78,7 @@ private:
     CStringHolder command_name;
     CStringHolder state_name;
     long timeout;
-    Trigger timout_trigger;
+    Trigger *timeout_trigger;
 };
 
 #endif

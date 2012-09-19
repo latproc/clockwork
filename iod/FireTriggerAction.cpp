@@ -24,17 +24,17 @@
 #include "DebugExtra.h"
 
 FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t) 
-	: Action(m), trigger(t){ if (m) t->setOwner(m); }
+	: Action(m), trigger(t->retain()){
+        if (m) t->setOwner(m);
+    }
 
 FireTriggerAction::~FireTriggerAction() {
+   trigger->release();
 }
 
 Action::Status FireTriggerAction::run() { 
 	owner->start(this);
 	if (!trigger->enabled()) {
-		DBG_SCHEDULER << owner->getName() << " trigger fire after it was disabled; deleting it\n";
-		//delete trigger;
-        trigger = 0;
 		status = Complete;
 		owner->stop(this);
 		return status;

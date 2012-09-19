@@ -98,6 +98,7 @@ trigger(other.trigger),
 uses_timer(other.uses_timer),
 triggered(other.triggered)
 {
+    if (trigger) trigger->retain();
 }
 
 ConditionHandler &ConditionHandler::operator=(const ConditionHandler &other) {
@@ -107,6 +108,7 @@ ConditionHandler &ConditionHandler::operator=(const ConditionHandler &other) {
     timer_val = other.timer_val;
     action = other.action;
     trigger = other.trigger;
+    if (trigger) trigger->retain();
 	uses_timer = other.uses_timer;
     triggered = other.triggered;
     return *this;
@@ -125,11 +127,12 @@ std::ostream &operator<<(std::ostream &out, const StableState &ss) {
 }
 
 StableState::~StableState() {
-    if (trigger && trigger->enabled()) {
-        trigger->disable();
+    if (trigger) {
+        if (trigger->enabled()) {
+            trigger->disable();
+            trigger->release();
+        }
     }
-    //else
-    //    delete trigger;
     if (subcondition_handlers) {
         subcondition_handlers->clear();
         delete subcondition_handlers;
@@ -832,14 +835,13 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 			if (s.uses_timer) {
 				long timer_val;
 				// first disable any trigger that may still be enabled
-				if ( s.trigger && s.trigger->enabled() ) {
-					DBG_M_SCHEDULER << _name << " disabling " << s.trigger->getName() << "\n";
-					s.trigger->disable();
+				if ( s.trigger) {
+                    if (s.trigger->enabled() ) {
+                        DBG_M_SCHEDULER << _name << " disabling " << s.trigger->getName() << "\n";
+                        s.trigger->disable();
+                    }
+                    s.trigger->release();
 				}
-                else if (s.trigger) {
-                    delete s.trigger;
-                    s.trigger = 0;
-                }
 				// prepare a new trigger
 				s.trigger = new Trigger("Timer");
 				if (s.timer_val.kind == Value::t_symbol) {
@@ -865,17 +867,16 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                 std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
                 while (iter != s.subcondition_handlers->end()) {
                     ConditionHandler &ch = *iter++;
-					//TBD setup triggers for subcondition handlers
+					//setup triggers for subcondition handlers
 
 					if (ch.uses_timer) {
 						long timer_val;
-						if (ch.trigger && ch.trigger->enabled()) {
-							ch.trigger->disable();
+						if (ch.trigger) {
+                            if (ch.trigger->enabled())
+                                ch.trigger->disable();
+                            ch.trigger->release();
 						}
-                        else {
-                            //delete ch.trigger;
-                            ch.trigger = 0;
-                        }
+                        ch.trigger = 0;
 						if (s.state_name == current_state.getName()) {
 							ch.trigger = new Trigger("Timer");
 							if (ch.timer_val.kind == Value::t_symbol) {
@@ -1133,16 +1134,16 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
         std::list<Action*>::iterator iter = active_actions.begin();
         while (iter != active_actions.end()) {
             Action *a = *iter++;
-			Trigger &trigger = a->getTrigger();
-			if (trigger.matches(m.getText())) {
+			Trigger *trigger = a->getTrigger();
+			if (trigger && trigger->matches(m.getText())) {
 				SetStateAction *ssa = dynamic_cast<SetStateAction*>(a);
 				if (ssa) {
 					if (!ssa->condition.predicate || ssa->condition(this)) {
-						trigger.fire();
+						trigger->fire();
 						DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 					}
 					else
-						DBG_M_MESSAGING << _name << " trigger message " << trigger.getName() 
+						DBG_M_MESSAGING << _name << " trigger message " << trigger->getName()
 							<< " arrived but condition " << *(ssa->condition.predicate) << " failed\n";
 				}
 				else 
@@ -1150,7 +1151,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 				// a call method action may be waiting for this message
 				CallMethodAction *cma = dynamic_cast<CallMethodAction*>(a);
 				if (cma) {
-					cma->getTrigger().fire();
+					if (cma->getTrigger()) cma->getTrigger()->fire();
 					DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 				}
 				else DBG_M_MESSAGING << _name << " trigger on " << *a << " is not a CallMethodAction\n";
@@ -1291,10 +1292,9 @@ void MachineInstance::clearAllActions() {
 		DBG_M_ACTIONS << "Releasing action " << *a << "\n";
 		// note that we can't delete an action with active triggers, instead we disable the trigger
 		// and wait for the scheduler to delete the action
-		if (a->getTrigger().enabled() && !a->getTrigger().fired() ) 
+		if (a->getTrigger() && a->getTrigger()->enabled() && !a->getTrigger()->fired() )
 			a->disableTrigger();
-        else
-            a->release();
+        a->release();
 	}
 
 	boost::mutex::scoped_lock(q_mutex);
@@ -1444,9 +1444,9 @@ void MachineInstance::setStableState() {
                         else {
                             DBG_M_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
                         }
-                        //state_change->release();
-                        if (action_status == Action::Complete || action_status == Action::Failed)
-                            state_change = 0;
+                        //if (action_status == Action::Complete || action_status == Action::Failed) {
+                        state_change->release();
+                        state_change = 0;
                     }
                     else {
                         //DBG_M_AUTOSTATES << " already there\n";
@@ -1665,13 +1665,13 @@ std::ostream &operator<<(std::ostream &out, const Action &a) {
 }
 
 
-Trigger MachineInstance::setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix = "_enter") {
+Trigger *MachineInstance::setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix = "_enter") {
 	std::string trigger_name = machine_name;
 	trigger_name += ".";
 	trigger_name += message;
 	trigger_name += suffix;
 	DBG_M_MESSAGING << _name << " is waiting for message " << trigger_name << " from " << machine_name << "\n";
-	return trigger_name;
+	return new Trigger(trigger_name);
 }
 
 const Value &MachineInstance::getValue(std::string property) {

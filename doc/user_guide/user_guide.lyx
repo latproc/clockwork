@@ -164,7 +164,15 @@ Language
 \end_layout
 
 \begin_layout Standard
-There are two language drivers at present, cw and iod.
+There are two language drivers at present, 
+\emph on
+cw
+\emph default
+ and 
+\emph on
+iod
+\emph default
+.
  The difference between them is that iod includes facilities to talk to
  I/O hardware via the IgH EtherCAT Master for Linux and cw does not.
  We will discuss the use of cw first and discuss the extensions that iod
@@ -299,7 +307,7 @@ Light Sensor
 
 \begin_layout Standard
 Here is an example of how Clockwork can be used to define a monitor that
- turns a light on or off once there is not activity in a room.
+ turns a light on or off once there is no activity in a room.
  We start with a sensor and a switch, with the idea that when the sensor
  comes on there is activity so we turn the light on.
  When the sensor goes off, we turn off the light.

@@ -320,6 +320,59 @@ name "sec:Machines"
 
 \begin_layout Standard
 To define a machine use:
+\emph on
+ class_name 
+\emph default
+MACHINE 
+\emph on
+parameter1, parameter2, ...
+ 
+\emph default
+{ } and place the definition between the braces.
+ 
+\end_layout
+
+\begin_layout Standard
+To create an instance of a machine, use: 
+\emph on
+name
+\emph default
+ 
+\emph on
+class_name
+\emph default
+ 
+\emph on
+param1, param2, ...
+ 
+\emph default
+;.
+ There can be any number of instances for a given machine definition.
+ The trick is mostly to do with what goes between the braces.
+\end_layout
+
+\begin_layout Subsection
+State definitions
+\end_layout
+
+\begin_layout Subsection
+Transitions
+\end_layout
+
+\begin_layout Subsection
+Event handlers (methods)
+\end_layout
+
+\begin_layout Subsection
+Commands
+\end_layout
+
+\begin_layout Subsection
+Exporting properties
+\end_layout
+
+\begin_layout Subsection
+Monitoring globals
 \end_layout
 
 \begin_layout Section

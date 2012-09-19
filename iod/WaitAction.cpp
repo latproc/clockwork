@@ -65,9 +65,9 @@ Action::Status WaitAction::run() {
 	}
 	else {
 		status = Running;
-		trigger = Trigger("Timer");
-		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, &trigger)));
-		assert(!trigger.fired());
+		trigger = new Trigger("Timer");
+		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, trigger)));
+		assert(!trigger->fired());
         if (use_property) wait_time = -1; // next time, find the property value again
 	}
     DBG_M_PROPERTIES << "waiting " << wait_time << "\n";
@@ -82,7 +82,7 @@ Action::Status WaitAction::checkComplete() {
 	if (delta >= wait_time * 1000) { status = Complete; owner->stop(this); }
 //    else DBG_M_ACTIONS << "still waiting " << (wait_time*1000-delta) << "\n";
 */
-	if (trigger.fired()) {
+	if (trigger && trigger->fired()) {
 		status = Complete;
 		owner->stop(this);
 	}

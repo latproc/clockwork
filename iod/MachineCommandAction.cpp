@@ -35,7 +35,7 @@ void MachineCommandTemplate::setActionTemplate(ActionTemplate *at) {
 
 
 MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
-: Action(mi), command_name(mct->command_name), state_name(mct->state_name), timeout(0) {
+: Action(mi), command_name(mct->command_name), state_name(mct->state_name), timeout(0), timeout_trigger(0) {
     BOOST_FOREACH(ActionTemplate *t, mct->action_templates) {
         //DBG_M_ACTIONS << "copying action " << (*t) << " for machine " << mi->_name << "\n";
         actions.push_back(t->factory(mi));
@@ -45,14 +45,15 @@ MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
 MachineCommand::~MachineCommand() {
 	BOOST_FOREACH(Action *a, actions) { 
 		owner->active_actions.remove(a); 
-		if (a->getTrigger().enabled() && !a->getTrigger().fired() ) 
+		if (a->getTrigger() && a->getTrigger()->enabled() && !a->getTrigger()->fired() )
 			a->disableTrigger();
-		else {
-            DBG_MESSAGING << "deleting " << *a<< "\n";
-			//delete a;
-            a->release();
-        }
+        DBG_MESSAGING << "deleting " << *a<< "\n";
+        a->release();
 	}
+    if (timeout_trigger) {
+        timeout_trigger->disable();
+        timeout_trigger->release();
+    }
 }
 
 void MachineCommand::addAction(Action *a, ActionParameterList *params) { 

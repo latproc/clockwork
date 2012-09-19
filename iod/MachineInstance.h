@@ -279,7 +279,7 @@ public:
     
 	MachineClass *getStateMachine() const { return state_machine; }
 	void setInitialState() { if (state_machine) setState(state_machine->initial_state); }
-	Trigger setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
+	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
 	const Value *getCurrentStateVal() { return &current_state_val; }
 

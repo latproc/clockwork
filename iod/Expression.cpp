@@ -62,6 +62,7 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 Condition::~Condition() {
 //    if (predicate)
 //       std::cout << "DELETING predicate " << *predicate << "\n";
+    stack.clear();
     delete predicate;
 }
 
@@ -356,7 +357,6 @@ void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left) {
 }
 
 ExprNode::~ExprNode() {
-    
 }
 
 void Stack::clear() {
@@ -367,7 +367,7 @@ void Stack::clear() {
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
 #if 1
-        stack.stack.clear();
+        stack.clear();
 	    prep(stack, predicate, m, true);
 //		if (m && m->debug()) {
 //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
@@ -376,6 +376,7 @@ bool Condition::operator()(MachineInstance *m) {
         std::stringstream ss;
         ss << last_result << " " << *predicate;
         last_evaluation = ss.str();
+        stack.clear();
 	    if (last_result.kind == Value::t_bool) return last_result.bValue;
 #else
 		Value res(eval(predicate, m, false));

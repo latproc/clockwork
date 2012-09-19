@@ -7,7 +7,7 @@ Chopstick MACHINE {
 
 Philosopher MACHINE left, right {
 	OPTION tab Test;
-    OPTION eat_time 1000;
+    OPTION eat_time 20;
     
     full FLAG;
     okToStart FLAG;
@@ -15,12 +15,12 @@ Philosopher MACHINE left, right {
 
 	finished WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  && TIMER >= eat_time;
 	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
-        TAG full WHEN TIMER > 100;
+        TAG full WHEN TIMER > 10;
 	starting WHEN left.owner == "noone" && right.owner == "noone";
 	waiting DEFAULT;
     
     ENTER INIT {
-        eat_time := (NOW % 400) * 10;
+        eat_time := (NOW % 10) * 10;
         SET okToStart TO on;
         SET okToStop TO on;
     }
@@ -50,7 +50,7 @@ Philosopher MACHINE left, right {
 		right.owner := "noone";
 		UNLOCK right;
 		UNLOCK left;
-		timer := 100 * TIMER;
+		timer := 10 * TIMER + 10;
 		WAIT timer;
 	}
     

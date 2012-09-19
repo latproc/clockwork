@@ -46,16 +46,20 @@ struct TriggerOwner {
 };
 
 struct Trigger {
-	Trigger() : name("inactive"), seen(false), is_active(false), owner(0), deleted(false) {}
-	Trigger(const std::string &n) : name(n), seen(false), is_active(true), owner(0), deleted(false) {}
-	Trigger(const Trigger &o) : name(o.name), seen(o.seen), is_active(o.is_active), owner(o.owner), deleted(false) {}
+	Trigger() : name("inactive"), seen(false), is_active(false), owner(0), deleted(false), refs(1) {}
+	Trigger(const std::string &n) : name(n), seen(false), is_active(true), owner(0), deleted(false), refs(1) {}
+	Trigger(const Trigger &o) : name(o.name), seen(o.seen), is_active(o.is_active), owner(o.owner), deleted(false), refs(1) {}
 	Trigger &operator=(const Trigger &o) { 
 		name = o.name;
 		seen = o.seen;
 		is_active = o.is_active;
         owner = o.owner;
+        // note: refs does not change
 		return *this;
 	}
+    Trigger*retain() { ++refs; return this; }
+    virtual void release() { if (--refs == 0) delete this; }
+    
     void setOwner(TriggerOwner *new_owner) { owner = new_owner; }
 	bool enabled() const { return is_active; }
 	bool fired() const { return seen; }
@@ -74,6 +78,7 @@ protected:
 	bool is_active;
     TriggerOwner *owner;
 	bool deleted;
+    int refs;
 };
 
 // an action is started by operator(). If the action successfully starts, 
@@ -81,8 +86,10 @@ protected:
 // return true;
 struct Action {
 public:
-    Action(MachineInstance *m = 0)  : refs(1), owner(m), error_str(""), result_str(""), status(New), saved_status(Running), blocked(0) {}
-    virtual ~Action(){ }
+    Action(MachineInstance *m = 0)
+        : refs(1), owner(m), error_str(""), result_str(""), status(New),
+            saved_status(Running), blocked(0), trigger(0) {}
+    virtual ~Action(){ if (trigger) trigger->release(); }
     
     Action*retain() { ++refs; return this; }
     virtual void release();
@@ -117,9 +124,10 @@ public:
 	bool isBlocked() { return blocked != 0; }
 	void setBlocker(Action *a) { blocked = a; }
 	
-	void setTrigger(const Trigger &t) { trigger = t; }
-	Trigger &getTrigger() { return trigger; }
-	void disableTrigger() { trigger.disable(); }
+	void setTrigger(Trigger *t) { if (trigger == t) return; if (trigger) trigger->release(); trigger = t->retain(); }
+	Trigger *getTrigger() const { return trigger; }
+	void disableTrigger() { if (trigger) trigger->disable(); }
+    
 
 	MachineInstance *getOwner() { return owner; }
     
@@ -135,7 +143,7 @@ protected:
 	Status status;
 	Status saved_status; // used when an action is suspended
 	Action *blocked; // blocked on this action
-	Trigger trigger;
+	Trigger *trigger;
 };
 
 struct IOComponent;
