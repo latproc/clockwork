@@ -521,6 +521,7 @@ void MachineInstance::idle() {
 	while (curr) {
 		curr->retain();
 		if (curr->getStatus() == Action::New || curr->getStatus() == Action::NeedsRetry) {
+            stop(curr); // avoid double queueing
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
 				NB_MSG << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
@@ -1251,13 +1252,16 @@ void MachineInstance::stop(Action *a) {
 //	active_actions.pop_back();
 //    a->release();
     
+    bool found = false;
     std::list<Action*>::iterator iter = active_actions.begin();
     while (iter != active_actions.end()) {
         Action *queued = *iter;
         if (queued == a) {
+            if (found)
+                std::cerr << "Warning: action " << *a << " was queued twice\n";
             iter = active_actions.erase(iter);
             a->release();
-            break;
+            found = true;
         }
         iter++;
     }
