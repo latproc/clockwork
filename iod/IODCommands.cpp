@@ -648,7 +648,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             const std::string &name = message_handlers[ss.str()];
             MachineInstance *m = MachineInstance::find(name.c_str());
             if (m) {
-                m->send(new Message(ss.str().c_str()));
+                m->send(new Message(ss.str().c_str()),m);
                 result_str = "OK";
                 return true;
             }
