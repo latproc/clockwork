@@ -30,6 +30,7 @@ class MachineInstance;
 
 struct PredicateActionTemplate : public ActionTemplate {
 	PredicateActionTemplate(Predicate *p) : predicate(p) { }
+    ~PredicateActionTemplate();
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
 		return out << *predicate;
@@ -39,6 +40,7 @@ struct PredicateActionTemplate : public ActionTemplate {
 
 struct PredicateAction : public Action {
 	PredicateAction(MachineInstance *mi, PredicateActionTemplate &pat) : Action(mi), predicate(new Predicate(*pat.predicate)) { }
+    ~PredicateAction();
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;

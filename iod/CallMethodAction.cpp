@@ -59,8 +59,8 @@ Action::Status CallMethodAction::run() {
 		return status;
 	}
 	else {
-		owner->send(new Message(message.get()), target_machine, true);
 		setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
+		owner->send(new Message(message.get()), target_machine, true);
 	}
 	status = Action::Running;
 	return status;

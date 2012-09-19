@@ -42,7 +42,7 @@ IfCommandAction::IfCommandAction(MachineInstance *mi, IfCommandActionTemplate *t
 }
 
 IfCommandAction::~IfCommandAction() {
-
+    if (command) command->release();
 }
 
 Action::Status IfCommandAction::run() {
@@ -94,7 +94,8 @@ IfElseCommandAction::IfElseCommandAction(MachineInstance *mi, IfElseCommandActio
 }
 
 IfElseCommandAction::~IfElseCommandAction() {
-
+    if (command) command->release();
+    if (else_command) else_command->release();
 }
 
 Action::Status IfElseCommandAction::run() {

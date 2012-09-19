@@ -786,6 +786,7 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
     DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
     return false;
 }
+
 Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 	Action::Status stat = Action::Complete; 
 	// update the Modbus interface for self 
@@ -916,23 +917,22 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 		}
 
 		std::string txt = _name + "." + new_state.getName() + "_enter";
-		Message *msg = new Message(txt.c_str());
+		Message msg(txt.c_str());
 		stat = execute(msg, this);
         
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
 			if (this == dep) continue;
-			DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is " << current_state.getName() << " using " << *msg << "\n";
+			DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is " << current_state.getName() << " using " << msg << "\n";
 			Action *act = dep->executingCommand();
 			if (act) {
 				if (act->getStatus() == Action::Suspended) act->resume();
 				DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
 			}
 			//TBD execute the message on the dependant machine
-			dep->execute(*msg, this);
+			dep->execute(msg, this);
 		}
-        delete msg;
 	}
 	return stat;
 }
@@ -971,14 +971,11 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 									ch.triggered = false;
 								}
 							}
-							MoveStateActionTemplate *temp
-								= new MoveStateActionTemplate(_name.c_str(), t.dest.getName().c_str() );
-							//Action *ssa = new SetStateAction(this, temp);
-						    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "unnamed_command");
-						    mc->setActionTemplate(temp);
-							IfCommandActionTemplate ifcat(s.condition.predicate, mc);
+							MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
+						    MachineCommandTemplate mc("if_command", "if_command");
+						    mc.setActionTemplate(&temp);
+							IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
 							this->push(new IfCommandAction(this, &ifcat));
-                            delete mc;
 							found = true;
 						}
 					}
@@ -990,9 +987,6 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 						ExecuteMessageActionTemplate emat(strdup(response.c_str()), strdup(from->getName().c_str()));
 						ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
 						this->push(ema);
-						//Message m(strdup(response.c_str()));
-						//HandleMessageActionTemplate hmat(this, from->asReceiver(), m, false);
-						//HandleMessageAction *hma = new HandleMessageAction(this, hmat);
 					}
 					if (!found) {
 						DBG_M_STATECHANGES << "no stable state condition test for " << t.dest.getName() << " pushing state change\n";
@@ -1102,7 +1096,7 @@ void MachineInstance::collect(const Package &package) {
 			DBG_M_MESSAGING <<_name<< "Interrupted " << *curr << "\n";
 		}
 		DBG_M_MESSAGING << _name << " pushed " << *hma << "\n";
-		active_actions.push_back(hma->retain());
+		active_actions.push_back(hma);
 	}
 }
 
@@ -1128,6 +1122,21 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	std::string event_name(m.getText());
 	if (from && event_name.find('.') == std::string::npos)
 		event_name = from->getName() + "." + m.getText();
+    
+    if (io_interface && from == io_interface) {
+        if (_type == "POINT") {
+            if(m.getText() == "on_enter") {
+                setState("on");
+            }
+            else if (m.getText() == "off_enter") {
+                setState("off");
+            }
+            // a POINT won't have an actions that depend on triggers so it's safe to return now
+            return Action::Complete;
+        }
+    }
+
+    // fire the triggers on any suspended commands that might be waiting for them.
 	if (executingCommand()) {
 		// tell any actions that are triggering on this that we have seen the event
 		DBG_M_MESSAGING << _name << " processing triggers for " << event_name << "\n";
@@ -1158,17 +1167,6 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			}
 		}
 	}
-	if (io_interface && from == io_interface) {
-		if (_type == "POINT") {
-		 	if(m.getText() == "on_enter") {
-				setState("on");
-			}
-			else if (m.getText() == "off_enter") {
-				setState("off");
-			}
-			return Action::Complete;
-		}
-	}
 	// execute the method if there is one
 	DBG_M_MESSAGING << _name<< " executing " << event_name << "\n";
 	HandleMessageActionTemplate hmat(Package(from, this, new Message(event_name.c_str())));
@@ -1194,7 +1192,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	}
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
-	active_actions.push_front(hma->retain());
+	active_actions.push_front(hma);
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"), name(class_name), allow_auto_states(true) {
@@ -1246,13 +1244,24 @@ void MachineInstance::displayActive(std::ostream &note) {
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
 	++needs_check;
-	if (active_actions.back() != a) {
-		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
-		return;
-	}
-	active_actions.pop_back();
-//    std::cout << "STOPPING: " << *a << "\n";
-    a->release();
+//	if (active_actions.back() != a) {
+//		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
+//		return;
+//	}
+//	active_actions.pop_back();
+//    a->release();
+    
+    std::list<Action*>::iterator iter = active_actions.begin();
+    while (iter != active_actions.end()) {
+        Action *queued = *iter;
+        if (queued == a) {
+            iter = active_actions.erase(iter);
+            a->release();
+            break;
+        }
+        iter++;
+    }
+    
 	if (!active_actions.empty()) {
 		Action *next = active_actions.back();
 		if (next) {

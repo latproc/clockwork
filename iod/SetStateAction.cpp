@@ -84,7 +84,8 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
                                 if (t.trigger.getText() == "NOTRIGGER")  break; // no trigger command for this transition
                                 DBG_M_ACTIONS << machine->_name << " has a transition from "
                                     << t.source << " to " << value << " using it\n";
-                                status = machine->execute(new Message(t.trigger.getText().c_str()), machine);
+                                Message ssmsg(t.trigger.getText().c_str());
+                                status = machine->execute(ssmsg, machine);
                                 if (status == Action::Failed) {
                                     error_str = "failed to execute transition\n";
                                 }

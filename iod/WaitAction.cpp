@@ -65,6 +65,7 @@ Action::Status WaitAction::run() {
 	}
 	else {
 		status = Running;
+        if (trigger) trigger->release();
 		trigger = new Trigger("Timer");
 		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, trigger)));
 		assert(!trigger->fired());

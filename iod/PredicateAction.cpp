@@ -25,6 +25,11 @@
 
 void breakpoint() {}
 
+PredicateActionTemplate::~PredicateActionTemplate() {
+    delete predicate;
+}
+
+
 Action *PredicateActionTemplate::factory(MachineInstance *mi) { 
   return new PredicateAction(mi, *this); 
 }
@@ -96,6 +101,10 @@ Value eval(Predicate *p, MachineInstance *m){
 	}
 	else
 		return resolve(p, m);
+}
+
+PredicateAction::~PredicateAction() {
+    delete predicate;
 }
 
 Action::Status PredicateAction::run() {

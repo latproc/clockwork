@@ -92,7 +92,9 @@ void IOComponent::idle() {
 
 			if (value) evt = "on_enter";
 			else evt = "off_enter";
-			BOOST_FOREACH(MachineInstance *m, depends) {
+            std::list<MachineInstance*>::iterator iter = depends.begin();
+            while (iter != depends.end()) {
+                MachineInstance *m = *iter++;
 				Message msg(evt);
 				m->execute(msg, this);
 			}
