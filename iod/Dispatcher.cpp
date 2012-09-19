@@ -153,7 +153,7 @@ void Dispatcher::idle() {
                 if (r->receives(m, from)) 
 					to_receive.push_back(r);
 				else
-					DBG_DISPATCHER << to->getName() << " will not accept package " << *p << "\n";
+					DBG_DISPATCHER << r->getName() << " will not accept package " << *p << "\n";
             }
             iter = to_receive.begin();
             while (iter != to_receive.end()) {
