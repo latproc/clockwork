@@ -85,8 +85,8 @@ int main(int argc, const char * argv[])
                 char *data = (char *)malloc(len+1);
                 memcpy(data, update.data(), len);
                 data[len] = 0;
+#if 0
 	            std::istringstream iss(data);
-				delete data;
 	            //iss >> count;
 	            std::string point, op, state;
 	            iss >> point >> op;
@@ -96,6 +96,9 @@ int main(int argc, const char * argv[])
 	                std::cout << " " << state << "\n";
 	            }
 	            else std::cout << data << "\n";
+#endif
+				std::cout << data << "\n";
+				delete data;
 	        }
 	    }
     }
