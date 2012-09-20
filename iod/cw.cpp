@@ -72,7 +72,7 @@ Statistics *statistics = NULL;
 std::list<Statistic *> Statistic::stats;
 
 
-static boost::mutex thread_protection_mutex;
+boost::mutex thread_protection_mutex;
 static boost::mutex io_mutex;
 static boost::mutex model_mutex;
 boost::condition_variable_any io_updated;

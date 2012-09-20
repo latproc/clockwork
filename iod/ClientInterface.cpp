@@ -32,6 +32,8 @@
 
 extern boost::mutex thread_protection_mutex;
 extern bool machine_is_ready;
+extern boost::mutex thread_protection_mutex;
+
 
 void IODCommandThread::operator()() {
     std::cout << "------------------ Command Thread Started -----------------\n";
@@ -67,7 +69,6 @@ void IODCommandThread::operator()() {
                 ++count;
             }
             boost::mutex::scoped_lock lock(thread_protection_mutex);
-            
             std::vector<std::string> params(0);
             std::copy(parts.begin(), parts.end(), std::back_inserter(params));
             if (params.empty()) {
