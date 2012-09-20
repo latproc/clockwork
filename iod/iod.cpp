@@ -69,7 +69,7 @@ void displaySymbolTable();
 Statistics *statistics = NULL;
 std::list<Statistic *> Statistic::stats;
 
-static boost::mutex thread_protection_mutex;
+boost::mutex thread_protection_mutex;
 static boost::mutex io_mutex;
 static boost::mutex model_mutex;
 boost::condition_variable_any io_updated;
@@ -332,7 +332,7 @@ int main (int argc, char const *argv[])
 		return load_result;
 	}
 	
-	ECInterface::FREQUENCY=4000;
+	ECInterface::FREQUENCY=1000;
 
 #ifndef EC_SIMULATOR
 	collectSlaveConfig(true);
