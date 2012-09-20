@@ -38,9 +38,9 @@ BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
-CFLAGS = $(SIMULATED) -pg -g -pedantic -Wall $(EXTRAINCS) -DUSE_ETHERCAT
+CFLAGS = $(SIMULATED) -g -pedantic -Wall $(EXTRAINCS) -DUSE_ETHERCAT
 CC = g++ $(CFLAGS)
-LDFLAGS = -pg $(EXTRALIBS)
+LDFLAGS = $(EXTRALIBS)
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
