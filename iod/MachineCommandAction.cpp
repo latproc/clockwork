@@ -47,7 +47,6 @@ MachineCommand::~MachineCommand() {
 		owner->active_actions.remove(a); 
 		if (a->getTrigger() && a->getTrigger()->enabled() && !a->getTrigger()->fired() )
 			a->disableTrigger();
-        DBG_MESSAGING << "deleting " << *a<< "\n";
         a->release();
 	}
     if (timeout_trigger) {
