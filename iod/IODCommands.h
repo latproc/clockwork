@@ -109,5 +109,22 @@ struct IODCommandUnknown : public IODCommand {
 	bool run(std::vector<std::string> &params);
 };
 
+#ifdef USE_ETHERCAT
+char *collectSlaveConfig(bool reconfigure);
+#endif
+
+struct IODCommandEtherCATTool : public IODCommand {
+    bool run(std::vector<std::string> &params);
+};
+
+struct IODCommandMasterInfo : public IODCommand {
+    bool run(std::vector<std::string> &params);
+};
+
+struct IODCommandGetSlaveConfig : public IODCommand {
+	bool run(std::vector<std::string> &params);
+};
+
+
 
 #endif

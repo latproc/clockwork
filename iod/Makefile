@@ -38,9 +38,9 @@ BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
-CFLAGS = $(SIMULATED) -g -pedantic -Wall $(EXTRAINCS)
+CFLAGS = $(SIMULATED) -pg -g -pedantic -Wall $(EXTRAINCS) -DUSE_ETHERCAT
 CC = g++ $(CFLAGS)
-LDFLAGS = $(EXTRALIBS)
+LDFLAGS = -pg $(EXTRALIBS)
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
@@ -56,7 +56,8 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	IOComponent.cpp			SetStateAction.cpp		symboltable.cpp \
 	IODCommands.cpp			ShutdownAction.cpp		test_client.cpp \
 	IfCommandAction.cpp		State.cpp			zmq_ecat_monitor.cpp \
-	LockAction.cpp			UnlockAction.cpp
+	LockAction.cpp			UnlockAction.cpp	clockwork.cpp \
+	ClientInterface.cpp
 
 all:	$(APPS)
 
@@ -76,7 +77,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			PatternAction.o regular_expressions.o
+			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
@@ -87,7 +88,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			PatternAction.o regular_expressions.o \
+			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o \
 			$(TOOLLIB) -lethercat 
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
@@ -113,7 +114,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			PatternAction.o regular_expressions.o
+			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
@@ -122,7 +123,8 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
-			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o PatternAction.o regular_expressions.o
+			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o PatternAction.o regular_expressions.o \
+			clockwork.o ClientInterface.o
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
@@ -224,6 +226,10 @@ beckhoffd.o:	\
 		IODCommand.h\
 		Statistics.h\
 		Statistic.h
+
+clockwork.o:
+
+ClientInterface.o:
 
 DisableAction.o:	\
 		DisableAction.h\

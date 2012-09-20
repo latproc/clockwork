@@ -22,6 +22,8 @@
 #define latprocc_Command_h
 #include <string.h>
 #include <stdlib.h>
+#include <string>
+#include <vector>
 
 class IODString {
 public:
