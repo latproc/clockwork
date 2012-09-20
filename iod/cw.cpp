@@ -73,7 +73,10 @@ std::list<Statistic *> Statistic::stats;
 
 
 static boost::mutex thread_protection_mutex;
-static boost::condition_variable_any cond;
+static boost::mutex io_mutex;
+static boost::mutex model_mutex;
+boost::condition_variable_any io_updated;
+boost::condition_variable_any model_updated;
 
 
 typedef std::map<std::string, IOComponent*> DeviceList;
@@ -163,11 +166,102 @@ bool setup_signals()
 }
 
 
+struct ProcessingThread {
+    void operator()();
+    ProcessingThread();
+    void stop() { program_done = true; }
+
+	ControlSystemMachine machine;
+    int sequence;
+};
+
+ProcessingThread::ProcessingThread(): sequence(0) {	}
+
+void ProcessingThread::operator()()  {
+	
+	Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
+	Statistic::add(cycle_delay_stat);
+	long delta, delta2;
+    
+ 	while (!program_done)
+    {
+        struct timeval start_t, end_t;
+        {
+            boost::mutex::scoped_lock lock(io_mutex);
+            io_updated.wait(io_mutex);
+        }
+        {
+            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
+			{
+				gettimeofday(&start_t, 0);
+				if (machine_is_ready) {
+					delta = get_diff_in_microsecs(&start_t, &end_t);
+					cycle_delay_stat->add(delta);
+				}
+				//if (ECInterface::sig_alarms != user_alarms)
+                {
+					gettimeofday(&end_t, 0);
+					delta = get_diff_in_microsecs(&end_t, &start_t);
+					statistics->io_scan_time.add(delta);
+					delta2 = delta;
+                    
+			        //checkInputs(); // simulated wiring between inputs and outputs
+                    machine.idle();
+					if (machine.connected()) {
+                        
+						gettimeofday(&end_t, 0);
+						delta = get_diff_in_microsecs(&end_t, &start_t);
+						statistics->points_processing.add(delta - delta2); delta2 = delta;
+                        
+					    if (!machine_is_ready) {
+							std::cout << "----------- Machine is Ready --------\n";
+							machine_is_ready = true;
+							BOOST_FOREACH(std::string &error, error_messages) {
+								std::cerr << error << "\n";
+							}
+					    }
+                        {
+                            //do {
+				            MachineInstance::processAll(MachineInstance::NO_BUILTINS);
+							gettimeofday(&end_t, 0);
+							delta = get_diff_in_microsecs(&end_t, &start_t);
+							statistics->machine_processing.add(delta - delta2); delta2 = delta;
+						    Dispatcher::instance()->idle();
+							gettimeofday(&end_t, 0);
+							delta = get_diff_in_microsecs(&end_t, &start_t);
+							statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
+                            //} while (delta <100);
+                            Scheduler::instance()->idle();
+                            //MachineInstance::updateAllTimers(MachineInstance::NO_BUILTINS);
+                            MachineInstance::checkStableStates();
+                            gettimeofday(&end_t, 0);
+                            delta = get_diff_in_microsecs(&end_t, &start_t);
+                            statistics->auto_states.add(delta - delta2); delta2 = delta;
+                        }
+					}
+                    
+				}
+				//else {
+				//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
+				//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
+				//}
+				std::cout << std::flush;
+			}
+            ++sequence;
+        }
+        
+        gettimeofday(&end_t, 0);
+        delta = get_diff_in_microsecs(&end_t, &start_t);
+        if (delta < 1000000/ECInterface::FREQUENCY)
+            usleep(1000000/ECInterface::FREQUENCY - delta);
+    }
+}
+
+
 int main (int argc, char const *argv[])
 {
 	unsigned int user_alarms = 0;
 	Logger::instance();
-	ControlSystemMachine machine;
 
     Logger::instance()->setLevel(Logger::Debug);
 	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
@@ -242,233 +336,98 @@ int main (int argc, char const *argv[])
 
 	std::list<Output *> output_list;
 	{
-		boost::mutex::scoped_lock lock(thread_protection_mutex);
-
-		size_t remaining = machines.size();
-		std::cout << remaining << " Machines\n";
-		std::cout << "Linking POINTs to hardware\n";
-		std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
-		while (iter != machines.end()) {
-			MachineInstance *m = (*iter).second; iter++;
-			--remaining;
-			if (m->_type == "POINT" && m->parameters.size() > 1) {
-				// points should have two parameters, the name of the io module and the bit offset
-				//Parameter module = m->parameters[0];
-				//Parameter offset = m->parameters[1];
-				//Value params = p.val;
-				//if (params.kind == Value::t_list && params.listValue.size() > 1) {
-					std::string name = m->parameters[0].real_name;
-					int bit_position = (int)m->parameters[1].val.iValue;
-					std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
-					MachineInstance *module_mi = MachineInstance::find(name.c_str());
-					if (!module_mi) {
-						std::cerr << "No machine called " << name << "\n";
-						continue;
-					}
-					if (!module_mi->properties.exists("position")) { // module position not given
-						std::cerr << "Machine " << name << " does not specify a position\n";
-						continue; 
-					}
-					std::cerr << module_mi->properties.lookup("position").kind << "\n";
-					int module_position = (int)module_mi->properties.lookup("position").iValue;
-					if (module_position == -1)  { // module position unmapped
-						std::cerr << "Machine " << name << " position not mapped\n";
-						continue; 
-					}
-				
-				}
-				else {
-					if (m->_type != "POINT")
-						DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
-					else  
-						DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (no parameters)\n";
-				}
-			}
-			assert(remaining==0);
+        {
+            boost::mutex::scoped_lock lock(thread_protection_mutex);
+            size_t remaining = machines.size();
+            std::cout << remaining << " Machines\n";
+            std::cout << "Linking POINTs to hardware\n";
+            std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
+            while (iter != machines.end()) {
+                MachineInstance *m = (*iter).second; iter++;
+                --remaining;
+                if (m->_type == "POINT" && m->parameters.size() > 1) {
+                    // points should have two parameters, the name of the io module and the bit offset
+                    //Parameter module = m->parameters[0];
+                    //Parameter offset = m->parameters[1];
+                    //Value params = p.val;
+                    //if (params.kind == Value::t_list && params.listValue.size() > 1) {
+                        std::string name = m->parameters[0].real_name;
+                        int bit_position = (int)m->parameters[1].val.iValue;
+                        std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
+                        MachineInstance *module_mi = MachineInstance::find(name.c_str());
+                        if (!module_mi) {
+                            std::cerr << "No machine called " << name << "\n";
+                            continue;
+                        }
+                        if (!module_mi->properties.exists("position")) { // module position not given
+                            std::cerr << "Machine " << name << " does not specify a position\n";
+                            continue; 
+                        }
+                        std::cerr << module_mi->properties.lookup("position").kind << "\n";
+                        int module_position = (int)module_mi->properties.lookup("position").iValue;
+                        if (module_position == -1)  { // module position unmapped
+                            std::cerr << "Machine " << name << " position not mapped\n";
+                            continue; 
+                        }
+                    
+                    }
+                    else {
+                        if (m->_type != "POINT")
+                            DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
+                        else  
+                            DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (no parameters)\n";
+                    }
+                }
+                assert(remaining==0);
+            }
 		}
 		MachineInstance::displayAll();
 #ifdef EC_SIMULATOR
 		wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
 #endif
 
-	std::cout << "-------- Initialising ---------\n";	
-	
-	std::list<MachineInstance *>::iterator m_iter;
-
-	if (persistent_store()) {
-		// load the store into a map
-		typedef std::pair<std::string, Value> PropertyPair;
-		std::map<std::string, std::list<PropertyPair> >init_values;
-		std::ifstream store(persistent_store());
-		char buf[200];
-		while (store.getline(buf, 200, '\n')) {
-			std::istringstream in(buf);
-			std::string name, property, value_str;
-			in >> name >> property >> value_str;
-			init_values[name].push_back(make_pair(property, value_str.c_str()));
-			std::cout << name <<"." << property << ":" << value_str << "\n";
-		}
-
-		// enable all persistent variables and set their value to the 
-		// value in the map.
-		m_iter = MachineInstance::begin();
-        while (m_iter != MachineInstance::end()) {
-			MachineInstance *m = *m_iter++;
-			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
-				std::string name("");
-				if (m->owner) name += m->owner->getName() + ".";
-				name += m->getName();
-				m->enable();
-				if (init_values.count(name)) {
-					std::list< PropertyPair > &list = init_values[name];
-					PropertyPair node;
-					BOOST_FOREACH(node, list) {
-						long v;
-						DBG_INITIALISATION << name << "initialising " << node.first << " to " << node.second << "\n";
-						if (node.second.asInteger(v))
-							m->setValue(node.first, v);
-						else
-							m->setValue(node.first, node.second);
-					}
-				}
-			}
-		}
-	}
-    else {
-		m_iter = MachineInstance::begin();
-        while (m_iter != MachineInstance::end()) {
-			MachineInstance *m = *m_iter++;
-			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
-				m->enable();
-            }
-        }
-    }
+	std::cout << "-------- Initialising ---------\n";
+	initialise_machines();
     
-    // prepare the list of machines that will be processed at idle time
-    m_iter = MachineInstance::begin();
-    int num_passive = 0;
-    int num_active = 0;
-    while (m_iter != MachineInstance::end()) {
-        MachineInstance *mi = *m_iter++;
-        if (!mi->receives_functions.empty() || mi->commands.size()
-            || (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
-            || mi->isModbusExported()
-            || mi->uses_timer ) {
-            mi->markActive();
-            DBG_INITIALISATION << mi->getName() << " is active\n";
-            ++num_active;
-        }
-        else {
-            mi->markPassive();
-            DBG_INITIALISATION << mi->getName() << " is passive\n";
-            ++num_passive;
-        }
-    }
-    std::cout << num_passive << " passive and " << num_active << " active machines\n";
-    
-
-	// enable all other machines
-
-	bool only_startup = machine_classes.count("STARTUP") > 0;
-	m_iter = MachineInstance::begin();
-	while (m_iter != MachineInstance::end()) {
-		MachineInstance *m = *m_iter++;	
-		Value enable = m->getValue("startup_enabled");
-		if (enable == SymbolTable::Null || enable == true) {
-			if (!only_startup || (only_startup && m->_type == "STARTUP") ) m->enable();
-		}
-		else {
-			DBG_INITIALISATION << m->getName() << " is disabled at startup\n";
-		}
-	}
-
     setup_signals();
     
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
 	boost::thread monitor(boost::ref(stateMonitor));
-	
-	Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
-	Statistic::add(cycle_delay_stat);
-	long delta, delta2;
 
 	// Inform the modbus interface we have started
 	load_debug_config();
 	ModbusAddress::message("STARTUP");
-
-	while (!program_done)
-    {
-        struct timeval start_t, end_t;
+    
+    ProcessingThread processMonitor;
+	boost::thread process(boost::ref(processMonitor));
+    
+    int processing_sequence = processMonitor.sequence;
+    struct timeval then;
+    gettimeofday(&then,0);
+    while (!program_done) {
+        ECInterface::instance()->collectState();
         {
-            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
-			{
-				gettimeofday(&start_t, 0);
-				if (machine_is_ready) {
-					delta = get_diff_in_microsecs(&start_t, &end_t);
-					cycle_delay_stat->add(delta);
-				}
-				//if (ECInterface::sig_alarms != user_alarms)
-                {
-					ECInterface::instance()->collectState();
-			
-					gettimeofday(&end_t, 0);
-					delta = get_diff_in_microsecs(&end_t, &start_t);
-					statistics->io_scan_time.add(delta);
-					delta2 = delta;
-			
-			        //checkInputs(); // simulated wiring between inputs and outputs
-                    machine.idle();
-					if (machine.connected()) {
-
-						gettimeofday(&end_t, 0);
-						delta = get_diff_in_microsecs(&end_t, &start_t);
-						statistics->points_processing.add(delta - delta2); delta2 = delta;
-
-					    if (!machine_is_ready) {
-							std::cout << "----------- Machine is Ready --------\n";
-							machine_is_ready = true;
-							BOOST_FOREACH(std::string &error, error_messages) {
-								std::cerr << error << "\n";
-							}
-					    }
-                        {
-                            //do {
-				            MachineInstance::processAll(MachineInstance::NO_BUILTINS);
-							gettimeofday(&end_t, 0);
-							delta = get_diff_in_microsecs(&end_t, &start_t);
-							statistics->machine_processing.add(delta - delta2); delta2 = delta;
-						    Dispatcher::instance()->idle();
-							gettimeofday(&end_t, 0);
-							delta = get_diff_in_microsecs(&end_t, &start_t);
-							statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
-                            //} while (delta <100);
-                            Scheduler::instance()->idle();
-                            //MachineInstance::updateAllTimers(MachineInstance::NO_BUILTINS);
-                            MachineInstance::checkStableStates();
-                            gettimeofday(&end_t, 0);
-                            delta = get_diff_in_microsecs(&end_t, &start_t);
-                            statistics->auto_states.add(delta - delta2); delta2 = delta;
-                        }
-					}
-					ECInterface::instance()->sendUpdates();
-					++user_alarms;			
-					if (ECInterface::sig_alarms != user_alarms)  user_alarms = ECInterface::sig_alarms-1;  // drop extra polls we missed
-                    
-				}
-				//else {
-				//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
-				//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
-				//}
-				std::cout << std::flush;
-			}
+        boost::mutex::scoped_lock lock(io_mutex);
+        io_updated.notify_all();
         }
-
-        gettimeofday(&end_t, 0);
-        delta = get_diff_in_microsecs(&end_t, &start_t);
-        if (delta < 1000000/ECInterface::FREQUENCY)
-            usleep(1000000/ECInterface::FREQUENCY - delta);
-
-	}
+//        if (ECInterface::sig_alarms == user_alarms) {
+//            boost::mutex::scoped_lock lock(model_mutex);
+//            model_updated.wait(model_mutex);
+//        }
+        usleep(900);
+        if (processing_sequence != processMonitor.sequence) { // did the model update?
+            ECInterface::instance()->sendUpdates();
+            ++processing_sequence;
+        }
+        struct timeval now;
+        gettimeofday(&now,0);
+        long delta = (now.tv_sec - then.tv_sec) * 1000000 + ( (long)now.tv_usec - (long)then.tv_usec);
+        if (1000-delta > 100)
+            usleep(1000-delta);
+        then = now;
+    }
+    process.join();
     stateMonitor.stop();
     monitor.join();
 	return 0;
