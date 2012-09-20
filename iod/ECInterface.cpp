@@ -38,8 +38,11 @@
 #define EK1814_SYNCS slave_3_syncs
 #endif
 
-//static boost::mutex model_mutex;
+//extern boost::mutex model_mutex;
 //extern boost::condition_variable_any model_updated;
+
+extern boost::mutex ecat_mutex;
+extern boost::condition_variable_any ecat_polltime;
 
 void signal_handler(int signum);
 
@@ -386,10 +389,7 @@ void signal_handler(int signum) {
     switch (signum) {
         case SIGALRM:
             ECInterface::sig_alarms++;
-//            {
-//                boost::mutex::scoped_lock lock(model_mutex);
-//                model_updated.notify_all(); // notify the ethercat thread to continue
-//            }
+            ecat_polltime.notify_all(); // notify the ethercat thread to continue
             break;
         default:
             std::cerr << "Signal: " << signum << "\n" << std::flush;

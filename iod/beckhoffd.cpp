@@ -42,6 +42,9 @@
 #include "IODCommands.h"
 #include "Statistics.h"
 
+boost::mutex ecat_mutex;
+boost::condition_variable_any ecat_polltime;
+
 int num_errors;
 std::list<std::string>error_messages;
 SymbolTable globals;

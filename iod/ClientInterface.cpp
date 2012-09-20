@@ -30,7 +30,7 @@
 #include "IODCommands.h"
 #include "Logger.h"
 
-
+extern boost::mutex thread_protection_mutex;
 extern bool machine_is_ready;
 
 void IODCommandThread::operator()() {
@@ -41,10 +41,13 @@ void IODCommandThread::operator()() {
     IODCommand *command = 0;
     
     while (!done) {
-        zmq::message_t request;
         try {
             
-            //  Wait for next request from client
+             zmq::pollitem_t items[] = { { socket, 0, ZMQ_POLLIN, 0 } };
+             zmq::poll( &items[0], 1, 500*1000);
+             if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
+
+        	zmq::message_t request;
             socket.recv (&request);
             if (!machine_is_ready) {
                 sendMessage(socket, "Ignored during startup");
@@ -63,7 +66,7 @@ void IODCommandThread::operator()() {
                 parts.push_back(ds);
                 ++count;
             }
-            //boost::mutex::scoped_lock lock(thread_protection_mutex);
+            boost::mutex::scoped_lock lock(thread_protection_mutex);
             
             std::vector<std::string> params(0);
             std::copy(parts.begin(), parts.end(), std::back_inserter(params));
@@ -159,9 +162,7 @@ void IODCommandThread::operator()() {
             free(data);
         }
         catch (std::exception e) {
-            //std::cout << e.what() << "\n";
-            usleep(1000);
-            //exit(1);
+            usleep(100);
         }
     }
     socket.close();
