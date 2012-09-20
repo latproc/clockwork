@@ -77,6 +77,7 @@ static boost::mutex io_mutex;
 static boost::mutex model_mutex;
 boost::condition_variable_any io_updated;
 boost::condition_variable_any model_updated;
+boost::condition_variable_any ecat_polltime;
 
 
 typedef std::map<std::string, IOComponent*> DeviceList;
