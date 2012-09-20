@@ -534,3 +534,14 @@ bool ECInterface::start() {
     }
 	return true;
 }
+
+bool ECInterface::stop() {
+    struct itimerval tv;
+    tv.it_interval.tv_sec = 0;
+    tv.it_interval.tv_usec = 0;
+    if (setitimer(ITIMER_REAL, &tv, NULL)) {
+		std::cerr << "Failed to stop timer: " << strerror(errno) << "\n";
+        return false;
+    }
+	return true;
+}

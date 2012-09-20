@@ -107,6 +107,7 @@ public:
 	void sendUpdates();
 	
 	bool start();
+	bool stop();
 	bool init();
 	void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
     const ec_master_t *getMaster() { return master; }

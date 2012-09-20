@@ -303,6 +303,7 @@ void EtherCATThread::operator()() {
         ECInterface::instance()->sendUpdates();
 		//std::cout << "..done..\n" << std::flush;
     }
+	ECInterface::instance()->stop();
 	std::cerr << "EtherCAT Thread saw processing done\n";
 	done = true;
 }
