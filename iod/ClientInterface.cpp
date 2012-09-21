@@ -45,7 +45,7 @@ void IODCommandThread::operator()() {
     while (!done) {
         try {
             
-             zmq::pollitem_t items[] = { { socket, 0, ZMQ_POLLIN, 0 } };
+             zmq::pollitem_t items[] = { { socket, 0, ZMQ_POLLERR || ZMQ_POLLIN, 0 } };
              zmq::poll( &items[0], 1, 500*1000);
              if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
 
