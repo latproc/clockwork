@@ -486,7 +486,7 @@ int main(int argc, const char * argv[]) {
         //subscriber.connect("ipc://ecat.ipc");
         while (!done) {
             zmq::message_t update;
-            subscriber.recv(&update);
+			if (!subscriber.recv(&update)) continue;
 			long len = update.size();
            	char *data = (char *)malloc(len+1);
            	memcpy(data, update.data(), len);
@@ -521,7 +521,10 @@ int main(int argc, const char * argv[]) {
         }
     }
     catch(std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n";
+        if (zmq_errno())
+            std::cerr << zmq_strerror(zmq_errno()) << "\n";
+        else
+            std::cerr << e.what() << "\n";
         return 1;
     }
     catch(...) {

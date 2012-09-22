@@ -34,6 +34,19 @@ extern boost::mutex thread_protection_mutex;
 extern bool machine_is_ready;
 extern boost::mutex thread_protection_mutex;
 
+struct ListenerThreadInternals : public ClientInterfaceInternals {
+    
+};
+
+void IODCommandListenerThread::operator()() {}
+IODCommandListenerThread::IODCommandListenerThread() : done(false), internals(0) { }
+void IODCommandListenerThread::stop() { done = true; }
+
+
+struct CommandThreadInternals : public ClientInterfaceInternals {
+    
+};
+
 
 void IODCommandThread::operator()() {
     std::cout << "------------------ Command Thread Started -----------------\n";
@@ -50,7 +63,7 @@ void IODCommandThread::operator()() {
              if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
 
         	zmq::message_t request;
-            socket.recv (&request);
+            if (!socket.recv (&request)) continue; // interrupted system call
             if (!machine_is_ready) {
                 sendMessage(socket, "Ignored during startup");
                 continue;
@@ -163,7 +176,10 @@ void IODCommandThread::operator()() {
             free(data);
         }
         catch (std::exception e) {
-            usleep(100);
+            if (zmq_errno())
+                std::cerr << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << e.what() << "\n";
         }
     }
     socket.close();

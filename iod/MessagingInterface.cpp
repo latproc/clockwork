@@ -94,14 +94,15 @@ void MessagingInterface::send(const char *txt) {
                 zmq::poll( &items[0], 1, 5000);
                 if (items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
-                    socket->recv(&reply);
-                    len = reply.size();
-                    char *data = (char *)malloc(len+1);
-                    memcpy(data, reply.data(), len);
-                    data[len] = 0;
-                    std::cout << data << "\n";
-                    free(data);
-                    return;
+                    if (socket->recv(&reply)) {
+                        len = reply.size();
+                        char *data = (char *)malloc(len+1);
+                        memcpy(data, reply.data(), len);
+                        data[len] = 0;
+                        std::cout << url << ": " << data << "\n";
+                        free(data);
+                        return;
+                    }
                 }
                 else
                     expect_reply = false;
@@ -112,6 +113,9 @@ void MessagingInterface::send(const char *txt) {
         }
 	}
 	catch (std::exception e) {
-		std::cout << e.what() << "\n";
+        if (zmq_errno())
+            std::cerr << zmq_strerror(zmq_errno()) << "\n";
+        else
+            std::cerr << e.what() << "\n";
 	}
 }
