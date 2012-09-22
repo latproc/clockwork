@@ -480,10 +480,10 @@ int main(int argc, const char * argv[]) {
 		ss << "tcp://localhost:" << port;
         zmq::context_t context (1);
         zmq::socket_t subscriber (context, ZMQ_SUB);
-        subscriber.connect(ss.str().c_str());
-        //subscriber.connect("ipc://ecat.ipc");
         res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
         assert (res == 0);
+        subscriber.connect(ss.str().c_str());
+        //subscriber.connect("ipc://ecat.ipc");
         while (!done) {
             zmq::message_t update;
             subscriber.recv(&update);
