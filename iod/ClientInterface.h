@@ -21,11 +21,24 @@
 #ifndef __ClientInterface_h__
 #define __ClientInterface_h__
 
+struct ClientInterfaceInternals { };
+
+struct IODCommandListenerThread {
+    void operator()();
+    IODCommandListenerThread();
+    void stop();
+    bool done;
+private:
+    ClientInterfaceInternals *internals;
+};
+
 struct IODCommandThread {
     void operator()();
     IODCommandThread();
     void stop();
     bool done;
+private:
+    ClientInterfaceInternals *internals;
 };
 
 #endif

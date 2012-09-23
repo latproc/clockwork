@@ -155,19 +155,19 @@ struct IODInterface{
             const char *msg = (message) ? message : "";
 
             int retries = REQUEST_RETRIES;
-            while (retries) {
+            while (!done && retries) {
                 size_t len = strlen(msg);
                 zmq::message_t request (len);
                 memcpy ((void *) request.data (), msg, len);
                 socket->send (request);
                 bool expect_reply = true;
                 
-                while (expect_reply) {
+                while (!done && expect_reply) {
                     zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
                     zmq::poll( &items[0], 1, REQUEST_TIMEOUT*1000);
                     if (items[0].revents & ZMQ_POLLIN) {
                         zmq::message_t reply;
-                        socket->recv(&reply);
+                        if (!socket->recv(&reply)) continue;
                     	len = reply.size();
                     	char *data = (char *)malloc(len+1);
                     	memcpy(data, reply.data(), len);
@@ -214,11 +214,16 @@ struct IODInterface{
             socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         }
         catch (std::exception e) {
-            std::cerr << e.what() << "\n";
+            if (zmq_errno())
+                std::cerr << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << e.what() << "\n";
         }
     }
     
-    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(2000), context(0), socket(0), options(opts) {
+    void stop() { done = true; }
+    
+    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(2000), context(0), socket(0), options(opts), done(false) {
         context = new zmq::context_t(1);
         connect();
     }
@@ -227,6 +232,7 @@ struct IODInterface{
     zmq::socket_t *socket;
     boost::mutex interface_mutex;
     const Options &options;
+    bool done;
 
 };
 
@@ -437,7 +443,10 @@ struct ConnectionThread {
         }
 		delete match;
         }catch (std::exception e) {
-            std::cerr << e.what() << "\n";
+            if (zmq_errno())
+                std::cerr << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << e.what() << "\n";
         }
     }
     
@@ -460,7 +469,8 @@ struct ConnectionThread {
         }
     }
     
-    void last_message(std::string &msg, struct timeval &msg_time) {
+    // returns the last received message and the time it arrived
+    void get_last_message(std::string &msg, struct timeval &msg_time) {
         boost::mutex::scoped_lock lock(connection_mutex);
         msg = last_msg;
         msg_time = last_active;
@@ -595,7 +605,7 @@ int main(int argc, const char * argv[])
         if (device_status.status == DeviceStatus::e_up || device_status.status == DeviceStatus::e_timeout) {
             std::string msg;
             struct timeval last;
-            connection_thread.last_message(msg, last);
+            connection_thread.get_last_message(msg, last);
             if (last_time.tv_sec != last.tv_sec && now.tv_sec > last.tv_sec + 1) {
                 if (device_status.status == DeviceStatus::e_timeout)
                     std::cerr << "Warning: Device timeout\n";
@@ -607,12 +617,16 @@ int main(int argc, const char * argv[])
         // send a message to iod
         usleep(100);
     }
-    
+
+    iod_interface.stop();
     connection_thread.stop();
     monitor.join();
     }
     catch (std::exception e) {
-        std::cerr << e.what() << "\n";
+        if (zmq_errno())
+            std::cerr << zmq_strerror(zmq_errno()) << "\n";
+        else
+            std::cerr << e.what() << "\n";
     }
     return 0;
 }

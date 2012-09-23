@@ -389,7 +389,7 @@ void signal_handler(int signum) {
     switch (signum) {
         case SIGALRM:
             ECInterface::sig_alarms++;
-            ecat_polltime.notify_all(); // notify the ethercat thread to continue
+            //ecat_polltime.notify_all(); // notify the ethercat thread to continue
             break;
         default:
             std::cerr << "Signal: " << signum << "\n" << std::flush;

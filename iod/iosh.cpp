@@ -95,13 +95,18 @@ int main(int argc, const char * argv[])
 				sendMessage(socket, msg.c_str());
 				size_t size = msg.length();
 	            zmq::message_t reply;
-				socket.recv(&reply);
-				size = reply.size();
-	            char *data = (char *)malloc(size+1);
-	            memcpy(data, reply.data(), size);
-	            data[size] = 0;
-				std::cout << data << "\n";
-				free(data);
+                int retries = 3;
+				while (retries-- && !socket.recv(&reply)) { }
+                if (retries) {
+                    size = reply.size();
+                    char *data = (char *)malloc(size+1);
+                    memcpy(data, reply.data(), size);
+                    data[size] = 0;
+                    std::cout << data << "\n";
+                    free(data);
+                }
+                else
+                    std::cout << "reply interrupted\n";
 				msg = "";
 			}
 			else
@@ -109,7 +114,10 @@ int main(int argc, const char * argv[])
         }
    }
     catch(std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n";
+        if (zmq_errno())
+            std::cerr << zmq_strerror(zmq_errno()) << "\n";
+        else
+            std::cerr << e.what() << "\n";
         return 1;
     }
     catch(...) {
