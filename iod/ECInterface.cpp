@@ -91,6 +91,17 @@ std::list<ECModule *> ECInterface::modules;
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0) {
 	offsets = new unsigned int[32];
+    slave_config = 0;
+    memset(&slave_config_state, 0, sizeof(ec_slave_config_state_t));
+	alias = 0;;
+    position = 0;
+    vendor_id = 0;
+    product_code = 0;
+    sync_count = 0;
+    
+    pdo_entries = 0;
+    pdos = 0;
+    syncs = 0;
 }
 
 bool ECModule::online() {
@@ -104,7 +115,7 @@ bool ECModule::operational() {
 #endif
 
 
-ECInterface::ECInterface() :initialised(0) {
+ECInterface::ECInterface() :initialised(0), active(false) {
 	initialised = init();
 }
 
@@ -448,6 +459,7 @@ void ECInterface::check_domain1_state(void)
 {
 #ifndef EC_SIMULATOR
     ec_domain_state_t ds;
+	memset(&ds, 0, sizeof(ec_domain_state_t));
 
     ecrt_domain_state(domain1, &ds);
 
@@ -468,6 +480,7 @@ void ECInterface::check_master_state(void)
 {
 #ifndef EC_SIMULATOR
     ec_master_state_t ms;
+	memset(&ms, 0, sizeof(ec_master_state_t));
 
     ecrt_master_state(master, &ms);
 

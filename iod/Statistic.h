@@ -23,10 +23,11 @@
 
 #include <ostream>
 #include <string>
+#include <limits.h>
 
 class Statistic {
 public:
-    Statistic(const char *msg) : text(msg), sum(0), count(0), min_value() {};
+    Statistic(const char *msg) : text(msg), sum(0), count(0), min_value(LONG_MAX), max_value(LONG_MIN) {};
     Statistic &operator=(const Statistic &other);
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const Statistic &other);

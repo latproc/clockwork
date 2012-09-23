@@ -181,7 +181,7 @@ void IODCommandThread::operator()() {
                 std::cerr << zmq_strerror(zmq_errno()) << "\n" << std::flush;
             else
                 std::cerr << " Exception: " << e.what() << "\n" << std::flush;
-			abort();
+			if (errno != EINTR && errno != EAGAIN) abort();
         }
     }
     socket.close();
