@@ -783,8 +783,8 @@ char *collectSlaveConfig(bool reconfigure)
     MasterDevice m(0);
     m.open(MasterDevice::Read);
     
-    ec_ioctl_master_t master;
-    ec_ioctl_slave_t slave;
+    ec_ioctl_master_t master = 0;
+    ec_ioctl_slave_t slave = 0;
     m.getMaster(&master);
     
 	for (unsigned int i=0; i<master.slave_count; i++) {
