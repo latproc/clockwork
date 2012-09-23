@@ -1262,6 +1262,7 @@ void MachineInstance::stop(Action *a) {
             iter = active_actions.erase(iter);
             a->release();
             found = true;
+			continue;
         }
         iter++;
     }
@@ -1285,7 +1286,7 @@ void Action::suspend() {
 }
 
 void Action::resume() {
-	assert(status == Suspended);
+	//assert(status == Suspended);
 	status = saved_status;
 	DBG_M_ACTIONS << "resumed: (status: " << status << ") " << *this << "\n";
 	if (status == Suspended) status = Running;

@@ -187,8 +187,11 @@ void ProcessingThread::operator()()  {
 	Statistic::add(cycle_delay_stat);
 	long delta, delta2;
 
+	unsigned long sync = 0;
 	while (!program_done) {
+		pause();
 		struct timeval start_t, end_t;
+#if 0
         {
 			boost::system_time const timeout=boost::get_system_time() + boost::posix_time::microseconds(1000000/ECInterface::FREQUENCY);
 			bool timed_out = false;
@@ -208,16 +211,19 @@ void ProcessingThread::operator()()  {
 			}
 			if (timed_out) goto end_process_loop;
         }
-		{
-			boost::mutex::scoped_lock lock(thread_protection_mutex);
-
-			gettimeofday(&start_t, 0);
-			if (machine_is_ready) {
-				delta = get_diff_in_microsecs(&start_t, &end_t);
-				cycle_delay_stat->add(delta);
-			}
+#endif
+		boost::mutex::scoped_lock lock(thread_protection_mutex);
+		gettimeofday(&start_t, 0);
+		if (machine_is_ready) {
+			delta = get_diff_in_microsecs(&start_t, &end_t);
+			cycle_delay_stat->add(delta);
+		}
+		if (sync != ECInterface::sig_alarms) {
 		
+	    	ECInterface::instance()->collectState();
+			IOComponent::processAll();
 			gettimeofday(&end_t, 0);
+
 			delta = get_diff_in_microsecs(&end_t, &start_t);
 			statistics->io_scan_time.add(delta);
 			delta2 = delta;
@@ -226,7 +232,6 @@ void ProcessingThread::operator()()  {
 	        checkInputs(); // simulated wiring between inputs and outputs
 #endif
 			if (machine.connected()) {
-			    //IOComponent::processAll();
 	            //MachineInstance::processAll(MachineInstance::BUILTINS);
 
 				gettimeofday(&end_t, 0);
@@ -258,16 +263,18 @@ void ProcessingThread::operator()()  {
 					statistics->auto_states.add(delta - delta2); delta2 = delta;
 				}
 			}
+   			ECInterface::instance()->sendUpdates();
+			++sync = ECInterface::sig_alarms;
+			if (sync != ECInterface::sig_alarms) sync = ECInterface::sig_alarms-1;
 			//else {
 			//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
 			//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
 			//}
 			std::cout << std::flush;
 		}
-		end_process_loop:
-		model_mutex.lock();
-		model_updated.notify_one();
-		model_mutex.unlock();
+//		model_mutex.lock();
+//		model_updated.notify_one();
+//		model_mutex.unlock();
 	}
 	std::cout << "processing done\n";
 }
@@ -299,20 +306,23 @@ void EtherCATThread::operator()() {
 			//ecat_polltime.wait(ecat_mutex);
 			//std::cout << "polltime";
 			//if (!starting) pause();
-			if (starting) usleep(100);
+			if (starting) usleep(2000);
 		}
 			
 //		if (!program_done && (starting || sync < ECInterface::sig_alarms)) {
 			sync = ECInterface::sig_alarms;
 			// time to wait to give the io processing task time to respond 
 		    ECInterface::instance()->collectState();
-		
+			IOComponent::processAll();
+   			//ECInterface::instance()->sendUpdates();
+
 			//std::cout << "signaling..." << std::flush;
 			io_mutex.lock();
 			io_updated.notify_one();
 			io_mutex.unlock();
 
-			boost::system_time const timeout=start_time + boost::posix_time::microseconds(800000/ECInterface::FREQUENCY);
+#if 0
+			boost::system_time const timeout=start_time + boost::posix_time::microseconds(500000/ECInterface::FREQUENCY);
 			start_time += cycle_time;
 
 			if (machine.connected()) {
@@ -333,11 +343,22 @@ void EtherCATThread::operator()() {
 			boost::mutex::scoped_lock lock(end_cycle_mutex);
             while (end_cycle_cond.timed_wait(end_cycle_mutex, start_time)) ;
 			}
+#else
+			{
+				boost::mutex::scoped_lock lock(model_mutex);
+            	model_updated.wait(model_mutex);
+			}
+   			ECInterface::instance()->sendUpdates();
+			boost::system_time const timeout=boost::get_system_time() + boost::posix_time::microseconds(500);
+			{
+				boost::mutex::scoped_lock lock(end_cycle_mutex);
+            	while (end_cycle_cond.timed_wait(end_cycle_mutex, start_time)) ;
+			}
+#endif
 			//std::cout << "..done..\n" << std::flush;
-
 //		}
     }
-	ECInterface::instance()->stop();
+	//ECInterface::instance()->stop();
 	std::cerr << "EtherCAT Thread saw processing done\n";
 	done = true;
 }
@@ -558,8 +579,8 @@ int main (int argc, char const *argv[])
 	initialise_machines();
 	setup_signals();
 
-	EtherCATThread etherCATMonitor(machine);
-	boost::thread etherCAT(boost::ref(etherCATMonitor));
+	//EtherCATThread etherCATMonitor(machine);
+	//boost::thread etherCAT(boost::ref(etherCATMonitor));
 
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
@@ -578,7 +599,7 @@ int main (int argc, char const *argv[])
 	//boost::thread process(boost::ref(processMonitor));
    	processMonitor();
     stateMonitor.stop();
-    etherCAT.join();
+    //etherCAT.join();
     monitor.join();
 	return 0;
 }

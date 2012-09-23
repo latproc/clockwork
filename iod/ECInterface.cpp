@@ -389,7 +389,6 @@ void signal_handler(int signum) {
     switch (signum) {
         case SIGALRM:
             ECInterface::sig_alarms++;
-            //ecat_polltime.notify_all(); // notify the ethercat thread to continue
             break;
         default:
             std::cerr << "Signal: " << signum << "\n" << std::flush;
@@ -422,7 +421,7 @@ void ECInterface::collectState() {
     ecrt_master_receive(master);
     ecrt_domain_process(domain1);
 #endif
-    IOComponent::processAll();
+    //IOComponent::processAll();
     //std::cout << "/" << std::flush;
     check_domain1_state();
     // check for master state (optional)
