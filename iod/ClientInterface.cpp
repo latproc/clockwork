@@ -50,7 +50,7 @@ struct CommandThreadInternals : public ClientInterfaceInternals {
 
 void IODCommandThread::operator()() {
     std::cout << "------------------ Command Thread Started -----------------\n";
-    zmq::context_t context (1);
+    zmq::context_t context (3);
     zmq::socket_t socket (context, ZMQ_REP);
     socket.bind ("tcp://*:5555");
     IODCommand *command = 0;
@@ -176,10 +176,12 @@ void IODCommandThread::operator()() {
             free(data);
         }
         catch (std::exception e) {
+			if (errno) std::cout << "error during client communication: " << strerror(errno) << "\n" << std::flush;
             if (zmq_errno())
-                std::cerr << zmq_strerror(zmq_errno()) << "\n";
+                std::cerr << zmq_strerror(zmq_errno()) << "\n" << std::flush;
             else
-                std::cerr << e.what() << "\n";
+                std::cerr << " Exception: " << e.what() << "\n" << std::flush;
+			abort();
         }
     }
     socket.close();
