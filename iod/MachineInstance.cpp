@@ -398,7 +398,7 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::describe(std::ostream &out) {
-    out << "---------------\n" << _name << ": " << current_state.getName() <<  "\n";
+    out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n";
     if (parameters.size()) {
         for (unsigned int i=0; i<parameters.size(); i++) {
             Value p_i = parameters[i].val;
