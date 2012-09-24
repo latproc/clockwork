@@ -8,12 +8,14 @@ Chopstick MACHINE {
 Philosopher MACHINE left, right {
 	OPTION tab Test;
     OPTION eat_time 20;
+    OPTION timer 20;
     
     full FLAG;
     okToStart FLAG;
     okToStop FLAG;
 
-	finished WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  && TIMER >= eat_time;
+    finished WHEN SELF IS finishing || SELF IS finished && TIMER < timer;
+	finishing WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  && TIMER >= eat_time;
 	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
         TAG full WHEN TIMER > 10;
 	starting WHEN left.owner == "noone" && right.owner == "noone";
@@ -50,8 +52,7 @@ Philosopher MACHINE left, right {
 		right.owner := "noone";
 		UNLOCK right;
 		UNLOCK left;
-		timer := 10 * TIMER + 10;
-		WAIT timer;
+		timer := 10 * (TIMER + 1);
 	}
     
     TRANSITION INIT TO starting REQUIRES okToStart IS on;
@@ -71,6 +72,6 @@ phil3 Philosopher c03, c04;
 phil4 Philosopher c04, c05;
 phil5 Philosopher c05, c06;
 phil6 Philosopher c06, c07;
-phil6 Philosopher c07, c01;
+phil7 Philosopher c07, c01;
 
 
