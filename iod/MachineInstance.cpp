@@ -829,14 +829,14 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 	if (reexecute || current_state != new_state) {
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);	
-		State last = current_state;
+		std::string last = current_state.getName();
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
 		// update the Modbus interface for the state
-		if (modbus_exports.count(_name + "." + last.getName())){
-			ModbusAddress ma = modbus_exports[_name + "." + last.getName()];
-			DBG_MODBUS << _name << " leaving state " << last.getName() << " triggering a modbus message " << ma << "\n";
+		if (modbus_exports.count(_name + "." + last)){
+			ModbusAddress ma = modbus_exports[_name + "." + last];
+			DBG_MODBUS << _name << " leaving state " << last << " triggering a modbus message " << ma << "\n";
 			assert(ma.getSource() == ModbusAddress::state);
 			ma.update(0);
 		}
@@ -859,12 +859,12 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                     }
                     s.trigger->release();
 				}
-				// prepare a new trigger
+				// prepare a new trigger. note: very short timers will still be scheduled
 				s.trigger = new Trigger("Timer");
 				if (s.timer_val.kind == Value::t_symbol) {
 					Value v = getValue(s.timer_val.sValue);
 					if (v.kind != Value::t_integer) {
-						DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " is not numeric\n";
+						NB_MSG << _name << " Error: timer value for state " << s.state_name << " is not numeric\n";
 						continue;
 					}
 					else
@@ -953,6 +953,28 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 	return stat;
 }
 
+/* findHandler - find a handler for a message by looking through the transition table 
+
+    if the message not in dot-form (i.e., does not contain a dot), we search the transition
+	  table for a matching transition
+
+		- find a matching transition
+		- if the transition is to a stable state
+			- clear the trigger on the condition handlers for the state
+			- construct a stable state IF test and push it to the action stack
+			- if a response is required push an ExecuteMessage action  for the _done message
+		- otherwise, 
+			-push a move state action
+			- if there is a matching command (unnecessary test) and the command is exported turn the command coil off
+
+   If the message is in dot-form (i.e., includes a machine name), we treat is as a simple
+	message :
+		- do not execute any command linked to the transition
+		- do not check requirements
+		- push a move state action
+
+*/
+
 Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response_required) {
 	std::string short_name(m.getText());
 	if (short_name.find('.')) {
@@ -988,7 +1010,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 								}
 							}
 							MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
-						    MachineCommandTemplate mc("if_command", "if_command");
+						    MachineCommandTemplate mc("stable_state_test", "stable_state_test");
 						    mc.setActionTemplate(&temp);
 							IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
 							this->push(new IfCommandAction(this, &ifcat));
@@ -1034,6 +1056,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 				else {
 				 	DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
                 }
+
+				// there is no matching command but a completion reply has been requested
                 if (response_required && from) {
                     DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
                     std::string response = _name + "." + t.trigger.getText() + "_done";
@@ -1042,11 +1066,12 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
                     this->push(ema);
                 }
 
+				// no matching command, just perform the transition
 				MoveStateActionTemplate temp(strdup(_name.c_str()), strdup(t.dest.getName().c_str()) );
 				return new MoveStateAction(this, temp);
 			}
-			// no transition but this may still be a command
 		}
+		// no transition but this may still be a command
 		DBG_M_MESSAGING << _name << " looking for a command with name " << short_name << "\n";
 		if (commands.count(short_name)) {
 			if (response_required && from) {
@@ -1072,7 +1097,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 			}
 		}
 	}
-    if (_type != "POINT") {
+    if (debug() && _type != "POINT" && LogState::instance()->includes(DebugExtra::instance()->DEBUG_ACTIONS) ) {
 		std::string message_str = _name + "." + current_state.getName() + "_enter";
 		if (message_str != m.getText())
 			DBG_M_MESSAGING << _name << ": No transition found to handle " << m << " from " << current_state.getName() << ". Searching receive_functions for a handler...\n";
@@ -1081,16 +1106,20 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 	}
     std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(m.getText().c_str()));
     if (receive_handler_i != receives_functions.end()) {
-		DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n";
-		DBG_M_MESSAGING << "handler: " << *((*receive_handler_i).second) << "\n";
+		if (debug()) {
+			DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
+				<< "handler: " << *((*receive_handler_i).second) << "\n";
+		}
         return (*receive_handler_i).second->retain();
 	}
 	else if (from == this) {
 		if (short_name == m.getText()) { return NULL; } // no other alternatives
 	    std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(short_name.c_str()));
 		if (receive_handler_i != receives_functions.end()) {
-				DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n";
-				DBG_M_MESSAGING << "handler: " << *((*receive_handler_i).second) << "\n";
+				if (debug()){
+					DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
+						<< "handler: " << *((*receive_handler_i).second) << "\n";
+				}
 	       		return (*receive_handler_i).second->retain();
 		}
 	}
@@ -1162,24 +1191,25 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			Trigger *trigger = a->getTrigger();
 			if (trigger && trigger->matches(m.getText())) {
 				SetStateAction *ssa = dynamic_cast<SetStateAction*>(a);
+				CallMethodAction *cma = dynamic_cast<CallMethodAction*>(a);
 				if (ssa) {
 					if (!ssa->condition.predicate || ssa->condition(this)) {
 						trigger->fire();
 						DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 					}
 					else
-						DBG_M_MESSAGING << _name << " trigger message " << trigger->getName()
+						DBG_MESSAGING << _name << " trigger message " << trigger->getName()
 							<< " arrived but condition " << *(ssa->condition.predicate) << " failed\n";
 				}
-				else 
-					DBG_M_MESSAGING << _name << " trigger on " << *a << " is not a SetStateAction\n";
 				// a call method action may be waiting for this message
-				CallMethodAction *cma = dynamic_cast<CallMethodAction*>(a);
-				if (cma) {
+				else if ( cma ) {
 					if (cma->getTrigger()) cma->getTrigger()->fire();
 					DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 				}
-				else DBG_M_MESSAGING << _name << " trigger on " << *a << " is not a CallMethodAction\n";
+				else {
+					NB_MSG << _name << " firing unknown trigger on " << *a << "\n";
+					trigger->fire();
+				}
 			}
 		}
 	}
