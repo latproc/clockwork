@@ -89,7 +89,7 @@ Action::Status MachineCommand::runActions() {
             return Failed; // action failed to start
         }
         if (stat == Action::NeedsRetry) {
-            NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
+            //NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
             owner->stop(a);
             status = Running;
             return status; // action failed to start

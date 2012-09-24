@@ -58,7 +58,7 @@ Action::Status HandleMessageAction::run() {
 		}
 		else {
 			// the command we started may have been suspended by running
-			// other commands.  if so se continue, otherwise we are done
+			// other commands.  if so we continue, otherwise we are done
 			if (stat == Complete) {
 				owner->stop(this);
 			}
