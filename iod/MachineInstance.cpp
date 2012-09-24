@@ -204,6 +204,11 @@ bool TriggeredAction::active() {
 	return true;
 }
 
+void MachineInstance::resetTemporaryStringStream() {
+	ss.clear();
+	ss.str("");
+}
+
 MachineInstance *MachineInstance::lookup(Parameter &param) {
 	assert(param.val.kind == Value::t_symbol);
 	if (!param.machine) {
@@ -283,10 +288,10 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 	}
 
 	MachineInstance *found = 0;
-	std::stringstream ss;
-    ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
+//	resetTemporaryStringStream();
+//    ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
     if (seek_machine_name == "SELF" || seek_machine_name == _name) { 
-		ss << "...self";
+//		ss << "...self";
 		if (_type == "CONDITION" && owner)
 			found = owner;
 		else
@@ -300,7 +305,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
     for (unsigned int i=0; i<locals.size(); ++i) {
         Parameter &p = locals[i];
         if (p.val.kind == Value::t_symbol && p.val.sValue == seek_machine_name) {
-			ss << "...local";
+//			ss << "...local";
 			found = p.machine; 
 			goto cache_local_name;
         }
@@ -309,22 +314,22 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
         Parameter &p = parameters[i];
         if (p.val.kind == Value::t_symbol &&
 			(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name) && p.machine) {
-			ss << "...parameter";
+//			ss << "...parameter";
 			found = p.machine; 
 			goto cache_local_name;
         }
     }
     if (machines.count(seek_machine_name)) {
-		ss << "...global";
+//		ss << "...global";
         found = machines[seek_machine_name];
 		goto cache_local_name;
 	}
-    ss << " not found";
-	DBG_M_MACHINELOOKUPS << ss << "";
+//    ss << " not found";
+//	DBG_M_MACHINELOOKUPS << ss << "";
 	return 0;
 	
 	cache_local_name:
-	DBG_M_MACHINELOOKUPS << "\n";
+//	DBG_M_MACHINELOOKUPS << "\n";
 	
 	if (found) {
 		if (seek_machine_name != found->getName())  {
@@ -403,7 +408,9 @@ void MachineInstance::describe(std::ostream &out) {
         for (unsigned int i=0; i<parameters.size(); i++) {
             Value p_i = parameters[i].val;
             if (p_i.kind == Value::t_symbol) {
-                out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name << ")\n";
+                out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name 
+					<< "), state: "
+					<< (parameters[i].machine ? parameters[i].machine->getCurrent().getName(): "") <<  "\n";
             }
         }
         out << "\n";
@@ -411,7 +418,10 @@ void MachineInstance::describe(std::ostream &out) {
     if (locals.size()) {
         out << "Locals:\n";
         for (unsigned int i = 0; i<locals.size(); ++i) {
-            out << "  " << (locals[i].machine ? locals[i].machine->getName() : "Missing machine") << "\n";
+			if (locals[i].machine)
+            	out << "  " << locals[i].machine->getName()  << ":   " << locals[i].machine->getCurrent().getName() << "\n";
+			else
+	            out << "  Missing machine\n";
         }
     }
     if (listens.size()) {
@@ -419,7 +429,12 @@ void MachineInstance::describe(std::ostream &out) {
         std::set<Transmitter *>::iterator iter = listens.begin();
         while (iter != listens.end()) {
             Transmitter *t = *iter++;
-            if (t) out << "  " << t->getName() << "\n";
+			MachineInstance *machine = dynamic_cast<MachineInstance*>(t);
+			if (machine)
+            	out << "  " << machine->getName() << ":   " << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED") << "\n";
+			else 
+				if (t) out << "  " << t->getName() << "\n";
+			
         }
         out << "\n";
     }
@@ -911,7 +926,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 		
 		{
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
-	        std::stringstream ss;
+			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
 	        ss << _name << " " << " STATE " << new_state << std::flush;
 	        mif->send(ss.str().c_str());
@@ -1586,7 +1601,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 				MachineClass *newsm = (*c_iter).second;
 	            newp.machine->setStateMachine(newsm);
 				if (newsm->parameters.size() != p.machine->parameters.size()) {
-					std::stringstream ss;
+					resetTemporaryStringStream();
 					ss << "## - Error: Machine " << newsm->name << " requires " 
 						<< newsm->parameters.size()
 						<< " parameters but instance " << _name << "." << newp.machine->getName() << " has " << newp.machine->parameters.size();
@@ -1701,7 +1716,7 @@ const Value &MachineInstance::getValue(std::string property) {
 			return v;
 		}
 		else {
-			std::stringstream ss;
+			resetTemporaryStringStream();
 			ss << "could not find machine named " << name << " for property " << property;
 			error_messages.push_back(ss.str());
 			++num_errors;
@@ -1726,7 +1741,7 @@ const Value &MachineInstance::getValue(std::string property) {
 		}
 		// use the global value if its name is mentioned in this machine's list of globals
         if (!state_machine) {
-            std::stringstream ss;
+			resetTemporaryStringStream();
             ss << _name << " could not find a machine definition: " << _type;
             DBG_PROPERTIES << ss.str() << "\n";
             error_messages.push_back(ss.str());
@@ -1739,7 +1754,7 @@ const Value &MachineInstance::getValue(std::string property) {
 				return m->getValue("VALUE");
 			}
 			else {
-				std::stringstream ss;
+				resetTemporaryStringStream();
 				ss << _name << " failed to find the machine for global: " << property;
 				DBG_PROPERTIES << ss.str() << "\n";
 				error_messages.push_back(ss.str());
@@ -1860,7 +1875,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 		{
 			properties.add(property, new_value, SymbolTable::ST_REPLACE);
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
-	        std::stringstream ss; 
+			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
 	        ss << _name << "." << property << " VALUE " << new_value << std::flush;
 	        mif->send(ss.str().c_str());

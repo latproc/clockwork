@@ -17,18 +17,18 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = iosh persistd cw device_connector zmq_ecat_monitor #modbusd 
+APPS = cw #iosh persistd device_connector zmq_ecat_monitor #modbusd 
 SIMULATED=-DEC_SIMULATOR=1
 
 # add any extra include or library directory paths as necessary
 
-EXTRAINCS = -I/opt/local/include -I/usr/local/include
-EXTRALIBS = -L/opt/local/lib -L/usr/local/lib
+EXTRAINCS = -I/opt/latproc/include -I/opt/local/include -I/usr/local/include
+EXTRALIBS = -L/opt/latproc/lib -L/opt/local/lib -L/usr/local/lib
 
 # adjust the following linker flags to set the boost libraries you 
 # would like to use.
 
-BOOST_LIB_EXTN = -mt
+BOOST_LIB_EXTN = #-mt
 BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN)
 BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST_LIB_EXTN)
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)

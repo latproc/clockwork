@@ -258,6 +258,7 @@ public:
 	bool dependsOn(Transmitter *m);
 	
 	bool needsCheck();
+	void resetTemporaryStringStream();
 
     static void processAll(PollType which);
 	//static void updateAllTimers(PollType which);
@@ -353,6 +354,7 @@ protected:
 	State saved_state; // save state before error
 	Value current_state_val;
     bool is_active; // is this machine active or passive?
+	std::stringstream ss; // saves recreating string stream for temporary use
 	
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
