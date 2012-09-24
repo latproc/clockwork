@@ -67,7 +67,7 @@ Action::Status ExpressionAction::run() {
 		owner->setValue(lhs.get(), rhs);
 		status = Complete;
 	}
-	owner->needs_check = true;
+	++owner->needs_check;
 	owner->stop(this);
 	return status;
 }

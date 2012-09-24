@@ -1423,7 +1423,7 @@ void MachineInstance::setStableState() {
 	DBG_M_AUTOSTATES << _name << " checking stable states\n";
 	
 	// we must not set our stable state if objects we depend on are still updating their own state
-	--needs_check;
+	needs_check = 0;
 
     if (io_interface) {
 	 	setState(io_interface->getStateString());
@@ -1916,7 +1916,9 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 			else
 				DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
 		}
-		BOOST_FOREACH(MachineInstance *dep, depends) {
+		std::set<MachineInstance *>::iterator d_iter = depends.begin();
+		while (d_iter != depends.end()) {
+			MachineInstance *dep = *d_iter++;
 			++dep->needs_check; // make sure dependant machines update when a property changes
 		}
 	}

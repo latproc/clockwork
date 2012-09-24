@@ -212,6 +212,7 @@ void ProcessingThread::operator()()  {
 			if (timed_out) goto end_process_loop;
         }
 #endif
+		{
 		boost::mutex::scoped_lock lock(thread_protection_mutex);
 		gettimeofday(&start_t, 0);
 		if (machine_is_ready) {
@@ -264,17 +265,18 @@ void ProcessingThread::operator()()  {
 				}
 			}
    			ECInterface::instance()->sendUpdates();
-			++sync = ECInterface::sig_alarms;
+			++sync;
 			if (sync != ECInterface::sig_alarms) sync = ECInterface::sig_alarms-1;
 			//else {
 			//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
 			//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
 			//}
-			std::cout << std::flush;
 		}
+		std::cout << std::flush;
 //		model_mutex.lock();
 //		model_updated.notify_one();
 //		model_mutex.unlock();
+		}
 	}
 	std::cout << "processing done\n";
 }
