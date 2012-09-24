@@ -447,7 +447,7 @@ int main (int argc, char const *argv[])
 		return load_result;
 	}
 	
-	ECInterface::FREQUENCY=1000;
+	ECInterface::FREQUENCY=500;
 
 #ifndef EC_SIMULATOR
 	collectSlaveConfig(true);

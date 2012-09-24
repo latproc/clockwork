@@ -548,7 +548,7 @@ void MachineInstance::idle() {
             }
 		}
 		else if (!curr->complete())  {
-			DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
+			//DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
 			curr->release();
 			return;
 		}
@@ -564,9 +564,9 @@ void MachineInstance::idle() {
         else
             last->release();
 	}
-	if (!mail_queue.empty()){
+	while (!mail_queue.empty()){
 		boost::mutex::scoped_lock(q_mutex);
-		while (!mail_queue.empty()) {
+		if (!mail_queue.empty()) {
 			DBG_M_MESSAGING << _name << " has " <<  mail_queue.size() << " messages waiting\n";
 			Package p = mail_queue.front();
 			DBG_M_MESSAGING << _name << " found package " << p << "\n";
@@ -656,7 +656,7 @@ void MachineInstance::checkStableStates() {
     std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
     while (iter != MachineInstance::automatic_machines.end()) {
         MachineInstance *m = *iter++;
-		if ( m->enabled()  && (m->needsCheck() || m->_type == "CONDITION") ) 
+		if ( m->enabled() && m->executingCommand() == NULL  && (m->needsCheck() || m->_type == "CONDITION") ) 
 			m->setStableState();
 	}
 }
