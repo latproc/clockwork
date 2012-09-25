@@ -114,8 +114,8 @@ void MessagingInterface::send(const char *txt) {
 	}
 	catch (std::exception e) {
         if (zmq_errno())
-            std::cerr << zmq_strerror(zmq_errno()) << "\n";
+            std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
         else
-            std::cerr << e.what() << "\n";
+            std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
 	}
 }

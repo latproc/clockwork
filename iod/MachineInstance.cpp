@@ -403,7 +403,8 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::describe(std::ostream &out) {
-    out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n";
+    out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n"
+		<< "  Class: " << _type << " instantiated at: " << definition_file << " line:" << definition_line << "\n";
     if (parameters.size()) {
         for (unsigned int i=0; i<parameters.size(); i++) {
             Value p_i = parameters[i].val;
