@@ -405,6 +405,9 @@ MachineInstance::~MachineInstance() {
 void MachineInstance::describe(std::ostream &out) {
     out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n"
 		<< "  Class: " << _type << " instantiated at: " << definition_file << " line:" << definition_line << "\n";
+    if (locked) {
+		out << "Locked by: " << locked->getName() << "\n";
+	}
     if (parameters.size()) {
         for (unsigned int i=0; i<parameters.size(); i++) {
             Value p_i = parameters[i].val;
@@ -1417,6 +1420,7 @@ void MachineInstance::setDebug(bool which) {
 
 void MachineInstance::disable() { 
 	is_enabled = false;
+	if (locked) locked = 0;
     if (io_interface) {
         io_interface->turnOff();
     }
