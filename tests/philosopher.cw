@@ -71,6 +71,6 @@ phil3 Philosopher c03, c04;
 phil4 Philosopher c04, c05;
 phil5 Philosopher c05, c06;
 phil6 Philosopher c06, c07;
-phil6 Philosopher c07, c01;
+phil7 Philosopher c07, c01;
 
 
