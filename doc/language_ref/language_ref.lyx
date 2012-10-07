@@ -349,10 +349,77 @@ param1, param2, ...
 ;.
  There can be any number of instances for a given machine definition.
  The trick is mostly to do with what goes between the braces.
+ 
 \end_layout
 
 \begin_layout Subsection
 State definitions
+\end_layout
+
+\begin_layout Standard
+States can be defined by providing a name along with the 'STATE' keyword
+ as follows: 
+\emph on
+state_name
+\emph default
+ 
+\noun on
+STATE
+\noun default
+.
+ When the machine enters a state, a script can be invoked to cause behaviour,
+ often resulting in other state changes.
+\end_layout
+
+\begin_layout Standard
+Such states can be used within transitions to define how the state of the
+ machine changes in response to events.
+ For example, the following states flip from one to the other continuously:
+\end_layout
+
+\begin_layout LyX-Code
+off STATE;
+\end_layout
+
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+ENTER off { SET SELF TO on; }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER on { SET SELF TO off; }
+\end_layout
+
+\begin_layout Standard
+In the above example, the keyword `SELF' refers to the current state of
+ the machine executing the script.
+ the SET..TO..
+ statement causes the state to change to the named state.
+\end_layout
+
+\begin_layout Standard
+Clockwork can automatically check a set of rules to determine what state
+ a machine is in.
+ This is used by applying a WHEN clause to a state name:
+\end_layout
+
+\begin_layout LyX-Code
+busy WHEN customers > 0;
+\end_layout
+
+\begin_layout LyX-Code
+idle WHEN customers == 0;
+\end_layout
+
+\begin_layout Standard
+The above states, `busy' and `idle' switch automatically depending on the
+ property `customers'.
+ We call theses `stable' states based on the idea that the machine finds.
+ Stable state tests are performed in order and stop evaluating as soon as
+ a match is found.
 \end_layout
 
 \begin_layout Subsection

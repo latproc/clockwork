@@ -77,7 +77,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			    // first look through the transitions to see if a state change should be triggered
 			    // by command
                 if (! machine->transitions.empty()) {
-					BOOST_FOREACH(Transition t, machine->transitions) {
+					std::list<Transition>::iterator iter = machine->transitions.begin();
+					while (iter != machine->transitions.end()) {
+						const Transition &t = *iter++;
 						if ( (t.source == machine->getCurrent() || t.source.getName() == "ANY")
                                 && (t.dest == value || t.dest.getName() == "ANY") ) {
                             if (!t.condition || (*t.condition)(owner)) {
@@ -184,7 +186,7 @@ Action::Status SetStateAction::checkComplete() {
     // NOTE:  this may never finish
 }
 std::ostream &SetStateAction::operator<<(std::ostream &out) const {
-    return out << "SetStateAction " << target.get() << " to " << value << " (status=" << status << ")" << "\n";
+    return out << "SetStateAction " << target.get() << " to " << value << " (status=" << status << ")";
 }
 
 Action::Status MoveStateAction::run()
