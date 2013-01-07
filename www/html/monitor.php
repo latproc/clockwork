@@ -327,7 +327,7 @@ foreach ($tabs as $tab => $data) {
 			$image_prefix = $curr->class;
 		if (isset($curr->type))
 			$type = $curr->type;	
-		if (isset($curr->class))
+		else if (isset($curr->class))
 			$type = $curr->class;	
 		else
 			$type = "Input";
@@ -343,9 +343,14 @@ foreach ($tabs as $tab => $data) {
 				 		. ( (isset($curr->enabled) && $curr->enabled) ? 'checked="checked"' : '')
 						.' name="'. $point . '" class="enable_disable"' 
 						.'</td>';
-				$tabdata .= '<td>'. $point . ":</td><td>"
+				if ($type != "piston") {
+					$tabdata .= '<td>'. $point . ":</td><td>"
 							.  button_image($point, "{$image_prefix}_$status.png");
-				if ($type != "Output") $tabdata .= ' <div id="mc_'.$point.'">' . htmlspecialchars($status) . '</div>';
+					if ($type != "Output") $tabdata .= ' <div id="mc_'.$point.'">' . htmlspecialchars($status) . '</div>';
+				}
+				else {
+					$tabdata .= '<td>'. $point . '</td><td><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div></td>';
+				}
 				$tabdata .= "</td>\n";
 				// display command buttons
 				if (isset($curr->commands)) {
@@ -364,7 +369,7 @@ foreach ($tabs as $tab => $data) {
 					$props = explode(",", $curr->display);
 					foreach ($props as $prop) {
 						$tabdata .= '<div name="p_' .htmlspecialchars($point ."-". $prop). '">'
-						. htmlspecialchars($prop) .': ';
+								. htmlspecialchars($prop) .': ';
 						if (isset($curr->$prop)) $tabdata .= htmlspecialchars($curr->$prop);
 						else $tabdata .= '""';
 						$tabdata .= ' </div>';
@@ -489,7 +494,7 @@ print <<<EOD
 			list: "json", tab: tabname}, 
 			function(data){ 
 				res=JSON.parse(data);
-				//$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
+				$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 				for (var i = 0; i < res.length; i++) {
 					if (res[i].class != "MODULE") {
 						btn=$('[name='+res[i].name+']');
@@ -506,9 +511,18 @@ print <<<EOD
 							if (typeof res[i].image === "undefined") res[i].image = res[i].class;
 							img= "img/" + res[i].image + "_" + res[i].state + ".png";
 							if ($(this).attr("src") != img) $(this).attr("src",img);
-							$("#mc_"+res[i].name).each(function(){
-								$(this).html(res[i].state);
-							});
+							if (typeof res[i].type === "undefined" || res[i].type != "piston")
+								$("#mc_"+res[i].name).each(function(){
+									$(this).html(res[i].state);
+								});
+							else {
+								var pos = parseInt(res[i].position);
+								$("#mc_"+res[i].name).each( function() { $(this).progressbar({ value: pos });  });
+								if (typeof res[i].maxpos !== "undefined" )  {
+									maxpos = parseInt(res[i].maxpos);
+									$("#mc_"+res[i].name).each( function() { $(this).progressbar({ max: maxpos }); });
+								}
+							}
 						});
 						display_props = typeof res[i].display;
 						if (display_props == "string") {
@@ -549,6 +563,9 @@ print <<<EOD
 					});
 			})
 		});
+		$( ".piston" ).progressbar({
+            value: 0
+        });
 		$(".enable_disable").each(function() {
 			$(this).click(function() {
 				if ($(this).attr("checked")) {
