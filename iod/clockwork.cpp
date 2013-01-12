@@ -333,9 +333,22 @@ void semantic_analysis() {
 		DBG_MSG << "fixing parameter references for locals in " << mi->getName() << "\n";
 		for (unsigned int i=0; i<mi->locals.size(); ++i) {
 			DBG_MSG << "   " << i << ": " << mi->locals[i].val << "\n";
+            
+            // fixup real names of parameters that are passed as parameters to our locals
 			for (unsigned int j=0; j<mi->locals[i].machine->parameters.size(); ++j) {
 				MachineInstance *m = mi->locals[i].machine;
-				Parameter p = m->parameters[j];
+				Parameter &p = m->parameters[j];
+                if (p.val.kind == Value::t_symbol) {
+                    for (int k = 0; k < mi->parameters.size(); ++k) {
+                        Value p_i = mi->parameters[i].val;
+                        if (p_i.kind == Value::t_symbol && p.val == p_i)
+                            p.real_name = mi->parameters[i].real_name;
+                    }
+                }
+            }
+			for (unsigned int j=0; j<mi->locals[i].machine->parameters.size(); ++j) {
+				MachineInstance *m = mi->locals[i].machine;
+				Parameter &p = m->parameters[j];
 				if (p.val.kind == Value::t_symbol) {
 					DBG_MSG << "      " << j << ": " << p.val << "\n";
 					m->parameters[j].machine = mi->lookup(m->parameters[j]);
