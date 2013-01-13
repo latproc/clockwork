@@ -737,7 +737,7 @@ std::ostream &MachineInstance::operator<<(std::ostream &out)const  {
     }
 	if (!parameters.empty()) {
 		for (unsigned int i=0; i<parameters.size(); ++i) {
-	        out << "  Parameter " << i << ": " << parameters[i].val;
+	        out << "  Parameter " << i << ": " << parameters[i].val << " real name: " << parameters[i].real_name << " ";
 	        if (!parameters[i].properties.empty())
 	            out << "(" << parameters[i].properties << ")";
 			MachineInstance *mi = parameters[i].machine;

@@ -286,9 +286,9 @@ void semantic_analysis() {
     }
     
     // stitch the definitions together
-    std::pair<std::string, MachineInstance*> node;
-    BOOST_FOREACH(node, machines) {
-        MachineInstance *mi = node.second;
+        m_iter = MachineInstance::begin();
+        while (m_iter != MachineInstance::end()) {
+            MachineInstance *mi = *m_iter++;
         std::cout << "Machine " << mi->getName() << " has " << mi->parameters.size() << " parameters\n";
         
 		if (mi->getStateMachine() && mi->parameters.size() != mi->getStateMachine()->parameters.size()) {
@@ -304,7 +304,6 @@ void semantic_analysis() {
         for (unsigned int i=0; i<mi->parameters.size(); i++) {
             Value p_i = mi->parameters[i].val;
             if (p_i.kind == Value::t_symbol) {
-	            //mi->lookup(mi->parameters[i].val); // TBD remove?
                 std::cout << "  parameter " << i << " " << p_i.sValue << " (" << mi->parameters[i].real_name << ")\n";
 				MachineInstance *found = mi->lookup(mi->parameters[i]); // uses the real_name field and caches the result
 				if (found) {
@@ -334,20 +333,21 @@ void semantic_analysis() {
 		for (unsigned int i=0; i<mi->locals.size(); ++i) {
 			DBG_MSG << "   " << i << ": " << mi->locals[i].val << "\n";
             
+            MachineInstance *m = mi->locals[i].machine;
             // fixup real names of parameters that are passed as parameters to our locals
-			for (unsigned int j=0; j<mi->locals[i].machine->parameters.size(); ++j) {
-				MachineInstance *m = mi->locals[i].machine;
+			for (unsigned int j=0; j<m->parameters.size(); ++j) {
 				Parameter &p = m->parameters[j];
                 if (p.val.kind == Value::t_symbol) {
                     for (int k = 0; k < mi->parameters.size(); ++k) {
                         Value p_i = mi->parameters[i].val;
-                        if (p_i.kind == Value::t_symbol && p.val == p_i)
+                        if (p_i.kind == Value::t_symbol && p.val == p_i) {
                             p.real_name = mi->parameters[i].real_name;
+                            break;
+                        }
                     }
                 }
             }
 			for (unsigned int j=0; j<mi->locals[i].machine->parameters.size(); ++j) {
-				MachineInstance *m = mi->locals[i].machine;
 				Parameter &p = m->parameters[j];
 				if (p.val.kind == Value::t_symbol) {
 					DBG_MSG << "      " << j << ": " << p.val << "\n";
@@ -355,7 +355,7 @@ void semantic_analysis() {
 					if (m->parameters[j].machine) {
 						m->parameters[j].machine->addDependancy(m);
 						m->listenTo(m->parameters[j].machine);
-						DBG_MSG << " linked " << m->parameters[j].val << " to local " << m->getName() << "\n";
+						DBG_MSG << " linked " << m->parameters[j].val << " to local " << m->getName() << " param " << j << "\n";
 					}
 					else {
 						std::stringstream ss;
@@ -369,7 +369,6 @@ void semantic_analysis() {
 	}
     
 	// setup triggered actions for the stable states for each machine
-    //BOOST_FOREACH(node, machines) {
 	std::list<MachineInstance*>::iterator am_iter = MachineInstance::begin();
 	am_iter = MachineInstance::begin();
 	while (am_iter != MachineInstance::end()) {

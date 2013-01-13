@@ -308,7 +308,7 @@ local_instantiation ';'
     DBG_PARSER << std::setw(5) << yylineno << " " << "Local instance of a machine:\n" << (*current_machine) << "\n";
     bool found = false;
     // check for duplicate names in local variables
-    BOOST_FOREACH(Parameter p, current_locals) {
+    BOOST_FOREACH(Parameter &p, current_locals) {
         if (p.val.kind == Value::t_symbol && p.val.sValue == current_machine->getName()) {
             std::stringstream ss;
             ss << "## - Error: " << yyfilename << ":" << std::setw(5) << yylineno 

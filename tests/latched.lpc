@@ -22,5 +22,3 @@ Test MACHINE input, latch{
 }
 test1 Test(tab:Test) input,latch;
 test2 Test(tab:Test) input,inverted;
-
-
