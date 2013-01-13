@@ -124,6 +124,9 @@ WHERE               return WHERE;
                 }
 <PATTERNSTR>\\`    { append_char('`'); }
 <PATTERNSTR>`      { BEGIN 0; yylval.sVal = buf; buf = NULL; return PATTERN; }
+<PATTERNSTR>\\[0-3][0-7][0-7] { unsigned char ch = ((yytext[1]-'0')*8 + yytext[2]-'0')*8+yytext[3]-'0'; append_char(ch);  }
+<PATTERNSTR>\r		{ append_char('\r');  }
+<PATTERNSTR>\t		{ append_char('\t');}
 <PATTERNSTR>\n		{ append_char('\n'); yylineno++; yycharno=1; }
 <PATTERNSTR>.      { append_char( *yytext); }
 
@@ -140,6 +143,7 @@ WHERE               return WHERE;
 <STRING>\\n		{ append_char('\n'); }
 <STRING>\\r		{ append_char('\r'); }
 <STRING>\\t		{ append_char('\t'); }
+<STRING>\\[0-3][0-7][0-7] { unsigned char ch = ((yytext[1]-'0')*8 + yytext[2]-'0')*8+yytext[3]-'0'; append_char(ch); }
 <STRING>\\\"	{ /*"*/ append_char('\"'); }
 <STRING>\"		{ /*"*/ BEGIN 0; yylval.sVal = buf; buf = NULL; return STRINGVAL; }
 <STRING>\n		{ append_char('\n'); yylineno++; yycharno=1; }
