@@ -339,9 +339,9 @@ void semantic_analysis() {
 				Parameter &p = m->parameters[j];
                 if (p.val.kind == Value::t_symbol) {
                     for (int k = 0; k < mi->parameters.size(); ++k) {
-                        Value p_i = mi->parameters[i].val;
-                        if (p_i.kind == Value::t_symbol && p.val == p_i) {
-                            p.real_name = mi->parameters[i].real_name;
+                        Value p_k = mi->parameters[k].val;
+                        if (p_k.kind == Value::t_symbol && p.val == p_k) {
+                            p.real_name = mi->parameters[k].real_name;
                             break;
                         }
                     }
