@@ -376,7 +376,8 @@ struct TypeFix {
 
 
 Value &Value::operator+(const Value &other) {
-	if (kind != other.kind) {
+	if ( ( (kind != t_symbol && kind != t_string) || (other.kind != t_symbol && other.kind != t_string) )
+        && kind != other.kind) {
 		Sum op;
 		TypeFix tf;
 		iValue = tf(*this, &op, other).iValue;
