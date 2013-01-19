@@ -8,8 +8,8 @@ class User {
   public function __construct($username, $password) {
     global $DBNAME;
 	$dbcon = new PDO('sqlite:'.$DBNAME);
-    $sql = "select id,username,administrator from users where username='"
-      . sqlite_escape_string($username) . "' and encrypted_password='" . md5($password) . "'";
+    $sql = "select id,username,administrator from users where username="
+      . $dbcon->quote($username) . " and encrypted_password='" . md5($password). "'";
 
     $row = $dbcon->query($sql)->fetch();
     if ($row === FALSE) { 

@@ -77,8 +77,8 @@ else if ( (User::count() == 0 || (isset($user) && $user->isAdministrator()))
    
            $dbcon = new PDO('sqlite:'.$DBNAME);
            // test for existing user
-           $sql = "select id,username,administrator from users where username='" 
-               . sqlite_escape_string($username) ."'";
+           $sql = "select id,username,administrator from users where username=" 
+               . $dbcon->quote($username);
            $query = $dbcon->query($sql);
            if ($query) $row = $query->fetch();
            else throw new exception("query failed when checking if the user exists: ". $sql);
@@ -88,10 +88,9 @@ else if ( (User::count() == 0 || (isset($user) && $user->isAdministrator()))
                if ($query) $row = $query->fetch();
                else throw new exception("query failed when getting new user id: ". $sql);
                $sql = "insert into users (username, encrypted_password, administrator, email) "
-                     . " values('" . sqlite_escape_string($username) 
-                     . "','" . md5($password) . "', " . (($admin) ? '1' : '0') . "," 
-                     . "'" . sqlite_escape_string($email) . "');";
-           
+                     . " values(" . $dbcon->quote($username) 
+                     . ",'" . md5($password) . "', " . (($admin) ? '1' : '0') . "," 
+                     . $dbcon->quote($email) . ");";
            
            if ($dbcon->exec($sql) === false) 
                throw new Exception("failed to add new user, please try a different name. " . $sql);
