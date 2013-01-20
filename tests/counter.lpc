@@ -1,5 +1,4 @@
 Counter MACHINE {
-
 	start WHEN counter == 0;
 	one WHEN counter == 1;
 	two WHEN SELF.counter == 2;
@@ -7,12 +6,92 @@ Counter MACHINE {
 
 	ENTER init { LOG "unknown"; counter := 0; }
 
-	ENTER start { LOG "start"; INC counter }
-	ENTER one { LOG "one"; INC counter}
-	ENTER two { LOG "two"; INC counter}
-	ENTER three { LOG "three"; INC counter }
+	ENTER start { LOG "start"; WAIT 1000; INC counter }
+	ENTER one { LOG "one"; WAIT 1000; INC counter}
+	ENTER two { LOG "two"; WAIT 1000; INC counter}
+	ENTER three { LOG "three"; WAIT 1000; INC counter }
 
 }
 
-counter Counter(tab:Counter);
+#mycounter Counter(tab:Counter);
+
+# pwm generator
+
+PWM MACHINE {
+    OPTION on_ms 0;
+    OPTION off_ms 0;
+    ENTER INIT {
+        CALL update ON SELF;
+    }
+    COMMAND update {
+        on_ms := duty * duration / 100;
+        off_ms := duration - on_ms;
+    }
+    
+    on WHEN (SELF IS INIT || SELF IS on) && TIMER < on_ms || SELF IS off && TIMER >=off_ms;
+    off WHEN SELF IS off && TIMER < off_ms|| SELF IS on && TIMER >= on_ms;
+    ENTER on { LOG "on" }
+    ENTER off { LOG "off" }
+}
+
+pulser PWM (tab:PWM, duty:30, duration:5000);
+
+
+PWMALARM MACHINE output {
+    OPTION on_ms 0;
+    OPTION off_ms 0;
+
+    idle STATE; # disabled
+    on WHEN SELF IS on && TIMER < on_ms || SELF IS off && TIMER >=off_ms;
+    off WHEN SELF IS off && TIMER < off_ms|| SELF IS on && TIMER >= on_ms;
+
+    ENTER INIT {
+        CALL update ON SELF;
+    }
+    COMMAND update {
+        on_ms := duty * duration / 100;
+        off_ms := duration - on_ms;
+    }
+    COMMAND stop { SET SELF TO idle; }
+    COMMAND start { SET SELF TO on; }
+
+    ENTER idle { SET output TO off; }
+    ENTER on { SET output TO on; }
+    ENTER off { SET output TO off; }
+}
+
+speaker FLAG(tab:siren);
+Siren PWMALARM(tab:siren) speaker;
+
+
+# example pwm usage:
+
+Alarm MACHINE output {
+
+  siren PWM(tab:Alarm, duty:50, duration:100);
+
+  on WHEN TIMER > 1000;
+  off DEFAULT;
+  
+  ENTER off { DISABLE siren; }
+  ENTER on { ENABLE siren; }
+  RECEIVE siren.on_enter { SET output TO on }
+  RECEIVE siren.off_enter { SET output TO off }
+}
+
+beeper FLAG(tab:Alarm);
+example_alarm Alarm(tab:Alarm) beeper ;
+
+Error MACHINE {
+    OPTION Cause "";
+    ERROR WHEN SELF.Cause != "";    
+    ENTER ERROR { DISABLE error_test; }
+}
+M_Error Error;
+
+ErrorTest MACHINE {
+    Error WHEN TIMER > 5000;
+    ENTER Error { M_Error.Cause := "Test Timeout"; SET M_Error TO ERROR; }
+}
+error_test ErrorTest;
 
