@@ -120,9 +120,9 @@ void PersistentStore::save() {
 	}
 	if (rename(scratchfile.c_str(), file_name.c_str())) {
 		std::cerr << "rename: " << strerror(errno) << "\n";
-	}
-	if (unlink(scratchfile.c_str())) {
-		std::cerr << "unlink: " << strerror(errno) << "\n";
+	    if (unlink(scratchfile.c_str())) {
+	    	std::cerr << "unlink: " << strerror(errno) << "\n";
+	    }
 	}
 	
 }
