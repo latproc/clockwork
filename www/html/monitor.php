@@ -28,7 +28,7 @@
 
 if ((!isset($user))) {
 	// not logged in, show a link to the login page
-	header('Location: index.php');
+	header('Location: admin.php');
 
 print <<<EOD
 <!DOCTYPE html PUBLIC 
@@ -48,9 +48,9 @@ $debug_messages = "";
 $use_ajax = true; // the 'false' version of this may not actually work
 
 $banner = "<p>Logged in as " . $user->getName() . "."
-	. " <a href=\"index.php?m=logout\">Logout</a>";
+	. " <a href=\"admin.php?m=logout\">Logout</a>";
 if ($user->isAdministrator()) {
-	$banner .= ' <a href="index.php?registration">Administration</a>';
+	$banner .= ' <a href="admin.php?registration">Administration</a>';
 }
 
 // static image generator
@@ -246,7 +246,6 @@ if (isset($_REQUEST["toggle"])) {
 	usleep(100000);
 	echo "$reply"; // ajax version
 	return; // ajax version
-	//header('Location: monitor.php');
 }
 
 /* if we aren't using ajax, we can get an automatic page refresh 
@@ -263,7 +262,7 @@ if (isset($_REQUEST["s"])) {
 	/* Crazy refresh logic to be reimplemented .... 
 		$debug_messages .= $s . "</br>";
 		if (time() - $s < 8) {
-			//header('Location: /monitor.php');
+			//header('Location: /admin.php');
 			//$header_extras='<meta http-equiv="REFRESH" content="1;url=">';
 			$header_extras='<meta http-equiv="REFRESH" content="1;url=/' . $siteurl . '?s=' . $s .'">';
 		}

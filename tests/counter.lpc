@@ -34,8 +34,7 @@ PWM MACHINE {
     ENTER off { LOG "off" }
 }
 
-pulser PWM (tab:PWM, duty:30, duration:5000);
-
+pulser PWM (tab:PWM, duty:30, duration:5000, wire:X11);
 
 PWMALARM MACHINE output {
     OPTION on_ms 0;
@@ -60,8 +59,8 @@ PWMALARM MACHINE output {
     ENTER off { SET output TO off; }
 }
 
-speaker FLAG(tab:siren);
-Siren PWMALARM(tab:siren) speaker;
+speaker FLAG(tab:siren, monitored:true);
+Siren PWMALARM(tab:siren, monitored:true) speaker;
 
 
 # example pwm usage:
@@ -93,5 +92,5 @@ ErrorTest MACHINE {
     Error WHEN TIMER > 5000;
     ENTER Error { M_Error.Cause := "Test Timeout"; SET M_Error TO ERROR; }
 }
-error_test ErrorTest;
+error_test ErrorTest(wire:U4);
 
