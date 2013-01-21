@@ -252,7 +252,7 @@ if (isset($_REQUEST["toggle"])) {
 	by use of a redirect. This can probably be removed as the 
 	only required bit is the 'else' clause.
  */
-$siteurl="admin.php" . $anchor;
+$siteurl="monitor.php" . $anchor;
 if (isset($_REQUEST["s"])) {
 	$s = intval($_REQUEST["s"]) - 1;
 	if ($use_ajax) {
@@ -489,7 +489,7 @@ print <<<EOD
 		var selected = $tabs.tabs('option', 'selected')+1;
 		tabname=$('#tabs-'+selected).attr("name")
 	//$("#xx").html("<p>" + tabname + "</p>");
-		$.get("admin.php", { 
+		$.get("monitor.php", { 
 			list: "json", tab: tabname}, 
 			function(data){ 
 				res=JSON.parse(data);
@@ -547,7 +547,7 @@ print <<<EOD
 		});
 		$(".out").each(function(){
 			$(this).click(function(){
-				$.get("admin.php", { toggle: $(this).attr("name") }, 
+				$.get("monitor.php", { toggle: $(this).attr("name") }, 
 					function(data){
 						if (data != "OK") alert(data) 
 					});
@@ -555,7 +555,7 @@ print <<<EOD
 		});
 		$(".machine_command").each(function(){
 			$(this).click(function(){
-				$.get("admin.php", { send: $(this).attr("name") }, 
+				$.get("monitor.php", { send: $(this).attr("name") }, 
 					function(data){
 						$("#xy").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 						//if (data != "OK") alert(data) 
@@ -568,13 +568,13 @@ print <<<EOD
 		$(".enable_disable").each(function() {
 			$(this).click(function() {
 				if ($(this).attr("checked")) {
-					$.get("admin.php", { enable: $(this).attr("name") },
+					$.get("monitor.php", { enable: $(this).attr("name") },
 						function(data) {
 							$("#xy").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 						})
 				}
 				else {
-					$.get("admin.php", { disable: $(this).attr("name") },
+					$.get("monitor.php", { disable: $(this).attr("name") },
 					function(data) {
 						$("#xy").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 					})
