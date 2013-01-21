@@ -140,7 +140,7 @@ $siteurl="index.php";
   $tabdata="";
 
   foreach ($config_entries as $curr) {
-	if ($curr->class != "MODULE" ) { 
+	if ($curr->class != "MODULE" && isset($curr->wire) ) { 
         $tabdata .= "<div class=\"item\">";
 		$point = $curr->name;
 		$image_prefix = "input64x64";
@@ -167,7 +167,7 @@ $siteurl="index.php";
 			// interactive objects
 			if ($use_ajax) {
 				if ($type != "piston") {
-					$tabdata .= '<div class="item_name">' . $point . "</div> "
+					$tabdata .= '<div class="item_name">' . $point . " (". $curr->wire . ")</div> "
 						. '<div class="item_img">' 
 						. button_image($point, "{$image_prefix}_$status.png", 'im_'.$point) . "</div>"
 						. '<div class="item_state" id="mc_' . $point. '">' 
@@ -191,7 +191,7 @@ $siteurl="index.php";
 		}
 		else { 
 			// static objects
-			$tabdata .=  $point . ":";
+			$tabdata .=  $point . " (" . $curr->wire . "):";
 			// TBD rather than a match, use the status property in the response
 			if (preg_match("/.*on.*/",$status))
 				 $tabdata .= image_html($point, $image_prefix . "_on.png");
