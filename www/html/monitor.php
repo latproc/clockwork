@@ -28,7 +28,7 @@
 
 if ((!isset($user))) {
 	// not logged in, show a link to the login page
-	header('Location: index.php');
+	header('Location: admin.php');
 
 print <<<EOD
 <!DOCTYPE html PUBLIC 
@@ -48,9 +48,9 @@ $debug_messages = "";
 $use_ajax = true; // the 'false' version of this may not actually work
 
 $banner = "<p>Logged in as " . $user->getName() . "."
-	. " <a href=\"index.php?m=logout\">Logout</a>";
+	. " <a href=\"admin.php?m=logout\">Logout</a>";
 if ($user->isAdministrator()) {
-	$banner .= ' <a href="index.php?registration">Administration</a>';
+	$banner .= ' <a href="admin.php?registration">Administration</a>';
 }
 
 // static image generator
@@ -246,14 +246,13 @@ if (isset($_REQUEST["toggle"])) {
 	usleep(100000);
 	echo "$reply"; // ajax version
 	return; // ajax version
-	//header('Location: monitor.php');
 }
 
 /* if we aren't using ajax, we can get an automatic page refresh 
 	by use of a redirect. This can probably be removed as the 
 	only required bit is the 'else' clause.
  */
-$siteurl="monitor.php" . $anchor;
+$siteurl="admin.php" . $anchor;
 if (isset($_REQUEST["s"])) {
 	$s = intval($_REQUEST["s"]) - 1;
 	if ($use_ajax) {
@@ -263,7 +262,7 @@ if (isset($_REQUEST["s"])) {
 	/* Crazy refresh logic to be reimplemented .... 
 		$debug_messages .= $s . "</br>";
 		if (time() - $s < 8) {
-			//header('Location: /monitor.php');
+			//header('Location: /admin.php');
 			//$header_extras='<meta http-equiv="REFRESH" content="1;url=">';
 			$header_extras='<meta http-equiv="REFRESH" content="1;url=/' . $siteurl . '?s=' . $s .'">';
 		}
@@ -490,7 +489,7 @@ print <<<EOD
 		var selected = $tabs.tabs('option', 'selected')+1;
 		tabname=$('#tabs-'+selected).attr("name")
 	//$("#xx").html("<p>" + tabname + "</p>");
-		$.get("monitor.php", { 
+		$.get("admin.php", { 
 			list: "json", tab: tabname}, 
 			function(data){ 
 				res=JSON.parse(data);
@@ -548,7 +547,7 @@ print <<<EOD
 		});
 		$(".out").each(function(){
 			$(this).click(function(){
-				$.get("monitor.php", { toggle: $(this).attr("name") }, 
+				$.get("admin.php", { toggle: $(this).attr("name") }, 
 					function(data){
 						if (data != "OK") alert(data) 
 					});
@@ -556,7 +555,7 @@ print <<<EOD
 		});
 		$(".machine_command").each(function(){
 			$(this).click(function(){
-				$.get("monitor.php", { send: $(this).attr("name") }, 
+				$.get("admin.php", { send: $(this).attr("name") }, 
 					function(data){
 						$("#xy").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 						//if (data != "OK") alert(data) 
@@ -569,13 +568,13 @@ print <<<EOD
 		$(".enable_disable").each(function() {
 			$(this).click(function() {
 				if ($(this).attr("checked")) {
-					$.get("monitor.php", { enable: $(this).attr("name") },
+					$.get("admin.php", { enable: $(this).attr("name") },
 						function(data) {
 							$("#xy").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 						})
 				}
 				else {
-					$.get("monitor.php", { disable: $(this).attr("name") },
+					$.get("admin.php", { disable: $(this).attr("name") },
 					function(data) {
 						$("#xy").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 					})
