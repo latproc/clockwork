@@ -59,8 +59,8 @@ PWMALARM MACHINE output {
     ENTER off { SET output TO off; }
 }
 
-speaker FLAG(tab:siren, wire:Z3);
-Siren PWMALARM(tab:siren, wire:Z4) speaker;
+speaker FLAG(tab:siren, monitored:true);
+Siren PWMALARM(tab:siren, monitored:true) speaker;
 
 
 # example pwm usage:

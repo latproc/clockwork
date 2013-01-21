@@ -140,7 +140,7 @@ $siteurl="index.php";
   $tabdata="";
 
   foreach ($config_entries as $curr) {
-	if ($curr->class != "MODULE" && isset($curr->wire) ) { 
+	if ($curr->class != "MODULE" && (isset($curr->wire) || isset($curr->monitored) && $curr->monitored == "true") ) { 
         $tabdata .= "<div class=\"item\">";
 		$point = $curr->name;
 		$image_prefix = "input64x64";
@@ -162,12 +162,14 @@ $siteurl="index.php";
 			$status = $curr->state;
 		else
 			$status = "unknown";
+		$wire = "";
+		if (isset($curr->wire)) $wire = " (" . $curr->wire . ")";
 		//$debug_messages .= "$point $status <br/>";
 		if ($type != "Input") { 
 			// interactive objects
 			if ($use_ajax) {
 				if ($type != "piston") {
-					$tabdata .= '<div class="item_name">' . $point . " (". $curr->wire . ")</div> "
+					$tabdata .= '<div class="item_name">' . $point . $wire . "</div> "
 						. '<div class="item_img">' 
 						. button_image($point, "{$image_prefix}_$status.png", 'im_'.$point) . "</div>"
 						. '<div class="item_state" id="mc_' . $point. '">' 
@@ -191,7 +193,7 @@ $siteurl="index.php";
 		}
 		else { 
 			// static objects
-			$tabdata .=  $point . " (" . $curr->wire . "):";
+			$tabdata .=  $point . $wire . ":";
 			// TBD rather than a match, use the status property in the response
 			if (preg_match("/.*on.*/",$status))
 				 $tabdata .= image_html($point, $image_prefix . "_on.png");
