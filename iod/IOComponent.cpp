@@ -42,6 +42,19 @@ void IOComponent::add_io_entry(const char *name, unsigned int io_offset, unsigne
 	io_names[name] = addr;
 }
 
+void IOComponent::add_publisher(const char *name, const char *topic, const char *message) {
+    MQTTTopic mqt(topic, message);
+    mqt.publisher = true;
+//    pubs[name] = mqt;
+}
+
+void IOComponent::add_subscriber(const char *name, const char *topic) {
+    MQTTTopic mqt(topic, "");
+    mqt.publisher = false;
+//    subs[name] = mqt;
+}
+
+
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
 	out << '['<< address.io_offset << ':' << address.io_bitpos << "]=" << address.value;
 	return out;
@@ -63,6 +76,7 @@ const char *IOComponent::getStateString() {
 	else if (last_event == e_off) return "turning_off";
 	else if (address.value == 0) return "off"; else return "on";
 }
+
 void IOComponent::idle() {
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;

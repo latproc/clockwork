@@ -612,49 +612,11 @@ void MachineInstance::processAll(PollType which) {
     std::list<MachineInstance *>::iterator iter = active_machines.begin();
     while (iter != active_machines.end()) {
         MachineInstance *m = *iter++;
-		if ( (builtins && m->_type == "POINT") || (!builtins && m->_type != "POINT") ) {
+		if ( (builtins && m->_type == "POINT") || (!builtins && (m->_type != "POINT" || m->mq_interface)) ) {
 			m->idle();
 		}
 	}
 }
-
-/*
-void MachineInstance::updateTimer(long dt) {
-	timer.tv_usec += dt;
-	while (timer.tv_usec> 1000000L) {
-		timer.tv_sec++;
-		timer.tv_usec -= 1000000L;
-		//DBG_M_MSG << _name << " " << "(" << timer.tv_sec << "." << timer.tv_usec<< ")\n";
-	}
-	// update the corresponding value for use in expressions
-	unsigned long msecs = (timer.tv_sec % 100000) * 1000 + (timer.tv_usec / 1000);
-	timer_val = msecs;
-}
-
-void MachineInstance::updateAllTimers(PollType which) {
-    bool builtins = false;
-    if (which == BUILTINS)
-		builtins = true;
-	if (first_run) {
-		gettimeofday(&mi_process_last, NULL);
-		first_run = false;
-	}
-	else {
-	    struct timeval now;
-	    gettimeofday(&now, NULL);
-	    long dt = get_diff_in_microsecs(&now, &mi_process_last);
-		mi_process_last = now;
-	    BOOST_FOREACH(MachineInstance *m, all_machines) {
-			if (!m->enabled()) continue; // timers do not move while a machine is disabled
-			if ( (builtins && m->_type == "POINT") || (!builtins && m->_type != "POINT") ) {
-				m->updateTimer(dt);
-				//DBG_M_SCHEDULER << m->getName() << " updated time: " << dt 
-				//<< " " << m->timer.tv_sec << "." << std::setfill('0') << std::setw(6) << m->timer.tv_usec << "\n";
-			}
-		}
-	}
-}
-*/
 
 void MachineInstance::checkStableStates() {
     std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
@@ -837,6 +799,12 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
+        // publish the state change if we are a publisher
+        if (mq_interface) {
+            if (_type == "PUBLISHER" || (_type == "POINT" && properties.lookup("type") == "Output")) {
+                mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(), this);
+            }
+        }
 		// update the Modbus interface for the state
 		if (modbus_exports.count(_name + "." + last)){
 			ModbusAddress ma = modbus_exports[_name + "." + last];
@@ -1172,8 +1140,8 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (from && event_name.find('.') == std::string::npos)
 		event_name = from->getName() + "." + m.getText();
     
-    if (io_interface && from == io_interface) {
-        if (_type == "POINT") {
+    if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER") {
+        if (io_interface && from == io_interface || mq_interface && from == mq_interface) {
             if(m.getText() == "on_enter") {
                 setState("on");
             }
@@ -1636,12 +1604,14 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 				MachineClass *newsm = (*c_iter).second;
 	            newp.machine->setStateMachine(newsm);
 				if (newsm->parameters.size() != p.machine->parameters.size()) {
-					resetTemporaryStringStream();
-					ss << "## - Error: Machine " << newsm->name << " requires " 
-						<< newsm->parameters.size()
-						<< " parameters but instance " << _name << "." << newp.machine->getName() << " has " << newp.machine->parameters.size();
-					error_messages.push_back(ss.str());
-					++num_errors;
+                    if (newsm->name != "POINT" || newsm->parameters.size() < 2 || newsm->parameters.size() >3) {
+                        resetTemporaryStringStream();
+                        ss << "## - Error: Machine " << newsm->name << " requires " 
+                            << newsm->parameters.size()
+                            << " parameters but instance " << _name << "." << newp.machine->getName() << " has " << newp.machine->parameters.size();
+                        error_messages.push_back(ss.str());
+                        ++num_errors;
+                    }
 				}
 				if (p.machine->parameters.size()) {
 					std::copy(p.machine->parameters.begin(), p.machine->parameters.end(), back_inserter(newp.machine->parameters));

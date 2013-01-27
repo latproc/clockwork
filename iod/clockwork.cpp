@@ -166,6 +166,19 @@ void semantic_analysis() {
     
     MachineClass *module_class = new MachineClass("MODULE");
 	module_class->disableAutomaticStateChanges();
+
+    MachineClass *publisher_class = new MachineClass("PUBLISHER");
+    publisher_class->parameters.push_back(Parameter("topic"));
+    publisher_class->parameters.push_back(Parameter("message"));
+    
+    MachineClass *subscriber_class = new MachineClass("SUBSCRIBER");
+    subscriber_class->parameters.push_back(Parameter("topic"));
+    subscriber_class->options["message"] = "";
+
+    MachineClass *broker_class = new MachineClass("MQTTBROKER");
+    broker_class->parameters.push_back(Parameter("host"));
+    broker_class->parameters.push_back(Parameter("port"));
+	broker_class->disableAutomaticStateChanges();
     
 	MachineClass *cond = new MachineClass("CONDITION");
 	cond->states.push_back("true");
@@ -292,13 +305,15 @@ void semantic_analysis() {
         std::cout << "Machine " << mi->getName() << " has " << mi->parameters.size() << " parameters\n";
         
 		if (mi->getStateMachine() && mi->parameters.size() != mi->getStateMachine()->parameters.size()) {
-			std::stringstream ss;
-			ss << "## - Error: Machine " << mi->getStateMachine()->name << " requires "
-            << mi->getStateMachine()->parameters.size()
-            << " parameters but instance " << mi->getName() << " has " << mi->parameters.size() << std::flush;
-			std::string s = ss.str();
-			++num_errors;
-			error_messages.push_back(s);
+            if (mi->getStateMachine()->name != "POINT" || mi->getStateMachine()->parameters.size() < 2 || mi->getStateMachine()->parameters.size() >3) {
+                std::stringstream ss;
+                ss << "## - Error: Machine " << mi->getStateMachine()->name << " requires "
+                << mi->getStateMachine()->parameters.size()
+                << " parameters but instance " << mi->getName() << " has " << mi->parameters.size() << std::flush;
+                std::string s = ss.str();
+                ++num_errors;
+                error_messages.push_back(s);
+            }
 		}
         
         for (unsigned int i=0; i<mi->parameters.size(); i++) {
@@ -307,9 +322,9 @@ void semantic_analysis() {
                 std::cout << "  parameter " << i << " " << p_i.sValue << " (" << mi->parameters[i].real_name << ")\n";
 				MachineInstance *found = mi->lookup(mi->parameters[i]); // uses the real_name field and caches the result
 				if (found) {
-                    if (mi->_type == "POINT" && i == 0 && found->_type != "MODULE") {
+                    if (mi->_type == "POINT" && i == 0 && found->_type != "MODULE" &&  found->_type != "MQTTBROKER") {
                         std::cout << "Error: in the definition of " << mi->getName() << ", " <<
-                        p_i.sValue << " has type " << found->_type << " but should be MODULE\n";
+                        p_i.sValue << " has type " << found->_type << " but should be MODULE or MQTTBROKER\n";
                     }
                     else { // TBD why the else clause?
                         mi->parameters[i].machine = found;
@@ -670,7 +685,9 @@ void initialise_machines() {
         if (!mi->receives_functions.empty() || mi->commands.size()
             || (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
             || mi->isModbusExported()
-            || mi->uses_timer ) {
+            || mi->uses_timer
+            || mi->mq_interface
+            ) {
             mi->markActive();
             DBG_INITIALISATION << mi->getName() << " is active\n";
             ++num_active;
