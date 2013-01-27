@@ -61,7 +61,7 @@ public:
     
     int mid_sent;
     int last_mid;
-    bool connected;;
+    bool connected;
     char *username;
     char *password;
     bool disconnect_sent;
