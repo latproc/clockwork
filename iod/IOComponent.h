@@ -28,6 +28,7 @@
 #include "State.h"
 #include "ECInterface.h"
 #include "Message.h"
+#include "MQTTInterface.h"
 
 struct IOAddress {
     unsigned int io_offset;
@@ -37,6 +38,14 @@ struct IOAddress {
 	IOAddress() : io_offset(0), io_bitpos(0), value(0) {}
 };
 
+struct MQTTTopic {
+    std::string topic;
+    std::string message;
+    bool publisher;
+    MQTTTopic(const char *t, const char *m) : topic(t), message(m) { }
+    MQTTTopic(const std::string&t, const std::string&m) : topic(t), message(m) { }
+};
+
 class MachineInstance;
 class IOComponent : public Transmitter {
 public:
@@ -44,6 +53,8 @@ public:
 	static Iterator begin() { return processing_queue.begin(); }
 	static Iterator end() { return processing_queue.end(); }
 	static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
+    static void add_publisher(const char *name, const char *topic, const char *message);
+    static void add_subscriber(const char *name, const char *topic);
 	static void processAll();
 protected:
 	static std::map<std::string, IOAddress> io_names;
@@ -92,6 +103,18 @@ public:
 class Input : public IOComponent {
 public:
 	Input(unsigned int offset, int bitpos) : IOComponent(offset,bitpos) { }
+	virtual const char *type() { return "Input"; }
+};
+
+
+class MQTTPublisher : public IOComponent {
+public:
+	MQTTPublisher(unsigned int offset, int bitpos) : IOComponent(offset,bitpos) { }
+	virtual const char *type() { return "Output"; }
+};
+class MQTTSubscriber : public IOComponent {
+public:
+	MQTTSubscriber(unsigned int offset, int bitpos) : IOComponent(offset,bitpos) { }
 	virtual const char *type() { return "Input"; }
 };
 

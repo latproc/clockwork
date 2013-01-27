@@ -60,6 +60,7 @@
 #include "Statistics.h"
 #include "clockwork.h"
 #include "ClientInterface.h"
+#include "MQTTInterface.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -331,9 +332,13 @@ int main (int argc, char const *argv[])
 		return load_result;
 	}
 	
+    MQTTInterface::instance()->init();
+    MQTTInterface::instance()->start();
+    
 	ECInterface::FREQUENCY=1000;
 
 	//ECInterface::instance()->start();
+    
 
 	std::list<Output *> output_list;
 	{
@@ -342,16 +347,37 @@ int main (int argc, char const *argv[])
             size_t remaining = machines.size();
             std::cout << remaining << " Machines\n";
             std::cout << "Linking POINTs to hardware\n";
+            
+            // find and process all MQTT Modules as they are required before POINTS that use them
             std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
             while (iter != machines.end()) {
                 MachineInstance *m = (*iter).second; iter++;
+                if (m->_type == "MQTTBROKER" && m->parameters.size() == 2) {
+                    MQTTModule *module = MQTTInterface::instance()->findModule(m->getName());
+                    if (module) {
+                        std::cerr << "MQTT Broker " << m->getName() << " is already registered\n";
+                        continue;
+                    }
+                    module = new MQTTModule();
+                    module->name = m->getName();
+                    module->host = m->parameters[0].val.asString();
+                    long port;
+                    if (m->parameters[1].val.asInteger(port)) {
+                        module->port = (int)port;
+                        MQTTInterface::instance()->addModule(module, false);
+                        module->connect();
+                    }
+                }
+            }
+            
+            iter = machines.begin();
+            while (iter != machines.end()) {
+                MachineInstance *m = (*iter).second; iter++;
                 --remaining;
-                if (m->_type == "POINT" && m->parameters.size() > 1) {
-                    // points should have two parameters, the name of the io module and the bit offset
-                    //Parameter module = m->parameters[0];
-                    //Parameter offset = m->parameters[1];
-                    //Value params = p.val;
-                    //if (params.kind == Value::t_list && params.listValue.size() > 1) {
+                if (m->_type == "MQTTBROKER" && m->parameters.size() == 2) {
+                    continue;
+                }
+                else if (m->_type == "POINT" && m->parameters.size() > 1 && m->parameters[1].val.kind == Value::t_integer) {
                         std::string name = m->parameters[0].real_name;
                         int bit_position = (int)m->parameters[1].val.iValue;
                         std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
@@ -370,19 +396,40 @@ int main (int argc, char const *argv[])
                             std::cerr << "Machine " << name << " position not mapped\n";
                             continue; 
                         }
-                    
-                    }
-                    else {
-                        if (m->_type != "POINT")
-                            DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
-                        else  
-                            DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (no parameters)\n";
+                }
+                else {
+                    if (m->_type != "POINT" && m->_type != "PUBLISH" && m->_type != "SUBSCRIBE")
+                        DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
+                    else   {
+                        std::string name = m->parameters[0].real_name;
+                        DBG_MSG << "Setting up " << m->_type << " " << m->getName() << " \n";
+                        MQTTModule *module = MQTTInterface::instance()->findModule(m->parameters[0].real_name);
+                        if (!module) {
+                            std::cerr << "No MQTT Broker called " << m->parameters[0].real_name << "\n";
+                            continue;
+                        }
+                        std::string topic = m->parameters[1].val.asString();
+                        if (m->_type != "SUBSCRIBE" && m->parameters.size() == 3) {
+                            if (!module->publishes(topic)) {
+                                m->properties.add("type", "Output");
+                                module->publish(topic, m->parameters[2].val.asString(), m);
+                            }
+                        }
+                        else if (m->_type != "PUBLISH") {
+                            if (!module->subscribes(topic)) {
+                                m->properties.add("type", "Input");
+                                module->subscribe(topic, m);
+                            }
+                        }
+                        else std::cerr << "Error defining instance " << m->getName() << "\n";
+                        
                     }
                 }
-                assert(remaining==0);
             }
-		}
-		MachineInstance::displayAll();
+            assert(remaining==0);
+        }
+	}
+	MachineInstance::displayAll();
 #ifdef EC_SIMULATOR
 		wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
 #endif
@@ -406,7 +453,9 @@ int main (int argc, char const *argv[])
     int processing_sequence = processMonitor.sequence;
     struct timeval then;
     gettimeofday(&then,0);
+    MQTTInterface::instance()->activate();
     while (!program_done) {
+        MQTTInterface::instance()->collectState();
         ECInterface::instance()->collectState();
         {
         boost::mutex::scoped_lock lock(io_mutex);
@@ -428,6 +477,7 @@ int main (int argc, char const *argv[])
             usleep(1000-delta);
         then = now;
     }
+    MQTTInterface::instance()->stop();
     process.join();
     stateMonitor.stop();
     monitor.join();

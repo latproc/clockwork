@@ -705,5 +705,592 @@ When a message is sent to the machine defined in this way, a connection
  The connection is help open, ready for more messages.
 \end_layout
 
+\begin_layout Section
+Examples
+\end_layout
+
+\begin_layout Subsection
+Patterns
+\end_layout
+
+\begin_layout Standard
+The following demonstrates how to detect a message and extract data from
+ it.
+ In particualr, this machine looks for a four character message beginning
+ with `c' and ending with `l'.
+ When a match is detected, it will set a variable called `single' to the
+ first character of the message and the variable all to the first $n$ alphabetic
+ letters.
+\end_layout
+
+\begin_layout Standard
+Note that another machine might send the message using:
+\end_layout
+
+\begin_layout LyX-Code
+pattern_test.message := 'curl'
+\end_layout
+
+\begin_layout Standard
+\begin_inset listings
+inline false
+status open
+
+\begin_layout Plain Layout
+
+PatternTest MACHINE {
+\end_layout
+
+\begin_layout Plain Layout
+
+	OPTION message "";
+\end_layout
+
+\begin_layout Plain Layout
+
+	found WHEN message MATCHES `c..l`;
+\end_layout
+
+\begin_layout Plain Layout
+
+	not_found DEFAULT; 
+\end_layout
+
+\begin_layout Plain Layout
+
+	ENTER found {
+\end_layout
+
+\begin_layout Plain Layout
+
+		single := COPY `[A-Za-z]` FROM message; 		
+\end_layout
+
+\begin_layout Plain Layout
+
+		all := COPY ALL `[A-Za-z]` FROM message;
+\end_layout
+
+\begin_layout Plain Layout
+
+	}
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\begin_layout Plain Layout
+
+pattern_test PatternTest;
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Latched input
+\end_layout
+
+\begin_layout Standard
+Here is an example of how to latch an input; once the input comes on the
+ latched input comes on and stays on until it is reset
+\end_layout
+
+\begin_layout Standard
+\begin_inset listings
+inline false
+status open
+
+\begin_layout Plain Layout
+
+GenericLatch MACHINE input {
+\end_layout
+
+\begin_layout Plain Layout
+
+	on STATE;
+\end_layout
+
+\begin_layout Plain Layout
+
+	off INITIAL;
+\end_layout
+
+\begin_layout Plain Layout
+
+	RECEIVE input.on_enter { SET SELF TO on }
+\end_layout
+
+\begin_layout Plain Layout
+
+	TRANSITION on TO off ON reset;
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Calling functions
+\end_layout
+
+\begin_layout Standard
+Machines can receive messages from other machines.
+ To send a message `start` to a machine called `other', the statement:
+\end_layout
+
+\begin_layout LyX-Code
+SEND start TO other;
+\end_layout
+
+\begin_layout Standard
+would be used.
+ Sometimes, we refer to these messages as `commands' and the two terms can
+ be used interchangeably.
+ The following example demonstrates the `CALL' syntax to send the message.
+ Apart from the name difference, a CALL statement will block until the command
+ handled at the receiving machine.
+\end_layout
+
+\begin_layout Standard
+\begin_inset listings
+inline false
+status open
+
+\begin_layout Plain Layout
+
+CommandTest MACHINE other {
+\end_layout
+
+\begin_layout Plain Layout
+
+	a DEFAULT;
+\end_layout
+
+\begin_layout Plain Layout
+
+	ENTER a { 
+\end_layout
+
+\begin_layout Plain Layout
+
+		LOG "a"; 
+\end_layout
+
+\begin_layout Plain Layout
+
+		CALL x ON SELF;
+\end_layout
+
+\begin_layout Plain Layout
+
+		CALL y ON other; 
+\end_layout
+
+\begin_layout Plain Layout
+
+	}
+\end_layout
+
+\begin_layout Plain Layout
+
+	COMMAND x { 
+\end_layout
+
+\begin_layout Plain Layout
+
+		LOG "x on CommandTest called" }
+\end_layout
+
+\begin_layout Plain Layout
+
+	}
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+OtherTest MACHINE {
+\end_layout
+
+\begin_layout Plain Layout
+
+	COMMAND y { LOG "y on OtherTest called" }
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\begin_layout Plain Layout
+
+o OtherTest;
+\end_layout
+
+\begin_layout Plain Layout
+
+test CommandTest o;
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Dining philosopers
+\end_layout
+
+\begin_layout Standard
+The following simulates several philosophers dining at a circular table.
+ There are seven philosophers and only seven chopsticks so chopsticks must
+ be shared as two chopsticks are required to eat.
+ The program uses resource locking to guarantee that chopsticks are not
+ being used by different philosplers simultaneously.
+\end_layout
+
+\begin_layout Standard
+\begin_inset listings
+inline false
+status open
+
+\begin_layout LyX-Code
+
+Chopstick MACHINE {
+\end_layout
+
+\begin_layout LyX-Code
+
+	OPTION tab Test;
+\end_layout
+
+\begin_layout LyX-Code
+
+	OPTION owner "noone";
+\end_layout
+
+\begin_layout LyX-Code
+
+	free STATE;
+\end_layout
+
+\begin_layout LyX-Code
+
+	busy STATE;
+\end_layout
+
+\begin_layout LyX-Code
+
+}
+\end_layout
+
+\begin_layout LyX-Code
+
+Philosopher MACHINE left, right {
+\end_layout
+
+\begin_layout LyX-Code
+
+	OPTION tab Test;
+\end_layout
+
+\begin_layout LyX-Code
+
+    OPTION eat_time 20;
+\end_layout
+
+\begin_layout LyX-Code
+
+    OPTION timer 20;
+\end_layout
+
+\begin_layout LyX-Code
+
+        full FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+
+    okToStart FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+
+    okToStop FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+
+    finished WHEN SELF IS finishing || SELF IS finished && TIMER < timer;
+\end_layout
+
+\begin_layout LyX-Code
+
+	finishing WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  
+\end_layout
+
+\begin_layout LyX-Code
+
+		&& TIMER >= eat_time; 
+\end_layout
+
+\begin_layout LyX-Code
+
+	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
+\end_layout
+
+\begin_layout LyX-Code
+
+        TAG full WHEN TIMER > 10;
+\end_layout
+
+\begin_layout LyX-Code
+
+	starting WHEN left.owner == "noone" && right.owner == "noone";
+\end_layout
+
+\begin_layout LyX-Code
+
+	waiting DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+
+    ENTER INIT {
+\end_layout
+
+\begin_layout LyX-Code
+
+        eat_time := (NOW % 10) * 10;
+\end_layout
+
+\begin_layout LyX-Code
+
+        SET okToStart TO on;
+\end_layout
+
+\begin_layout LyX-Code
+
+        SET okToStop TO on;
+\end_layout
+
+\begin_layout LyX-Code
+
+    }
+\end_layout
+
+\begin_layout LyX-Code
+
+	ENTER starting {
+\end_layout
+
+\begin_layout LyX-Code
+
+		LOCK left;
+\end_layout
+
+\begin_layout LyX-Code
+
+		IF (left.owner == "noone") {
+\end_layout
+
+\begin_layout LyX-Code
+
+            LOG "got left";
+\end_layout
+
+\begin_layout LyX-Code
+
+			left.owner := SELF.NAME;
+\end_layout
+
+\begin_layout LyX-Code
+
+			LOCK right;
+\end_layout
+
+\begin_layout LyX-Code
+
+			IF (right.owner == "noone") {
+\end_layout
+
+\begin_layout LyX-Code
+
+				right.owner := SELF.NAME;
+\end_layout
+
+\begin_layout LyX-Code
+
+                LOG "got right";
+\end_layout
+
+\begin_layout LyX-Code
+
+			}
+\end_layout
+
+\begin_layout LyX-Code
+
+			ELSE {
+\end_layout
+
+\begin_layout LyX-Code
+
+				UNLOCK left;
+\end_layout
+
+\begin_layout LyX-Code
+
+				UNLOCK right;
+\end_layout
+
+\begin_layout LyX-Code
+
+			}
+\end_layout
+
+\begin_layout LyX-Code
+
+		}
+\end_layout
+
+\begin_layout LyX-Code
+
+		ELSE {
+\end_layout
+
+\begin_layout LyX-Code
+
+			UNLOCK left;
+\end_layout
+
+\begin_layout LyX-Code
+
+		}
+\end_layout
+
+\begin_layout LyX-Code
+
+	}
+\end_layout
+
+\begin_layout LyX-Code
+
+	ENTER finished {
+\end_layout
+
+\begin_layout LyX-Code
+
+        LOG "finished"; 
+\end_layout
+
+\begin_layout LyX-Code
+
+		left.owner := "noone";
+\end_layout
+
+\begin_layout LyX-Code
+
+		right.owner := "noone";
+\end_layout
+
+\begin_layout LyX-Code
+
+		UNLOCK right;
+\end_layout
+
+\begin_layout LyX-Code
+
+		UNLOCK left;
+\end_layout
+
+\begin_layout LyX-Code
+
+		timer := 10 * (TIMER + 1);
+\end_layout
+
+\begin_layout LyX-Code
+
+	}
+\end_layout
+
+\begin_layout LyX-Code
+
+    TRANSITION INIT TO starting REQUIRES okToStart IS on;
+\end_layout
+
+\begin_layout LyX-Code
+
+    TRANSITION eating TO finished REQUIRES okToStop IS on; }
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+
+c01 Chopstick; c02 Chopstick; c03 Chopstick; 
+\end_layout
+
+\begin_layout LyX-Code
+
+c04 Chopstick; c05 Chopstick; c06 Chopstick; c07 Chopstick;
+\end_layout
+
+\begin_layout LyX-Code
+
+phil1 Philosopher c01, c02; 
+\end_layout
+
+\begin_layout LyX-Code
+
+phil2 Philosopher c02, c03; 
+\end_layout
+
+\begin_layout LyX-Code
+
+phil3 Philosopher c03, c04; 
+\end_layout
+
+\begin_layout LyX-Code
+
+phil4 Philosopher c04, c05; 
+\end_layout
+
+\begin_layout LyX-Code
+
+phil5 Philosopher c05, c06; 
+\end_layout
+
+\begin_layout LyX-Code
+
+phil6 Philosopher c06, c07; 
+\end_layout
+
+\begin_layout LyX-Code
+
+phil7 Philosopher c07, c01; 
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
 \end_body
 \end_document

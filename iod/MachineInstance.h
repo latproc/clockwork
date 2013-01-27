@@ -184,6 +184,7 @@ struct HardwareAddress {
 };
 
 class IOComponent;
+class MQTTModule;
 
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
 public:
@@ -322,6 +323,7 @@ public:
 	void setDebug(bool which);
 
     IOComponent *io_interface;
+    MQTTModule *mq_interface;
 	MachineInstance *owner;
 
     SymbolTable properties;

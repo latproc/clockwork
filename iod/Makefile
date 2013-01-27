@@ -57,7 +57,7 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	IODCommands.cpp			ShutdownAction.cpp		test_client.cpp \
 	IfCommandAction.cpp		State.cpp			zmq_ecat_monitor.cpp \
 	LockAction.cpp			UnlockAction.cpp	clockwork.cpp \
-	ClientInterface.cpp
+	ClientInterface.cpp		MQTTInterface.cpp
 
 all:	$(APPS)
 
@@ -77,7 +77,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o
+			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
@@ -88,8 +88,8 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o \
-			$(TOOLLIB) -lethercat 
+			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
+			$(TOOLLIB) -lethercat -lmosquitto
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
@@ -114,7 +114,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o
+			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
@@ -124,7 +124,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o PatternAction.o regular_expressions.o \
-			clockwork.o ClientInterface.o
+			clockwork.o ClientInterface.o MQTTInterface.o -lmosquitto
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \

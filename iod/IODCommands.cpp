@@ -189,7 +189,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 			size_t pos = params[1].find('-');
 			std::string machine_name = params[1];
 			if (pos != std::string::npos) machine_name.erase(pos);
-		    MachineInstance *m = MachineInstance::find(machine_name.c_str());
+            MachineInstance *m = MachineInstance::find(machine_name.c_str());
 		    if (m) {
 				if (pos != std::string::npos) {
 					machine_name = params[1].substr(pos+1);
@@ -242,8 +242,23 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
                 return true;
             }
             else {
-                error_str = "Unknown device";
-                return false;
+                // MQTT
+                Message *msg;
+                if (m->getCurrent().getName() == "on" || m->getCurrent().getName() == "off") {
+                    std::string msg_str = m->getCurrent().getName();
+                    if (msg_str == "off")
+                        msg_str = "on_enter";
+                    else
+                        msg_str = "off_enter";
+                    //m->mq_interface->send(new Message(msg_str.c_str()), m);
+                    m->execute(new Message(msg_str.c_str()), m->mq_interface);
+                    result_str = "OK";
+                    return true;
+                }
+                else {
+                    error_str = "Unknown message for a POINT";
+                    return false;
+                }
             }
         }
 		else {
