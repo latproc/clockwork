@@ -1142,10 +1142,13 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
     
     if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER") {
         if (io_interface && from == io_interface || mq_interface && from == mq_interface) {
-            if(m.getText() == "on_enter") {
+            //std::string state_name = m.getText();
+            //if (state_name.find('_') != std::string::npos)
+            //    state_name = state_name.substr(state_name.find('_'));
+            if(m.getText() == "on_enter" && current_state.getName() != "on") {
                 setState("on");
             }
-            else if (m.getText() == "off_enter") {
+            else if (m.getText() == "off_enter" && current_state.getName() != "off") {
                 setState("off");
             }
             // a POINT won't have an actions that depend on triggers so it's safe to return now
