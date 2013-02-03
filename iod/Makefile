@@ -79,7 +79,6 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
-			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
 			MachineInstance.o latprocc.tab.o latprocc.yy.o Scheduler.o \
@@ -89,6 +88,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
+			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
 			$(TOOLLIB) -lethercat -lmosquitto
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
@@ -116,7 +116,6 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
-			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
@@ -124,12 +123,13 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o PatternAction.o regular_expressions.o \
+			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			clockwork.o ClientInterface.o MQTTInterface.o -lmosquitto
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
-		symboltable.o Logger.o DebugExtra.o
+		symboltable.o Logger.o DebugExtra.o -lzmq
 
 modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_THREAD_LIB) \
