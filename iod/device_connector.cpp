@@ -37,6 +37,15 @@
 #include <functional>
 #include <boost/bind.hpp>
 
+#include <stdio.h>
+#include <sys/select.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include <ctype.h>
+
+
 struct DeviceStatus {
     enum State {e_unknown, e_disconnected, e_connected, e_up, e_failed, e_timeout };
     State status;
@@ -52,6 +61,7 @@ void usage(int argc, const char * argv[]) {
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
+                serial_port_name_(0), serial_settings_(0),
                 got_host(false), got_port(true), got_property(false), got_pattern(false)  {
         setIODHost("localhost");
     }
@@ -61,7 +71,11 @@ struct Options {
         if (machine_) free(machine_);
         if (property_) free(property_);
     }
-    bool valid() const { return got_port && got_host && got_property && got_pattern && name_ != 0 && iod_host_ != 0; }
+    bool valid() const {
+        // serial implies client
+        return ( (got_port && got_host) || (got_serial && got_serial_settings && !is_server) )
+            && got_property && got_pattern && name_ != 0 && iod_host_ != 0;
+    }
     
     void clientMode(bool which = true) { is_server = !which; }
     void serverMode(bool which = true) { is_server = which; }
@@ -86,6 +100,19 @@ struct Options {
     
     const char *iodHost() const { return iod_host_; }
     void setIODHost(const char *h) { if (iod_host_) free(iod_host_); iod_host_ = strdup(h); }
+    
+    const char *serialPort() const { return serial_port_name_; }
+    const char *serialSettings() const { return serial_settings_; }
+    
+    void setSerialPort(const char *port_name) {
+        serial_port_name_ = strdup(port_name);
+        got_serial = true;
+    }
+    
+    void setSerialSettings(const char *settings) {
+        serial_settings_ = strdup(settings);
+        got_serial_settings = true;
+    }
     
     // properties are provided in dot form, we split it into machine and property for the iod
     void setProperty(const char* machine_property) {
@@ -135,13 +162,136 @@ protected:
     char *pattern_;     // pattern used to detect a complete message
     rexp_info *compiled_pattern;
     char *iod_host_;
+    char *serial_port_name_;
+    char *serial_settings_;
     
     // validation
     bool got_host;
     bool got_port;
     bool got_property;
     bool got_pattern;
+    bool got_serial;
+    bool got_serial_settings;
 };
+
+
+
+int getSettings(const char *str, struct termios *settings) {
+	int err;
+	char *buf = strdup(str);
+	char *fld, *p = buf;
+	enum config_state {cs_baud, cs_bits, cs_parity, cs_stop, cs_flow, cs_end };
+	enum config_state state = cs_baud;
+	
+	while (state != cs_end) {
+		fld = strsep(&p, ":");
+		if (!fld) goto done_getSettings; // no more fields
+        
+		char *tmp = 0;
+		// most fields are numbers so we usually attempt to convert the field to a number
+		long val;
+		if (state != cs_parity && state != cs_flow) val = strtol(fld, &tmp, 10);
+		if ( (tmp && *tmp == 0) || ( (state == cs_parity || state == cs_flow) && *fld != ':') ) { // config included the field
+			switch(state) {
+				case cs_baud:
+					if ( (err = cfsetspeed(settings, val)) ) {
+						perror("setting port speed");
+						return err;
+					}
+					settings->c_cflag |= (CLOCAL | CREAD);
+					break;
+				case cs_bits:
+					settings->c_cflag &= ~CSIZE;
+					if (val == 8)
+						settings->c_cflag |= CS8;
+					else if (val == 7)
+						settings->c_cflag |= CS7;
+					break;
+				case cs_parity:
+					if (toupper(*fld) == 'N') {
+						settings->c_cflag &= ~PARENB;
+					}
+					else if (toupper(*fld) == 'E') {
+						settings->c_cflag |= PARENB;
+						settings->c_cflag &= ~PARODD;
+					}
+					else if (toupper(*fld) == 'O') {
+						settings->c_cflag |= PARENB;
+						settings->c_cflag |= PARODD;
+					}
+					break;
+				case cs_stop:
+					if (val != 2)
+						settings->c_cflag &= ~CSTOPB;
+					else
+						settings->c_cflag |= CSTOPB;
+					break;
+				case cs_flow:
+#if 0
+					if (toupper(*fld) == 'Y')
+						settings->c_cflag |= CNEW_RTSCTS;
+					else if (toupper(*fld) == 'N')
+						settings->c_cflag &= !CNEWRTSCTS;
+#endif
+					break;
+				case cs_end:
+				default: ;
+			}
+		}
+		else {
+			if (*tmp && *tmp != ':') {
+				fprintf(stderr, "skipping unrecognised setting: %s\n", fld);
+			}
+		}
+		state++;
+	}
+done_getSettings:
+	free(buf);
+	return 0;
+}
+
+int setupSerialPort(const char *portname, const char *setting_str) {
+	int serial = open(portname, O_RDWR | O_NOCTTY | O_NDELAY);
+	if (serial == -1) {
+		perror("Error opening port ");
+        return -1;
+	}
+	{
+		int flags = fcntl(serial, F_GETFL);
+		if (flags == -1) {
+			perror("fcntl getting flags ");
+            return -1;
+		}
+		flags |= O_NONBLOCK;
+        
+		int ec = 0;
+		ec = fcntl(serial, F_SETFL, flags);
+		if (ec == -1) {
+			perror("fcntl setting flags ");
+            return -1;
+		}
+	}
+	{
+		struct termios settings;
+		int result;
+		result = tcgetattr(serial, &settings);
+		if (result == -1) {
+			perror("getting terminal attributes");
+            return -1;
+		}
+		if ( ( result = getSettings(setting_str, &settings)) ) {
+			fprintf(stderr, "Setup error %d\n", result);
+            return -1;
+		}
+		result = tcsetattr(serial, 0, &settings);
+		if (result == -1) {
+			perror("setting terminal attributes");
+            return -1;
+		}
+	}
+	return serial;
+}
+
 
 struct IODInterface{
     
@@ -200,6 +350,7 @@ struct IODInterface{
     
     void setProperty(const std::string &machine, const std::string &property, const std::string &val) {
         std::stringstream ss;
+        std::cout << "val: '" << val << "'\n";
         ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
         sendMessage(ss.str().c_str());
     }
@@ -252,7 +403,7 @@ struct MatchFunction {
             size_t *n = (size_t*)data;
             *n += strlen(match);
         }
-		int num_sub = numSubexpressions(instance()->options.regexpInfo());
+		int num_sub = (int)numSubexpressions(instance()->options.regexpInfo());
         if (num_sub == 0 || index>0) {
             struct timeval now;
             gettimeofday(&now, 0);
@@ -310,10 +461,18 @@ struct ConnectionThread {
             
             // connect or accept connection
             if (device_status.status == DeviceStatus::e_disconnected && options.client()) {
-                connection = anetTcpConnect(msg_buffer, options.host(), options.port());
-                if (connection == -1) {
-                    std::cerr << msg_buffer << "\n";
-                    continue;
+                if (options.serialPort()) {
+                    connection = setupSerialPort(options.serialPort(), options.serialSettings());
+                    if (connection == -1) {
+                        continue;
+                    }
+                }
+                else {
+                    connection = anetTcpConnect(msg_buffer, options.host(), options.port());
+                    if (connection == -1) {
+                        std::cerr << msg_buffer << "\n";
+                        continue;
+                    }
                 }
                 device_status.status = DeviceStatus::e_connected;
                 updateProperty();
@@ -517,6 +676,7 @@ struct ConnectionThread {
     DeviceStatus last_status;
     struct timeval last_property_update;
     boost::mutex connection_mutex;
+    struct termios terminal_settings;
 };
 
 
@@ -575,6 +735,12 @@ int main(int argc, const char * argv[])
         }
         else if (strcmp(argv[i], "--client") == 0) {
             options.clientMode();
+        }
+        else if (strcmp(argv[i], "--serial_port") == 0) {
+            options.setSerialPort(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--serial_settings") == 0) {
+            options.setSerialSettings(argv[++i]);
         }
         else {
             std::cerr << "Warning: parameter " << argv[i] << " not understood\n";

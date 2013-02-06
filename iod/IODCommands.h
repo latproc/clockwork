@@ -57,7 +57,9 @@ struct IODCommandToggle : public IODCommand {
 };
 
 struct IODCommandProperty : public IODCommand {
+    IODCommandProperty(const char *raw_message) : raw_message_(raw_message) {}
 	bool run(std::vector<std::string> &params);
+    std::string raw_message_;
 };
 
 struct IODCommandDescribe : public IODCommand {

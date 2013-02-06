@@ -143,7 +143,7 @@ void IODCommandThread::operator()() {
                     command = new IODCommandMasterInfo;
                 }
                 else if (ds == "PROPERTY") {
-                    command = new IODCommandProperty;
+                    command = new IODCommandProperty(data);
                 }
                 else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
                     command = new IODCommandModbusExport;
