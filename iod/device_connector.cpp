@@ -175,12 +175,25 @@ protected:
 };
 
 
+enum config_state {cs_baud, cs_bits, cs_parity, cs_stop, cs_flow, cs_end };
+
+config_state operator++(config_state cs) {
+    switch (cs) {
+        case cs_baud: return cs_bits;
+        case cs_bits: return cs_parity;
+        case cs_parity: return cs_stop;
+        case cs_stop:   return cs_flow;
+        case cs_flow:   return cs_end;
+        case cs_end:
+        default:
+            return cs_end;
+    }
+}
 
 int getSettings(const char *str, struct termios *settings) {
 	int err;
 	char *buf = strdup(str);
 	char *fld, *p = buf;
-	enum config_state {cs_baud, cs_bits, cs_parity, cs_stop, cs_flow, cs_end };
 	enum config_state state = cs_baud;
 	
 	while (state != cs_end) {
