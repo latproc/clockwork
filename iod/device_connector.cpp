@@ -256,7 +256,7 @@ int getSettings(const char *str, struct termios *settings) {
 				fprintf(stderr, "skipping unrecognised setting: %s\n", fld);
 			}
 		}
-		state++;
+		++state;
 	}
 done_getSettings:
 	free(buf);
