@@ -60,13 +60,13 @@ void usage(int argc, const char * argv[]) {
     std::cout << "Usage: " << argv[0]
         << " (--host hostname --port port | --serial_port portname --config baud:bits:parity:stop_bits:flow_control ) "
         << " --property property_name [--client] [--name device_name] "
-        << " --watch property_name "
+        << " --watch property_name --collect_repeats "
         << "\n";
 }
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
-                serial_port_name_(0), serial_settings_(0), watch_(0), 
+                serial_port_name_(0), serial_settings_(0), watch_(0), collect_duplicates(false),
                 got_host(false), got_port(true), got_property(false), got_pattern(false)  {
         setIODHost("localhost");
     }
@@ -108,6 +108,9 @@ struct Options {
     
     const char *serialPort() const { return serial_port_name_; }
     const char *serialSettings() const { return serial_settings_; }
+    
+    bool skippingRepeats() const { return !collect_duplicates; }
+    void doNotSkipRepeats() { collect_duplicates = true; }
     
     void setSerialPort(const char *port_name) {
         if (serial_port_name_) free(serial_port_name_);
@@ -178,6 +181,7 @@ protected:
     char *serial_port_name_;
     char *serial_settings_;
     char *watch_;
+    bool collect_duplicates;
     
     // validation
     bool got_host;
@@ -322,6 +326,9 @@ closePort:
     return -1;
 }
 
+/** IODInterface maintains a connection to iod/clockwork in order to 
+    pass status information and collected data to iod.
+ */
 
 struct IODInterface{
     
@@ -442,7 +449,7 @@ struct MatchFunction {
 			else 
 				MatchFunction::instance()->result += match;
 			std::string res = MatchFunction::instance()->result;
-            if (index == num_sub && (last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
+            if (index == num_sub && (instance()->options.skippingRepeats() == false || last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
                 instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), res.c_str());
 				last_message = res;
                 last_send.tv_sec = now.tv_sec;
@@ -872,6 +879,9 @@ int main(int argc, const char * argv[])
         }
         else if (strcmp(argv[i], "--watch_property") == 0) {
             options.setWatch(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--collect_repeats") == 0) {
+            options.doNotSkipRepeats();
         }
         else {
             std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
