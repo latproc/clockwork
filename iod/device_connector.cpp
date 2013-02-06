@@ -21,6 +21,7 @@
 /*
     This program will ping the iod every second, as long as it has a connection
     to its device and that device is responding.
+    ... and the rest..
  */
 #include <iostream>
 #include "anet.h"
@@ -35,6 +36,7 @@
 #include <zmq.hpp>
 #include "regular_expressions.h"
 #include <functional>
+#include <exception>
 #include <boost/bind.hpp>
 
 #include <stdio.h>
@@ -56,13 +58,16 @@ struct DeviceStatus {
 
 void usage(int argc, const char * argv[]) {
     std::cout << "Usage: " << argv[0]
-        << " --host hostname --port port --property property_name [--client] [--name device_name]\n";
+        << " (--host hostname --port port | --serial_port portname --config baud:bits:parity:stop_bits:flow_control ) "
+        << " --property property_name [--client] [--name device_name] "
+        << " --watch property_name "
+        << "\n";
 }
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
                 serial_port_name_(0), serial_settings_(0),
-                got_host(false), got_port(true), got_property(false), got_pattern(false)  {
+                got_host(false), got_port(true), got_property(false), got_pattern(false), watch_(0)  {
         setIODHost("localhost");
     }
     ~Options() {
@@ -105,13 +110,21 @@ struct Options {
     const char *serialSettings() const { return serial_settings_; }
     
     void setSerialPort(const char *port_name) {
+        if (serial_port_name_) free(serial_port_name_);
         serial_port_name_ = strdup(port_name);
         got_serial = true;
     }
     
     void setSerialSettings(const char *settings) {
+        if (serial_settings_) free(serial_settings_);
         serial_settings_ = strdup(settings);
         got_serial_settings = true;
+    }
+    
+    const char *watchProperty() const { return watch_; }
+    void setWatch(const char*new_watch) {
+        if (watch_) free(watch_);
+        watch_ = strdup(new_watch);
     }
     
     // properties are provided in dot form, we split it into machine and property for the iod
@@ -164,6 +177,7 @@ protected:
     char *iod_host_;
     char *serial_port_name_;
     char *serial_settings_;
+    char *watch_;
     
     // validation
     bool got_host;
@@ -177,17 +191,17 @@ protected:
 
 enum config_state {cs_baud, cs_bits, cs_parity, cs_stop, cs_flow, cs_end };
 
-config_state operator++(config_state cs) {
+config_state operator++(config_state &cs) {
     switch (cs) {
-        case cs_baud: return cs_bits;
-        case cs_bits: return cs_parity;
-        case cs_parity: return cs_stop;
-        case cs_stop:   return cs_flow;
-        case cs_flow:   return cs_end;
+        case cs_baud: { cs = cs_bits; break;}
+        case cs_bits: { cs = cs_parity; break; }
+        case cs_parity: { cs = cs_stop; break; }
+        case cs_stop:   { cs = cs_flow; break; };
+        case cs_flow:   { cs = cs_end; break; };
         case cs_end:
-        default:
-            return cs_end;
+        default:  { cs = cs_end; break; }
     }
+    return cs;
 }
 
 int getSettings(const char *str, struct termios *settings) {
@@ -273,7 +287,7 @@ int setupSerialPort(const char *portname, const char *setting_str) {
 		int flags = fcntl(serial, F_GETFL);
 		if (flags == -1) {
 			perror("fcntl getting flags ");
-            return -1;
+            goto closePort;
 		}
 		flags |= O_NONBLOCK;
         
@@ -281,7 +295,7 @@ int setupSerialPort(const char *portname, const char *setting_str) {
 		ec = fcntl(serial, F_SETFL, flags);
 		if (ec == -1) {
 			perror("fcntl setting flags ");
-            return -1;
+            goto closePort;
 		}
 	}
 	{
@@ -290,19 +304,22 @@ int setupSerialPort(const char *portname, const char *setting_str) {
 		result = tcgetattr(serial, &settings);
 		if (result == -1) {
 			perror("getting terminal attributes");
-            return -1;
+            goto closePort;
 		}
 		if ( ( result = getSettings(setting_str, &settings)) ) {
 			fprintf(stderr, "Setup error %d\n", result);
-            return -1;
+            goto closePort;
 		}
 		result = tcsetattr(serial, 0, &settings);
 		if (result == -1) {
 			perror("setting terminal attributes");
-            return -1;
+            goto closePort;
 		}
 	}
 	return serial;
+closePort:
+    close(serial);
+    return -1;
 }
 
 
@@ -335,7 +352,7 @@ struct IODInterface{
                     	char *data = (char *)malloc(len+1);
                     	memcpy(data, reply.data(), len);
                     	data[len] = 0;
-                    	std::cout << data << "\n";
+                    	//std::cout << data << "\n";
                     	free(data);
 						return;
                     }
@@ -363,7 +380,7 @@ struct IODInterface{
     
     void setProperty(const std::string &machine, const std::string &property, const std::string &val) {
         std::stringstream ss;
-        std::cout << "val: '" << val << "'\n";
+        //std::cout << "val: '" << val << "'\n";
         ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
         sendMessage(ss.str().c_str());
     }
@@ -411,7 +428,7 @@ struct MatchFunction {
     static MatchFunction *instance() { return instance_; }
     static int match_func(const char *match, int index, void *data)
     {
-        std::cout << "match: " << index << " " << match << "\n";
+        //std::cout << "match: " << index << " " << match << "\n";
         if (index == 0) {
             size_t *n = (size_t*)data;
             *n += strlen(match);
@@ -445,148 +462,159 @@ private:
 };
 MatchFunction *MatchFunction::instance_;
 
-
 struct ConnectionThread {
-
+    
     void operator()() {
         try {
-        gettimeofday(&last_active, 0);
-        MatchFunction *match = new MatchFunction(options, iod_interface);
-        
-        if (options.server()) {
-            listener = anetTcpServer(msg_buffer, options.port(), options.host());
-            if (listener == -1) {
-                std::cerr << msg_buffer << "...aborting\n";
-                device_status.status = DeviceStatus::e_failed;
-                updateProperty();
-                done = true;
-                return;
-            }
-        }
-        
-        const int buffer_size = 100;
-        char buf[buffer_size];
-        size_t offset = 0;
-        
-        device_status.status = DeviceStatus::e_disconnected;
-        updateProperty();
-        while (!done) {
+            gettimeofday(&last_active, 0);
+            MatchFunction *match = new MatchFunction(options, iod_interface);
             
-            // connect or accept connection
-            if (device_status.status == DeviceStatus::e_disconnected && options.client()) {
-                if (options.serialPort()) {
-                    connection = setupSerialPort(options.serialPort(), options.serialSettings());
-                    if (connection == -1) {
-                        continue;
-                    }
-                }
-                else {
-                    connection = anetTcpConnect(msg_buffer, options.host(), options.port());
-                    if (connection == -1) {
-                        std::cerr << msg_buffer << "\n";
-                        continue;
-                    }
-                }
-                device_status.status = DeviceStatus::e_connected;
-                updateProperty();
-            }
-           
-            fd_set read_ready;
-            FD_ZERO(&read_ready);
-            int nfds = 0;
-            if (device_status.status == DeviceStatus::e_connected
-                || device_status.status == DeviceStatus::e_up
-                || device_status.status == DeviceStatus::e_timeout
-                ) {
-                FD_SET(connection, &read_ready);
-                nfds = connection+1;
-            }
-            else if (options.server()) {
-                FD_SET(listener, &read_ready);
-                nfds = listener+1;
-            }
-                
-            struct timeval select_timeout;
-            select_timeout.tv_sec = 2;
-            select_timeout.tv_usec = 0;
-            int err = select(nfds, &read_ready, NULL, NULL, &select_timeout);
-            if (err == -1) {
-                if (errno != EINTR)
-                    std::cerr << "socket: " << strerror(errno) << "\n";
-            }
-            else if (err == 0) {
-                if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
-                    device_status.status = DeviceStatus::e_timeout;
+            if (options.server()) {
+                listener = anetTcpServer(msg_buffer, options.port(), options.host());
+                if (listener == -1) {
+                    std::cerr << msg_buffer << "...aborting\n";
+                    device_status.status = DeviceStatus::e_failed;
                     updateProperty();
-                    std::cerr << "select timeout\n";
-                    close(connection);
-                    device_status.status = DeviceStatus::e_disconnected;
-                    updateProperty();
-					continue;
+                    done = true;
+                    return;
                 }
             }
             
+            const int buffer_size = 100;
+            char buf[buffer_size];
+            size_t offset = 0;
             
-            if (device_status.status == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
-                // Accept and setup a connection
-                int port;
-                char hostip[16]; // dot notation
-                connection = anetAccept(msg_buffer, listener, hostip, &port);
-
-                if (anetTcpKeepAlive(msg_buffer, connection) == -1) {
-                    std::cerr << msg_buffer << "\n";
-                    close(connection);
-                    continue;
-                }
+            device_status.status = DeviceStatus::e_disconnected;
+            updateProperty();
+            while (!done) {
                 
-                if (anetTcpNoDelay(msg_buffer, connection) == -1) {
-                    std::cerr << msg_buffer << "\n";
-                    close(connection);
-                    continue;
-                }
-                
-                if (anetNonBlock(msg_buffer, connection) == -1) {
-                    std::cerr << msg_buffer << "\n";
-                    close(connection);
-                    continue;
-                }
-                device_status.status = DeviceStatus::e_connected;
-                updateProperty();
-            }
-            else if (connection != -1 && FD_ISSET(connection, &read_ready)) {
-                if (offset < buffer_size-1) {
-                    ssize_t n = read(connection, buf+offset, buffer_size - offset - 1);
-                    if (n == -1) { 
-                        if (!done && errno != EINTR && errno != EAGAIN) { // stop() may cause a read error that we ignore
-                            std::cerr << "error: " << strerror(errno) << " reading from connection\n";
-                            close(connection);
-                            device_status.status = DeviceStatus::e_disconnected;
- 							updateProperty();                           
-                        }
-                    }
-                    else if (n) {
-                        device_status.status = DeviceStatus::e_up;
-                        updateProperty();
-
-                        buf[offset+n] = 0;
-                        {
-                            boost::mutex::scoped_lock lock(connection_mutex);
-                            gettimeofday(&last_active, 0);
-                            last_msg = buf;
+                // connect or accept connection
+                if (device_status.status == DeviceStatus::e_disconnected && options.client()) {
+                    if (options.serialPort()) {
+                        connection = setupSerialPort(options.serialPort(), options.serialSettings());
+                        if (connection == -1) {
+                            continue;
                         }
                     }
                     else {
+                        connection = anetTcpConnect(msg_buffer, options.host(), options.port());
+                        if (connection == -1) {
+                            std::cerr << msg_buffer << "\n";
+                            continue;
+                        }
+                    }
+                    device_status.status = DeviceStatus::e_connected;
+                    updateProperty();
+                }
+                
+                fd_set read_ready;
+                FD_ZERO(&read_ready);
+                int nfds = 0;
+                if (device_status.status == DeviceStatus::e_connected
+                    || device_status.status == DeviceStatus::e_up
+                    || device_status.status == DeviceStatus::e_timeout
+                    ) {
+                    FD_SET(connection, &read_ready);
+                    nfds = connection+1;
+                }
+                else if (options.server()) {
+                    FD_SET(listener, &read_ready);
+                    nfds = listener+1;
+                }
+                
+                struct timeval select_timeout;
+                select_timeout.tv_sec = 2;
+                select_timeout.tv_usec = 0;
+                int err = select(nfds, &read_ready, NULL, NULL, &select_timeout);
+                if (err == -1) {
+                    if (errno != EINTR)
+                        std::cerr << "socket: " << strerror(errno) << "\n";
+                }
+                else if (err == 0) {
+                    if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
+                        device_status.status = DeviceStatus::e_timeout;
+                        updateProperty();
+                        std::cerr << "select timeout\n";
                         close(connection);
                         device_status.status = DeviceStatus::e_disconnected;
                         updateProperty();
-                        std::cerr << "connection lost\n";
-                        connection = -1;
+                        continue;
+                    }
+                }
+                
+                if (connection != -1 && !to_send.empty()) {
+                    boost::mutex::scoped_lock lock(connection_mutex);
+                    
+                    size_t n = write(connection, to_send.c_str(), to_send.length());
+                    if (n == -1) {
+                        std::cerr << "write error sending data to current connection\n";
+                    }
+                    else {
+                        to_send = to_send.substr(n); // shift off the data that has been written
+                    }
+                }
+                
+                
+                if (device_status.status == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
+                    // Accept and setup a connection
+                    int port;
+                    char hostip[16]; // dot notation
+                    connection = anetAccept(msg_buffer, listener, hostip, &port);
+                    
+                    if (anetTcpKeepAlive(msg_buffer, connection) == -1) {
+                        std::cerr << msg_buffer << "\n";
+                        close(connection);
+                        continue;
                     }
                     
-                    // recalculate offset as we step through matches
-                    offset = 0;
-                    each_match(options.regexpInfo(), buf, &MatchFunction::match_func, &offset);
-                    size_t len = strlen(buf);
+                    if (anetTcpNoDelay(msg_buffer, connection) == -1) {
+                        std::cerr << msg_buffer << "\n";
+                        close(connection);
+                        continue;
+                    }
+                    
+                    if (anetNonBlock(msg_buffer, connection) == -1) {
+                        std::cerr << msg_buffer << "\n";
+                        close(connection);
+                        continue;
+                    }
+                    device_status.status = DeviceStatus::e_connected;
+                    updateProperty();
+                }
+                else if (connection != -1 && FD_ISSET(connection, &read_ready)) {
+                    if (offset < buffer_size-1) {
+                        ssize_t n = read(connection, buf+offset, buffer_size - offset - 1);
+                        if (n == -1) {
+                            if (!done && errno != EINTR && errno != EAGAIN) { // stop() may cause a read error that we ignore
+                                std::cerr << "error: " << strerror(errno) << " reading from connection\n";
+                                close(connection);
+                                device_status.status = DeviceStatus::e_disconnected;
+                                updateProperty();
+                            }
+                        }
+                        else if (n) {
+                            device_status.status = DeviceStatus::e_up;
+                            updateProperty();
+                            
+                            buf[offset+n] = 0;
+                            {
+                                boost::mutex::scoped_lock lock(connection_mutex);
+                                gettimeofday(&last_active, 0);
+                                last_msg = buf;
+                            }
+                        }
+                        else {
+                            close(connection);
+                            device_status.status = DeviceStatus::e_disconnected;
+                            updateProperty();
+                            std::cerr << "connection lost\n";
+                            connection = -1;
+                        }
+                        
+                        // recalculate offset as we step through matches
+                        offset = 0;
+                        each_match(options.regexpInfo(), buf, &MatchFunction::match_func, &offset);
+                        size_t len = strlen(buf);
 #if 0
                         std::cout << "buf: ";
                         for (int i=0; i<=len; ++i) {
@@ -594,7 +622,7 @@ struct ConnectionThread {
                         }
                         std::cout << "\n";
                         std::cout << "     ";
-
+                        
                         for (int i=0; i<offset; ++i) {
                             std::cout << std::hex << "   ";
                         }
@@ -603,17 +631,17 @@ struct ConnectionThread {
                         if (offset)  {
                             memmove(buf, buf+offset, len+1-offset);
                         }
-                    offset = strlen(buf);
-                }
-                else {
-                    std::cerr << "buffer full\n";
-                    close(connection);
-                    device_status.status = DeviceStatus::e_disconnected;
-					updateProperty();                           
+                        offset = strlen(buf);
+                    }
+                    else {
+                        std::cerr << "buffer full\n";
+                        close(connection);
+                        device_status.status = DeviceStatus::e_disconnected;
+                        updateProperty();
+                    }
                 }
             }
-        }
-		delete match;
+            delete match;
         }catch (std::exception e) {
             if (zmq_errno())
                 std::cerr << zmq_strerror(zmq_errno()) << "\n";
@@ -622,8 +650,13 @@ struct ConnectionThread {
         }
     }
     
+    void send(const char *msg) {
+        boost::mutex::scoped_lock lock(connection_mutex);
+        to_send += msg;
+    }
+    
     ConnectionThread(Options &opts, DeviceStatus &status, IODInterface &iod)
-            : done(false), connection(-1), options(opts), device_status(status), iod_interface(iod)
+    : done(false), connection(-1), options(opts), device_status(status), iod_interface(iod)
     {
         assert(options.valid());
         msg_buffer =new char[ANET_ERR_LEN];
@@ -690,8 +723,89 @@ struct ConnectionThread {
     struct timeval last_property_update;
     boost::mutex connection_mutex;
     struct termios terminal_settings;
+    std::string to_send;
 };
 
+
+struct PropertyMonitorThread {
+    void operator()() {
+        while (!done) {
+            if (status == ws_disconnected) {
+                connect();
+                continue;
+            }
+            if (status == ws_connected) {
+                try {
+                    zmq::message_t update;
+                    socket->recv(&update);
+                    long len = update.size();
+                    char *data = (char *)malloc(len+1);
+                    memcpy(data, update.data(), len);
+                    data[len] = 0;
+                    if (len > match_str.length() && strncmp(match_str.c_str(), data, match_str.length()) == 0) {
+                        std::cout << "Found: " << data << "\n";
+                        connection.send(data + match_str.length());
+                    }
+                    delete data;
+                }
+                catch (std::exception e) {
+                    if (zmq_errno())
+                        std::cerr << zmq_strerror(zmq_errno()) << "\n";
+                    else
+                        std::cerr << e.what() << "\n";
+                    status = ws_disconnected;
+                }
+            }
+        }
+    }
+    PropertyMonitorThread(Options &opts, ConnectionThread &connection_) : done(false), context(0), socket(0), options(opts), connection(connection_) {
+        match_str = options.watchProperty();
+        match_str += " VALUE ";
+        context = new zmq::context_t(1);
+        connect();
+    }
+    
+    class WatchException : public std::exception {
+        public:
+        WatchException(const char *msg) : message(msg) {};
+            const char *what() { return message.c_str(); }
+        private:
+            std::string message;
+    };
+
+    void connect() {
+        try {
+            int res;
+            std::stringstream ss;
+            ss << "tcp://" << options.iodHost() << ":" << 5556;
+            socket = new zmq::socket_t (*context, ZMQ_SUB);
+            res = zmq_setsockopt (*socket, ZMQ_SUBSCRIBE, "", 0);
+            if (res) throw new WatchException("error setting zmq socket option");
+            socket->connect(ss.str().c_str());
+            int linger = 0; // do not wait at socket close time
+            socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            status = ws_connected;
+        }
+        catch (std::exception e) {
+            if (zmq_errno())
+                std::cerr << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << e.what() << "\n";
+            status = ws_disconnected;
+        }
+    }
+    
+    void stop() { done = true; }
+    enum WatcherStates { ws_disconnected, ws_connected };
+    bool done;
+    zmq::context_t *context;
+    zmq::socket_t *socket;
+    boost::mutex interface_mutex;
+    const Options &options;
+    WatcherStates status;
+    std::string match_str;
+    ConnectionThread &connection;
+};
 
 bool done = false;
 
@@ -755,6 +869,9 @@ int main(int argc, const char * argv[])
         else if (strcmp(argv[i], "--serial_settings") == 0) {
             options.setSerialSettings(argv[++i]);
         }
+        else if (strcmp(argv[i], "--watch_property") == 0) {
+            options.setWatch(argv[++i]);
+        }
         else {
             std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
         }
@@ -769,7 +886,14 @@ int main(int argc, const char * argv[])
     
 	ConnectionThread connection_thread(options, device_status, iod_interface);
 	boost::thread monitor(boost::ref(connection_thread));
-    
+
+    PropertyMonitorThread watch_thread(options, connection_thread);
+    boost::thread *watcher = 0;
+        
+    if (options.watchProperty()) {
+        watcher = new boost::thread(boost::ref(watch_thread));
+    }
+
     struct timeval last_time;
     gettimeofday(&last_time, 0);
     if (!setup_signals()) {
@@ -799,6 +923,7 @@ int main(int argc, const char * argv[])
 
     iod_interface.stop();
     connection_thread.stop();
+    if (watcher) watch_thread.stop();
     monitor.join();
     }
     catch (std::exception e) {
