@@ -66,8 +66,8 @@ void usage(int argc, const char * argv[]) {
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
-                serial_port_name_(0), serial_settings_(0),
-                got_host(false), got_port(true), got_property(false), got_pattern(false), watch_(0)  {
+                serial_port_name_(0), serial_settings_(0), watch_(0), 
+                got_host(false), got_port(true), got_property(false), got_pattern(false)  {
         setIODHost("localhost");
     }
     ~Options() {
@@ -546,7 +546,7 @@ struct ConnectionThread {
                     boost::mutex::scoped_lock lock(connection_mutex);
                     
                     size_t n = write(connection, to_send.c_str(), to_send.length());
-                    if (n == -1) {
+                    if ((long)n == -1) {
                         std::cerr << "write error sending data to current connection\n";
                     }
                     else {
@@ -742,7 +742,7 @@ struct PropertyMonitorThread {
                     char *data = (char *)malloc(len+1);
                     memcpy(data, update.data(), len);
                     data[len] = 0;
-                    if (len > match_str.length() && strncmp(match_str.c_str(), data, match_str.length()) == 0) {
+                    if (len > (long)match_str.length() && strncmp(match_str.c_str(), data, match_str.length()) == 0) {
                         std::cout << "Found: " << data << "\n";
                         connection.send(data + match_str.length());
                     }
@@ -768,6 +768,7 @@ struct PropertyMonitorThread {
     class WatchException : public std::exception {
         public:
         WatchException(const char *msg) : message(msg) {};
+        virtual ~WatchException() throw () {}
             const char *what() { return message.c_str(); }
         private:
             std::string message;
