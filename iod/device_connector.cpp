@@ -314,6 +314,8 @@ int setupSerialPort(const char *portname, const char *setting_str) {
 			perror("getting terminal attributes");
             goto closePort;
 		}
+        settings.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+        settings.c_iflag &= ~(IXON | IXOFF | IXANY);
 		if ( ( result = getSettings(setting_str, &settings)) ) {
 			fprintf(stderr, "Setup error %d\n", result);
             goto closePort;
