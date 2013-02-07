@@ -2280,15 +2280,16 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 	ModbusAddress addr = modbus_exports[item_name];
 	DBG_M_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";	
 
-	if (addr.getGroup() == ModbusAddress::coil){
+	if (addr.getGroup() == ModbusAddress::coil || addr.getGroup() == ModbusAddress::discrete){
 		
 		if (addr.getSource() == ModbusAddress::machine) {
 			// crosscheck - the machine must have been exported read/write
 			assert(properties.exists("export"));
 			Value &export_type = properties.lookup("export");
-			assert( (export_type.kind == Value::t_string || export_type.kind == Value::t_symbol)
-				&& export_type.sValue == "rw");
-			assert(addr.getOffset() == 0);
+            // disabling this test because does not seem valid when talking with a PLC instead of a panel
+			//assert( (export_type.kind == Value::t_string || export_type.kind == Value::t_symbol)
+			//	&& export_type.sValue == "rw");
+			//assert(addr.getOffset() == 0);
 
 			if (new_value) {
 				SetStateActionTemplate ssat(CStringHolder("SELF"), State("on") );

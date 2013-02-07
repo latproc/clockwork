@@ -319,7 +319,7 @@ struct ModbusServerThread {
 										int val = *data & (1<<bit);
 										if (val != modbus_mapping->tab_bits[addr]) {
 											if (debug) std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
-											iod_sync_commands.push_back( getIODSyncCommand(1, addr+1, (val) ? 1 : 0) );
+											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, (val) ? 1 : 0) );
 										}
 									}
 									++addr;
