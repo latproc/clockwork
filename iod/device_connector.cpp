@@ -557,19 +557,6 @@ struct ConnectionThread {
                     }
                 }
                 
-                if (connection != -1 && !to_send.empty()) {
-                    boost::mutex::scoped_lock lock(connection_mutex);
-                    
-                    size_t n = write(connection, to_send.c_str(), to_send.length());
-                    if ((long)n == -1) {
-                        std::cerr << "write error sending data to current connection\n";
-                    }
-                    else {
-                        to_send = to_send.substr(n); // shift off the data that has been written
-                    }
-                }
-                
-                
                 if (device_status.status == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
                     // Accept and setup a connection
                     int port;
@@ -668,6 +655,17 @@ struct ConnectionThread {
     void send(const char *msg) {
         boost::mutex::scoped_lock lock(connection_mutex);
         to_send += msg;
+        if (connection != -1 && !to_send.empty()) {
+            //boost::mutex::scoped_lock lock(connection_mutex);
+            
+            size_t n = write(connection, to_send.c_str(), to_send.length());
+            if ((long)n == -1) {
+                std::cerr << "write error sending data to current connection\n";
+            }
+            else {
+                to_send = to_send.substr(n); // shift off the data that has been written
+            }
+        }
     }
     
     ConnectionThread(Options &opts, DeviceStatus &status, IODInterface &iod)
