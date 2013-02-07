@@ -321,7 +321,7 @@ struct ModbusServerThread {
 							if (debug) 
 								std::cout << "connection " << conn << " write multi coil " 
 									<< addr << "\n"; //<< " n:" << len << "\n";
-							int num_coils = query_backup[function_code_offset+3] <<16 
+							int num_coils = (query_backup[function_code_offset+3] <<16)
 								+ query_backup[function_code_offset + 4];
 							int num_bytes = query_backup[function_code_offset+5];
 							int curr_coil = 0;
