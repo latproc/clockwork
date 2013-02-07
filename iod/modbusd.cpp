@@ -71,7 +71,9 @@ static modbus_t *modbus_context = 0;
 
 static std::set<std::string> active_addresses;
 
+std::string getIODSyncCommand(int group, int addr, int new_value);
 char *sendIOD(int group, int addr, int new_value);
+char *sendIODMessage(const std::string &s);
 
 void insert(int group, int addr, int value, int len) {
 	char buf[20];
@@ -184,7 +186,7 @@ struct IODCommandInterface {
 	                    char *data = (char *)malloc(len+1);
 	                    memcpy(data, reply.data(), len);
 	                    data[len] = 0;
-	                    std::cout << data << "\n";
+	                    if (debug || strcmp(data, "OK") ) std::cout << data << "\n";
 						return data;
                     }
                     else if (--retries == 0) {
@@ -288,6 +290,7 @@ struct ModbusServerThread {
 					modbus_set_socket(modbus_context, conn); // tell modbus to use this current connection
 			        n = modbus_receive(modbus_context, query);
 			        if (n != -1) {
+						std::list<std::string>iod_sync_commands;
 						memcpy(query_backup, query, n);
 						int addr = getInt( &query[function_code_offset+1]);
 						//int len = getInt( &query[function_code_offset+3]);
@@ -298,6 +301,32 @@ struct ModbusServerThread {
 							ignore_coil_change = (query_backup[function_code_offset + 3] && modbus_mapping->tab_bits[addr]);
 							if (ignore_coil_change) std::cout << "ignoring coil change " << addr    
 								<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
+						}
+						else if (fc == 15) {
+							int num_coils = (query_backup[function_code_offset+3] <<16)
+								+ query_backup[function_code_offset + 4];
+							int num_bytes = query_backup[function_code_offset+5];
+							int curr_coil = 0;
+							unsigned char *data = query_backup + function_code_offset + 6;
+							for (int b = 0; b<num_bytes; ++b) {
+								for (int bit = 0; bit < 8; ++bit) {
+									if (curr_coil >= num_coils) break;
+									char buf[20];
+									snprintf(buf, 19, "%d.%d", 1, addr);
+									std::string addr_str(buf);
+
+									if (active_addresses.find(addr_str) != active_addresses.end()) {
+										int val = *data & (1<<bit);
+										if (val != modbus_mapping->tab_bits[addr]) {
+											if (debug) std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
+											iod_sync_commands.push_back( getIODSyncCommand(1, addr+1, (val) ? 1 : 0) );
+										}
+									}
+									++addr;
+									++curr_coil;
+								}
+								++data;
+							}
 						}
 
 						// process the request, updating our ram as appropriate
@@ -320,29 +349,13 @@ struct ModbusServerThread {
 							if (debug) 
 								std::cout << "connection " << conn << " write multi coil " 
 									<< addr << "\n"; //<< " n:" << len << "\n";
-							int num_coils = (query_backup[function_code_offset+3] <<16)
-								+ query_backup[function_code_offset + 4];
-							int num_bytes = query_backup[function_code_offset+5];
-							int curr_coil = 0;
-							unsigned char *data = query_backup + function_code_offset + 6;
-							for (int b = 0; b<num_bytes; ++b) {
-								for (int bit = 0; bit < 8; ++bit) {
-									if (curr_coil >= num_coils) break;
-									char buf[20];
-									snprintf(buf, 19, "%d.%d", 1, addr);
-									std::string addr_str(buf);
-
-									if (active_addresses.find(addr_str) != active_addresses.end()) {
-										int val = *data & (1<<bit);
-										char *res = sendIOD(1, addr+1, (val) ? 1 : 0);
-										std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
-										if (res) free(res);
-									}
-									++addr;
-									++curr_coil;
+								std::list<std::string>::iterator iter = iod_sync_commands.begin();
+								while (iter != iod_sync_commands.end()) {
+									std::string cmd = *iter++;
+									char *res = sendIODMessage(cmd);
+									if (res) free(res);
 								}
-								++data;
-							}
+								iod_sync_commands.clear();
 						}
 						else if (fc == 16) {
 							if (debug) std::cout << "write multiple register " << addr  << "\n"; //<< " n=" << len << "\n";
@@ -395,10 +408,22 @@ struct ModbusServerThread {
 	int max_fd;
 };
 
-char *sendIOD(int group, int addr, int new_value) {
+std::string getIODSyncCommand(int group, int addr, int new_value) {
 	std::stringstream ss;
 	ss << "MODBUS " << group << " " << addr << " " << new_value;
 	std::string s(ss.str());
+	return s;
+}
+
+char *sendIOD(int group, int addr, int new_value) {
+	std::string s(getIODSyncCommand(group, addr, new_value));
+	if (g_iodcmd) 
+		return g_iodcmd->sendMessage(s.c_str());
+	else 	
+		return strdup("IOD interface not ready\n");
+}
+
+char *sendIODMessage(const std::string &s) {
 	if (g_iodcmd) 
 		return g_iodcmd->sendMessage(s.c_str());
 	else 	
