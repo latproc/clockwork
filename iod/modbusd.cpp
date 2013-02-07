@@ -304,7 +304,26 @@ struct ModbusServerThread {
 							if (debug) std::cout << "connection " << conn << " got register " << addr << "\n";
 						}
 						else if (fc == 15) {
-							if (debug) std::cout << "connection " << conn << " request multi addr " << addr << "\n"; //<< " n:" << len << "\n";
+							if (debug) 
+								std::cout << "connection " << conn << " write multi coil " 
+									<< addr << "\n"; //<< " n:" << len << "\n";
+							int num_coils = query_backup[function_code_offset+3] <<16 
+								+ query_backup[function_code_offset + 4];
+							int num_bytes = query_backup[function_code_offset+5];
+							int curr_coil = 0;
+							unsigned char *data = query_backup + function_code_offset + 6;
+							for (int b = 0; b<num_bytes; ++b) {
+								for (int bit = 0; bit < 8; ++bit) {
+									if (curr_coil >= num_coils) break;
+									int val = *data & (1<<bit);
+									char *res = sendIOD(0, addr+1, (val) ? 1 : 0);
+									std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
+									if (res) free(res);
+									++addr;
+									++curr_coil;
+								}
+								++data;
+							}
 						}
 						else if (fc == 16) {
 							if (debug) std::cout << "write multiple register " << addr  << "\n"; //<< " n=" << len << "\n";
