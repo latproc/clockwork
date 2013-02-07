@@ -69,26 +69,40 @@ IODCommandInterface *g_iodcmd;
 static modbus_mapping_t *modbus_mapping = 0;
 static modbus_t *modbus_context = 0;
 
+static std::set<std::string> active_addresses;
+
 char *sendIOD(int group, int addr, int new_value);
 
 void insert(int group, int addr, int value, int len) {
-	if (group == 1)
+	std::string addr_str = "";
+	addr_str += group;
+	addr_str += ".";
+	addr_str += addr;
+	if (group == 1) {
 		modbus_mapping->tab_input_bits[addr] = value;
-	else if (group == 0)
+		active_addresses.insert(addr_str);
+	}
+	else if (group == 0) {
 		modbus_mapping->tab_bits[addr] = value;
+		active_addresses.insert(addr_str);
+	}
 	else if (group == 3) {
 		if (len == 1) {
 			modbus_mapping->tab_input_registers[addr] = value & 0xffff;
+			active_addresses.insert(addr_str);
 		} else if (len == 2) {
 			int *l = (int32_t*) &modbus_mapping->tab_input_registers[addr];
 			*l = value & 0xffffffff;
+			active_addresses.insert(addr_str);
 		}
 	} else if (group == 4) {
 		if (len == 1) {
 			modbus_mapping->tab_registers[addr] = value & 0xffff;
+			active_addresses.insert(addr_str);
 		} else if (len == 2) {
 			int *l = (int32_t*) &modbus_mapping->tab_registers[addr];
 			*l = value & 0xffffffff;
+			active_addresses.insert(addr_str);
 		}
 	}
 }
@@ -315,10 +329,14 @@ struct ModbusServerThread {
 							for (int b = 0; b<num_bytes; ++b) {
 								for (int bit = 0; bit < 8; ++bit) {
 									if (curr_coil >= num_coils) break;
-									int val = *data & (1<<bit);
-									char *res = sendIOD(0, addr+1, (val) ? 1 : 0);
-									std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
-									if (res) free(res);
+									std::string address_str = "0.";
+									address_str += addr;
+									if (active_addresses.find(address_str) != active_addresses.end()) {
+										int val = *data & (1<<bit);
+										char *res = sendIOD(0, addr+1, (val) ? 1 : 0);
+										std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
+										if (res) free(res);
+									}
 									++addr;
 									++curr_coil;
 								}
