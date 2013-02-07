@@ -328,6 +328,31 @@ struct ModbusServerThread {
 								++data;
 							}
 						}
+						else if (fc == 16) {
+							int num_words = (query_backup[function_code_offset+3] <<16)
+								+ query_backup[function_code_offset + 4];
+							int num_bytes = query_backup[function_code_offset+5];
+							unsigned char *data = query_backup + function_code_offset + 6; // interpreted as BCD
+							for (int reg = 0; reg<num_words; ++reg) {
+								char buf[20];
+								snprintf(buf, 19, "%d.%d", 1, addr);
+								std::string addr_str(buf);
+
+								if (active_addresses.find(addr_str) != active_addresses.end()) {
+									uint16_t val = 0;
+									val = ((*data >> 4) * 10 + (*data & 0xf));
+									++data;
+									val = val*100 + ((*data >> 4) * 10 + (*data & 0xf));
+									if (active_addresses.find(addr_str) != active_addresses.end()) {
+										if (val != modbus_mapping->tab_registers[addr]) {
+											if (debug) std::cout << " Updating register " << addr 
+												<< " to " << val << " from connection " << conn << "\n";									
+											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, val) );
+										}
+									}
+								}
+							}
+						}
 
 						// process the request, updating our ram as appropriate
 			            n = modbus_reply(modbus_context, query, n, modbus_mapping);
@@ -345,20 +370,23 @@ struct ModbusServerThread {
 						else if (fc == 4) {
 							if (debug) std::cout << "connection " << conn << " got register " << addr << "\n";
 						}
-						else if (fc == 15) {
-							if (debug) 
-								std::cout << "connection " << conn << " write multi coil " 
-									<< addr << "\n"; //<< " n:" << len << "\n";
-								std::list<std::string>::iterator iter = iod_sync_commands.begin();
-								while (iter != iod_sync_commands.end()) {
-									std::string cmd = *iter++;
-									char *res = sendIODMessage(cmd);
-									if (res) free(res);
-								}
-								iod_sync_commands.clear();
-						}
-						else if (fc == 16) {
-							if (debug) std::cout << "write multiple register " << addr  << "\n"; //<< " n=" << len << "\n";
+						else if (fc == 15 || fc == 16) {
+							if (fc == 15) {
+								if (debug) 
+									std::cout << "connection " << conn << " write multi coil " 
+										<< addr << "\n"; //<< " n:" << len << "\n";
+							}
+							else if (fc == 16) {
+								if (debug) 
+									std::cout << "write multiple register " << addr  << "\n"; 
+							}
+							std::list<std::string>::iterator iter = iod_sync_commands.begin();
+							while (iter != iod_sync_commands.end()) {
+								std::string cmd = *iter++;
+								char *res = sendIODMessage(cmd);
+								if (res) free(res);
+							}
+							iod_sync_commands.clear();
 						}
 						else if (fc == 5) {
 							if (!ignore_coil_change) {
