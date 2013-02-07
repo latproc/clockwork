@@ -283,7 +283,7 @@ struct ModbusServerThread {
 						bool ignore_coil_change = false; 
 						if (fc == 5) {  // coil write function
 							ignore_coil_change = (query_backup[function_code_offset + 3] && modbus_mapping->tab_bits[addr]);
-							if (ignore_coil_change) std::cout << "ignoring coil change " << addr 
+							if (ignore_coil_change) std::cout << "ignoring coil change " << addr    
 								<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
 						}
 
@@ -292,22 +292,22 @@ struct ModbusServerThread {
 
 						// post process - make sure iod is informed of the change
 						if (fc == 2) {
-							//std::cout << "connection " << conn << " read coil " << addr << "\n";
+							if (debug) std::cout << "connection " << conn << " read coil " << addr << "\n";
 						} 
 						else if (fc == 1) {
-							//std::cout << "connection " << conn << " read discrete " << addr << "\n";
+							if (debug) std::cout << "connection " << conn << " read discrete " << addr << "\n";
 						}
 						else if (fc == 3) {
-							//std::cout << "connection " << conn << " got rw_register " << addr << "\n";
+							if (debug) std::cout << "connection " << conn << " got rw_register " << addr << "\n";
 						}
 						else if (fc == 4) {
-							//std::cout << "connection " << conn << " got register " << addr << "\n";
+							if (debug) std::cout << "connection " << conn << " got register " << addr << "\n";
 						}
 						else if (fc == 15) {
-							//std::cout << "connection " << conn << " request multi addr " << addr << " n:" << len << "\n";
+							if (debug) std::cout << "connection " << conn << " request multi addr " << addr << "\n"; //<< " n:" << len << "\n";
 						}
 						else if (fc == 16) {
-							//std::cout << "write multiple register " << addr << " n=" << len << "\n";
+							if (debug) std::cout << "write multiple register " << addr  << "\n"; //<< " n=" << len << "\n";
 						}
 						else if (fc == 5) {
 							if (!ignore_coil_change) {
@@ -324,7 +324,7 @@ struct ModbusServerThread {
 							if (debug) std::cout << " Updating register " << addr << " to " << val << " from connection " << conn << "\n";
 						}
 						else 
-							std::cout << " function code: " << (int)query_backup[function_code_offset] << "\n";
+							if (debug) std::cout << " function code: " << (int)query_backup[function_code_offset] << "\n";
 						if (n == -1) {
 							if (debug) std::cout << "Error: " << modbus_strerror(errno) << "\n";
 
@@ -426,7 +426,10 @@ int main(int argc, const char * argv[]) {
 		port = strtol(argv[2], 0, 0);
 	}
 
-	if (vm.count("debug")) LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
+	if (vm.count("debug")) {
+		LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
+		debug = true;
+	}
 
 	modbus_mapping = modbus_mapping_new(10000, 10000, 10000, 10000);
 	if (!modbus_mapping) {
