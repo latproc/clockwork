@@ -60,13 +60,13 @@ void usage(int argc, const char * argv[]) {
     std::cout << "Usage: " << argv[0]
         << " (--host hostname --port port | --serial_port portname --config baud:bits:parity:stop_bits:flow_control ) "
         << " --property property_name [--client] [--name device_name] "
-        << " --watch property_name --collect_repeats "
+        << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ] "
         << "\n";
 }
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
-                serial_port_name_(0), serial_settings_(0), watch_(0), collect_duplicates(false),
+        serial_port_name_(0), serial_settings_(0), watch_(0), collect_duplicates(false), disconnect_on_timeout(true),
                 got_host(false), got_port(true), got_property(false), got_pattern(false)  {
         setIODHost("localhost");
     }
@@ -111,6 +111,9 @@ struct Options {
     
     bool skippingRepeats() const { return !collect_duplicates; }
     void doNotSkipRepeats() { collect_duplicates = true; }
+    
+    bool disconnectOnTimeout() { return disconnect_on_timeout; }
+    void setDisconnectOnTimeout(bool which) { disconnect_on_timeout = which; }
     
     void setSerialPort(const char *port_name) {
         if (serial_port_name_) free(serial_port_name_);
@@ -182,6 +185,7 @@ protected:
     char *serial_settings_;
     char *watch_;
     bool collect_duplicates;
+    bool disconnect_on_timeout;
     
     // validation
     bool got_host;
@@ -542,9 +546,11 @@ struct ConnectionThread {
                         device_status.status = DeviceStatus::e_timeout;
                         updateProperty();
                         std::cerr << "select timeout\n";
-                        close(connection);
-                        device_status.status = DeviceStatus::e_disconnected;
-                        updateProperty();
+                        if (!options.serialPort() && options.disconnectOnTimeout()) {
+                            close(connection);
+                            device_status.status = DeviceStatus::e_disconnected;
+                            updateProperty();
+                        }
                         continue;
                     }
                 }
@@ -882,6 +888,12 @@ int main(int argc, const char * argv[])
         }
         else if (strcmp(argv[i], "--collect_repeats") == 0) {
             options.doNotSkipRepeats();
+        }
+        else if (strcmp(argv[i], "--disconnect_on_timeout") == 0) {
+            options.setDisconnectOnTimeout(true);
+        }
+        else if (strcmp(argv[i], "--no_timeout_disconnect") == 0) {
+            options.setDisconnectOnTimeout(false);
         }
         else {
             std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
