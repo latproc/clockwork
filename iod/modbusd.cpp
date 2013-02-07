@@ -74,10 +74,9 @@ static std::set<std::string> active_addresses;
 char *sendIOD(int group, int addr, int new_value);
 
 void insert(int group, int addr, int value, int len) {
-	std::string addr_str = "";
-	addr_str += group;
-	addr_str += ".";
-	addr_str += addr;
+	char buf[20];
+	snprintf(buf, 19, "%d.%d", group, addr);
+	std::string addr_str(buf);
 	if (group == 1) {
 		modbus_mapping->tab_input_bits[addr] = value;
 		active_addresses.insert(addr_str);
@@ -329,11 +328,13 @@ struct ModbusServerThread {
 							for (int b = 0; b<num_bytes; ++b) {
 								for (int bit = 0; bit < 8; ++bit) {
 									if (curr_coil >= num_coils) break;
-									std::string address_str = "0.";
-									address_str += addr;
-									if (active_addresses.find(address_str) != active_addresses.end()) {
+									char buf[20];
+									snprintf(buf, 19, "%d.%d", 1, addr);
+									std::string addr_str(buf);
+
+									if (active_addresses.find(addr_str) != active_addresses.end()) {
 										int val = *data & (1<<bit);
-										char *res = sendIOD(0, addr+1, (val) ? 1 : 0);
+										char *res = sendIOD(1, addr+1, (val) ? 1 : 0);
 										std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
 										if (res) free(res);
 									}
