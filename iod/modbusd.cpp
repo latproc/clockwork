@@ -572,6 +572,8 @@ int main(int argc, const char * argv[]) {
 		std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
 		char *initial_settings;
 		do {	
+			active_addresses.clear();
+			initialised_address.clear();
 			initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
 			if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0) {
 				loadData(initial_settings);
