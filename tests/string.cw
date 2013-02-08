@@ -10,9 +10,9 @@ OPTION result "";
         x := SELF.NAME + " test";
         LOG x; # this needs to be fixed
         
-        v := "123";
-        d := "3";
-        buf := "     123.4";
+        v := 123;
+        d := 3;
+        buf := "z       " + v + "." + d;
         result := COPY `.{7}$` FROM buf;
         #SHUTDOWN;
 	}
