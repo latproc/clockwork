@@ -627,6 +627,8 @@ int main(int argc, const char * argv[]) {
 			}
 			else if (cmd == "STARTUP") {
 #if 1
+				active_addresses.clear();
+				initialised_address.clear();
 				sleep(2);
 				break;		
 #else
