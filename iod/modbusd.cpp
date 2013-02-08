@@ -70,10 +70,19 @@ static modbus_mapping_t *modbus_mapping = 0;
 static modbus_t *modbus_context = 0;
 
 static std::set<std::string> active_addresses;
+static std::map<std::string, bool> initialised_address;
 
 std::string getIODSyncCommand(int group, int addr, int new_value);
 char *sendIOD(int group, int addr, int new_value);
 char *sendIODMessage(const std::string &s);
+
+
+void activate_address(std::string& addr_str) {
+    if (active_addresses.find(addr_str) == active_addresses.end()) {
+	active_addresses.insert(addr_str);
+	initialised_address[addr_str] = false;
+    }
+}
 
 void insert(int group, int addr, int value, int len) {
 	char buf[20];
@@ -81,29 +90,32 @@ void insert(int group, int addr, int value, int len) {
 	std::string addr_str(buf);
 	if (group == 1) {
 		modbus_mapping->tab_input_bits[addr] = value;
-		active_addresses.insert(addr_str);
+std::cout << "Updated Modbus memory for input bit " << addr << " to " << value << "\n";
+		activate_address(addr_str);
 	}
 	else if (group == 0) {
 		modbus_mapping->tab_bits[addr] = value;
-		active_addresses.insert(addr_str);
+std::cout << "Updated Modbus memory for bit " << addr << " to " << value << "\n";
+		activate_address(addr_str);
 	}
 	else if (group == 3) {
 		if (len == 1) {
 			modbus_mapping->tab_input_registers[addr] = value & 0xffff;
-			active_addresses.insert(addr_str);
+			activate_address(addr_str);
 		} else if (len == 2) {
 			int *l = (int32_t*) &modbus_mapping->tab_input_registers[addr];
 			*l = value & 0xffffffff;
-			active_addresses.insert(addr_str);
+			activate_address(addr_str);
 		}
 	} else if (group == 4) {
 		if (len == 1) {
 			modbus_mapping->tab_registers[addr] = value & 0xffff;
-			active_addresses.insert(addr_str);
+std::cout << "Updated Modbus memory for reg " << addr << " to " << (value  & 0xffff) << "\n";
+			activate_address(addr_str);
 		} else if (len == 2) {
 			int *l = (int32_t*) &modbus_mapping->tab_registers[addr];
 			*l = value & 0xffffffff;
-			active_addresses.insert(addr_str);
+			activate_address(addr_str);
 		}
 	}
 }
@@ -312,14 +324,22 @@ struct ModbusServerThread {
 								for (int bit = 0; bit < 8; ++bit) {
 									if (curr_coil >= num_coils) break;
 									char buf[20];
-									snprintf(buf, 19, "%d.%d", 1, addr);
+									snprintf(buf, 19, "%d.%d", 0, addr);
 									std::string addr_str(buf);
 
 									if (active_addresses.find(addr_str) != active_addresses.end()) {
-										int val = *data & (1<<bit);
-										if (val != modbus_mapping->tab_bits[addr]) {
+										if (debug) std::cout << "updating cw with new discrete: " << addr 
+											<< " (" << (int)(modbus_mapping->tab_bits[addr]) <<")"
+											<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
+											<< "\n";
+										unsigned char val = (*data) & (1<<bit);
+									
+
+										if ( !initialised_address[addr_str] ||  ( val != 0 && modbus_mapping->tab_bits[addr] == 0 ) 
+												|| (!val && modbus_mapping->tab_bits[addr] ) ) {
 											if (debug) std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
 											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, (val) ? 1 : 0) );
+											initialised_address[addr_str] = true;
 										}
 									}
 									++addr;
@@ -332,25 +352,25 @@ struct ModbusServerThread {
 							int num_words = (query_backup[function_code_offset+3] <<16)
 								+ query_backup[function_code_offset + 4];
 							int num_bytes = query_backup[function_code_offset+5];
-							unsigned char *data = query_backup + function_code_offset + 6; // interpreted as BCD
+							unsigned char *data = query_backup + function_code_offset + 6; // interpreted as binary
 							for (int reg = 0; reg<num_words; ++reg) {
 								char buf[20];
-								snprintf(buf, 19, "%d.%d", 1, addr);
+								snprintf(buf, 19, "%d.%d", 4, addr);
 								std::string addr_str(buf);
 
 								if (active_addresses.find(addr_str) != active_addresses.end()) {
 									uint16_t val = 0;
-									val = ((*data >> 4) * 10 + (*data & 0xf));
-									++data;
-									val = val*100 + ((*data >> 4) * 10 + (*data & 0xf));
-									if (active_addresses.find(addr_str) != active_addresses.end()) {
-										if (val != modbus_mapping->tab_registers[addr]) {
-											if (debug) std::cout << " Updating register " << addr 
-												<< " to " << val << " from connection " << conn << "\n";									
-											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, val) );
-										}
+									//val = ((*data >> 4) * 10 + (*data & 0xf)); ++data; val = val*100 + ((*data >> 4) * 10 + (*data & 0xf)); // BCD
+									val = getInt(data);
+									data += 2;
+									if (!initialised_address[addr_str] || val != modbus_mapping->tab_registers[addr]) {
+										if (debug) std::cout << " Updating register " << addr 
+											<< " to " << val << " from connection " << conn << "\n";									
+										iod_sync_commands.push_back( getIODSyncCommand(4, addr+1, val) );
+										initialised_address[addr_str] = true;
 									}
 								}
+								++addr;
 							}
 						}
 
@@ -362,7 +382,13 @@ struct ModbusServerThread {
 							if (debug) std::cout << "connection " << conn << " read coil " << addr << "\n";
 						} 
 						else if (fc == 1) {
-							if (debug) std::cout << "connection " << conn << " read discrete " << addr << "\n";
+							char buf[20];
+							snprintf(buf, 19, "%d.%d", 1, addr);
+							std::string addr_str(buf);
+							if (active_addresses.find(addr_str) != active_addresses.end() ) 
+								if (debug) std::cout << "connection " << conn << " read discrete " << addr  
+									<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
+								<< "\n";
 						}
 						else if (fc == 3) {
 							if (debug) std::cout << "connection " << conn << " got rw_register " << addr << "\n";
@@ -372,8 +398,11 @@ struct ModbusServerThread {
 						}
 						else if (fc == 15 || fc == 16) {
 							if (fc == 15) {
-								if (debug) 
-									std::cout << "connection " << conn << " write multi coil " 
+								char buf[20];
+								snprintf(buf, 19, "%d.%d", 0, addr);
+								std::string addr_str(buf);
+								if (active_addresses.find(addr_str) != active_addresses.end() ) 
+									if (debug)std::cout << "connection " << conn << " write multi discrete " 
 										<< addr << "\n"; //<< " n:" << len << "\n";
 							}
 							else if (fc == 16) {

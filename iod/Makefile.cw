@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = cw #iosh persistd device_connector zmq_ecat_monitor #modbusd 
+APPS = cw iosh persistd device_connector zmq_ecat_monitor modbusd 
 SIMULATED=-DEC_SIMULATOR=1
 
 # add any extra include or library directory paths as necessary
