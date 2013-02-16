@@ -133,7 +133,7 @@ Action::Status MachineCommand::run() {
 	Action::Status stat = runActions();
     if (stat  == Failed) {
         error_str = "Failed to start an action";
-		NB_MSG << command_name.get() << " " << error_str.get() << "\n";
+		NB_MSG << owner->getName() << ": " << command_name.get() << " " << error_str.get() << "\n";
 		status = stat;
 		owner->stop(this);
         return Failed;

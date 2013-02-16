@@ -268,19 +268,35 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 	}
 
     bool IODCommandProperty::run(std::vector<std::string> &params) {
-        if (params.size() == 4) {
+        //if (params.size() == 4) {
 		    MachineInstance *m = MachineInstance::find(params[1].c_str());
 		    if (m) {
-				if (m->debug()) {
-					DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
-				}
-				long x;
-				char *p;
-				x = strtol(params[3].c_str(), &p, 0);
-				if (*p == 0)
-					m->setValue(params[2], x);
-				else
-					m->setValue(params[2], params[3].c_str());
+                if (params.size() == 3)
+                    m->setValue(params[2], "");
+                else if (params.size() == 4) {
+                    if (m->debug()) {
+                        DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
+                    }
+                    long x;
+                    char *p;
+                    x = strtol(params[3].c_str(), &p, 0);
+                    if (*p == 0)
+                        m->setValue(params[2], x);
+                    else
+                        m->setValue(params[2], params[3].c_str());
+                }
+                else {
+                    // extra parameters implies the value contains spaces so we find the tail of the parameter string and use that for the property value
+                    size_t pos = raw_message_.find(params[2].c_str());
+                    if (pos == std::string::npos) {
+                        error_str = "Unexpected parameter error ";
+                        return false;
+                    }
+                    pos += params[2].length();
+                    while (raw_message_[pos] == ' ') ++pos; // skip the parameter spacing
+                    const char *p = raw_message_.c_str() + pos;
+                    m->setValue(params[2], p);
+                }
 
                 result_str = "OK";
                 return true;
@@ -289,8 +305,8 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 	            error_str = "Unknown device";
 	            return false;
 	        }
-		}
-		else {
+		/*}
+         else {
 			std::stringstream ss;
 			ss << "Unrecognised parameters in ";
 			std::ostream_iterator<std::string> out(ss, " ");
@@ -299,6 +315,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 			error_str = ss.str();
 			return false;
 		}
+         */
 	}
 
     bool IODCommandList::run(std::vector<std::string> &params) {

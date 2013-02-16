@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = cw #iosh persistd device_connector zmq_ecat_monitor #modbusd 
+APPS = cw iosh persistd device_connector zmq_ecat_monitor modbusd 
 SIMULATED=-DEC_SIMULATOR=1
 
 # add any extra include or library directory paths as necessary
@@ -140,7 +140,8 @@ iosh: iosh.cpp
 
 
 device_connector:	device_connector.o regular_expressions.o anet.o
-	g++ $(CFLAGS) $(LDFLAGS) -o $@ $? $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
+	g++ $(CFLAGS) $(LDFLAGS) -o $@ device_connector.o regular_expressions.o anet.o \
+		 $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h
 

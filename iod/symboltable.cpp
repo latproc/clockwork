@@ -360,8 +360,9 @@ struct TypeFix {
 					return (*op)(v, b);
 				}
 				else {
-					DBG_PREDICATES << "Trying to add a string and value but the string does not contain a number\n";
-					return b;
+					//DBG_PREDICATES << "Trying to add a string and value but the string does not contain a number\n";
+                    Value s(a);
+					return s.operator+(b.asString());
 				}
 			}
 			else {
@@ -380,8 +381,15 @@ Value &Value::operator+(const Value &other) {
         && kind != other.kind) {
 		Sum op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
+		Value new_value = tf(*this, &op, other);
+        if (new_value.kind == t_integer) {
+            iValue = new_value.iValue;
+            kind = t_integer;
+        }
+        else {
+            sValue = new_value.asString();
+            kind = t_string;
+        }
 		return *this;
 	}
 	switch(kind) {

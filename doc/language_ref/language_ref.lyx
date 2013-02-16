@@ -92,7 +92,7 @@ Clockwork is a language intended to be used to describe systems of interacting
  components using state machines.
  The purpose of the language is to provide a platform for monitoring and
  control and it has currently been implemented as a control system using
- the Beckhoff EtherCAT®.
+ Beckhoff EtherCAT® and The Internet of Things (MQTT).
 \end_layout
 
 \begin_layout Standard

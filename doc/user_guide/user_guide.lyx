@@ -100,6 +100,10 @@ cw a daemon that runs clockwork programs
 \end_layout
 
 \begin_layout Description
+device_connector a program to interface between iod and external programs
+\end_layout
+
+\begin_layout Description
 iod a daemon that talks to EtherCAT to interact with io hardware using the
  clockwork language
 \end_layout
@@ -154,6 +158,10 @@ libmodbus (http://libmodbus.org/) - for communication with modbus/tcp terminals
 zeromq (http://www.zeromq.org/) - for inter-program messaging
 \end_layout
 
+\begin_layout Itemize
+mqtt (http://mqtt.org)
+\end_layout
+
 \begin_layout Standard
 We developed the software using open source development tools: GNU gcc,
  bison and flex and used Linux and MacOSX workstations.
@@ -161,6 +169,16 @@ We developed the software using open source development tools: GNU gcc,
 
 \begin_layout Section
 Language
+\end_layout
+
+\begin_layout Standard
+The clockwork language is finite state machine based, designed to monitor
+ various statemachines and to generate events when certain conditions arise
+ in a machine interfacing and control environment.
+ The program provides the user with a way to build a model of a machine
+ and to simulate or change its behaviour.
+ Clockwork is event-based and inherently parallel and can be used to model
+ many systems that can be represented using finite state machines.
 \end_layout
 
 \begin_layout Standard
@@ -177,6 +195,10 @@ iod
  I/O hardware via the IgH EtherCAT Master for Linux and cw does not.
  We will discuss the use of cw first and discuss the extensions that iod
  provides afterwards.
+ Note that both iod and cw are able to communicate with devices over MQTT
+ with some limitations as the MQTT implementation is not complete.
+ Through these hardware interfaces, clockwork can be used to design and
+ build complex control systems that interface to the physical world.
 \end_layout
 
 \begin_layout Subsection
@@ -185,7 +207,8 @@ Getting started
 
 \begin_layout Standard
 The file: README, that comes with the latproc distribution explains how
- to build the cw program:
+ to build the cw program.
+ The essense of the process is:
 \end_layout
 
 \begin_layout Enumerate
@@ -219,6 +242,30 @@ The `make' process should produce a file latproc/iod/cw that can be copied
 
 \begin_layout Subsubsection
 Hello World
+\end_layout
+
+\begin_layout Standard
+Clockwork accepts a list of files on the commandline; it reads all the state
+ machine descriptions and connections within those files and then starts
+ a virtual environment that runs those machines.
+ For the sake of brevity, clockwork refers to finite state machine definitions
+ simply as 'machines'.
+ A machine requires a 
+\emph on
+definition
+\emph default
+, that describes the states the machine has and how the machine moves between
+ those states and at least one 
+\emph on
+instantiation
+\emph default
+, that causes a machine to be started in the virtual environment.
+\end_layout
+
+\begin_layout Standard
+When an instantiated machine is enabled, it enters its INIT state, causing
+ an event handler to be executed.
+ Each time a machine changes state the associated event handler is executed.
 \end_layout
 
 \begin_layout Standard
@@ -258,26 +305,6 @@ hello Hello;
 \end_layout
 
 \begin_layout Standard
-The program defines a class of state machine called 'Hello' and provides
- instructions that the machine will execute when it enters a state called
- INIT.
-\end_layout
-
-\begin_layout Standard
-In Clockwork, instructions can only be executed inside event handlers, so
- to log a simple message first requires that we define a class of state
- machine and then an event handler within that state machine.
- Every state machine enters a state called 'INIT' when it is enabled and
- our machine, 'Hello', thus, our LOG statment is executed when an instance
- of the 'Hello' class of machine is started.
-\end_layout
-
-\begin_layout Standard
-The last line makes an instance of the Hello machine and calls it 'hello'.
- Note that case is important in Clockwork.
-\end_layout
-
-\begin_layout Standard
 The above program can be executed by saving it into a file (eg hello.cw)
  and running cw:
 \end_layout
@@ -295,10 +322,25 @@ The output should be displayed as:
 \end_layout
 
 \begin_layout Standard
+Note that case is important in Clockwork and that the clockwork language
+ uses uppercase letters for its reserved words and builtin machine definitions.
+ In Clockwork, instructions can only be executed inside event handlers,
+ so to log a simple message first requires that we define a class of state
+ machine and then an event handler within that state machine.
+ 
+\end_layout
+
+\begin_layout Standard
+The example above defines a class of state machine called 'Hello' and an
+ event handler for entry to INIT; our LOG statment is executed when an instance
+ of the 'Hello' class of machine is started.
+\end_layout
+
+\begin_layout Standard
 Note that after the LOG statement, our program has a SHUTDOWN statement;
  Clockwork is intended to be used to monitor system states or provide ongoing
  control functions so it normally does not exit; the SHUTDOWN statement
- tells it to.
+ tells the driver to shutdown the virtual environment, stopping all machines.
 \end_layout
 
 \begin_layout Subsubsection
@@ -663,6 +705,10 @@ beckhoffd
 
 \begin_layout Subsection
 modbusd
+\end_layout
+
+\begin_layout Subsection
+device_connector
 \end_layout
 
 \begin_layout Section

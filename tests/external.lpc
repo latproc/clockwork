@@ -13,3 +13,6 @@ Test MACHINE camera {
 test Test(tab:Test) camera;
 
 ROUTE "TestMessage" TO test;
+
+arduino EXTERNAL(DEVICE:"/dev/tty.usbserial-A900ced4", BAUD:9600, 
+    BITS:8, PARITY:"NONE", STOPBITS:1);

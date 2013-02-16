@@ -69,26 +69,53 @@ IODCommandInterface *g_iodcmd;
 static modbus_mapping_t *modbus_mapping = 0;
 static modbus_t *modbus_context = 0;
 
+static std::set<std::string> active_addresses;
+static std::map<std::string, bool> initialised_address;
+
+std::string getIODSyncCommand(int group, int addr, int new_value);
 char *sendIOD(int group, int addr, int new_value);
+char *sendIODMessage(const std::string &s);
+
+
+void activate_address(std::string& addr_str) {
+    if (active_addresses.find(addr_str) == active_addresses.end()) {
+	active_addresses.insert(addr_str);
+	initialised_address[addr_str] = false;
+    }
+}
 
 void insert(int group, int addr, int value, int len) {
-	if (group == 1)
+	char buf[20];
+	snprintf(buf, 19, "%d.%d", group, addr);
+	std::string addr_str(buf);
+	if (group == 1) {
 		modbus_mapping->tab_input_bits[addr] = value;
-	else if (group == 0)
+std::cout << "Updated Modbus memory for input bit " << addr << " to " << value << "\n";
+		activate_address(addr_str);
+	}
+	else if (group == 0) {
 		modbus_mapping->tab_bits[addr] = value;
+std::cout << "Updated Modbus memory for bit " << addr << " to " << value << "\n";
+		activate_address(addr_str);
+	}
 	else if (group == 3) {
 		if (len == 1) {
 			modbus_mapping->tab_input_registers[addr] = value & 0xffff;
+			activate_address(addr_str);
 		} else if (len == 2) {
 			int *l = (int32_t*) &modbus_mapping->tab_input_registers[addr];
 			*l = value & 0xffffffff;
+			activate_address(addr_str);
 		}
 	} else if (group == 4) {
 		if (len == 1) {
 			modbus_mapping->tab_registers[addr] = value & 0xffff;
+std::cout << "Updated Modbus memory for reg " << addr << " to " << (value  & 0xffff) << "\n";
+			activate_address(addr_str);
 		} else if (len == 2) {
 			int *l = (int32_t*) &modbus_mapping->tab_registers[addr];
 			*l = value & 0xffffffff;
+			activate_address(addr_str);
 		}
 	}
 }
@@ -171,7 +198,7 @@ struct IODCommandInterface {
 	                    char *data = (char *)malloc(len+1);
 	                    memcpy(data, reply.data(), len);
 	                    data[len] = 0;
-	                    std::cout << data << "\n";
+	                    if (debug || strcmp(data, "OK") ) std::cout << data << "\n";
 						return data;
                     }
                     else if (--retries == 0) {
@@ -275,6 +302,7 @@ struct ModbusServerThread {
 					modbus_set_socket(modbus_context, conn); // tell modbus to use this current connection
 			        n = modbus_receive(modbus_context, query);
 			        if (n != -1) {
+						std::list<std::string>iod_sync_commands;
 						memcpy(query_backup, query, n);
 						int addr = getInt( &query[function_code_offset+1]);
 						//int len = getInt( &query[function_code_offset+3]);
@@ -283,8 +311,67 @@ struct ModbusServerThread {
 						bool ignore_coil_change = false; 
 						if (fc == 5) {  // coil write function
 							ignore_coil_change = (query_backup[function_code_offset + 3] && modbus_mapping->tab_bits[addr]);
-							if (ignore_coil_change) std::cout << "ignoring coil change " << addr 
+							if (ignore_coil_change) std::cout << "ignoring coil change " << addr    
 								<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
+						}
+						else if (fc == 15) {
+							int num_coils = (query_backup[function_code_offset+3] <<16)
+								+ query_backup[function_code_offset + 4];
+							int num_bytes = query_backup[function_code_offset+5];
+							int curr_coil = 0;
+							unsigned char *data = query_backup + function_code_offset + 6;
+							for (int b = 0; b<num_bytes; ++b) {
+								for (int bit = 0; bit < 8; ++bit) {
+									if (curr_coil >= num_coils) break;
+									char buf[20];
+									snprintf(buf, 19, "%d.%d", 0, addr);
+									std::string addr_str(buf);
+
+									if (active_addresses.find(addr_str) != active_addresses.end()) {
+										if (debug) std::cout << "updating cw with new discrete: " << addr 
+											<< " (" << (int)(modbus_mapping->tab_bits[addr]) <<")"
+											<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
+											<< "\n";
+										unsigned char val = (*data) & (1<<bit);
+									
+
+										if ( !initialised_address[addr_str] ||  ( val != 0 && modbus_mapping->tab_bits[addr] == 0 ) 
+												|| (!val && modbus_mapping->tab_bits[addr] ) ) {
+											if (debug) std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
+											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, (val) ? 1 : 0) );
+											initialised_address[addr_str] = true;
+										}
+									}
+									++addr;
+									++curr_coil;
+								}
+								++data;
+							}
+						}
+						else if (fc == 16) {
+							int num_words = (query_backup[function_code_offset+3] <<16)
+								+ query_backup[function_code_offset + 4];
+							int num_bytes = query_backup[function_code_offset+5];
+							unsigned char *data = query_backup + function_code_offset + 6; // interpreted as binary
+							for (int reg = 0; reg<num_words; ++reg) {
+								char buf[20];
+								snprintf(buf, 19, "%d.%d", 4, addr);
+								std::string addr_str(buf);
+
+								if (active_addresses.find(addr_str) != active_addresses.end()) {
+									uint16_t val = 0;
+									//val = ((*data >> 4) * 10 + (*data & 0xf)); ++data; val = val*100 + ((*data >> 4) * 10 + (*data & 0xf)); // BCD
+									val = getInt(data);
+									data += 2;
+									if (!initialised_address[addr_str] || val != modbus_mapping->tab_registers[addr]) {
+										if (debug) std::cout << " Updating register " << addr 
+											<< " to " << val << " from connection " << conn << "\n";									
+										iod_sync_commands.push_back( getIODSyncCommand(4, addr+1, val) );
+										initialised_address[addr_str] = true;
+									}
+								}
+								++addr;
+							}
 						}
 
 						// process the request, updating our ram as appropriate
@@ -292,22 +379,43 @@ struct ModbusServerThread {
 
 						// post process - make sure iod is informed of the change
 						if (fc == 2) {
-							//std::cout << "connection " << conn << " read coil " << addr << "\n";
+							if (debug) std::cout << "connection " << conn << " read coil " << addr << "\n";
 						} 
 						else if (fc == 1) {
-							//std::cout << "connection " << conn << " read discrete " << addr << "\n";
+							char buf[20];
+							snprintf(buf, 19, "%d.%d", 1, addr);
+							std::string addr_str(buf);
+							if (active_addresses.find(addr_str) != active_addresses.end() ) 
+								if (debug) std::cout << "connection " << conn << " read discrete " << addr  
+									<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
+								<< "\n";
 						}
 						else if (fc == 3) {
-							//std::cout << "connection " << conn << " got rw_register " << addr << "\n";
+							if (debug) std::cout << "connection " << conn << " got rw_register " << addr << "\n";
 						}
 						else if (fc == 4) {
-							//std::cout << "connection " << conn << " got register " << addr << "\n";
+							if (debug) std::cout << "connection " << conn << " got register " << addr << "\n";
 						}
-						else if (fc == 15) {
-							//std::cout << "connection " << conn << " request multi addr " << addr << " n:" << len << "\n";
-						}
-						else if (fc == 16) {
-							//std::cout << "write multiple register " << addr << " n=" << len << "\n";
+						else if (fc == 15 || fc == 16) {
+							if (fc == 15) {
+								char buf[20];
+								snprintf(buf, 19, "%d.%d", 0, addr);
+								std::string addr_str(buf);
+								if (active_addresses.find(addr_str) != active_addresses.end() ) 
+									if (debug)std::cout << "connection " << conn << " write multi discrete " 
+										<< addr << "\n"; //<< " n:" << len << "\n";
+							}
+							else if (fc == 16) {
+								if (debug) 
+									std::cout << "write multiple register " << addr  << "\n"; 
+							}
+							std::list<std::string>::iterator iter = iod_sync_commands.begin();
+							while (iter != iod_sync_commands.end()) {
+								std::string cmd = *iter++;
+								char *res = sendIODMessage(cmd);
+								if (res) free(res);
+							}
+							iod_sync_commands.clear();
 						}
 						else if (fc == 5) {
 							if (!ignore_coil_change) {
@@ -324,7 +432,7 @@ struct ModbusServerThread {
 							if (debug) std::cout << " Updating register " << addr << " to " << val << " from connection " << conn << "\n";
 						}
 						else 
-							std::cout << " function code: " << (int)query_backup[function_code_offset] << "\n";
+							if (debug) std::cout << " function code: " << (int)query_backup[function_code_offset] << "\n";
 						if (n == -1) {
 							if (debug) std::cout << "Error: " << modbus_strerror(errno) << "\n";
 
@@ -357,10 +465,22 @@ struct ModbusServerThread {
 	int max_fd;
 };
 
-char *sendIOD(int group, int addr, int new_value) {
+std::string getIODSyncCommand(int group, int addr, int new_value) {
 	std::stringstream ss;
 	ss << "MODBUS " << group << " " << addr << " " << new_value;
 	std::string s(ss.str());
+	return s;
+}
+
+char *sendIOD(int group, int addr, int new_value) {
+	std::string s(getIODSyncCommand(group, addr, new_value));
+	if (g_iodcmd) 
+		return g_iodcmd->sendMessage(s.c_str());
+	else 	
+		return strdup("IOD interface not ready\n");
+}
+
+char *sendIODMessage(const std::string &s) {
 	if (g_iodcmd) 
 		return g_iodcmd->sendMessage(s.c_str());
 	else 	
@@ -426,7 +546,10 @@ int main(int argc, const char * argv[]) {
 		port = strtol(argv[2], 0, 0);
 	}
 
-	if (vm.count("debug")) LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
+	if (vm.count("debug")) {
+		LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
+		debug = true;
+	}
 
 	modbus_mapping = modbus_mapping_new(10000, 10000, 10000, 10000);
 	if (!modbus_mapping) {
@@ -449,6 +572,8 @@ int main(int argc, const char * argv[]) {
 		std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
 		char *initial_settings;
 		do {	
+			active_addresses.clear();
+			initialised_address.clear();
 			initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
 			if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0) {
 				loadData(initial_settings);
@@ -504,6 +629,8 @@ int main(int argc, const char * argv[]) {
 			}
 			else if (cmd == "STARTUP") {
 #if 1
+				active_addresses.clear();
+				initialised_address.clear();
 				sleep(2);
 				break;		
 #else
