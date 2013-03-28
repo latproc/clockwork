@@ -168,10 +168,12 @@ void semantic_analysis() {
 	module_class->disableAutomaticStateChanges();
 
     MachineClass *publisher_class = new MachineClass("PUBLISHER");
+    publisher_class->parameters.push_back(Parameter("broker"));
     publisher_class->parameters.push_back(Parameter("topic"));
     publisher_class->parameters.push_back(Parameter("message"));
     
     MachineClass *subscriber_class = new MachineClass("SUBSCRIBER");
+    subscriber_class->parameters.push_back(Parameter("broker"));
     subscriber_class->parameters.push_back(Parameter("topic"));
     subscriber_class->options["message"] = "";
 

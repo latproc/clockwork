@@ -358,8 +358,7 @@ int main (int argc, char const *argv[])
                         std::cerr << "MQTT Broker " << m->getName() << " is already registered\n";
                         continue;
                     }
-                    module = new MQTTModule();
-                    module->name = m->getName();
+                    module = new MQTTModule(m->getName().c_str());
                     module->host = m->parameters[0].val.asString();
                     long port;
                     if (m->parameters[1].val.asInteger(port)) {
@@ -398,7 +397,7 @@ int main (int argc, char const *argv[])
                         }
                 }
                 else {
-                    if (m->_type != "POINT" && m->_type != "PUBLISH" && m->_type != "SUBSCRIBE")
+                    if (m->_type != "POINT" && m->_type != "PUBLISHER" && m->_type != "SUBSCRIBER")
                         DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
                     else   {
                         std::string name = m->parameters[0].real_name;
@@ -409,13 +408,13 @@ int main (int argc, char const *argv[])
                             continue;
                         }
                         std::string topic = m->parameters[1].val.asString();
-                        if (m->_type != "SUBSCRIBE" && m->parameters.size() == 3) {
+                        if (m->_type != "SUBSCRIBER" && m->parameters.size() == 3) {
                             if (!module->publishes(topic)) {
                                 m->properties.add("type", "Output");
                                 module->publish(topic, m->parameters[2].val.asString(), m);
                             }
                         }
-                        else if (m->_type != "PUBLISH") {
+                        else if (m->_type != "PUBLISHER") {
                             if (!module->subscribes(topic)) {
                                 m->properties.add("type", "Input");
                                 module->subscribe(topic, m);

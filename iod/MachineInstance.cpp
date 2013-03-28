@@ -1141,7 +1141,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		event_name = from->getName() + "." + m.getText();
     
     if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER") {
-        if (io_interface && from == io_interface || mq_interface && from == mq_interface) {
+        if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
             //std::string state_name = m.getText();
             //if (state_name.find('_') != std::string::npos)
             //    state_name = state_name.substr(state_name.find('_'));
@@ -1879,9 +1879,10 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 		++needs_check;
 	    // try the current instance ofthe machine, then the machine class and finally the global symbols
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
-
+        Value &prev_value = properties.lookup(property.c_str());
+        bool changed = (prev_value != new_value);
 		{
-			properties.add(property, new_value, SymbolTable::ST_REPLACE);
+            properties.add(property, new_value, SymbolTable::ST_REPLACE);
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
 			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
@@ -1943,6 +1944,10 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 		while (d_iter != depends.end()) {
 			MachineInstance *dep = *d_iter++;
 			++dep->needs_check; // make sure dependant machines update when a property changes
+            //if (changed) {
+            //    Message *msg = new Message("property_change");
+            //    send(msg, dep);
+            //}
 		}
 	}
 }
