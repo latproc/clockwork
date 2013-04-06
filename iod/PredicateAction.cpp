@@ -85,6 +85,10 @@ Value eval(Predicate *p, MachineInstance *m){
 			case opTimes: res = l * r; break;
 			case opDivide: res = l / r; break;
 			case opMod: res = l % r; break;
+            case opBitAnd: res = l & r; break;
+            case opBitOr: res = l | r; break;
+            case opBitXOr: res = l ^ r; break;
+            case opNegate: res = ~r; break;
 			case opAssign: res = r; break; // TBD
 	        case opNone: res = 0;
 	    }

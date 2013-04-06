@@ -118,10 +118,11 @@ struct Subcondition {
 %left OR
 %left AND
 %left GE LE EQ NE LT GT
-%left '+' '-'
-%left '*' '/' '%'
+%left '+' '-' '|'
+%left '*' '/' '%' '&' '^'
 %nonassoc NOT
 %nonassoc UMINUS
+%nonassoc '~'
 %left IFX
 %left IFELSE
 
@@ -481,7 +482,11 @@ value {
 | expression '*' expression { $$ = new Predicate($1, opTimes, $3);}
 | expression '/' expression { $$ = new Predicate($1, opDivide, $3);}
 | expression '%' expression { $$ = new Predicate($1, opMod, $3);}
-| expression MATCHES PATTERN { 
+| expression '&' expression { $$ = new Predicate($1, opBitAnd, $3);}
+| expression '|' expression { $$ = new Predicate($1, opBitOr, $3);}
+| expression '^' expression { $$ = new Predicate($1, opBitXOr, $3);}
+| '!' expression { $$ = new Predicate(0, opNegate, $2);}
+| expression MATCHES PATTERN {
     Value pat($3, Value::t_string);
     $$ = new Predicate($1, opMatch, new Predicate( pat )); }
 ;

@@ -21,7 +21,18 @@ ExprTest  MACHINE  {
 
     ENTER INIT { last := 1; val := 1; }
 }
-expr_test 
-ExprTest
-(tab:Tests)
-;
+expr_test  ExprTest(tab:Tests);
+
+Calc MACHINE {
+    OPTION a 5;
+    OPTION b 3;
+
+    ENTER INIT {
+        x := a + b;
+        c := a | b;
+        d := a & b;
+        e := a ^ b;
+        f := !a;
+    }
+}
+calc Calc(tab:Tests);

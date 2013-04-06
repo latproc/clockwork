@@ -167,6 +167,11 @@ WHERE               return WHERE;
 "||"            return OR;
 ":="            return BECOMES;
 
+"&"             return *yytext;
+"|"             return *yytext;
+"^"             return *yytext;
+"!"             return *yytext;
+
 [ \t]+        ;       /* ignore whitespace */
 
 \'              /*' ignore single quotes */
