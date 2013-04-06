@@ -47,6 +47,10 @@ std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.oper
 			case opMod: opstr = "%"; break;
 			case opAssign: opstr = ":="; break;
             case opMatch: opstr = "~"; break;
+            case opBitAnd: opstr = "&"; break;
+            case opBitOr: opstr = "|"; break;
+            case opNegate: opstr = "~"; break;
+            case opBitXOr: opstr = "^"; break;
         }
         return out << opstr;
     }
@@ -286,6 +290,10 @@ Value eval(Predicate *p, MachineInstance *m, bool left){
 			case opTimes:  res = l * r; break;
 			case opDivide: res = l / r; break;
 			case opMod:    res = l % r; break;
+            case opBitAnd: res = l & r; break;
+            case opBitOr: res = l | r; break;
+            case opNegate: res = ~r; break;
+            case opBitXOr: res = l | r; break;
 			case opAssign: res =l = r; break;
             case opMatch:
                 res = matches(l.asString().c_str(), r.asString().c_str());
@@ -333,6 +341,10 @@ ExprNode eval_stack(Stack &stack){
 		case opTimes: return a.val * b.val;
 		case opDivide:return a.val / b.val;
 		case opMod:   return a.val % b.val;
+        case opBitAnd: return a.val & b.val;
+        case opBitOr: return a.val | b.val;
+        case opNegate: return ~ b.val;
+        case opBitXOr: return a.val ^ b.val;
 		case opAssign:return b.val;
         case opMatch: return matches(a.val.asString().c_str(), b.val.asString().c_str());
 		case opNone: return 0;

@@ -336,6 +336,23 @@ namespace ValueOperations {
 		}
 	};
 
+	struct BitAnd : public ValueOperation {
+		Value operator()(const Value &a, const Value &b) const {
+			return a.iValue & b.iValue;
+		}
+	};
+    
+	struct BitOr : public ValueOperation {
+		Value operator()(const Value &a, const Value &b) const {
+			return a.iValue | b.iValue;
+		}
+	};
+    
+	struct BitXOr : public ValueOperation {
+		Value operator()(const Value &a, const Value &b) const {
+			return a.iValue ^ b.iValue;
+		}
+	};
 
 }
 using namespace ValueOperations;
@@ -475,6 +492,63 @@ Value &Value::operator%(const Value &other) {
 	switch(kind) {
 		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue % other.iValue; break;
 		case t_bool: bValue ^= other.bValue;
+		default: ;
+	}
+	return *this;
+}
+
+Value &Value::operator &(const Value &other) {
+	if (kind != other.kind) {
+		BitAnd op;
+		TypeFix tf;
+		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
+		return *this;
+	}
+	switch(kind) {
+		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue & other.iValue; break;
+		case t_bool: bValue &= other.bValue;
+		default: ;
+	}
+	return *this;
+}
+
+Value &Value::operator |(const Value &other) {
+	if (kind != other.kind) {
+		BitOr op;
+		TypeFix tf;
+		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
+		return *this;
+	}
+	switch(kind) {
+		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue | other.iValue; break;
+		case t_bool: bValue |= other.bValue;
+		default: ;
+	}
+	return *this;
+}
+
+Value &Value::operator ^(const Value &other) {
+	if (kind != other.kind) {
+		BitXOr op;
+		TypeFix tf;
+		iValue = tf(*this, &op, other).iValue;
+        kind = t_integer;
+		return *this;
+	}
+	switch(kind) {
+		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue ^ other.iValue; break;
+		case t_bool: bValue ^= other.bValue;
+		default: ;
+	}
+	return *this;
+}
+
+Value &Value::operator ~() {
+	switch(kind) {
+		case t_integer: iValue = ~iValue; break;
+		case t_bool: bValue = !bValue;
 		default: ;
 	}
 	return *this;

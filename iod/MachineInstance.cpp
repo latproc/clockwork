@@ -801,7 +801,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
         // publish the state change if we are a publisher
         if (mq_interface) {
-            if (_type == "PUBLISHER" || (_type == "POINT" && properties.lookup("type") == "Output")) {
+            if (_type == "POINT" && properties.lookup("type") == "Output") {
                 mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(), this);
             }
         }
@@ -1141,7 +1141,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		event_name = from->getName() + "." + m.getText();
     
     if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER") {
-        if (io_interface && from == io_interface || mq_interface && from == mq_interface) {
+        if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
             //std::string state_name = m.getText();
             //if (state_name.find('_') != std::string::npos)
             //    state_name = state_name.substr(state_name.find('_'));
@@ -1879,9 +1879,10 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 		++needs_check;
 	    // try the current instance ofthe machine, then the machine class and finally the global symbols
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
-
+        Value &prev_value = properties.lookup(property.c_str());
+        bool changed = (prev_value != new_value);
 		{
-			properties.add(property, new_value, SymbolTable::ST_REPLACE);
+            properties.add(property, new_value, SymbolTable::ST_REPLACE);
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
 			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
@@ -1939,10 +1940,22 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 			else
 				DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
 		}
+        
+        if (_type == "PUBLISHER" && mq_interface && property == "message" )
+        {
+            std::string old_val(properties.lookup(property.c_str()).asString());
+            mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
+        }
+
+        
 		std::set<MachineInstance *>::iterator d_iter = depends.begin();
 		while (d_iter != depends.end()) {
 			MachineInstance *dep = *d_iter++;
 			++dep->needs_check; // make sure dependant machines update when a property changes
+            //if (changed) {
+            //    Message *msg = new Message("property_change");
+            //    send(msg, dep);
+            //}
 		}
 	}
 }

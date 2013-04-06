@@ -34,13 +34,12 @@ public:
     
     enum Status { STATUS_CONNECTING, STATUS_CONNACK_RECVD, STATUS_WAITING, STATUS_ERROR };
 
-	MQTTModule();
+	MQTTModule(const char *name);
 	bool online();
 	std::ostream &operator <<(std::ostream &)const;
 public:
     Status status;
     struct mosquitto *mosq;
-	std::string name;
     std::string host;
     int port;
     SymbolTable pubs;

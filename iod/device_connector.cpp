@@ -58,11 +58,16 @@ struct DeviceStatus {
 
 void usage(int argc, const char * argv[]) {
     std::cout << "Usage: " << argv[0]
-        << " (--host hostname --port port | --serial_port portname --config baud:bits:parity:stop_bits:flow_control ) "
-        << " --property property_name [--client] [--name device_name] "
+        << "\n (--host hostname [--port port]) \n"
+        << " | (--serial_port portname --serial_settings baud:bits:parity:stop_bits:flow_control )\n"
+        << " --property property_name [--client] [--name device_name]\n"
         << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ] "
         << "\n";
 }
+
+/** The Options structure provides methods to access parsed values of the commandline parameters
+
+ */
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
@@ -78,8 +83,28 @@ struct Options {
     }
     bool valid() const {
         // serial implies client
-        return ( (got_port && got_host) || (got_serial && got_serial_settings && !is_server) )
+        bool result =
+                ( (got_port && got_host) || (got_serial && got_serial_settings) )
             && got_property && got_pattern && name_ != 0 && iod_host_ != 0;
+        if (!result) {
+            std::stringstream msg;
+            msg << "\nError:\n";
+            if ( got_serial || got_serial_settings) {
+                if (got_serial_settings) msg << "  specifying serial_settings requires --serial_port is also given\n";
+                if (got_serial) msg << "  specifying serial_port requires --serial_port_settings is also given\n";
+            }
+            else if ( !got_host ) {
+                msg << "  --host is required unless serial port is being used\n";
+            }
+            if (!got_property)
+                msg << "  no property name detected (--property machine.property)\n";
+            if (!got_pattern)
+                msg << "  no pattern detected (--pattern text)\n";
+            if (!name_)
+                msg << "  no name given (--name)\n";
+            std::cerr <<msg.str() << "\n";
+        }
+        return result;
     }
     
     void clientMode(bool which = true) { is_server = !which; }
@@ -119,12 +144,14 @@ struct Options {
         if (serial_port_name_) free(serial_port_name_);
         serial_port_name_ = strdup(port_name);
         got_serial = true;
+        clientMode(true);
     }
     
     void setSerialSettings(const char *settings) {
         if (serial_settings_) free(serial_settings_);
         serial_settings_ = strdup(settings);
         got_serial_settings = true;
+        clientMode(true);
     }
     
     const char *watchProperty() const { return watch_; }
@@ -372,13 +399,13 @@ struct IODInterface{
                     else if (--retries == 0) {
                         // abandon
                         expect_reply = false;
-                        std::cerr << "abandoning message " << msg << "\n";
+                        std::cerr << "abandoning send of message '" << msg << "'\n";
                         delete socket;
                         connect();
                     }
                     else {
                         // retry
-                        std::cerr << "retrying message " << msg << "\n";
+                        std::cerr << "retrying send of message '" << msg << "'\n";
                         delete socket;
                         connect();
                         socket->send (request);
@@ -430,6 +457,9 @@ struct IODInterface{
 
 };
 
+/** The MatchFunction provides a regular expression interface so that data incoming on the
+    device connection can be filtered. Only matched data is passed back to iod/clockwork
+ */
 
 static struct timeval last_send;
 static std::string last_message;
@@ -475,6 +505,12 @@ private:
 };
 MatchFunction *MatchFunction::instance_;
 
+/** The ConnectionThread maintains a connection to the device, either on a network
+    (tcp) stream or a serial port.
+ 
+   Device Status is used to report the connection state to clockwork via the status property
+*/
+
 struct ConnectionThread {
     
     void operator()() {
@@ -485,7 +521,7 @@ struct ConnectionThread {
             if (options.server()) {
                 listener = anetTcpServer(msg_buffer, options.port(), options.host());
                 if (listener == -1) {
-                    std::cerr << msg_buffer << "...aborting\n";
+                    std::cerr << msg_buffer << " attempting to listen on port " << options.port() << "...aborting\n";
                     device_status.status = DeviceStatus::e_failed;
                     updateProperty();
                     done = true;
@@ -742,6 +778,8 @@ struct ConnectionThread {
 
 struct PropertyMonitorThread {
     void operator()() {
+        if (!options.watchProperty()) done = true; // shouldn't have started this thread without a property to watch
+            
         while (!done) {
             if (status == ws_disconnected) {
                 connect();
@@ -771,11 +809,14 @@ struct PropertyMonitorThread {
             }
         }
     }
-    PropertyMonitorThread(Options &opts, ConnectionThread &connection_) : done(false), context(0), socket(0), options(opts), connection(connection_) {
-        match_str = options.watchProperty();
-        match_str += " VALUE ";
-        context = new zmq::context_t(1);
-        connect();
+    PropertyMonitorThread(Options &opts, ConnectionThread &connection_)
+            : done(false), context(0), socket(0), options(opts), connection(connection_) {
+        if (options.watchProperty()) {
+            match_str = options.watchProperty();
+            match_str += " VALUE ";
+            context = new zmq::context_t(1);
+            connect();
+        }
     }
     
     class WatchException : public std::exception {

@@ -45,16 +45,32 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
     MQTTModule *device = (MQTTModule *)obj;
     
     if(message->payloadlen){
-        std::cout << message->topic << ": " << (const char *)message->payload << "\n";
+        char *payload = new char[message->payloadlen + 1];
+        memcpy(payload, message->payload, message->payloadlen);
+        payload[message->payloadlen] = 0;
+        std::cout << message->topic << ": " << payload << "\n";
         std::map<std::string, MachineInstance*>::iterator pos = device->handlers.find(message->topic);
         if (pos != device->handlers.end()) {
             MachineInstance *m = (*pos).second;
             m->setValue("topic", message->topic);
-            m->setValue("message", (const char *)message->payload);
-            const char *evt = (const char *)message->payload;
+            //const Value &prev = m->getValue("message");
+            //Value new_value = (const char *)message->payload;
+            //bool changed = (prev != new_value);
+            char *tmp = 0;
+            if (strcmp(payload, "off"))
+                int x = 0;
+            long val = strtol(payload, &tmp, 10);
+            if (tmp && *tmp == 0)
+                m->setValue("message", val);
+            else
+                m->setValue("message", payload);
+            const char *evt = payload;
             std::string event("");
             event += evt;
-            event += "_enter";
+            if (strcmp(evt,"on") == 0 || strcmp(evt, "off") == 0)
+                event += "_enter";
+            else
+                event = "property_change";
             if (m->_type == "POINT" && (event ==  "on_enter" || event == "off_enter")) {
                 Message msg(event.c_str());
                 m->execute(msg, device);
@@ -64,7 +80,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
                 while (iter != m->depends.end()) {
                     MachineInstance *mi = *iter++;
                     Message msg(event.c_str());
-                    mi->execute(msg, device);
+                    mi->execute(msg, m);
                 }
 			}
         }
@@ -110,7 +126,7 @@ void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid)
     
 }
 
-MQTTModule::MQTTModule() {
+MQTTModule::MQTTModule(const char *name) : Transmitter(name) {
     mid_sent = 0;
     last_mid = -1;
     connected = true;
@@ -181,7 +197,8 @@ bool MQTTModule::publish(const std::string &topic, const std::string &message, M
         return false;
     }
     m->setValue("topic", topic.c_str());
-    m->setValue("message", message.c_str());
+    if (m->getValue("message").asString() != message)
+        m->setValue("message", message.c_str());
     handlers[topic] = m;
     m->mq_interface = this;
     return true;
@@ -252,7 +269,7 @@ void MQTTInterface::shutdown() {
 }
 
 std::ostream &MQTTModule::operator <<(std::ostream & out)const {
-	out << "Topic " << name;
+	out << "Topic " << _name;
 	return out;
 }
 
@@ -261,7 +278,7 @@ MQTTModule *MQTTInterface::findModule(std::string name) {
 	std::list<MQTTModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		MQTTModule *m = *iter++;
-		if (m->name == name) return m;
+		if (m->getName() == name) return m;
 	}
 	return 0;
 }
@@ -271,7 +288,7 @@ void MQTTInterface::processAll()
 }
 
 bool MQTTInterface::addModule(MQTTModule *module, bool reset_io) {
-	MQTTModule *m = findModule(module->name);
+	MQTTModule *m = findModule(module->getName());
     if (m) return false;
 
 	modules.push_back(module);
