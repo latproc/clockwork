@@ -197,7 +197,8 @@ bool MQTTModule::publish(const std::string &topic, const std::string &message, M
         return false;
     }
     m->setValue("topic", topic.c_str());
-    m->setValue("message", message.c_str());
+    if (m->getValue("message").asString() != message)
+        m->setValue("message", message.c_str());
     handlers[topic] = m;
     m->mq_interface = this;
     return true;
