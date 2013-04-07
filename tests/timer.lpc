@@ -3,12 +3,19 @@ BasicTimer MACHINE {
     off WHEN TIMER>3000;
     on INITIAL;
 }
+
+LongTimer MACHINE {
+    OPTION duration 10000; # default to 10 secs
+    triggered WHEN TIMER > 3600000; # one hour
+    waiting INITIAL;
+}
 basicTimer BasicTimer(tab:Test);
 basicTimer1 BasicTimer(tab:Test);
 basicTimer2 BasicTimer(tab:Test);
 f1 FLAG(tab:Test);
 f2 FLAG(tab:Test);
 f3 FLAG(tab:Test);
+one_hour LongTimer(duration:3600000, tab:Test); # one hour timer
 
 Timer MACHINE (timeout:1) {
 	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);

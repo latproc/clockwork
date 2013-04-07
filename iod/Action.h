@@ -42,6 +42,7 @@ std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 
 class Trigger;
 struct TriggerOwner {
+    virtual ~TriggerOwner() {}
     virtual void triggerFired(Trigger *trigger) {}
 };
 
@@ -57,6 +58,7 @@ struct Trigger {
         // note: refs does not change
 		return *this;
 	}
+	virtual ~Trigger() {}
     Trigger*retain() { ++refs; return this; }
     virtual void release() { if (--refs == 0) delete this; }
     
