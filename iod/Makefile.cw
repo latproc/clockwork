@@ -95,13 +95,13 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			CallMethodAction.o \
 			regular_expressions.cpp PatternAction.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
-			-lzmq $(BOOST_THREAD_LIB) \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
 			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
 			CallMethodAction.o $(TOOLLIB) \
-			regular_expressions.cpp PatternAction.o
+			regular_expressions.cpp PatternAction.o \
+			-lzmq $(BOOST_THREAD_LIB)
 
 cw.o:	cw.cpp	MessagingInterface.h
 		$(CC) -c -o $@ cw.cpp
@@ -115,7 +115,6 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
-			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			latprocc.tab.o latprocc.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
@@ -124,6 +123,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
+			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			-lmosquitto
 
 persistd:	persistd.cpp symboltable.o Logger.o DebugExtra.o
@@ -136,7 +136,8 @@ modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 			symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
 iosh: iosh.cpp
-	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq
+	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq \
+		$(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_SYSTEM_LIB)
 
 
 device_connector:	device_connector.o regular_expressions.o anet.o

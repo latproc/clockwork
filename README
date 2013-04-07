@@ -36,6 +36,8 @@ Instructions
 
 	* boost (http://boost.org/) - various c++ bits and pieces
 
+	* mosquitto (http://mosquitto.org) - MQTT broker and protocol implementation
+
 
    Part A - Building Latproc tools for standalone experimentation
 
