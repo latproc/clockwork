@@ -80,7 +80,11 @@ Preface
 \end_layout
 
 \begin_layout Standard
-Please note that this is a very early draft.
+Please note that this is 
+\emph on
+still
+\emph default
+ a very early draft.
 \end_layout
 
 \begin_layout Section
@@ -732,7 +736,15 @@ PERSISTENT a property that indicates that state changes on this machine
 \end_layout
 
 \begin_layout Description
-POINT refers to an addressable port within a module
+POINT refers to an addressable port within a module or a builtin machine
+ with that name (see Section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sub:Builtin-classes"
+
+\end_inset
+
+)
 \end_layout
 
 \begin_layout Description
@@ -1095,7 +1107,24 @@ receives a list of messages this machine receives
 \end_layout
 
 \begin_layout Subsection
+Expressions
+\end_layout
+
+\begin_layout Standard
+Expressions are based on C language expressions, standard arithmetic and
+ bitwise operations are supported (with the exception at the moment of bitwise
+ shift operators).
+\end_layout
+
+\begin_layout Subsection
 Builtin classes
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:Builtin-classes"
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
@@ -1122,7 +1151,19 @@ FLAG two state machine with states 'on' and 'off'
 \end_layout
 
 \begin_layout Description
-POINT a machine that links to a IO Point
+POINT a machine that links to a IO Point or a digital value accessible through
+ the Internet of Things protocol.
+\end_layout
+
+\begin_layout Description
+PUBLISHER a machine that publishes changes to its 'message' property to
+ Internet Of Things brokers using its 'topic' property for the IoT topic.
+\end_layout
+
+\begin_layout Description
+SUBSCRIBER a machine that subscribes to messages from Internet Of Things
+ brokers to update its 'message' property when changes occur on the topic
+ named in its 'topic' property.
 \end_layout
 
 \begin_layout Section
@@ -1131,6 +1172,18 @@ Other features
 
 \begin_layout Subsection
 Expressions
+\end_layout
+
+\begin_layout Standard
+Recently added
+\end_layout
+
+\begin_layout Itemize
+XOR (`^')
+\end_layout
+
+\begin_layout Itemize
+Bitwise AND ('&'), OR ('|') and negate ('!')
 \end_layout
 
 \begin_layout Section
