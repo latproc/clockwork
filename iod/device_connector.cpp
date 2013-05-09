@@ -982,7 +982,14 @@ int main(int argc, const char * argv[])
             }
         }
         // send a message to iod
-        usleep(100);
+        
+        struct timespec sleep_time;
+        struct timespec remain_time;
+        sleep_time.tv_sec = 0;
+        sleep_time.tv_nsec = 2000000;
+        while (nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
+            sleep_time.tv_nsec = remain_time.tv_nsec;
+        }
     }
 
     iod_interface.stop();
