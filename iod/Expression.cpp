@@ -293,7 +293,7 @@ Value eval(Predicate *p, MachineInstance *m, bool left){
             case opBitAnd: res = l & r; break;
             case opBitOr: res = l | r; break;
             case opNegate: res = ~r; break;
-            case opBitXOr: res = l | r; break;
+            case opBitXOr: res = l ^ r; break;
 			case opAssign: res =l = r; break;
             case opMatch:
                 res = matches(l.asString().c_str(), r.asString().c_str());
