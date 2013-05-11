@@ -1492,6 +1492,11 @@ void MachineInstance::setStableState() {
                     }
                     else {
                         //DBG_M_AUTOSTATES << " already there\n";
+                        // reschedule timer triggers for this state
+                        if (s.uses_timer) {
+                            //DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
+                            needs_check++;
+                        }
                     }
                     if (s.subcondition_handlers) {
                         std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
@@ -1517,8 +1522,11 @@ void MachineInstance::setStableState() {
                     found_match = true;
                     continue; // skip to the end of the stable state loop
                 }
-                else
+                else {
                     DBG_M_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
+                    if (s.uses_timer)
+                        needs_check++;
+                }
 
 	        }
             // this state is not active so ensure its subcondition flags are turned off
