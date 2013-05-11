@@ -153,6 +153,32 @@ void StableState::fired(Trigger *trig) {
     if (owner) ++owner->needs_check;
 }
 
+void StableState::refreshTimer() {
+    // prepare a new trigger. note: very short timers will still be scheduled
+    trigger = new Trigger("Timer");
+    long trigger_time;
+
+    // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
+    //   we should trigger at v.iValue+1
+    if (timer_val.kind == Value::t_symbol) {
+        Value v = owner->getValue(timer_val.sValue);
+        if (v.kind != Value::t_integer) {
+            NB_MSG << owner->getName() << " Error: timer value for state " << state_name << " is not numeric\n";
+                return;
+            }
+            else
+                trigger_time = v.iValue;
+        }
+        else if (timer_val.kind == Value::t_integer)
+            trigger_time = timer_val.iValue;
+        else {
+            DBG_SCHEDULER << owner->getName() << " Warning: timer value for state " << state_name << " is not numeric\n";
+            return;
+        }
+        DBG_SCHEDULER << owner->getName() << " Scheduling timer for " << timer_val*1000 << "us\n";
+        Scheduler::instance()->add(new ScheduledItem(trigger_time*1000, new FireTriggerAction(owner, trigger)));
+}
+
 std::map<std::string, MachineInstance*> machines;
 std::map<std::string, MachineClass*> machine_classes;
 
@@ -1458,6 +1484,8 @@ void MachineInstance::setStableState() {
     }
     else {
 		bool found_match = false;
+        const long MAX_TIMER = 100000000L;
+        long next_timer = MAX_TIMER; // during the search, we find the shortest timer value and schedule a wake-up
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             StableState &s = stable_states[ss_idx];
 			// the following test should be enabled but there is currently a situation that 
@@ -1495,7 +1523,9 @@ void MachineInstance::setStableState() {
                         // reschedule timer triggers for this state
                         if (s.uses_timer) {
                             //DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
-                            needs_check++;
+                            Value v = getValue(s.timer_val.sValue);
+                            if (v.kind == Value::t_integer && v.iValue < next_timer)
+                                next_timer = v.iValue;
                         }
                     }
                     if (s.subcondition_handlers) {
@@ -1524,11 +1554,33 @@ void MachineInstance::setStableState() {
                 }
                 else {
                     DBG_M_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
-                    if (s.uses_timer)
-                        needs_check++;
+                    if (s.uses_timer) {
+                        Value v = getValue(s.timer_val.sValue);
+                        if (v.kind == Value::t_integer && v.iValue < next_timer) {
+                            // we would like to say  next_timer = v.iValue; here but since we have already been in this
+                            // state for some time we need to sat:
+                            Value current_timer = getTimerVal();
+                            next_timer = v.iValue - current_timer.iValue;
+                        }
+                    }
                 }
 
 	        }
+            if (next_timer < MAX_TIMER) {
+                /*
+                 If only we could now just schedule a timer event:
+                     Trigger *trigger = new Trigger("Timer");
+                     Scheduler::instance()->add(new ScheduledItem(next_timer*1000, new FireTriggerAction(owner, trigger)));
+                 unfortunately, the current code still has a bug because the 'uses_timer' flag of stable states
+                 simply indicates that the state depends on *something* that uses a timer but that may be another
+                 machine and that machine may not be in the state we are interested in.
+                 
+                 Workaround for now: check stable states every millisecond or so if any state uses a timer.
+                 */
+                Trigger *trigger = new Trigger("Timer");
+                Scheduler::instance()->add(new ScheduledItem(1000, new FireTriggerAction(this, trigger)));
+                trigger->release();
+            }
             // this state is not active so ensure its subcondition flags are turned off
             {
 				if (s.subcondition_handlers) {
