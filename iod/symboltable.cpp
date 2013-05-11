@@ -506,7 +506,7 @@ Value &Value::operator &(const Value &other) {
 		return *this;
 	}
 	switch(kind) {
-		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue & other.iValue; break;
+		case t_integer: iValue = iValue & other.iValue; break;
 		case t_bool: bValue &= other.bValue;
 		default: ;
 	}
@@ -522,7 +522,7 @@ Value &Value::operator |(const Value &other) {
 		return *this;
 	}
 	switch(kind) {
-		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue | other.iValue; break;
+		case t_integer: iValue = iValue | other.iValue; break;
 		case t_bool: bValue |= other.bValue;
 		default: ;
 	}
@@ -538,7 +538,7 @@ Value &Value::operator ^(const Value &other) {
 		return *this;
 	}
 	switch(kind) {
-		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue ^ other.iValue; break;
+		case t_integer: iValue = iValue ^ other.iValue; break;
 		case t_bool: bValue ^= other.bValue;
 		default: ;
 	}

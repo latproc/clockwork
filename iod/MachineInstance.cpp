@@ -89,14 +89,14 @@ Transition &Transition::operator=(const Transition &other) {
 
 
 ConditionHandler::ConditionHandler(const ConditionHandler &other)
-: condition(other.condition),
-command_name(other.command_name),
-flag_name(other.flag_name),
-timer_val(other.timer_val),
-action(other.action),
-trigger(other.trigger),
-uses_timer(other.uses_timer),
-triggered(other.triggered)
+    : condition(other.condition),
+    command_name(other.command_name),
+    flag_name(other.flag_name),
+    timer_val(other.timer_val),
+    action(other.action),
+    trigger(other.trigger),
+    uses_timer(other.uses_timer),
+    triggered(other.triggered)
 {
     if (trigger) trigger->retain();
 }
@@ -151,6 +151,32 @@ StableState::StableState (const StableState &other)
 
 void StableState::fired(Trigger *trig) {
     if (owner) ++owner->needs_check;
+}
+
+void StableState::refreshTimer() {
+    // prepare a new trigger. note: very short timers will still be scheduled
+    trigger = new Trigger("Timer");
+    long trigger_time;
+
+    // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
+    //   we should trigger at v.iValue+1
+    if (timer_val.kind == Value::t_symbol) {
+        Value v = owner->getValue(timer_val.sValue);
+        if (v.kind != Value::t_integer) {
+            NB_MSG << owner->getName() << " Error: timer value for state " << state_name << " is not numeric\n";
+                return;
+            }
+            else
+                trigger_time = v.iValue;
+        }
+        else if (timer_val.kind == Value::t_integer)
+            trigger_time = timer_val.iValue;
+        else {
+            DBG_SCHEDULER << owner->getName() << " Warning: timer value for state " << state_name << " is not numeric\n";
+            return;
+        }
+        DBG_SCHEDULER << owner->getName() << " Scheduling timer for " << timer_val*1000 << "us\n";
+        Scheduler::instance()->add(new ScheduledItem(trigger_time*1000, new FireTriggerAction(owner, trigger)));
 }
 
 std::map<std::string, MachineInstance*> machines;
@@ -343,21 +369,21 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 
 MachineInstance::MachineInstance(InstanceType instance_type) 
         : Receiver(""), 
-_type("Undefined"), 
-io_interface(0), 
-owner(0), 
-needs_check(1),
-uses_timer(false),
-my_instance_type(instance_type),
-state_change(0), 
-state_machine(0), 
-current_state("undefined"),
-is_enabled(false),
-locked(0),
-modbus_exported(none),
-saved_state("undefined"),
-current_state_val("undefined"),
-is_active(false)
+    _type("Undefined"), 
+    io_interface(0), 
+    owner(0), 
+    needs_check(1),
+    uses_timer(false),
+    my_instance_type(instance_type),
+    state_change(0), 
+    state_machine(0),
+    current_state("undefined"),
+    is_enabled(false),
+    locked(0),
+    modbus_exported(none),
+    saved_state("undefined"),
+    current_state_val("undefined"),
+    is_active(false)
 {
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
@@ -370,21 +396,21 @@ is_active(false)
 
 MachineInstance::MachineInstance(CStringHolder name, const char * type, InstanceType instance_type)
         : Receiver(name), 
-_type(type), 
-io_interface(0), 
-owner(0), 
-needs_check(1),
-uses_timer(false),
-my_instance_type(instance_type),
-state_change(0), 
-state_machine(0), 
-current_state("undefined"),
-is_enabled(false),
-locked(0),
-modbus_exported(none),
-saved_state("undefined"),
-current_state_val("undefined"),
-is_active(false)
+    _type(type), 
+    io_interface(0), 
+    owner(0), 
+    needs_check(1),
+    uses_timer(false),
+    my_instance_type(instance_type),
+    state_change(0), 
+    state_machine(0), 
+    current_state("undefined"),
+    is_enabled(false),
+    locked(0),
+    modbus_exported(none),
+    saved_state("undefined"),
+    current_state_val("undefined"),
+    is_active(false)
 {
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
@@ -429,7 +455,7 @@ void MachineInstance::describe(std::ostream &out) {
         }
     }
     if (listens.size()) {
-        out << "Lisening to: \n";
+        out << "Listening to: \n";
         std::set<Transmitter *>::iterator iter = listens.begin();
         while (iter != listens.end()) {
             Transmitter *t = *iter++;
@@ -443,10 +469,8 @@ void MachineInstance::describe(std::ostream &out) {
         out << "\n";
     }
     if (!active_actions.empty()) {
-        if (debug() && LogState::instance()->includes(DebugExtra::instance()->DEBUG_ACTIONS)) {
-            out << "active actions:\n";
-            displayActive(out);
-        }
+        out << "active actions:\n";
+        displayActive(out);
     }
     if (properties.size()) {
         out << "properties:\n  ";
@@ -455,6 +479,10 @@ void MachineInstance::describe(std::ostream &out) {
     if (locked) {
         out << "locked: " << locked->getName() << "\n";
     }
+    if (uses_timer)
+        out << "Uses timer in stable state evaluation\n";
+    const Value *current_timer_val = getTimerVal();
+    out << "Timer: " << *current_timer_val << "\n";
     if (stable_states.size()) {
         out << "Last stable state evaluation:\n";
         for (unsigned int i=0; i<stable_states.size(); ++i) {
@@ -833,6 +861,9 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 				}
 				// prepare a new trigger. note: very short timers will still be scheduled
 				s.trigger = new Trigger("Timer");
+
+                // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
+                //   we should trigger at v.iValue+1
 				if (s.timer_val.kind == Value::t_symbol) {
 					Value v = getValue(s.timer_val.sValue);
 					if (v.kind != Value::t_integer) {
@@ -867,6 +898,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 						}
                         ch.trigger = 0;
 						if (s.state_name == current_state.getName()) {
+                            // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
+                            //   we should trigger at v.iValue+1
 							ch.trigger = new Trigger("Timer");
 							if (ch.timer_val.kind == Value::t_symbol) {
 								Value v = getValue(ch.timer_val.sValue);
@@ -1451,6 +1484,8 @@ void MachineInstance::setStableState() {
     }
     else {
 		bool found_match = false;
+        const long MAX_TIMER = 100000000L;
+        long next_timer = MAX_TIMER; // during the search, we find the shortest timer value and schedule a wake-up
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             StableState &s = stable_states[ss_idx];
 			// the following test should be enabled but there is currently a situation that 
@@ -1485,6 +1520,13 @@ void MachineInstance::setStableState() {
                     }
                     else {
                         //DBG_M_AUTOSTATES << " already there\n";
+                        // reschedule timer triggers for this state
+                        if (s.uses_timer) {
+                            //DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
+                            Value v = getValue(s.timer_val.sValue);
+                            if (v.kind == Value::t_integer && v.iValue < next_timer)
+                                next_timer = v.iValue;
+                        }
                     }
                     if (s.subcondition_handlers) {
                         std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
@@ -1510,10 +1552,35 @@ void MachineInstance::setStableState() {
                     found_match = true;
                     continue; // skip to the end of the stable state loop
                 }
-                else
+                else {
                     DBG_M_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
+                    if (s.uses_timer) {
+                        Value v = getValue(s.timer_val.sValue);
+                        if (v.kind == Value::t_integer && v.iValue < next_timer) {
+                            // we would like to say  next_timer = v.iValue; here but since we have already been in this
+                            // state for some time we need to sat:
+                            Value current_timer = getTimerVal();
+                            next_timer = v.iValue - current_timer.iValue;
+                        }
+                    }
+                }
 
 	        }
+            if (next_timer < MAX_TIMER) {
+                /*
+                 If only we could now just schedule a timer event:
+                     Trigger *trigger = new Trigger("Timer");
+                     Scheduler::instance()->add(new ScheduledItem(next_timer*1000, new FireTriggerAction(owner, trigger)));
+                 unfortunately, the current code still has a bug because the 'uses_timer' flag of stable states
+                 simply indicates that the state depends on *something* that uses a timer but that may be another
+                 machine and that machine may not be in the state we are interested in.
+                 
+                 Workaround for now: check stable states every millisecond or so if any state uses a timer.
+                 */
+                Trigger *trigger = new Trigger("Timer");
+                Scheduler::instance()->add(new ScheduledItem(1000, new FireTriggerAction(this, trigger)));
+                trigger->release();
+            }
             // this state is not active so ensure its subcondition flags are turned off
             {
 				if (s.subcondition_handlers) {

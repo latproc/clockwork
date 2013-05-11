@@ -102,6 +102,7 @@ struct StableState : public TriggerOwner {
         
     void setOwner(MachineInstance *m) { owner = m; }
     void fired(Trigger *trigger);
+    void refreshTimer();
 	
 	bool uses_timer;
 	Value timer_val;
