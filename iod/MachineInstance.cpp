@@ -89,14 +89,14 @@ Transition &Transition::operator=(const Transition &other) {
 
 
 ConditionHandler::ConditionHandler(const ConditionHandler &other)
-: condition(other.condition),
-command_name(other.command_name),
-flag_name(other.flag_name),
-timer_val(other.timer_val),
-action(other.action),
-trigger(other.trigger),
-uses_timer(other.uses_timer),
-triggered(other.triggered)
+    : condition(other.condition),
+    command_name(other.command_name),
+    flag_name(other.flag_name),
+    timer_val(other.timer_val),
+    action(other.action),
+    trigger(other.trigger),
+    uses_timer(other.uses_timer),
+    triggered(other.triggered)
 {
     if (trigger) trigger->retain();
 }
@@ -343,21 +343,21 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 
 MachineInstance::MachineInstance(InstanceType instance_type) 
         : Receiver(""), 
-_type("Undefined"), 
-io_interface(0), 
-owner(0), 
-needs_check(1),
-uses_timer(false),
-my_instance_type(instance_type),
-state_change(0), 
-state_machine(0), 
-current_state("undefined"),
-is_enabled(false),
-locked(0),
-modbus_exported(none),
-saved_state("undefined"),
-current_state_val("undefined"),
-is_active(false)
+    _type("Undefined"), 
+    io_interface(0), 
+    owner(0), 
+    needs_check(1),
+    uses_timer(false),
+    my_instance_type(instance_type),
+    state_change(0), 
+    state_machine(0),
+    current_state("undefined"),
+    is_enabled(false),
+    locked(0),
+    modbus_exported(none),
+    saved_state("undefined"),
+    current_state_val("undefined"),
+    is_active(false)
 {
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
@@ -370,21 +370,21 @@ is_active(false)
 
 MachineInstance::MachineInstance(CStringHolder name, const char * type, InstanceType instance_type)
         : Receiver(name), 
-_type(type), 
-io_interface(0), 
-owner(0), 
-needs_check(1),
-uses_timer(false),
-my_instance_type(instance_type),
-state_change(0), 
-state_machine(0), 
-current_state("undefined"),
-is_enabled(false),
-locked(0),
-modbus_exported(none),
-saved_state("undefined"),
-current_state_val("undefined"),
-is_active(false)
+    _type(type), 
+    io_interface(0), 
+    owner(0), 
+    needs_check(1),
+    uses_timer(false),
+    my_instance_type(instance_type),
+    state_change(0), 
+    state_machine(0), 
+    current_state("undefined"),
+    is_enabled(false),
+    locked(0),
+    modbus_exported(none),
+    saved_state("undefined"),
+    current_state_val("undefined"),
+    is_active(false)
 {
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
@@ -429,7 +429,7 @@ void MachineInstance::describe(std::ostream &out) {
         }
     }
     if (listens.size()) {
-        out << "Lisening to: \n";
+        out << "Listening to: \n";
         std::set<Transmitter *>::iterator iter = listens.begin();
         while (iter != listens.end()) {
             Transmitter *t = *iter++;
@@ -443,10 +443,8 @@ void MachineInstance::describe(std::ostream &out) {
         out << "\n";
     }
     if (!active_actions.empty()) {
-        if (debug() && LogState::instance()->includes(DebugExtra::instance()->DEBUG_ACTIONS)) {
-            out << "active actions:\n";
-            displayActive(out);
-        }
+        out << "active actions:\n";
+        displayActive(out);
     }
     if (properties.size()) {
         out << "properties:\n  ";
@@ -455,6 +453,10 @@ void MachineInstance::describe(std::ostream &out) {
     if (locked) {
         out << "locked: " << locked->getName() << "\n";
     }
+    if (uses_timer)
+        out << "Uses timer in stable state evaluation\n";
+    const Value *current_timer_val = getTimerVal();
+    out << "Timer: " << *current_timer_val << "\n";
     if (stable_states.size()) {
         out << "Last stable state evaluation:\n";
         for (unsigned int i=0; i<stable_states.size(); ++i) {
@@ -833,6 +835,9 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 				}
 				// prepare a new trigger. note: very short timers will still be scheduled
 				s.trigger = new Trigger("Timer");
+
+                // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
+                //   we should trigger at v.iValue+1
 				if (s.timer_val.kind == Value::t_symbol) {
 					Value v = getValue(s.timer_val.sValue);
 					if (v.kind != Value::t_integer) {
@@ -867,6 +872,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 						}
                         ch.trigger = 0;
 						if (s.state_name == current_state.getName()) {
+                            // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
+                            //   we should trigger at v.iValue+1
 							ch.trigger = new Trigger("Timer");
 							if (ch.timer_val.kind == Value::t_symbol) {
 								Value v = getValue(ch.timer_val.sValue);
