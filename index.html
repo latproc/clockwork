@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Latproc by latproc</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Latproc</h1>
+        <p>A finite statemachine-based language and supporting software for Industrial Control and Simple Automation</p>
+
+        <p class="view"><a href="https://github.com/latproc/latproc">View the Project on GitHub <small>latproc/latproc</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/latproc/latproc/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/latproc/latproc/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/latproc/latproc">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <p>Copyright (C) 2012 Martin Leadbeater, Michael O'Connor</p>
+
+<p>See the LICENCES file for license information.</p>
+
+<p>Martin Leadbeater,  <a href="mailto:martin.leadbeater@gmail.com">martin.leadbeater@gmail.com</a></p>
+
+<p>PLEASE NOTE: 
+    This software is a work in progress and may be tricky to install. We are
+   trying to improve this situation and should have some significant improvements 
+   over the next few months.</p>
+
+<h1>Latproc - Language and Tools for Process Control</h1>
+
+<h2>Introduction</h2>
+
+<p>This software provides a high level, finite statemachine-based language 
+called Clockwork that can be used to describe process control systems. 
+Currently, this software supports the Beckhoff EtherCat system (<a href="http://www.beckhoff.de/">http://www.beckhoff.de/</a>) 
+through the IgH EtherCAT Master for Linux (<a href="http://www.etherlab.org/en/ethercat/index.php">http://www.etherlab.org/en/ethercat/index.php</a>)
+and has experimental support for Internet of Things integration</p>
+
+<p>Below are some instructions to help you build the program please
+see the documentation for details about the language itself.</p>
+
+<h2>Instructions</h2>
+
+<p>Note: this software requires that the following software be installed:</p>
+
+<pre><code>* libmodbus (http://libmodbus.org/)  - for communication with modbus/tcp terminals
+
+* zeromq (http://www.zeromq.org/) - for inter-program messaging
+
+* boost (http://boost.org/) - various c++ bits and pieces
+
+* mosquitto (http://mosquitto.org) - MQTT broker and protocol implementation
+</code></pre>
+
+<p>Part A - Building Latproc tools for standalone experimentation</p>
+
+<p>The instructions in this part build the Clockwork programming language interpreter
+without the need for the IgH EtherCAT Master.</p>
+
+<p>Note, the Makefile used here assumes libzmq is installed in /usr/local/</p>
+
+<ul>
+<li>
+<p>pull the latproc project from git</p>
+
+<p>git clone git://github.com/latproc/latproc.git latproc</p>
+</li>
+<li>
+<p>change to the latproc directory and build the interpreter</p>
+
+<p>cd latproc/iod
+make -f Makefile.cw</p>
+
+<p>Part B - setting up the user database for the web interface</p>
+
+<p>The user database can be created using scripts/create_webiodb.</p>
+
+<p>By default it will be created in www/app with the name 'webio.db' these
+ settings can be changed in settings.php</p>
+
+<p>Part C - Setting up the IgH EtherCAT software to be used but the Latproc software</p>
+</li>
+</ul><p>The following instructions are brutally terse at present and we apologise
+for that. Please watch this space for more precise instructions.</p>
+
+<ul>
+<li>
+<p>pull the latproc project from git</p>
+
+<p>git clone git://github.com/latproc/latproc.git latproc</p>
+
+<p>please do not cd into the latproc directory yet.</p>
+</li>
+<li>
+<p>extract the etherlab kit from the EtherLab website:
+see <a href="http://www.etherlab.org/en/ethercat/index.php">http://www.etherlab.org/en/ethercat/index.php</a></p>
+
+<p>tar/hg/... etc</p>
+
+<p>Note: The following instructions assume your extract was placed into 
+    a directory called 'ethercat' next to the latproc directory.</p>
+</li>
+<li>
+<p>configure and build etherlabs ethercat component</p>
+
+<p>cd ethercat
+./configure --enable-generic --enable-e1000e=no --enable-8139too=no
+make</p>
+
+<p>(your configure options may be different from ours)</p>
+</li>
+<li>
+<p>the latproc io daemon (iod) uses some parts from ethercat that are 
+not built into the ethercat library; the following script prepares
+a build area for these bits (ec_tool). The script needs to know
+the location of the ethercat extract, passed as the first parameter. </p>
+
+<p>cd latproc
+scripts/prepare_ec_tool ethercat-path</p>
+</li>
+<li>
+<p>build the object files in the ec_tool build area</p>
+
+<p>cd ec_tool
+make</p>
+</li>
+<li>
+<p>build the latproc tools (in the iod directory)</p>
+
+<p>cd ../iod
+make</p>
+</li>
+</ul><p>At this point, the following tools should have been created:</p>
+
+<p>iod  : a daemon that talks to EtherCAT to interact with io
+  iosh : a shell to interact with iod
+  zmq_monitor : a program to monitor zmq messages published by iod
+  persistd : a basic persistence daemon to record state changes from iod</p>
+
+<p>You may also like to install libmodbus and edit the makefile to build:</p>
+
+<p>modbusd : a modbus interface to iod</p>
+
+<h2>Sponsors</h2>
+
+<p>Thanks to our sponsors.</p>
+
+<p><img src="https://raw.github.com/latproc/latproc/master/doc/Shuttleworth-Funded.jpg" alt="Shuttleworth Funded"></p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/latproc">latproc</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
