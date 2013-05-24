@@ -1901,6 +1901,18 @@ const Value &MachineInstance::getValue(std::string property) {
 	return SymbolTable::Null;
 }
 
+bool MachineInstance::hasState(const std::string &state_name) const {
+	//is this a state?
+    if (state_machine) {
+        BOOST_FOREACH(State &s, state_machine->states) {
+            if (s.getName() == state_name) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void MachineInstance::setValue(std::string property, Value new_value) {
 	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
 	if (property.find('.') != std::string::npos) {
