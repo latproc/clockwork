@@ -186,7 +186,7 @@ Action::Status SetStateAction::checkComplete() {
     // NOTE:  this may never finish
 }
 std::ostream &SetStateAction::operator<<(std::ostream &out) const {
-    return out << "SetStateAction " << target.get() << " to " << value << " (status=" << status << ")";
+    return out << "SetStateAction " << target.get() << " to " << value;
 }
 
 Action::Status MoveStateAction::run()
