@@ -362,6 +362,15 @@ void semantic_analysis() {
                             break;
                         }
                     }
+                    // no matching name in the parameter list, is a local machine being passed?
+                    for (unsigned int k=0; k<mi->locals.size(); ++k) {
+                        if (p.val == mi->locals[k].machine->getName()) {
+                            p.real_name = mi->getName() + ".";
+                            p.real_name += p.val.sValue;
+                            m->parameters[j].machine = mi->locals[k].machine;
+                            break;
+                        }
+                    }
                 }
             }
 			for (unsigned int j=0; j<mi->locals[i].machine->parameters.size(); ++j) {
