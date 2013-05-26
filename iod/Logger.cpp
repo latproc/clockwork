@@ -65,7 +65,7 @@ std::ostream&Logger::log(Level l){
   	    localtime_r(&now,&now_tm);
 		struct timeval now_tv;
 		gettimeofday(&now_tv,0);
-		char buf[30];
+		char buf[50];
 		sprintf(buf,"%04d-%02d-%02d %02d:%02d:%02d.%03ld ",
 			now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
 			now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, now_tv.tv_usec / 1000);

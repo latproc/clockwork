@@ -226,6 +226,9 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 				p->cached_entry = m->getCurrentStateVal();
 				return p->cached_entry;
 			}
+            else if (m->hasState(v->sValue)) {
+                return v;
+            }
 			else {
 				const Value *prop = &m->getValue(v->sValue); // property lookup
 				if (*prop != SymbolTable::Null) {

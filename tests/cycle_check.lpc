@@ -25,20 +25,20 @@ Check MACHINE in, out {
     COMMAND reset { in_code := 0; out_code := 0; code := 0; }
     
     RECEIVE in.on_enter { 
-        in_code := in_code + 1; 
-        code := in_code + out_code; 
+        in_code := in_code | 1; 
+        code := in_code | out_code; 
     }
     RECEIVE in.off_enter { 
-        in_code := in_code + 2; 
-        code := in_code + out_code;
+        in_code := in_code | 2; 
+        code := in_code | out_code;
     }
     RECEIVE out.on_enter { 
-        out_code := out_code + 4;
-        code := in_code + out_code;
+        out_code := out_code | 4;
+        code := in_code | out_code;
     }
     RECEIVE out.off_enter { 
-        out_code := out_code + 8; 
-        code := in_code + out_code;
+        out_code := out_code | 8; 
+        code := in_code | out_code;
     }
 }
 
@@ -56,16 +56,16 @@ Checker2 MACHINE in, out {
     COMMAND reset { code := 0; }
     
     RECEIVE in.on_enter {
-        code := code + 1
+        code := code | 1
     }
     RECEIVE in.off_enter {
-        code := code + 2
+        code := code | 2
     }
     RECEIVE out.on_enter {
-        code := code + 4
+        code := code | 4
     }
     RECEIVE out.off_enter {
-        code := code + 8
+        code := code | 8
     }
 }
 

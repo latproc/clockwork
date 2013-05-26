@@ -94,3 +94,22 @@ ErrorTest MACHINE {
 }
 error_test ErrorTest(wire:U4);
 
+CountUp MACHINE {
+    OPTION target 0;
+    OPTION val 0;
+    
+    startup_delay WHEN SELF IS INIT AND TIMER < 2000;
+    done WHEN val >= target;
+    stepping WHEN SELF IS running;
+    running WHEN val < target;
+    
+    ENTER stepping { val := val + 1; }
+    COMMAND reset { val := 0; }
+    
+    ENTER startup_delay { LOG "starting countup"; }
+    ENTER done { LOG "finished countup"; 
+        SHUTDOWN
+    }
+}
+
+count1000 CountUp(target:5000);
