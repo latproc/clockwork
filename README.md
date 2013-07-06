@@ -1,4 +1,3 @@
-[![githalytics.com alpha](https://cruel-carlota.pagodabox.com/0d66de942c72677c80a4d443824479a4 "githalytics.com")](http://githalytics.com/latproc/clockwork)
 Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
 See the LICENCES file for license information.
@@ -130,4 +129,5 @@ You may also like to install libmodbus and edit the makefile to build:
 
   modbusd : a modbus interface to iod
 
+[![githalytics.com alpha](https://cruel-carlota.pagodabox.com/0d66de942c72677c80a4d443824479a4 "githalytics.com")](http://githalytics.com/latproc/clockwork)
 
