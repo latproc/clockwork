@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <string.h>
+#include <boost/thread.hpp>
 #include "ECInterface.h"
 #include "IOComponent.h"
 #include <boost/thread/condition.hpp>
@@ -214,8 +215,15 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 			dr->position = m->position;
 			dr->vendor_id = m->vendor_id;
 			dr->product_code = m->product_code;
-			dr->index = m->syncs[i].pdos[0].entries[0].index; 
-			dr->subindex = m->syncs[i].pdos[0].entries[0].subindex;
+				
+			if (m->syncs[i].pdos) {
+				dr->index = m->syncs[i].pdos[0].entries[0].index;
+				dr->subindex = m->syncs[i].pdos[0].entries[0].subindex;
+			}
+			else {
+				dr->index = 0;
+				dr->subindex = 0;
+			}
 			dr->offset = &m->offsets[i];
 			++idx;
 			std::cout << dr->alias <<", " <<dr->position << ", " << std::hex << ", "<< dr->vendor_id << ", "<< dr->product_code

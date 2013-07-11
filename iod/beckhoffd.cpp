@@ -42,6 +42,8 @@
 #include "IODCommands.h"
 #include "Statistics.h"
 
+//#include "MachineInstance.h"
+
 boost::mutex ecat_mutex;
 boost::condition_variable_any ecat_polltime;
 
@@ -103,6 +105,87 @@ void checkInputs() {
 
 #endif
 
+
+struct BeckhoffdToggle : public IODCommand {
+	bool run(std::vector<std::string> &params);
+};
+
+    bool BeckhoffdToggle::run(std::vector<std::string> &params) {
+        if (params.size() == 2) {
+			DBG_MSG << "toggling " << params[1] << "\n";
+			size_t pos = params[1].find('-');
+			std::string machine_name = params[1];
+			if (pos != std::string::npos) machine_name.erase(pos);
+            Output *device = dynamic_cast<Output *>(lookup_device(machine_name));
+            if (device) {
+                if (device->isOn()) 
+					device->turnOff();
+                else if (device->isOff()) 
+						device->turnOn();
+				else {
+					error_str = "device is neither on nor off\n";
+					return false;
+				}
+                result_str = "OK";
+                return true;
+            }
+			else {
+				error_str = "Usage: toggle device_name";
+				return false;
+		    }
+        }
+		else {
+			error_str = "Usage: toggle device_name";
+			return false;
+	    }
+	}
+
+
+struct BeckhoffdListJSON : public IODCommand {
+	bool run(std::vector<std::string> &params);
+};
+
+    bool BeckhoffdListJSON::run(std::vector<std::string> &params) {
+        cJSON *root = cJSON_CreateArray();
+        std::map<std::string, IOComponent*>::const_iterator iter = devices.begin();
+        while (iter != devices.end()) {
+			std::string name_str = (*iter).first;
+            IOComponent *ioc = (*iter++).second;
+			if (name_str == "!") continue; //TBD
+			cJSON *node = cJSON_CreateObject();
+    		cJSON_AddStringToObject(node, "name", name_str.c_str());
+			cJSON_AddStringToObject(node, "class", ioc->type());
+			if (strcmp(ioc->type(), "Output") == 0)
+    				cJSON_AddStringToObject(node, "tab", "Outputs");
+			else
+    				cJSON_AddStringToObject(node, "tab", "Inputs");
+
+			if (ioc->isOn())
+    			cJSON_AddStringToObject(node, "state", "on");
+			else if (ioc->isOff())
+    			cJSON_AddStringToObject(node, "state", "off");
+			else
+    			cJSON_AddStringToObject(node, "state", "unknown");
+		cJSON_AddTrueToObject(node, "enabled");
+
+   		    cJSON_AddItemToArray(root, node);
+        }
+        char *res = cJSON_Print(root);
+        cJSON_Delete(root);
+        bool done;
+        if (res) {
+            result_str = res;
+            free(res);
+            done = true;
+        }
+        else {
+            error_str = "JSON error";
+            done = false;
+        }
+        return done;
+    }
+
+
 struct CommandThread {
     void operator()() {
         zmq::context_t context (1);
@@ -152,10 +235,10 @@ struct CommandThread {
 	            }
 	#endif
 	            else if (count == 2 && ds == "TOGGLE") {
-	                command = new IODCommandToggle;
+	                command = new BeckhoffdToggle;
 	            }
-	            else if (count == 2 && ds == "LIST" && params[1] == "JSON") {
-	                command = new IODCommandListJSON;
+	            else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
+	                command = new BeckhoffdListJSON;
 	            }
 	            else {
 	                command = new IODCommandUnknown;
@@ -169,9 +252,9 @@ struct CommandThread {
 	            free(data);
             }
             catch (std::exception e) {
-                std::cout << e.what() << "\n";
-				usleep(200000);
-               //exit(1);
+                //std::cout << e.what() << "\n";
+		//usleep(200000);
+                //exit(1);
             }
         } 
     }
@@ -235,14 +318,15 @@ int main (int argc, char const *argv[])
 					if (module->sync_count>1) {
 						while (sm_idx < module->sync_count && (bit_pos+1) > module->syncs[sm_idx].n_pdos) {
 							bit_pos -= module->syncs[sm_idx].n_pdos;
-							direction = module->syncs[sm_idx].dir;
 							++sm_idx;
+							if (sm_idx < module->sync_count)
+								direction = module->syncs[sm_idx].dir;
 						}
 					}
 					// default to input if the point type is not specified
 					if (direction == EC_DIR_OUTPUT) {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << position << "_OUT_" << bit_pos;
+						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2) << position << "_OUT_" << std::setfill('0') << std::setw(2) << (bit_position+1);
 						const char *name_str = sstr.str().c_str();
 						std::cerr << "Adding new output device " << name_str 
 							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
@@ -251,10 +335,15 @@ int main (int argc, char const *argv[])
 	            		Output *o = new Output(module->offsets[sm_idx], bit_pos);
 	            		output_list.push_back(o);
 	            		devices[name_str] = o;
+						// for IOD Commands support
+						//MachineInstance *m = new MachineInstance(name_str, "POINT");
+						//m->io_interface = o;
+						//o->addDependent(m);
+						//machines[name_str] = m;
 					}
 					else {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << position << "_IN_" << bit_pos;
+						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2)<< position << "_IN_" << std::setfill('0') << std::setw(2) << (bit_position+1);
 						char *name_str = strdup(sstr.str().c_str());
 						std::cerr << "Adding new input device " << name_str
 							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
@@ -262,6 +351,12 @@ int main (int argc, char const *argv[])
 						IOComponent::add_io_entry(name_str, module->offsets[sm_idx], bit_pos);
 						Input *in = new Input(module->offsets[sm_idx], bit_pos);
 						devices[name_str] = in;
+						// for IOD Commands support
+						//MachineInstance *m = new MachineInstance(name_str, "POINT");
+						//m->io_interface = in;
+						//in->addDependent(m);
+						//machines[name_str] = m;
+
 						free(name_str);
 					}
 				}
@@ -313,6 +408,16 @@ int main (int argc, char const *argv[])
 			std::cout << *o << "\n";
             o->turnOff();
         }
+
+#if 0
+		// enable machine instances
+		std::list<MachineInstance *>::iterator m_iter;
+		m_iter = MachineInstance::begin();
+		while (m_iter != MachineInstance::end()) {
+			MachineInstance *m = *m_iter++;
+			m->enable();
+		}
+#endif
         
         CommandThread stateMonitor;
         boost::thread monitor(boost::ref(stateMonitor));

@@ -55,14 +55,14 @@ if ($user->isAdministrator()) {
 
 // static image generator
 function image_html($name, $filename) {
-	return '<img width=16 name="'.$name.'" src="img/' .  $filename . '"/>';
+	return '<img width=64 name="'.$name.'" src="img/' .  $filename . '"/>';
 }
 
 // toggle button html generator
 function button_image($name, $filename) {
 	global $use_ajax;
 	if ($use_ajax)
-		return '<img width=16 class="out" width=16 name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
+		return '<img width=64 class="out" width=16 name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
 	else
 		return '<input type="image" width=16 name="'.$name.'" src="img/' .  $filename . '"/>';
 }
@@ -139,9 +139,10 @@ if (json_last_error() != JSON_ERROR_NONE) {
 	display_json_error($res, $reply);
 	$config_entries = array();
 }
+//$debug_messages .= "\n" . count($config_entries) . " items found\n";
 //$debug_messages .= var_export($config_entries, true);
 
-$debug_messages .= var_export($_REQUEST, true);
+//$debug_messages .= "Request: " . var_export($_REQUEST, true) . "\n";
 /*
 	AJAX handlers for a status update and other commands
  */
@@ -214,7 +215,9 @@ if (json_last_error() != JSON_ERROR_NONE) {
 	display_json_error($res, $reply);
 	$slaves = array();
 }
-//$debug_messages .= "<literal>" . $reply . "</literal><br>\n";
+//$debug_messages .= "<literal>";
+//$debug_messages .= " " . count($slaves) . " slaves found\n";
+//$debug_messages .= $reply . "</literal><br>\n";
 
 /* each tab has a 'refresh' button that refreshes all tabs and navigates
 	back to the tab the user was on. This can be improved with a bit of
@@ -300,7 +303,7 @@ foreach ($tabs as $tab => $data) {
   $tabname = 'tabs-' . $n;
   $tabdata='<div id="'. $tabname . '" name="' . $tab . '"><table>' . "\n";
   if ($tab != 'Modules')
-		$tabdata .= '<thead><tr><th>Enabled</th><th>Name</th><th>State</th><th>Commands</th><th>Messages</th></tr></thead>';
+		$tabdata .= '<thead><tr><th style="width:5%">Enabled</th><th>Name</th><th>State</th><th>Commands</th><th>Messages</th></tr></thead>';
   else
 		$tabdata .= '<thead><tr><th>Name</th><th>Matched Bus Module</th></tr></thead>';
 
@@ -399,13 +402,13 @@ foreach ($tabs as $tab => $data) {
 		}
 		else { 
 			// static objects
-			$tabdata .= '<td>' . $point . ":</td><td>";
+			$tabdata .= '<td></td><td>' . $point . ":</td><td>";
 			// TBD rather than a match, use the status property in the response
 			if (preg_match("/.*on.*/",$status))
 				 $tabdata .= image_html($point, $image_prefix . "_on.png");
 			else
 				$tabdata .= image_html($point, $image_prefix . ".png");
-			$tabdata .= "</td>\n";
+			$tabdata .= " $status</td>\n";
 		}
 	}
 	else if ($curr->class == "MODULE") {
@@ -493,7 +496,7 @@ print <<<EOD
 			list: "json", tab: tabname}, 
 			function(data){ 
 				res=JSON.parse(data);
-				$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
+				//$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 				for (var i = 0; i < res.length; i++) {
 					if (res[i].class != "MODULE") {
 						btn=$('[name='+res[i].name+']');
@@ -581,7 +584,7 @@ print <<<EOD
 				}
 			});
 		});
-		setTimeout("refresh()", 2000);
+		setTimeout("refresh()", 900);
 	})
 	</script>
 	$header_extras 
