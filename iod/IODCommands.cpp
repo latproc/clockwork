@@ -697,7 +697,11 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 
 #ifdef USE_ETHERCAT
 
-std::string tool_main(int argc, char **argv);
+#include <Command.h>
+int tool_main(int argc, char **argv);
+typedef list<Command *> CommandList;
+extern CommandList commandList;
+
 
 // in a real environment we can look for devices on the bus
 
@@ -755,7 +759,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
             
 	        for (j = 0; j < sync.pdo_count; j++) {
 	            m.getPdo(&pdo, slave.position, i, j);
-                
+                		std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
 				c_pdos[j + pdo_pos].index = pdo.index;
 				c_pdos[j + pdo_pos].n_entries = (unsigned int) pdo.entry_count;
 				if (pdo.entry_count)
@@ -765,11 +769,15 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
                 
 	            for (k = 0; k < pdo.entry_count; k++) {
 	                m.getPdoEntry(&entry, slave.position, i, j, k);
-                    
+                    			std::cout << " entry: " << k << "{" 
+						<< (int)entry.index <<", " 
+						<< (int)entry.subindex<<", "
+						<< (int)entry.bit_length <<"}";
 					c_entries[k + entry_pos].index = entry.index;
 					c_entries[k + entry_pos].subindex = entry.subindex;
 					c_entries[k + entry_pos].bit_length = entry.bit_length;
 	            }
+		    std::cout << "\n";
 	            entry_pos += pdo.entry_count;
 	        }
             
@@ -840,13 +848,28 @@ char *collectSlaveConfig(bool reconfigure)
                 argv[i] = strdup(params[i].c_str());
             }
             argv[argc] = 0;
-            std::string res = tool_main(argc, argv);
-            std::cout << res << "\n";
+            std::stringstream tool_output;
+            std::stringstream tool_err;
+            std::streambuf *old_cout = std::cout.rdbuf(tool_output.rdbuf());
+            std::streambuf *old_cerr = std::cerr.rdbuf(tool_err.rdbuf());
+            int res = tool_main(argc, argv);
+			std::cout.rdbuf(old_cout);
+			std::cerr.rdbuf(old_cerr);
+            std::cout << tool_output.str() << "\n";
+            std::cerr << tool_err.str() << "\n";
             for (int i=0; i<argc; ++i) {
                 free(argv[i]);
             }
             free(argv);
-            result_str = res;
+            result_str = tool_output.str();
+			//cleanup the command list left over from the ethercat tool
+			CommandList::iterator iter = commandList.begin();
+			while (iter != commandList.end()) {
+				Command *cmd = *iter;
+				iter = commandList.erase(iter);
+				delete cmd;
+			}
+		
             return true;
         }
         else {
