@@ -254,8 +254,10 @@ void ProcessingThread::operator()()  {
         
         gettimeofday(&end_t, 0);
         delta = get_diff_in_microsecs(&end_t, &start_t);
-        if (delta < 1000000/ECInterface::FREQUENCY)
+        /*
+         if (delta < 1000000/ECInterface::FREQUENCY)
             usleep(1000000/ECInterface::FREQUENCY - delta);
+         */
     }
 }
 
@@ -335,7 +337,7 @@ int main (int argc, char const *argv[])
     MQTTInterface::instance()->init();
     MQTTInterface::instance()->start();
     
-	ECInterface::FREQUENCY=1000;
+	ECInterface::FREQUENCY=100000;
 
 	//ECInterface::instance()->start();
     
@@ -464,7 +466,7 @@ int main (int argc, char const *argv[])
 //            boost::mutex::scoped_lock lock(model_mutex);
 //            model_updated.wait(model_mutex);
 //        }
-        usleep(900);
+        usleep(200);
         if (processing_sequence != processMonitor.sequence) { // did the model update?
             ECInterface::instance()->sendUpdates();
             ++processing_sequence;
@@ -472,8 +474,8 @@ int main (int argc, char const *argv[])
         struct timeval now;
         gettimeofday(&now,0);
         long delta = (now.tv_sec - then.tv_sec) * 1000000 + ( (long)now.tv_usec - (long)then.tv_usec);
-        if (1000-delta > 100)
-            usleep(1000-delta);
+        //if (1000-delta > 100)
+        //    usleep(1000-delta);
         then = now;
     }
     MQTTInterface::instance()->stop();
