@@ -1,3 +1,20 @@
+c01 Chopstick;
+c02 Chopstick;
+c03 Chopstick;
+c04 Chopstick;
+c05 Chopstick;
+c06 Chopstick;
+c07 Chopstick;
+
+phil1 Philosopher c01, c02;
+phil2 Philosopher c02, c03;
+phil3 Philosopher c03, c04;
+phil4 Philosopher c04, c05;
+phil5 Philosopher c05, c06;
+phil6 Philosopher c06, c07;
+phil7 Philosopher c07, c01;
+
+
 Chopstick MACHINE {
 	OPTION tab Test;
 	OPTION owner "noone";
@@ -6,9 +23,9 @@ Chopstick MACHINE {
 }
 
 Philosopher MACHINE left, right {
-	OPTION tab Test;
-    OPTION eat_time 20;
-    OPTION timer 20;
+	OPTION tab Test;     # web page to display status on
+    OPTION eat_time 20;  # time it takes to eat
+    OPTION timer 20;     # time spent between meals
     
     full FLAG;
     okToStart FLAG;
@@ -58,20 +75,4 @@ Philosopher MACHINE left, right {
     TRANSITION INIT TO starting REQUIRES okToStart IS on;
     TRANSITION eating TO finished REQUIRES okToStop IS on;
 }
-c01 Chopstick;
-c02 Chopstick;
-c03 Chopstick;
-c04 Chopstick;
-c05 Chopstick;
-c06 Chopstick;
-c07 Chopstick;
-
-phil1 Philosopher c01, c02;
-phil2 Philosopher c02, c03;
-phil3 Philosopher c03, c04;
-phil4 Philosopher c04, c05;
-phil5 Philosopher c05, c06;
-phil6 Philosopher c06, c07;
-phil7 Philosopher c07, c01;
-
 

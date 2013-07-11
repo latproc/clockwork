@@ -27,3 +27,23 @@ TIMER MACHINE (timeout:1) {
 	TRANSITION expired,stopped TO running USING start;
 }
 
+JAWSTATES MACHINE {
+  Open STATE;
+  RequestOpen STATE;
+  Close STATE;
+  RequestClose INITIAL;
+}
+State JAWSTATES (tab:GrabCarriage);
+
+TimerBug MACHINE { 
+    OPTION expired 0;
+    switch FLAG;
+    
+    finished WHEN SELF IS working && TIMER > expired;
+    working WHEN switch IS on;
+    idle DEFAULT;
+    
+    ENTER finished { SET switch TO off;  expired:= 0; LOG "done" }
+    ENTER working { expired := 300; LOG "starting" }
+}
+timer_test TimerBug;
