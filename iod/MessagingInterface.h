@@ -21,6 +21,7 @@
 #ifndef latprocc_MessagingInterface_h
 #define latprocc_MessagingInterface_h
 
+#include <string>
 #include <zmq.hpp>
 #include "Message.h"
 
