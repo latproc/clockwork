@@ -151,15 +151,23 @@ struct BeckhoffdListJSON : public IODCommand {
         while (iter != devices.end()) {
 			std::string name_str = (*iter).first;
             IOComponent *ioc = (*iter++).second;
+			if (name_str == "!") continue; //TBD
 			cJSON *node = cJSON_CreateObject();
     		cJSON_AddStringToObject(node, "name", name_str.c_str());
 			cJSON_AddStringToObject(node, "class", ioc->type());
+			if (strcmp(ioc->type(), "Output") == 0)
+    				cJSON_AddStringToObject(node, "tab", "Outputs");
+			else
+    				cJSON_AddStringToObject(node, "tab", "Inputs");
+
 			if (ioc->isOn())
     			cJSON_AddStringToObject(node, "state", "on");
 			else if (ioc->isOff())
     			cJSON_AddStringToObject(node, "state", "off");
 			else
     			cJSON_AddStringToObject(node, "state", "unknown");
+		cJSON_AddTrueToObject(node, "enabled");
+
    		    cJSON_AddItemToArray(root, node);
         }
         char *res = cJSON_Print(root);
@@ -229,7 +237,7 @@ struct CommandThread {
 	            else if (count == 2 && ds == "TOGGLE") {
 	                command = new BeckhoffdToggle;
 	            }
-	            else if (count == 2 && ds == "LIST" && params[1] == "JSON") {
+	            else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
 	                command = new BeckhoffdListJSON;
 	            }
 	            else {
@@ -318,7 +326,7 @@ int main (int argc, char const *argv[])
 					// default to input if the point type is not specified
 					if (direction == EC_DIR_OUTPUT) {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << position << "_OUT_" << bit_pos;
+						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2) << position << "_OUT_" << std::setfill('0') << std::setw(2) << (bit_position+1);
 						const char *name_str = sstr.str().c_str();
 						std::cerr << "Adding new output device " << name_str 
 							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
@@ -335,7 +343,7 @@ int main (int argc, char const *argv[])
 					}
 					else {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << position << "_IN_" << bit_pos;
+						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2)<< position << "_IN_" << std::setfill('0') << std::setw(2) << (bit_position+1);
 						char *name_str = strdup(sstr.str().c_str());
 						std::cerr << "Adding new input device " << name_str
 							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
