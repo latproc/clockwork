@@ -127,7 +127,7 @@ int main(int argc, const char * argv[])
 				line = line_str;
 				line_input.clear();
 				line_input.str(line);
-				if (!(line_input >> word)) break;
+				if (!(line_input >> word)) continue;
 			}
 #endif
 			size_t stmt_end;
