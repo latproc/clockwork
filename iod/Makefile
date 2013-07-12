@@ -140,7 +140,7 @@ modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 			symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
 iosh: iosh.cpp
-	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq
+	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq -lreadline
 
 zmq_ecat_monitor: zmq_ecat_monitor.o
 	g++ $(CFLAGS) $(LDFLAGS) -o zmq_ecat_monitor zmq_ecat_monitor.o -lzmq

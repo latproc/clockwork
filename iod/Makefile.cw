@@ -137,7 +137,7 @@ modbusd:	modbusd.cpp symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 
 iosh: iosh.cpp
 	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq \
-		$(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_SYSTEM_LIB)
+		$(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_SYSTEM_LIB) -lreadline
 
 
 device_connector:	device_connector.o regular_expressions.o anet.o
