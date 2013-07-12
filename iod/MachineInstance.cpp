@@ -1577,9 +1577,9 @@ void MachineInstance::setStableState() {
                  
                  Workaround for now: check stable states every millisecond or so if any state uses a timer.
                  */
-                Trigger *trigger = new Trigger("Timer");
+              /*  Trigger *trigger = new Trigger("Timer");
                 Scheduler::instance()->add(new ScheduledItem(1000, new FireTriggerAction(this, trigger)));
-                trigger->release();
+                trigger->release(); */
             }
             // this state is not active so ensure its subcondition flags are turned off
             {

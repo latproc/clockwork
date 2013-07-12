@@ -118,7 +118,7 @@ void IOComponent::idle() {
 }
 
 void IOComponent::turnOn() { 
-	std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
+//	std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;
 	while (bitpos>=8) { 
@@ -130,7 +130,7 @@ void IOComponent::turnOn() {
 }
 
 void IOComponent::turnOff() { 
-	std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
+//	std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;
 	while (bitpos>=8) { 
