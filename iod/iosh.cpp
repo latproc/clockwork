@@ -29,6 +29,11 @@
 #include <inttypes.h>
 #include <iomanip>
 #include <sys/types.h>
+#define USE_READLINE 1
+#ifdef USE_READLINE
+#include <readline/readline.h>
+#include <readline/history.h>
+#endif
 
 namespace po = boost::program_options;
 
@@ -39,6 +44,35 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
     memcpy ((void *) reply.data (), msg, len);
     socket.send (reply);
 }
+
+#ifdef USE_READLINE
+/* A static variable for holding the line. */
+static char *line_read = (char *)NULL;
+
+/* Read a string, and return a pointer to it.
+   Returns NULL on EOF. */
+char *
+rl_gets (const char *prompt)
+{
+  /* If the buffer has already been allocated,
+     return the memory to the free pool. */
+  if (line_read)
+    {
+      free (line_read);
+      line_read = (char *)NULL;
+    }
+
+  /* Get a line from the user. */
+  line_read = readline (prompt);
+
+  /* If the line has any text in it,
+     save it on the history. */
+  if (line_read && *line_read)
+    add_history (line_read);
+
+  return (line_read);
+}
+#endif
 
 int main(int argc, const char * argv[])
 {
@@ -80,9 +114,20 @@ int main(int argc, const char * argv[])
         socket.connect(ss.str().c_str());
 		std::string word;
 		std::string msg;
+		std::string line;
+		std::stringstream line_input(line);
         for (;;) {
+#ifndef USE_READLINE
 			if (!quiet) std::cout << "> " << std::flush;
 			if (!(std::cin >> word)) break;
+#else
+			if (!(line_input >> word)) {
+				line = rl_gets("> ");
+				line_input.clear();
+				line_input.str(line);
+				if (!(line_input >> word)) break;
+			}
+#endif
 			size_t stmt_end;
 			if ( (stmt_end = word.rfind(';')) != std::string::npos) {
 				if (stmt_end > word.length()) continue;
