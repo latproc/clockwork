@@ -122,10 +122,12 @@ int main(int argc, const char * argv[])
 			if (!(std::cin >> word)) break;
 #else
 			if (!(line_input >> word)) {
-				line = rl_gets("> ");
+				const char *line_str = rl_gets("> ");
+				if (line_str == NULL) break;
+				line = line_str;
 				line_input.clear();
 				line_input.str(line);
-				if (!(line_input >> word)) break;
+				if (!(line_input >> word)) continue;
 			}
 #endif
 			size_t stmt_end;
