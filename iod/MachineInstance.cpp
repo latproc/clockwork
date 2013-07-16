@@ -1413,6 +1413,12 @@ void MachineInstance::enable() {
     }
     setInitialState();
 	++needs_check;
+	// if any dependent machines are already enabled, make sure they know we are awake
+	std::set<MachineInstance *>::iterator d_iter = depends.begin();
+	while (d_iter != depends.end()) {
+		MachineInstance *dep = *d_iter++;
+		if (dep->enabled())++dep->needs_check; // make sure dependant machines update when a property changes
+	}	
 }
 
 void MachineInstance::setDebug(bool which) {
