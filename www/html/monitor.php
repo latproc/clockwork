@@ -55,14 +55,14 @@ if ($user->isAdministrator()) {
 
 // static image generator
 function image_html($name, $filename) {
-	return '<img width=64 name="'.$name.'" src="img/' .  $filename . '"/>';
+	return '<img name="'.$name.'" src="img/' .  $filename . '"/>';
 }
 
 // toggle button html generator
 function button_image($name, $filename) {
 	global $use_ajax;
 	if ($use_ajax)
-		return '<img width=64 class="out" width=16 name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
+		return '<img class="out" width=16 name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
 	else
 		return '<input type="image" width=16 name="'.$name.'" src="img/' .  $filename . '"/>';
 }
