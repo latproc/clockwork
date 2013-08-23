@@ -155,17 +155,19 @@ struct BeckhoffdListJSON : public IODCommand {
 			cJSON *node = cJSON_CreateObject();
     		cJSON_AddStringToObject(node, "name", name_str.c_str());
 			cJSON_AddStringToObject(node, "class", ioc->type());
+			cJSON_AddNumberToObject(node, "value", ioc->value());
 			if (strcmp(ioc->type(), "Output") == 0)
     				cJSON_AddStringToObject(node, "tab", "Outputs");
 			else
     				cJSON_AddStringToObject(node, "tab", "Inputs");
 
-			if (ioc->isOn())
-    			cJSON_AddStringToObject(node, "state", "on");
-			else if (ioc->isOff())
-    			cJSON_AddStringToObject(node, "state", "off");
-			else
-    			cJSON_AddStringToObject(node, "state", "unknown");
+			cJSON_AddStringToObject(node, "state", ioc->getStateString());
+//			if (ioc->isOn())
+//    			cJSON_AddStringToObject(node, "state", "on");
+//			else if (ioc->isOff())
+//    			cJSON_AddStringToObject(node, "state", "off");
+//			else
+//    			cJSON_AddStringToObject(node, "state", "unknown");
 		cJSON_AddTrueToObject(node, "enabled");
 
    		    cJSON_AddItemToArray(root, node);
@@ -278,7 +280,7 @@ int main (int argc, char const *argv[])
 	statistics = new Statistics;
 	ControlSystemMachine machine;
     Logger::instance()->setLevel(Logger::Debug);
-	ECInterface::FREQUENCY=1000;
+	ECInterface::FREQUENCY=10;
 
 #ifndef EC_SIMULATOR
 	/*std::cout << "init slaves: " << */
@@ -309,56 +311,76 @@ int main (int argc, char const *argv[])
 
 				std::cout << "module " << position << " has " << num_points << " points\n";
 				
-				for (unsigned int bit_position = 0; bit_position<num_points; ++bit_position) {
-				
-					unsigned int bit_pos = bit_position;
-					unsigned int direction = EC_DIR_INPUT;
-					direction = module->syncs[0].dir;
-					unsigned int sm_idx = 0;
-					if (module->sync_count>1) {
-						while (sm_idx < module->sync_count && (bit_pos+1) > module->syncs[sm_idx].n_pdos) {
-							bit_pos -= module->syncs[sm_idx].n_pdos;
-							++sm_idx;
-							if (sm_idx < module->sync_count)
-								direction = module->syncs[sm_idx].dir;
-						}
+				unsigned int sm_idx = 0;
+				unsigned int pdo_idx = 0;
+				unsigned int entry_idx = 0;
+				unsigned int bit_pos = 0;
+				// add io entries to for each point.
+				unsigned int pos = 0; 
+				while (pos<num_points) {
+
+					if (sm_idx >= module->sync_count) {
+						std::cerr  << "out of bits trying to find offset for point " << pos << "\n";
+						break;
 					}
-					// default to input if the point type is not specified
+					if (module->syncs[sm_idx].n_pdos == 0) {
+						std::cout << "sm_idx: " << sm_idx << " has no pdos\n";
+						++sm_idx;
+						continue;
+					}
+					unsigned int direction = module->syncs[sm_idx].dir;
+
+					unsigned int bitlen = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].bit_length;
+
 					if (direction == EC_DIR_OUTPUT) {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2) << position << "_OUT_" << std::setfill('0') << std::setw(2) << (bit_position+1);
+						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2) << position << "_OUT_" << std::setfill('0') << std::setw(2) << (pos+1);
 						const char *name_str = sstr.str().c_str();
 						std::cerr << "Adding new output device " << name_str 
 							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
-							<< " offset: " << module->offsets[sm_idx] <<  "\n";
-						IOComponent::add_io_entry(name_str, module->offsets[sm_idx], bit_pos);
-	            		Output *o = new Output(module->offsets[sm_idx], bit_pos);
-	            		output_list.push_back(o);
-	            		devices[name_str] = o;
-						// for IOD Commands support
-						//MachineInstance *m = new MachineInstance(name_str, "POINT");
-						//m->io_interface = o;
-						//o->addDependent(m);
-						//machines[name_str] = m;
+							<< " offset: " << module->offsets[sm_idx] << " bitlen: " << bitlen <<  "\n";
+						IOComponent::add_io_entry(name_str, module->offsets[sm_idx], bit_pos, bitlen);
+						if (bitlen == 1) {
+	            			Output *o = new Output(module->offsets[sm_idx], bit_pos);
+	            			output_list.push_back(o);
+	            			devices[name_str] = o;
+						}
+						else {
+	            			AnalogueOutput *o = new AnalogueOutput(module->offsets[sm_idx], bit_pos, bitlen);
+	            			output_list.push_back(o);
+	            			devices[name_str] = o;
+						}
 					}
 					else {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2)<< position << "_IN_" << std::setfill('0') << std::setw(2) << (bit_position+1);
+						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2)<< position << "_IN_" << std::setfill('0') << std::setw(2) << (pos+1);
 						char *name_str = strdup(sstr.str().c_str());
 						std::cerr << "Adding new input device " << name_str
 							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
-							<< " offset: " << module->offsets[sm_idx] <<  "\n";
-						IOComponent::add_io_entry(name_str, module->offsets[sm_idx], bit_pos);
-						Input *in = new Input(module->offsets[sm_idx], bit_pos);
-						devices[name_str] = in;
-						// for IOD Commands support
-						//MachineInstance *m = new MachineInstance(name_str, "POINT");
-						//m->io_interface = in;
-						//in->addDependent(m);
-						//machines[name_str] = m;
-
-						free(name_str);
+							<< " offset: " << module->offsets[sm_idx] <<  " bitlen: " << bitlen << "\n";
+						IOComponent::add_io_entry(name_str, module->offsets[sm_idx], bit_pos, bitlen);
+						if (bitlen == 1) {
+							Input *in = new Input(module->offsets[sm_idx], bit_pos);
+							devices[name_str] = in;
+							free(name_str);
+						}
+						else {
+							AnalogueInput *in = new AnalogueInput(module->offsets[sm_idx], bit_pos, bitlen);
+							devices[name_str] = in;
+							free(name_str);
+						}
 					}
+					//while (sm_idx < module->sync_count && (bit_pos+1) > module_bits) {
+					bit_pos += bitlen;
+					if (++entry_idx >= module->syncs[sm_idx].pdos[pdo_idx].n_entries) {
+						entry_idx = 0;
+						if (++pdo_idx >= module->syncs[sm_idx].n_pdos) {
+							pdo_idx = 0;
+							++sm_idx;
+							bit_pos = 0;
+						}
+					}
+					++pos;
 				}
 			}
 #endif

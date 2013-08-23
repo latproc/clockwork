@@ -34,6 +34,16 @@
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #include "hw_config.h"
+
+struct list_head {
+    struct list_head *next, *prev;
+};
+typedef enum {
+    EC_ORIG_INTERNAL, /**< Internal. */
+    EC_ORIG_EXTERNAL /**< External. */
+} ec_origin_t;
+
+#include "domain.h"
 #define EL1008_SYNCS slave_1_syncs
 #define EL2008_SYNCS slave_2_syncs
 #define EK1814_SYNCS slave_3_syncs
@@ -200,7 +210,18 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 		num_syncmasters += m->sync_count;
 	}
 
-	int domain_reg_size = sizeof(ec_pdo_entry_reg_t) * (num_syncmasters+1);
+	// register sync masters with pdo entries
+
+    int sm_count = 0;
+	iter = modules.begin();
+	while (iter != modules.end()){
+		ECModule *m = *iter++;
+		for(unsigned int i=0; i<m->sync_count; ++i) {
+			if (m->syncs[i].pdos) ++sm_count;
+		}
+	}
+
+	int domain_reg_size = sizeof(ec_pdo_entry_reg_t) * (sm_count+1);
 	ec_pdo_entry_reg_t *new_domain_regs = (ec_pdo_entry_reg_t*)malloc(domain_reg_size);
 	memset(new_domain_regs, 0, domain_reg_size);
 	
@@ -210,6 +231,7 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 		ECModule *m = *iter++;
 		for(unsigned int i=0; i<m->sync_count; ++i) {
 			//ecrt_slave_config_pdo_assign_clear(m->slave_config, i);
+			if (!m->syncs[i].pdos) continue; // careful to skip sm with no pdos
 			ec_pdo_entry_reg_t *dr = new_domain_regs + idx;
 			dr->alias = m->alias;
 			dr->position = m->position;
@@ -224,13 +246,14 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 				dr->index = 0;
 				dr->subindex = 0;
 			}
-			dr->offset = &m->offsets[i];
+			dr->offset = &(m->offsets[i]);
 			++idx;
-			std::cout << dr->alias <<", " <<dr->position << ", " << std::hex << ", "<< dr->vendor_id << ", "<< dr->product_code
-				 << ", "<< dr->index << ", " << (int)dr->subindex << std::dec << "\n";
+			std::cout <<"Domain Registation: " << dr->alias <<", " <<dr->position << ", " 
+				<< std::hex << dr->vendor_id << ", "<< dr->product_code
+				 << ", "<< dr->index << ", " << (int)dr->subindex <<" offset addr " << dr->offset << std::dec << "\n";
 		}
 	}
-	new_domain_regs[num_syncmasters].alias = 0xff;
+	new_domain_regs[idx].alias = 0xff;
 
     if (new_domain_regs && ecrt_domain_reg_pdo_entry_list(domain1, new_domain_regs)) {
 		std::cerr << "PDO entry registration failed\n";
@@ -242,6 +265,7 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 		iter = modules.begin();
 		while (iter != modules.end()){
 			ECModule *m = *iter++;
+			m->operator<<(std::cout) << "\n";
 			for(unsigned int i=0; i<m->sync_count; ++i) {
 				std::cerr << m->name << " offset " << i << " " << m->offsets[i] << "\n";
 			}
@@ -439,6 +463,12 @@ void ECInterface::collectState() {
     // receive process data
     ecrt_master_receive(master);
     ecrt_domain_process(domain1);
+
+//    uint8_t *domain1_pd = ecrt_domain_data(domain1) ;
+//	for (int i=0; i<100; ++i) 
+//		std::cout << std::hex << std::setfill('0') << std::setw(2) << (int)*domain1_pd;
+//	std::cout << "\n";
+
 #endif
     //IOComponent::processAll();
     //std::cout << "/" << std::flush;

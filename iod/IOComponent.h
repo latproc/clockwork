@@ -33,9 +33,10 @@
 struct IOAddress {
     unsigned int io_offset;
     int io_bitpos;
-	int value;
-	IOAddress(unsigned int offs, int bitp) : io_offset(offs), io_bitpos(bitp), value(0) { }
-	IOAddress() : io_offset(0), io_bitpos(0), value(0) {}
+	uint32_t value;
+	unsigned int bitlen;
+	IOAddress(unsigned int offs, int bitp, unsigned int len=1) : io_offset(offs), io_bitpos(bitp), value(0), bitlen(len) { }
+	IOAddress() : io_offset(0), io_bitpos(0), value(0), bitlen(1) {}
 };
 
 struct MQTTTopic {
@@ -52,7 +53,7 @@ public:
 	typedef std::list<IOComponent *>::iterator Iterator;
 	static Iterator begin() { return processing_queue.begin(); }
 	static Iterator end() { return processing_queue.end(); }
-	static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
+	static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset, unsigned int bit_len = 1);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
 	static void processAll();
@@ -63,12 +64,13 @@ private:
 	static std::list<IOComponent *>processing_queue;
 
 protected:
-	enum event { e_on, e_off, e_none};
+	enum event { e_on, e_off, e_change, e_none};
 	event last_event;
 	struct timeval last;
 public:
 
-    IOComponent(unsigned int offset, int bitpos) : last_event(e_none), address(offset,bitpos) { processing_queue.push_back(this); }
+    IOComponent(unsigned int offset, int bitpos, unsigned int len=1) 
+		: last_event(e_none), address(offset,bitpos, len) { processing_queue.push_back(this); }
     IOComponent() : last_event(e_none) { processing_queue.push_back(this); }
 	virtual ~IOComponent() { processing_queue.remove(this); }
 	const char *getStateString();
@@ -77,6 +79,8 @@ public:
 	void turnOff();
 	bool isOn();
 	bool isOff();
+	uint32_t value() { if (address.bitlen == 1) { if (isOn()) return 1; else return 0; } else return address.value; }
+	void setValue(uint32_t new_value);
 	virtual const char *type() { return "IOComponent"; }
 	std::ostream &operator<<(std::ostream &out) const;
 	IOAddress address;
@@ -97,24 +101,36 @@ std::ostream &operator<<(std::ostream&out, const IOComponent &);
 
 class Output : public IOComponent {
 public:
-	Output(unsigned int offset, int bitpos) : IOComponent(offset,bitpos) { }
+	Output(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "Output"; }
 };
+
 class Input : public IOComponent {
 public:
-	Input(unsigned int offset, int bitpos) : IOComponent(offset,bitpos) { }
+	Input(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "Input"; }
 };
 
+class AnalogueInput : public IOComponent {
+public:
+	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
+	virtual const char *type() { return "AnalogueInput"; }
+};
+
+class AnalogueOutput : public Output {
+public:
+	AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
+	virtual const char *type() { return "AnalogueInput"; }
+};
 
 class MQTTPublisher : public IOComponent {
 public:
-	MQTTPublisher(unsigned int offset, int bitpos) : IOComponent(offset,bitpos) { }
+	MQTTPublisher(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "Output"; }
 };
 class MQTTSubscriber : public IOComponent {
 public:
-	MQTTSubscriber(unsigned int offset, int bitpos) : IOComponent(offset,bitpos) { }
+	MQTTSubscriber(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "Input"; }
 };
 

@@ -256,7 +256,13 @@ bool MachineInstance::uses(MachineInstance *other) {
 	if (other->_type == "MODULE") return true;
 	if (_type == "MODULE") return false;
 	if (other->_type == "POINT") return true;
+	if (other->_type == "ANALOGINPUT") return true;
+	if (other->_type == "ANALOGOUTPUT") return true;
+	if (other->_type == "STATUS_FLAG") return true;
 	if (_type == "POINT") return false;
+	if (_type == "ANALOGINPUT") return true;
+	if (_type == "ANALOGOUTPUT") return true;
+	if (_type == "STATUS_FLAG") return true;
 	if (other->_type == "FLAG") return true;
 	if (_type == "FLAG") return false;
 	if (dependsOn(other)) return true;
@@ -1173,7 +1179,8 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (from && event_name.find('.') == std::string::npos)
 		event_name = from->getName() + "." + m.getText();
     
-    if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER") {
+    if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER" 
+			|| _type == "ANALOGINPUT"  || _type == "STATUS_FLAG" ) {
         if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
             //std::string state_name = m.getText();
             //if (state_name.find('_') != std::string::npos)
@@ -1183,6 +1190,9 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
             }
             else if (m.getText() == "off_enter" && current_state.getName() != "off") {
                 setState("off");
+            }
+            else if (m.getText() == "property_change" ) {
+                setValue("VALUE", io_interface->address.value);
             }
             // a POINT won't have an actions that depend on triggers so it's safe to return now
             return Action::Complete;

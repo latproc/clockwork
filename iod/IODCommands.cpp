@@ -45,16 +45,31 @@ std::map<std::string, std::string>message_handlers;
 extern bool program_done;
 
 bool IODCommandGetStatus::run(std::vector<std::string> &params) {
-       if (params.size() == 2) {
-    MachineInstance *machine = MachineInstance::find(params[1].c_str());
-    if (machine) {
-	done = true;
-	result_str = machine->getCurrentStateString();
-    }
-           else
+    if (params.size() == 2) {
+		done = false;
+        std::string ds = params[1];
+        IOComponent *device = lookup_device(ds);
+        if (device) {
+			done = true;
+			std::string res = device->getStateString();
+			if (device->address.bitlen>1) {
+				char buf[10];
+				snprintf(buf, 9, "(%d)", device->value());
+				res += buf;
+			}
+			result_str = res;
+		}
+		else {
+    		MachineInstance *machine = MachineInstance::find(params[1].c_str());
+		    if (machine) {
+				done = true;
+				result_str = machine->getCurrentStateString();
+    		}
+            else
                error_str = "Not Found";
-       }
-       return done;
+		}
+	 }
+     return done;
    }
 
 bool IODCommandSetStatus::run(std::vector<std::string> &params) {
@@ -759,7 +774,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
             
 	        for (j = 0; j < sync.pdo_count; j++) {
 	            m.getPdo(&pdo, slave.position, i, j);
-                		//std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
+                std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
 				c_pdos[j + pdo_pos].index = pdo.index;
 				c_pdos[j + pdo_pos].n_entries = (unsigned int) pdo.entry_count;
 				if (pdo.entry_count)
@@ -769,12 +784,16 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
                 
 	            for (k = 0; k < pdo.entry_count; k++) {
 	                m.getPdoEntry(&entry, slave.position, i, j, k);
-                    			//std::cout << " entry: " << k << "{" << (int)entry.index <<", " << (int)entry.subindex<<", " << (int)entry.bit_length <<"}";
+                  	std::cout << " entry: " << k 
+						<< "{" 
+						<< std::hex << (int)entry.index <<", " 
+						<< (int)entry.subindex<<", " 
+						<< (int)entry.bit_length <<"}";
 					c_entries[k + entry_pos].index = entry.index;
 					c_entries[k + entry_pos].subindex = entry.subindex;
 					c_entries[k + entry_pos].bit_length = entry.bit_length;
 	            }
-		    //std::cout << "\n";
+		    	std::cout << "\n";
 	            entry_pos += pdo.entry_count;
 	        }
             

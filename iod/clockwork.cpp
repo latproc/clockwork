@@ -163,6 +163,28 @@ void semantic_analysis() {
 	point_class->default_state = State("off");
 	point_class->initial_state = State("off");
 	point_class->disableAutomaticStateChanges();
+
+    point_class = new MachineClass("STATUS_FLAG");
+    point_class->parameters.push_back(Parameter("module"));
+    point_class->parameters.push_back(Parameter("offset"));
+    point_class->parameters.push_back(Parameter("entry"));
+    point_class->states.push_back("on");
+    point_class->states.push_back("off");
+	point_class->default_state = State("off");
+	point_class->initial_state = State("off");
+	point_class->disableAutomaticStateChanges();
+    
+    
+    MachineClass *ain_class = new MachineClass("ANALOGINPUT");
+    ain_class->parameters.push_back(Parameter("module"));
+    ain_class->parameters.push_back(Parameter("offset"));
+    ain_class->parameters.push_back(Parameter("entry"));
+    ain_class->states.push_back("stable");
+    ain_class->states.push_back("unstable");
+	ain_class->default_state = State("stable");
+	ain_class->initial_state = State("stable");
+	ain_class->disableAutomaticStateChanges();
+	ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
     
     MachineClass *module_class = new MachineClass("MODULE");
 	module_class->disableAutomaticStateChanges();
@@ -355,7 +377,7 @@ void semantic_analysis() {
 			for (unsigned int j=0; j<m->parameters.size(); ++j) {
 				Parameter &p = m->parameters[j];
                 if (p.val.kind == Value::t_symbol) {
-                    for (int k = 0; k < mi->parameters.size(); ++k) {
+                    for (unsigned int k = 0; k < mi->parameters.size(); ++k) {
                         Value p_k = mi->parameters[k].val;
                         if (p_k.kind == Value::t_symbol && p.val == p_k) {
                             p.real_name = mi->parameters[k].real_name;

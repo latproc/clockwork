@@ -27,9 +27,10 @@ TOOLLIB = ../ec_tool/build/*.o
 TOOLINC = ../ethercat/tool
 EXTRAINCS = -I/opt/local/include -I/usr/local/include -I/opt/latproc/include \
 	-I$(ETHERCAT)/include -I$(ETHERCAT) -I$(ETHERCAT)/master \
-	-I$(TOOLINC)
+	-I$(TOOLINC)  -I.
+#	-I/usr/src/linux-headers-3.5.0-32-generic/include -I/usr/src/linux-headers-3.5.0-32/arch/ia64/include
 EXTRALIBS = -L/opt/local/lib -L/usr/local/lib -L/opt/latproc/lib \
-	-L$(ETHERCAT)/lib/.libs
+	-L$(ETHERCAT)/lib/.libs 
 
 # adjust the following linker flags to set the boost libraries you 
 # would like to use.

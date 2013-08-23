@@ -466,15 +466,16 @@ int main (int argc, char const *argv[])
 		while (iter != machines.end()) {
 			MachineInstance *m = (*iter).second; iter++;
 			--remaining;
-			if (m->_type == "POINT" && m->parameters.size() > 1) {
+			if ( (m->_type == "POINT" || m->_type == "ANALOGINPUT" 
+					|| m->_type == "STATUS_FLAG" || m->_type == "ANALOGOUTPUT" ) && m->parameters.size() > 1) {
 				// points should have two parameters, the name of the io module and the bit offset
 				//Parameter module = m->parameters[0];
 				//Parameter offset = m->parameters[1];
 				//Value params = p.val;
 				//if (params.kind == Value::t_list && params.listValue.size() > 1) {
 					std::string name = m->parameters[0].real_name;
-					int bit_position = m->parameters[1].val.iValue;
-					std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
+					int pdo_position = m->parameters[1].val.iValue;
+					std::cerr << "Setting up point " << m->getName() << " " << pdo_position << " on module " << name << "\n";
 					MachineInstance *module_mi = MachineInstance::find(name.c_str());
 					if (!module_mi) {
 						std::cerr << "No machine called " << name << "\n";
@@ -491,7 +492,7 @@ int main (int argc, char const *argv[])
 						continue; 
 					}
 				
-	#ifndef EC_SIMULATOR
+#ifndef EC_SIMULATOR
 					// some modules have multiple io types (eg the EK1814) and therefore
 					// multiple syncmasters, we number 
 					// the points from 1..n but the device numbers them 1.n,1.m,..., resetting
@@ -503,60 +504,83 @@ int main (int argc, char const *argv[])
 					}
 				
 					unsigned int sm_idx = 0;
-					unsigned int bit_pos = bit_position;
-					if (module->sync_count>1) {
-						while (sm_idx < module->sync_count && (bit_pos+1) > module->syncs[sm_idx].n_pdos) {
-							bit_pos -= module->syncs[sm_idx].n_pdos;
+					unsigned int pdo_pos = pdo_position;
+					unsigned int bit_pos = 0;
+					unsigned int pdo_idx = 0;
+					unsigned int entry_idx = 0;
+
+					if (module->sync_count>0) {
+						while (sm_idx < module->sync_count) {
+							int num_pdos = module->syncs[sm_idx].n_pdos;
+							if (pdo_pos < num_pdos) {
+								pdo_idx = pdo_pos;
+								break;
+							}
+							else 
+								pdo_pos -= num_pdos;
 							++sm_idx;
 						}
 					}
-					char *device_type;
-					if (module->syncs[sm_idx].dir == EC_DIR_OUTPUT)
-						device_type = strdup("Output");
-					else
-						device_type = strdup("Input");
-#if 0
-					// default to input if the point type is not specified
-					char *device_type;
-					if (m->properties.exists("type")) 
-						device_type = strdup(m->properties.lookup("type").asString().c_str());
-					else
-						device_type = strdup("Input");
-					//std::stringstream sstr;
-#endif
+					if (m->parameters.size() >= 3)
+						entry_idx = m->parameters[2].val.iValue;
+					unsigned int direction = module->syncs[sm_idx].dir;
+					bit_pos = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].subindex;
+					unsigned int bitlen = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].bit_length;
+					if (m->parameters.size() == 2)
+						bit_pos = pdo_position;
 
-					if (strcmp(device_type, "Output") == 0) {
-						//sstr << m->getName() << "_OUT_" << bit_position << std::flush;
+					if (direction == EC_DIR_OUTPUT) {
+						//sstr << m->getName() << "_OUT_" << pdo_position << std::flush;
 						//const char *name_str = sstr.str().c_str();
 						std::cerr << "Adding new output device " << m->getName() 
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
+							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos
 							<< " offset: " << module->offsets[sm_idx] <<  "\n";
-						IOComponent::add_io_entry(m->getName().c_str(), module->offsets[sm_idx], bit_pos);
-						Output *o = new Output(module->offsets[sm_idx], bit_pos);
-						output_list.push_back(o);
-						devices[m->getName().c_str()] = o;
-						o->setName(m->getName().c_str());
-						m->io_interface = o;
-						o->addDependent(m);
+						IOComponent::add_io_entry(m->getName().c_str(), module->offsets[sm_idx], bit_pos, bitlen);
+						if (bitlen == 1) {
+							Output *o = new Output(module->offsets[sm_idx], bit_pos);
+							output_list.push_back(o);
+							devices[m->getName().c_str()] = o;
+							o->setName(m->getName().c_str());
+							m->io_interface = o;
+							o->addDependent(m);
+						}
+						else {
+							AnalogueOutput *o = new AnalogueOutput(module->offsets[sm_idx], bit_pos, bitlen);
+							output_list.push_back(o);
+							devices[m->getName().c_str()] = o;
+							o->setName(m->getName().c_str());
+							m->io_interface = o;
+							o->addDependent(m);
+						}
 					}
 					else {
-						//sstr << m->getName() << "_IN_" << bit_position << std::flush;
+						//sstr << m->getName() << "_IN_" << pdo_position << std::flush;
 						//const char *name_str = sstr.str().c_str();
 						std::cerr << "Adding new input device " << m->getName().c_str() 
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
+							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos
+							<< " bitlen: " << bitlen
 							<< " offset: " << module->offsets[sm_idx] <<  "\n";
-						IOComponent::add_io_entry(m->getName().c_str(), module->offsets[sm_idx], bit_pos);
-						Input *in = new Input(module->offsets[sm_idx], bit_pos);
-						devices[m->getName().c_str()] = in;
-						in->setName(m->getName().c_str());
-						m->io_interface = in;
-						in->addDependent(m);
+						IOComponent::add_io_entry(m->getName().c_str(), module->offsets[sm_idx], bit_pos, bitlen);
+						if (bitlen == 1) {
+							Input *in = new Input(module->offsets[sm_idx], bit_pos);
+							devices[m->getName().c_str()] = in;
+							in->setName(m->getName().c_str());
+							m->io_interface = in;
+							in->addDependent(m);
+						}
+						else {
+							AnalogueInput *in = new AnalogueInput(module->offsets[sm_idx], bit_pos, bitlen);
+							devices[m->getName().c_str()] = in;
+							in->setName(m->getName().c_str());
+							m->io_interface = in;
+							in->addDependent(m);
+						}
 					}
-					free(device_type);
-	#endif
+#endif
 				}
 				else {
-					if (m->_type != "POINT")
+					if (m->_type != "POINT" && m->_type != "STATUS_FLAG"
+							&& m->_type != "ANALOGINPUT" && m->_type != "ANALOGOUTPUT" )
 						DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
 					else  
 						DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (no parameters)\n";
