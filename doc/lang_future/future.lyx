@@ -1,0 +1,437 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+The Future of the Clockwork Programming Language
+\end_layout
+
+\begin_layout Author
+Martin Leadbeater
+\end_layout
+
+\begin_layout Abstract
+This paper describes various language features that will be added to Clockwork
+ in the future
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Itemize
+Floating point calculations
+\end_layout
+
+\begin_layout Itemize
+Sets and relationships
+\end_layout
+
+\begin_layout Itemize
+Lists
+\end_layout
+
+\begin_layout Itemize
+Streams (also generators)
+\end_layout
+
+\begin_layout Itemize
+Replace the current symbol table and Value system with a more efficient
+ and robust implementation
+\end_layout
+
+\begin_layout Itemize
+Type conversions (x AS type)
+\end_layout
+
+\begin_layout Itemize
+Substates
+\end_layout
+
+\begin_layout Itemize
+Exceptions
+\end_layout
+
+\begin_layout Itemize
+Conditions
+\end_layout
+
+\begin_layout Itemize
+Delayed messaging (sending messages after a delay and cancelling..)
+\end_layout
+
+\begin_layout Itemize
+Wall time (long period timers)
+\end_layout
+
+\begin_layout Itemize
+Support of parallel execution
+\end_layout
+
+\begin_layout Itemize
+Type extensions
+\end_layout
+
+\begin_layout Itemize
+External function calls
+\end_layout
+
+\begin_layout Itemize
+Passing SELF to an internal object
+\end_layout
+
+\begin_layout Itemize
+Sharing properties or data
+\end_layout
+
+\begin_layout Itemize
+Dynamic allocation (ie creating and destroying data items)
+\end_layout
+
+\begin_layout Itemize
+Dynamic configuration (creating and destroying machines)
+\end_layout
+
+\begin_layout Standard
+Since machines are defined statically there is no way to create a new machine
+ or destroy one that is not needed.
+ The language uses properties to store values and although machines can
+ be named, there is no way to make a property that refers to a machine.
+ It is not even possible to save the state of a machine and restore that
+ state later.
+ 
+\end_layout
+
+\begin_layout Section
+Feature discussion
+\end_layout
+
+\begin_layout Standard
+Clockwork is currently based around the notion of machines, states and propertie
+s.
+ Machines cannot carry data per-se but since the property system provides
+ for simple key-value objects, the effect can be simulated at a basic level.
+ Machines also need the notion of a working-set of data that is being processed
+ or held.
+ Traditionally data is grouped into 'structure's or 'object's and these
+ terms and their common usage seems fine.
+ More generally, a 'working set', if we chose to use the term, would refer
+ to a collection of various values, structures and objects.
+\end_layout
+
+\begin_layout Subsection
+Value system
+\end_layout
+
+\begin_layout Standard
+The way property values are stored in machines desparately needs an overhaul;
+ the current system is build on a C type structure and uses runtime type
+ comparions.
+ A new version will use C++ virtual methods that bind functions at compile
+ time.
+\end_layout
+
+\begin_layout Subsection
+Floating point calculations
+\end_layout
+
+\begin_layout Subsection
+Sets and relationships
+\end_layout
+
+\begin_layout Standard
+We need to decide whether bits that are allocated to symbols should be allocated
+ in least-significant or most-significant order.
+ Perhaps a mapping function should be used (like a C union), with this in
+ mind, defining three symbols, x,y and z to a block of bits would map bit
+ 2 to x, bit 1 to y and bit 0 (least significant) to z.
+ This gives a nice mapping for those who visualise the bits in a block and
+ want to map the symbols over the block.
+\end_layout
+
+\begin_layout LyX-Code
+cutter1 Cutter;
+\end_layout
+
+\begin_layout LyX-Code
+cutter2 Cutter;
+\end_layout
+
+\begin_layout LyX-Code
+B BITSET [a,b,c,d]; # defines symbols a..d for bits 0..3
+\end_layout
+
+\begin_layout LyX-Code
+C BITSET [r:8,g:8,b:8]; # defines symbols r,g and b for bits 0..23 of C
+\end_layout
+
+\begin_layout LyX-Code
+INCLUDE a,d IN B
+\end_layout
+
+\begin_layout LyX-Code
+x := B AS INTEGER;
+\end_layout
+
+\begin_layout LyX-Code
+cutters SET[cutter1, cutter2];
+\end_layout
+
+\begin_layout LyX-Code
+s INCLUDES? [a,b,c];
+\end_layout
+
+\begin_layout Standard
+Sets could be implemented as a machine where each combination of members
+ is a distinct state there doesn't seem to be much value in this.
+ It may be useful to use three states: empty, nonempty and full.
+\end_layout
+
+\begin_layout Subsubsection
+Enumeration
+\end_layout
+
+\begin_layout Standard
+There should be a way to trigger events for each item in a set: 
+\end_layout
+
+\begin_layout LyX-Code
+EACH item IN set DO command
+\end_layout
+
+\begin_layout Subsubsection
+Events
+\end_layout
+
+\begin_layout Standard
+Sets should send messages on state change between empty, nonempty and full.
+ It may be useful to send events as each item enters/leaves but at this
+ point that seems excessive and of little value.
+\end_layout
+
+\begin_layout Subsection
+Streams
+\end_layout
+
+\begin_layout Standard
+A Stream is an ordered collection of data that can be grouped into fixed
+ size units (bits, bytes, chars etc); it has a current value and position.
+ the position can be moved forward or backward and the value can be read
+ and changed.
+ Streams may have a beginning and end and has a state of closed, valid or
+ invalid.
+ In the closed and invalid state, the current value cannot be read; if the
+ stream is moved past the end or before its beginning, it becomes invalid.
+ A Reader is a special case of a Stream in which the data cannot be changed,
+ similarly, a Writer is a Stream that can only be written to.
+\end_layout
+
+\begin_layout Standard
+s READER 
+\begin_inset Quotes eld
+\end_inset
+
+example.dat
+\begin_inset Quotes erd
+\end_inset
+
+:1; # read one bit at a time
+\end_layout
+
+\begin_layout Standard
+done WHEN s IS invalid; # terminating condition
+\end_layout
+
+\begin_layout Standard
+start WHEN s IS closed;
+\end_layout
+
+\begin_layout Standard
+one WHEN s.curr == 1;
+\end_layout
+
+\begin_layout Standard
+zero WHEN s.curr == 0;
+\end_layout
+
+\begin_layout Standard
+ENTER start { SEND open TO s }
+\end_layout
+
+\begin_layout Standard
+ENTER one { LOG 
+\begin_inset Quotes eld
+\end_inset
+
+1
+\begin_inset Quotes erd
+\end_inset
+
+; SEND forward TO s }
+\end_layout
+
+\begin_layout Standard
+ENTER zero { LOG 
+\begin_inset Quotes eld
+\end_inset
+
+0
+\begin_inset Quotes erd
+\end_inset
+
+; SEND forward TO s }
+\end_layout
+
+\begin_layout Subsection
+Lists
+\end_layout
+
+\begin_layout Standard
+Procedural or functional style? A functional language tends to use functions
+ such as car and cdr.
+ Similar to sets, it should be possible to enumerate objects and also to
+ receive events as items are added or removed from the list.
+\end_layout
+
+\begin_layout Subsection
+Substates
+\end_layout
+
+\begin_layout Subsection
+Exceptions
+\end_layout
+
+\begin_layout Subsection
+Conditions
+\end_layout
+
+\begin_layout Subsection
+Support of parallel execution
+\end_layout
+
+\begin_layout Standard
+The most direct method to support parallel execution is to identify separate
+ chains of dependency within the machine graph.
+ Thus, for example, changes that occur in one input may be able to be completely
+ processed in parallel with another chain if the steps are independent of
+ changes that occur in another input.
+ [yuk reword]
+\end_layout
+
+\begin_layout Standard
+More explanation required
+\end_layout
+
+\begin_layout Subsection
+Type Extensions
+\end_layout
+
+\begin_layout Standard
+Type extensions provide for adding parameters, statements to the handlers
+ within a state machine, fields and substates.
+\end_layout
+
+\begin_layout LyX-Code
+A MACHINE { \SpecialChar \ldots{}
+ };
+\end_layout
+
+\begin_layout LyX-Code
+B MACHINE EXTENDS A <additional parameters> {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+<event handler extensions>
+\end_layout
+
+\begin_layout LyX-Code
+<additional fields>
+\end_layout
+
+\begin_layout LyX-Code
+<state extensions>
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+More thought is required here, what I am planning is that clauses within
+ B can be defined as separate or as extensions of those in A, for example
+ INIT { ...
+ } simply defines a handler for the INIT state in B.
+ Whereas INIT EXTENDS A.INIT { ...
+ } defines extra steps that are added to the handler already defined in
+ A.
+\end_layout
+
+\end_body
+\end_document
