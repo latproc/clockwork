@@ -69,6 +69,12 @@ std::ostream &operator<<(std::ostream&out, const IOComponent &ioc) {
 unsigned char mem[1000];
 #define EC_READ_BIT(offset, bitpos) ( (*offset) & (1 << (bitpos)) )
 #define EC_WRITE_BIT(offset, bitpos, val) *(offset) |=  ( 1<< (bitpos))
+#define EC_READ_U8(offset) 0
+#define EC_READ_U16(offset) 0
+#define EC_READ_U32(offset) 0
+#define EC_WRITE_U8(offset, val) 0
+#define EC_WRITE_U16(offset, val) 0
+#define EC_WRITE_U32(offset, val) 0
 #endif
 
 unsigned int get_bits(uint8_t *offset, unsigned int bitpos, unsigned int bitlen)
