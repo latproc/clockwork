@@ -9,7 +9,7 @@ StartStopTimer MACHINE {
 	started STATE;
 
 	COMMAND stop { timer := TIMER; }
-	COMMAND started { }
+	COMMAND start { }
 	TRANSITION started TO ready ON stop;
 	TRANSITION ready TO started ON start;
 }

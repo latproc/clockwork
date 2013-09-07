@@ -147,7 +147,7 @@ boost (http://boost.org/) - various c++ bits and pieces
 \end_layout
 
 \begin_layout Itemize
-IgH EtherCAT Master for Linux (http://www.etherlab.org/en/ethercat/index.php)
+IgH EtherCAT(tm) Master for Linux (http://www.etherlab.org/en/ethercat/index.php)
 \end_layout
 
 \begin_layout Itemize
@@ -192,7 +192,7 @@ iod
 \emph default
 .
  The difference between them is that iod includes facilities to talk to
- I/O hardware via the IgH EtherCAT Master for Linux and cw does not.
+ I/O hardware via the IgH EtherCAT(tm) Master for Linux and cw does not.
  We will discuss the use of cw first and discuss the extensions that iod
  provides afterwards.
  Note that both iod and cw are able to communicate with devices over MQTT

@@ -496,20 +496,207 @@ The above states, `busy' and `idle' switch automatically depending on the
 Transitions
 \end_layout
 
+\begin_layout Standard
+Transitions define how a system changes state based on the receipt of an
+ event or command.
+ Transitions can:
+\end_layout
+
+\begin_layout Itemize
+be used to prevent arbitrary state changes
+\end_layout
+
+\begin_layout Itemize
+can be guarded by requirements that must be met for the transtion to occur
+\end_layout
+
+\begin_layout Itemize
+can define a command to execute when a machine is set into a state by another
+ machine
+\end_layout
+
+\begin_layout Standard
+The following Machine changes between a `ready' and `started' state when
+ a start or stop command is received.
+\end_layout
+
+\begin_layout LyX-Code
+StartStopTimer MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+ready INITIAL; started STATE;
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND stop { timer := TIMER; } 
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND start { } 
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION started TO ready ON stop; 
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION ready TO started ON start; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+} 
+\end_layout
+
+\begin_layout Standard
+The following machine steps through states upon receipt of the `next' command
+ but may not transtion if the appropriate 'finished' flag is not set.
+ This example uses an advanced feature that automatically sets a FLAG value
+ as part of the stable state evaluation.
+ While the `next' command is executing, the Machine enters the 'changing'
+ state.
+ In this example this is important because a transtion to a stable state
+ can not occur if the condition for the stable state is not true.
+ In this example, if the `next' command had any actions, those actions would
+ be executed each time the event occurs but the automatic transtion will
+ not occur if the requirement is not met.
+\end_layout
+
+\begin_layout LyX-Code
+Cycle MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+a_finished FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+b_finished FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+c_finished FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+a WHEN SELF IS a OR SELF IS INIT OR SELF IS changing, 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+TAG a_finished WHEN TIMER > 5000;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+b WHEN SELF IS b OR SELF IS changing, 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+TAG b_finished WHEN TIMER > 5000;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+c WHEN SELF IS c OR SELF IS changing, 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+TAG c_finished WHEN TIMER > 5000;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+ENTER a { SET a_finished TO off }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER b { SET b_finished TO off }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER c { SET c_finished TO off }
+\end_layout
+
+\begin_layout LyX-Code
+changing DURING next { }
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION a TO b ON next REQUIRES a_finished IS on;
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION b TO c ON next REQUIRES b_finished IS on;
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION c TO a ON next REQUIRES c_finished IS on;
+\end_layout
+
+\begin_layout LyX-Code
+ 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+} 
+\end_layout
+
 \begin_layout Subsection
 Event handlers (methods)
+\end_layout
+
+\begin_layout Standard
+Event handlers are commands that execute when a machine changes state.
+ Currently handlers are executed upon entry to a state but no handler is
+ called when the system leaves a state (this is a topic for future).
 \end_layout
 
 \begin_layout Subsection
 Commands
 \end_layout
 
+\begin_layout Standard
+Commands are lists of actions that are executed in response to receipt of
+ a message.
+ While commands are being executed, the stable state evaluation for a machine
+ are not executed.
+ Commands may have an associated state that the machine moves to while executing
+ the actions.
+\end_layout
+
+\begin_layout Standard
+Note: there is currently no way to abort the exectuion of a command, this
+ feature will be added in future.
+\end_layout
+
 \begin_layout Subsection
 Exporting properties
 \end_layout
 
+\begin_layout Standard
+A machine can export its properties for use by Modbus applications through
+ use of the EXPORT statement...
+\end_layout
+
 \begin_layout Subsection
 Monitoring globals
+\end_layout
+
+\begin_layout Standard
+Generally a Machine will only receive events from machines that are passed
+ as parameters or that are included within the Machine.
+ By using the GLOBAL keyword, a Machine can monitor state changes on other
+ machines, not passed as parameters.
+ By this technique, it is possible to avoid passing parameters to machines
+ and to simply refer to all machines globally.
+ This is probably fine for small systems but less practical for larger systems.
 \end_layout
 
 \begin_layout Section
