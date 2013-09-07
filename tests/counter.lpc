@@ -1,3 +1,11 @@
+# This file experiments with counters and pulses
+
+# The Counter machine changes state based on the value 
+# of its 'counter' property. Initially the counter
+# is set to 0 and this causes the start state to 
+# activate. This in turn causes the counter to 
+# increase, activating the next state.
+
 Counter MACHINE {
 	start WHEN counter == 0;
 	one WHEN counter == 1;
@@ -10,10 +18,9 @@ Counter MACHINE {
 	ENTER one { LOG "one"; WAIT 1000; INC counter}
 	ENTER two { LOG "two"; WAIT 1000; INC counter}
 	ENTER three { LOG "three"; WAIT 1000; INC counter }
-
 }
 
-#mycounter Counter(tab:Counter);
+mycounter Counter(tab:Counter);
 
 # pwm generator
 

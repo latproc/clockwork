@@ -100,7 +100,7 @@ Clockwork is a language intended to be used to describe systems of interacting
 \end_layout
 
 \begin_layout Standard
-The language provides the programmer with a means to 
+The language provides the programmer with a means to:
 \end_layout
 
 \begin_layout Itemize
@@ -120,12 +120,29 @@ define transition rules that determine what actions can be performed and
 define state entry functions that execute when a machine enters a state
 \end_layout
 
+\begin_layout Subsection
+Machines
+\end_layout
+
 \begin_layout Standard
-Conditions on a machine are defined in terms of the state of other machines
- and properties of itself and other machines.
- Machines continuously evaluate these conditions and automatically switch
- to the first state found that matches the condition, executing its state
- entry function as it does so.
+The main components in a Clockwork program are called Machines.
+ Machines are models of processing components or real-world devices that
+ can be interconnected.
+ Each Machine has a current state and (normally) several other states that
+ the machine may automatically move to or that can be manually set by processing
+ steps in the program.
+\end_layout
+
+\begin_layout Standard
+The key difference between Clockwork and other state machine systems is
+ that in Clockwork the software components automatically move between states
+ by monitoring a set of conditions that define the states.
+ As with other systems, it is also possible to define transition tables
+ that describe how a system moves between states based on events.
+ Conditions on a machine are defined in terms of the state and properties
+ of itself and other machines, Machines continuously evaluate these conditions
+ and automatically switch to the first state found that matches the condition,
+ executing its state entry function as it does so.
  When a state includes a condition, we tend to refer to that as a 
 \emph on
 stable 
@@ -138,11 +155,11 @@ automatic
 \end_layout
 
 \begin_layout Standard
-A machine definition can be instantiated by providing a name, the name of
- the machine definition, also called the machine `class', and a list or
- parameters that are required by the definition.
- For example, following is a machine that monitors two inputs and turns
- on when both inputs are on:
+Each type of machine is defined by a block of code that provides the name,
+ parameters, properties, conditions and processing of the machine.
+ For example, here is a definition for a Machine that behaves like an and
+ gate in an electronic circuit.
+ 
 \end_layout
 
 \begin_layout LyX-Code
@@ -167,6 +184,43 @@ off DEFAULT
 }
 \end_layout
 
+\begin_layout Standard
+The machine definition for this AndGate requires two parameters for the
+ two inputs and defines a condition on state `on' that will activate when
+ both inputs are on.
+ The statement 
+\noun on
+'
+\family typewriter
+\noun default
+off DEFAULT
+\family default
+\noun on
+'
+\noun default
+ defines a default condition on the 
+\family typewriter
+off
+\family default
+ state that always returns true.
+ There can be only one DEFAULT state in each machine but it is not required;
+ the presence of a default state ensures that machines of this type will
+ be in the on state when the condition is true and only when the condition
+ is true.
+\end_layout
+
+\begin_layout Standard
+A machine definition can be instantiated by providing a name, the name of
+ the machine definition, also called the machine `class', and a list or
+ parameters that are required by the definition.
+ For example, following is a machine that monitors two inputs and turns
+ on when both inputs are on:
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGate a, b;
+\end_layout
+
 \begin_layout LyX-Code
 a FLAG;
 \end_layout
@@ -175,34 +229,46 @@ a FLAG;
 b FLAG;
 \end_layout
 
+\begin_layout Standard
+Note that the FLAG machine type is defined internally in the language but
+ it is equivalent to a machine defined like this:
+\end_layout
+
 \begin_layout LyX-Code
-and_gate AndGate a, b;
+FLAG MACHINE
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+off INITIAL;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout Standard
-The machine definition for AndGate requires two parameters for the two inputs
- and defines a condition on state `on' to activate when both inputs are
- on.
- The statement 
-\noun on
-off
-\noun default
- 
-\noun on
-DEFAULT
-\noun default
- defines a default condition on the 
-\noun on
-off
-\noun default
- state that always returns true.
- There can be only one DEFAULT state in each machine but it is not required.
+Thus a FLAG can be either on or off and is initially off.
+ There are no rules to define how the machine might automatically move between
+ those states so it is left to other parts of the program to change the
+ state of the FLAG as required.
 \end_layout
 
 \begin_layout Standard
-The above machine is not particularly useful; after detecting an issue,
- we may want to do something about it.
- The above can be adjusted to, for example, turn on a light when the two
+The above AndGate machine does not directly control any other part of the
+ system, it simply sets its own state based on its inputs.
+ After detecting the condition where both of the inputs are on, we may want
+ to do something about it.
+ The AndGate can be adjusted to, for example, turn on a light when the two
  inputs are on, to do this, we add an ENTER method for the on state:
 \end_layout
 
@@ -220,12 +286,7 @@ on WHEN input1 IS on AND input2 IS on;
 \end_layout
 
 \begin_layout LyX-Code
-off DEFAULT
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-}
+off DEFAULT;
 \end_layout
 
 \begin_layout LyX-Code
@@ -234,6 +295,11 @@ ENTER on { SET output TO on; }
 
 \begin_layout LyX-Code
 ENTER off { SET output TO off; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout LyX-Code

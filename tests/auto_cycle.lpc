@@ -1,3 +1,9 @@
+# This file defines a Cycle, being a machine with three states: a,b,c
+# and a next command to move through them.
+
+# A test machine turns an output on and off and as it does so it
+# also sends a 'next' command to cause a submachine to cycle.
+
 Cycle MACHINE {
 
 a INITIAL;

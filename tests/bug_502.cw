@@ -1,3 +1,8 @@
+# this file defins a Follow machine that is embedded
+# within another machine. There was once a bug relating
+# to this situation and this is here to verify that the
+# bug is squashed.
+
 Follow MACHINE a {
     OPTION tab Follow;
     on WHEN a IS on;

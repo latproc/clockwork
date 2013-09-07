@@ -1,3 +1,8 @@
+# this program is used to define a test rig that includes
+# a couple Beckhoff devices on the EtherCAT(TM) bus. 
+#
+# ANALOGINPUT is a new machine class and its usage is changing.
+
 MODULES {
 	EK1814 (position:0);
 	EL3051 (position:1);
