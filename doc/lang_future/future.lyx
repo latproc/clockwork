@@ -150,6 +150,11 @@ Sharing properties or data
 \end_layout
 
 \begin_layout Itemize
+Controlling safe access to data - stable and changing property states, dynamic
+ data privacy
+\end_layout
+
+\begin_layout Itemize
 Dynamic allocation (ie creating and destroying data items)
 \end_layout
 
@@ -198,6 +203,12 @@ The way property values are stored in machines desparately needs an overhaul;
 
 \begin_layout Subsection
 Floating point calculations
+\end_layout
+
+\begin_layout Standard
+Clockwork is very weak when manipulating floating point data.
+ Currently all calculations are done using integer arithmetic and the type
+ system needs to be updated to fix this.
 \end_layout
 
 \begin_layout Subsection
@@ -431,6 +442,18 @@ More thought is required here, what I am planning is that clauses within
  Whereas INIT EXTENDS A.INIT { ...
  } defines extra steps that are added to the handler already defined in
  A.
+\end_layout
+
+\begin_layout Subsection
+Data access
+\end_layout
+
+\begin_layout Standard
+Data is often modified during a process but it is not appropriate for external
+ monitors to see data until it is in a stable state.
+ The intention is to add a facility that can be used to perform data calculation
+s using internal, private instances and to only make the data available
+ externally in certain states.
 \end_layout
 
 \end_body

@@ -1,3 +1,6 @@
+# this file simply demonstrates various forms of expression
+# in stable state evaluation and in event handlers/commands.
+
 val VARIABLE 7;
  
 ExprTest  MACHINE  {

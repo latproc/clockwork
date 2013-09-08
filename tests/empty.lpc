@@ -1,4 +1,7 @@
+# this script defines a test machine that has an intial state 
+# called 'done' and no other states.
+
 Test MACHINE {
   done INITIAL;
 }
-
+test Test;
