@@ -762,7 +762,7 @@ Patterns
 \begin_layout Standard
 The following demonstrates how to detect a message and extract data from
  it.
- In particualr, this machine looks for a four character message beginning
+ In particular, this machine looks for a four character message beginning
  with `c' and ending with `l'.
  When a match is detected, it will set a variable called `single' to the
  first character of the message and the variable all to the first $n$ alphabetic
@@ -774,67 +774,63 @@ Note that another machine might send the message using:
 \end_layout
 
 \begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
 pattern_test.message := 'curl'
 \end_layout
 
-\begin_layout Standard
-\begin_inset listings
-inline false
-status open
+\begin_layout LyX-Code
+...
+\end_layout
 
-\begin_layout Plain Layout
+\begin_layout LyX-Code
 
+\end_layout
+
+\begin_layout LyX-Code
 PatternTest MACHINE {
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_deeper
+\begin_layout LyX-Code
 	OPTION message "";
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 	found WHEN message MATCHES `c..l`;
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 	not_found DEFAULT; 
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 	ENTER found {
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_deeper
+\begin_layout LyX-Code
 		single := COPY `[A-Za-z]` FROM message; 		
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 		all := COPY ALL `[A-Za-z]` FROM message;
 \end_layout
 
-\begin_layout Plain Layout
-
+\end_deeper
+\begin_layout LyX-Code
 	}
 \end_layout
 
-\begin_layout Plain Layout
-
+\end_deeper
+\begin_layout LyX-Code
 }
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 pattern_test PatternTest;
-\end_layout
-
-\end_inset
-
-
 \end_layout
 
 \begin_layout Subsection
@@ -846,44 +842,30 @@ Here is an example of how to latch an input; once the input comes on the
  latched input comes on and stays on until it is reset
 \end_layout
 
-\begin_layout Standard
-\begin_inset listings
-inline false
-status open
-
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 GenericLatch MACHINE input {
 \end_layout
 
-\begin_layout Plain Layout
-
-	on STATE;
+\begin_deeper
+\begin_layout LyX-Code
+on STATE;
 \end_layout
 
-\begin_layout Plain Layout
-
-	off INITIAL;
+\begin_layout LyX-Code
+off INITIAL;
 \end_layout
 
-\begin_layout Plain Layout
-
-	RECEIVE input.on_enter { SET SELF TO on }
+\begin_layout LyX-Code
+RECEIVE input.on_enter { SET SELF TO on }
 \end_layout
 
-\begin_layout Plain Layout
-
-	TRANSITION on TO off ON reset;
+\begin_layout LyX-Code
+TRANSITION on TO off ON reset;
 \end_layout
 
-\begin_layout Plain Layout
-
+\end_deeper
+\begin_layout LyX-Code
 }
-\end_layout
-
-\end_inset
-
-
 \end_layout
 
 \begin_layout Subsection
@@ -908,88 +890,157 @@ would be used.
  handled at the receiving machine.
 \end_layout
 
-\begin_layout Standard
-\begin_inset listings
-inline false
-status open
-
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 CommandTest MACHINE other {
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_deeper
+\begin_layout LyX-Code
 	a DEFAULT;
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 	ENTER a { 
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_deeper
+\begin_layout LyX-Code
 		LOG "a"; 
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 		CALL x ON SELF;
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 		CALL y ON other; 
 \end_layout
 
-\begin_layout Plain Layout
-
+\end_deeper
+\begin_layout LyX-Code
 	}
 \end_layout
 
-\begin_layout Plain Layout
-
-	COMMAND x { 
+\begin_layout LyX-Code
+	COMMAND x { LOG "x on CommandTest called" }
 \end_layout
 
-\begin_layout Plain Layout
-
-		LOG "x on CommandTest called" }
-\end_layout
-
-\begin_layout Plain Layout
-
+\end_deeper
+\begin_layout LyX-Code
 	}
 \end_layout
 
-\begin_layout Plain Layout
+\begin_layout LyX-Code
 
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 OtherTest MACHINE {
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_deeper
+\begin_layout LyX-Code
 	COMMAND y { LOG "y on OtherTest called" }
 \end_layout
 
-\begin_layout Plain Layout
-
+\end_deeper
+\begin_layout LyX-Code
 }
 \end_layout
 
-\begin_layout Plain Layout
-
+\begin_layout LyX-Code
 o OtherTest;
+\end_layout
+
+\begin_layout LyX-Code
+test CommandTest o;
+\end_layout
+
+\begin_layout Subsection
+LED Light chaser
+\end_layout
+
+\begin_layout Standard
+Here is a program that produces a light chaser pattern on a list of lights.
+\end_layout
+
+\begin_layout LyX-Code
+Cell MACHINE left, right {     
+\end_layout
+
+\begin_layout LyX-Code
+on WHEN right IS off AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER
+ >= 1000);   
+\end_layout
+
+\begin_layout LyX-Code
+off DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+starting DURING start { SET SELF TO on }     
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+led01 Cell led06, led02; 
+\end_layout
+
+\begin_layout LyX-Code
+led02 Cell led01, led03; 
+\end_layout
+
+\begin_layout LyX-Code
+led03 Cell led02, led04; 
+\end_layout
+
+\begin_layout LyX-Code
+led04 Cell led03, led05; 
+\end_layout
+
+\begin_layout LyX-Code
+led05 Cell led04, led06; 
+\end_layout
+
+\begin_layout LyX-Code
+led06 Cell led05, led01;
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename images/light_chaser.png
+	lyxscale 50
+	scale 25
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+LED Light Chaser demonstration displayed in the web page
+\end_layout
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Plain Layout
 
-test CommandTest o;
 \end_layout
 
 \end_inset
@@ -1009,333 +1060,286 @@ The following simulates several philosophers dining at a circular table.
  being used by different philosplers simultaneously.
 \end_layout
 
-\begin_layout Standard
-\begin_inset listings
-inline false
-status open
-
 \begin_layout LyX-Code
-
 Chopstick MACHINE {
 \end_layout
 
+\begin_deeper
 \begin_layout LyX-Code
-
 	OPTION tab Test;
 \end_layout
 
 \begin_layout LyX-Code
-
 	OPTION owner "noone";
 \end_layout
 
 \begin_layout LyX-Code
-
 	free STATE;
 \end_layout
 
 \begin_layout LyX-Code
-
 	busy STATE;
 \end_layout
 
+\end_deeper
 \begin_layout LyX-Code
+}
+\end_layout
 
+\begin_layout LyX-Code
+Philosopher MACHINE left, right {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+	OPTION tab Test;
+\end_layout
+
+\begin_layout LyX-Code
+    OPTION eat_time 20;
+\end_layout
+
+\begin_layout LyX-Code
+    OPTION timer 20;
+\end_layout
+
+\begin_layout LyX-Code
+    full FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+    okToStart FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+    okToStop FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+    finished WHEN SELF IS finishing || SELF IS finished && TIMER < timer;
+\end_layout
+
+\begin_layout LyX-Code
+	finishing WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+		&& TIMER >= eat_time; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+        TAG full WHEN TIMER > 10;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+	starting WHEN left.owner == "noone" && right.owner == "noone";
+\end_layout
+
+\begin_layout LyX-Code
+	waiting DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+    ENTER INIT {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+        eat_time := (NOW % 10) * 10;
+\end_layout
+
+\begin_layout LyX-Code
+        SET okToStart TO on;
+\end_layout
+
+\begin_layout LyX-Code
+        SET okToStop TO on;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+    }
+\end_layout
+
+\begin_layout LyX-Code
+	ENTER starting {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+		LOCK left;
+\end_layout
+
+\begin_layout LyX-Code
+		IF (left.owner == "noone") {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+            LOG "got left";
+\end_layout
+
+\begin_layout LyX-Code
+			left.owner := SELF.NAME;
+\end_layout
+
+\begin_layout LyX-Code
+			LOCK right;
+\end_layout
+
+\begin_layout LyX-Code
+			IF (right.owner == "noone") {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+				right.owner := SELF.NAME;
+\end_layout
+
+\begin_layout LyX-Code
+                LOG "got right";
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+			}
+\end_layout
+
+\begin_layout LyX-Code
+			ELSE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+				UNLOCK left;
+\end_layout
+
+\begin_layout LyX-Code
+				UNLOCK right;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+			}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+		}
+\end_layout
+
+\begin_layout LyX-Code
+		ELSE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+			UNLOCK left;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+		}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+	}
+\end_layout
+
+\begin_layout LyX-Code
+	ENTER finished {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+        LOG "finished"; 
+\end_layout
+
+\begin_layout LyX-Code
+		left.owner := "noone";
+\end_layout
+
+\begin_layout LyX-Code
+		right.owner := "noone";
+\end_layout
+
+\begin_layout LyX-Code
+		UNLOCK right;
+\end_layout
+
+\begin_layout LyX-Code
+		UNLOCK left;
+\end_layout
+
+\begin_layout LyX-Code
+		timer := 10 * (TIMER + 1);
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+	}
+\end_layout
+
+\begin_layout LyX-Code
+    TRANSITION INIT TO starting REQUIRES okToStart IS on;
+\end_layout
+
+\begin_layout LyX-Code
+    TRANSITION eating TO finished REQUIRES okToStop IS on;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
 }
 \end_layout
 
 \begin_layout LyX-Code
 
-Philosopher MACHINE left, right {
 \end_layout
 
 \begin_layout LyX-Code
-
-	OPTION tab Test;
-\end_layout
-
-\begin_layout LyX-Code
-
-    OPTION eat_time 20;
-\end_layout
-
-\begin_layout LyX-Code
-
-    OPTION timer 20;
-\end_layout
-
-\begin_layout LyX-Code
-
-        full FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-
-    okToStart FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-
-    okToStop FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-
-    finished WHEN SELF IS finishing || SELF IS finished && TIMER < timer;
-\end_layout
-
-\begin_layout LyX-Code
-
-	finishing WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  
-\end_layout
-
-\begin_layout LyX-Code
-
-		&& TIMER >= eat_time; 
-\end_layout
-
-\begin_layout LyX-Code
-
-	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
-\end_layout
-
-\begin_layout LyX-Code
-
-        TAG full WHEN TIMER > 10;
-\end_layout
-
-\begin_layout LyX-Code
-
-	starting WHEN left.owner == "noone" && right.owner == "noone";
-\end_layout
-
-\begin_layout LyX-Code
-
-	waiting DEFAULT;
-\end_layout
-
-\begin_layout LyX-Code
-
-    ENTER INIT {
-\end_layout
-
-\begin_layout LyX-Code
-
-        eat_time := (NOW % 10) * 10;
-\end_layout
-
-\begin_layout LyX-Code
-
-        SET okToStart TO on;
-\end_layout
-
-\begin_layout LyX-Code
-
-        SET okToStop TO on;
-\end_layout
-
-\begin_layout LyX-Code
-
-    }
-\end_layout
-
-\begin_layout LyX-Code
-
-	ENTER starting {
-\end_layout
-
-\begin_layout LyX-Code
-
-		LOCK left;
-\end_layout
-
-\begin_layout LyX-Code
-
-		IF (left.owner == "noone") {
-\end_layout
-
-\begin_layout LyX-Code
-
-            LOG "got left";
-\end_layout
-
-\begin_layout LyX-Code
-
-			left.owner := SELF.NAME;
-\end_layout
-
-\begin_layout LyX-Code
-
-			LOCK right;
-\end_layout
-
-\begin_layout LyX-Code
-
-			IF (right.owner == "noone") {
-\end_layout
-
-\begin_layout LyX-Code
-
-				right.owner := SELF.NAME;
-\end_layout
-
-\begin_layout LyX-Code
-
-                LOG "got right";
-\end_layout
-
-\begin_layout LyX-Code
-
-			}
-\end_layout
-
-\begin_layout LyX-Code
-
-			ELSE {
-\end_layout
-
-\begin_layout LyX-Code
-
-				UNLOCK left;
-\end_layout
-
-\begin_layout LyX-Code
-
-				UNLOCK right;
-\end_layout
-
-\begin_layout LyX-Code
-
-			}
-\end_layout
-
-\begin_layout LyX-Code
-
-		}
-\end_layout
-
-\begin_layout LyX-Code
-
-		ELSE {
-\end_layout
-
-\begin_layout LyX-Code
-
-			UNLOCK left;
-\end_layout
-
-\begin_layout LyX-Code
-
-		}
-\end_layout
-
-\begin_layout LyX-Code
-
-	}
-\end_layout
-
-\begin_layout LyX-Code
-
-	ENTER finished {
-\end_layout
-
-\begin_layout LyX-Code
-
-        LOG "finished"; 
-\end_layout
-
-\begin_layout LyX-Code
-
-		left.owner := "noone";
-\end_layout
-
-\begin_layout LyX-Code
-
-		right.owner := "noone";
-\end_layout
-
-\begin_layout LyX-Code
-
-		UNLOCK right;
-\end_layout
-
-\begin_layout LyX-Code
-
-		UNLOCK left;
-\end_layout
-
-\begin_layout LyX-Code
-
-		timer := 10 * (TIMER + 1);
-\end_layout
-
-\begin_layout LyX-Code
-
-	}
-\end_layout
-
-\begin_layout LyX-Code
-
-    TRANSITION INIT TO starting REQUIRES okToStart IS on;
-\end_layout
-
-\begin_layout LyX-Code
-
-    TRANSITION eating TO finished REQUIRES okToStop IS on; }
-\end_layout
-
-\begin_layout LyX-Code
-
-\end_layout
-
-\begin_layout LyX-Code
-
 c01 Chopstick; c02 Chopstick; c03 Chopstick; 
 \end_layout
 
 \begin_layout LyX-Code
-
 c04 Chopstick; c05 Chopstick; c06 Chopstick; c07 Chopstick;
 \end_layout
 
 \begin_layout LyX-Code
-
 phil1 Philosopher c01, c02; 
 \end_layout
 
 \begin_layout LyX-Code
-
 phil2 Philosopher c02, c03; 
 \end_layout
 
 \begin_layout LyX-Code
-
 phil3 Philosopher c03, c04; 
 \end_layout
 
 \begin_layout LyX-Code
-
 phil4 Philosopher c04, c05; 
 \end_layout
 
 \begin_layout LyX-Code
-
 phil5 Philosopher c05, c06; 
 \end_layout
 
 \begin_layout LyX-Code
-
 phil6 Philosopher c06, c07; 
 \end_layout
 
 \begin_layout LyX-Code
-
-phil7 Philosopher c07, c01; 
-\end_layout
-
-\end_inset
-
-
+phil7 Philosopher c07, c01;
 \end_layout
 
 \end_body
