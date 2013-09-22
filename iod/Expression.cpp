@@ -80,7 +80,7 @@ bool Predicate::usesTimer(Value &timer_val) const {
 		if (!left_p->left_p) {
 			if (left_p->entry.kind == Value::t_symbol 
 					&& (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
-				DBG_MSG << "Copying timer value " << right_p->entry << "\n";
+				//DBG_MSG << "Copying timer value " << right_p->entry << "\n";
 				timer_val = right_p->entry;
 				return true; 
 			}
