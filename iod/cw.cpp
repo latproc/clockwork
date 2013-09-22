@@ -200,7 +200,6 @@ void ProcessingThread::operator()()  {
 					delta = get_diff_in_microsecs(&start_t, &end_t);
 					cycle_delay_stat->add(delta);
 				}
-				//if (ECInterface::sig_alarms != user_alarms)
                 {
 					gettimeofday(&end_t, 0);
 					delta = get_diff_in_microsecs(&end_t, &start_t);
@@ -241,12 +240,7 @@ void ProcessingThread::operator()()  {
                             statistics->auto_states.add(delta - delta2); delta2 = delta;
                         }
 					}
-                    
 				}
-				//else {
-				//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
-				//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
-				//}
 				std::cout << std::flush;
 			}
             ++sequence;
@@ -264,7 +258,6 @@ void ProcessingThread::operator()()  {
 
 int main (int argc, char const *argv[])
 {
-	unsigned int user_alarms = 0;
 	Logger::instance();
 
     Logger::instance()->setLevel(Logger::Debug);
@@ -466,7 +459,7 @@ int main (int argc, char const *argv[])
 //            boost::mutex::scoped_lock lock(model_mutex);
 //            model_updated.wait(model_mutex);
 //        }
-        usleep(200);
+        //usleep(200);
         if (processing_sequence != processMonitor.sequence) { // did the model update?
             ECInterface::instance()->sendUpdates();
             ++processing_sequence;
@@ -474,8 +467,8 @@ int main (int argc, char const *argv[])
         struct timeval now;
         gettimeofday(&now,0);
         long delta = (now.tv_sec - then.tv_sec) * 1000000 + ( (long)now.tv_usec - (long)then.tv_usec);
-        //if (1000-delta > 100)
-        //    usleep(1000-delta);
+        if (1000-delta > 100)
+            usleep(1000-delta);
         then = now;
     }
     MQTTInterface::instance()->stop();
