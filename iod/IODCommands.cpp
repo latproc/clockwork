@@ -774,7 +774,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
             
 	        for (j = 0; j < sync.pdo_count; j++) {
 	            m.getPdo(&pdo, slave.position, i, j);
-                std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
+                //std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
 				c_pdos[j + pdo_pos].index = pdo.index;
 				c_pdos[j + pdo_pos].n_entries = (unsigned int) pdo.entry_count;
 				if (pdo.entry_count)
@@ -784,16 +784,16 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
                 
 	            for (k = 0; k < pdo.entry_count; k++) {
 	                m.getPdoEntry(&entry, slave.position, i, j, k);
-                  	std::cout << " entry: " << k 
-						<< "{" 
-						<< std::hex << (int)entry.index <<", " 
-						<< (int)entry.subindex<<", " 
-						<< (int)entry.bit_length <<"}";
+                  	//std::cout << " entry: " << k 
+					//	<< "{" 
+					//	<< std::hex << (int)entry.index <<", " 
+					//	<< (int)entry.subindex<<", " 
+					//	<< (int)entry.bit_length <<"}";
 					c_entries[k + entry_pos].index = entry.index;
 					c_entries[k + entry_pos].subindex = entry.subindex;
 					c_entries[k + entry_pos].bit_length = entry.bit_length;
 	            }
-		    	std::cout << "\n";
+		    	//std::cout << "\n";
 	            entry_pos += pdo.entry_count;
 	        }
             
