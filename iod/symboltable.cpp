@@ -620,7 +620,7 @@ bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
 		return true;
     }
     else {
-        std::cerr << "Error: " << name << " already defined\n";
+        //std::cerr << "Error: " << name << " already defined\n";
 		return false;
     }
 }
@@ -631,7 +631,7 @@ bool SymbolTable::add(const std::string name, Value val, ReplaceMode replace_mod
 		return true;
 	}
 	else {
-        std::cerr << "Error: " << name << " already defined\n";
+        //std::cerr << "Error: " << name << " already defined\n";
 		return false;
 	}
 }
