@@ -323,12 +323,15 @@ void semantic_analysis() {
     }
     
     // stitch the definitions together
+    
+        // check the parameter count of the instantiated machine vs the machine class and raise an error if necessary
         m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
             MachineInstance *mi = *m_iter++;
         std::cout << "Machine " << mi->getName() << " has " << mi->parameters.size() << " parameters\n";
         
 		if (mi->getStateMachine() && mi->parameters.size() != mi->getStateMachine()->parameters.size()) {
+            // the POINT class special; it can have either 2 or 3 parameters (yuk)
             if (mi->getStateMachine()->name != "POINT" || mi->getStateMachine()->parameters.size() < 2 || mi->getStateMachine()->parameters.size() >3) {
                 std::stringstream ss;
                 ss << "## - Error: Machine " << mi->getStateMachine()->name << " requires "
@@ -340,12 +343,16 @@ void semantic_analysis() {
             }
 		}
         
+        // for each of the machine instance's symbol parameters,
+        //  find a reference to the machine instance corresponding to the given name
+        //  and raise a warning if necessary. ( should this warning be an error?)
         for (unsigned int i=0; i<mi->parameters.size(); i++) {
             Value p_i = mi->parameters[i].val;
             if (p_i.kind == Value::t_symbol) {
                 std::cout << "  parameter " << i << " " << p_i.sValue << " (" << mi->parameters[i].real_name << ")\n";
 				MachineInstance *found = mi->lookup(mi->parameters[i]); // uses the real_name field and caches the result
 				if (found) {
+                    // special check of parameter types for points
                     if (mi->_type == "POINT" && i == 0 && found->_type != "MODULE" &&  found->_type != "MQTTBROKER") {
                         std::cout << "Error: in the definition of " << mi->getName() << ", " <<
                         p_i.sValue << " has type " << found->_type << " but should be MODULE or MQTTBROKER\n";
@@ -399,7 +406,7 @@ void semantic_analysis() {
 				Parameter &p = m->parameters[j];
 				if (p.val.kind == Value::t_symbol) {
 					DBG_MSG << "      " << j << ": " << p.val << "\n";
-					m->parameters[j].machine = mi->lookup(m->parameters[j]);
+					m->parameters[j].machine = mi->lookup(mi->parameters[j]);
 					if (m->parameters[j].machine) {
 						m->parameters[j].machine->addDependancy(m);
 						m->listenTo(m->parameters[j].machine);
@@ -495,7 +502,7 @@ void semantic_analysis() {
 			}
 			
 			if (source && source->getName() != machine) {
-				DBG_MSG << "duplicating receive function for " << mi->getName() << " from " << source->getName() << " (" << machine << ")" << "\n";
+				//DBG_MSG << "duplicating receive function for " << mi->getName() << " from " << source->getName() << " (" << machine << ")" << "\n";
 				event = source->getName() + "." + event;
 				mi->receives_functions[Message(event.c_str())] = rcv.second;
 			}
