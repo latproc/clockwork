@@ -31,6 +31,7 @@ ParamPropertyTest MACHINE (tab:All, a:3, b:"world") {
     p_3 ParamTest (tab:All) a;
     p_4 ParamTest (tab:All) b;
 }
+#ppt ParamPropertyTest; # this fails because a and b are properties and can't be passed as parameters atm.
 
 zero VARIABLE 0;
 default_value VARIABLE 7;
@@ -39,7 +40,7 @@ default_value VARIABLE 7;
 p_1 ParamTest (tab:All) 1;
 
 # string parameter
-p_hello ParamTest (tab:All) "hello";
+p_hello ParamTest (tab:All) "hello";  # note: bug, p_hello.val should be "hello"
 
 # variable name as parameter
 p_zero ParamTest (tab:All) zero;
