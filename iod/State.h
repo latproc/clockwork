@@ -34,6 +34,7 @@ public:
     State(const char *name);
     State(int val);
     State(const State &orig);
+    virtual ~State() {}
     State &operator=(const State &other);
     std::ostream &operator<<(std::ostream &out) const;
     virtual bool operator==(const State &other) const;

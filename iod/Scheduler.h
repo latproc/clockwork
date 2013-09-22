@@ -68,7 +68,7 @@ public:
 	ScheduledItem *next() const { if (items.empty()) return 0; else return items.top(); }
 	void pop() { items.pop(); }
 	bool ready();
-	virtual void idle();
+    void idle();
 	bool empty() { return items.empty(); }
     
 protected:
