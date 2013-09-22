@@ -50,12 +50,10 @@ std::ostream &operator<<(std::ostream &out, const Dispatcher &m) {
 
 void Dispatcher::addReceiver(Receiver*r) {
     all_receivers.push_back(r);
-    std::cout << " added receiver " << r->getName() << "\n";
 }
 
 void Dispatcher::removeReceiver(Receiver*r) {
     all_receivers.remove(r);
-    std::cout << " removed reciever " << r->getName() << "\n";
 }
 void Dispatcher::deliver(Package *p) {
 #if 1
