@@ -5,7 +5,6 @@ Cell MACHINE left, right {
     on WHEN right IS off AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER >= 1000);
     off DEFAULT;
     starting DURING start { SET SELF TO on }
-    #RECEIVE right.on_enter { LOG "off"; SET SELF TO off }
 }
 
 led01 Cell led06, led02;
