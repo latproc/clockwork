@@ -1,6 +1,7 @@
 #!/bin/sh
 
 [ -d www ] && cd www;
+chown nobody app
 [ -d app ] && cd app;
 
 sqlite3 webio.db << EOF
@@ -11,3 +12,4 @@ CREATE TABLE Users
 CREATE TABLE notes(id integer primary key autoincrement, note varchar(500));
 CREATE UNIQUE INDEX i_username on users(username);
 EOF
+chown nobody webio.db
