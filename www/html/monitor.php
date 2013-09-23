@@ -346,12 +346,12 @@ foreach ($tabs as $tab => $data) {
 						.' name="'. $point . '" class="enable_disable"' 
 						.'</td>';
 				if ($type != "piston") {
-					$tabdata .= '<td>'. $point . ":</td><td>"
+					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td><td>"
 							.  button_image($point, "{$image_prefix}_$status.png");
 					if ($type != "Output") $tabdata .= ' <div id="mc_'.$point.'">' . htmlspecialchars($status) . '</div>';
 				}
 				else {
-					$tabdata .= '<td>'. $point . '</td><td><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div></td>';
+					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . '</td><td><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div></td>';
 				}
 				$tabdata .= "</td>\n";
 				// display command buttons
@@ -584,6 +584,21 @@ print <<<EOD
 				}
 			});
 		});
+        $("#hideinfo").click( function(){
+            $(this).css("display","none");
+            $("#info").css("display","none")
+        })
+        $(".item_name").each(function(){
+          $(this).click(function(){
+            $.get("index.php", { describe: $(this).attr("name").replace("-",".") },
+            function(data){
+                $("#info").html("<pre>"+data+"</pre>");
+                $("#info").css("display","block");
+                $("#hideinfo").css("display","block");
+            })
+          })
+        })
+
 		setTimeout("refresh()", 900);
 	})
 	</script>
@@ -592,6 +607,11 @@ print <<<EOD
 <body>
 <div>$banner</div>
 <fieldset><legend>IO Control</legend>
+<div style="position:relative;background-color:white">
+  <div id="hideinfo" style="position:absolute;left:600px;top:80px;display:none;z-index:1000;background-color:yellow;">hide</div>
+  <div id="info" style="border:1px solid black;position:absolute;left:100px;top:100px;width:800px;height:500px;background-color:white;overflow:scroll;display:none;z-index:1000;" >
+  </div>
+</div>
 $page_body
 <br/>
 </fieldset>

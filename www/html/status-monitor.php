@@ -140,7 +140,7 @@ $siteurl="status-monitor.php";
   $tabdata="";
 
   foreach ($config_entries as $curr) {
-	if ($curr->class != "MODULE" ) { 
+	if ($curr->class != "MODULE"){ //  && (isset($curr->wire) || isset($curr->monitored) && $curr->monitored == "true") ) { 
         $tabdata .= "<div class=\"item\">";
 		$point = $curr->name;
 		$image_prefix = "input64x64";
@@ -162,19 +162,21 @@ $siteurl="status-monitor.php";
 			$status = $curr->state;
 		else
 			$status = "unknown";
+		$wire = "";
+		if (isset($curr->wire)) $wire = " (" . $curr->wire . ")";
 		//$debug_messages .= "$point $status <br/>";
 		if ($type != "Input") { 
 			// interactive objects
 			if ($use_ajax) {
 				if ($type != "piston") {
-					$tabdata .= '<div class="item_name">' . $point . "</div> "
+					$tabdata .= '<div class="itemname" name="'.$point.'">' . $point . "</div> "
 						. '<div class="item_img">' 
 						. button_image($point, "{$image_prefix}_$status.png", 'im_'.$point) . "</div>"
 						. '<div class="item_state" id="mc_' . $point. '">' 
 						. htmlspecialchars($status) . "</div>";
 				}
 				else {
-					$tabdata .=  $point . '<div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div>';
+					$tabdata .=  '<div class="itemname" name="'.$point.'">' . $point . '</div><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div>';
 				}
 				// display properties
 				//if (isset($curr->display)) {
@@ -227,13 +229,13 @@ print <<<EOD
 	    .error_message { font-size:24px; color:#f44; }
 	    .item { float:left; width:240px; }
 	    .debug_messages { display:none; }
-		.item_name { width:120px; height:40px;font-weight:bold;float:left; }
+		.itemname { width:120px; height:40px;font-weight:bold;float:left; }
 		.item_img { width:20px; height:40px;float:left; }
 		.item_state { width:80px; padding-left:5px; height:40px;float:left; }
     </style>
 	<script type="text/javascript">
 	function refresh() {
-		$.get("status-monitor.php", { list: "json"}, 
+		$.get("index.php", { list: "json"}, 
 			function(data){ 
 				res=JSON.parse(data);
 				$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
@@ -299,7 +301,7 @@ print <<<EOD
 		});
 		$(".out").each(function(){
 			$(this).click(function(){
-				$.get("monitor.php", { toggle: $(this).attr("name") }, 
+				$.get("index.php", { toggle: $(this).attr("name") }, 
 					function(data){
 						if (data != "OK") alert(data) 
 					});
@@ -308,6 +310,20 @@ print <<<EOD
 		$( ".piston" ).progressbar({
             value: 0
         });
+	    $("#hideinfo").click( function(){
+	        $(this).css("display","none"); 
+	        $("#info").css("display","none")
+	    })  
+		$(".itemname").each(function(){
+		  $(this).click(function(){
+    		$.get("index.php", { describe: $(this).attr("name").replace("-",".") },
+        	function(data){
+            	$("#info").html("<pre>"+data+"</pre>");
+            	$("#info").css("display","block");
+            	$("#hideinfo").css("display","block");
+        	})  
+		  })
+     	})  
 		setTimeout("refresh()", 2000);
 	})
 	</script>
@@ -319,6 +335,11 @@ print <<<EOD
 	<div class="error_message"></div>
 </fieldset>
 <fieldset><legend>Status</legend>
+<div style="position:relative">
+  <div id="hideinfo" style="position:absolute;left:600px;top:80px;display:none;z-index:100;background-color:yellow">hide</div>
+  <div id="info" style="position:absolute;left:100px;top:100px;width:600px;height:400px;overflow:scroll;display:none;z-index:100;background-color:white" >
+  </div>
+</div>
 $page_body
 <br/>
 </fieldset>
