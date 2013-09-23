@@ -84,7 +84,7 @@ Action::Status MachineCommand::runActions() {
 		DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
 		Action::Status stat = (*a)();
         if (stat == Action::Failed) {
-            NB_MSG << " action: " << *a << " failed to start (" << a->error() << ")\n";
+            NB_MSG << " action: " << *a <<" running on " << owner->getName() << " failed to start (" << a->error() << ")\n";
 			error_str = a->error() ;
             return Failed; // action failed to start
         }
