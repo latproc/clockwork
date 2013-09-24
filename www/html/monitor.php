@@ -593,6 +593,9 @@ print <<<EOD
             $.get("index.php", { describe: $(this).attr("name").replace("-",".") },
             function(data){
                 $("#info").html("<pre>"+data+"</pre>");
+				$("#info").css("width",window.innerWidth - 200)
+				$("#info").css("height",window.innerHeight - 200)
+				$("#hideinfo").css("left",window.innerWidth- 150)
                 $("#info").css("display","block");
                 $("#hideinfo").css("display","block");
             })
