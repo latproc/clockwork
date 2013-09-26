@@ -406,7 +406,12 @@ void semantic_analysis() {
 				Parameter &p = m->parameters[j];
 				if (p.val.kind == Value::t_symbol) {
 					DBG_MSG << "      " << j << ": " << p.val << "\n";
-					p.machine = mi->lookup(p);
+                    if (p.real_name.length() == 0) {
+                        p.machine = mi->lookup(p.val);
+                        if (p.machine) p.real_name = p.machine->getName();
+                    }
+                    else
+                        p.machine = mi->lookup(p);
 					if (p.machine) {
 						p.machine->addDependancy(m);
 						m->listenTo(p.machine);
