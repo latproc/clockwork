@@ -466,9 +466,12 @@ void MachineInstance::describe(std::ostream &out) {
         while (iter != listens.end()) {
             Transmitter *t = *iter++;
 			MachineInstance *machine = dynamic_cast<MachineInstance*>(t);
-			if (machine)
-            	out << "  " << machine->getName() << ":   " << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED") << "\n";
-			else 
+                if (machine) {
+                    out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   " << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
+                if (machine->owner) out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
+                out << "\n";
+            }
+			else
 				if (t) out << "  " << t->getName() << "\n";
 			
         }
@@ -1628,8 +1631,12 @@ void MachineInstance::setStableState() {
 }
 
 void MachineInstance::setStateMachine(MachineClass *machine_class) {
+    if (_name == "D_BaleInPos") {
+        int xxx = 3;
+    }
+    //if (state_machine) return;
     state_machine = machine_class;
-	DBG_M_INITIALISATION << _name << " is of class " << machine_class->name << "\n";
+	DBG_MSG << _name << " is of class " << machine_class->name << "\n";
 	if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states && machine_class->stable_states.size()) 
 		automatic_machines.push_back(this);
     BOOST_FOREACH(StableState &s, machine_class->stable_states) {
@@ -1669,53 +1676,55 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
 	}
 	properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
-    BOOST_FOREACH(Parameter p, state_machine->locals) {
-        DBG_M_INITIALISATION << "cloning machine '" << p.val.sValue << "'\n";
-        Parameter newp(p.val.sValue.c_str());
-        if (!p.machine) {
-            DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter " << p.val.sValue << "\n";
+    if (locals.size() == 0) {
+        BOOST_FOREACH(Parameter p, state_machine->locals) {
+            DBG_MSG << "cloning machine '" << p.val.sValue << "'\n";
+            Parameter newp(p.val.sValue.c_str());
+            if (!p.machine) {
+                DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter " << p.val.sValue << "\n";
+            }
+            else {
+                newp.machine = new MachineInstance(p.val.sValue.c_str(), p.machine->_type.c_str());
+                newp.machine->setProperties(p.machine->properties);
+                newp.machine->setDefinitionLocation(p.machine->definition_file.c_str(), p.machine->definition_line);
+                listenTo(newp.machine);
+                newp.machine->addDependancy(this);
+                std::map<std::string, MachineClass*>::iterator c_iter = machine_classes.find(newp.machine->_type);
+                if (c_iter == machine_classes.end()) 
+                    DBG_M_INITIALISATION <<"Warning: class " << newp.machine->_type << " not found\n"
+                    ;
+                else if ((*c_iter).second) {
+                    newp.machine->owner = this;
+                    MachineClass *newsm = (*c_iter).second;
+                    newp.machine->setStateMachine(newsm);
+                    if (newsm->parameters.size() != p.machine->parameters.size()) {
+                        if (newsm->name != "POINT" || newsm->parameters.size() < 2 || newsm->parameters.size() >3) {
+                            resetTemporaryStringStream();
+                            ss << "## - Error: Machine " << newsm->name << " requires " 
+                                << newsm->parameters.size()
+                                << " parameters but instance " << _name << "." << newp.machine->getName() << " has " << newp.machine->parameters.size();
+                            error_messages.push_back(ss.str());
+                            ++num_errors;
+                        }
+                    }
+                    if (p.machine->parameters.size()) {
+                        std::copy(p.machine->parameters.begin(), p.machine->parameters.end(), back_inserter(newp.machine->parameters));
+                        DBG_M_INITIALISATION << "copied " << p.machine->parameters.size() << " parameters. local has " << p.machine->parameters.size() << "parameters\n";
+                    }
+                    if (p.machine->stable_states.size()) {
+                        DBG_M_INITIALISATION << " restoring stable states for " << newp.val << "...before: " << newp.machine->stable_states.size();
+                        newp.machine->stable_states.clear();
+                        BOOST_FOREACH(StableState &s, p.machine->stable_states) {
+                            newp.machine->stable_states.push_back(s);
+                            newp.machine->stable_states[newp.machine->stable_states.size()-1].setOwner(this); //
+                        }
+                        std::copy(p.machine->stable_states.begin(), p.machine->stable_states.end(), back_inserter(newp.machine->stable_states));
+                        DBG_M_INITIALISATION << " after: " << newp.machine->stable_states.size() << "\n";
+                    }
+                }
+            }
+           locals.push_back(newp);
         }
-        else {
-            newp.machine = new MachineInstance(p.val.sValue.c_str(), p.machine->_type.c_str());
-			newp.machine->setProperties(p.machine->properties);
-			newp.machine->setDefinitionLocation(p.machine->definition_file.c_str(), p.machine->definition_line);
-			listenTo(newp.machine);
-			newp.machine->addDependancy(this);
-	        std::map<std::string, MachineClass*>::iterator c_iter = machine_classes.find(newp.machine->_type);
-	        if (c_iter == machine_classes.end()) 
-	            DBG_M_INITIALISATION <<"Warning: class " << newp.machine->_type << " not found\n"
-				;
-	        else if ((*c_iter).second) {
-				newp.machine->owner = this;
-				MachineClass *newsm = (*c_iter).second;
-	            newp.machine->setStateMachine(newsm);
-				if (newsm->parameters.size() != p.machine->parameters.size()) {
-                    if (newsm->name != "POINT" || newsm->parameters.size() < 2 || newsm->parameters.size() >3) {
-                        resetTemporaryStringStream();
-                        ss << "## - Error: Machine " << newsm->name << " requires " 
-                            << newsm->parameters.size()
-                            << " parameters but instance " << _name << "." << newp.machine->getName() << " has " << newp.machine->parameters.size();
-                        error_messages.push_back(ss.str());
-                        ++num_errors;
-                    }
-				}
-				if (p.machine->parameters.size()) {
-					std::copy(p.machine->parameters.begin(), p.machine->parameters.end(), back_inserter(newp.machine->parameters));
-					DBG_M_INITIALISATION << "copied " << p.machine->parameters.size() << " parameters. local has " << p.machine->parameters.size() << "parameters\n";
-				}
-				if (p.machine->stable_states.size()) {
-					DBG_M_INITIALISATION << " restoring stable states for " << newp.val << "...before: " << newp.machine->stable_states.size();
-					newp.machine->stable_states.clear();
-                    BOOST_FOREACH(StableState &s, p.machine->stable_states) {
-                        newp.machine->stable_states.push_back(s);
-                        newp.machine->stable_states[newp.machine->stable_states.size()-1].setOwner(this); //
-                    }
-					std::copy(p.machine->stable_states.begin(), p.machine->stable_states.end(), back_inserter(newp.machine->stable_states));
-					DBG_M_INITIALISATION << " after: " << newp.machine->stable_states.size() << "\n";
-				}
-			}
-		}
-        locals.push_back(newp);
     }
 	// TBD check the parameter types
 	size_t num_class_params = state_machine->parameters.size();
