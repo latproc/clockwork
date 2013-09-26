@@ -402,19 +402,21 @@ void semantic_analysis() {
                     }
                 }
             }
-			for (unsigned int j=0; j<mi->locals[i].machine->parameters.size(); ++j) {
+			for (unsigned int j=0; j<m->parameters.size(); ++j) {
 				Parameter &p = m->parameters[j];
 				if (p.val.kind == Value::t_symbol) {
 					DBG_MSG << "      " << j << ": " << p.val << "\n";
-					m->parameters[j].machine = mi->lookup(mi->locals[i].machine->parameters[j]);
-					if (m->parameters[j].machine) {
-						m->parameters[j].machine->addDependancy(m);
-						m->listenTo(m->parameters[j].machine);
-						DBG_MSG << " linked " << m->parameters[j].val << " to local " << m->getName() << " param " << j << "\n";
+					p.machine = mi->lookup(p);
+					if (p.machine) {
+						p.machine->addDependancy(m);
+						m->listenTo(p.machine);
+						DBG_MSG << " linked parameter " << j << " of local " << m->getName()
+                            << " (" << m->parameters[j].val << ") to " << p.machine->getName() << "\n";
 					}
 					else {
 						std::stringstream ss;
-						ss << "## - Error: local parameter " << m->getName() << " for machine " << mi->getName() << " sends an unknown parameter " << p.val << "\n";
+						ss << "## - Error: local " << m->getName() << " for machine " << mi->getName()
+                            << " sends an unknown parameter " << p.val << " at position: " << j << "\n";
 						error_messages.push_back(ss.str());
 						++num_errors;
 					}
