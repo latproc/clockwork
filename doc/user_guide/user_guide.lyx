@@ -969,10 +969,25 @@ Cell MACHINE left, right {
 \end_layout
 
 \begin_layout LyX-Code
-on WHEN right IS off AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER
- >= 1000);   
+on WHEN right IS off 
 \end_layout
 
+\begin_deeper
+\begin_layout LyX-Code
+AND (SELF IS on 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OR 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+left IS on AND SELF IS off AND left.TIMER >= 1000);   
+\end_layout
+
+\end_deeper
 \begin_layout LyX-Code
 off DEFAULT;
 \end_layout

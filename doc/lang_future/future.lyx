@@ -377,8 +377,29 @@ Substates
 Exceptions
 \end_layout
 
+\begin_layout Standard
+Exceptions are messages that are broadcast to several receivers, based on
+ whether they CATCH the event or not.
+ An exception is sent by the THROW command and this command causes a handler
+ to abort at point the exception is sent.
+ I would like to consider the option of temporarily listening for events,
+ including exceptions and this is likely to be done via a LISTEN command
+ to enable listening and an IGNORE command to disable listening.
+ By default, if a machine implements an event handler for an event it is
+ assumed to be listening for the event.
+ 
+\end_layout
+
 \begin_layout Subsection
 Conditions
+\end_layout
+
+\begin_layout Standard
+Conditions are not currently implemented but they are intended to operate
+ as shortcuts or optimisations that reduce the need to have a large set
+ of expressions on WHEN clauses.
+ Effectively, a CONDITION is a machine that is true when the expression
+ is true and false otherwise.
 \end_layout
 
 \begin_layout Subsection
@@ -454,6 +475,38 @@ Data is often modified during a process but it is not appropriate for external
  The intention is to add a facility that can be used to perform data calculation
 s using internal, private instances and to only make the data available
  externally in certain states.
+\end_layout
+
+\begin_layout Subsection
+Date and Time functions
+\end_layout
+
+\begin_layout Description
+NOW the current time in milliseconds
+\end_layout
+
+\begin_layout Description
+DAY the number of the current day (1..31)
+\end_layout
+
+\begin_layout Description
+MONTH the number of the current month (1..12)
+\end_layout
+
+\begin_layout Description
+YR the current year (two digits)
+\end_layout
+
+\begin_layout Description
+YEAR the curren tyear (four digits)
+\end_layout
+
+\begin_layout Description
+HOUR the current hour
+\end_layout
+
+\begin_layout Description
+MIN the current minute
 \end_layout
 
 \end_body

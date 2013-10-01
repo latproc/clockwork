@@ -263,6 +263,10 @@ Thus a FLAG can be either on or off and is initially off.
  state of the FLAG as required.
 \end_layout
 
+\begin_layout Subsection
+Controlling outputs
+\end_layout
+
 \begin_layout Standard
 The above AndGate machine does not directly control any other part of the
  system, it simply sets its own state based on its inputs.
@@ -323,6 +327,69 @@ and_gate AndGate a, b, light;
 \end_layout
 
 \begin_layout Standard
+This approach, where we pass the object to be controlled makes the linkage
+ explicit but there is alternative, where another machine monitors the state
+ of the AndGate and then performs the control function:
+\end_layout
+
+\begin_layout LyX-Code
+LightController MACHINE input, output {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+  active WHEN 1==1, TAG output WHEN input IS on;
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+Note the test 1==1 is a functional placeholder; the indention is to define
+ the value TRUE for this kind of situation.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+in this case, AndGate does not manipulate or even know about the output:
+\end_layout
+
+\begin_layout LyX-Code
+AndGate MACHINE input1, input2
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN input1 IS on AND input2 IS on;
+\end_layout
+
+\begin_layout LyX-Code
+off DEFAULT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+It is not clear yet whether this approach is better or worse in general
+ however, if multiple machines need to be driven by the AndGate, the separate
+ controller pattern is much more reusable.
+\end_layout
+
+\begin_layout Standard
 So far we have been using FLAG machines as placeholders for machines that
  have an interface to hardware.
  For the sake of describing the language, this is sufficient and has the
@@ -338,6 +405,10 @@ Parts of a machine
 
 \begin_layout Standard
 The definition of a machine includes several sections:
+\end_layout
+
+\begin_layout Itemize
+declaration and initialisation of properties (also called options)
 \end_layout
 
 \begin_layout Itemize
@@ -365,7 +436,8 @@ export declarations
 \end_layout
 
 \begin_layout Standard
-These sections can be mixed but the order that stable states are declared
+These sections are only for conceptual convenience; declarations and definitions
+ can be freely intermixed but the order that stable states are declared
  is important.
  Please refer to section 
 \begin_inset CommandInset ref
@@ -1133,6 +1205,13 @@ name "sec:Machines"
 \end_layout
 
 \begin_layout Standard
+Machines are the core of clockwork programming; they define a virtual representa
+tion of the operation of real machines or processes and in so doing provide
+ a correspondence between the state of the program and the state of the
+ machinery in the real world.
+\end_layout
+
+\begin_layout Standard
 To define a machine use:
 \emph on
  class_name 
@@ -1200,11 +1279,11 @@ on STATE;
 \end_layout
 
 \begin_layout LyX-Code
-ENTER off { SET SELF TO on; }
+ENTER off { SET SELF TO on }
 \end_layout
 
 \begin_layout LyX-Code
-ENTER on { SET SELF TO off; }
+ENTER on { SET SELF TO off }
 \end_layout
 
 \begin_layout Standard
@@ -1212,6 +1291,20 @@ In the above example, the keyword `SELF' refers to the current state of
  the machine executing the script.
  the SET..TO..
  statement causes the state to change to the named state.
+\end_layout
+
+\begin_layout Standard
+Stable States
+\end_layout
+
+\begin_layout Standard
+The definition of machines with a set of states and actions is a common
+ approach and works well for describing event driven processes.
+ In clockwork, machines are repeatedly monitoring their inputs to ensure
+ that the machine's state is consistent with the definition of that state.
+ When the machine's input change to a configuration that implies the external
+ system has changed, clockwork machines automatically shift to the first
+ state they can find that matches the measured conditions.
 \end_layout
 
 \begin_layout Standard
@@ -1234,6 +1327,85 @@ The above states, `busy' and `idle' switch automatically depending on the
  We call theses `stable' states based on the idea that the machine finds.
  Stable state tests are performed in order and stop evaluating as soon as
  a match is found.
+\end_layout
+
+\begin_layout Standard
+As another example, the following machine tries to stay in an inverted state
+ compared to its input:
+\end_layout
+
+\begin_layout LyX-Code
+Inverted MACHINE input { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN input == off; 
+\end_layout
+
+\begin_layout LyX-Code
+off DEFAULT
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+} 
+\end_layout
+
+\begin_layout Standard
+At first glance, it seems that all instances of `Inverted' will always move
+ to the opposite state of their inputs.
+ However, in clockwork, we do not formally require that machines conform
+ to any particular interface, for example, the only requirement in the above
+ 'Inverted' machine is that the input might at some time enter the 'off'
+ state and when this happens, the Inverted machine will be 'on'.
+ 
+\end_layout
+
+\begin_layout Standard
+Both the input and the inverted machine may be in the same state for short
+ times, for example, for a short time after the machines are first enabled,
+ they will both be in the 'INIT' state.
+ Also using the above definition we cannot guarantee that the inverted machine
+ is actually the inverse of the input since the input may have pass through
+ other states and during all of these states, the inverted machine will
+ stay 'off'.
+ 
+\end_layout
+
+\begin_layout Standard
+The above definition may be made more strict by tightening the definition
+ of the off state:
+\end_layout
+
+\begin_layout LyX-Code
+Inverted MACHINE input { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN input == off; 
+\end_layout
+
+\begin_layout LyX-Code
+off WHEN input == on;
+\end_layout
+
+\begin_layout LyX-Code
+unknown DEFAULT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+This definition enables us to be more confident in claiming the machine
+ to be an inversion but if the input machine has many other states we may
+ have to deal with the `unknown' state in some way.
+ In practice, the previous definition is quite practical and these subtle
+ distinctions are not helpful to the modelling process.
 \end_layout
 
 \begin_layout Subsection
