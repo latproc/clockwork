@@ -78,12 +78,11 @@ std::ostream &Scheduler::operator<<(std::ostream &out) const  {
         struct timeval now;
         gettimeofday(&now, 0);
         long dt = get_diff_in_microsecs(&item->delivery_time, &now);
-		out << "Scheduler: " << item->delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << item->delivery_time.tv_usec
-                << " (" << dt << "usec)" << "\n";
+		out << "Scheduler: {" << item->delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << item->delivery_time.tv_usec
+                << " (" << dt << "usec) }" << "\n";
 		if (item->package) out << *(item->package);
 		else if (item->action) out << *(item->action);
-		out << " (" << items.size() << " items)";
-		out << "\n";
+		out << " (" << items.size() << " items)\n";
 	}
     return out;
 }
@@ -107,8 +106,8 @@ bool Scheduler::ready() {
 
 void Scheduler::idle() {
 	while ( ready()) {
-		DBG_SCHEDULER << "Scheduled item: "<< *this << " is ready\n";
 		ScheduledItem *item = next();
+		DBG_SCHEDULER << "Scheduled item is ready.\n"<< *this;
 		pop();
 		next_time.tv_sec = 0;
 		if (item->package) {
