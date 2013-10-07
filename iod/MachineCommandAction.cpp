@@ -113,7 +113,7 @@ Action::Status MachineCommand::runActions() {
         DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
     }
     DBG_M_ACTIONS << owner->getName() << " " << *this <<" completed all actions\n";
-	owner->needs_check = true; // conservative..
+	//owner->needs_check = true; // conservative..
     return Complete;
 }
 
