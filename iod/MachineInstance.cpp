@@ -149,7 +149,7 @@ StableState::StableState (const StableState &other)
     }
 }
 
-void StableState::fired(Trigger *trig) {
+void StableState::triggerFired(Trigger *trig) {
     if (owner) ++owner->needs_check;
 }
 
@@ -229,6 +229,12 @@ bool TriggeredAction::active() {
 	}
 	return true;
 }
+
+
+void MachineInstance::triggerFired(Trigger *trig) {
+    ++needs_check;
+}
+
 
 void MachineInstance::resetTemporaryStringStream() {
 	ss.clear();
@@ -659,7 +665,7 @@ void MachineInstance::checkStableStates() {
     std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
     while (iter != MachineInstance::automatic_machines.end()) {
         MachineInstance *m = *iter++;
-		if ( m->enabled() && m->executingCommand() == NULL  && (m->needsCheck() || m->_type == "CONDITION") ) 
+		if ( m->enabled() && m->executingCommand() == NULL  && (m->needsCheck() || m->_type == "CONDITION") )
 			m->setStableState();
 	}
 }
@@ -829,6 +835,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 			}
 		}
 	}
+    assert(reexecute == false);
 	if (reexecute || current_state != new_state) {
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);	
@@ -855,6 +862,10 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 			assert(ma.getSource() == ModbusAddress::state);
 			ma.update(1);
 		}
+        /* TBD optimise the timer triggers to only schedule the earliest trigger
+        StableState *earliestTimerState = NULL;
+        unsigned long ealiestTimer = (unsigned long) -1L;
+         */
 		
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             StableState &s = stable_states[ss_idx];
@@ -862,14 +873,13 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 				long timer_val;
 				// first disable any trigger that may still be enabled
 				if ( s.trigger) {
+                    //NB_MSG << "clearing trigger for state " << s.state_name << "\n";
                     if (s.trigger->enabled() ) {
                         DBG_M_SCHEDULER << _name << " disabling " << s.trigger->getName() << "\n";
                         s.trigger->disable();
                     }
                     s.trigger->release();
 				}
-				// prepare a new trigger. note: very short timers will still be scheduled
-				s.trigger = new Trigger("Timer");
 
                 // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
                 //   we should trigger at v.iValue+1
@@ -889,6 +899,9 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					continue;
 				}
 				DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val*1000 << "us\n";
+				// prepare a new trigger. note: very short timers will still be scheduled
+                // TBD move this outside of the loop and only apply it for the earliest timer
+				s.trigger = new Trigger("Timer");
 				Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, s.trigger)));
 			}
 			if (s.subcondition_handlers) 
@@ -899,8 +912,10 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					//setup triggers for subcondition handlers
 
 					if (ch.uses_timer) {
+
 						long timer_val;
 						if (ch.trigger) {
+                            //NB_MSG << "clearing trigger on subcondition of state " << s.state_name << "\n";
                             if (ch.trigger->enabled())
                                 ch.trigger->disable();
                             ch.trigger->release();
@@ -909,7 +924,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 						if (s.state_name == current_state.getName()) {
                             // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
                             //   we should trigger at v.iValue+1
-							ch.trigger = new Trigger("Timer");
+                            //NB_MSG << "setting up trigger for subcondition on state " << s.state_name << "\n";
+
 							if (ch.timer_val.kind == Value::t_symbol) {
 								Value v = getValue(ch.timer_val.sValue);
 								if (v.kind != Value::t_integer) {
@@ -926,12 +942,13 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 								continue;
 							}
 							DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
+							ch.trigger = new Trigger("Timer");
 							Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
 						}
 					}
 					else if (ch.command_name == "FLAG") {
 						if (s.state_name == current_state.getName()) {
-							
+							//TBD What was intended here?
 						}
 					}
 				}
@@ -1561,10 +1578,16 @@ void MachineInstance::setStableState() {
                                     else
                                         flag->setState("off");
                             }
-                            else if (!ch.triggered && ch.condition(this)) {
+                            else if (ch.trigger->enabled() && !ch.triggered && ch.condition(this)) {
                                 ch.triggered = true;
                                 DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
                                 execute(Message(ch.command_name.c_str()),this);
+                                ch.trigger->disable();
+                            }
+                            else if (ch.trigger->enabled() && ch.trigger->fired()) {
+                                DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
+                                execute(Message(ch.command_name.c_str()),this);
+                                ch.trigger->disable();
                             }
                         }
                     }
@@ -1631,9 +1654,6 @@ void MachineInstance::setStableState() {
 }
 
 void MachineInstance::setStateMachine(MachineClass *machine_class) {
-    if (_name == "D_BaleInPos") {
-        int xxx = 3;
-    }
     //if (state_machine) return;
     state_machine = machine_class;
 	DBG_MSG << _name << " is of class " << machine_class->name << "\n";

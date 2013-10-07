@@ -102,6 +102,7 @@ struct StableState : public TriggerOwner {
         
     void setOwner(MachineInstance *m) { owner = m; }
     void fired(Trigger *trigger);
+    void triggerFired(Trigger *trigger);
     void refreshTimer();
 	
 	bool uses_timer;
@@ -196,6 +197,8 @@ public:
     virtual ~MachineInstance();
 	virtual Receiver *asReceiver() { return this; }
     
+    void triggerFired(Trigger *trig);
+
     void addParameter(Value param);
     void setProperties(const SymbolTable &props);
     
