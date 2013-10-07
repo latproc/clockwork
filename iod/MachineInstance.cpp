@@ -1578,16 +1578,18 @@ void MachineInstance::setStableState() {
                                     else
                                         flag->setState("off");
                             }
-                            else if (ch.trigger->enabled() && !ch.triggered && ch.condition(this)) {
-                                ch.triggered = true;
-                                DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
-                                execute(Message(ch.command_name.c_str()),this);
-                                ch.trigger->disable();
-                            }
-                            else if (ch.trigger->enabled() && ch.trigger->fired()) {
-                                DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
-                                execute(Message(ch.command_name.c_str()),this);
-                                ch.trigger->disable();
+                            else if (ch.trigger && ch.trigger->enabled()) {
+                                if (!ch.triggered && ch.condition(this)) {
+                                    ch.triggered = true;
+                                    DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
+                                    execute(Message(ch.command_name.c_str()),this);
+                                    ch.trigger->disable();
+                                }
+                                else if (ch.trigger->fired()) {
+                                    DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
+                                    execute(Message(ch.command_name.c_str()),this);
+                                    ch.trigger->disable();
+                                }
                             }
                         }
                     }
