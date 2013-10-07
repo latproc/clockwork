@@ -122,6 +122,14 @@ Conditions
 \end_layout
 
 \begin_layout Itemize
+Low priority/slow scan inputs
+\end_layout
+
+\begin_layout Itemize
+Communication between instances of clockwork drivers
+\end_layout
+
+\begin_layout Itemize
 Delayed messaging (sending messages after a delay and cancelling..)
 \end_layout
 
@@ -134,7 +142,19 @@ Support of parallel execution
 \end_layout
 
 \begin_layout Itemize
-Type extensions
+Type extensions 
+\end_layout
+
+\begin_layout Itemize
+PID controls - ramps, constant speed
+\end_layout
+
+\begin_layout Itemize
+Counter inputs
+\end_layout
+
+\begin_layout Itemize
+Frequency inputsc
 \end_layout
 
 \begin_layout Itemize
