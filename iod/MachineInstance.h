@@ -64,6 +64,10 @@ struct ConditionHandler {
 	ConditionHandler(const ConditionHandler &other);
 	ConditionHandler &operator=(const ConditionHandler &other);
 	ConditionHandler() : action(0), trigger(0), uses_timer(false), triggered(false) {}
+    
+    bool check(MachineInstance *machine);
+    void reset();
+    
 	Condition condition;
 	std::string command_name;
 	std::string flag_name;
@@ -376,6 +380,7 @@ private:
 	friend class ExpressionAction;
 	friend class IODCommandToggle;
     friend class IODCommandSetStatus;
+    friend class ConditionHandler;
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);

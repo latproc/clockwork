@@ -114,6 +114,48 @@ ConditionHandler &ConditionHandler::operator=(const ConditionHandler &other) {
     return *this;
 }
 
+bool ConditionHandler::check(MachineInstance *machine) {
+    if (!machine) return false;
+    if (trigger && trigger->fired())
+        int x = 1;
+    if (command_name == "FLAG" ) {
+        MachineInstance *flag = machine->lookup(flag_name);
+        if (!flag)
+            std::cerr << machine->getName() << " error: flag " << flag_name << " not found\n";
+        else
+            if (condition(machine))
+                flag->setState("on");
+            else
+                flag->setState("off");
+    }
+    else if (!triggered && ( (trigger && trigger->fired()) || !trigger) && condition(machine)) {
+        triggered = true;
+        DBG_AUTOSTATES << machine->getName() << " subcondition triggered: " << command_name << " " << *(condition.predicate) << "\n";
+        machine->execute(Message(command_name.c_str()),machine);
+        if (trigger) trigger->disable();
+    }
+    else {
+        DBG_AUTOSTATES <<"condition: " << (condition.predicate) << "\n";
+        if (!trigger) { DBG_AUTOSTATES << "    condition does not have a timer\n"; }
+        if (triggered) {DBG_AUTOSTATES <<"     condition " << (condition.predicate) << " already triggered\n";}
+        if (condition(machine)) {DBG_AUTOSTATES <<"    condition " << (condition.predicate) << " passes\n";}
+    }
+    if (triggered) return true;
+    return false;
+}
+
+void ConditionHandler::reset() {
+    if (trigger) {
+        //NB_MSG << "clearing trigger on subcondition of state " << s.state_name << "\n";
+        if (trigger->enabled())
+            trigger->disable();
+        trigger->release();
+    }
+    trigger = 0;
+    triggered = false;
+}
+
+
 std::ostream &operator<<(std::ostream &out, const Parameter &p) {
     return p.operator<<(out);
 }
@@ -149,9 +191,11 @@ StableState::StableState (const StableState &other)
     }
 }
 
+
 void StableState::triggerFired(Trigger *trig) {
     if (owner) ++owner->needs_check;
 }
+
 
 void StableState::refreshTimer() {
     // prepare a new trigger. note: very short timers will still be scheduled
@@ -914,13 +958,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					if (ch.uses_timer) {
 
 						long timer_val;
-						if (ch.trigger) {
-                            //NB_MSG << "clearing trigger on subcondition of state " << s.state_name << "\n";
-                            if (ch.trigger->enabled())
-                                ch.trigger->disable();
-                            ch.trigger->release();
-						}
-                        ch.trigger = 0;
+                        ch.reset();
 						if (s.state_name == current_state.getName()) {
                             // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
                             //   we should trigger at v.iValue+1
@@ -1519,6 +1557,7 @@ void MachineInstance::setStableState() {
 	 	setState(io_interface->getStateString());
     }
     else {
+        const Value *current_timer_val = getTimerVal();
 		bool found_match = false;
         const long MAX_TIMER = 100000000L;
         long next_timer = MAX_TIMER; // during the search, we find the shortest timer value and schedule a wake-up
@@ -1567,30 +1606,8 @@ void MachineInstance::setStableState() {
                     if (s.subcondition_handlers) {
                         std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
                         while (iter != s.subcondition_handlers->end()) {
-                            ConditionHandler&ch = *iter++;
-                            if (ch.command_name == "FLAG" ) {
-                                MachineInstance *flag = lookup(ch.flag_name);
-                                if (!flag)
-                                        std::cerr << _name << " error: flag " << ch.flag_name << " not found\n"; 
-                                else 
-                                    if (ch.condition(this)) 
-                                        flag->setState("on");
-                                    else
-                                        flag->setState("off");
-                            }
-                            else if (ch.trigger && ch.trigger->enabled()) {
-                                if (!ch.triggered && ch.condition(this)) {
-                                    ch.triggered = true;
-                                    DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
-                                    execute(Message(ch.command_name.c_str()),this);
-                                    if (ch.trigger) ch.trigger->disable();
-                                }
-                                else if (ch.trigger && ch.trigger->fired()) {
-                                    DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
-                                    execute(Message(ch.command_name.c_str()),this);
-                                    if (ch.trigger) ch.trigger->disable();
-                                }
-                            }
+                            ConditionHandler *ch = &(*iter++);
+                            ch->check(this);
                         }
                     }
                     found_match = true;
