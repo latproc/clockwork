@@ -1583,12 +1583,12 @@ void MachineInstance::setStableState() {
                                     ch.triggered = true;
                                     DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
                                     execute(Message(ch.command_name.c_str()),this);
-                                    ch.trigger->disable();
+                                    if (ch.trigger) ch.trigger->disable();
                                 }
-                                else if (ch.trigger->fired()) {
+                                else if (ch.trigger && ch.trigger->fired()) {
                                     DBG_M_AUTOSTATES << _name << " subcondition triggered: " << ch.command_name << " " << *(ch.condition.predicate) << "\n";
                                     execute(Message(ch.command_name.c_str()),this);
-                                    ch.trigger->disable();
+                                    if (ch.trigger) ch.trigger->disable();
                                 }
                             }
                         }
