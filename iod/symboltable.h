@@ -46,7 +46,6 @@ public:
     Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0) { }
     Value(const Value&other);
 //    void push_back(int value) { listValue.push_back(value); }
-    std::string name() const;
     std::string asString() const;
 	bool asInteger(long &val) const;
 //	Value operator[](int index);
@@ -88,6 +87,8 @@ public:
 	Value &operator |(const Value &other);
 	Value &operator ^(const Value &other);
 	Value &operator ~();
+private:
+    std::string name() const;
 };
 
 std::ostream &operator<<(std::ostream &out, const Value &val);
@@ -98,7 +99,7 @@ typedef std::map<std::string, Value>::const_iterator SymbolTableConstIterator;
 
 class SymbolTable {
 public: 
-    SymbolTable() { }
+    SymbolTable();
 	enum ReplaceMode { ST_REPLACE, NO_REPLACE };
 	
     bool add(const char *name, Value val, ReplaceMode replace_mode = ST_REPLACE);
@@ -119,11 +120,16 @@ public:
     int size() const { return st.size(); }
 	bool empty() const { return st.empty(); }
     
+    static bool isKeyword(const char *name);
+    static Value &getKeyValue(const char *name);
+    
 	static Value Null;
 	static Value True;
 	static Value False;
 private:
     std::map<std::string, Value>st;
+    static SymbolTable *keywords;
+    static bool initialised;
     static std::list<SymbolTable *>symbol_tables;
 };
 

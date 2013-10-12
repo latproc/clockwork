@@ -33,6 +33,9 @@ Value SymbolTable::Null(-432576);
 Value SymbolTable::True(true);
 Value SymbolTable::False(false);
 
+bool SymbolTable::initialised = false;
+SymbolTable *SymbolTable::keywords = 0;
+
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue), sValue(other.sValue), 
 					cached_machine(other.cached_machine) {
 //    if (kind == t_list) {
@@ -592,7 +595,21 @@ std::ostream &Value::operator<<(std::ostream &out) const {
 
 std::ostream &operator<<(std::ostream &out, const Value &val){ return val.operator<<(out); }
 
-
+SymbolTable::SymbolTable() {
+    if (!initialised) {
+        initialised = true;
+        keywords = new SymbolTable();
+        keywords->add("NOW", 0L);
+        keywords->add("SECONDS", 0L);
+        keywords->add("MINUTE", 0L);
+        keywords->add("HOUR", 0L);
+        keywords->add("DAY", 0L);
+        keywords->add("MONTH", 0L);
+        keywords->add("YR", 0L);
+        keywords->add("YEAR", 0L);
+        keywords->add("TIMESTAMP", Value("",Value::t_string));
+    }
+}
 
 SymbolTable::SymbolTable(const SymbolTable &orig) {
     SymbolTableConstIterator iter = orig.st.begin();
@@ -611,6 +628,67 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
     }
     return *this;
 }
+
+
+/* Symbol table key values, calculated every time they are referenced */
+bool SymbolTable::isKeyword(const char *name)
+{
+    if (!name) return false;
+    return keywords->exists(name);
+}
+
+Value &SymbolTable::getKeyValue(const char *name) {
+    if (!name) return Null;
+    if (keywords->exists(name)) {
+        Value &res = keywords->lookup(name);
+        if (strcmp("NOW", name) == 0) {
+            struct timeval now;
+            gettimeofday(&now,0);
+            unsigned long msecs = (now.tv_sec % 1000) * 1000 + (now.tv_usec + 500) / 1000;
+            res.iValue = msecs;
+            return res;
+        }
+        // the remaining values are all time fields
+        static time_t last = 0L;
+        time_t now = time(0);
+        struct tm lt;
+        if (last != now) {
+            localtime_r(&now, &lt);
+        }
+        if (strcmp("SECONDS", name) == 0) {
+            res.iValue = lt.tm_sec;
+            return res;
+        }
+        if (strcmp("MINUTE", name) == 0) {
+            res.iValue = lt.tm_min;
+            return res;
+        }
+        if (strcmp("HOUR", name) == 0) {
+            res.iValue = lt.tm_hour;
+            return res;
+        }
+        if (strcmp("DAY", name) == 0) {
+            res.iValue = lt.tm_mday;
+            return res;
+        }
+        if (strcmp("MONTH", name) == 0) {
+            res.iValue = lt.tm_mon;
+            return res;
+        }
+        if (strcmp("YEAR", name) == 0) {
+            res.iValue = lt.tm_year;
+            return res;
+        }
+        if (strcmp("TIMESTAMP", name) == 0) {
+            char buf[40];
+            res.sValue = ctime_r(&now, buf);
+            return res;
+        }
+        return res;
+    }
+    return Null;
+}
+
 
 
 bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
@@ -641,6 +719,9 @@ bool SymbolTable::exists(const char *name) {
 }
 
 Value &SymbolTable::lookup(const char *name) {
+    if (this != keywords && keywords->exists(name))
+        return keywords->lookup(name);
+
     SymbolTableIterator iter = st.find(name);
     if (iter != st.end())
         return (*iter).second;

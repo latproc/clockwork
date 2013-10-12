@@ -1909,14 +1909,9 @@ const Value &MachineInstance::getValue(std::string property) {
             getTimerVal();
 			return timer_val; 
 		}
-		else if (property == "NOW") {
-			struct timeval now;
-			gettimeofday(&now,0);
-			unsigned long msecs = (now.tv_sec % 1000) * 1000 + (now.tv_usec + 500) / 1000;
-			setValue("NOW", msecs);
-			return properties.lookup("NOW");
+		else if (SymbolTable::isKeyword(property.c_str())) {
+			return SymbolTable::getKeyValue(property.c_str());
 		}
-
 	    else if (!properties.exists(property.c_str())) {
             if (state_machine) {
                 if (!state_machine->properties.exists(property.c_str())) {
