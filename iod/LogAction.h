@@ -24,27 +24,30 @@
 #include <iostream>
 #include "Action.h"
 #include "symboltable.h"
+#include "Expression.h"
 
 class MachineInstance;
 
 struct LogActionTemplate : public ActionTemplate {
-    LogActionTemplate(CStringHolder msg) : message(msg.get()) { }
-    LogActionTemplate(const Value &v) : message(v) { }
+    LogActionTemplate(CStringHolder msg) : message(msg.get()), predicate(0) { }
+    LogActionTemplate(const Value &v) : message(v), predicate(0) { }
+    LogActionTemplate(Predicate *pred) : message(SymbolTable::Null), predicate(pred) { }
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
         return out << message;
     }
     Value message;
-
+    Predicate *predicate;
 };
 
 struct LogAction : public Action {
     LogAction(MachineInstance *mi, LogActionTemplate &lat)
-    : Action(mi), message(lat.message) { }
+    : Action(mi), message(lat.message), predicate(lat.predicate) { }
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
     Value message;
+    Predicate *predicate;
 };
 
 #endif

@@ -765,11 +765,11 @@ SET SYMBOL TO SYMBOL  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ReplaceAllPatternActionTemplate($3, $5, $7);    
 }
-| LOG value /* log message to stdout */ { 
+| LOG expression /* log message to stdout */ {
     if (current_action) current_actions->push_back(current_action);
     DBG_PARSER << " log action: log " << *$2 << "\n";
-    current_action = new LogActionTemplate(*$2); 
-    delete $2;
+    current_action = new LogActionTemplate($2);
+    //delete $2; no delete, ownership is passed to the current_action;
 }
 | IF '(' predicate ')' '{' action_list '}'  %prec IFX {
    DBG_PARSER << " IF action: " << *$3 << "\n";

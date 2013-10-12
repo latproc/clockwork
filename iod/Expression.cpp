@@ -378,6 +378,17 @@ void Stack::clear() {
     stack.clear();
 }
 
+Value Predicate::evaluate(MachineInstance *m) {
+	Stack stack;
+    stack.clear();
+    prep(stack, this, m, true);
+    //		if (m && m->debug()) {
+    //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
+    //		}
+    Value res = eval_stack(stack).val;
+    return res;
+}
+
 
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {

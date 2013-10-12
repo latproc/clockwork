@@ -28,8 +28,22 @@ Action *LogActionTemplate::factory(MachineInstance *mi) {
 
 Action::Status LogAction::run() {
 	owner->start(this);
-    std::cout << "------- " << owner->getName() << ": " << message << " -------\n";
-    DBG_MSG << "------- " << owner->getName() << ": " << message << " -------\n";
+    if (!predicate) {
+        const Value &prop = owner->getValue(message.asString());
+        if (prop != SymbolTable::Null) {
+            std::cout << "------- " << owner->getName() << ": " << prop << " -------\n";
+            DBG_MSG << "------- " << owner->getName() << ": " << prop << " -------\n";
+        }
+        else {
+            std::cout << "------- " << owner->getName() << ": " << message << " -------\n";
+            DBG_MSG << "------- " << owner->getName() << ": " << message << " -------\n";
+        }
+    }
+    else {
+        Value val = predicate->evaluate(owner);
+        std::cout << "------- " << owner->getName() << ": " << val << " -------\n";
+        DBG_MSG << "------- " << owner->getName() << ": " << val << " -------\n";
+    }
 	status = Complete;
 	owner->stop(this);
 	return status;

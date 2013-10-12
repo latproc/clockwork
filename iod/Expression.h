@@ -79,7 +79,7 @@ struct Predicate {
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);
     std::ostream &operator <<(std::ostream &out) const;
-    bool evaluate();
+    Value evaluate(MachineInstance *m);
 	bool usesTimer(Value &val) const; // recursively search for use of TIMER
     int priority; // used for the default predicate
 	bool lookup_error;
