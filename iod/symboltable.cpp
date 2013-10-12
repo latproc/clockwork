@@ -683,7 +683,7 @@ Value &SymbolTable::getKeyValue(const char *name) {
             char buf[40];
             ctime_r(&now, buf);
             int n = strlen(buf);
-            if (n>1) buf[n-1] = 0;
+            if (n>1 && buf[n-1] == '\n') buf[n-1] = 0;
             res.sValue = buf;
             return res;
         }
