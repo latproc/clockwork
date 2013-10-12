@@ -154,7 +154,11 @@ Counter inputs
 \end_layout
 
 \begin_layout Itemize
-Frequency inputsc
+Frequency inputs (calculated or read from advanced devices)
+\end_layout
+
+\begin_layout Itemize
+Global configuration (eg timer range in usec, msec, sec)
 \end_layout
 
 \begin_layout Itemize
@@ -180,6 +184,10 @@ Dynamic allocation (ie creating and destroying data items)
 
 \begin_layout Itemize
 Dynamic configuration (creating and destroying machines)
+\end_layout
+
+\begin_layout Itemize
+Processing priorities
 \end_layout
 
 \begin_layout Standard
@@ -522,11 +530,78 @@ YEAR the curren tyear (four digits)
 \end_layout
 
 \begin_layout Description
-HOUR the current hour
+HOUR the current hour (0..23)
 \end_layout
 
 \begin_layout Description
-MIN the current minute
+MIN the current minute within the hour (0..59)
+\end_layout
+
+\begin_layout Description
+SEC the current second within the current minute (0..59)
+\end_layout
+
+\begin_layout Subsection
+Frequency Calculation
+\end_layout
+
+\begin_layout Standard
+All single bit inputs have the option of having their cycle frequency calculated.
+ The simplest method for this is to record the number of cycles of the input
+ state over a period of time.
+ There is no need to perform the calculation of 
+\begin_inset Formula $\frac{cycle}{time}$
+\end_inset
+
+ until the frequency data is actually needed.
+ A clever algorithm will be used to ensure that the counter and time period
+ values use sensible ranges (eg per sec, per msec etc).
+\end_layout
+
+\begin_layout Standard
+Initially no attempt will be made to identify input frequency for analogue
+ inputs.
+\end_layout
+
+\begin_layout Subsection
+Priorities
+\end_layout
+
+\begin_layout Standard
+A machine will be able to be given a priority or a polling rate to indicate
+ that events for this machine are to be handled more or less frequently
+ than other machines
+\end_layout
+
+\begin_layout Subsection
+Cycle Time
+\end_layout
+
+\begin_layout Standard
+The program must be able to be configured to use a faster or slower cycle
+ time in order to save power on small devices and to give better performance
+ when dealing with demanding tasks.
+\end_layout
+
+\begin_layout Subsection
+Input polling
+\end_layout
+
+\begin_layout Standard
+Currently the machine follows a cycle that is input-process-output on a
+ fixed clock.
+ The new design pushes work to be done onto a processing queue and that
+ processing queue operates until the cycle time arrives and then performs
+ a read/update cycle to the IO.
+ 
+\end_layout
+
+\begin_layout Standard
+This approach must buffer incoming data in order to prevent invalid state
+ processing on machine with automatic states.
+ This will be done by marking some tasks as high priority such that these
+ tasks but be performed every cycle.
+ Further thought is required.
 \end_layout
 
 \end_body
