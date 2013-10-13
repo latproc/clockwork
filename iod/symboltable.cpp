@@ -607,6 +607,7 @@ SymbolTable::SymbolTable() {
         keywords->add("MONTH", 0L);
         keywords->add("YR", 0L);
         keywords->add("YEAR", 0L);
+        keywords->add("TIMEZONE", Value("",Value::t_string));
         keywords->add("TIMESTAMP", Value("",Value::t_string));
     }
 }
@@ -672,11 +673,19 @@ Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
         if (strcmp("MONTH", name) == 0) {
-            res.iValue = lt.tm_mon;
+            res.iValue = lt.tm_mon+1;
             return res;
         }
         if (strcmp("YEAR", name) == 0) {
-            res.iValue = lt.tm_year;
+            res.iValue = lt.tm_year + 1900;
+            return res;
+        }
+        if (strcmp("YR", name) == 0) {
+            res.iValue = lt.tm_year - 100;
+            return res;
+        }
+        if (strcmp("TIMEZONE", name) == 0) {
+            res.sValue = lt.tm_zone;
             return res;
         }
         if (strcmp("TIMESTAMP", name) == 0) {
