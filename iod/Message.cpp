@@ -69,7 +69,7 @@ bool Message::operator==(const char *msg) const {
 Package::Package(const Package &other) 
 	:transmitter(other.transmitter), 
 	receiver(other.receiver), 
-	message(new Message(other.message)),
+	message(other.message),
 	needs_receipt(other.needs_receipt) {	
 }
 
