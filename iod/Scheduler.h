@@ -35,14 +35,13 @@ struct ScheduledItem {
 	Action *action;
 	struct timeval delivery_time;
 	// this operator produces a reverse ordering because the standard priority queue is a max value queue.
-	bool operator<(const ScheduledItem& other) const {
-		if (delivery_time.tv_sec < other.delivery_time.tv_sec) return true;
-		if (delivery_time.tv_sec == other.delivery_time.tv_sec) return delivery_time.tv_usec < other.delivery_time.tv_usec;
-		return false;
-	}
+	bool operator<(const ScheduledItem& other) const;
 	ScheduledItem(long when, Package *p);
 	ScheduledItem(long when, Action *a);
+    std::ostream &operator <<(std::ostream &out) const;
 };
+
+std::ostream &operator <<(std::ostream &out, const ScheduledItem &item);
 
 class PriorityQueue {
 public:
@@ -70,6 +69,7 @@ public:
 	bool ready();
     void idle();
 	bool empty() { return items.empty(); }
+    int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
     
 protected:
     Scheduler();

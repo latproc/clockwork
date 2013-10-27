@@ -786,7 +786,7 @@ bool Value::asInteger(long &x) const {
 		x = iValue;
 		return true;
 	}
-	if (kind == t_string || kind == t_symbol) {
+	if (kind == t_string) {
 		char *p;
 		x = strtol(sValue.c_str(), &p, 0);
 		if (*p == 0) return true;

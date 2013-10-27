@@ -80,7 +80,13 @@ struct Predicate {
 	Predicate &operator=(const Predicate &other);
     std::ostream &operator <<(std::ostream &out) const;
     Value evaluate(MachineInstance *m);
+    /* predicate clauses may involve timers that need to be scheduled or cleared
+       whenever a machine changes state.
+     */
 	bool usesTimer(Value &val) const; // recursively search for use of TIMER
+    void scheduleTimerEvents(MachineInstance *target); // setup timer events that trigger the supplied machine
+    void clearTimerEvents(MachineInstance *target); // clear all timer events scheduled for the supplid machine
+    
     int priority; // used for the default predicate
 	bool lookup_error;
 	std::string error_str;	

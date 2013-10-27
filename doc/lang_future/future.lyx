@@ -84,6 +84,10 @@ This paper describes various language features that will be added to Clockwork
 Introduction
 \end_layout
 
+\begin_layout Subsection
+Types
+\end_layout
+
 \begin_layout Itemize
 Floating point calculations
 \end_layout
@@ -110,6 +114,26 @@ Type conversions (x AS type)
 \end_layout
 
 \begin_layout Itemize
+Type extensions 
+\end_layout
+
+\begin_layout Subsection
+Data
+\end_layout
+
+\begin_layout Itemize
+Sharing properties or data
+\end_layout
+
+\begin_layout Itemize
+Events with data
+\end_layout
+
+\begin_layout Subsection
+Features
+\end_layout
+
+\begin_layout Itemize
 Substates
 \end_layout
 
@@ -122,19 +146,23 @@ Conditions
 \end_layout
 
 \begin_layout Itemize
-Low priority/slow scan inputs
+Processing priorities - low priority/slow scan inputs
 \end_layout
 
 \begin_layout Itemize
-Communication between instances of clockwork drivers
+External function calls
 \end_layout
 
 \begin_layout Itemize
-Delayed messaging (sending messages after a delay and cancelling..)
+Dynamic allocation (ie creating and destroying data items)
 \end_layout
 
 \begin_layout Itemize
-Wall time (long period timers)
+Dynamic configuration (creating and destroying machines)
+\end_layout
+
+\begin_layout Itemize
+Modular/dynamic components
 \end_layout
 
 \begin_layout Itemize
@@ -142,7 +170,56 @@ Support of parallel execution
 \end_layout
 
 \begin_layout Itemize
-Type extensions 
+Controlling safe access to data - stable and changing property states, dynamic
+ data privacy
+\end_layout
+
+\begin_layout Itemize
+Method extensions
+\end_layout
+
+\begin_layout Itemize
+Sequences and Cycles - shortcuts for transition tables?
+\end_layout
+
+\begin_layout Itemize
+Threaded implementation
+\end_layout
+
+\begin_layout Subsection
+Bugs
+\end_layout
+
+\begin_layout Itemize
+Passing SELF to an internal object
+\end_layout
+
+\begin_layout Itemize
+Stable states that use timers of other machines
+\end_layout
+
+\begin_layout Itemize
+State changes during stable state evaluation
+\end_layout
+
+\begin_layout Subsection
+Communication
+\end_layout
+
+\begin_layout Itemize
+Communication between instances of clockwork drivers
+\end_layout
+
+\begin_layout Itemize
+Global configuration (eg timer range in usec, msec, sec)
+\end_layout
+
+\begin_layout Itemize
+Formal/scrict interfaces
+\end_layout
+
+\begin_layout Subsection
+Modules
 \end_layout
 
 \begin_layout Itemize
@@ -157,37 +234,16 @@ Counter inputs
 Frequency inputs (calculated or read from advanced devices)
 \end_layout
 
-\begin_layout Itemize
-Global configuration (eg timer range in usec, msec, sec)
+\begin_layout Subsection
+Time
 \end_layout
 
 \begin_layout Itemize
-External function calls
+Delayed messaging (sending messages after a delay and cancelling..)
 \end_layout
 
 \begin_layout Itemize
-Passing SELF to an internal object
-\end_layout
-
-\begin_layout Itemize
-Sharing properties or data
-\end_layout
-
-\begin_layout Itemize
-Controlling safe access to data - stable and changing property states, dynamic
- data privacy
-\end_layout
-
-\begin_layout Itemize
-Dynamic allocation (ie creating and destroying data items)
-\end_layout
-
-\begin_layout Itemize
-Dynamic configuration (creating and destroying machines)
-\end_layout
-
-\begin_layout Itemize
-Processing priorities
+Wall time (long period timers)
 \end_layout
 
 \begin_layout Standard

@@ -1,3 +1,5 @@
+1:00000	Start_Stop	Discrete
+0:00000	ON_OFF	Discrete
 1:01002	flash1.error_flag	Discrete
 1:01000	monitor.sample_flag	Discrete
 0:01000	monitor.sample_flag2	Discrete

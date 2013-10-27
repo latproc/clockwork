@@ -924,6 +924,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                     }
                     s.trigger->release();
 				}
+                s.condition.predicate->clearTimerEvents(this);
 
                 // BUG here. If the timer comparison is '>' (ie Timer should be > the given value
                 //   we should trigger at v.iValue+1
@@ -1616,13 +1617,17 @@ void MachineInstance::setStableState() {
                 else {
                     DBG_M_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
                     if (s.uses_timer) {
-                        Value v = getValue(s.timer_val.sValue);
-                        if (v.kind == Value::t_integer && v.iValue < next_timer) {
+                        DBG_M_MESSAGING << _name << " scheduling condition tests for state " << s.state_name << "\n";
+                        s.condition.predicate->scheduleTimerEvents(this);
+                        //Value v = s.timer_val;
+                        // there is a bug here; if the timer used in this state is on a different machine
+                        // the schedule we generate has to be based on the timer of the other machine.
+                        //if (v.kind == Value::t_integer && v.iValue < next_timer) {
                             // we would like to say  next_timer = v.iValue; here but since we have already been in this
-                            // state for some time we need to sat:
-                            Value current_timer = getTimerVal();
-                            next_timer = v.iValue - current_timer.iValue;
-                        }
+                            // state for some time we need to say:
+                        //    Value current_timer = *getTimerVal();
+                        //    next_timer = v.iValue - current_timer.iValue;
+                        //}
                     }
                 }
 

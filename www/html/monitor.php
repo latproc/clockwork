@@ -592,12 +592,17 @@ print <<<EOD
           $(this).click(function(){
             $.get("index.php", { describe: $(this).attr("name").replace("-",".") },
             function(data){
-                $("#info").html("<pre>"+data+"</pre>");
+                $("#info").html("<pre id=\"info-details\">"+data+"</pre>");
 				$("#info").css("width",window.innerWidth - 200)
 				$("#info").css("height",window.innerHeight - 200)
 				$("#hideinfo").css("left",window.innerWidth- 150)
                 $("#info").css("display","block");
                 $("#hideinfo").css("display","block");
+			    $("#info").click( function(){
+			        $(this).css("display","none"); 
+			        $("#info").css("display","none")
+	            	$("#hideinfo").css("display","none");
+			    })  
             })
           })
         })
