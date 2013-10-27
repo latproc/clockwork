@@ -44,8 +44,8 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DisableAction.cpp		MachineCommandAction.cpp	cw.cpp \
 	Dispatcher.cpp			MachineInstance.cpp		iod.cpp \
 	ECInterface.cpp			Message.cpp			iosh.cpp \
-	EnableAction.cpp		MessagingInterface.cpp		latprocc.tab.cpp \
-	ExecuteMessageAction.cpp	ModbusInterface.cpp		latprocc.yy.cpp \
+	EnableAction.cpp		MessagingInterface.cpp		cwlang.tab.cpp \
+	ExecuteMessageAction.cpp	ModbusInterface.cpp		cwlang.yy.cpp \
 	Expression.cpp			PredicateAction.cpp		modbusd.cpp \
 	ExpressionAction.cpp		ResumeAction.cpp		options.cpp \
 	FireTriggerAction.cpp		Scheduler.cpp			persistd.cpp \
@@ -69,7 +69,7 @@ iod.o:	iod.cpp	MessagingInterface.h
 
 iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
-			latprocc.tab.o latprocc.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
+			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
@@ -78,7 +78,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
-			MachineInstance.o latprocc.tab.o latprocc.yy.o Scheduler.o $(TOOLLIB) \
+			MachineInstance.o cwlang.tab.o cwlang.yy.o Scheduler.o $(TOOLLIB) \
 			Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
@@ -89,7 +89,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
-			latprocc.tab.o latprocc.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
+			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
 			MachineCommandAction.o HandleMessageAction.o \
 			CallMethodAction.o \
@@ -108,7 +108,7 @@ cw.o:	cw.cpp	MessagingInterface.h
 
 cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
-			latprocc.tab.o latprocc.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
+			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
@@ -116,7 +116,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			Dispatcher.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
-			latprocc.tab.o latprocc.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
+			cwlang.tab.o cwlang.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
@@ -152,14 +152,14 @@ zmq_ecat_monitor: zmq_ecat_monitor.o
 
 anet.o:	anet.c
 
-latprocc.tab.cpp:	latprocc.ypp latprocc.lpp
-	yacc -o $@ -g -v -d latprocc.ypp
+cwlang.tab.cpp:	cwlang.ypp cwlang.lpp
+	yacc -o $@ -g -v -d cwlang.ypp
 
-latprocc.yy.cpp:	latprocc.lpp
-	lex -o $@ latprocc.lpp
+cwlang.yy.cpp:	cwlang.lpp
+	lex -o $@ cwlang.lpp
 
 clean:
-	rm -f $(APPS) *.o latprocc.tab.cpp latprocc.tab.hpp latprocc.yy.cpp
+	rm -f $(APPS) *.o cwlang.tab.cpp cwlang.tab.hpp cwlang.yy.cpp
 	rm -rf iod.dSYM
 
 # DO NOT DELETE
@@ -267,7 +267,7 @@ cw.o:	\
 		State.h\
 		Message.h\
 		cJSON.h\
-		latprocc.h\
+		cwlang.h\
 		symboltable.h\
 		MachineInstance.h\
 		Action.h\
@@ -330,7 +330,7 @@ iod.o:	\
 		State.h\
 		Message.h\
 		cJSON.h\
-		latprocc.h\
+		cwlang.h\
 		symboltable.h\
 		MachineInstance.h\
 		Action.h\
@@ -378,7 +378,7 @@ MessagingInterface.o:	\
 		MessagingInterface.h\
 		Message.h
 
-latprocc.tab.o:	\
+cwlang.tab.o:	\
 		symboltable.h\
 		Logger.h\
 		MachineInstance.h\
@@ -403,7 +403,7 @@ latprocc.tab.o:	\
 		WaitAction.h\
 		SendMessageAction.h\
 		CallMethodAction.h\
-		latprocc.h
+		cwlang.h
 
 ExecuteMessageAction.o:	\
 		ExecuteMessageAction.h\
@@ -428,8 +428,8 @@ ModbusInterface.o:	\
 		MessagingInterface.h\
 		Message.h
 
-latprocc.yy.o:	\
-		latprocc.h\
+cwlang.yy.o:	\
+		cwlang.h\
 		symboltable.h\
 		MachineInstance.h\
 		Message.h\

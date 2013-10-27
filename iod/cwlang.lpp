@@ -1,6 +1,6 @@
 %{
 #include <stdlib.h>
-#include "latprocc.h"
+#include "cwlang.h"
 #include "y.tab.h"
 void yyerror(const char *);
 static char *buf;

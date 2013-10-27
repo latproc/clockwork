@@ -18,8 +18,8 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef latprocc_State_h
-#define latprocc_State_h
+#ifndef cwlang_State_h
+#define cwlang_State_h
 
 #include <ostream>
 #include <string>

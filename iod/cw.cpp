@@ -44,7 +44,7 @@
 #endif
 
 #define __MAIN__
-#include "latprocc.h"
+#include "cwlang.h"
 #include "options.h"
 #include <stdio.h>
 #include "Logger.h"

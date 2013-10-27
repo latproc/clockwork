@@ -347,6 +347,34 @@ Sets could be implemented as a machine where each combination of members
  It may be useful to use three states: empty, nonempty and full.
 \end_layout
 
+\begin_layout Standard
+Sets can be used in expressions in th following ways
+\end_layout
+
+\begin_layout Itemize
+ANY IN set_name ARE | IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+ALL IN set_name ARE | IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+ONE IN set_name IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+NONE IN set_name ARE/IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+COUNT state_name FROM set_name
+\end_layout
+
+\begin_layout Itemize
+BITSET FROM set_name state_name
+\end_layout
+
 \begin_layout Subsubsection
 Enumeration
 \end_layout

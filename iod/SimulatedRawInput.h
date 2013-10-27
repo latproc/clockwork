@@ -18,8 +18,8 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef latprocc_SimulatedRawInput_h
-#define latprocc_SimulatedRawInput_h
+#ifndef cwlang_SimulatedRawInput_h
+#define cwlang_SimulatedRawInput_h
 
 #include "IOComponent.h"
 #include <sys/time.h>
