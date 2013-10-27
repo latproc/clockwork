@@ -258,7 +258,6 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
             }
             else {
                 // MQTT
-                Message *msg;
                 if (m->getCurrent().getName() == "on" || m->getCurrent().getName() == "off") {
                     std::string msg_str = m->getCurrent().getName();
                     if (msg_str == "off")
