@@ -101,7 +101,8 @@ static ec_pdo_entry_reg_t domain1_regs[] =
 std::list<ECModule *> ECInterface::modules;
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0) {
-	offsets = new unsigned int[32];
+	offsets = new unsigned int[64];
+	bit_positions = new unsigned int[64];
     slave_config = 0;
     memset(&slave_config_state, 0, sizeof(ec_slave_config_state_t));
 	alias = 0;;
@@ -173,12 +174,14 @@ ECModule *ECInterface::findModule(int pos) {
 
 bool ECInterface::addModule(ECModule *module, bool reset_io) {
 	
-	std::list<ECModule *>::iterator iter = modules.begin();
-	while (iter != modules.end()){
-		ECModule *m = *iter++;
-		if (m->alias == module->alias && m->position == module->position) return false;
+	if (module) {
+		std::list<ECModule *>::iterator iter = modules.begin();
+		while (iter != modules.end()){
+			ECModule *m = *iter++;
+			if (m->alias == module->alias && m->position == module->position) return false;
+		}
+		modules.push_back(module);
 	}
-	modules.push_back(module);
 	
 	if (!reset_io) 
 		return true;
@@ -192,19 +195,9 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
     //    return false;
     //}
     //else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created\n";
-	
-	if (!module->ecrtMasterSlaveConfig(master)) {
-        std::cerr << "Failed to get slave configuration.\n";
-        return false;
-    }
-
-    if (module->syncs && module->ecrtSlaveConfigPdos()) {
-        std::cerr << "Failed to configure PDOs.\n";
-        return false;
-    }
 
 	int num_syncmasters = 0;
-	iter = modules.begin();
+	std::list<ECModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 		num_syncmasters += m->sync_count;
@@ -212,66 +205,124 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 
 	// register sync masters with pdo entries
 
+/*
     int sm_count = 0;
 	iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 		for(unsigned int i=0; i<m->sync_count; ++i) {
-			if (m->syncs[i].pdos) ++sm_count;
+			for (unsigned int j = 0; j<m->syncs[i].n_pdos; ++j) {
+				for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
+					++sm_count;
+				}
+			}
 		}
 	}
 
-	int domain_reg_size = sizeof(ec_pdo_entry_reg_t) * (sm_count+1);
-	ec_pdo_entry_reg_t *new_domain_regs = (ec_pdo_entry_reg_t*)malloc(domain_reg_size);
-	memset(new_domain_regs, 0, domain_reg_size);
-	
+*/
+//	int domain_reg_size = sizeof(ec_pdo_entry_reg_t) * (sm_count+1);
+//	ec_pdo_entry_reg_t *new_domain_regs = (ec_pdo_entry_reg_t*)malloc(domain_reg_size);
+//	memset(new_domain_regs, 0, domain_reg_size);
+
 	iter = modules.begin();
 	int idx = 0;
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
+	
+		if (!m->ecrtMasterSlaveConfig(master)) {
+	        std::cerr << "Failed to get slave configuration.\n";
+	        return false;
+	    }
+	
+	    if (m->syncs && m->ecrtSlaveConfigPdos()) {
+	        std::cerr << "Failed to configure PDOs.\n";
+	        return false;
+	    }
+		unsigned int module_offset_idx = 0;
 		for(unsigned int i=0; i<m->sync_count; ++i) {
 			//ecrt_slave_config_pdo_assign_clear(m->slave_config, i);
 			if (!m->syncs[i].pdos) continue; // careful to skip sm with no pdos
-			ec_pdo_entry_reg_t *dr = new_domain_regs + idx;
-			dr->alias = m->alias;
-			dr->position = m->position;
-			dr->vendor_id = m->vendor_id;
-			dr->product_code = m->product_code;
-				
 			if (m->syncs[i].pdos) {
-				dr->index = m->syncs[i].pdos[0].entries[0].index;
-				dr->subindex = m->syncs[i].pdos[0].entries[0].subindex;
+				for (unsigned int j = 0; j<m->syncs[i].n_pdos; ++j) {
+					for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
+						m->offsets[module_offset_idx] = 0;
+						m->bit_positions[module_offset_idx] = 0;
+						m->offsets[module_offset_idx] = ecrt_slave_config_reg_pdo_entry(
+								m->slave_config, m->syncs[i].pdos[j].entries[k].index,
+								m->syncs[i].pdos[j].entries[k].subindex,
+								domain1, &(m->bit_positions[module_offset_idx]) );
+/*
+						if ( m->syncs[i].pdos[j].entries[k].index ) {
+							ec_pdo_entry_reg_t *dr = &(new_domain_regs[idx]);
+							dr->alias = m->alias;
+							dr->position = m->position;
+							dr->vendor_id = m->vendor_id;
+							dr->product_code = m->product_code;
+				
+							dr->index = m->syncs[i].pdos[j].entries[k].index;
+							dr->subindex = m->syncs[i].pdos[j].entries[k].subindex;
+							dr->offset = &(m->offsets[module_offset_idx]);
+							dr->bit_position = &(m->bit_positions[module_offset_idx]);
+							std::cout <<"prep registration: " 
+								<< dr->alias <<", " <<dr->position << ", "  
+								<< i << " " 
+								<< std::hex << dr->vendor_id << ", "
+								<< dr->product_code << std::dec
+								<< ", "<< dr->index << ", " 
+								<< (int)dr->subindex 
+								<< " mid_off_idx: " << module_offset_idx << "\n";
+							++idx;
+						}
+						else {
+							std::cout << "WARNING: zero pdo entry index at " << i<<","<<j<<","<<k<<"\n";
+							m->offsets[module_offset_idx] = 0;
+							m->bit_positions[module_offset_idx] = 0;
+						}
+*/
+						++idx;
+						++module_offset_idx;
+					}
+				}
 			}
-			else {
-				dr->index = 0;
-				dr->subindex = 0;
-			}
-			dr->offset = &(m->offsets[i]);
-			++idx;
-			std::cout <<"Domain Registation: " << dr->alias <<", " <<dr->position << ", " 
+		
+/*			std::cout <<"Domain Registation: " << dr->alias <<", " <<dr->position << ", "  << i << " " 
 				<< std::hex << dr->vendor_id << ", "<< dr->product_code
-				 << ", "<< dr->index << ", " << (int)dr->subindex <<" offset addr " << dr->offset << std::dec << "\n";
+				<< ", "<< dr->index << ", " << (int)dr->subindex <<" offset addr " 
+				<< dr->offset << std::dec 
+				<< " " << "\n";
+*/
 		}
 	}
-	new_domain_regs[idx].alias = 0xff;
+//	new_domain_regs[idx].index= 0x00;
 
+/*
     if (new_domain_regs && ecrt_domain_reg_pdo_entry_list(domain1, new_domain_regs)) {
 		std::cerr << "PDO entry registration failed\n";
-		module->operator<<(std::cerr) << "\n";
+		//module->operator<<(std::cerr) << "\n";
 		return false;
     }
     else {
         std::cerr << "PDO entry registration succeeded\n";
 		iter = modules.begin();
+		int module_offset_idx = 0;
 		while (iter != modules.end()){
 			ECModule *m = *iter++;
 			m->operator<<(std::cout) << "\n";
 			for(unsigned int i=0; i<m->sync_count; ++i) {
-				std::cerr << m->name << " offset " << i << " " << m->offsets[i] << "\n";
+				for (unsigned int j = 0; j<m->syncs[i].n_pdos; ++j) {
+					for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
+						std::cerr << m->name << " offset " << i 
+							<< " " << m->offsets[module_offset_idx] 
+							<< " " << m->bit_positions[module_offset_idx] 
+							<< "\n";
+						++module_offset_idx;
+					}
+				}
 			}
 		}
     }
 	free(new_domain_regs);
+*/
 
 #if 0
 // alternative approach, adding modules on the fly

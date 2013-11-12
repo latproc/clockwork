@@ -731,6 +731,11 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
     ec_ioctl_slave_sync_pdo_t pdo;
     ec_ioctl_slave_sync_pdo_entry_t entry;
     unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
+
+	const unsigned int estimated_max_entries = 128;
+	const unsigned int estimated_max_pdos = 32;
+	const unsigned int estimated_max_syncs = 32;
+    unsigned int total_entries = 0, total_pdos = 0, total_syncs = 0;
     
 	cJSON *root = cJSON_CreateObject();
 	cJSON_AddNumberToObject(root, "position", slave.position);
@@ -743,63 +748,92 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 	cJSON_AddStringToObject(root, "name", name);
 	free(name);
     
-	cJSON *syncs = cJSON_CreateObject();
     if (slave.sync_count) {
 		// add pdo entries for this slave
-		// note the assumptions here about the maximum number of entries (32), pdos(32) and syncs (8) we expect
-		const int c_entries_size = sizeof(ec_pdo_entry_info_t) * 32;
+		// note the assumptions here about the maximum number of entries, pdos and syncs we expect
+		const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
 		c_entries = (ec_pdo_entry_info_t *) malloc(c_entries_size);
 		memset(c_entries, 0, c_entries_size);
         
-		const int c_pdos_size = sizeof(ec_pdo_info_t) * 32;
+		const int c_pdos_size = sizeof(ec_pdo_info_t) * estimated_max_pdos;
 		c_pdos = (ec_pdo_info_t *) malloc(c_pdos_size);
 		memset(c_pdos, 0, c_pdos_size);
         
-		const int c_syncs_size = sizeof(ec_sync_info_t) * 32;
+		const int c_syncs_size = sizeof(ec_sync_info_t) * estimated_max_syncs;
 		c_syncs = (ec_sync_info_t *) malloc(c_syncs_size);
 		memset(c_syncs, 0, c_syncs_size);
         
+		total_syncs += slave.sync_count;
+		assert(total_syncs < estimated_max_syncs);
+		cJSON *json_syncs = cJSON_CreateArray();
 	    for (i = 0; i < slave.sync_count; i++) {
+			cJSON *json_sync = cJSON_CreateObject();
 	        m.getSync(&sync, slave.position, i);
 			c_syncs[i].index = sync.sync_index;
 			c_syncs[i].dir = EC_READ_BIT(&sync.control_register, 2) ? EC_DIR_OUTPUT : EC_DIR_INPUT;
 			c_syncs[i].n_pdos = (unsigned int) sync.pdo_count;
-			cJSON_AddNumberToObject(syncs, "index", c_syncs[i].index);
-			cJSON_AddStringToObject(syncs, "direction", (c_syncs[i].dir == EC_DIR_OUTPUT) ? "Output" : "Input");
+			cJSON_AddNumberToObject(json_sync, "index", c_syncs[i].index);
+			cJSON_AddStringToObject(json_sync, "direction", (c_syncs[i].dir == EC_DIR_OUTPUT) ? "Output" : "Input");
 			if (sync.pdo_count)
 				c_syncs[i].pdos = c_pdos + pdo_pos;
 			else
 				c_syncs[i].pdos = 0;
 			c_syncs[i].watchdog_mode = EC_READ_BIT(&sync.control_register, 6) ? EC_WD_ENABLE : EC_WD_DISABLE;
             
-	        for (j = 0; j < sync.pdo_count; j++) {
-	            m.getPdo(&pdo, slave.position, i, j);
-                //std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
-				c_pdos[j + pdo_pos].index = pdo.index;
-				c_pdos[j + pdo_pos].n_entries = (unsigned int) pdo.entry_count;
-				if (pdo.entry_count)
-					c_pdos[j + pdo_pos].entries = c_entries + entry_pos;
-				else
-					c_pdos[j + pdo_pos].entries = 0;
-                
-	            for (k = 0; k < pdo.entry_count; k++) {
-	                m.getPdoEntry(&entry, slave.position, i, j, k);
-                  	//std::cout << " entry: " << k 
-					//	<< "{" 
-					//	<< std::hex << (int)entry.index <<", " 
-					//	<< (int)entry.subindex<<", " 
-					//	<< (int)entry.bit_length <<"}";
-					c_entries[k + entry_pos].index = entry.index;
-					c_entries[k + entry_pos].subindex = entry.subindex;
-					c_entries[k + entry_pos].bit_length = entry.bit_length;
-	            }
-		    	//std::cout << "\n";
-	            entry_pos += pdo.entry_count;
-	        }
-            
+			total_pdos += sync.pdo_count;
+			assert(total_pdos < estimated_max_pdos);
+			if (sync.pdo_count) {
+				cJSON* json_pdos = cJSON_CreateArray();
+		        for (j = 0; j < sync.pdo_count; j++) {
+		            m.getPdo(&pdo, slave.position, i, j);
+					cJSON* json_pdo = cJSON_CreateObject();
+					cJSON_AddNumberToObject(json_pdo, "index", pdo.index);
+					cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.entry_count);
+					cJSON_AddStringToObject(json_pdo, "name", (const char *)pdo.name);
+	                //std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
+					c_pdos[j + pdo_pos].index = pdo.index;
+					c_pdos[j + pdo_pos].n_entries = (unsigned int) pdo.entry_count;
+					if (pdo.entry_count)
+						c_pdos[j + pdo_pos].entries = c_entries + entry_pos;
+					else
+						c_pdos[j + pdo_pos].entries = 0;
+	                
+					if (pdo.entry_count) {
+						cJSON *json_entries = cJSON_CreateObject();
+						total_entries += pdo.entry_count;
+						assert(total_entries < estimated_max_entries);
+		            	for (k = 0; k < pdo.entry_count; k++) {
+							cJSON *json_entry = cJSON_CreateObject();
+		            	    m.getPdoEntry(&entry, slave.position, i, j, k);
+	                	  	std::cout << " entry: " << k 
+								<< "{" 
+								<< std::hex << (int)entry.index <<", " 
+								<< (int)entry.subindex<<", " 
+								<< (int)entry.bit_length <<", "
+								<<'"' << entry.name<<"\"}";
+							c_entries[k + entry_pos].index = entry.index;
+							c_entries[k + entry_pos].subindex = entry.subindex;
+							c_entries[k + entry_pos].bit_length = entry.bit_length;
+
+							cJSON_AddNumberToObject(json_entry, "index", entry.index);
+							cJSON_AddStringToObject(json_entry, "name", (const char *)entry.name);
+							cJSON_AddNumberToObject(json_entry, "subindex", entry.subindex);
+							cJSON_AddNumberToObject(json_entry, "bit_length", entry.bit_length);
+	
+							cJSON_AddItemToArray(json_entries, json_entry);
+		            	}
+						cJSON_AddItemToObject(json_pdo, "entries", json_entries);
+					}
+			    	//std::cout << "\n";
+		            entry_pos += pdo.entry_count;
+					cJSON_AddItemToArray(json_pdos, json_pdo);
+		        }
+				cJSON_AddItemToObject(json_sync, "pdos", json_pdos);
+    		}        
 	        pdo_pos += sync.pdo_count;
-            
+			cJSON_AddItemToArray(json_syncs, json_sync);
 	    }
+		cJSON_AddItemToObject(root, "sync_managers", json_syncs);
 		c_syncs[slave.sync_count].index = 0xff;
 	}
 	else {
@@ -818,18 +852,20 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 		module->pdos = c_pdos;
 		module->pdo_entries = c_entries;
 		module->sync_count = slave.sync_count;
-		if (!ECInterface::instance()->addModule(module, true)) delete module; // module may be already registered
+		if (!ECInterface::instance()->addModule(module, false)) delete module; // module may be already registered
 	}
-	if (slave.sync_count)
-		cJSON_AddItemToObject(root, "sync_managers", syncs);
-	else
-		cJSON_Delete(syncs);
+	else {
+		free(c_entries);
+		free(c_pdos);
+		free(c_syncs);
+	}
 	
 	//std::stringstream result;
 	//result << "slave: " << slave.position << "\t"
 	//	<< "syncs: " << i << " pdos: " << pdo_pos << " entries: " << entry_pos << "\n";
 	//result << cJSON_Print(root);
 	//return result.str();
+
 	return root;
 }
 
@@ -850,8 +886,16 @@ char *collectSlaveConfig(bool reconfigure)
 		m.getSlave(&slave, i);
         cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave, reconfigure));
     }
+	if (reconfigure)
+		ECInterface::instance()->addModule(0, true);
 	char *res = cJSON_Print(root);
 	cJSON_Delete(root);
+
+	std::ofstream logfile;
+	logfile.open("ecat.log", std::ofstream::out | std::ofstream::app);
+	logfile << res << "\n";
+    logfile.close();
+
 	return res;
 }
 
