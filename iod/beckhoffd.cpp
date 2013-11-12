@@ -412,18 +412,22 @@ int main (int argc, char const *argv[])
 							<< std::setfill('0') << std::setw(2) << (pos+1);
 						const char *name_str = sstr.str().c_str();
 						std::cerr << "Adding new output device " << name_str 
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
-							<< " offset: " << module->offsets[offset_idx] << " bitlen: " << bitlen <<  "\n";
-						IOComponent::add_io_entry(name_str, module->offsets[offset_idx], bit_pos, bitlen);
+							<< " sm_idx: " << sm_idx 
+							<< " bit_pos: " << module->bit_positions[offset_idx] 
+							<< " offset: " << module->offsets[offset_idx] 
+							<< " bitlen: " << bitlen <<  "\n";
+						IOComponent::add_io_entry(name_str, module->offsets[offset_idx], 
+								module->bit_positions[offset_idx], bitlen);
 						if (bitlen == 1) {
-	            			Output *o = new Output(module->offsets[offset_idx], bit_pos);
+	            			Output *o = new Output(module->offsets[offset_idx], 
+													module->bit_positions[offset_idx]);
 							o->setName(name_str);
 	            			output_list.push_back(o);
 	            			devices[name_str] = o;
 						}
 						else {
 	            			AnalogueOutput *o = new AnalogueOutput(module->offsets[offset_idx], 
-								bit_pos, bitlen);
+								module->bit_positions[offset_idx], bitlen);
 							o->setName(name_str);
 	            			output_list.push_back(o);
 	            			devices[name_str] = o;
@@ -436,17 +440,22 @@ int main (int argc, char const *argv[])
 							<< std::setw(2) << (pos+1);
 						char *name_str = strdup(sstr.str().c_str());
 						std::cerr << "Adding new input device " << name_str
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
-							<< " offset: " << module->offsets[sm_idx] <<  " bitlen: " << bitlen << "\n";
-						IOComponent::add_io_entry(name_str, module->offsets[offset_idx], bit_pos, bitlen);
+							<< " sm_idx: " << sm_idx 
+							<< " bit_pos: " << module->bit_positions[offset_idx]
+							<< " offset: " << module->offsets[offset_idx] 
+							<<  " bitlen: " << bitlen << "\n";
+						IOComponent::add_io_entry(name_str, module->offsets[offset_idx], 
+							module->bit_positions[offset_idx], bitlen);
 						if (bitlen == 1) {
-							Input *in = new Input(module->offsets[offset_idx], bit_pos);
+							Input *in = new Input(module->offsets[offset_idx], 
+													module->bit_positions[offset_idx]);
 							in->setName(name_str);
 							devices[name_str] = in;
 							free(name_str);
 						}
 						else {
-							AnalogueInput *in = new AnalogueInput(module->offsets[offset_idx], bit_pos, bitlen);
+							AnalogueInput *in = new AnalogueInput(module->offsets[offset_idx], 
+													module->bit_positions[offset_idx], bitlen);
 							in->setName(name_str);
 							devices[name_str] = in;
 							free(name_str);
