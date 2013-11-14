@@ -30,7 +30,7 @@
 
 class Message;
 class Receiver;
-class Package;
+struct Package;
 
 class Dispatcher {
 public:

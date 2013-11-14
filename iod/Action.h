@@ -46,7 +46,8 @@ struct TriggerOwner {
     virtual void triggerFired(Trigger *trigger) {}
 };
 
-struct Trigger {
+class Trigger {
+public:
 	Trigger() : name("inactive"), seen(false), is_active(false), owner(0), deleted(false), refs(1) {}
 	Trigger(const std::string &n) : name(n), seen(false), is_active(true), owner(0), deleted(false), refs(1) {}
 	Trigger(const Trigger &o) : name(o.name), seen(o.seen), is_active(o.is_active), owner(o.owner), deleted(false), refs(1) {}
@@ -86,7 +87,7 @@ protected:
 // an action is started by operator(). If the action successfully starts, 
 // running() will return true. When the action is complete, complete() will
 // return true;
-struct Action {
+class Action {
 public:
     Action(MachineInstance *m = 0)
         : refs(1), owner(m), error_str(""), result_str(""), status(New),
@@ -148,8 +149,9 @@ protected:
 	Trigger *trigger;
 };
 
-struct IOComponent;
-struct TriggeredAction : public Action {
+class IOComponent;
+class TriggeredAction : public Action {
+public:
 	TriggeredAction(MachineInstance *m) : Action(m), has_triggered(false) {}
 	enum TriggerType { TT_ON, TT_OFF };
 	void addComponent(IOComponent *ioc, TriggerType which) {
