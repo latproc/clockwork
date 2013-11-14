@@ -2071,6 +2071,13 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
 	        ss << _name << "." << property << " VALUE " << new_value << std::flush;
+			if (property == "VALUE" && io_interface) {
+				char *p = 0;
+				errno = 0;
+				long value = strtol(property.c_str(), &p, 10);
+				if (errno == 0) 
+					io_interface->setValue(value);
+			}
 	        mif->send(ss.str().c_str());
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";

@@ -123,23 +123,37 @@ struct BeckhoffdToggle : public IODCommand {
                 else if (device->isOff()) 
 						device->turnOn();
 				else {
-					error_str = "device is neither on nor off\n";
+					result_str = "device is neither on nor off\n";
 					return false;
 				}
                 result_str = "OK";
                 return true;
             }
 			else {
-				error_str = "Usage: toggle device_name";
+				result_str = "Usage: toggle device_name";
 				return false;
 		    }
         }
 		else {
-			error_str = "Usage: toggle device_name";
+			result_str = "Usage: toggle device_name";
 			return false;
 	    }
 	}
 
+
+struct BeckhoffdList : public IODCommand {
+	bool run(std::vector<std::string> &params);
+};
+bool BeckhoffdList::run(std::vector<std::string> &params) {
+    std::map<std::string, IOComponent*>::const_iterator iter = devices.begin();
+    std::string res;
+    while (iter != devices.end()) {
+	    res = res + (*iter).first + "\n";
+		iter++;
+    }
+    result_str = res;
+    return true;
+}
 
 struct BeckhoffdListJSON : public IODCommand {
 	bool run(std::vector<std::string> &params);
@@ -187,6 +201,40 @@ struct BeckhoffdListJSON : public IODCommand {
         return done;
     }
 
+
+struct BeckhoffdProperty : public IODCommand {
+	BeckhoffdProperty(const char *data) : details(data) { };
+	bool run(std::vector<std::string> &params);
+	std::string details;
+};
+bool BeckhoffdProperty::run(std::vector<std::string> &params) {
+    //if (params.size() == 4) {
+	IOComponent *m = lookup_device(params[1]);
+    if (m) {
+        if (params.size() == 3) {
+            long x;
+            char *p;
+            x = strtol(params[2].c_str(), &p, 0);
+            if (*p == 0)
+                m->setValue(x);
+            else {
+                result_str = "Require integer parameter";
+                return false;
+			}
+        }
+        else {
+            result_str = "usage: PROPERTY name value";
+            return false;
+		}
+
+        result_str = "OK";
+        return true;
+    }
+    else {
+        result_str = "Unknown device";
+        return false;
+    }
+}
 
 struct CommandThread {
     void operator()() {
@@ -239,6 +287,12 @@ struct CommandThread {
 	            else if (count == 2 && ds == "TOGGLE") {
 	                command = new BeckhoffdToggle;
 	            }
+	            else if (ds == "PROPERTY") {
+	                command = new BeckhoffdProperty(data);
+	            }
+	            else if (count == 1 && ds == "LIST") {
+	                command = new BeckhoffdList;
+	            }
 	            else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
 	                command = new BeckhoffdListJSON;
 	            }
@@ -280,14 +334,31 @@ int main (int argc, char const *argv[])
 	statistics = new Statistics;
 	ControlSystemMachine machine;
     Logger::instance()->setLevel(Logger::Debug);
-	ECInterface::FREQUENCY=10;
+	ECInterface::FREQUENCY=1000;
 
 #ifndef EC_SIMULATOR
 	/*std::cout << "init slaves: " << */
 	collectSlaveConfig(true);
 	ECInterface::instance()->activate();
+    std::list<ECModule *>::const_iterator iter = ECInterface::modules.begin();
+        int module_offset_idx = 0;
+        while (iter != ECInterface::modules.end()){
+            ECModule *m = *iter++;
+            m->operator<<(std::cout) << "\n";
+            for(unsigned int i=0; i<m->sync_count; ++i) {
+                for (unsigned int j = 0; j<m->syncs[i].n_pdos; ++j) {
+                    for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
+                        std::cerr << m->name << " pdo offset " << i
+                            << " " << m->offsets[module_offset_idx]
+                            << " " << m->bit_positions[module_offset_idx]
+                            << "\n";
+                        ++module_offset_idx;
+                    }
+                }
+            }
+        }
+
 #endif
-	ECInterface::instance()->start();
 
 	{
         std::list<Output *> output_list;
@@ -315,6 +386,7 @@ int main (int argc, char const *argv[])
 				unsigned int pdo_idx = 0;
 				unsigned int entry_idx = 0;
 				unsigned int bit_pos = 0;
+				unsigned int offset_idx = 0;
 				// add io entries to for each point.
 				unsigned int pos = 0; 
 				while (pos<num_points) {
@@ -332,43 +404,63 @@ int main (int argc, char const *argv[])
 
 					unsigned int bitlen = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].bit_length;
 
+					if (true || module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].index) {
 					if (direction == EC_DIR_OUTPUT) {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2) << position << "_OUT_" << std::setfill('0') << std::setw(2) << (pos+1);
+						sstr << "EC_" << std::setfill('0') 
+							<< std::setw(2) << position << "_OUT_" 
+							<< std::setfill('0') << std::setw(2) << (pos+1);
 						const char *name_str = sstr.str().c_str();
 						std::cerr << "Adding new output device " << name_str 
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
-							<< " offset: " << module->offsets[sm_idx] << " bitlen: " << bitlen <<  "\n";
-						IOComponent::add_io_entry(name_str, module->offsets[sm_idx], bit_pos, bitlen);
+							<< " sm_idx: " << sm_idx 
+							<< " bit_pos: " << module->bit_positions[offset_idx] 
+							<< " offset: " << module->offsets[offset_idx] 
+							<< " bitlen: " << bitlen <<  "\n";
+						IOComponent::add_io_entry(name_str, module->offsets[offset_idx], 
+								module->bit_positions[offset_idx], bitlen);
 						if (bitlen == 1) {
-	            			Output *o = new Output(module->offsets[sm_idx], bit_pos);
+	            			Output *o = new Output(module->offsets[offset_idx], 
+													module->bit_positions[offset_idx]);
+							o->setName(name_str);
 	            			output_list.push_back(o);
 	            			devices[name_str] = o;
 						}
 						else {
-	            			AnalogueOutput *o = new AnalogueOutput(module->offsets[sm_idx], bit_pos, bitlen);
+	            			AnalogueOutput *o = new AnalogueOutput(module->offsets[offset_idx], 
+								module->bit_positions[offset_idx], bitlen);
+							o->setName(name_str);
 	            			output_list.push_back(o);
 	            			devices[name_str] = o;
 						}
 					}
 					else {
 						std::stringstream sstr;
-						sstr << "BECKHOFF_" << std::setfill('0') << std::setw(2)<< position << "_IN_" << std::setfill('0') << std::setw(2) << (pos+1);
+						sstr << "EC_" << std::setfill('0') << std::setw(2)
+							<< position << "_IN_" << std::setfill('0') 	
+							<< std::setw(2) << (pos+1);
 						char *name_str = strdup(sstr.str().c_str());
 						std::cerr << "Adding new input device " << name_str
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos 
-							<< " offset: " << module->offsets[sm_idx] <<  " bitlen: " << bitlen << "\n";
-						IOComponent::add_io_entry(name_str, module->offsets[sm_idx], bit_pos, bitlen);
+							<< " sm_idx: " << sm_idx 
+							<< " bit_pos: " << module->bit_positions[offset_idx]
+							<< " offset: " << module->offsets[offset_idx] 
+							<<  " bitlen: " << bitlen << "\n";
+						IOComponent::add_io_entry(name_str, module->offsets[offset_idx], 
+							module->bit_positions[offset_idx], bitlen);
 						if (bitlen == 1) {
-							Input *in = new Input(module->offsets[sm_idx], bit_pos);
+							Input *in = new Input(module->offsets[offset_idx], 
+													module->bit_positions[offset_idx]);
+							in->setName(name_str);
 							devices[name_str] = in;
 							free(name_str);
 						}
 						else {
-							AnalogueInput *in = new AnalogueInput(module->offsets[sm_idx], bit_pos, bitlen);
+							AnalogueInput *in = new AnalogueInput(module->offsets[offset_idx], 
+													module->bit_positions[offset_idx], bitlen);
+							in->setName(name_str);
 							devices[name_str] = in;
 							free(name_str);
 						}
+					}
 					}
 					//while (sm_idx < module->sync_count && (bit_pos+1) > module_bits) {
 					bit_pos += bitlen;
@@ -381,6 +473,7 @@ int main (int argc, char const *argv[])
 						}
 					}
 					++pos;
+					++offset_idx;
 				}
 			}
 #endif
@@ -430,6 +523,8 @@ int main (int argc, char const *argv[])
 			std::cout << *o << "\n";
             o->turnOff();
         }
+		std::cout << std::flush;
+		ECInterface::instance()->start();
 
 #if 0
 		// enable machine instances

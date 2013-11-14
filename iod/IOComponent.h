@@ -84,6 +84,7 @@ public:
 	virtual const char *type() { return "IOComponent"; }
 	std::ostream &operator<<(std::ostream &out) const;
 	IOAddress address;
+	uint32_t pending_value;
 	
 	void addDependent(MachineInstance *m) {
 		depends.push_back(m);

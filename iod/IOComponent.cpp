@@ -77,24 +77,36 @@ unsigned char mem[1000];
 #define EC_WRITE_U32(offset, val) 0
 #endif
 
+/*
 unsigned int get_bits(uint8_t *offset, unsigned int bitpos, unsigned int bitlen)
 {
-	uint32_t value=0;
+	uint32_t val=0;
 	int n = bitlen;
 	if (n>32) n = 32;
-	uint8_t mask=1<<(bitpos%8);
-	while (n-- > 0) {
-		value = value<<1;
-		if (*offset & mask) ++value;
-		mask = mask >> 1;
-		if (mask == 0) {
-			mask=1<<7;
-			++offset;
+	if (bitlen == 1) {
+		val = EC_READ_BIT(offset, bitpos);
+	}
+	else if (bitlen == 8) 
+		val = EC_READ_U8(offset);
+	else if (bitlen == 16) 
+		val = EC_READ_U16(offset);
+	else if (bitlen == 32) 
+		val = EC_READ_U32(offset);
+    else {
+		uint8_t mask=1<<(bitpos%8);
+		while (n-- > 0) {
+			val = val<<1;
+			if (*offset & mask) ++val;
+			mask = mask >> 1;
+			if (mask == 0) {
+				mask=1<<7;
+				++offset;
+			}
 		}
 	}
-	return value;
+	return val;
 }
-
+*/
 void set_bits(uint8_t *offset, unsigned int bitpos, unsigned int bitlen, uint32_t value)
 {
     
@@ -152,14 +164,18 @@ void IOComponent::idle() {
         if (last_event == e_change) {
             //set_bits(offset, bitpos, address.bitlen, address.value);
 			if (address.bitlen == 8) 
-				EC_WRITE_U8(offset, (uint8_t)address.value);
-			else if (address.bitlen == 16) 
-				EC_WRITE_U16(offset, (uint16_t)address.value);
+				EC_WRITE_U8(offset, (uint8_t)(pending_value % 256));
+			else if (address.bitlen == 16) {
+				uint16_t x = pending_value % 65536;
+				EC_WRITE_U16(offset, x);
+			}
 			else if (address.bitlen == 32) 
-				EC_WRITE_U32(offset, (uint32_t)address.value);
+				EC_WRITE_U32(offset, pending_value);
+			last_event = e_none;
+			address.value = pending_value;
         }
         else {
-			uint32_t val;
+			uint32_t val = 0;
 			if (address.bitlen == 8) 
 				val = EC_READ_U8(offset);
 			else if (address.bitlen == 16) 
@@ -213,12 +229,13 @@ void IOComponent::turnOff() {
 }
 
 void IOComponent::setValue(uint32_t new_value) {
-    address.value = new_value;
+    pending_value = new_value;
 	gettimeofday(&last, 0);
     last_event = e_change;
 }
 
 
+/*
 int IOComponent::getStatus() {
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;
@@ -227,11 +244,11 @@ int IOComponent::getStatus() {
 		bitpos-=8;
 	}
     if (address.bitlen == 1) {
-	int value = EC_READ_BIT(offset, bitpos);
-	return value;
+		int value = EC_READ_BIT(offset, bitpos);
+		return value;
     }
     else {
-		address.value = get_bits(offset, bitpos, address.bitlen);
+		address.value = get_bits(offset, address.io_bitpos, address.bitlen);
         last_event = e_none;
         const char *evt = "value_changed";
         std::list<MachineInstance*>::iterator iter = depends.begin();
@@ -243,6 +260,7 @@ int IOComponent::getStatus() {
         return address.value;
     }
 }
+*/
 
 bool IOComponent::isOn() {
 	return last_event == e_none && address.value != 0;

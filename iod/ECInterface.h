@@ -44,6 +44,7 @@ public:
 	uint32_t vendor_id;
 	uint32_t product_code;
 	unsigned int *offsets;
+	unsigned int *bit_positions;
 	unsigned int sync_count;
 	
 	ec_pdo_entry_info_t *pdo_entries;
