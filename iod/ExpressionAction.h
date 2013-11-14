@@ -65,5 +65,4 @@ struct ExpressionAction : public Action {
 	MachineInstance *machine;
 };
 
-
 #endif

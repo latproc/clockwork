@@ -46,5 +46,4 @@ struct CallMethodAction: public Action {
 	MachineInstance *target_machine;
 };
 
-
 #endif

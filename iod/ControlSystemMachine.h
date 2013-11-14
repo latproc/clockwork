@@ -25,7 +25,7 @@
 class ControlSystemMachine : IOComponent {
 public:
     ControlSystemMachine() : state(s_unknown) {
-        std::cout << "ControlSystem version 0.5\n";
+        std::cout << "ControlSystem version 0.5.1\n";
     }
 
     /* states */
