@@ -36,18 +36,17 @@ public:
 	typedef std::list<Value*> List;
 //    typedef std::map<std::string, Value> Map;
 
-    Value() : kind(t_empty), cached_machine(0), list(0) { }
-    Value(Kind k) : kind(k), cached_machine(0), list(0) { }
+    Value() : kind(t_empty), cached_machine(0) { }
+    Value(Kind k) : kind(k), cached_machine(0) { }
     virtual ~Value() { }
-    Value(bool v) : kind(t_bool), bValue(v), cached_machine(0), list(0) { }
-    Value(long v) : kind(t_integer), iValue(v), cached_machine(0), list(0) { }
-    Value(int v) : kind(t_integer), iValue(v), cached_machine(0), list(0) { }
-    Value(unsigned int v) : kind(t_integer), iValue(v), cached_machine(0), list(0) { }
-    Value(unsigned long v) : kind(t_integer), iValue(v), cached_machine(0), list(0) { }
-    Value(const char *str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), list(0) { }
-    Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), list(0) { }
+    Value(bool v) : kind(t_bool), bValue(v), cached_machine(0) { }
+    Value(long v) : kind(t_integer), iValue(v), cached_machine(0) { }
+    Value(int v) : kind(t_integer), iValue(v), cached_machine(0) { }
+    Value(unsigned int v) : kind(t_integer), iValue(v), cached_machine(0) { }
+    Value(unsigned long v) : kind(t_integer), iValue(v), cached_machine(0) { }
+    Value(const char *str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0) { }
+    Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0) { }
     Value(const Value&other);
-    void push_back(Value *value) { if (list) list->push_back(value); }
     std::string asString() const;
 	bool asInteger(long &val) const;
 //	Value operator[](int index);
@@ -60,18 +59,9 @@ public:
     long iValue;
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
-
-    List *list;
-//    Map mapValue;
-    Value operator=(const Value &orig);
-    std::ostream &operator<<(std::ostream &out) const;
-#if 0
-    void addItem(int next_value);
-    void addItem(const char *next_value);
-    void addItem(Value next_value);
-    void addItem(std::string key, Value next_value);
-#endif
     
+    Value operator=(const Value &orig);
+
     bool operator>=(const Value &other) const;
     bool operator<=(const Value &other) const;
 	bool operator<(const Value &other) const { return !operator>=(other); }
@@ -91,11 +81,25 @@ public:
 	Value &operator |(const Value &other);
 	Value &operator ^(const Value &other);
 	Value &operator ~();
+
+    std::ostream &operator<<(std::ostream &out) const;
 private:
     std::string name() const;
 };
 
 std::ostream &operator<<(std::ostream &out, const Value &val);
+
+class ListValue : public Value {
+public:
+    List *list;
+    //    Map mapValue;
+    void addItem(int next_value);
+    void addItem(const char *next_value);
+    void addItem(Value next_value);
+    void addItem(std::string key, Value next_value);
+    void push_back(Value *value) { if (list) list->push_back(value); }
+
+};
 
 class DynamicValue : public Value {
 public:
