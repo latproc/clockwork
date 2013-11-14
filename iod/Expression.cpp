@@ -53,6 +53,10 @@ std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.oper
             case opBitOr: opstr = "|"; break;
             case opNegate: opstr = "~"; break;
             case opBitXOr: opstr = "^"; break;
+            case opAny: opstr = "ANY"; break;
+            case opAll: opstr = "ALL"; break;
+            case opCount: opstr = "COUNT"; break;
+            case opIncludes: opstr = "INCLUDES"; break;
         }
         return out << opstr;
     }
@@ -208,6 +212,7 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
 	op = other.op;
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
+    dyn_value = other.dyn_value; // note shared copy, should be a shared pointer
 	entry.cached_machine = 0; // do not preserve any cached values in this clone
 	priority = other.priority;
 	mi = 0;
@@ -221,6 +226,7 @@ Predicate &Predicate::operator=(const Predicate &other) {
 	op = other.op;
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
+    dyn_value = other.dyn_value; // note shared copy, should be a shared pointer
 	entry.cached_machine = 0; // do not preserve any cached machine pointers in this clone
 	priority = other.priority;
 	mi = 0;
@@ -316,6 +322,14 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 				p->cached_entry = m->getCurrentStateVal();
 				return p->cached_entry;
 			}
+            else if (v->sValue == "TRUE") {
+				p->cached_entry = &SymbolTable::True;
+				return p->cached_entry;
+            }
+            else if (v->sValue == "FALSE") {
+				p->cached_entry = &SymbolTable::False;
+				return p->cached_entry;
+            }
             else if (m->hasState(v->sValue)) {
                 return v;
             }
@@ -333,7 +347,7 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 			found = m->lookup(p->entry);
 			p->mi = found; // cache the machine we just looked up with the predcate
 			if (p->mi) {
-				// found a machine, make sure we get to here if that machine changes state or if its properties change
+				// found a machine, make sure we get to hear if that machine changes state or if its properties change
 				if (p->mi != m) {
 					p->mi->addDependancy(m); // ensure this condition will be updated when p->mi changes
 					m->listenTo(p->mi);
@@ -349,6 +363,10 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 		// if we found a reference to a machine but that machine is a variable or constant, we
 		// are actually interested in its 'VALUE' property
 		if (found) {
+            const DynamicValue *dv = found->getCurrentValue();
+            p->cached_entry = dv;
+            return p->cached_entry;
+            /*
 			if (found->_type == "VARIABLE" || found->_type == "CONSTANT") {
 				p->cached_entry = &found->getValue("VALUE");
 				return p->cached_entry;
@@ -357,9 +375,26 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 				p->cached_entry = found->getCurrentStateVal();
 				return p->cached_entry;
 			}
+             */
 		}
 	}
 	return v;
+}
+
+bool any_in_state(Value &val) {
+    //if (list.kind != Value::t_symbol || state.kind != Value::t_symbol) return false;
+    
+    return false; // TBD
+}
+
+bool all_in_state(Value &val) {
+    return false; //TBD
+}
+
+bool count(Value &val) {
+    //if (list.kind != Value::t_symbol || state.kind != Value::t_symbol) return false;
+    
+    return false; // TBD
 }
 
 Value eval(Predicate *p, MachineInstance *m, bool left){
@@ -391,6 +426,9 @@ Value eval(Predicate *p, MachineInstance *m, bool left){
             case opMatch:
                 res = matches(l.asString().c_str(), r.asString().c_str());
                 break;
+            case opAny: res = any_in_state(p->entry); break;
+            case opAll: res = all_in_state(p->entry); break;
+            case opCount: res = count(p->entry); break;
 	        case opNone:   res = 0;
 	    }
 		
@@ -418,6 +456,10 @@ ExprNode eval_stack(Stack &stack){
     if (o.kind != ExprNode::t_op) return o;
     ExprNode b(eval_stack(stack));
     ExprNode a(eval_stack(stack));
+    assert(a.kind != ExprNode::t_op);
+    assert(b.kind != ExprNode::t_op);
+    if (a.val.kind == Value::t_dynamic) a.val = a.val();
+    if (b.val.kind == Value::t_dynamic) b.val = b.val();
     switch (o.op) {
         case opGE: return a.val >= b.val;
         case opGT: return a.val > b.val;
@@ -440,6 +482,8 @@ ExprNode eval_stack(Stack &stack){
         case opBitXOr: return a.val ^ b.val;
 		case opAssign:return b.val;
         case opMatch: return matches(a.val.asString().c_str(), b.val.asString().c_str());
+        case opAny: return any_in_state(b.val);
+        case opAll: return all_in_state(b.val);
 		case opNone: return 0;
     }
     return o;

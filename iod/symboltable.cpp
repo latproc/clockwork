@@ -36,7 +36,23 @@ Value SymbolTable::False(false);
 bool SymbolTable::initialised = false;
 SymbolTable *SymbolTable::keywords = 0;
 
-Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue), sValue(other.sValue), 
+Value *DynamicValue::operator()() { return &SymbolTable::False; }
+const Value *DynamicValue::operator()() const { return &SymbolTable::False; }
+
+Value *AnyInValue::operator()() { return &SymbolTable::False; }
+const Value *AnyInValue::operator()() const { return &SymbolTable::False; }
+Value *AllInValue::operator()() { return &SymbolTable::False; }
+const Value *AllInValue::operator()() const {return &SymbolTable::False; }
+Value *CountValue::operator()() { return &SymbolTable::False; }
+const Value *CountValue::operator()() const { return &SymbolTable::False; }
+Value *IncludesValue::operator()() { return &SymbolTable::False; }
+const Value *IncludesValue::operator()() const { return &SymbolTable::False; }
+Value *BitsetValue::operator()() { return &SymbolTable::Null; }
+const Value *BitsetValue::operator()() const { return &SymbolTable::Null; }
+
+
+
+Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue), sValue(other.sValue),
 					cached_machine(other.cached_machine) {
 //    if (kind == t_list) {
 //        std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
@@ -589,6 +605,9 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         case t_bool: {
             out << ((bValue) ? "true" : "false");
         }
+		case t_dynamic: {
+			out << "<dynamic value>";
+		}
     }
     return out;
 }

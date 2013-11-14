@@ -95,7 +95,8 @@ struct Subcondition {
 %token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
-%token WHERE ROUTE
+%token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
+%token INCLUDES INCLUDE CREATE BITSET
 
 %union {
 	int iVal;
@@ -489,6 +490,22 @@ value {
 | expression MATCHES PATTERN {
     Value pat($3, Value::t_string);
     $$ = new Predicate($1, opMatch, new Predicate( pat )); }
+| ANY SYMBOL ARE SYMBOL {
+    AnyInValue val($4, $2);
+    $$ = new Predicate(0, opAny, new Predicate(val) ); }
+| ALL SYMBOL ARE SYMBOL {
+    AllInValue val($4, $2);
+    $$ = new Predicate(0, opAll, new Predicate(val)); }
+| COUNT SYMBOL FROM SYMBOL {
+    CountValue val($4,$2);
+    $$ = new Predicate(0, opCount, new Predicate(val) ); }
+| SYMBOL INCLUDES SYMBOL {
+    IncludesValue val($3, $1);
+    $$ = new Predicate(0, opIncludes, new Predicate(val) );
+}
+| BITSET FROM SYMBOL SYMBOL {
+    BitsetValue val($4,$3);
+    $$ = new Predicate(0, opCount, new Predicate(val) ); }
 ;
 
 value:
@@ -757,6 +774,10 @@ SET SYMBOL TO SYMBOL  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExtractAllPatternActionTemplate($1, $5, $7);    
 }
+| CREATE SYMBOL WITH COUNT SYMBOL IN SYMBOL { current_action = new LogActionTemplate(new Predicate("COUNT"));}
+| CREATE SYMBOL WITH COPY INTEGER FROM SYMBOL { current_action = new LogActionTemplate(new Predicate("COPY"));}
+| CREATE SYMBOL WITH TAKE INTEGER FROM SYMBOL { current_action = new LogActionTemplate(new Predicate("TAKE"));}
+| INCLUDE SYMBOL IN SYMBOL { current_action = new LogActionTemplate(new Predicate("INCLUDE"));}
 | REPLACE PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ReplacePatternActionTemplate($2, $4, $6);    

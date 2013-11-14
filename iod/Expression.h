@@ -29,7 +29,7 @@ class MachineInstance;
 
 enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR, opNOT,
 	opUnaryMinus, opPlus, opMinus, opTimes, opDivide, opMod, opAssign, opMatch,
-    opBitAnd, opBitOr, opBitXOr, opNegate };
+    opBitAnd, opBitOr, opBitXOr, opNegate, opAny, opAll, opCount, opIncludes };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
 struct ExprNode {
@@ -59,6 +59,7 @@ struct Predicate {
     Predicate *right_p;
     Value entry;
 	MachineInstance *mi;
+    DynamicValue *dyn_value;
 	const Value *cached_entry;
     const Value *last_calculation; // for dynamic values, retains the last value for display only
 	bool error() { return lookup_error; }
@@ -66,15 +67,18 @@ struct Predicate {
 	void clearError() { lookup_error = false; }
 	void setErrorString(const std::string &err) { error_str = err; lookup_error = true; }
 	
-    Predicate(Value &v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {
+    Predicate(Value *v) : left_p(0), op(opNone), right_p(0), entry(*v), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {
         if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") priority = 1;
     }
-    Predicate(const char *s) : left_p(0), op(opNone), right_p(0), entry(s), mi(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {
+    Predicate(Value &v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {
         if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") priority = 1;
     }
-    Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {}
+    Predicate(const char *s) : left_p(0), op(opNone), right_p(0), entry(s), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {
+        if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") priority = 1;
+    }
+    Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {}
     Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r), 	
-		mi(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {}
+		mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false) {}
     ~Predicate();
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);

@@ -423,6 +423,38 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 }
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m.operator<<(out); }
 
+/* Machine instances have different ways of reporting their 'current value', depending on the type of machine */
+
+class MachineValue : public DynamicValue {
+public:
+    MachineValue(MachineInstance *mi): machine_instance(mi) { }
+    virtual const Value *operator()() const {
+        if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
+            return &machine_instance->getValue("VALUE");
+        }
+        else {
+            return machine_instance->getCurrentStateVal();
+        }
+    }
+protected:
+    MachineInstance *machine_instance;
+};
+
+class VariableValue : public DynamicValue {
+public:
+    VariableValue(MachineInstance *mi): machine_instance(mi) { }
+    virtual const Value *operator()() const {
+        if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
+            return &machine_instance->getValue("VALUE");
+        }
+        else {
+            return machine_instance->getCurrentStateVal();
+        }
+    }
+protected:
+    MachineInstance *machine_instance;
+};
+
 MachineInstance::MachineInstance(InstanceType instance_type) 
         : Receiver(""), 
     _type("Undefined"), 
@@ -439,8 +471,10 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     modbus_exported(none),
     saved_state("undefined"),
     current_state_val("undefined"),
-    is_active(false)
+    is_active(false),
+    current_value(0)
 {
+    if (_type != "LIST") current_value = new MachineValue(this);
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
@@ -466,8 +500,10 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     modbus_exported(none),
     saved_state("undefined"),
     current_state_val("undefined"),
-    is_active(false)
+    is_active(false),
+    current_value(0)
 {
+    if (_type != "LIST") current_value = new MachineValue(this);
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
@@ -482,7 +518,9 @@ MachineInstance::~MachineInstance() {
     automatic_machines.remove(this);
     active_machines.remove(this);
     Dispatcher::instance()->removeReceiver(this);
+    delete current_value;
 }
+
 
 void MachineInstance::describe(std::ostream &out) {
     out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n"
@@ -1742,11 +1780,14 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                     MachineClass *newsm = (*c_iter).second;
                     newp.machine->setStateMachine(newsm);
                     if (newsm->parameters.size() != p.machine->parameters.size()) {
-                        if (newsm->name != "POINT" || newsm->parameters.size() < 2 || newsm->parameters.size() >3) {
+                        if (newsm->name == "LIST") {
+                            DBG_MSG << "List has " << p.machine->parameters.size() << " parameters\n";
+                        }
+                        if (newsm->name != "LIST" && (newsm->name != "POINT" || newsm->parameters.size() < 2 || newsm->parameters.size() >3 ) ) {
                             resetTemporaryStringStream();
                             ss << "## - Error: Machine " << newsm->name << " requires " 
                                 << newsm->parameters.size()
-                                << " parameters but instance " << _name << "." << newp.machine->getName() << " has " << newp.machine->parameters.size();
+                                << " parameters but instance " << _name << "." << newp.machine->getName() << " has " << p.machine->parameters.size();
                             error_messages.push_back(ss.str());
                             ++num_errors;
                         }

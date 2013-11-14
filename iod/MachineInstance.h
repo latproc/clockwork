@@ -44,12 +44,13 @@ long get_diff_in_microsecs(struct timeval *now, struct timeval *then);
 class MachineInstance;
 class MachineClass;
 
-class MoveStateAction;
+struct MoveStateAction;
 
 extern std::map<std::string, MachineInstance*>machines;
 extern std::map<std::string, MachineClass*> machine_classes;
 
-struct Transition {
+class Transition {
+public:
     State source;
     State dest;
     Message trigger;
@@ -60,7 +61,8 @@ struct Transition {
     ~Transition();
 };
 
-struct ConditionHandler {
+class ConditionHandler {
+public:
 	ConditionHandler(const ConditionHandler &other);
 	ConditionHandler &operator=(const ConditionHandler &other);
 	ConditionHandler() : action(0), trigger(0), uses_timer(false), triggered(false) {}
@@ -78,7 +80,8 @@ struct ConditionHandler {
 	bool triggered;
 };
 
-struct StableState : public TriggerOwner {
+class StableState : public TriggerOwner {
+public:
     std::string state_name;
     Condition condition;
 
@@ -117,7 +120,8 @@ struct StableState : public TriggerOwner {
 };
 std::ostream &operator<<(std::ostream &out, const StableState &ss);
 
-struct Parameter {
+class Parameter {
+public:
     Value val;
     SymbolTable properties;
     MachineInstance *machine;
@@ -130,7 +134,8 @@ struct Parameter {
 std::ostream &operator<<(std::ostream &out, const Parameter &p);
 
 // modbus interfacing
-struct ModbusAddressTemplate {
+class ModbusAddressTemplate {
+public:
     //Group - discrete, coil, etc
     //Size - number of units of the address type (always 1 for discretes and coils)
 	std::string property_name;
@@ -140,7 +145,8 @@ struct ModbusAddressTemplate {
 		: property_name(property), kind(g), size(n_units) {	}
 };
 
-struct MachineClass {
+class MachineClass {
+public:
     MachineClass(const char *class_name);
     SymbolTable properties;
     std::vector<Parameter> parameters;
@@ -293,6 +299,7 @@ public:
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
 	const Value *getCurrentStateVal() { return &current_state_val; }
+    const DynamicValue *getCurrentValue() { return current_value; }
 
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;
@@ -338,7 +345,6 @@ public:
     SymbolTable properties;
     std::string definition_file;
     int definition_line;
-    //struct timeval timer; // time that the current state has been active
 	struct timeval start_time; // time the current state started
 	struct timeval disabled_time; // time the current state started
 
@@ -365,6 +371,7 @@ protected:
 	State saved_state; // save state before error
 	Value current_state_val;
     bool is_active; // is this machine active or passive?
+    DynamicValue *current_value;
 	std::stringstream ss; // saves recreating string stream for temporary use
 	
 private:
@@ -374,12 +381,12 @@ private:
     static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
     static std::list<MachineInstance*> active_machines; // machines that require idle() processing
 
-	friend class SetStateAction;
-	friend class MoveStateAction;
-	friend class SetIOStateAction;
-	friend class ExpressionAction;
-	friend class IODCommandToggle;
-    friend class IODCommandSetStatus;
+	friend struct SetStateAction;
+	friend struct MoveStateAction;
+	friend struct SetIOStateAction;
+	friend struct ExpressionAction;
+	friend struct IODCommandToggle;
+    friend struct IODCommandSetStatus;
     friend class ConditionHandler;
 };
 

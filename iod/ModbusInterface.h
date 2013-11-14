@@ -28,7 +28,8 @@
 /* when a Modbus addressable object changes value, it informs the interface by calling update()
 	
 */
-struct ModbusAddressDetails {
+class ModbusAddressDetails {
+public:
 	short group;
 	short address;
 	short len;
@@ -37,7 +38,8 @@ struct ModbusAddressDetails {
 };
 
 class ModbusAddressable;
-struct ModbusAddress {
+class ModbusAddress {
+public:
 	enum Group {coil, discrete, none, input_register, holding_register };
 	enum Source {unknown, machine, state, command, property};
 	static Group toGroup(int g) { if (g<0 || g>4) return none; else return (Group)g; }
@@ -115,7 +117,8 @@ std::ostream &operator<<( std::ostream &out, const ModbusAddress&addr);
 
 ModbusAddress::Group groupFromInt(int g);
 
-struct ModbusAddressable {
+class ModbusAddressable {
+public:
 	enum ExportType {none, discrete, coil, reg, reg32, rw_reg, rw_reg32, str};
 	virtual ~ModbusAddressable();
 	void updateModbus(int new_value);
@@ -123,7 +126,7 @@ struct ModbusAddressable {
 	virtual int getModbusValue(ModbusAddress &addr, unsigned int offset, int len) = 0;
 };
 
-struct ModbusInterface {
+class ModbusInterface {
 
 private:
 	ModbusInterface() { }
