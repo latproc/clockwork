@@ -186,6 +186,15 @@ void semantic_analysis() {
 	ain_class->disableAutomaticStateChanges();
 	ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
     
+    MachineClass *list_class = new MachineClass("LIST");
+    list_class->states.push_back("empty");
+    list_class->states.push_back("nonempty");
+	list_class->default_state = State("empty");
+	list_class->initial_state = State("empty");
+	list_class->disableAutomaticStateChanges();
+	list_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+    
+    
     MachineClass *module_class = new MachineClass("MODULE");
 	module_class->disableAutomaticStateChanges();
 
@@ -332,7 +341,10 @@ void semantic_analysis() {
         
 		if (mi->getStateMachine() && mi->parameters.size() != mi->getStateMachine()->parameters.size()) {
             // the POINT class special; it can have either 2 or 3 parameters (yuk)
-            if (mi->getStateMachine()->name != "POINT" || mi->getStateMachine()->parameters.size() < 2 || mi->getStateMachine()->parameters.size() >3) {
+            if (mi->getStateMachine()->name == "LIST") {
+                DBG_MSG << "List has " << mi->parameters.size() << " parameters\n";
+            }
+            else if (mi->getStateMachine()->name != "POINT" || mi->getStateMachine()->parameters.size() < 2 || mi->getStateMachine()->parameters.size() >3) {
                 std::stringstream ss;
                 ss << "## - Error: Machine " << mi->getStateMachine()->name << " requires "
                 << mi->getStateMachine()->parameters.size()
