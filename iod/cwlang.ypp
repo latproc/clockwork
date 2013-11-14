@@ -28,6 +28,7 @@
 #include "MachineCommandAction.h"
 #include "PatternAction.h"
 #include "IODCommands.h"
+#include "IncludeAction.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -774,10 +775,22 @@ SET SYMBOL TO SYMBOL  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExtractAllPatternActionTemplate($1, $5, $7);    
 }
-| CREATE SYMBOL WITH COUNT SYMBOL IN SYMBOL { current_action = new LogActionTemplate(new Predicate("COUNT"));}
-| CREATE SYMBOL WITH COPY INTEGER FROM SYMBOL { current_action = new LogActionTemplate(new Predicate("COPY"));}
-| CREATE SYMBOL WITH TAKE INTEGER FROM SYMBOL { current_action = new LogActionTemplate(new Predicate("TAKE"));}
-| INCLUDE SYMBOL IN SYMBOL { current_action = new LogActionTemplate(new Predicate("INCLUDE"));}
+| CREATE SYMBOL WITH COUNT SYMBOL IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LogActionTemplate(new Predicate("COUNT"));
+}
+| CREATE SYMBOL WITH COPY INTEGER FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LogActionTemplate(new Predicate("COPY"));
+}
+| CREATE SYMBOL WITH TAKE INTEGER FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LogActionTemplate(new Predicate("TAKE"));
+}
+| INCLUDE SYMBOL IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new IncludeActionTemplate($4, $2);
+}
 | REPLACE PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ReplacePatternActionTemplate($2, $4, $6);    
