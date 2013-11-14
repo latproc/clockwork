@@ -1,4 +1,4 @@
-# This script tests various builtin special values
+# This script demonstrates various builtin special values
 #
 Test MACHINE {
 

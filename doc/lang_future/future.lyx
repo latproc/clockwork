@@ -186,6 +186,10 @@ Sequences and Cycles - shortcuts for transition tables?
 Threaded implementation
 \end_layout
 
+\begin_layout Itemize
+Executing a subexpression on the default state
+\end_layout
+
 \begin_layout Subsection
 Bugs
 \end_layout
@@ -218,6 +222,10 @@ Global configuration (eg timer range in usec, msec, sec)
 Formal/scrict interfaces
 \end_layout
 
+\begin_layout Itemize
+sending data with a message
+\end_layout
+
 \begin_layout Subsection
 Modules
 \end_layout
@@ -234,6 +242,18 @@ Counter inputs
 Frequency inputs (calculated or read from advanced devices)
 \end_layout
 
+\begin_layout Itemize
+Low level module initialisation
+\end_layout
+
+\begin_layout Itemize
+Bus change events
+\end_layout
+
+\begin_layout Itemize
+CAN objects for paramaterisation
+\end_layout
+
 \begin_layout Subsection
 Time
 \end_layout
@@ -244,6 +264,10 @@ Delayed messaging (sending messages after a delay and cancelling..)
 
 \begin_layout Itemize
 Wall time (long period timers)
+\end_layout
+
+\begin_layout Itemize
+Polling - repeatedly executing a statement
 \end_layout
 
 \begin_layout Standard
@@ -341,6 +365,10 @@ cutters SET[cutter1, cutter2];
 s INCLUDES? [a,b,c];
 \end_layout
 
+\begin_layout LyX-Code
+SELECT state_name/value FROM set_name;
+\end_layout
+
 \begin_layout Standard
 Sets could be implemented as a machine where each combination of members
  is a distinct state there doesn't seem to be much value in this.
@@ -348,11 +376,18 @@ Sets could be implemented as a machine where each combination of members
 \end_layout
 
 \begin_layout Standard
-Sets can be used in expressions in th following ways
+Statements involving sets may be classified by whether they refer to the
+ set itself, for example `INCLUDE 3 IN s', or the members.
+ 
+\end_layout
+
+\begin_layout Standard
+Sets can be used in expressions in the following ways
 \end_layout
 
 \begin_layout Itemize
-ANY IN set_name ARE | IS state_name/value
+ANY IN set_name ARE | IS state_name/value # returns true if any of the items
+ in the set are in the state given or have the value given
 \end_layout
 
 \begin_layout Itemize
@@ -360,19 +395,20 @@ ALL IN set_name ARE | IS state_name/value
 \end_layout
 
 \begin_layout Itemize
-ONE IN set_name IS state_name/value
+COUNT state_name FROM set_name # counts the number of items in the set that
+ are in the named state
 \end_layout
 
 \begin_layout Itemize
-NONE IN set_name ARE/IS state_name/value
+BITSET FROM set_name state_name # returns a bitset that represents 
 \end_layout
 
 \begin_layout Itemize
-COUNT state_name FROM set_name
+COPY n FROM set_name # picks n elements at random from a set
 \end_layout
 
 \begin_layout Itemize
-BITSET FROM set_name state_name
+TAKE n FROM set_name # takes n elements at random from a set
 \end_layout
 
 \begin_layout Subsubsection
@@ -686,6 +722,23 @@ This approach must buffer incoming data in order to prevent invalid state
  This will be done by marking some tasks as high priority such that these
  tasks but be performed every cycle.
  Further thought is required.
+\end_layout
+
+\begin_layout Subsubsection
+Command Polling
+\end_layout
+
+\begin_layout Standard
+A subcondition can be used to repeat an action only while a machine is in
+ a particular state:
+\end_layout
+
+\begin_layout Standard
+DO command EVERY time_period;
+\end_layout
+
+\begin_layout Subsection
+Dynamic machine
 \end_layout
 
 \end_body

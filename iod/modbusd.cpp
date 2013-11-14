@@ -62,7 +62,7 @@ time_t now;
 #define OUT (time(&now) == last) ? dummy : std::cout
 
 //class IODInterfaceThread;
-class IODCommandInterface;
+struct IODCommandInterface;
 
 //IODInterfaceThread *g_iod_interface;
 IODCommandInterface *g_iodcmd;
@@ -351,7 +351,7 @@ struct ModbusServerThread {
 						else if (fc == 16) {
 							int num_words = (query_backup[function_code_offset+3] <<16)
 								+ query_backup[function_code_offset + 4];
-							int num_bytes = query_backup[function_code_offset+5];
+							//int num_bytes = query_backup[function_code_offset+5];
 							unsigned char *data = query_backup + function_code_offset + 6; // interpreted as binary
 							for (int reg = 0; reg<num_words; ++reg) {
 								char buf[20];
