@@ -788,8 +788,9 @@ MachineInstance *MachineInstance::find(const char *name) {
 	return 0;
 }
 
-void MachineInstance::addParameter(Value param) { 
-    parameters.push_back(param); 
+void MachineInstance::addParameter(Value param, MachineInstance *mi) {
+    parameters.push_back(param);
+    parameters[parameters.size()-1].machine = mi;
 }
 
 void MachineInstance::setProperties(const SymbolTable &props) {

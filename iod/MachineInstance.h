@@ -209,7 +209,7 @@ public:
     
     void triggerFired(Trigger *trig);
 
-    void addParameter(Value param);
+    void addParameter(Value param, MachineInstance *machine = 0);
     void setProperties(const SymbolTable &props);
     
     // record where in the program this machine was defined
