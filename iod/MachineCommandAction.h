@@ -42,7 +42,8 @@
 
 class MachineInstance;
 	
-struct MachineCommandTemplate : public ActionTemplate {
+class MachineCommandTemplate : public ActionTemplate {
+public:
     MachineCommandTemplate(CStringHolder cmd_name, CStringHolder state)
     : command_name(cmd_name), state_name(state), timeout(0) { }
     virtual Action *factory(MachineInstance *mi);
