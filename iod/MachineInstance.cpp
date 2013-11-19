@@ -40,11 +40,24 @@
 #include "HandleMessageAction.h"
 #include "ExecuteMessageAction.h"
 #include "CallMethodAction.h"
+#include "dynamic_value.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
 
 MessagingInterface *persistentStore = 0;
+
+Parameter::Parameter(Value v) : val(v), machine(0) {
+    ;
+}
+Parameter::Parameter(const char *name, const SymbolTable &st) : val(name), properties(st), machine(0) { }
+std::ostream &Parameter::operator<< (std::ostream &out)const {
+    return out << val << "(" << properties << ")";
+}
+Parameter::Parameter(const Parameter &orig) {
+    val = orig.val; machine = orig.machine; properties = orig.properties;
+}
+
 
 bool Action::debug() {
 	return owner && owner->debug();
@@ -428,14 +441,15 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 class MachineValue : public DynamicValue {
 public:
     MachineValue(MachineInstance *mi): machine_instance(mi) { }
-    virtual const Value *operator()() const {
+    Value operator()()  {
         if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
-            return &machine_instance->getValue("VALUE");
+            return machine_instance->getValue("VALUE");
         }
         else {
             return machine_instance->getCurrentStateVal();
         }
     }
+    DynamicValue *clone() const;
 protected:
     MachineInstance *machine_instance;
 };
@@ -443,17 +457,28 @@ protected:
 class VariableValue : public DynamicValue {
 public:
     VariableValue(MachineInstance *mi): machine_instance(mi) { }
-    virtual const Value *operator()() const {
+    virtual Value operator()() const {
         if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
-            return &machine_instance->getValue("VALUE");
+            return machine_instance->getValue("VALUE");
         }
         else {
             return machine_instance->getCurrentStateVal();
         }
     }
+    DynamicValue *clone() const;
 protected:
     MachineInstance *machine_instance;
 };
+
+DynamicValue *MachineValue::clone() const {
+    MachineValue *mv = new MachineValue(*this);
+    return mv;
+}
+
+DynamicValue *VariableValue::clone() const {
+    VariableValue *vv = new VariableValue(*this);
+    return vv;
+}
 
 MachineInstance::MachineInstance(InstanceType instance_type) 
         : Receiver(""), 
@@ -471,10 +496,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     modbus_exported(none),
     saved_state("undefined"),
     current_state_val("undefined"),
-    is_active(false),
-    current_value(0)
+    is_active(false)
 {
-    if (_type != "LIST") current_value = new MachineValue(this);
+    if (_type != "LIST") current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
@@ -501,9 +525,9 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     saved_state("undefined"),
     current_state_val("undefined"),
     is_active(false),
-    current_value(0)
+    current_value_holder(0)
 {
-    if (_type != "LIST") current_value = new MachineValue(this);
+    if (_type != "LIST") current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
@@ -518,7 +542,6 @@ MachineInstance::~MachineInstance() {
     automatic_machines.remove(this);
     active_machines.remove(this);
     Dispatcher::instance()->removeReceiver(this);
-    delete current_value;
 }
 
 

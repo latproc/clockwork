@@ -1,5 +1,19 @@
 # Various expression exercises, particular for the new LIST machine
 
+Sample MACHINE {
+    a FLAG;
+    b FLAG;
+    list LIST a;
+
+    ready WHEN list INCLUDES a AND list INCLUDES b;
+    on WHEN list INCLUDES a OR list INCLUDES b;
+    off DEFAULT;
+    
+    ENTER on { LOG "Sample machine turned on"; INCLUDE b IN list; }
+}
+sample Sample;
+
+
 Test01 MACHINE {
     a FLAG;
     b FLAG;
@@ -18,6 +32,7 @@ Test01 MACHINE {
         IF (flags INCLUDES a) { LOG "a is in flags. correct" }
 		ELSE { LOG "a is not in flags, incorrect" };
 
+        INCLUDE d IN flags;
         INCLUDE d IN flags;
         IF (flags INCLUDES d) { LOG "d is in flags. correct"; } 
         ELSE {LOG "d is not in flags. incorrect" };

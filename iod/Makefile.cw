@@ -28,7 +28,7 @@ EXTRALIBS = -L/opt/latproc/lib -L/opt/local/lib -L/usr/local/lib
 # adjust the following linker flags to set the boost libraries you 
 # would like to use.
 
-BOOST_LIB_EXTN = -mt
+BOOST_LIB_EXTN = #-mt
 BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN)
 BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST_LIB_EXTN)
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
@@ -54,7 +54,7 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	IODCommands.cpp			ShutdownAction.cpp		test_client.cpp \
 	IfCommandAction.cpp		State.cpp			zmq_ecat_monitor.cpp \
 	IncludeAction.cpp LockAction.cpp			UnlockAction.cpp	clockwork.cpp \
-	ClientInterface.cpp		MQTTInterface.cpp	value.cpp
+	ClientInterface.cpp		MQTTInterface.cpp	dynamic_value.cpp value.cpp
 
 all:	$(APPS)
 
@@ -68,7 +68,7 @@ all:	$(APPS)
 iod.o:	iod.cpp	MessagingInterface.h
 
 iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
-			Dispatcher.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
+			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			IncludeAction.o LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
@@ -77,7 +77,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
-			Dispatcher.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
+			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
 			MachineInstance.o cwlang.tab.o cwlang.yy.o Scheduler.o $(TOOLLIB) \
 			Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
@@ -96,7 +96,7 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			regular_expressions.cpp PatternAction.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
-			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o value.o symboltable.o Scheduler.o \
+			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o dynamic_value.o value.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
 			CallMethodAction.o $(TOOLLIB) \
@@ -107,7 +107,7 @@ cw.o:	cw.cpp	MessagingInterface.h
 		$(CC) -c -o $@ cw.cpp
 
 cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
-			Dispatcher.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
+			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			IncludeAction.o LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
@@ -115,7 +115,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
-			Dispatcher.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
+			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			cwlang.tab.o cwlang.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			IncludeAction.o LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
@@ -126,12 +126,12 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			-lmosquitto
 
-persistd:	persistd.cpp value.o symboltable.o Logger.o DebugExtra.o
+persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
-		value.o symboltable.o Logger.o DebugExtra.o
+		value.o symboltable.o Logger.o DebugExtra.o 
 
-modbusd:	modbusd.cpp value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o
+modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_SYSTEM_LIB) $(BOOST_THREAD_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) \
 			value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 

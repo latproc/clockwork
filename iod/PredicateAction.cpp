@@ -23,6 +23,8 @@
 #include "DebugExtra.h"
 #include "MachineInstance.h"
 #include "regular_expressions.h"
+#include "value.h"
+#include "dynamic_value.h"
 
 void breakpoint() {}
 
@@ -61,18 +63,6 @@ Value resolve(Predicate *p, MachineInstance *m) {
 }
 
 
-static bool any_in_state(Value &val);
-
-bool all_in_state(Value &val);
-
-bool count(Value &val);
-
-bool any_in_state(Value &val) {
-    //if (list.kind != Value::t_symbol || state.kind != Value::t_symbol) return false;
-    
-    return false; // TBD
-}
-
 
 Value eval(Predicate *p, MachineInstance *m){
 	if (p->left_p || p->right_p) { 
@@ -106,9 +96,18 @@ Value eval(Predicate *p, MachineInstance *m){
             case opNegate: res = ~r; break;
 			case opAssign: res = r; break; // TBD
             case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
-            case opAny: return any_in_state(r);
-            case opAll: return all_in_state(r);
+            case opAny:
+            case opAll:
+            case opIncludes:
+            case opCount: {
+                DynamicValue *dyn_v = r.dynamicValue();
+                if (dyn_v) return dyn_v->operator()(m);
+            }
+                break;
 	        case opNone: res = 0;
+                break;
+            default:
+                std::cerr << "Error: unhandled operator " << p->op << " in evaluating predicate\n";
 	    }
 		
 		if (m && m->debug()) {

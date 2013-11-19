@@ -26,6 +26,7 @@
 #include "regular_expressions.h"
 #include "Scheduler.h"
 #include "FireTriggerAction.h"
+#include "dynamic_value.h"
 
 std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
     std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
@@ -363,8 +364,7 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 		// if we found a reference to a machine but that machine is a variable or constant, we
 		// are actually interested in its 'VALUE' property
 		if (found) {
-            const DynamicValue *dv = found->getCurrentValue();
-            p->cached_entry = dv;
+            p->cached_entry = found->getCurrentValue();
             return p->cached_entry;
             /*
 			if (found->_type == "VARIABLE" || found->_type == "CONSTANT") {
@@ -378,25 +378,12 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
              */
 		}
 	}
+    else if (v->kind == Value::t_dynamic)
+        std::cout << " resolved a dynamic value\n";
 	return v;
 }
 
-bool any_in_state(Value &val) {
-    //if (list.kind != Value::t_symbol || state.kind != Value::t_symbol) return false;
-    
-    return false; // TBD
-}
-
-bool all_in_state(Value &val) {
-    return false; //TBD
-}
-
-bool count(Value &val) {
-    //if (list.kind != Value::t_symbol || state.kind != Value::t_symbol) return false;
-    
-    return false; // TBD
-}
-
+#if 0
 Value eval(Predicate *p, MachineInstance *m, bool left){
 	if (p->left_p) {
 		Value l(eval(p->left_p, m, true));
@@ -429,6 +416,8 @@ Value eval(Predicate *p, MachineInstance *m, bool left){
             case opAny: res = any_in_state(p->entry); break;
             case opAll: res = all_in_state(p->entry); break;
             case opCount: res = count(p->entry); break;
+            case opIncludes:
+                res = includes(p->entry); break;
 	        case opNone:   res = 0;
 	    }
 		
@@ -447,19 +436,20 @@ Value eval(Predicate *p, MachineInstance *m, bool left){
 	else
 		return resolve(p, m, left);
 }
+#endif
 
 ExprNode eval_stack();
 void prep(Predicate *p, MachineInstance *m, bool left);
 
-ExprNode eval_stack(Stack &stack){
+ExprNode eval_stack(MachineInstance *m, Stack &stack){
     ExprNode o = stack.pop();
     if (o.kind != ExprNode::t_op) return o;
-    ExprNode b(eval_stack(stack));
-    ExprNode a(eval_stack(stack));
+    ExprNode b(eval_stack(m, stack));
+    ExprNode a(eval_stack(m, stack));
     assert(a.kind != ExprNode::t_op);
     assert(b.kind != ExprNode::t_op);
-    if (a.val.kind == Value::t_dynamic) a.val = a.val();
-    if (b.val.kind == Value::t_dynamic) b.val = b.val();
+    if (a.val.kind == Value::t_dynamic) a.val = a.val.dynamicValue()->operator()(m);
+    if (b.val.kind == Value::t_dynamic) b.val = b.val.dynamicValue()->operator()(m);
     switch (o.op) {
         case opGE: return a.val >= b.val;
         case opGT: return a.val > b.val;
@@ -482,9 +472,18 @@ ExprNode eval_stack(Stack &stack){
         case opBitXOr: return a.val ^ b.val;
 		case opAssign:return b.val;
         case opMatch: return matches(a.val.asString().c_str(), b.val.asString().c_str());
-        case opAny: return any_in_state(b.val);
-        case opAll: return all_in_state(b.val);
-		case opNone: return 0;
+        case opAny:
+        case opCount:
+        case opAll:
+        case opIncludes:
+        {
+            DynamicValue *dv = b.val.dynamicValue();
+            if (dv) return dv->operator()(m);
+            return SymbolTable::False;
+        }
+            break;
+		case opNone:
+            return 0;
     }
     return o;
 }
@@ -519,7 +518,7 @@ Value Predicate::evaluate(MachineInstance *m) {
     //		if (m && m->debug()) {
     //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
     //		}
-    Value res = eval_stack(stack).val;
+    Value res = eval_stack(m, stack).val;
     return res;
 }
 
@@ -532,7 +531,7 @@ bool Condition::operator()(MachineInstance *m) {
 //		if (m && m->debug()) {
 //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
 //		}
-	    last_result = eval_stack(stack).val;
+	    last_result = eval_stack(m, stack).val;
         std::stringstream ss;
         ss << last_result << " " << *predicate;
         last_evaluation = ss.str();

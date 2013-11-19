@@ -34,10 +34,10 @@ Action *IncludeActionTemplate::factory(MachineInstance *mi) {
 }
 
 IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat)
-    : Action(m), list_machine_name(dat->list_machine_name), entry_name(dat->entry_name) {
+    : Action(m), list_machine_name(dat->list_machine_name), entry_name(dat->entry_name), list_machine(0), entry_machine(0) {
 }
 
-IncludeAction::IncludeAction() {
+IncludeAction::IncludeAction() : list_machine(0), entry_machine(0) {
 }
 
 std::ostream &IncludeAction::operator<<(std::ostream &out) const {

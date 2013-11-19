@@ -126,10 +126,10 @@ public:
     SymbolTable properties;
     MachineInstance *machine;
     std::string real_name;
-    Parameter(Value v) : val(v), machine(0) { }
-    Parameter(const char *name, const SymbolTable &st) : val(name), properties(st), machine(0) { }
-    std::ostream &operator<< (std::ostream &out)const { return out << val << "(" << properties << ")"; }
-    Parameter(const Parameter &orig) { val = orig.val; machine = orig.machine; properties = orig.properties; }
+    Parameter(Value v);
+    Parameter(const char *name, const SymbolTable &st);
+    std::ostream &operator<< (std::ostream &out)const;
+    Parameter(const Parameter &orig);
 };
 std::ostream &operator<<(std::ostream &out, const Parameter &p);
 
@@ -299,7 +299,7 @@ public:
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
 	const Value *getCurrentStateVal() { return &current_state_val; }
-    const DynamicValue *getCurrentValue() { return current_value; }
+    const Value *getCurrentValue() { return &current_value_holder; }
 
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;
@@ -371,7 +371,7 @@ protected:
 	State saved_state; // save state before error
 	Value current_state_val;
     bool is_active; // is this machine active or passive?
-    DynamicValue *current_value;
+    Value current_value_holder;
 	std::stringstream ss; // saves recreating string stream for temporary use
 	
 private:

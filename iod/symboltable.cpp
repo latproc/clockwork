@@ -32,6 +32,7 @@
 Value SymbolTable::Null(-432576);
 Value SymbolTable::True(true);
 Value SymbolTable::False(false);
+Value SymbolTable::Zero(0);
 
 bool SymbolTable::initialised = false;
 SymbolTable *SymbolTable::keywords = 0;
@@ -132,7 +133,7 @@ Value &SymbolTable::getKeyValue(const char *name) {
         if (strcmp("TIMESTAMP", name) == 0) {
             char buf[40];
             ctime_r(&now, buf);
-            int n = strlen(buf);
+            size_t n = strlen(buf);
             if (n>1 && buf[n-1] == '\n') buf[n-1] = 0;
             res.sValue = buf;
             return res;

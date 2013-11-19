@@ -47,7 +47,7 @@ IfCommandAction::~IfCommandAction() {
 
 Action::Status IfCommandAction::run() {
 	owner->start(this);
-	//DBG_M_ACTIONS << "If is testing " << *condition.predicate << "\n";
+	DBG_M_ACTIONS << "If is testing " << *condition.predicate << "\n";
 	if (!condition(owner)) {
 		DBG_M_ACTIONS << owner->getName() << " IF " << *condition.predicate << " returned false" << "\n";
 		status = Complete;

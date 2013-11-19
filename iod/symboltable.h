@@ -62,6 +62,7 @@ public:
 	static Value Null;
 	static Value True;
 	static Value False;
+	static Value Zero;
 private:
     std::map<std::string, Value>st;
     static SymbolTable *keywords;

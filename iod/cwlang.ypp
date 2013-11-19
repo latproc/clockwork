@@ -29,6 +29,7 @@
 #include "PatternAction.h"
 #include "IODCommands.h"
 #include "IncludeAction.h"
+#include "dynamic_value.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -448,15 +449,15 @@ expression {
 }
 | predicate AND predicate {
     $$ = new Predicate($1, opAND, $3);
-    DBG_PREDICATES << "joined " << *$1 << "\n";
+    /*DBG_PREDICATES << "joined " << *$1 << "\n";
     DBG_PREDICATES << " and " << *$3 <<"\n";
-    DBG_PREDICATES << " to give " << *$$ << "\n";
+    DBG_PREDICATES << " to give " << *$$ << "\n";*/
 }
 | predicate OR predicate {
     $$ = new Predicate($1, opOR, $3);
-    DBG_PREDICATES << "joined " << *$1 << "\n";
+    /*DBG_PREDICATES << "joined " << *$1 << "\n";
     DBG_PREDICATES << " and " << *$3 <<"\n";
-    DBG_PREDICATES << " to give " << *$$ << "\n";
+    DBG_PREDICATES << " to give " << *$$ << "\n";*/
 }
 ;
 
@@ -491,22 +492,24 @@ value {
 | expression MATCHES PATTERN {
     Value pat($3, Value::t_string);
     $$ = new Predicate($1, opMatch, new Predicate( pat )); }
+/*
 | ANY SYMBOL ARE SYMBOL {
-    AnyInValue val($4, $2);
+    Value val(new AnyInValue($4, $2));
     $$ = new Predicate(0, opAny, new Predicate(val) ); }
 | ALL SYMBOL ARE SYMBOL {
-    AllInValue val($4, $2);
+   Value val(new AllInValue($4, $2));
     $$ = new Predicate(0, opAll, new Predicate(val)); }
 | COUNT SYMBOL FROM SYMBOL {
-    CountValue val($4,$2);
+    Value val(new CountValue($2,$4));
     $$ = new Predicate(0, opCount, new Predicate(val) ); }
 | SYMBOL INCLUDES SYMBOL {
-    IncludesValue val($3, $1);
+    Value val(new IncludesValue($3, $1));
     $$ = new Predicate(0, opIncludes, new Predicate(val) );
 }
 | BITSET FROM SYMBOL SYMBOL {
-    BitsetValue val($4,$3);
+    Value val(new BitsetValue($4,$3));
     $$ = new Predicate(0, opCount, new Predicate(val) ); }
+*/
 ;
 
 value:
@@ -519,8 +522,24 @@ INTEGER   {
 | SYMBOL {
     $$ = new Value($1); 
 }
-;
-
+| SYMBOL INCLUDES SYMBOL {
+    $$ =  new Value(new IncludesValue($3, $1));
+};
+| ANY SYMBOL ARE SYMBOL {
+    $$ = new Value(AnyInValue($4, $2));
+}
+| ALL SYMBOL ARE SYMBOL {
+    $$ = new Value(new AllInValue($4, $2));
+}
+| COUNT SYMBOL FROM SYMBOL {
+    $$ = new Value(new CountValue($2,$4));
+}
+| SYMBOL INCLUDES SYMBOL {
+    $$ = new Value(new IncludesValue($3, $1));
+}
+| BITSET FROM SYMBOL SYMBOL {
+    $$ = new Value(new BitsetValue($4,$3));
+}
 
 command:
 enter_command

@@ -27,7 +27,7 @@
 #include <list>
 
 class MachineInstance;
-
+class DynamicValue;
 
 class Value {
 public:
@@ -36,29 +36,33 @@ public:
 	typedef std::list<Value*> List;
 //    typedef std::map<std::string, Value> Map;
 
-    Value() : kind(t_empty), cached_machine(0) { }
-    Value(Kind k) : kind(k), cached_machine(0) { }
-    virtual ~Value() { }
-    Value(bool v) : kind(t_bool), bValue(v), cached_machine(0) { }
-    Value(long v) : kind(t_integer), iValue(v), cached_machine(0) { }
-    Value(int v) : kind(t_integer), iValue(v), cached_machine(0) { }
-    Value(unsigned int v) : kind(t_integer), iValue(v), cached_machine(0) { }
-    Value(unsigned long v) : kind(t_integer), iValue(v), cached_machine(0) { }
-    Value(const char *str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0) { }
-    Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0) { }
+    Value() : kind(t_empty), cached_machine(0), dyn_value(0) { }
+    Value(Kind k) : kind(k), cached_machine(0), dyn_value(0) { }
+    Value(bool v) : kind(t_bool), bValue(v), cached_machine(0), dyn_value(0) { }
+    Value(long v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
+    Value(int v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
+    Value(unsigned int v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
+    Value(unsigned long v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
+    Value(const char *str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), dyn_value(0) { }
+    Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), dyn_value(0) { }
     Value(const Value&other);
+    Value(DynamicValue *dv);
+    Value(const DynamicValue &dv);
+    virtual ~Value();
     std::string asString() const;
 	bool asInteger(long &val) const;
 //	Value operator[](int index);
 //	Value operator[](std::string index);
-    virtual const Value *operator()() const { return this; }
-    virtual Value *operator()() { return this; }
 
     Kind kind;
     bool bValue;
     long iValue;
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
+    DynamicValue *dyn_value;
+    DynamicValue *dynamicValue() { return dyn_value; }
+    void setDynamicValue(DynamicValue *dv);
+    void setDynamicValue(const DynamicValue &dv);
     
     Value operator=(const Value &orig);
 
@@ -98,72 +102,6 @@ public:
     void addItem(Value next_value);
     void addItem(std::string key, Value next_value);
     void push_back(Value *value) { if (list) list->push_back(value); }
-
 };
-
-class DynamicValue : public Value {
-public:
-    DynamicValue() : Value(t_dynamic) { }
-    virtual ~DynamicValue() {}
-    virtual Value *operator()();
-    virtual const Value *operator()() const;
-};
-
-class AnyInValue : public DynamicValue {
-public:
-    AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
-    virtual ~AnyInValue() {}
-    virtual Value *operator()();
-    virtual const Value *operator()() const;
-private:
-    std::string state;
-    std::string machine_list;
-};
-
-class AllInValue : public DynamicValue {
-public:
-    AllInValue(const char *state_str, const char *list) : state(state_str), machine_list(list) {}
-    virtual ~AllInValue() {}
-    virtual Value *operator()();
-    virtual const Value *operator()() const;
-private:
-    std::string state;
-    std::string machine_list;
-};
-
-
-class CountValue : public DynamicValue {
-public:
-    CountValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
-    virtual ~CountValue() {}
-    virtual Value *operator()();
-    virtual const Value *operator()() const;
-private:
-    std::string state;
-    std::string machine_list;
-};
-
-class IncludesValue : public DynamicValue {
-public:
-    IncludesValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
-    virtual ~IncludesValue() {}
-    virtual Value *operator()();
-    virtual const Value *operator()() const;
-private:
-    std::string state;
-    std::string machine_list;
-};
-
-class BitsetValue : public DynamicValue {
-public:
-    BitsetValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
-    virtual ~BitsetValue() {}
-    virtual Value *operator()();
-    virtual const Value *operator()() const;
-private:
-    std::string state;
-    std::string machine_list;
-};
-
 
 #endif

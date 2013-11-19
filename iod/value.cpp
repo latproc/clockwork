@@ -28,25 +28,27 @@
 #include <boost/foreach.hpp>
 #include <utility>
 #include "DebugExtra.h"
+#include "dynamic_value.h"
 
-Value *DynamicValue::operator()() { return &SymbolTable::False; }
-const Value *DynamicValue::operator()() const { return &SymbolTable::False; }
+void Value::setDynamicValue(DynamicValue *dv) {
+    if (kind == t_dynamic) { delete dyn_value; dyn_value = 0; }
+    kind = t_dynamic;
+    dyn_value = dv;
+}
 
-Value *AnyInValue::operator()() { return &SymbolTable::False; }
-const Value *AnyInValue::operator()() const { return &SymbolTable::False; }
-Value *AllInValue::operator()() { return &SymbolTable::False; }
-const Value *AllInValue::operator()() const {return &SymbolTable::False; }
-Value *CountValue::operator()() { return &SymbolTable::False; }
-const Value *CountValue::operator()() const { return &SymbolTable::False; }
-Value *IncludesValue::operator()() { return &SymbolTable::False; }
-const Value *IncludesValue::operator()() const { return &SymbolTable::False; }
-Value *BitsetValue::operator()() { return &SymbolTable::Null; }
-const Value *BitsetValue::operator()() const { return &SymbolTable::Null; }
+void Value::setDynamicValue(const DynamicValue &dv) {
+    if (kind == t_dynamic) { delete dyn_value; dyn_value = 0; }
+    kind = t_dynamic;
+    dyn_value = dv.clone();
+}
 
+Value::~Value() {
+    if (kind == t_dynamic) { delete dyn_value; dyn_value = 0; }
+}
 
-
-Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue), sValue(other.sValue),
-					cached_machine(other.cached_machine) {
+Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),
+    sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(0) {
+        if (other.dyn_value) dyn_value = other.dyn_value->clone();
 //    if (kind == t_list) {
 //        std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
 //    }
@@ -58,9 +60,19 @@ Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(
 //    }
 }
 
+Value::Value(const DynamicValue &dv) : kind(t_dynamic) {
+    dyn_value = dv.clone();
+}
+
+// this form takes ownership of the passed DynamiValue rather than makes a clone
+Value::Value(DynamicValue *dv) : kind(t_dynamic) {
+    dyn_value = dv;
+}
+
 Value Value::operator=(const Value &orig){
-    kind=orig.kind;
 //    listValue.erase(listValue.begin(), listValue.end());
+    kind=orig.kind;
+    if (dyn_value) { delete dyn_value; dyn_value = 0; }
     switch (kind) {
         case t_bool:
             bValue = orig.bValue;
@@ -71,6 +83,10 @@ Value Value::operator=(const Value &orig){
         case t_string:
         case t_symbol:
             sValue = orig.sValue;
+            break;
+        case t_dynamic:
+            dyn_value = orig.dyn_value->clone();
+            kind=orig.kind;
             break;
 #if 0
         case t_list:
@@ -589,18 +605,22 @@ std::ostream &Value::operator<<(std::ostream &out) const {
             std::ostream_iterator<Value> o_iter(out, ","); 
             std::copy(listValue.begin(), listValue.end(), o_iter);
             out << "(" << listValue.size() << " values)"; 
-        } 
+        }
+            breawk;
         case t_map: {
             if (mapValue.size())
                 out << "(Properties)";
         }
+            break;
 #endif
         case t_bool: {
             out << ((bValue) ? "true" : "false");
         }
+            break;
 		case t_dynamic: {
 			out << "<dynamic value>";
 		}
+            break;
     }
     return out;
 }
