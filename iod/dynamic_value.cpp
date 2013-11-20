@@ -30,7 +30,7 @@ std::ostream &operator<<(std::ostream &out, const AllInValue &val) { return val.
 
 DynamicValue *CountValue::clone() const { return new CountValue(*this); }
 std::ostream &CountValue::operator<<(std::ostream &out ) const {
-    return out << "COUNT " << state << " FROM " << machine_list_name;
+    return out << "COUNT " << state << " FROM " << machine_list_name << " (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const CountValue &val) { return val.operator<<(out); }
 

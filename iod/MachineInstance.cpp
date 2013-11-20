@@ -301,6 +301,7 @@ void MachineInstance::resetTemporaryStringStream() {
 MachineInstance *MachineInstance::lookup(Parameter &param) {
 	assert(param.val.kind == Value::t_symbol);
 	if (!param.machine) {
+        if (param.real_name.empty()) param.real_name = param.val.asString();
 		param.machine = lookup(param.real_name);
 	}
 	return param.machine;
@@ -383,10 +384,10 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 	}
 
 	MachineInstance *found = 0;
-//	resetTemporaryStringStream();
-//    ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
+	resetTemporaryStringStream();
+    ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
     if (seek_machine_name == "SELF" || seek_machine_name == _name) { 
-//		ss << "...self";
+		ss << "...self";
 		if (_type == "CONDITION" && owner)
 			found = owner;
 		else
@@ -400,7 +401,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
     for (unsigned int i=0; i<locals.size(); ++i) {
         Parameter &p = locals[i];
         if (p.val.kind == Value::t_symbol && p.val.sValue == seek_machine_name) {
-//			ss << "...local";
+			ss << "...local";
 			found = p.machine; 
 			goto cache_local_name;
         }
@@ -409,17 +410,18 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
         Parameter &p = parameters[i];
         if (p.val.kind == Value::t_symbol &&
 			(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name) && p.machine) {
-//			ss << "...parameter";
+			ss << "...parameter";
 			found = p.machine; 
 			goto cache_local_name;
         }
     }
     if (machines.count(seek_machine_name)) {
-//		ss << "...global";
+		ss << "...global";
         found = machines[seek_machine_name];
 		goto cache_local_name;
 	}
-//    ss << " not found";
+    ss << " not found";
+    std::cout << ss.str() << "\n";
 //	DBG_M_MACHINELOOKUPS << ss << "";
 	return 0;
 	

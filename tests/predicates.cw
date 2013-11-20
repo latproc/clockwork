@@ -42,6 +42,17 @@ Puzzle MACHINE {
 }
 puzzle Puzzle;
 
+gOne FLAG;
+gTwo FLAG;
+GlobalList LIST gOne, gTwo;
+
+GTest MACHINE list {
+GLOBAL gOne, gTwo;
+    ok WHEN COUNT on FROM list == 2;
+    waiting DEFAULT;
+}
+gtest GTest GlobalList;
+
 TransitionTest  MACHINE {
     a STATE;
     b STATE;
