@@ -191,7 +191,7 @@ void semantic_analysis() {
     list_class->states.push_back("nonempty");
 	list_class->default_state = State("empty");
 	list_class->initial_state = State("empty");
-	list_class->disableAutomaticStateChanges();
+	//list_class->disableAutomaticStateChanges();
 	list_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
     
     

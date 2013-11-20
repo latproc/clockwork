@@ -47,7 +47,7 @@ gTwo FLAG;
 GlobalList LIST gOne, gTwo;
 
 GTest MACHINE list {
-GLOBAL gOne, gTwo;
+#GLOBAL gOne, gTwo;
     ok WHEN COUNT on FROM list == 2;
     waiting DEFAULT;
 }

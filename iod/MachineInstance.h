@@ -349,8 +349,12 @@ public:
 	struct timeval disabled_time; // time the current state started
 
 	static void sort();
+    
+    void setNeedsCheck();
 
+private:
 	int needs_check;
+public:
 	bool uses_timer;
 	
 protected:

@@ -206,7 +206,7 @@ StableState::StableState (const StableState &other)
 
 
 void StableState::triggerFired(Trigger *trig) {
-    if (owner) ++owner->needs_check;
+    if (owner) owner->setNeedsCheck();
 }
 
 
@@ -258,6 +258,17 @@ std::string fullName(const MachineInstance &m) {
 	return name;
 }
 
+void MachineInstance::setNeedsCheck() {
+    ++needs_check;
+    if (_type == "LIST") {
+        std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+        while (dep_iter != depends.end()) {
+            MachineInstance *dep = *dep_iter++;
+            dep->setNeedsCheck();
+        }
+    }
+}
+
 void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset){
 	HardwareAddress addr(io_offset, bit_offset);
 	addr.io_offset = io_offset;
@@ -289,7 +300,7 @@ bool TriggeredAction::active() {
 
 
 void MachineInstance::triggerFired(Trigger *trig) {
-    ++needs_check;
+    setNeedsCheck();
 }
 
 
@@ -301,7 +312,6 @@ void MachineInstance::resetTemporaryStringStream() {
 MachineInstance *MachineInstance::lookup(Parameter &param) {
 	assert(param.val.kind == Value::t_symbol);
 	if (!param.machine) {
-        if (param.real_name.empty()) param.real_name = param.val.asString();
 		param.machine = lookup(param.real_name);
 	}
 	return param.machine;
@@ -385,9 +395,9 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 
 	MachineInstance *found = 0;
 	resetTemporaryStringStream();
-    ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
+    //ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
     if (seek_machine_name == "SELF" || seek_machine_name == _name) { 
-		ss << "...self";
+		//ss << "...self";
 		if (_type == "CONDITION" && owner)
 			found = owner;
 		else
@@ -401,7 +411,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
     for (unsigned int i=0; i<locals.size(); ++i) {
         Parameter &p = locals[i];
         if (p.val.kind == Value::t_symbol && p.val.sValue == seek_machine_name) {
-			ss << "...local";
+			//ss << "...local";
 			found = p.machine; 
 			goto cache_local_name;
         }
@@ -410,18 +420,17 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
         Parameter &p = parameters[i];
         if (p.val.kind == Value::t_symbol &&
 			(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name) && p.machine) {
-			ss << "...parameter";
+			//ss << "...parameter";
 			found = p.machine; 
 			goto cache_local_name;
         }
     }
     if (machines.count(seek_machine_name)) {
-		ss << "...global";
+		//ss << "...global";
         found = machines[seek_machine_name];
 		goto cache_local_name;
 	}
-    ss << " not found";
-    std::cout << ss.str() << "\n";
+    //ss << " not found";
 //	DBG_M_MACHINELOOKUPS << ss << "";
 	return 0;
 	
@@ -816,6 +825,8 @@ MachineInstance *MachineInstance::find(const char *name) {
 void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     parameters.push_back(param);
     parameters[parameters.size()-1].machine = mi;
+    if (!mi) mi = lookup(param.asString().c_str());
+    addDependancy(mi);
 }
 
 void MachineInstance::setProperties(const SymbolTable &props) {
@@ -1082,6 +1093,9 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 			}
 			//TBD execute the message on the dependant machine
 			dep->execute(msg, this);
+            if (dep->_type == "LIST") {
+                dep->setNeedsCheck();
+            }
 		}
 	}
 	return stat;
@@ -1296,7 +1310,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		NB_MSG << _name << " error: dropping empty message\n";
 		return Action::Failed;
 	}
-	++needs_check; // TBD is this necessary?
+	setNeedsCheck(); // TBD is this necessary?
 	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
 	std::string event_name(m.getText());
 	if (from && event_name.find('.') == std::string::npos)
@@ -1430,7 +1444,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
-	++needs_check;
+	setNeedsCheck();
 //	if (active_actions.back() != a) {
 //		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 //		return;
@@ -1534,7 +1548,7 @@ void MachineInstance::resume() {
         }
         setState(current_state, true);
 	} 
-	++needs_check;
+	setNeedsCheck();
 }
 
 void MachineInstance::enable() { 
@@ -1545,12 +1559,12 @@ void MachineInstance::enable() {
         locals[i].machine->enable();
     }
     setInitialState();
-	++needs_check;
+	setNeedsCheck();
 	// if any dependent machines are already enabled, make sure they know we are awake
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();
 	while (d_iter != depends.end()) {
 		MachineInstance *dep = *d_iter++;
-		if (dep->enabled())++dep->needs_check; // make sure dependant machines update when a property changes
+		if (dep->enabled())dep->setNeedsCheck(); // make sure dependant machines update when a property changes
 	}	
 }
 
@@ -1593,7 +1607,7 @@ void MachineInstance::resume(const std::string &state_name) {
                 locals[i].machine->resume();
         }
     }
-	++needs_check;
+	setNeedsCheck();
 }
 
 
@@ -1835,6 +1849,20 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                 }
             }
            locals.push_back(newp);
+        }
+    }
+    // a list has many parameters but the list class does not.
+    // nevertheless, the parameters and dependencies still need to be setup.
+    if (_type == "LIST") {
+        for (unsigned int i=0; i<parameters.size(); ++i) {
+            parameters[i].real_name = parameters[i].val.sValue;
+            MachineInstance *m = lookup(parameters[i].real_name);
+            if(m) {
+                DBG_M_INITIALISATION << " found " << m->getName() << "\n";
+                m->addDependancy(this);
+                listenTo(m);
+            }
+            parameters[i].machine = m;
         }
     }
 	// TBD check the parameter types
@@ -2086,7 +2114,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 				return;
 			}
 		}
-		++needs_check;
+		setNeedsCheck();
 	    // try the current instance ofthe machine, then the machine class and finally the global symbols
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
         Value &prev_value = properties.lookup(property.c_str());
@@ -2168,7 +2196,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 		std::set<MachineInstance *>::iterator d_iter = depends.begin();
 		while (d_iter != depends.end()) {
 			MachineInstance *dep = *d_iter++;
-			++dep->needs_check; // make sure dependant machines update when a property changes
+			dep->setNeedsCheck(); // make sure dependant machines update when a property changes
             //if (changed) {
             //    Message *msg = new Message("property_change");
             //    send(msg, dep);
