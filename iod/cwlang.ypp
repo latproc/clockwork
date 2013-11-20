@@ -1073,6 +1073,10 @@ SYMBOL {
     DBG_PARSER << ", " << $3;
     current_name_list.push_back($3);
 }
+| ANY {
+    DBG_PARSER << ", ANY";
+    current_name_list.push_back("ANY");
+}
 ;
 
 transition_entry:

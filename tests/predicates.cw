@@ -29,6 +29,7 @@ PuzzleRow MACHINE {
         IF (cell1 IS blank) { cell1.contents := 1; }
         ELSE { IF (cell2 IS blank) { cell2.contents := 1; } }
     }
+    
 }
 Puzzle MACHINE {
     row1 PuzzleRow;
@@ -40,6 +41,19 @@ Puzzle MACHINE {
     ENTER solved { LOG "Puzzle solved"; }
 }
 puzzle Puzzle;
+
+TransitionTest  MACHINE {
+    a STATE;
+    b STATE;
+    c STATE;
+    init INITIAL;
+    ready STATE;
+
+    COMMAND log { LOG "transitioning to working" }
+
+    TRANSITION ANY TO ready USING log;
+}
+tt TransitionTest;
 
 Test01 MACHINE {
     a FLAG;
