@@ -681,3 +681,7 @@ bool Value::asInteger(long &x) const {
 	return false;
 }
 
+std::ostream &DynamicValue::operator<<(std::ostream &out ) const {
+    return out << "<dynamic value>";
+}
+std::ostream &operator<<(std::ostream &out, const DynamicValue &val) { return val.operator<<(out); }
