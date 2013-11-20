@@ -13,6 +13,33 @@ Sample MACHINE {
 }
 sample Sample;
 
+PuzzleCell MACHINE { OPTION contents 0; found WHEN contents != 0; blank DEFAULT; }
+PuzzleRow MACHINE {
+    cell1 PuzzleCell;
+    cell2 PuzzleCell;
+    
+    row LIST cell1, cell2;
+
+    working WHEN SELF IS unsolved AND TIMER>10;
+    unsolved WHEN ANY row ARE blank;
+    solved WHEN ALL row ARE found;
+    
+    ENTER working {
+        LOG "working";
+        IF (cell1 IS blank) { cell1.contents := 1; }
+        ELSE { IF (cell2 IS blank) { cell2.contents := 1; } }
+    }
+}
+Puzzle MACHINE {
+    row1 PuzzleRow;
+    row2 PuzzleRow;
+    rows LIST row1, row2;
+    
+    solved WHEN ALL rows ARE solved;
+    unsolved DEFAULT;
+    ENTER solved { LOG "Puzzle solved"; }
+}
+puzzle Puzzle;
 
 Test01 MACHINE {
     a FLAG;

@@ -113,7 +113,7 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     
     // clauses like (machine.TIMER >= 10)
     if (left_p && left_p->entry.kind == Value::t_symbol && left_p->entry.sValue == "TIMER" && right_p) {
-        DBG_MSG << "schedule timer event for entry " <<  left_p->entry << "\n";
+        //DBG_MSG << "schedule timer event for entry " <<  left_p->entry << "\n";
         if (right_p->entry.kind == Value::t_symbol && target->getValue(right_p->entry.sValue).asInteger(current_time))
             ;
         else if (right_p->entry.asInteger(scheduled_time))
@@ -378,8 +378,14 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
              */
 		}
 	}
-    else if (v->kind == Value::t_dynamic)
-        std::cout << " resolved a dynamic value\n";
+    else if (v->kind == Value::t_dynamic) {
+        DynamicValue *dv = v->dynamicValue();
+        if (dv) {
+            dv->operator()(m);
+            return dv->lastResult();
+        }
+        return &SymbolTable::False;
+    }
 	return v;
 }
 

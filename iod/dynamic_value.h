@@ -34,43 +34,54 @@ public:
     virtual ~DynamicValue() {}
     virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    Value *lastResult() { return &last_result; }
+protected:
+    Value last_result;
 };
+std::ostream &operator<<(std::ostream &, const DynamicValue &);
 
 class AnyInValue : public DynamicValue {
 public:
-    AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
+    AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
     virtual ~AnyInValue() {}
-    virtual Value operator()();
+    virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
     
 private:
     std::string state;
-    std::string machine_list;
+    std::string machine_list_name;
+    MachineInstance *machine_list;
 };
 
 class AllInValue : public DynamicValue {
 public:
-    AllInValue(const char *state_str, const char *list) : state(state_str), machine_list(list) {}
+    AllInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0) {}
     virtual ~AllInValue() {}
-    virtual Value operator()();
+    virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
     
 private:
     std::string state;
-    std::string machine_list;
+    std::string machine_list_name;
+    MachineInstance *machine_list;
 };
 
 
 class CountValue : public DynamicValue {
 public:
-    CountValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
+    CountValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
     virtual ~CountValue() {}
-    virtual Value operator()();
+    virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
     
 private:
     std::string state;
-    std::string machine_list;
+    std::string machine_list_name;
+    MachineInstance *machine_list;
 };
 
 class IncludesValue : public DynamicValue {
@@ -79,10 +90,9 @@ public:
     virtual ~IncludesValue() {}
     virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
     
 private:
-    virtual Value operator()();
-
     std::string entry_name;
     std::string machine_list_name;
     MachineInstance *machine_list;
@@ -92,9 +102,10 @@ class BitsetValue : public DynamicValue {
 public:
     BitsetValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
     virtual ~BitsetValue() {}
-    virtual Value operator()();
+    virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
-    
+    virtual std::ostream &operator<<(std::ostream &) const;
+   
 private:
     std::string state;
     std::string machine_list;

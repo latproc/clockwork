@@ -59,6 +59,11 @@ Value resolve(Predicate *p, MachineInstance *m) {
 			}
 		}
 	}
+    else if (v.kind == Value::t_dynamic) {
+        DynamicValue *dv = v.dynamicValue();
+        if (dv) return dv->operator()(m);
+        return false;
+    }
 	return v;
 }
 

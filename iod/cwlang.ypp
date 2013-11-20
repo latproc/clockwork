@@ -492,24 +492,6 @@ value {
 | expression MATCHES PATTERN {
     Value pat($3, Value::t_string);
     $$ = new Predicate($1, opMatch, new Predicate( pat )); }
-/*
-| ANY SYMBOL ARE SYMBOL {
-    Value val(new AnyInValue($4, $2));
-    $$ = new Predicate(0, opAny, new Predicate(val) ); }
-| ALL SYMBOL ARE SYMBOL {
-   Value val(new AllInValue($4, $2));
-    $$ = new Predicate(0, opAll, new Predicate(val)); }
-| COUNT SYMBOL FROM SYMBOL {
-    Value val(new CountValue($2,$4));
-    $$ = new Predicate(0, opCount, new Predicate(val) ); }
-| SYMBOL INCLUDES SYMBOL {
-    Value val(new IncludesValue($3, $1));
-    $$ = new Predicate(0, opIncludes, new Predicate(val) );
-}
-| BITSET FROM SYMBOL SYMBOL {
-    Value val(new BitsetValue($4,$3));
-    $$ = new Predicate(0, opCount, new Predicate(val) ); }
-*/
 ;
 
 value:

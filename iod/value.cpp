@@ -617,9 +617,8 @@ std::ostream &Value::operator<<(std::ostream &out) const {
             out << ((bValue) ? "true" : "false");
         }
             break;
-		case t_dynamic: {
-			out << "<dynamic value>";
-		}
+		case t_dynamic:
+            if (dyn_value) out << *dyn_value; else out << "<null>";
             break;
     }
     return out;
