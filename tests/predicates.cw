@@ -38,7 +38,10 @@ Puzzle MACHINE {
     
     solved WHEN ALL rows ARE solved;
     unsolved DEFAULT;
-    ENTER solved { LOG "Puzzle solved"; }
+    ENTER solved { 
+        LOG "Puzzle solved"; 
+        COPY PROPERTIES FROM row2.cell2 TO SELF;
+    }
 }
 puzzle Puzzle;
 

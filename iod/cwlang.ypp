@@ -30,6 +30,7 @@
 #include "IODCommands.h"
 #include "IncludeAction.h"
 #include "dynamic_value.h"
+#include "CopyPropertiesAction.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -98,7 +99,7 @@ struct Subcondition {
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
-%token INCLUDES INCLUDE CREATE BITSET
+%token INCLUDES INCLUDE CREATE BITSET PROPERTIES
 
 %union {
 	int iVal;
@@ -799,6 +800,11 @@ SET SYMBOL TO SYMBOL  {
 | REPLACE ALL PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ReplaceAllPatternActionTemplate($3, $5, $7);    
+}
+| COPY PROPERTIES FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new CopyPropertiesActionTemplate($4, $6);
+    
 }
 | LOG expression /* log message to stdout */ {
     if (current_action) current_actions->push_back(current_action);

@@ -168,6 +168,20 @@ bool SymbolTable::add(const std::string name, Value val, ReplaceMode replace_mod
 	}
 }
 
+void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
+    SymbolTableConstIterator iter = orig.st.begin();
+    while (iter != orig.st.end()) {
+        if (replace_mode != ST_REPLACE && st.find((*iter).first) != orig.st.end()) {  // skip entries we already have if not replace mode
+            ++iter; continue;
+        }
+        const std::string &name = (*iter).first;
+        if(name != "NAME" && name != "STATE") { // these reserved words cannot be replaces en mass
+            st[(*iter).first] = (*iter).second;
+        }
+        iter++;
+    }
+}
+
 bool SymbolTable::exists(const char *name) {
     return st.find(name) != st.end();
 }

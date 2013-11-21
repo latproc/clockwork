@@ -71,6 +71,7 @@ NOT                 return NOT;
 ON					return ON;
 OPTION              return OPTION;
 OR                  return OR;
+PROPERTIES          return PROPERTIES;
 PROPERTY			return PROPERTY;
 READONLY            return READONLY;
 READWRITE          return READWRITE;

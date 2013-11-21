@@ -40,6 +40,7 @@ public:
 	
     bool add(const char *name, Value val, ReplaceMode replace_mode = ST_REPLACE);
     bool add(const std::string name, Value val, ReplaceMode replace_mode = ST_REPLACE);
+    void add(const SymbolTable &orig, ReplaceMode replace_mode = ST_REPLACE); // load symbols optionally with replacement
     Value &lookup(const char *name);
 	size_t count(const char *name) { return st.count(name); }
     bool exists(const char *name);
