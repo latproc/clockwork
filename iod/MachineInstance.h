@@ -392,6 +392,7 @@ private:
 	friend struct IODCommandToggle;
     friend struct IODCommandSetStatus;
     friend class ConditionHandler;
+    friend class SetListEntriesAction;
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);

@@ -69,7 +69,13 @@ TransitionTest  MACHINE {
 }
 tt TransitionTest;
 
-Test01 MACHINE {
+out1 FLAG;
+out2 FLAG;
+out3 FLAG;
+out4 FLAG;
+map LIST out1, out2, out3, out4;
+
+Test01 MACHINE result_map {
     a FLAG;
     b FLAG;
     c FLAG;
@@ -110,17 +116,23 @@ Test01 MACHINE {
         n := COUNT off FROM flags;
         LOG "There are " + n + " flags off";
         
-        val := BITSET FROM flags on;
+        val := BITSET FROM flags; # WITH STATES on=1,off=0    or  WITH PROPERTIES r:8,g:8,b:8
         LOG "on flags have value " + val;
+        
+        SET ENTRIES OF result_map FROM BITSET val; # WITH STATES on=1,off=0
+        #SET PROPERTIES OF ENTRIES OF flags FROM BITSET val WITH PROPERTIES val:16;
+        
+        # the following ideas aren't implemented yet and will probably change form 
         
         CREATE test WITH COPY 2 FROM flags;
         LOG "copied " + test + " from " + flags;
         
         CREATE test WITH TAKE 2 FROM flags;
         LOG "took " + test + " from " + flags;
+
     }
 }
-test01 Test01;
+test01 Test01 map;
 
 Test02 MACHINE {
     true WHEN FALSE;

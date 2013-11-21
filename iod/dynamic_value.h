@@ -100,7 +100,7 @@ private:
 
 class BitsetValue : public DynamicValue {
 public:
-    BitsetValue(const char *state_str, const char *list) : state(state_str), machine_list(list)  { }
+    BitsetValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
     virtual ~BitsetValue() {}
     virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
@@ -108,7 +108,8 @@ public:
    
 private:
     std::string state;
-    std::string machine_list;
+    std::string machine_list_name;
+    MachineInstance *machine_list;
 };
 
 

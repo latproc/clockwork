@@ -25,6 +25,7 @@
 #include <string>
 #include <iostream>
 #include <list>
+#include <set>
 #include "value.h"
 
 class MachineInstance;
@@ -67,6 +68,7 @@ public:
 private:
     std::map<std::string, Value>st;
     static SymbolTable *keywords;
+    static std::set<std::string> *reserved;
     static bool initialised;
     static std::list<SymbolTable *>symbol_tables;
 };

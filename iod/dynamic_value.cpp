@@ -97,7 +97,19 @@ Value IncludesValue::operator()(MachineInstance *mi) {
 }
 
 Value BitsetValue::operator()(MachineInstance *mi) {
-    last_result = SymbolTable::Null;
+    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+    if (!machine_list)  { last_result = false; return last_result; }
+    unsigned long val = 0;
+    for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+        MachineInstance *entry = machine_list->parameters[i].machine;
+        val *= 2;
+        if (entry) {
+            if (state == entry->getCurrentStateString())  {
+                val += 1;
+            }
+        }
+    }
+    last_result = val;
     return last_result;
 }
 

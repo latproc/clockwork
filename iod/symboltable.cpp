@@ -36,6 +36,7 @@ Value SymbolTable::Zero(0);
 
 bool SymbolTable::initialised = false;
 SymbolTable *SymbolTable::keywords = 0;
+std::set<std::string> *SymbolTable::reserved = 0;
 
 SymbolTable::SymbolTable() {
     if (!initialised) {
@@ -51,6 +52,12 @@ SymbolTable::SymbolTable() {
         keywords->add("YEAR", 0L);
         keywords->add("TIMEZONE", Value("",Value::t_string));
         keywords->add("TIMESTAMP", Value("",Value::t_string));
+        reserved = new std::set<std::string>;
+        reserved->insert("NAME");
+        reserved->insert("PERSISTENT");
+        reserved->insert("tab");
+        reserved->insert("STATE");
+        reserved->insert("PERSISTENT");
     }
 }
 

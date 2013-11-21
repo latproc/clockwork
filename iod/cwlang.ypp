@@ -31,6 +31,7 @@
 #include "IncludeAction.h"
 #include "dynamic_value.h"
 #include "CopyPropertiesAction.h"
+#include "SetListEntriesAction.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -99,7 +100,7 @@ struct Subcondition {
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
-%token INCLUDES INCLUDE CREATE BITSET PROPERTIES
+%token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES OF
 
 %union {
 	int iVal;
@@ -520,8 +521,14 @@ INTEGER   {
 | SYMBOL INCLUDES SYMBOL {
     $$ = new Value(new IncludesValue($3, $1));
 }
-| BITSET FROM SYMBOL SYMBOL {
-    $$ = new Value(new BitsetValue($4,$3));
+| BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
+    $$ = new Value(new BitsetValue($8,$5));
+}
+| BITSET FROM SYMBOL {
+    $$ = new Value(new BitsetValue("on",$3));
+}
+| BITSET FROM SYMBOL WITH STATES SYMBOL {
+    $$ = new Value(new BitsetValue($6,$3));
 }
 
 command:
@@ -792,6 +799,10 @@ SET SYMBOL TO SYMBOL  {
 | INCLUDE SYMBOL IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new IncludeActionTemplate($4, $2);
+}
+| SET ENTRIES OF SYMBOL FROM BITSET SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetListEntriesActionTemplate($7, $4);
 }
 | REPLACE PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);

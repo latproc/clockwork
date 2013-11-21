@@ -129,6 +129,10 @@ Sharing properties or data
 Events with data
 \end_layout
 
+\begin_layout Itemize
+Copying properties en mass
+\end_layout
+
 \begin_layout Subsection
 Features
 \end_layout
@@ -386,12 +390,20 @@ Sets can be used in expressions in the following ways
 \end_layout
 
 \begin_layout Itemize
-ANY IN set_name ARE | IS state_name/value # returns true if any of the items
- in the set are in the state given or have the value given
+ANY IN set_name ARE | IS state_name # returns true if any of the items in
+ the set are in the state given
+\end_layout
+
+\begin_layout Itemize
+ANY PROPERTY property IN set_name ARE | IS value
 \end_layout
 
 \begin_layout Itemize
 ALL IN set_name ARE | IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+ALL PROPERTY property_name IN set_name ARE | IS state_name/value
 \end_layout
 
 \begin_layout Itemize
@@ -400,7 +412,14 @@ COUNT state_name FROM set_name # counts the number of items in the set that
 \end_layout
 
 \begin_layout Itemize
-BITSET FROM set_name state_name # returns a bitset that represents 
+COUNT WHERE expression FROM set_name # counts the number of items in the
+ set where the expression returns true 
+\end_layout
+
+\begin_layout Itemize
+BITSET FROM set_name state_name # returns a bitset that represents the an
+ on/off value for the given state name.
+ Further examples use variable values..
 \end_layout
 
 \begin_layout Itemize
@@ -504,6 +523,152 @@ ENTER zero { LOG
 \end_inset
 
 ; SEND forward TO s }
+\end_layout
+
+\begin_layout Subsection
+Data
+\end_layout
+
+\begin_layout Standard
+Machines currently have an unstructured set of properties as the only method
+ of handling data.
+ In the short term this won't change but we are starting to add some tools
+ to help manupulate data.
+ For example
+\end_layout
+
+\begin_layout LyX-Code
+COPY PROPERTIES FROM machine1 TO machine2
+\end_layout
+
+\begin_layout Standard
+Note that this statement does not copy the reserved properties NAME and
+ STATE.
+\end_layout
+
+\begin_layout Standard
+It is convenient to be able to save and restore the state of an entire list
+ of objects.
+ One mechanism to support this is the bit functions; a list of objects can
+ be packed into a bitmap, represented in the language by a property value.
+ For example, a LIST may contain a list of FLAG machines, each of which
+ have a state of on or off.
+ This list can be mapped to a an array of bits where each bit records the
+ state of a machine.
+ In theory, a list can be of arbitrary length and so can a BITMAP, in practice,
+ we expect that many algorithms only need a small list and so such a list
+ may be able to be packed into a single integer property value.
+ BITSET values are packed structures that can pack lists with a limited
+ number of items (currently 32) [and possibly with the advantage that the
+ items of a bitset are still addressible].
+\end_layout
+
+\begin_layout Standard
+Further, a BITSET can be generated from properties as well as states in
+ either case, a notation is required that provides a way to describe the
+ way that bitsets are packed.
+ 
+\end_layout
+
+\begin_layout Standard
+The state of list entries can be converted to a bitset and back using statements
+ like the following
+\end_layout
+
+\begin_layout LyX-Code
+my_flags := BITSET FROM ENTRIES OF list WITH STATES off,on
+\end_layout
+
+\begin_layout LyX-Code
+SET ENTRIES OF list FROM BITSET my_flags WITH STATES [on=1,off=0]
+\end_layout
+
+\begin_layout Standard
+Equivalent forms exist that can map a set or properties rather than states
+\end_layout
+
+\begin_layout LyX-Code
+val := BITSET FROM ENTRIES OF list WITH PROPERTY a;
+\end_layout
+
+\begin_layout LyX-Code
+SET PROPERTIES OF ENTRIES OF list FROM BITSET val WITH PROPERTY [a:1];
+\end_layout
+
+\begin_layout Standard
+Both the state and property forms of these statements can be abbreviated
+ by removal of the 'ENTRIES OF' clauses:
+\end_layout
+
+\begin_layout LyX-Code
+my_flags := BITSET FROM list WITH STATES off,on
+\end_layout
+
+\begin_layout LyX-Code
+SET list FROM BITSET my_flags WITH STATES [on=1,off=0]
+\end_layout
+
+\begin_layout Standard
+In both cases, the WITH STATES clauses can also be removed if the specification
+ is using a list of flags:
+\end_layout
+
+\begin_layout LyX-Code
+my_flags := BITSET FROM list;
+\end_layout
+
+\begin_layout LyX-Code
+SET list FROM BITSET my_flags;
+\end_layout
+
+\begin_layout Subsubsection
+Bit packing notation
+\end_layout
+
+\begin_layout Standard
+The programmer can control how states or properties are mapped into a bitmap;
+ a subset of states may be used and multiple bits per state or property
+ may also be used.
+ The notation is
+\end_layout
+
+\begin_layout LyX-Code
+specification = specifier | '[' specifier [ ',' specifier ] ']'
+\end_layout
+
+\begin_layout LyX-Code
+specifier = name [ '=' value ] [ ':' size ]
+\end_layout
+
+\begin_layout Standard
+The size indicate sets the number of bits to be used for each value, if
+ it is not given, the size will be the smallest number of bits needs to
+ hold the largest value in the specification.
+ The name is the name of the state or the name of the property, depending
+ on the statement in which the specification is being used.
+ The value is a non-negative integer (0,1,2,..) giving the bit pattern to
+ be used to represent each state.
+ Note that in this specification, there is currently no way to nominate
+ whether a big-endian or little endian packing of the values.
+\end_layout
+
+\begin_layout Standard
+For example, 
+\end_layout
+
+\begin_layout Description
+on=1,off=0 indicates that state or property 'on' will be represented by
+ one and state or property 'off' will be represented by zero.
+ 
+\end_layout
+
+\begin_layout Description
+off,on has the same effect; since no value is given, it defaults to 0, 1
+ etc and all states or properties not represented in the list map to zero
+\end_layout
+
+\begin_layout Description
+on=1:1,off=0:1 is the complete specification, avoiding the use of defaults
 \end_layout
 
 \begin_layout Subsection
