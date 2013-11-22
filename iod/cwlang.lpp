@@ -88,6 +88,7 @@ SELECT              return SELECT;
 SEND                return SEND;
 SET                 return SET;
 SHUTDOWN			return SHUTDOWN;
+SORT                return SORT;
 STATE               return STATE;
 STATES              return STATES;
 STRING              return STRINGTYPE;

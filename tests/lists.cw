@@ -37,3 +37,18 @@ Controller MACHINE outputs {
 }
 controller Controller lights;
 
+one VARIABLE 1;
+two VARIABLE 2;
+three VARIABLE 3;
+four VARIABLE 4;
+
+numbers LIST two,four,three,one;
+
+Sorter MACHINE input {
+
+ENTER INIT { SORT input }
+
+}
+sorter Sorter numbers;
+
+

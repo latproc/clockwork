@@ -41,7 +41,7 @@ SetListEntriesAction::SetListEntriesAction() : dest_machine(0) {
 }
 
 std::ostream &SetListEntriesAction::operator<<(std::ostream &out) const {
-	return out << "Copy Properties Action " << source << " to " << dest << "\n";
+	return out << "Set List Entires Action " << source << " to " << dest << "\n";
 }
 
 Action::Status SetListEntriesAction::run() {
