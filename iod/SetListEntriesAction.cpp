@@ -56,12 +56,10 @@ Action::Status SetListEntriesAction::run() {
             unsigned long bitmap = (unsigned long) val;
             for (size_t i=dest_machine->parameters.size(); i>0; --i) {
                 MachineInstance *entry = dest_machine->parameters[i-1].machine;
-                if (entry && entry->_type == "FLAG") {
-                    if (bitmap % 2)
-                        entry->setState("on");
-                    else
-                        entry->setState("off");
-                }
+                if (bitmap % 2)
+                    entry->setState("on");
+                else
+                    entry->setState("off");
                 bitmap /= 2;
             }
             
