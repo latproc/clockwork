@@ -1558,6 +1558,10 @@ void MachineInstance::enable() {
     for (unsigned int i = 0; i<locals.size(); ++i) {
         locals[i].machine->enable();
     }
+    if (_type == "LIST")
+        for (unsigned int i = 0; i<parameters.size(); ++i) {
+            if (parameters[i].machine) parameters[i].machine->enable();
+        }
     setInitialState();
 	setNeedsCheck();
 	// if any dependent machines are already enabled, make sure they know we are awake
@@ -1582,6 +1586,10 @@ void MachineInstance::disable() {
         io_interface->turnOff();
     }
 	gettimeofday(&disabled_time, 0); 
+    if (_type == "LIST")
+        for (unsigned int i = 0; i<parameters.size(); ++i) {
+            if (parameters[i].machine) parameters[i].machine->disable();
+        }
 	for (unsigned int i = 0; i<locals.size(); ++i) {
 		locals[i].machine->disable();
 	}

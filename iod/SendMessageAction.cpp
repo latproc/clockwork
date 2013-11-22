@@ -37,6 +37,12 @@ Action::Status SendMessageAction::run() {
 	if (!target_machine) target_machine = owner->lookup(target.get());
 	if (target_machine) {
 		owner->send(new Message(message.get()), target_machine);
+        if (target_machine->_type == "LIST") {
+            for (unsigned int i=0; i<target_machine->parameters.size(); ++i) {
+                MachineInstance *entry = target_machine->parameters[i].machine;
+                if (entry) owner->send(new Message(message.get()), entry);
+            }
+        }
 	}
 	else {
 		NB_MSG << *this << " Error: cannot find target machine " << target.get() << "\n"; 
