@@ -722,6 +722,7 @@ extern CommandList commandList;
 ec_pdo_entry_info_t *c_entries = 0;
 ec_pdo_info_t *c_pdos = 0;
 ec_sync_info_t *c_syncs = 0;
+EntryDetails *c_entry_details;
 
 
 cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool reconfigure)
@@ -753,6 +754,8 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 		const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
 		c_entries = (ec_pdo_entry_info_t *) malloc(c_entries_size);
 		memset(c_entries, 0, c_entries_size);
+        
+		c_entry_details = new EntryDetails[estimated_max_entries];
         
 		const int c_pdos_size = sizeof(ec_pdo_info_t) * estimated_max_pdos;
 		c_pdos = (ec_pdo_info_t *) malloc(c_pdos_size);
@@ -813,6 +816,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 							c_entries[k + entry_pos].index = entry.index;
 							c_entries[k + entry_pos].subindex = entry.subindex;
 							c_entries[k + entry_pos].bit_length = entry.bit_length;
+							c_entry_details[k + entry_pos].name = (const char *)entry.name;
 
 							cJSON_AddNumberToObject(json_entry, "index", entry.index);
 							cJSON_AddStringToObject(json_entry, "name", (const char *)entry.name);
@@ -851,12 +855,15 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 		module->pdos = c_pdos;
 		module->pdo_entries = c_entries;
 		module->sync_count = slave.sync_count;
+		module->entry_details = c_entry_details;
+		module->num_entries = total_entries;
 		if (!ECInterface::instance()->addModule(module, false)) delete module; // module may be already registered
 	}
 	else {
 		free(c_entries);
 		free(c_pdos);
 		free(c_syncs);
+		delete c_entry_details;
 	}
 	
 	//std::stringstream result;

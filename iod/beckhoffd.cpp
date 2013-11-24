@@ -483,7 +483,7 @@ int main (int argc, char const *argv[])
 	statistics = new Statistics;
 	ControlSystemMachine machine;
     Logger::instance()->setLevel(Logger::Debug);
-	ECInterface::FREQUENCY=1000;
+	ECInterface::FREQUENCY=5000;
 
 #ifndef EC_SIMULATOR
 	collectSlaveConfig(true); // load slave information from the EtherCAT master and configure the domain
@@ -499,7 +499,7 @@ int main (int argc, char const *argv[])
 		// Note: the use of pause here introduces a random variation of up to 500ns
 		struct timeval start_t, end_t;
 		gettimeofday(&start_t, 0);
-		pause();
+//		pause();
 		gettimeofday(&end_t, 0);
 		long delta = get_diff_in_microsecs(&end_t, &start_t);
 		if (delta < 100) usleep(100-delta);

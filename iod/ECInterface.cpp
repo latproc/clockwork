@@ -100,7 +100,7 @@ static ec_pdo_entry_reg_t domain1_regs[] =
 
 std::list<ECModule *> ECInterface::modules;
 
-ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0) {
+ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), entry_details(0) {
 	offsets = new unsigned int[64];
 	bit_positions = new unsigned int[64];
     slave_config = 0;
@@ -114,6 +114,13 @@ ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0) {
     pdo_entries = 0;
     pdos = 0;
     syncs = 0;
+}
+
+ECModule::~ECModule() {
+	if (pdo_entries) { free(pdo_entries); pdo_entries = 0; }
+	if (pdos) { free(pdos); pdos = 0; }
+	if (syncs) { free(syncs); syncs = 0; }
+	delete entry_details; entry_details = 0;
 }
 
 bool ECModule::online() {

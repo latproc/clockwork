@@ -27,10 +27,15 @@
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 
+class EntryDetails {
+public:
+	std::string name;
+};
 
 class ECModule {
 public:
 	ECModule();
+	~ECModule();
 	bool ecrtMasterSlaveConfig(ec_master_t *master);
 	bool ecrtSlaveConfigPdos();
 	bool online();
@@ -51,6 +56,8 @@ public:
 	ec_pdo_info_t *pdos;
 	ec_sync_info_t *syncs;
 	std::string name;
+	unsigned int num_entries;
+	EntryDetails *entry_details;
 };
 
 #else

@@ -330,23 +330,25 @@ void generateIOComponentModules() {
 					}
 				
 					unsigned int sm_idx = 0;
-					unsigned int pdo_pos = pdo_position;
+					unsigned int pdo_pos = 0;
 					unsigned int bit_pos = 0;
 					unsigned int pdo_idx = 0;
 					unsigned int entry_idx = 0;
 
-					if (module->sync_count>0) {
-						while (sm_idx < module->sync_count) {
-							int num_pdos = module->syncs[sm_idx].n_pdos;
-							if (pdo_pos < num_pdos) {
-								pdo_idx = pdo_pos;
-								break;
-							}
-							else 
-								pdo_pos -= num_pdos;
-							++sm_idx;
+					while (sm_idx < module->sync_count) {
+						unsigned int i = 0;
+						for (i = 0; i<module->syncs[sm_idx].n_pdos; ++i) {
+							if (pdo_pos == pdo_position && module->syncs[sm_idx].pdos[pdo_pos].n_entries) break;
+							pdo_pos += 1;
 						}
+						if (i<module->syncs[sm_idx].n_pdos) break;
+						++sm_idx;
 					}
+					if (sm_idx == module->sync_count) {
+						std::cerr << "No entry " << pdo_position << " on module " << module_position << "\n";
+						continue; // could not find this device
+					}
+					pdo_idx = pdo_pos;
 					if (m->parameters.size() >= 3)
 						entry_idx = m->parameters[2].val.iValue;
 					unsigned int direction = module->syncs[sm_idx].dir;

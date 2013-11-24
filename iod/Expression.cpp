@@ -173,7 +173,7 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
         trigger->release();
     }
     else if (scheduled_time > 0) {
-        DBG_MSG << "no event scheduled for " << ( (target)?target->getName() : "unknown" ) << ".  over time\n";
+        DBG_SCHEDULER << "no event scheduled for " << ( (target)?target->getName() : "unknown" ) << ".  over time\n";
     }
     if (right_p) right_p->scheduleTimerEvents(target);
 }
@@ -183,7 +183,7 @@ void Predicate::clearTimerEvents(MachineInstance *target) // clear all timer eve
 	if (left_p) {
         left_p->clearTimerEvents(target);
         if (entry.kind == Value::t_symbol && (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
-            DBG_MSG << "clear timer event for entry " << entry << "\n";
+            DBG_SCHEDULER << "clear timer event for entry " << entry << "\n";
         }
     }
     if (right_p) right_p->clearTimerEvents(target);
