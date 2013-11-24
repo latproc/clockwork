@@ -83,9 +83,6 @@ boost::condition_variable_any ecat_polltime;
 typedef std::map<std::string, IOComponent*> DeviceList;
 DeviceList devices;
 
-//IOComponent* lookup_device(const std::string name);
-void checkInputs();
-
 IOComponent* lookup_device(const std::string name) {
     DeviceList::iterator device_iter = devices.find(name);
     if (device_iter != devices.end()) 
@@ -96,6 +93,7 @@ IOComponent* lookup_device(const std::string name) {
 #ifdef EC_SIMULATOR
 
 // in a simulated environment, we provide a way to wire components together
+void checkInputs();
 
 typedef std::list<std::string> StringList;
 std::map<std::string, StringList> wiring;
@@ -282,187 +280,14 @@ void ProcessingThread::operator()()  {
 	std::cout << "processing done\n";
 }
 
-
-struct EtherCATThread {
-    void operator()();
-    EtherCATThread(ControlSystemMachine &m) :machine(m), user_alarms(0), done(false), starting(true) {}
-    void stop() { program_done = true; }
-    bool stopped() { return done; }
-	ControlSystemMachine &machine;
-	unsigned int user_alarms;
-	bool done;
-    bool starting;
-};
-
-void EtherCATThread::operator()() {
-
-	unsigned long sync = ECInterface::sig_alarms;
-	boost::mutex end_cycle_mutex;
-	boost::condition_variable_any end_cycle_cond;
-	boost::system_time start_time = boost::get_system_time();
-	boost::posix_time::microseconds cycle_time(1000000/ECInterface::FREQUENCY);
-    while (!program_done) {
-		starting = !machine.connected();
-		{
-			//std::cout << "waiting..." << std::flush;
-		    //boost::mutex::scoped_lock lock(ecat_mutex);
-			//ecat_polltime.wait(ecat_mutex);
-			//std::cout << "polltime";
-			//if (!starting) pause();
-			if (starting) usleep(2000);
-		}
-			
-//		if (!program_done && (starting || sync < ECInterface::sig_alarms)) {
-			sync = ECInterface::sig_alarms;
-			// time to wait to give the io processing task time to respond 
-		    ECInterface::instance()->collectState();
-			IOComponent::processAll();
-   			//ECInterface::instance()->sendUpdates();
-
-			//std::cout << "signaling..." << std::flush;
-			io_mutex.lock();
-			io_updated.notify_one();
-			io_mutex.unlock();
-
-#if 0
-			boost::system_time const timeout=start_time + boost::posix_time::microseconds(500000/ECInterface::FREQUENCY);
-			start_time += cycle_time;
-
-			if (machine.connected()) {
-				//std::cout << "..sleeping.." << std::flush;
-				for(;;) {
-					try {
-						boost::mutex::scoped_lock lock(model_mutex);
-			            if (!model_updated.timed_wait(model_mutex, timeout)) break;
-					
-					}
-					catch (boost::thread_resource_error e) {
-	   	         		std::cerr << e.what() << "\n";
-					}
-				}
-			}
-   			ECInterface::instance()->sendUpdates();
-			{
-			boost::mutex::scoped_lock lock(end_cycle_mutex);
-            while (end_cycle_cond.timed_wait(end_cycle_mutex, start_time)) ;
-			}
-#else
-			{
-				boost::mutex::scoped_lock lock(model_mutex);
-            	model_updated.wait(model_mutex);
-			}
-   			ECInterface::instance()->sendUpdates();
-			boost::system_time const timeout=boost::get_system_time() + boost::posix_time::microseconds(500);
-			{
-				boost::mutex::scoped_lock lock(end_cycle_mutex);
-            	while (end_cycle_cond.timed_wait(end_cycle_mutex, start_time)) ;
-			}
-#endif
-			//std::cout << "..done..\n" << std::flush;
-//		}
-    }
-	//ECInterface::instance()->stop();
-	std::cerr << "EtherCAT Thread saw processing done\n";
-	done = true;
-}
-
-int main (int argc, char const *argv[])
-{
-	Logger::instance();
-	ControlSystemMachine machine;
-
-    Logger::instance()->setLevel(Logger::Debug);
-	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
-
-	load_debug_config();
-
-#if 0
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PREDICATES);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_INITIALISATION);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_ACTIONS);
-	//std::cout << DebugExtra::instance()->DEBUG_PREDICATES << "\n";
-	//assert (!LogState::instance()->includes(DebugExtra::instance()->DEBUG_PREDICATES));
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_SCHEDULER);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PROPERTIES);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_STATECHANGES);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_AUTOSTATES);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
-#endif
-	
-	IODCommandListJSON::no_display.insert("tab");
-	IODCommandListJSON::no_display.insert("type");
-	IODCommandListJSON::no_display.insert("name");
-	IODCommandListJSON::no_display.insert("image");
-	IODCommandListJSON::no_display.insert("class");
-	IODCommandListJSON::no_display.insert("state");
-	IODCommandListJSON::no_display.insert("export");
-	IODCommandListJSON::no_display.insert("startup_enabled");
-	IODCommandListJSON::no_display.insert("NAME");
-	IODCommandListJSON::no_display.insert("STATE");
-	IODCommandListJSON::no_display.insert("PERSISTENT");
-	
-	statistics = new Statistics;
-	int load_result = loadConfig(argc, argv);
-	if (load_result)
-		return load_result;
-    if (dependency_graph()) {
-		std::cout << "writing dependency graph to " << dependency_graph() << "\n";
-        std::ofstream graph(dependency_graph());
-        if (graph) {
-            graph << "digraph G {\n";
-            std::list<MachineInstance *>::iterator m_iter;
-            m_iter = MachineInstance::begin();
-            while (m_iter != MachineInstance::end()) {
-                MachineInstance *mi = *m_iter++;
-				if (!mi->depends.empty()) {
-                	BOOST_FOREACH(MachineInstance *dep, mi->depends) {
-                		graph << mi->getName() << " -> " << dep->getName() << ";\n";
-					}
-				}
-            }
-            graph << "}\n";
-        }
-        else {
-            std::cerr << "not able to open " << dependency_graph() << " for write\n";
-        }
-    }
-
-	if (test_only() ) {
-		const char *backup_file_name = "modbus_mappings.bak";
-		rename(modbus_map(), backup_file_name);
-		// export the modbus mappings and exit
-        std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
-        std::ofstream out(modbus_map());
-        if (!out) {
-            std::cerr << "not able to open " << modbus_map() << " for write\n";
-            return false;
-        }    
-        while (m_iter != MachineInstance::end()) {
-            (*m_iter)->exportModbusMapping(out);
-            m_iter++;
-        }    
-        out.close();
-
-		return load_result;
-	}
-	
-	ECInterface::FREQUENCY=500;
-
-#ifndef EC_SIMULATOR
-	collectSlaveConfig(true);
-	ECInterface::instance()->activate();
-#endif
-	ECInterface::instance()->start();
-
+void generateIOComponentModules() {
 	std::list<Output *> output_list;
 	{
 		boost::mutex::scoped_lock lock(thread_protection_mutex);
 
 		int remaining = machines.size();
 		std::cout << remaining << " Machines\n";
-		std::cout << "Linking POINTs to hardware\n";
+		std::cout << "Linking clockwork machines to hardware\n";
 		std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
 		while (iter != machines.end()) {
 			MachineInstance *m = (*iter).second; iter++;
@@ -589,25 +414,108 @@ int main (int argc, char const *argv[])
 			}
 			assert(remaining==0);
 		}
-		MachineInstance::displayAll();
+}
+
+int main (int argc, char const *argv[])
+{
+	Logger::instance();
+	ControlSystemMachine machine;
+
+    Logger::instance()->setLevel(Logger::Debug);
+	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
+
+	load_debug_config();
+
+#if 0
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PREDICATES);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_INITIALISATION);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_ACTIONS);
+	//std::cout << DebugExtra::instance()->DEBUG_PREDICATES << "\n";
+	//assert (!LogState::instance()->includes(DebugExtra::instance()->DEBUG_PREDICATES));
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_SCHEDULER);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PROPERTIES);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_STATECHANGES);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_AUTOSTATES);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
+#endif
+	
+	IODCommandListJSON::no_display.insert("tab");
+	IODCommandListJSON::no_display.insert("type");
+	IODCommandListJSON::no_display.insert("name");
+	IODCommandListJSON::no_display.insert("image");
+	IODCommandListJSON::no_display.insert("class");
+	IODCommandListJSON::no_display.insert("state");
+	IODCommandListJSON::no_display.insert("export");
+	IODCommandListJSON::no_display.insert("startup_enabled");
+	IODCommandListJSON::no_display.insert("NAME");
+	IODCommandListJSON::no_display.insert("STATE");
+	IODCommandListJSON::no_display.insert("PERSISTENT");
+	
+	statistics = new Statistics;
+	int load_result = loadConfig(argc, argv);
+	if (load_result)
+		return load_result;
+    if (dependency_graph()) {
+		std::cout << "writing dependency graph to " << dependency_graph() << "\n";
+        std::ofstream graph(dependency_graph());
+        if (graph) {
+            graph << "digraph G {\n";
+            std::list<MachineInstance *>::iterator m_iter;
+            m_iter = MachineInstance::begin();
+            while (m_iter != MachineInstance::end()) {
+                MachineInstance *mi = *m_iter++;
+				if (!mi->depends.empty()) {
+                	BOOST_FOREACH(MachineInstance *dep, mi->depends) {
+                		graph << mi->getName() << " -> " << dep->getName() << ";\n";
+					}
+				}
+            }
+            graph << "}\n";
+        }
+        else {
+            std::cerr << "not able to open " << dependency_graph() << " for write\n";
+        }
+    }
+
+	if (test_only() ) {
+		const char *backup_file_name = "modbus_mappings.bak";
+		rename(modbus_map(), backup_file_name);
+		// export the modbus mappings and exit
+        std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
+        std::ofstream out(modbus_map());
+        if (!out) {
+            std::cerr << "not able to open " << modbus_map() << " for write\n";
+            return false;
+        }    
+        while (m_iter != MachineInstance::end()) {
+            (*m_iter)->exportModbusMapping(out);
+            m_iter++;
+        }    
+        out.close();
+
+		return load_result;
+	}
+	
+	ECInterface::FREQUENCY=500;
+
+#ifndef EC_SIMULATOR
+	collectSlaveConfig(true);
+	ECInterface::instance()->activate();
+#endif
+	generateIOComponentModules();
+	MachineInstance::displayAll();
+	ECInterface::instance()->start();
+
 #ifdef EC_SIMULATOR
 		wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
-#endif
-#if 0
-		std::list<Output *>::const_iterator o_iter = output_list.begin();
-		while (o_iter != output_list.end()) {
-			Output *o = *o_iter++;
-			o->turnOff();
-		}
 #endif
 
 	std::cout << "-------- Initialising ---------\n";	
 	
 	initialise_machines();
 	setup_signals();
-
-	//EtherCATThread etherCATMonitor(machine);
-	//boost::thread etherCAT(boost::ref(etherCATMonitor));
 
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
@@ -617,16 +525,15 @@ int main (int argc, char const *argv[])
 	Statistic::add(cycle_delay_stat);
 	long delta, delta2;
 
-
 	// Inform the modbus interface we have started
 	load_debug_config();
 	ModbusAddress::message("STARTUP");
 
     ProcessingThread processMonitor(machine);
-	//boost::thread process(boost::ref(processMonitor));
+	//boost::thread process(boost::ref(processMonitor)); 
+	// do not start a thread, simply run this process directly
    	processMonitor();
     stateMonitor.stop();
-    //etherCAT.join();
     monitor.join();
 	return 0;
 }
