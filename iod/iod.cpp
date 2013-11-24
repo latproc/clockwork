@@ -42,7 +42,8 @@
 #endif
 
 #define __MAIN__
-#include "latprocc.h"
+//#include "latprocc.h"
+#include "MachineInstance.h"
 #include "options.h"
 #include <stdio.h>
 #include "Logger.h"

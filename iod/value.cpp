@@ -618,7 +618,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         }
             break;
 		case t_dynamic:
-            if (dyn_value) out << *dyn_value; else out << "<null>";
+            if (dyn_value) dyn_value->operator<<(out); else out << "<null>";
             break;
     }
     return out;
@@ -680,8 +680,3 @@ bool Value::asInteger(long &x) const {
 	}
 	return false;
 }
-
-std::ostream &DynamicValue::operator<<(std::ostream &out ) const {
-    return out << "<dynamic value>";
-}
-std::ostream &operator<<(std::ostream &out, const DynamicValue &val) { return val.operator<<(out); }
