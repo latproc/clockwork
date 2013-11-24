@@ -44,7 +44,7 @@ SortListAction::SortListAction() : list_machine(0) {
 }
 
 std::ostream &SortListAction::operator<<(std::ostream &out) const {
-	return out << "Sort List Action " << list_machine << " to " << property_name << "\n";
+	return out << "Sort List Action " << list_machine->getName() << " BY PROPERTY " << property_name;
 }
 
 class PropertyValueStringSorter {

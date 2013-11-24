@@ -1593,6 +1593,12 @@ void MachineInstance::disable() {
 	for (unsigned int i = 0; i<locals.size(); ++i) {
 		locals[i].machine->disable();
 	}
+	// if any dependent machines are already enabled, make sure they know we are disabled
+	std::set<MachineInstance *>::iterator d_iter = depends.begin();
+	while (d_iter != depends.end()) {
+		MachineInstance *dep = *d_iter++;
+		if (dep->enabled())dep->setNeedsCheck(); // make sure dependant machines update when a property changes
+	}
 }
 
 void MachineInstance::resume(const std::string &state_name) { 

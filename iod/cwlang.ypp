@@ -102,6 +102,7 @@ struct Subcondition {
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES OF SORT
+%token ENABLED DISABLED
 
 %union {
 	int iVal;
@@ -530,6 +531,12 @@ INTEGER   {
 }
 | BITSET FROM SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($6,$3));
+}
+| SYMBOL "IS" ENABLED {
+    $$ = new Value(new EnabledValue($1));
+}
+| SYMBOL ARE ENABLED {
+    $$ = new Value(new EnabledValue($1));
 }
 
 command:

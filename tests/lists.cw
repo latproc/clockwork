@@ -26,7 +26,7 @@ lights LIST led01, led02;
 
 Controller MACHINE outputs {
 
-  on WHEN ALL outputs ARE on;
+  on WHEN ALL outputs ARE on AND outputs ARE ENABLED;
   off DEFAULT;
   
   COMMAND turnOn { SEND turnOn TO outputs }
@@ -46,9 +46,8 @@ numbers LIST two,four,three,one;
 
 Sorter MACHINE input {
 
-ENTER INIT { SORT input }
+COMMAND sort { LOG "sorting"; SORT input }
 
 }
 sorter Sorter numbers;
-
 

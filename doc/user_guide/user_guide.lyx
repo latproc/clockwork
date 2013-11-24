@@ -834,6 +834,70 @@ pattern_test PatternTest;
 \end_layout
 
 \begin_layout Subsection
+Using lists
+\end_layout
+
+\begin_layout Standard
+Lists can be treated like sets or lists.
+ Here are some examples.
+\end_layout
+
+\begin_layout Subsubsection
+Expressions involving lists
+\end_layout
+
+\begin_layout Itemize
+ANY IN set_name ARE | IS state_name # returns true if any of the items in
+ the set are in the state given
+\end_layout
+
+\begin_layout Itemize
+ANY PROPERTY property IN set_name ARE | IS value
+\end_layout
+
+\begin_layout Itemize
+ALL IN set_name ARE | IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+ALL PROPERTY property_name IN set_name ARE | IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+COUNT state_name FROM set_name # counts the number of items in the set that
+ are in the named state
+\end_layout
+
+\begin_layout Itemize
+COUNT WHERE expression FROM set_name # counts the number of items in the
+ set where the expression returns true 
+\end_layout
+
+\begin_layout Itemize
+BITSET FROM set_name state_name # returns a bitset that represents the an
+ on/off value for the given state name.
+ Further examples use variable values..
+\end_layout
+
+\begin_layout Itemize
+COPY n FROM set_name # picks n elements at random from a set
+\end_layout
+
+\begin_layout Itemize
+TAKE n FROM set_name # takes n elements at random from a set
+\end_layout
+
+\begin_layout Subsubsection
+Statements involving lists
+\end_layout
+
+\begin_layout Itemize
+BITSET FROM set_name WITH STATE state_name # returns a bitset that represents
+ the an on/off value for the given state name.
+ Further examples use variable values..
+\end_layout
+
+\begin_layout Subsection
 Latched input
 \end_layout
 

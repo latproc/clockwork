@@ -117,3 +117,15 @@ Value BitsetValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 
+DynamicValue *EnabledValue::clone() const { return new EnabledValue(*this); }
+Value EnabledValue::operator()(MachineInstance *mi) {
+    if (machine == NULL) machine = mi->lookup(machine_name);
+    if (!machine)  { last_result = false; return last_result; }
+    last_result = machine->enabled();
+    return last_result;
+}
+std::ostream &EnabledValue::operator<<(std::ostream &out ) const {
+    return out << machine_name << "IS ENABLED ";
+}
+std::ostream &operator<<(std::ostream &out, const EnabledValue &val) { return val.operator<<(out); }
+

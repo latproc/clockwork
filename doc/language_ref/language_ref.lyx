@@ -1602,6 +1602,51 @@ A machine can export its properties for use by Modbus applications through
 \end_layout
 
 \begin_layout Subsection
+Lists
+\end_layout
+
+\begin_layout Standard
+Machines can be grouped together into lists.
+ Lists have some features and restrictions:
+\end_layout
+
+\begin_layout Itemize
+every entry in the list must be unique, attempting to include an item a
+ second time does nothing
+\end_layout
+
+\begin_layout Itemize
+messages sent to a list are also sent to all entries of the list
+\end_layout
+
+\begin_layout Itemize
+entries of a list remain in the order they are added (ie., the INCLUDE statement
+ adds an elment to the end of the list) unless the list order is changed
+ by a SORT statement
+\end_layout
+
+\begin_layout Itemize
+lists can be reordered by using a property of the entries as the sort key,
+ by default the VALUE property is used
+\end_layout
+
+\begin_layout Itemize
+lists entry states or properties can be packed into an binary value property
+ using the BITSET FROM statement and can be restored using the SET LIST
+ ENTRIES statement
+\end_layout
+
+\begin_layout Itemize
+items can be tested to see if a list contains a reference to them (eg., my_list
+ INCLUDES my_machine)
+\end_layout
+
+\begin_layout Itemize
+set operations are available to load lists based on operations involving
+ other lists
+\end_layout
+
+\begin_layout Subsection
 Monitoring globals
 \end_layout
 
