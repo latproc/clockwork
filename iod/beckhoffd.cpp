@@ -321,49 +321,10 @@ struct CommandThread {
     bool done;
 };
 
-void usage(int argc, char const *argv[])
-{
-    fprintf(stderr, "Usage: %s\n", argv[0]);
-}
 
-bool program_done = false;
-
-int main (int argc, char const *argv[])
-{
-	unsigned int user_alarms = 0;
-	statistics = new Statistics;
-	ControlSystemMachine machine;
-    Logger::instance()->setLevel(Logger::Debug);
-	ECInterface::FREQUENCY=1000;
-
-#ifndef EC_SIMULATOR
-	/*std::cout << "init slaves: " << */
-	collectSlaveConfig(true);
-	ECInterface::instance()->activate();
-    std::list<ECModule *>::const_iterator iter = ECInterface::modules.begin();
-        int module_offset_idx = 0;
-        while (iter != ECInterface::modules.end()){
-            ECModule *m = *iter++;
-            m->operator<<(std::cout) << "\n";
-            for(unsigned int i=0; i<m->sync_count; ++i) {
-                for (unsigned int j = 0; j<m->syncs[i].n_pdos; ++j) {
-                    for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
-                        std::cerr << m->name << " pdo offset " << i
-                            << " " << m->offsets[module_offset_idx]
-                            << " " << m->bit_positions[module_offset_idx]
-                            << "\n";
-                        ++module_offset_idx;
-                    }
-                }
-            }
-        }
-
-#endif
-
-	{
+void generateIOComponentMappings() {
         std::list<Output *> output_list;
 
-		if (true){
 #ifndef EC_SIMULATOR
 			for(int position=0; ; position++) {
 				// some modules have multiple io types (eg the EK1814) and therefore
@@ -477,42 +438,6 @@ int main (int argc, char const *argv[])
 				}
 			}
 #endif
-		}
- 		else {
-			std::cout << "EL1008 offset " << ECInterface::off_dig_in << "\n";
-			std::cout << "EL2008 offset " << ECInterface::off_dig_out << "\n";
-			std::cout << "EK1814_IN offset " << ECInterface::off_multi_in << "\n";
-			std::cout << "EK1814_OUT offset " << ECInterface::off_multi_out << "\n";
-	        for (int i=0; i<8; ++i) {
-	            std::stringstream sstr;
-	            sstr << "EL1008_IN_" << i;
-	            IOComponent::add_io_entry(sstr.str().c_str(), ECInterface::off_dig_in, i);
-	            devices[sstr.str().c_str()] = new Input(ECInterface::off_dig_out, i);
-	        }
-	        for (int i=0; i<8; ++i) {
-	            std::stringstream sstr;
-	            sstr << "EL2008_OUT_" << i;
-	            IOComponent::add_io_entry(sstr.str().c_str(), ECInterface::off_dig_out, i);
-	            Output *o = new Output(ECInterface::off_dig_out, i);
-	            output_list.push_back(o);
-	            devices[sstr.str().c_str()] = o;
-	        }
-	        for (int i=0; i<8; ++i) {
-	            std::stringstream sstr;
-	            if (i>=4) {
-	                sstr << "EK1814_IN_" << (i-4);
-	                IOComponent::add_io_entry(sstr.str().c_str(), ECInterface::off_multi_in, i-4);
-	                devices[sstr.str().c_str()] = new Input(ECInterface::off_dig_out, i);
-	            }
-	            else {
-	                sstr << "EK1814_OUT_" << i ;
-	                IOComponent::add_io_entry(sstr.str().c_str(), ECInterface::off_multi_out, i);
-	                Output *o = new Output(ECInterface::off_dig_out, i);
-	                output_list.push_back(o);
-	                devices[sstr.str().c_str()] = o;
-	            }
-	        }
-	}
 
 #ifdef EC_SIMULATOR
         wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
@@ -524,42 +449,72 @@ int main (int argc, char const *argv[])
             o->turnOff();
         }
 		std::cout << std::flush;
-		ECInterface::instance()->start();
-
-#if 0
-		// enable machine instances
-		std::list<MachineInstance *>::iterator m_iter;
-		m_iter = MachineInstance::begin();
-		while (m_iter != MachineInstance::end()) {
-			MachineInstance *m = *m_iter++;
-			m->enable();
-		}
-#endif
-        
-        CommandThread stateMonitor;
-        boost::thread monitor(boost::ref(stateMonitor));
-
-		while (! program_done) {
-			// Note: the use of pause here introduces a random variation of up to 500ns
-			struct timeval start_t, end_t;
-			gettimeofday(&start_t, 0);
-			pause();
-			gettimeofday(&end_t, 0);
-			long delta = get_diff_in_microsecs(&end_t, &start_t);
-			if (delta < 100) usleep(100-delta);
-			while (ECInterface::sig_alarms != user_alarms) {
-				ECInterface::instance()->collectState();
-#ifdef EC_SIMULATOR
-		        checkInputs(); // simulated wiring between inputs and outputs
-#endif
-			    IOComponent::processAll();
-				user_alarms++;
-				ECInterface::instance()->sendUpdates();
-			}
-			std::cout << std::flush;
-		}
-        stateMonitor.stop();
-        monitor.join();
 	}
+
+void displayEtherCATModulePDOOffsets() {
+    std::list<ECModule *>::const_iterator iter = ECInterface::modules.begin();
+    int module_offset_idx = 0;
+    while (iter != ECInterface::modules.end()){
+	    ECModule *m = *iter++;
+        m->operator<<(std::cout) << "\n";
+        for(unsigned int i=0; i<m->sync_count; ++i) {
+            for (unsigned int j = 0; j<m->syncs[i].n_pdos; ++j) {
+                for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
+                    std::cout << m->name << " pdo offset " << i
+                        << " " << m->offsets[module_offset_idx]
+                        << " " << m->bit_positions[module_offset_idx]
+                        << "\n";
+                    ++module_offset_idx;
+                }
+            }
+        }
+    }
+}
+void usage(int argc, char const *argv[])
+{
+    fprintf(stderr, "Usage: %s\n", argv[0]);
+}
+
+bool program_done = false;
+
+int main (int argc, char const *argv[])
+{
+	unsigned int user_alarms = 0;
+	statistics = new Statistics;
+	ControlSystemMachine machine;
+    Logger::instance()->setLevel(Logger::Debug);
+	ECInterface::FREQUENCY=1000;
+
+#ifndef EC_SIMULATOR
+	collectSlaveConfig(true); // load slave information from the EtherCAT master and configure the domain
+	ECInterface::instance()->activate();
+#endif
+	generateIOComponentMappings();
+	ECInterface::instance()->start();
+
+    CommandThread stateMonitor;
+    boost::thread monitor(boost::ref(stateMonitor));
+
+	while (! program_done) {
+		// Note: the use of pause here introduces a random variation of up to 500ns
+		struct timeval start_t, end_t;
+		gettimeofday(&start_t, 0);
+		pause();
+		gettimeofday(&end_t, 0);
+		long delta = get_diff_in_microsecs(&end_t, &start_t);
+		if (delta < 100) usleep(100-delta);
+		while (ECInterface::sig_alarms != user_alarms) {
+			ECInterface::instance()->collectState();
+#ifdef EC_SIMULATOR
+	        checkInputs(); // simulated wiring between inputs and outputs
+#endif
+		    IOComponent::processAll();
+			user_alarms++;
+			ECInterface::instance()->sendUpdates();
+		}
+		std::cout << std::flush;
+	}
+    stateMonitor.stop();
+    monitor.join();
 	return 0;
 }
