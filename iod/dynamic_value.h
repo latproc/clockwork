@@ -125,4 +125,17 @@ private:
     MachineInstance *machine;
 };
 
+class DisabledValue : public DynamicValue {
+public:
+    DisabledValue(const char *name) : machine_name(name), machine(0) { }
+    virtual ~DisabledValue() { }
+    virtual Value operator()(MachineInstance *);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    
+private:
+    std::string machine_name;
+    MachineInstance *machine;
+};
+
 #endif

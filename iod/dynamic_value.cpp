@@ -125,7 +125,20 @@ Value EnabledValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 std::ostream &EnabledValue::operator<<(std::ostream &out ) const {
-    return out << machine_name << "IS ENABLED ";
+    return out << machine_name << " ENABLED ";
 }
 std::ostream &operator<<(std::ostream &out, const EnabledValue &val) { return val.operator<<(out); }
+
+
+DynamicValue *DisabledValue::clone() const { return new DisabledValue(*this); }
+Value DisabledValue::operator()(MachineInstance *mi) {
+    if (machine == NULL) machine = mi->lookup(machine_name);
+    if (!machine)  { last_result = false; return last_result; }
+    last_result = !machine->enabled();
+    return last_result;
+}
+std::ostream &DisabledValue::operator<<(std::ostream &out ) const {
+    return out << machine_name << " DISABLED ";
+}
+std::ostream &operator<<(std::ostream &out, const DisabledValue &val) { return val.operator<<(out); }
 

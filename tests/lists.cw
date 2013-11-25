@@ -26,7 +26,8 @@ lights LIST led01, led02;
 
 Controller MACHINE outputs {
 
-  on WHEN ALL outputs ARE on AND outputs ARE ENABLED;
+  waiting WHEN outputs DISABLED;
+  on WHEN ALL outputs ARE on AND outputs ENABLED;
   off DEFAULT;
   
   COMMAND turnOn { SEND turnOn TO outputs }

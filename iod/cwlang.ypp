@@ -532,11 +532,17 @@ INTEGER   {
 | BITSET FROM SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($6,$3));
 }
-| SYMBOL "IS" ENABLED {
+| SYMBOL ENABLED {
     $$ = new Value(new EnabledValue($1));
 }
-| SYMBOL ARE ENABLED {
+| SYMBOL ENABLED {
     $$ = new Value(new EnabledValue($1));
+}
+| SYMBOL DISABLED {
+    $$ = new Value(new DisabledValue($1));
+}
+| SYMBOL DISABLED {
+    $$ = new Value(new DisabledValue($1));
 }
 
 command:
