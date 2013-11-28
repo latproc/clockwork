@@ -299,7 +299,8 @@ std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iter
 
 const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
 	// return the cached pointer to the value if we have one
-	if (p->cached_entry) { return p->cached_entry; }
+	if (p->cached_entry)
+        return p->cached_entry;
 
 	Value *v = &p->entry;
 	p->clearError();
@@ -454,8 +455,10 @@ ExprNode eval_stack(MachineInstance *m, Stack &stack){
     ExprNode a(eval_stack(m, stack));
     assert(a.kind != ExprNode::t_op);
     assert(b.kind != ExprNode::t_op);
-    if (a.val.kind == Value::t_dynamic) a.val = a.val.dynamicValue()->operator()(m);
-    if (b.val.kind == Value::t_dynamic) b.val = b.val.dynamicValue()->operator()(m);
+    if (a.val.kind == Value::t_dynamic)
+        a.val = a.val.dynamicValue()->operator()(m);
+    if (b.val.kind == Value::t_dynamic)
+        b.val = b.val.dynamicValue()->operator()(m);
     switch (o.op) {
         case opGE: return a.val >= b.val;
         case opGT: return a.val > b.val;

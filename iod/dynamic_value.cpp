@@ -15,7 +15,7 @@
 DynamicValue *DynamicValue::clone() const { return new DynamicValue(); }
 
 std::ostream &DynamicValue::operator<<(std::ostream &out ) const {
-    return out << "<dynamic value>";
+    return out << "<dynamic value> (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const DynamicValue &val) { return val.operator<<(out); }
 

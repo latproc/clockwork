@@ -595,14 +595,14 @@ print <<<EOD
                 $("#info").html("<pre id=\"info-details\">"+data+"</pre>");
 				$("#info").css("width",window.innerWidth - 200)
 				$("#info").css("height",window.innerHeight - 200)
-				$("#hideinfo").css("left",window.innerWidth- 150)
+				$("#hideinfo").css("left", 150)
                 $("#info").css("display","block");
                 $("#hideinfo").css("display","block");
-			    $("#info").click( function(){
-			        $(this).css("display","none"); 
-			        $("#info").css("display","none")
-	            	$("#hideinfo").css("display","none");
-			    })  
+			    //$("#info").click( function(){
+			    //    $(this).css("display","none"); 
+			    //    $("#info").css("display","none")
+	            //	$("#hideinfo").css("display","none");
+			    //})  
             })
           })
         })
@@ -616,7 +616,7 @@ print <<<EOD
 <div>$banner</div>
 <fieldset><legend>IO Control</legend>
 <div style="position:relative;background-color:white">
-  <div id="hideinfo" style="position:absolute;left:600px;top:80px;display:none;z-index:1000;background-color:yellow;">hide</div>
+  <div id="hideinfo" style="height:18px;width:64px;text-align:center;font-size:16px;position:absolute;left:600px;top:80px;display:none;z-index:1000;background-color:yellow;">hide</div>
   <div id="info" style="border:1px solid black;position:absolute;left:100px;top:100px;width:800px;height:500px;background-color:white;overflow:scroll;display:none;z-index:1000;" >
   </div>
 </div>
