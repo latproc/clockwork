@@ -44,9 +44,6 @@ typedef enum {
 } ec_origin_t;
 
 #include "domain.h"
-#define EL1008_SYNCS slave_1_syncs
-#define EL2008_SYNCS slave_2_syncs
-#define EK1814_SYNCS slave_3_syncs
 #endif
 
 //extern boost::mutex model_mutex;
@@ -68,35 +65,7 @@ uint8_t *ECInterface::domain1_pd = 0;
 ec_slave_config_t *ECInterface::sc_dig_in = NULL;
 ec_slave_config_state_t ECInterface::sc_dig_in_state = {};
 
-#if 0
-#define BusCouplerPos  0, 0
-#define DigInSlavePos 0, 1
-#define DigOutSlavePos 0, 2
-#define MultiCouplerInOutSlavePos 0, 3
-
-#define Beckhoff_EK1100 0x00000002, 0x044c2c52
-#define Beckhoff_EL1008 0x00000002, 0x03f03052
-#define Beckhoff_EL2008 0x00000002, 0x07d83052
-#define Beckhoff_EK1814 0x00000002, 0x07162c52
-
-// offsets for PDO entries
-unsigned int ECInterface::off_dig_out;
-unsigned int ECInterface::off_dig_in;
-unsigned int ECInterface::off_multi_out;
-unsigned int ECInterface::off_multi_in;
-#endif
-
 #ifndef EC_SIMULATOR
-#if 0
-static ec_pdo_entry_reg_t domain1_regs[] =
-{
-    {DigInSlavePos, Beckhoff_EL1008, 0x6000, 1, &ECInterface::off_dig_in},
-    {DigOutSlavePos, Beckhoff_EL2008, 0x7000, 1, &ECInterface::off_dig_out},
-     {MultiCouplerInOutSlavePos, Beckhoff_EK1814, 0x6000, 1, &ECInterface::off_multi_in},
-     {MultiCouplerInOutSlavePos, Beckhoff_EK1814, 0x7080, 1, &ECInterface::off_multi_out},
-    {}
-};
-#endif
 
 std::list<ECModule *> ECInterface::modules;
 
@@ -205,23 +174,15 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 	        return false;
 	    }
 	
-//	    if (m->syncs && m->ecrtSlaveConfigPdos()) {
-//	        std::cerr << "Failed to configure PDOs.\n";
-//	        return false;
-//	    }
 		unsigned int module_offset_idx = 0;
 		for(unsigned int i=0; i<m->sync_count; ++i) {
-			//ecrt_slave_config_pdo_assign_clear(m->slave_config, i);
-			//if (!m->syncs[i].pdos) continue; // careful to skip sm with no pdos
 			for (unsigned int j = 0; j<m->syncs[i].n_pdos; ++j) {
 				for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
-					//if ( m->syncs[i].pdos[j].entries[k].index ) {
-						m->offsets[module_offset_idx] 
+					m->offsets[module_offset_idx] 
 						= ecrt_slave_config_reg_pdo_entry(
 							m->slave_config, m->syncs[i].pdos[j].entries[k].index,
 							m->syncs[i].pdos[j].entries[k].subindex,
 							domain1, &(m->bit_positions[module_offset_idx]) );
-					//}
 					++idx;
 					++module_offset_idx;
 				}
@@ -229,94 +190,8 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 		}
 	}
 
-#if 0
-// alternative approach, adding modules on the fly
-	for (int i=0; i<module->sync_count; ++i) {
-		for (int j = 0; j< module->syncs[i].n_pdos; ++j) {
-			int res = ecrt_slave_config_reg_pdo_entry(module->slave_config, module->syncs[i].pdos[j].index, 1, domain1, 0);
-			if (res <= 0) {
-			std::cerr << "Error " << res << "when setting pdo entry\n";
-			}
-			else {
-				module->offsets[i] = res;
-				std::cout << "PDO registration for " << module->name << " sm " << i << " done\n";
-			}
-		}
-	}
-#endif
-    //if (ecrt_master_activate(master)) {
-	//	std::cerr << "failed to reactivate master\n";
-	//        return false;	
-	//}
-
-    //if (!(domain1_pd = ecrt_domain_data(domain1))) {
-	//	std::cout << "ecrt_domain_data failure\n";
-    //    return false;
-    //}
-
 	return true;
 }
-
-#if 0
-bool ECInterface::configurePDOs() {
-    ec_slave_config_t *sc;
-	int res;
-    
-    if (!(sc_dig_in = ecrt_master_slave_config(
-                                               master, DigInSlavePos, Beckhoff_EL1008))) {
-        std::cerr << "Failed to get slave configuration.\n";
-        return false;
-    }
-    
-    std::cout << "Configuring PDOs...\n";
-    if ( (res = ecrt_slave_config_pdos(sc_dig_in, EC_END, EL1008_SYNCS)) ) {
-        std::cerr << "Failed to configure PDOs." << res << "\n";
-        return false;
-    }
-    
-    if (!(sc = ecrt_master_slave_config(
-                                        master, DigOutSlavePos, Beckhoff_EL2008))) {
-        std::cerr << "Failed to get slave configuration.\n";
-        return false;
-    }
-    
-    if ( (res = ecrt_slave_config_pdos(sc, EC_END, EL2008_SYNCS)) ) {
-        std::cerr << "Failed to configure PDOs." << res << "\n";
-        return false;
-    }
-    
-    
-    if (!(sc = ecrt_master_slave_config(
-                                        master, MultiCouplerInOutSlavePos, Beckhoff_EK1814))) {
-        fprintf(stderr, "Failed to get slave configuration.\n");
-        return -1;
-    }
-    
-    if (ecrt_slave_config_pdos(sc, EC_END, EK1814_SYNCS)) {
-        fprintf(stderr, "Failed to configure PDOs.\n");
-        return -1;
-    }
-    
-    sc = ecrt_master_slave_config(master, MultiCouplerInOutSlavePos, Beckhoff_EK1814);
-    if (!sc)
-        return -1;
-    
-    // Create configuration for bus coupler
-    sc = ecrt_master_slave_config(master, BusCouplerPos, Beckhoff_EK1814);
-    if (!sc)
-        return false;
-    
-    if (ecrt_domain_reg_pdo_entry_list(domain1, domain1_regs)) {
-        std::cerr << "PDO entry registration failed!\n";
-        return false;
-    }
-    else {
-        std::cerr << "PDO Registration: din offset: " << off_dig_in 
-		<< " dout offset " << off_dig_out << "\n";
-    }
-	return true;
-}
-#endif
 
 bool ECInterface::activate() {
 	int res;
