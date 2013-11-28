@@ -101,7 +101,7 @@ struct Subcondition {
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
-%token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES OF SORT
+%token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED
 
 %union {
@@ -120,6 +120,7 @@ struct Subcondition {
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
 %token <pVal> PATTERN
+%type <symbol> transition_state
 
 %left BECOMES
 %left OR
@@ -1103,18 +1104,24 @@ SYMBOL PROPSEP value
 ;
 
 name_list:
-SYMBOL {
+transition_state {
     DBG_PARSER << " name list: " << $1 << "\n";
     current_name_list.push_back($1);
 }
-| name_list COMMA SYMBOL 
+
+| name_list COMMA SYMBOL
 {
     DBG_PARSER << ", " << $3;
     current_name_list.push_back($3);
 }
+;
+
+transition_state:
+SYMBOL {
+    $$ = $1;
+}
 | ANY {
-    DBG_PARSER << ", ANY";
-    current_name_list.push_back("ANY");
+    $$ = "ANY";
 }
 ;
 
@@ -1123,7 +1130,7 @@ transition ';'
 ;
 
 transition:
-TRANSITION name_list /* list of source states */ TO SYMBOL /* destination state */ USING SYMBOL /* command_name */
+TRANSITION name_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << " using " << $6 << "\n";
@@ -1131,7 +1138,7 @@ TRANSITION name_list /* list of source states */ TO SYMBOL /* destination state 
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */ ON SYMBOL /* received event */
+| TRANSITION name_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
@@ -1139,7 +1146,7 @@ TRANSITION name_list /* list of source states */ TO SYMBOL /* destination state 
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */
+| TRANSITION name_list /*  source state */ TO transition_state /* destination state */
     USING SYMBOL /* received event */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
@@ -1148,7 +1155,7 @@ TRANSITION name_list /* list of source states */ TO SYMBOL /* destination state 
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */
+| TRANSITION name_list /*  source state */ TO transition_state /* destination state */
     ON SYMBOL /* received event */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
@@ -1157,7 +1164,7 @@ TRANSITION name_list /* list of source states */ TO SYMBOL /* destination state 
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO SYMBOL /* destination state */ REQUIRES predicate /* rule */
+| TRANSITION name_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "requiring " << *($6) << "\n";

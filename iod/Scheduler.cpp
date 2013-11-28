@@ -84,6 +84,7 @@ Scheduler::Scheduler() {
 }
 
 void Scheduler::add(ScheduledItem*item) {
+    DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
 	DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
 	items.push(item);
 	next_time = next()->delivery_time;

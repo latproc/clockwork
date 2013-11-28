@@ -1125,7 +1125,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 
 Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response_required) {
 	std::string short_name(m.getText());
-	if (short_name.find('.')) {
+	if (short_name.find('.') != std::string::npos) {
 		short_name = short_name.substr(short_name.find('.')+1);
 	}
 	if (from) {
@@ -1135,7 +1135,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 	    std::list<Transition>::const_iterator iter = transitions.begin();
 		while (iter != transitions.end()) {
    		 	const Transition &t = *iter++;
-   		 	if (t.trigger.getText() == short_name && current_state == t.source) {
+   		 	if (t.trigger.getText() == short_name && (current_state == t.source || t.source == "ANY")
+                && (!t.condition || t.condition->operator()(this))) {
    	        	// found match, if there is a command defined for this transition, we
    	        	// execute the command, otherwise we just do the state change
 			   	if (commands.count(t.trigger.getText())) {

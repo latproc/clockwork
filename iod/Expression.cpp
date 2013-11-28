@@ -169,7 +169,7 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     // true on slow clock cycles. For now we reschedule the trigger for up to 10ms past the necessary time.
     if (current_time <= scheduled_time + 10) {
         Trigger *trigger = new Trigger("Timer");
-        Scheduler::instance()->add(new ScheduledItem(scheduled_time - current_time, new FireTriggerAction(target, trigger)));
+        Scheduler::instance()->add(new ScheduledItem( (scheduled_time - current_time) * 1000, new FireTriggerAction(target, trigger)));
         trigger->release();
     }
     else if (scheduled_time > 0) {
