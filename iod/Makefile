@@ -96,7 +96,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			MachineInstance.o cwlang.tab.o cwlang.yy.o Scheduler.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
-			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) \
+			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) $(BOOST_SYSTEM_LIB) \
 			$(TOOLLIB) -lethercat -lmosquitto
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
@@ -112,7 +112,8 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o IODCommands.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
 			CallMethodAction.o regular_expressions.o \
-			MQTTInterface.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) -lethercat -lmosquitto
+			MQTTInterface.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) \
+			-lethercat -lmosquitto
 
 cw.o:	cw.cpp	MessagingInterface.h
 		$(CC) -c -o $@ cw.cpp
@@ -151,14 +152,14 @@ modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o
 			dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
 iosh: iosh.cpp
-	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq -lreadline
+	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq -lreadline $(BOOST_SYSTEM_LIB)
 
 zmq_ecat_monitor: zmq_ecat_monitor.o
-	g++ $(CFLAGS) $(LDFLAGS) -o zmq_ecat_monitor zmq_ecat_monitor.o -lzmq
+	g++ $(CFLAGS) $(LDFLAGS) -o zmq_ecat_monitor zmq_ecat_monitor.o -lzmq $(BOOST_SYSTEM_LIB)
 
 device_connector:	device_connector.o regular_expressions.o anet.o
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ device_connector.o regular_expressions.o anet.o \
-		 $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
+		 $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq 
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h
 
