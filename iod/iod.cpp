@@ -300,8 +300,8 @@ void generateIOComponentModules() {
 				//Value params = p.val;
 				//if (params.kind == Value::t_list && params.listValue.size() > 1) {
 					std::string name = m->parameters[0].real_name;
-					int pdo_position = m->parameters[1].val.iValue;
-					std::cerr << "Setting up point " << m->getName() << " " << pdo_position << " on module " << name << "\n";
+					unsigned int entry_position = m->parameters[1].val.iValue;
+					std::cerr << "Setting up point " << m->getName() << " " << entry_position << " on module " << name << "\n";
 					MachineInstance *module_mi = MachineInstance::find(name.c_str());
 					if (!module_mi) {
 						std::cerr << "No machine called " << name << "\n";
@@ -329,43 +329,57 @@ void generateIOComponentModules() {
 						continue;
 					}
 				
+/*
 					unsigned int sm_idx = 0;
-					unsigned int pdo_pos = 0;
-					unsigned int bit_pos = 0;
+					unsigned int entry_pos = 0;
 					unsigned int pdo_idx = 0;
+					unsigned int bit_pos = 0;
 					unsigned int entry_idx = 0;
 
 					while (sm_idx < module->sync_count) {
-						unsigned int i = 0;
-						for (i = 0; i<module->syncs[sm_idx].n_pdos; ++i) {
-							if (pdo_pos == pdo_position && module->syncs[sm_idx].pdos[pdo_pos].n_entries) break;
-							pdo_pos += 1;
+						for (pdo_idx = 0; pdo_idx<module->syncs[sm_idx].n_pdos; ++pdo_idx) {
+							if (entry_pos + module->syncs[sm_idx].pdos[pdo_idx].n_entries > entry_position) {
+								entry_idx = entry_position - entry_pos;
+								goto found_entry;
+							}
+							entry_pos += module->syncs[sm_idx].pdos[pdo_idx].n_entries;
 						}
-						if (i<module->syncs[sm_idx].n_pdos) break;
 						++sm_idx;
 					}
 					if (sm_idx == module->sync_count) {
-						std::cerr << "No entry " << pdo_position << " on module " << module_position << "\n";
+						std::cerr << "No entry " << entry_position << " on module " << module_position << "\n";
 						continue; // could not find this device
 					}
-					pdo_idx = pdo_pos;
-					if (m->parameters.size() >= 3)
-						entry_idx = m->parameters[2].val.iValue;
+					found_entry:
 					unsigned int direction = module->syncs[sm_idx].dir;
 					bit_pos = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].subindex;
 					unsigned int bitlen = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].bit_length;
 					if (m->parameters.size() == 2)
-						bit_pos = pdo_position;
+						bit_pos = entry_position;
+*/
+
+					if (entry_position >= module->num_entries) {
+						std::cerr << "No entry " << entry_position << " on module " << module_position << "\n";
+						continue; // could not find this device
+					}
+					EntryDetails *ed = &module->entry_details[entry_position];
+					unsigned int direction = module->syncs[ed->sm_index].dir;
+					unsigned int offset_idx = entry_position;
+					unsigned int bitlen = module->pdo_entries[entry_position].bit_length;
 
 					if (direction == EC_DIR_OUTPUT) {
-						//sstr << m->getName() << "_OUT_" << pdo_position << std::flush;
-						//const char *name_str = sstr.str().c_str();
-						std::cerr << "Adding new output device " << m->getName() 
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos
-							<< " offset: " << module->offsets[sm_idx] <<  "\n";
-						IOComponent::add_io_entry(m->getName().c_str(), module->offsets[sm_idx], bit_pos, bitlen);
+                        std::cerr << "Adding new output device " << m->getName()
+							<< " position: " << entry_position
+							<< " name: " << module->entry_details[offset_idx].name
+                            << " bit_pos: " << module->bit_positions[offset_idx]
+                            << " offset: " << module->offsets[offset_idx]
+                            << " bitlen: " << bitlen <<  "\n";
+						IOAddress addr (	
+                        	IOComponent::add_io_entry(ed->name.c_str(), module->offsets[offset_idx],
+                                module->bit_positions[offset_idx], offset_idx, bitlen));
+
 						if (bitlen == 1) {
-							Output *o = new Output(module->offsets[sm_idx], bit_pos);
+							Output *o = new Output(addr);
 							output_list.push_back(o);
 							devices[m->getName().c_str()] = o;
 							o->setName(m->getName().c_str());
@@ -373,7 +387,7 @@ void generateIOComponentModules() {
 							o->addDependent(m);
 						}
 						else {
-							AnalogueOutput *o = new AnalogueOutput(module->offsets[sm_idx], bit_pos, bitlen);
+                            AnalogueOutput *o = new AnalogueOutput(addr);
 							output_list.push_back(o);
 							devices[m->getName().c_str()] = o;
 							o->setName(m->getName().c_str());
@@ -382,22 +396,27 @@ void generateIOComponentModules() {
 						}
 					}
 					else {
-						//sstr << m->getName() << "_IN_" << pdo_position << std::flush;
+						//sstr << m->getName() << "_IN_" << entry_position << std::flush;
 						//const char *name_str = sstr.str().c_str();
-						std::cerr << "Adding new input device " << m->getName().c_str() 
-							<< " sm_idx: " << sm_idx << " bit_pos: " << bit_pos
-							<< " bitlen: " << bitlen
-							<< " offset: " << module->offsets[sm_idx] <<  "\n";
-						IOComponent::add_io_entry(m->getName().c_str(), module->offsets[sm_idx], bit_pos, bitlen);
+                        std::cerr << "Adding new input device " << m->getName()
+							<< " position: " << entry_position
+							<< " name: " << module->entry_details[offset_idx].name
+                            << " sm_idx: " << ed->sm_index
+                            << " bit_pos: " << module->bit_positions[offset_idx]
+                            << " offset: " << module->offsets[offset_idx]
+                            <<  " bitlen: " << bitlen << "\n";
+                        IOAddress addr( IOComponent::add_io_entry(ed->name.c_str(), module->offsets[offset_idx],
+                            module->bit_positions[offset_idx], offset_idx, bitlen));
+
 						if (bitlen == 1) {
-							Input *in = new Input(module->offsets[sm_idx], bit_pos);
+							Input *in = new Input(addr);
 							devices[m->getName().c_str()] = in;
 							in->setName(m->getName().c_str());
 							m->io_interface = in;
 							in->addDependent(m);
 						}
 						else {
-							AnalogueInput *in = new AnalogueInput(module->offsets[sm_idx], bit_pos, bitlen);
+							AnalogueInput *in = new AnalogueInput(addr);
 							devices[m->getName().c_str()] = in;
 							in->setName(m->getName().c_str());
 							m->io_interface = in;

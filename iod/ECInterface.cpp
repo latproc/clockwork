@@ -89,7 +89,7 @@ ECModule::~ECModule() {
 	if (pdo_entries) { free(pdo_entries); pdo_entries = 0; }
 	if (pdos) { free(pdos); pdos = 0; }
 	if (syncs) { free(syncs); syncs = 0; }
-	delete entry_details; entry_details = 0;
+	delete[] entry_details; entry_details = 0;
 }
 
 bool ECModule::online() {

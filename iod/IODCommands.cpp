@@ -722,7 +722,7 @@ extern CommandList commandList;
 ec_pdo_entry_info_t *c_entries = 0;
 ec_pdo_info_t *c_pdos = 0;
 ec_sync_info_t *c_syncs = 0;
-EntryDetails *c_entry_details;
+EntryDetails *c_entry_details = 0;
 
 
 cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool reconfigure)
@@ -780,7 +780,8 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 				c_syncs[i].pdos = c_pdos + pdo_pos;
 			else
 				c_syncs[i].pdos = 0;
-			c_syncs[i].watchdog_mode = EC_READ_BIT(&sync.control_register, 6) ? EC_WD_ENABLE : EC_WD_DISABLE;
+			c_syncs[i].watchdog_mode 
+				= EC_READ_BIT(&sync.control_register, 6) ? EC_WD_ENABLE : EC_WD_DISABLE;
             
 			total_pdos += sync.pdo_count;
 			assert(total_pdos < estimated_max_pdos);
@@ -809,26 +810,33 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 		            	    m.getPdoEntry(&entry, slave.position, i, j, k);
 	                	  	std::cout << " entry: " << k 
 								<< "{" 
+								<< entry_pos << ", "
 								<< std::hex << (int)entry.index <<", " 
 								<< (int)entry.subindex<<", " 
 								<< (int)entry.bit_length <<", "
 								<<'"' << entry.name<<"\"}";
-							c_entries[k + entry_pos].index = entry.index;
-							c_entries[k + entry_pos].subindex = entry.subindex;
-							c_entries[k + entry_pos].bit_length = entry.bit_length;
-							c_entry_details[k + entry_pos].name = (const char *)entry.name;
+							c_entries[entry_pos].index = entry.index;
+							c_entries[entry_pos].subindex = entry.subindex;
+							c_entries[entry_pos].bit_length = entry.bit_length;
+							c_entry_details[entry_pos].name = (const char *)pdo.name;
+							c_entry_details[entry_pos].name += " ";
+							c_entry_details[entry_pos].name += (const char *)entry.name;
+							c_entry_details[entry_pos].entry_index = entry_pos;
+							c_entry_details[entry_pos].pdo_index = j + pdo_pos;
+							c_entry_details[entry_pos].sm_index = i;
 
+							cJSON_AddNumberToObject(json_entry, "pos", entry_pos);
 							cJSON_AddNumberToObject(json_entry, "index", entry.index);
-							cJSON_AddStringToObject(json_entry, "name", (const char *)entry.name);
+							cJSON_AddStringToObject(json_entry, "name", c_entry_details[entry_pos].name.c_str());
 							cJSON_AddNumberToObject(json_entry, "subindex", entry.subindex);
 							cJSON_AddNumberToObject(json_entry, "bit_length", entry.bit_length);
+		            		++entry_pos;
 	
 							cJSON_AddItemToArray(json_entries, json_entry);
 		            	}
 						cJSON_AddItemToObject(json_pdo, "entries", json_entries);
 					}
 			    	//std::cout << "\n";
-		            entry_pos += pdo.entry_count;
 					cJSON_AddItemToArray(json_pdos, json_pdo);
 		        }
 				cJSON_AddItemToObject(json_sync, "pdos", json_pdos);
@@ -857,13 +865,13 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 		module->sync_count = slave.sync_count;
 		module->entry_details = c_entry_details;
 		module->num_entries = total_entries;
-		if (!ECInterface::instance()->addModule(module, false)) delete module; // module may be already registered
+		if (!ECInterface::instance()->addModule(module, reconfigure)) delete module; // module may be already registered
 	}
 	else {
-		free(c_entries);
-		free(c_pdos);
-		free(c_syncs);
-		delete c_entry_details;
+		if (c_entries) free(c_entries);
+		if (c_pdos) free(c_pdos);
+		if (c_syncs) free(c_syncs);
+		delete[] c_entry_details;
 	}
 	
 	//std::stringstream result;
@@ -890,7 +898,7 @@ char *collectSlaveConfig(bool reconfigure)
     
 	for (unsigned int i=0; i<master.slave_count; i++) {
 		m.getSlave(&slave, i);
-        cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave, reconfigure));
+        cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave, true));
     }
 	if (reconfigure)
 		ECInterface::instance()->addModule(0, true);

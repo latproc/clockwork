@@ -27,9 +27,16 @@
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 
+/* the entry details structure is used to gather extra data about
+  an entry in a module that the Etherlab master structures doesn't
+  normally give us. 
+*/
 class EntryDetails {
 public:
 	std::string name;
+	unsigned int entry_index;
+	unsigned int sm_index;
+	unsigned int pdo_index;
 };
 
 class ECModule {

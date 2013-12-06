@@ -178,7 +178,6 @@ void semantic_analysis() {
     MachineClass *ain_class = new MachineClass("ANALOGINPUT");
     ain_class->parameters.push_back(Parameter("module"));
     ain_class->parameters.push_back(Parameter("offset"));
-    ain_class->parameters.push_back(Parameter("entry"));
     ain_class->states.push_back("stable");
     ain_class->states.push_back("unstable");
 	ain_class->default_state = State("stable");
@@ -186,6 +185,15 @@ void semantic_analysis() {
 	ain_class->disableAutomaticStateChanges();
 	ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
     
+    MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
+    aout_class->parameters.push_back(Parameter("module"));
+    aout_class->parameters.push_back(Parameter("offset"));
+    aout_class->states.push_back("stable");
+    aout_class->states.push_back("unstable");
+	aout_class->default_state = State("stable");
+	aout_class->initial_state = State("stable");
+	aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+
     MachineClass *list_class = new MachineClass("LIST");
     list_class->states.push_back("empty");
     list_class->states.push_back("nonempty");

@@ -36,11 +36,18 @@ void IOComponent::processAll() {
 	}
 }
 
-void IOComponent::add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset, unsigned int bit_len){
-	IOAddress addr(io_offset, bit_offset, bit_len);
+IOAddress IOComponent::add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset, unsigned int entry_pos, unsigned int bit_len){
+	IOAddress addr(io_offset, bit_offset, entry_pos, bit_len);
 	addr.io_offset = io_offset;
 	addr.io_bitpos = bit_offset;
+    addr.entry_position = entry_pos;
+	addr.description = name;
+	if (io_names.find(std::string(name)) != io_names.end())  {
+		std::cerr << "IOComponent::add_io_entry: warning - an IO component named " 
+			<< name << " already existed\n";
+	}
 	io_names[name] = addr;
+	return addr;
 }
 
 void IOComponent::add_publisher(const char *name, const char *topic, const char *message) {
@@ -57,7 +64,7 @@ void IOComponent::add_subscriber(const char *name, const char *topic) {
 
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
-	out << '['<< address.io_offset << ':' << address.io_bitpos << "]=" << address.value;
+	out << '[' << address.description<<" "<< address.io_offset << ':' << address.io_bitpos << "." << address.bitlen << "]=" << address.value;
 	return out;
 }
 
@@ -123,12 +130,16 @@ const char *IOComponent::getStateString() {
 void IOComponent::idle() {
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;
+	offset += (bitpos / 8);
+	bitpos = bitpos % 8;
+/*
 	while (bitpos>=8) { 
 		++offset;
 		bitpos-=8;
 	}
+*/
 	if (address.bitlen == 1) {
-		int value = EC_READ_BIT(offset, bitpos);
+		unsigned int value = EC_READ_BIT(offset, bitpos);
 		if (!value && last_event == e_on) {
 			EC_WRITE_BIT(offset, bitpos, 1);			
 		}

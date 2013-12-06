@@ -269,12 +269,14 @@ void MachineInstance::setNeedsCheck() {
     }
 }
 
+#if 0
 void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset){
 	HardwareAddress addr(io_offset, bit_offset);
 	addr.io_offset = io_offset;
 	addr.io_bitpos = bit_offset;
 	hw_names[name] = addr;
 }
+#endif
 
 void Transmitter::send(Message *m, Receiver *r, bool expect_reply) {
 	DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
@@ -570,9 +572,13 @@ void MachineInstance::describe(std::ostream &out) {
 					<< "), state: "
 					<< (parameters[i].machine ? parameters[i].machine->getCurrent().getName(): "") <<  "\n";
             }
+			else {
+                out << "  parameter " << (i+1) << " " << p_i << " (" << parameters[i].real_name << ")\n";
+			}
         }
         out << "\n";
     }
+	if (io_interface) out << " io: " << *io_interface << "\n";
     if (locals.size()) {
         out << "Locals:\n";
         for (unsigned int i = 0; i<locals.size(); ++i) {
@@ -1318,7 +1324,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		event_name = from->getName() + "." + m.getText();
     
     if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER" 
-			|| _type == "ANALOGINPUT"  || _type == "STATUS_FLAG" ) {
+			|| _type == "ANALOGINPUT"  || _type == "ANALOGOUTPUT" || _type == "STATUS_FLAG" ) {
         if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
             //std::string state_name = m.getText();
             //if (state_name.find('_') != std::string::npos)
@@ -2143,8 +2149,8 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 			if (property == "VALUE" && io_interface) {
 				char *p = 0;
 				errno = 0;
-				long value = strtol(property.c_str(), &p, 10);
-				if (errno == 0) 
+				long value =0;
+				if (new_value.asInteger(value))
 					io_interface->setValue(value);
 			}
 	        mif->send(ss.str().c_str());
