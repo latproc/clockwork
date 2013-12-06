@@ -39,7 +39,7 @@ Philosopher MACHINE left, right {
 	waiting DEFAULT;
     
     ENTER INIT {
-        eat_time := (NOW % 10) * 10;
+        eat_time := (NOW % 10) * 100;
         SET okToStart TO on;
         SET okToStop TO on;
     }

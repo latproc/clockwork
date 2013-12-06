@@ -454,12 +454,12 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 class MachineValue : public DynamicValue {
 public:
     MachineValue(MachineInstance *mi): machine_instance(mi) { }
-    Value operator()()  {
+    Value operator()(MachineInstance *m)  {
         if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
             return machine_instance->getValue("VALUE");
         }
         else {
-            return machine_instance->getCurrentStateVal();
+            return *machine_instance->getCurrentStateVal();
         }
     }
     DynamicValue *clone() const;
@@ -470,7 +470,7 @@ protected:
 class VariableValue : public DynamicValue {
 public:
     VariableValue(MachineInstance *mi): machine_instance(mi) { }
-    virtual Value operator()() const {
+    virtual Value operator()(MachineInstance *m) {
         if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
             return machine_instance->getValue("VALUE");
         }
@@ -511,7 +511,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     current_state_val("undefined"),
     is_active(false)
 {
-    if (_type != "LIST") current_value_holder.setDynamicValue(new MachineValue(this));
+    if (_type != "LIST")
+        current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
@@ -540,7 +541,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     is_active(false),
     current_value_holder(0)
 {
-    if (_type != "LIST") current_value_holder.setDynamicValue(new MachineValue(this));
+    if (_type != "LIST")
+        current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
