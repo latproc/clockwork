@@ -41,6 +41,21 @@ protected:
 };
 std::ostream &operator<<(std::ostream &, const DynamicValue &);
 
+class AssignmentValue : public DynamicValue {
+public:
+    AssignmentValue(const char *dest, Value *val)
+    : src(*val), dest_name(dest)  { }
+    virtual ~AssignmentValue() {}
+    virtual Value operator()(MachineInstance *);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    
+private:
+    Value src;
+    std::string dest_name;
+};
+
+
 class AnyInValue : public DynamicValue {
 public:
     AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
@@ -97,6 +112,67 @@ private:
     std::string machine_list_name;
     MachineInstance *machine_list;
 };
+
+
+class ItemAtPosValue : public DynamicValue {
+public:
+    ItemAtPosValue(const char *list, Value *val, bool remove = true)
+        : index(*val), machine_list_name(list), machine_list(0), remove_from_list(remove)  { }
+    virtual ~ItemAtPosValue() {}
+    virtual Value operator()(MachineInstance *);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    
+private:
+    Value index;
+    std::string machine_list_name;
+    MachineInstance *machine_list;
+    bool remove_from_list = false;
+};
+
+class SizeValue : public DynamicValue {
+public:
+    SizeValue(const char *list) : machine_list_name(list), machine_list(0)  { }
+    virtual ~SizeValue() {}
+    virtual Value operator()(MachineInstance *);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    
+private:
+    std::string machine_list_name;
+    MachineInstance *machine_list;
+};
+
+class PopListBackValue : public DynamicValue {
+public:
+    PopListBackValue(const char *list, bool remove = true)
+        : machine_list_name(list), machine_list(0), remove_from_list(remove)  { }
+    virtual ~PopListBackValue() {}
+    virtual Value operator()(MachineInstance *);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    
+private:
+    std::string machine_list_name;
+    MachineInstance *machine_list;
+    bool remove_from_list;
+};
+
+class PopListFrontValue : public DynamicValue {
+public:
+    PopListFrontValue(const char *list, bool remove = true)
+        : machine_list_name(list), machine_list(0), remove_from_list(remove)  { }
+    virtual ~PopListFrontValue() {}
+    virtual Value operator()(MachineInstance *);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    
+private:
+    std::string machine_list_name;
+    MachineInstance *machine_list;
+    bool remove_from_list;
+};
+
 
 class BitsetValue : public DynamicValue {
 public:

@@ -52,3 +52,16 @@ COMMAND sort { LOG "sorting"; SORT input }
 }
 sorter Sorter numbers;
 
+digits LIST 0,1,2,3,4,5,6,7,8,9;
+DigitTest MACHINE list {
+    OPTION sz 0;
+    changed WHEN sz != SIZE OF list;
+    done WHEN 5 == LAST OF list;
+    nonempty WHEN SIZE OF list > 0;
+    empty DEFAULT;
+    ENTER INIT { xx := LAST OF list; }
+    ENTER changed { sz := SIZE OF list; LOG "items in list: " + sz; }
+    ENTER nonempty { val := TAKE LAST FROM list; LOG "Value popped: " + val; }
+}
+dt DigitTest digits;
+dt2 DigitTest numbers;

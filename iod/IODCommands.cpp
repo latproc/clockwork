@@ -365,7 +365,6 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 	        cJSON_AddNumberToObject(node, item.first.c_str(), item.second.iValue);
 	    else
 	        cJSON_AddStringToObject(node, item.first.c_str(), item.second.asString().c_str());
-	        //std::cout << item.first << ": " <<  item.second.asString() << "\n";
     }
 	Action *action;
 	if ( (action = m->executingCommand()))  {

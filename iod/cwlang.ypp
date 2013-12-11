@@ -102,7 +102,8 @@ struct Subcondition {
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
-%token ENABLED DISABLED
+%token ENABLED DISABLED SIZE ITEM FIRST LAST
+%token COMMON BETWEEN DIFFERENCE COMBINATION
 
 %union {
 	int iVal;
@@ -518,6 +519,9 @@ INTEGER   {
 | ALL SYMBOL ARE SYMBOL {
     $$ = new Value(new AllInValue($4, $2));
 }
+| SIZE OF SYMBOL {
+    $$ = new Value(new SizeValue($3));
+}
 | COUNT SYMBOL FROM SYMBOL {
     $$ = new Value(new CountValue($2,$4));
 }
@@ -544,6 +548,36 @@ INTEGER   {
 }
 | SYMBOL DISABLED {
     $$ = new Value(new DisabledValue($1));
+}
+| COMMON BETWEEN SYMBOL AND SYMBOL {
+    $$ = new Value(SymbolTable::Null);
+}
+| DIFFERENCE BETWEEN SYMBOL AND SYMBOL {
+    $$ = new Value(SymbolTable::Null);
+}
+| COMBINATION OF SYMBOL AND SYMBOL {
+    $$ = new Value(SymbolTable::Null);
+}
+| SYMBOL BECOMES value {
+    $$ = new Value(new AssignmentValue($1, $3));
+}
+| TAKE LAST FROM SYMBOL {
+    $$ = new Value(new PopListBackValue($4));
+}
+| TAKE FIRST FROM SYMBOL {
+    $$ = new Value(new PopListFrontValue($4));
+}
+| TAKE ITEM value FROM SYMBOL {
+    $$ = new Value(ItemAtPosValue($5, $3));
+}
+| ITEM value OF SYMBOL {
+    $$ = new Value(ItemAtPosValue($4, $2, false));
+}
+| LAST OF SYMBOL {
+    $$ = new Value(new PopListBackValue($3, false));
+}
+| FIRST OF SYMBOL {
+    $$ = new Value(new PopListFrontValue($3, false));
 }
 
 command:
@@ -840,6 +874,20 @@ SET SYMBOL TO SYMBOL  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SortListActionTemplate($2, $5);
 }
+/*
+| TAKE LAST FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new PopBackActionTemplate($4);
+}
+| TAKE FIRST FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new PopFrontActionTemplate($4);
+}
+| TAKE ITEM INTEGER FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new GetListItemActionTemplate($5, $3);
+}
+*/
 | LOG expression /* log message to stdout */ {
     if (current_action) current_actions->push_back(current_action);
     DBG_PARSER << " log action: log " << *$2 << "\n";

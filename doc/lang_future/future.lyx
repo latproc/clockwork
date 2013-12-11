@@ -230,6 +230,14 @@ Formal/scrict interfaces
 sending data with a message
 \end_layout
 
+\begin_layout Itemize
+holding messages that arrive outside the state where they can be used
+\end_layout
+
+\begin_layout Itemize
+limiting execution of commands apart from in certain states
+\end_layout
+
 \begin_layout Subsection
 Modules
 \end_layout
@@ -281,7 +289,7 @@ Since machines are defined statically there is no way to create a new machine
  be named, there is no way to make a property that refers to a machine.
  It is not even possible to save the state of a machine and restore that
  state later.
- 
+ [this is changing (see LIST), TBD]
 \end_layout
 
 \begin_layout Section
@@ -778,6 +786,49 @@ More thought is required here, what I am planning is that clauses within
  A.
 \end_layout
 
+\begin_layout Standard
+When a MACHINE is extended, all instances of the object share default properties
+ of the extended type unless they are explicitly added for the derived machine.
+\end_layout
+
+\begin_layout Subsection
+Protocols
+\end_layout
+
+\begin_layout Standard
+Protocols can be used to ensure that machines passed as parameters actually
+ provide the correct facilities.
+ A machine can conform to multiple protocols.
+\end_layout
+
+\begin_layout LyX-Code
+switch PROTOCOL { STATES { on, off; } COMMANDS {turnOn, turnOff} }
+\end_layout
+
+\begin_layout LyX-Code
+controller MACHINE on_off<switch> { ...
+ }
+\end_layout
+
+\begin_layout Standard
+In the above, the machine passed to the controller will be required to have
+ only a state 'on' and a state 'off' and support the turnOn and turnOff
+ commands.
+\end_layout
+
+\begin_layout Standard
+If the switch is to be also allowed to have other states or commands we
+ would describe it:
+\end_layout
+
+\begin_layout LyX-Code
+switch PROTOCOL { STATES { on, off, ...; } COMMANDS {turnOn, turnOff, ...} }
+\end_layout
+
+\begin_layout Standard
+TBD
+\end_layout
+
 \begin_layout Subsection
 Data access
 \end_layout
@@ -903,7 +954,40 @@ DO command EVERY time_period;
 \end_layout
 
 \begin_layout Subsection
-Dynamic machine
+Dynamic machines
+\end_layout
+
+\begin_layout Standard
+New machines can be constructed with the CREATE command and removed with
+ the DESTROY command.
+ An object cannot be destroyed if it is being used within another object
+ (ie it has dependencies) or is passed to another object, it needs to be
+ either removed from that object or that object must first be destroyed.
+ Automatic reference counting is used so that when objects leave scope they
+ are automatically destroyed.
+\end_layout
+
+\begin_layout Subsection
+Extensions
+\end_layout
+
+\begin_layout Standard
+New machine types can be defined by loadable modules.
+ A loadable module is required to provide a particular interface that is
+ used when instances of objects from that module are processed.
+ It may be possible to provide loadable objects using a messaging or rpc
+ interface.
+ (TBD)
+\end_layout
+
+\begin_layout Subsubsection
+The EtherCAT extension
+\end_layout
+
+\begin_layout Standard
+This extension provides an object of type EtherCAT_Entry when instantiated,
+ this machine registers a pdo entry with ethercat, using the details provided.
+ The extension also adds an SDO object for performing SDO functions.
 \end_layout
 
 \end_body
