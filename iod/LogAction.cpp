@@ -29,7 +29,7 @@ Action *LogActionTemplate::factory(MachineInstance *mi) {
 Action::Status LogAction::run() {
 	owner->start(this);
     if (!predicate) {
-        const Value &prop = owner->getValue(message.asString());
+        Value prop(owner->getValue(message.asString()));
         if (prop != SymbolTable::Null) {
             std::cout << "------- " << owner->getName() << ": " << prop << " -------\n";
             DBG_MSG << "------- " << owner->getName() << ": " << prop << " -------\n";
