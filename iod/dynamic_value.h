@@ -127,7 +127,7 @@ private:
     Value index;
     std::string machine_list_name;
     MachineInstance *machine_list;
-    bool remove_from_list = false;
+    bool remove_from_list;
 };
 
 class SizeValue : public DynamicValue {
