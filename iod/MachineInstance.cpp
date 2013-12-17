@@ -2149,11 +2149,10 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 			if (owner) ss << owner->getName() << ".";
 	        ss << _name << "." << property << " VALUE " << new_value << std::flush;
 			if (property == "VALUE" && io_interface) {
-				char *p = 0;
 				errno = 0;
-				long value =0;
+				long value =0; // TBD deal with sign
 				if (new_value.asInteger(value))
-					io_interface->setValue(value);
+					io_interface->setValue( (uint32_t)value);
 			}
 	        mif->send(ss.str().c_str());
 			if (getValue("PERSISTENT") == "true") {
@@ -2215,16 +2214,17 @@ void MachineInstance::setValue(std::string property, Value new_value) {
             mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
         }
 
-        
-		std::set<MachineInstance *>::iterator d_iter = depends.begin();
-		while (d_iter != depends.end()) {
-			MachineInstance *dep = *d_iter++;
-			dep->setNeedsCheck(); // make sure dependant machines update when a property changes
-            //if (changed) {
-            //    Message *msg = new Message("property_change");
-            //    send(msg, dep);
-            //}
-		}
+        // only tell dependent machines to recheck predicates if the property
+        // actually changes value
+        if (changed) {
+            std::set<MachineInstance *>::iterator d_iter = depends.begin();
+            while (d_iter != depends.end()) {
+                MachineInstance *dep = *d_iter++;
+                dep->setNeedsCheck(); // make sure dependant machines update when a property changes
+                //Message *msg = new Message("property_change");
+                //send(msg, dep);
+            }
+        }
 	}
 }
 

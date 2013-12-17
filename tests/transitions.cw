@@ -41,6 +41,7 @@ TrafficLight MACHINE crossing_lights {
     ENTER amber { LOG "Amber"; }
     ENTER red   { LOG "Red"; }
 }
+
 IntersectionController MACHINE ns, ew {
     NS_change WHEN (SELF IS EW_go OR SELF IS waiting) AND TIMER>6000;
     EW_change WHEN SELF IS NS_go AND TIMER>5000;

@@ -7,10 +7,10 @@ Cell MACHINE left, right {
     starting DURING start { SET SELF TO on }
 }
 
-led01 Cell led06, led02;
-led02 Cell led01, led03;
-led03 Cell led02, led04;
-led04 Cell led03, led05;
-led05 Cell led04, led06;
-led06 Cell led05, led01;
+led01 Cell(tab:cells) led06, led02;
+led02 Cell(tab:cells) led01, led03;
+led03 Cell(tab:cells) led02, led04;
+led04 Cell(tab:cells) led03, led05;
+led05 Cell(tab:cells) led04, led06;
+led06 Cell(tab:cells) led05, led01;
 
