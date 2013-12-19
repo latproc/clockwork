@@ -101,6 +101,10 @@ Lists
 \end_layout
 
 \begin_layout Itemize
+References
+\end_layout
+
+\begin_layout Itemize
 Streams (also generators)
 \end_layout
 
@@ -151,6 +155,10 @@ Conditions
 
 \begin_layout Itemize
 Processing priorities - low priority/slow scan inputs
+\end_layout
+
+\begin_layout Itemize
+Functions
 \end_layout
 
 \begin_layout Itemize
@@ -461,6 +469,77 @@ Sets should send messages on state change between empty, nonempty and full.
 \end_layout
 
 \begin_layout Subsection
+Functions
+\end_layout
+
+\begin_layout Standard
+Actions are executed when a message is received by a machine.
+ These actions may return a result that can be used in a property assignment.
+\end_layout
+
+\begin_layout Subsection
+References
+\end_layout
+
+\begin_layout Standard
+The reference type REFERENCE is provided to provide a way to make a reference
+ to another object.
+ It has operations to assign and to clear the reference and has two states:
+ EMPTY and ASSIGNED.
+ Once an object is assigned to a reference, the object can be obtained using
+ reference.ITEM.
+ Referring to the ITEM on an empty reference produces undefined behaviour.
+\end_layout
+
+\begin_layout Standard
+The implementation of a reference is similar to 
+\end_layout
+
+\begin_layout LyX-Code
+REFERENCE MACHINE {
+\end_layout
+
+\begin_layout LyX-Code
+    ITEM ANY_MACHINE;
+\end_layout
+
+\begin_layout LyX-Code
+    ASSIGNED WHEN ITEM != NULL;
+\end_layout
+
+\begin_layout LyX-Code
+    EMPTY DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+    
+\end_layout
+
+\begin_layout LyX-Code
+    COMMAND clear { } # clear the current ITEM 
+\end_layout
+
+\begin_layout LyX-Code
+    COMMAND assign WITH new_item {  } # clear the current item then set
+ it to new_item
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Calling clear on the reference will unassign the object that was previously
+ assigned and calling assign will perform an assignment.
+ 
+\end_layout
+
+\begin_layout Standard
+Note: Initially, the language does not provide a way to return an object
+ from a function.
+\end_layout
+
+\begin_layout Subsection
 Streams
 \end_layout
 
@@ -477,7 +556,7 @@ A Stream is an ordered collection of data that can be grouped into fixed
  similarly, a Writer is a Stream that can only be written to.
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 s READER 
 \begin_inset Quotes eld
 \end_inset
@@ -489,27 +568,27 @@ example.dat
 :1; # read one bit at a time
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 done WHEN s IS invalid; # terminating condition
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 start WHEN s IS closed;
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 one WHEN s.curr == 1;
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 zero WHEN s.curr == 0;
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 ENTER start { SEND open TO s }
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 ENTER one { LOG 
 \begin_inset Quotes eld
 \end_inset
@@ -521,7 +600,7 @@ ENTER one { LOG
 ; SEND forward TO s }
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 ENTER zero { LOG 
 \begin_inset Quotes eld
 \end_inset
@@ -547,6 +626,11 @@ Machines currently have an unstructured set of properties as the only method
 
 \begin_layout LyX-Code
 COPY PROPERTIES FROM machine1 TO machine2
+\end_layout
+
+\begin_layout LyX-Code
+COPY PROPERTIES NAMED property_name,...
+ FROM machine1 TO machine2
 \end_layout
 
 \begin_layout Standard
@@ -618,7 +702,7 @@ SET list FROM BITSET my_flags WITH STATES [on=1,off=0]
 
 \begin_layout Standard
 In both cases, the WITH STATES clauses can also be removed if the specification
- is using a list of flags:
+ is using a list of flags or a list of integers:
 \end_layout
 
 \begin_layout LyX-Code
@@ -965,6 +1049,11 @@ New machines can be constructed with the CREATE command and removed with
  either removed from that object or that object must first be destroyed.
  Automatic reference counting is used so that when objects leave scope they
  are automatically destroyed.
+\end_layout
+
+\begin_layout Standard
+Objects that are allocated statically can never be destroyed and reference
+ counting is not necessary for these items (it may still be applied, however..TBD)
 \end_layout
 
 \begin_layout Subsection
