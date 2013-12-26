@@ -378,7 +378,11 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 	else 
 		cJSON_AddFalseToObject(node, "enabled");
     if (!m->io_interface) {
-        cJSON_AddStringToObject(node, "state", m->getCurrentStateString());
+        size_t len = m->getCurrent().getName().length()+1;
+		char *cs = (char*)malloc(len);
+        memcpy(cs, m->getCurrentStateString(), len);
+        cJSON_AddStringToObject(node, "state", cs);
+        free(cs);
     }
     else {
            IOComponent *device = lookup_device(m->getName().c_str());

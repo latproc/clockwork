@@ -68,7 +68,7 @@ static void list_directory( const std::string &pathToCheck, std::list<std::strin
          ++file)
     {
         struct stat file_stat;
-        int err = stat((*file).path().native().c_str(), &file_stat);
+        int err = stat(file->path().native().c_str(), &file_stat);
         if (err == -1) {
             std::cerr << "Error: " << strerror(errno) << " checking file type for " << (*file) << "\n";
         }

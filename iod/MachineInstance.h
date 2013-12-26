@@ -393,6 +393,9 @@ private:
     friend struct IODCommandSetStatus;
     friend class ConditionHandler;
     friend class SetListEntriesAction;
+    friend class PopListBackValue;
+    friend class PopListFrontValue;
+    friend class ItemAtPosValue;
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);

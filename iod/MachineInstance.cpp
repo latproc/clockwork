@@ -266,6 +266,7 @@ void MachineInstance::setNeedsCheck() {
             MachineInstance *dep = *dep_iter++;
             dep->setNeedsCheck();
         }
+        
     }
 }
 
@@ -680,14 +681,6 @@ bool MachineInstance::dependsOn(Transmitter *m) {
 
 
 bool MachineInstance::needsCheck() {
-#if 0
-    BOOST_FOREACH(StableState &s, stable_states) {
-        if (s.trigger && s.trigger->fired()) {
-            DBG_M_AUTOSTATES << _name << " checking stable states because a trigger has fired\n";
-            return true;
-        }
-    }
-#endif
 	return needs_check != 0;
 }
 
@@ -789,7 +782,8 @@ void MachineInstance::checkStableStates() {
     std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
     while (iter != MachineInstance::automatic_machines.end()) {
         MachineInstance *m = *iter++;
-		if ( m->enabled() && m->executingCommand() == NULL  && (m->needsCheck() || m->_type == "CONDITION") )
+		if ( m->enabled() && m->executingCommand() == NULL
+                && (m->needsCheck() || m->_type == "CONDITION" ) )
 			m->setStableState();
 	}
 }
@@ -835,6 +829,13 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     parameters[parameters.size()-1].machine = mi;
     if (!mi) mi = lookup(param.asString().c_str());
     addDependancy(mi);
+    if (_type == "LIST") {
+        setNeedsCheck();
+        //if (parameters.size())
+        //    setState(State("nonempty"));
+        //else
+        //    setState(State("empty"));
+    }
 }
 
 void MachineInstance::setProperties(const SymbolTable &props) {
@@ -1026,6 +1027,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " is not numeric\n";
 					continue;
 				}
+                if (s.condition.predicate->op == opGT) timer_val++;
+                else if (s.condition.predicate->op == opLT) --timer_val;
 				DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val*1000 << "us\n";
 				// prepare a new trigger. note: very short timers will still be scheduled
                 // TBD move this outside of the loop and only apply it for the earliest timer
@@ -1567,7 +1570,7 @@ void MachineInstance::enable() {
     for (unsigned int i = 0; i<locals.size(); ++i) {
         locals[i].machine->enable();
     }
-    if (_type == "LIST")
+    if (_type == "LIST") // enabling a list enables the members
         for (unsigned int i = 0; i<parameters.size(); ++i) {
             if (parameters[i].machine) parameters[i].machine->enable();
         }
@@ -1595,7 +1598,7 @@ void MachineInstance::disable() {
         io_interface->turnOff();
     }
 	gettimeofday(&disabled_time, 0); 
-    if (_type == "LIST")
+    if (_type == "LIST") // disabling a list disables the members
         for (unsigned int i = 0; i<parameters.size(); ++i) {
             if (parameters[i].machine) parameters[i].machine->disable();
         }
@@ -1657,6 +1660,13 @@ void MachineInstance::setStableState() {
 
     if (io_interface) {
 	 	setState(io_interface->getStateString());
+    }
+    else if (_type == "LIST") {
+        //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
+        if (parameters.size())
+            setState(State("nonempty"));
+        else
+            setState(State("empty"));
     }
     else {
         const Value *current_timer_val = getTimerVal();
@@ -1782,7 +1792,8 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     //if (state_machine) return;
     state_machine = machine_class;
 	DBG_MSG << _name << " is of class " << machine_class->name << "\n";
-	if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states && machine_class->stable_states.size()) 
+	if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states
+            && (machine_class->stable_states.size() || machine_class->name == "LIST") )
 		automatic_machines.push_back(this);
     BOOST_FOREACH(StableState &s, machine_class->stable_states) {
         stable_states.push_back(s);
@@ -1845,6 +1856,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                     if (newsm->parameters.size() != p.machine->parameters.size()) {
                         if (newsm->name == "LIST") {
                             DBG_MSG << "List has " << p.machine->parameters.size() << " parameters\n";
+                            p.machine->setNeedsCheck();
                         }
                         if (newsm->name != "LIST" && (newsm->name != "POINT" || newsm->parameters.size() < 2 || newsm->parameters.size() >3 ) ) {
                             resetTemporaryStringStream();
@@ -1886,6 +1898,11 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                 listenTo(m);
             }
             parameters[i].machine = m;
+            setNeedsCheck();
+            if (parameters.size())
+                setState(State("nonempty"));
+            else
+                setState(State("empty"));
         }
     }
 	// TBD check the parameter types

@@ -150,7 +150,10 @@ Value PopListBackValue::operator()(MachineInstance *mi) {
     last_result = false;
     if (i>=0) {
         last_result = machine_list->parameters[i].val;
-        if (remove_from_list) machine_list->parameters.pop_back();
+        if (remove_from_list){
+            machine_list->parameters.pop_back();
+            machine_list->setNeedsCheck();
+        }
     }
     return last_result;
 }
@@ -161,7 +164,12 @@ Value PopListFrontValue::operator()(MachineInstance *mi) {
     last_result = false;
     if (machine_list->parameters.size()) {
         last_result = machine_list->parameters[0].val;
-        if (remove_from_list) machine_list->parameters.erase(machine_list->parameters.begin());
+        if (remove_from_list){
+            machine_list->parameters.erase(machine_list->parameters.begin());
+            if (machine_list->_type == "LIST") {
+                machine_list->setNeedsCheck();
+            }
+        }
     }
     return last_result;
 }
@@ -184,8 +192,12 @@ Value ItemAtPosValue::operator()(MachineInstance *mi) {
             if (mi->getValue(index.sValue).asInteger(idx)) {
                 if (idx>=0 && idx < machine_list->parameters.size()) {
                     last_result = machine_list->parameters[idx].val;
-                    if (remove_from_list)
+                    if (remove_from_list) {
                         machine_list->parameters.erase(machine_list->parameters.begin()+idx);
+                        if (machine_list->_type == "LIST") {
+                            machine_list->setNeedsCheck();
+                        }
+                    }
                     return last_result;
                 }
             }
