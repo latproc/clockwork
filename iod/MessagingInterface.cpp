@@ -82,7 +82,7 @@ MessagingInterface::~MessagingInterface() {
 
 
 void MessagingInterface::send(const char *txt) {
-    int len = strlen(txt);
+    size_t len = strlen(txt);
 	try {
 	    zmq::message_t msg(len);
 	    strncpy ((char *) msg.data(), txt, len);
