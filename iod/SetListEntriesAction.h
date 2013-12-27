@@ -46,7 +46,8 @@ struct SetListEntriesActionTemplate : public ActionTemplate {
     std::string dest_name;
 };
 
-struct SetListEntriesAction : public Action {
+class SetListEntriesAction : public Action {
+public:
 	SetListEntriesAction(MachineInstance *m, const SetListEntriesActionTemplate *dat);
     SetListEntriesAction();
 	Status run();
@@ -56,6 +57,8 @@ struct SetListEntriesAction : public Action {
 	Value source;
     Value dest;
     MachineInstance *dest_machine;
+private:
+    void setListEntries(unsigned long val);
 };
 
 #endif
