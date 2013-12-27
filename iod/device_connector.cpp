@@ -369,7 +369,7 @@ struct IODInterface{
     const int REQUEST_TIMEOUT;
     
     void sendMessage(const char *message) {
-        boost::mutex::scoped_lock lock(interface_mutex);
+        //boost::mutex::scoped_lock lock(interface_mutex);
 
         try {
             const char *msg = (message) ? message : "";
@@ -451,7 +451,7 @@ struct IODInterface{
     
     zmq::context_t *context;
     zmq::socket_t *socket;
-    boost::mutex interface_mutex;
+    //boost::mutex interface_mutex;
     const Options &options;
     bool done;
 
@@ -855,7 +855,6 @@ struct PropertyMonitorThread {
     bool done;
     zmq::context_t *context;
     zmq::socket_t *socket;
-    boost::mutex interface_mutex;
     const Options &options;
     WatcherStates status;
     std::string match_str;
