@@ -599,7 +599,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
         case t_symbol: out << sValue; break;
-        case t_string: out << sValue; break;
+        case t_string: out << '"' << sValue << '"'; break;
 #if 0
         case t_list:   { 
             std::ostream_iterator<Value> o_iter(out, ","); 
@@ -657,8 +657,9 @@ void Value::addItem(std::string key, Value val) {
 #endif
 
 std::string Value::asString() const {
+    if (kind == t_string) return this->sValue;
     std::ostringstream ss;
-    ss << *this ;
+    ss << *this;
 	std::string s(ss.str());
     return s;
 }
