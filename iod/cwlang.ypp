@@ -527,9 +527,6 @@ INTEGER   {
 | COUNT SYMBOL FROM SYMBOL {
     $$ = new Value(new CountValue($2,$4));
 }
-| SYMBOL INCLUDES SYMBOL {
-    $$ = new Value(new IncludesValue($3, $1));
-}
 | BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($8,$5));
 }
@@ -541,12 +538,6 @@ INTEGER   {
 }
 | SYMBOL ENABLED {
     $$ = new Value(new EnabledValue($1));
-}
-| SYMBOL ENABLED {
-    $$ = new Value(new EnabledValue($1));
-}
-| SYMBOL DISABLED {
-    $$ = new Value(new DisabledValue($1));
 }
 | SYMBOL DISABLED {
     $$ = new Value(new DisabledValue($1));
@@ -698,7 +689,7 @@ RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ action  {
         std::stringstream ss;
         ss << "Error: " << yyfilename << ":" << yylineno 
             << ": Already have a RECEIVES handler for " << msg_name.get();
-        DBG_PARSER << ss << "\n";
+        DBG_PARSER << ss.str() << "\n";
         error_messages.push_back(ss.str());
         ++num_errors;
     }
