@@ -22,6 +22,8 @@
 #include <iostream>
 #include <exception>
 #include <zmq.hpp>
+#include "Logger.h"
+#include "DebugExtra.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
@@ -45,7 +47,8 @@ MessagingInterface::MessagingInterface(int num_threads, int port) {
     is_publisher = true;
     std::stringstream ss;
     ss << "tcp://*:" << port;
-    socket->bind(ss.str().c_str());
+    url = ss.str();
+    socket->bind(url.c_str());
 }
 
 MessagingInterface::MessagingInterface(std::string host, int port) {
@@ -55,7 +58,8 @@ MessagingInterface::MessagingInterface(std::string host, int port) {
         is_publisher = true;
         std::stringstream ss;
         ss << "tcp://*:" << port;
-        socket->bind(ss.str().c_str());
+        url = ss.str();
+        socket->bind(url.c_str());
     }
     else {
         context = new zmq::context_t(1);
@@ -82,6 +86,12 @@ MessagingInterface::~MessagingInterface() {
 
 
 void MessagingInterface::send(const char *txt) {
+    if (!is_publisher){
+        DBG_MESSAGING << "sending message " << txt << " on " << url << "\n";
+    }
+    else {
+        DBG_MESSAGING << "sending message " << txt << "\n";
+    }
     size_t len = strlen(txt);
 	try {
 	    zmq::message_t msg(len);
