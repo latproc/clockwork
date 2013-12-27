@@ -157,6 +157,7 @@ Action::Status PredicateAction::run() {
 			}
 		}
 		else {
+            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to " << val << "\n";
 			owner->setValue(name, val);
 		}
 	}

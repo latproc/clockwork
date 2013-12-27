@@ -519,6 +519,11 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 //		timer.tv_usec = 0;
 		gettimeofday(&start_time, 0);
 	}
+    if (!persistentStore) {
+        DBG_PROPERTIES << "Initialising persistence feed\n";
+        persistentStore = new MessagingInterface(1, 5557);
+        usleep(200000); // give subscribers a chance to connect before publishing
+    }
 }
 
 MachineInstance::MachineInstance(CStringHolder name, const char * type, InstanceType instance_type)
@@ -549,6 +554,11 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 //		timer.tv_usec = 0;
 		gettimeofday(&start_time, 0);
 	}
+    if (!persistentStore) {
+        DBG_PROPERTIES << "Initialising persistence feed\n";
+        persistentStore = new MessagingInterface(1, 5557);
+        usleep(200000); // give subscribers a chance to connect before publishing
+    }
 }
 
 MachineInstance::~MachineInstance() {
@@ -2175,7 +2185,6 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 	        mif->send(ss.str().c_str());
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
-				if (!persistentStore) persistentStore = new MessagingInterface(1, 5557);
 				persistentStore->send(ss.str().c_str());
 			}
 			// update modbus with the new value

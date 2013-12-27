@@ -28,6 +28,14 @@
 MessagingInterface *MessagingInterface::current = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
+MessagingInterface *MessagingInterface::getCurrent() {
+    if (current == 0) {
+        current = new MessagingInterface(1, 5556);
+        usleep(200000); // give current subscribers time to notice us
+    }
+    return current;
+}
+
 MessagingInterface *MessagingInterface::create(std::string host, int port) {
     std::stringstream ss;
     ss << host << ":" << port;

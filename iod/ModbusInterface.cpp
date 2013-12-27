@@ -110,12 +110,18 @@ bool ModbusAddress::operator==(const ModbusAddress &other) const {
 static MessagingInterface *modbus_changes = 0;
 
 void ModbusAddress::message(const std::string &msg) {
-	if (modbus_changes == 0) modbus_changes = new MessagingInterface(1, 5558);
+	if (modbus_changes == 0) {
+        modbus_changes = new MessagingInterface(1, 5558);
+        usleep(200000); // give subscribers time to notice...
+    }
 	modbus_changes->send(msg.c_str());
 }
 
 void ModbusAddress::update(Group group, int addr, const char *str_value, int len) {
-	if (modbus_changes == 0) modbus_changes = new MessagingInterface(1, 5558);
+	if (modbus_changes == 0) {
+        modbus_changes = new MessagingInterface(1, 5558);
+        usleep(200000); // give subscribers time to notice...
+    }
 	std::cerr << "Warning: modbus string values are not yet supported\n";
 	std::stringstream ss;
 	ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " \"" << str_value << "\"" <<  "\n";
@@ -124,8 +130,11 @@ void ModbusAddress::update(Group group, int addr, const char *str_value, int len
 }
 
 void ModbusAddress::update(Group group, int addr, int new_value, int len) {
-	if (modbus_changes == 0) modbus_changes = new MessagingInterface(1, 5558);
-	std::stringstream ss;
+	if (modbus_changes == 0) {
+        modbus_changes = new MessagingInterface(1, 5558);
+        usleep(200000); // give subscribers time to notice...
+    }
+    std::stringstream ss;
 	ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " " << new_value <<  "\n";
 	std::string s = ss.str();
 	modbus_changes->send(s.c_str());

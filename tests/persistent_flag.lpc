@@ -1,18 +1,23 @@
 PFlag MACHINE {
+	OPTION VALUE 0;
 	on WHEN VALUE == 1;
 	off DEFAULT;
 	OPTION PERSISTENT "true";
-	ENTER INIT {VALUE := 0;}
 }
 	
 flag PFlag;
 
 Test MACHINE {
 	GLOBAL flag;
-	f PFlag(tab:Test);
+	f PFlag(tab:Test); # persistent flag
+	g FLAG(tab:Test);  # a normal flag
 
 	x DEFAULT ;
 	ENTER x { flag := flag + 1; f.VALUE := f.VALUE + 1; }
+	ENTER INIT {
+		f.name := "Freddy"; # note that the PFlag doesn't initially have a name property
+		g.name := "Wilma"; # note that the PFlag doesn't initially have a name property
+	}
 
 }
 test Test(tab:Test);
@@ -29,4 +34,4 @@ PFlag2 MACHINE {
 	turningOn DURING turnOn { VALUE := 1; }
 	turningOff DURING turnOff { VALUE := 0; }
 }
-
+flag2 PFlag2;

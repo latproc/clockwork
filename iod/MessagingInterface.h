@@ -32,10 +32,7 @@ public:
     ~MessagingInterface();
     void send(const char *msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
-    static MessagingInterface *getCurrent() {
-        if (current == 0) current = new MessagingInterface(1, 5556);
-        return current; 
-    }
+    static MessagingInterface *getCurrent();
     static MessagingInterface *create(std::string host, int port);
 private:
     void connect();
