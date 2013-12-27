@@ -33,6 +33,8 @@
 #include "CopyPropertiesAction.h"
 #include "SetListEntriesAction.h"
 #include "SortListAction.h"
+#include "ClearListAction.h"
+#include "SetOperationAction.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -103,7 +105,7 @@ struct Subcondition {
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
-%token COMMON BETWEEN DIFFERENCE COMBINATION
+%token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
 
 %union {
 	int iVal;
@@ -849,6 +851,10 @@ SET SYMBOL TO SYMBOL  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new IncludeActionTemplate($4, $2);
 }
+| CLEAR SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ClearListActionTemplate($2);
+}
 | SET ENTRIES OF SYMBOL FROM BITSET SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetListEntriesActionTemplate($7, $4);
@@ -864,7 +870,18 @@ SET SYMBOL TO SYMBOL  {
 | COPY PROPERTIES FROM SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new CopyPropertiesActionTemplate($4, $6);
-    
+}
+| COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate($4, $6, $8, $10, soIntersect);
+}
+| COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate($4, $6, $8, $10, soDifference);
+}
+| COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL USING SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate($4, $6, $8, $10, soUnion);
 }
 | SORT SYMBOL {
     if (current_action) current_actions->push_back(current_action);

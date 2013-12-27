@@ -52,6 +52,16 @@ COMMAND sort { LOG "sorting"; SORT input }
 }
 sorter Sorter numbers;
 
+
+Queue MACHINE {
+queue LIST 1,2,3;
+	nonempty WHEN queue IS nonempty;
+	empty DEFAULT;
+
+	ENTER INIT { CLEAR queue; }
+}
+q Queue;
+
 digits LIST 0,1,2,3,4,5,6,7,8,9;
 DigitTest MACHINE list {
     OPTION sz 0;

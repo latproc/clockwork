@@ -34,6 +34,7 @@ BETWEEN             return BETWEEN;
 BITSET              return BITSET;
 BY                  return BY;
 CALL				return CALL;
+CLEAR               return CLEAR;
 COMMAND				return COMMAND;
 COMMANDS			return COMMANDS;
 COMBINATION         return COMBINATION;
