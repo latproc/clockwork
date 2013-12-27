@@ -256,4 +256,25 @@ std::ostream &DisabledValue::operator<<(std::ostream &out ) const {
 std::ostream &operator<<(std::ostream &out, const DisabledValue &val) { return val.operator<<(out); }
 
 
+DynamicValue *CastValue::clone() const { return new CastValue(*this); }
+Value CastValue::operator()(MachineInstance *mi) {
+    Value val = mi->getValue(property);
+    if (kind == "STRING")
+        last_result = val.asString();
+    else if (kind == "NUMBER") {
+        long lValue = 0;
+        if (val.asInteger(lValue))
+            last_result = lValue;
+        else
+            last_result = false;
+        return last_result;
+    }
+    return last_result;
+}
+std::ostream &CastValue::operator<<(std::ostream &out ) const {
+    return out << "CAST(" << property << "," << kind << ") ";
+}
+std::ostream &operator<<(std::ostream &out, const CastValue &val) { return val.operator<<(out); }
+
+
 

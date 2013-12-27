@@ -214,4 +214,20 @@ private:
     MachineInstance *machine;
 };
 
+
+class CastValue : public DynamicValue {
+public:
+    CastValue(const char *name, const char *type_name) : property(name), kind(type_name) { }
+    virtual ~CastValue() { }
+    virtual Value operator()(MachineInstance *);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    
+private:
+    std::string property;
+    std::string kind;
+};
+
+
+
 #endif
