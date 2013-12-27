@@ -193,7 +193,6 @@ void ProcessingThread::operator()()  {
             io_updated.wait(io_mutex);
         }
         {
-            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
 			{
 				gettimeofday(&start_t, 0);
 				if (machine_is_ready) {
@@ -222,6 +221,7 @@ void ProcessingThread::operator()()  {
 							}
 					    }
                         {
+                            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
                             //do {
 				            MachineInstance::processAll(MachineInstance::NO_BUILTINS);
 							gettimeofday(&end_t, 0);
@@ -466,7 +466,7 @@ int main (int argc, char const *argv[])
         }
         struct timeval now;
         gettimeofday(&now,0);
-        uint64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
+        int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
         if (1000-delta > 100)
             usleep(1000-delta);
         then = now;
