@@ -30,7 +30,6 @@
 #include "IODCommands.h"
 #include "Logger.h"
 
-extern boost::mutex thread_protection_mutex;
 extern bool machine_is_ready;
 extern boost::mutex thread_protection_mutex;
 
@@ -81,7 +80,6 @@ void IODCommandThread::operator()() {
                 parts.push_back(ds);
                 ++count;
             }
-            boost::mutex::scoped_lock lock(thread_protection_mutex);
             std::vector<std::string> params(0);
             std::copy(parts.begin(), parts.end(), std::back_inserter(params));
             if (params.empty()) {
@@ -90,6 +88,7 @@ void IODCommandThread::operator()() {
             }
             ds = params[0];
             {
+                boost::mutex::scoped_lock lock(thread_protection_mutex);
                 
                 if (ds == "GET" && count>1) {
                     command = new IODCommandGetStatus;
