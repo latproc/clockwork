@@ -160,6 +160,8 @@ int main(int argc, const char * argv[]) {
         po::options_description desc("Allowed options");
         desc.add_options()
         ("help", "produce help message")
+		("port", po::value<int>(), "set port number")
+		("verbose", "display changes on stdout")
         ;
         po::variables_map vm;        
         po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -168,10 +170,16 @@ int main(int argc, const char * argv[]) {
             std::cout << desc << "\n";
             return 1;
         }
+
 		int port = 5557;
+		bool verbose = false;
+
+		if (vm.count("port")) port = vm["port"].as<int>();
 		if (argc > 2 && strcmp(argv[1],"-p") == 0) {
 			port = strtol(argv[2], 0, 0);
 		}
+
+		if (vm.count("verbose")) verbose = true;
 		
 		setup_signals();
 
@@ -188,6 +196,7 @@ int main(int argc, const char * argv[]) {
         assert (res == 0);
         subscriber.connect(ss.str().c_str());
         //subscriber.connect("ipc://ecat.ipc");
+		if (verbose) std::cout << "persistd ready\n";
         while (!done) {
             zmq::message_t update;
             subscriber.recv(&update);
@@ -195,6 +204,8 @@ int main(int argc, const char * argv[]) {
            	char *data = (char *)malloc(len+1);
            	memcpy(data, update.data(), len);
            	data[len] = 0;
+
+			if (verbose) std::cout << data << "\n";		
             std::istringstream iss(data);
 			try {
             	std::string property, op, value;
