@@ -129,8 +129,6 @@ ConditionHandler &ConditionHandler::operator=(const ConditionHandler &other) {
 
 bool ConditionHandler::check(MachineInstance *machine) {
     if (!machine) return false;
-    if (trigger && trigger->fired())
-        int x = 1;
     if (command_name == "FLAG" ) {
         MachineInstance *flag = machine->lookup(flag_name);
         if (!flag)
@@ -1669,7 +1667,6 @@ void MachineInstance::setStableState() {
             setState(State("empty"));
     }
     else {
-        const Value *current_timer_val = getTimerVal();
 		bool found_match = false;
         const long MAX_TIMER = 100000000L;
         long next_timer = MAX_TIMER; // during the search, we find the shortest timer value and schedule a wake-up
@@ -2234,6 +2231,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
         // only tell dependent machines to recheck predicates if the property
         // actually changes value
         if (changed) {
+            DBG_M_PROPERTIES << "telling dependent machines about the change\n";
             std::set<MachineInstance *>::iterator d_iter = depends.begin();
             while (d_iter != depends.end()) {
                 MachineInstance *dep = *d_iter++;
@@ -2583,7 +2581,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 		if (addr.getSource() == ModbusAddress::machine) {
 			// crosscheck - the machine must have been exported read/write
 			assert(properties.exists("export"));
-			Value &export_type = properties.lookup("export");
+			//Value &export_type = properties.lookup("export");
             // disabling this test because does not seem valid when talking with a PLC instead of a panel
 			//assert( (export_type.kind == Value::t_string || export_type.kind == Value::t_symbol)
 			//	&& export_type.sValue == "rw");
