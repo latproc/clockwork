@@ -727,8 +727,8 @@ void MachineInstance::idle() {
             last->release();
 	}
 	while (!mail_queue.empty()){
-		boost::mutex::scoped_lock(q_mutex);
 		if (!mail_queue.empty()) {
+            boost::mutex::scoped_lock(q_mutex);
 			DBG_M_MESSAGING << _name << " has " <<  mail_queue.size() << " messages waiting\n";
 			Package p = mail_queue.front();
 			DBG_M_MESSAGING << _name << " found package " << p << "\n";
@@ -1647,11 +1647,15 @@ void MachineInstance::push(Action *new_action) {
 
 
 void MachineInstance::setStableState() {
-	if (!state_machine || !state_machine->allow_auto_states) return;
+	DBG_M_AUTOSTATES << _name << " checking stable states\n";
+	if (!state_machine || !state_machine->allow_auto_states) {
+        DBG_M_AUTOSTATES << _name << " aborting stable states check due to configuration\n";
+        return;
+    }
 	if ( executingCommand() || !mail_queue.empty() ) {
+        DBG_M_AUTOSTATES << _name << " aborting stable states check due to command execution\n";
 		return;
 	}
-	DBG_M_AUTOSTATES << _name << " checking stable states\n";
 	
 	// we must not set our stable state if objects we depend on are still updating their own state
 	needs_check = 0;
