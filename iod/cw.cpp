@@ -466,12 +466,13 @@ int main (int argc, char const *argv[])
         }
         struct timeval now;
         gettimeofday(&now,0);
-        long delta = (now.tv_sec - then.tv_sec) * 1000000 + ( (long)now.tv_usec - (long)then.tv_usec);
+        uint64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
         if (1000-delta > 100)
             usleep(1000-delta);
         then = now;
     }
     MQTTInterface::instance()->stop();
+    processMonitor.stop();
     process.join();
     stateMonitor.stop();
     monitor.join();
