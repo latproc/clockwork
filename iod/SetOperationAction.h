@@ -57,8 +57,10 @@ struct SetOperationAction : public Action {
     SetOperationAction();
 	Status run();
 	Status checkComplete();
+    virtual Status doOperation();
     virtual std::ostream &operator<<(std::ostream &out)const;
 
+protected:
 	Value source_a;
 	Value source_b;
     Value dest;
@@ -67,6 +69,21 @@ struct SetOperationAction : public Action {
 	MachineInstance *source_b_machine;
     MachineInstance *dest_machine;
     SetOperation operation;
+};
+
+struct IntersectSetOperation : public SetOperationAction {
+	IntersectSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
+	Status doOperation();
+};
+
+struct UnionSetOperation : public SetOperationAction {
+	UnionSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
+	Status doOperation();
+};
+
+struct DifferenceSetOperation : public SetOperationAction {
+	DifferenceSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
+	Status doOperation();
 };
 
 #endif

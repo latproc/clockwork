@@ -24,19 +24,25 @@
 
 SetOperationActionTemplate::SetOperationActionTemplate(Value a, Value b,
                                                        Value destination, Value property, SetOperation op)
-    : src_a_name(a.asString()), src_b_name(b.asString()), dest_name(destination.asString()), operation(op) {
+    : src_a_name(a.asString()), src_b_name(b.asString()),
+      dest_name(destination.asString()), property_name(property.asString()), operation(op) {
 }
 
 SetOperationActionTemplate::~SetOperationActionTemplate() {
 }
                                            
 Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
-	return new SetOperationAction(mi, this);
+    switch (operation) {
+        case soIntersect: return new IntersectSetOperation(mi, this);
+        case soUnion: return new UnionSetOperation(mi, this);
+        case soDifference:return new DifferenceSetOperation(mi, this);
+    }
 }
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
     : Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
-        dest(dat->dest_name), dest_machine(0),  operation(dat->operation) {
+        dest(dat->dest_name), dest_machine(0),  operation(dat->operation),
+        property_name(dat->property_name) {
 }
 
 SetOperationAction::SetOperationAction() : dest_machine(0) {
@@ -61,6 +67,13 @@ bool CompareSymbolAndValue(MachineInstance*scope, Value &sym, std::string &prop,
     return CompareValues(mi->getValue(prop), b);
 }
 
+bool MachineIncludesParameter(MachineInstance *m, Value &param) {
+    for (int i=0; i<m->parameters.size(); ++i) {
+        if (m->parameters[i].val == param) return true;
+    }
+    return false;
+}
+
 Action::Status SetOperationAction::run() {
 	owner->start(this);
     try {
@@ -68,28 +81,7 @@ Action::Status SetOperationAction::run() {
         if (!source_b_machine) source_b_machine = owner->lookup(source_b);
         if (!dest_machine) dest_machine = owner->lookup(dest);
         if (dest_machine && dest_machine->_type == "LIST") {
-            if (operation == soIntersect) {
-                for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
-                    Value &a(source_a_machine->parameters.at(i).val);
-                    for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
-                        Value &b(source_b_machine->parameters.at(j).val);
-                        Value v1(a);
-                        if (v1.kind == Value::t_symbol && (b.kind == Value::t_string || b.kind == Value::t_integer)) {
-                            if (CompareSymbolAndValue(owner, v1, property_name, b)) {
-                                dest_machine->addParameter(a);
-                            }
-                        }
-                        else if (b.kind == Value::t_symbol && (v1.kind == Value::t_string || v1.kind == Value::t_integer)) {
-                            if (CompareSymbolAndValue(owner, b, property_name, v1))
-                                dest_machine->addParameter(a);
-                        }
-                        else if (a == b) dest_machine->addParameter(a);
-                    }
-                }
-                status = Complete;
-            }
-            else
-                status = Failed;
+            status = doOperation();
         }
         else
             status = Failed;
@@ -99,6 +91,10 @@ Action::Status SetOperationAction::run() {
     }
     owner->stop(this);
 	return status;
+}
+
+Action::Status SetOperationAction::doOperation() {
+    return Failed;
 }
 
 Action::Status SetOperationAction::checkComplete() {
@@ -111,5 +107,105 @@ Action::Status SetOperationAction::checkComplete() {
 		owner->stop(this);
 	}
 	return status;
+}
+
+IntersectSetOperation::IntersectSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat)
+: SetOperationAction(m, dat)
+{
+    
+}
+
+Action::Status IntersectSetOperation::doOperation() {
+    for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
+        Value &a(source_a_machine->parameters.at(i).val);
+        for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
+            Value &b(source_b_machine->parameters.at(j).val);
+            Value v1(a);
+            if (v1.kind == Value::t_symbol && (b.kind == Value::t_string || b.kind == Value::t_integer)) {
+                if (CompareSymbolAndValue(owner, v1, property_name, b)) {
+                    dest_machine->addParameter(a, v1.cached_machine);
+                    break;
+                }
+            }
+            else if (b.kind == Value::t_symbol && (v1.kind == Value::t_string || v1.kind == Value::t_integer)) {
+                if (CompareSymbolAndValue(owner, b, property_name, v1)) {
+                    dest_machine->addParameter(a, v1.cached_machine);
+                    break;
+                }
+            }
+            else if (a == b) dest_machine->addParameter(a);
+        }
+    }
+    status = Complete;
+    return status;
+}
+
+UnionSetOperation::UnionSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat)
+: SetOperationAction(m, dat)
+{
+    
+}
+
+Action::Status UnionSetOperation::doOperation() {
+    if (source_a_machine != dest_machine)
+        for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
+            Value &a(source_a_machine->parameters.at(i).val);
+            if (a.kind == Value::t_symbol) {
+                MachineInstance *mi = owner->lookup(a);
+                if (!mi) throw new SetOperationException();
+                Value val(mi->getValue(a.sValue));
+                if (!MachineIncludesParameter(dest_machine,val)) dest_machine->addParameter(a);
+            }
+            else {
+                if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
+            }
+        }
+    if (source_b_machine != dest_machine)
+        for (unsigned int i=0; i < source_b_machine->parameters.size(); ++i) {
+            Value &a(source_b_machine->parameters.at(i).val);
+            if (a.kind == Value::t_symbol) {
+                MachineInstance *mi = owner->lookup(a);
+                if (!mi) throw new SetOperationException();
+                Value val(mi->getValue(a.sValue));
+                if (!MachineIncludesParameter(dest_machine,val)) dest_machine->addParameter(a);
+            }
+            else {
+                if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
+            }
+        }
+    
+    status = Complete;
+    return status;
+}
+
+DifferenceSetOperation::DifferenceSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat)
+: SetOperationAction(m, dat)
+{
+    
+}
+
+Action::Status DifferenceSetOperation::doOperation() {
+    for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
+        Value &a(source_a_machine->parameters.at(i).val);
+        bool found = false;
+        for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
+            Value &b(source_b_machine->parameters.at(j).val);
+            Value v1(a);
+            if (v1.kind == Value::t_symbol && (b.kind == Value::t_string || b.kind == Value::t_integer)) {
+                if (CompareSymbolAndValue(owner, v1, property_name, b)) {
+                    found = true; break;
+                }
+            }
+            else if (b.kind == Value::t_symbol && (v1.kind == Value::t_string || v1.kind == Value::t_integer)) {
+                if (CompareSymbolAndValue(owner, b, property_name, v1)) {
+                    found = true; break;
+                }
+            }
+            else if (a == b) { found = true; break; }
+        }
+        if (!found) dest_machine->addParameter(a);
+    }
+    status = Complete;
+    return status;
 }
 

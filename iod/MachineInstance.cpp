@@ -264,7 +264,6 @@ void MachineInstance::setNeedsCheck() {
             MachineInstance *dep = *dep_iter++;
             dep->setNeedsCheck();
         }
-        
     }
 }
 
@@ -675,7 +674,7 @@ bool checkDepend(std::set<Transmitter*>&checked, Transmitter *seek, Transmitter 
 }
 
 void MachineInstance::addDependancy(MachineInstance *m) { 
-	if (m != this && !depends.count(m)) {
+	if (m && m != this && !depends.count(m)) {
 		depends.insert(m); 
 		DBG_M_DEPENDANCIES << _name << " added dependant machine " << m->getName() << "\n";
 	}

@@ -866,9 +866,21 @@ SET SYMBOL TO SYMBOL  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetOperationActionTemplate($4, $6, $8, $10, soIntersect);
 }
+| COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate($4, $6, $8, "", soIntersect);
+}
+| COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL  /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate($4, $6, $8, "", soDifference);
+}
 | COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetOperationActionTemplate($4, $6, $8, $10, soDifference);
+}
+| COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL  /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate($4, $6, $8, "", soUnion);
 }
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);

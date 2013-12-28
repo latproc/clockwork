@@ -75,3 +75,68 @@ DigitTest MACHINE list {
 }
 dt DigitTest digits;
 dt2 DigitTest numbers;
+
+SetIntersect MACHINE {
+	ready STATE;
+
+p01 FLAG(usage:0,pos:1);
+p02 FLAG(usage:0,pos:2);
+p03 FLAG(usage:0,pos:3);
+p04 FLAG(usage:0,pos:4);
+
+all_positions LIST 3,2,1,4;
+actions LIST p01,p02,p03,p04;
+current_index_pos LIST 1,2;
+reachable LIST; # list of positions reachable at this index pos
+active LIST; # list of the flags that should activate
+
+COMMAND GetAvailableGrabs {
+	CLEAR reachable;
+   	COPY COMMON 
+		BETWEEN all_positions 
+		AND current_index_pos 
+		TO reachable;
+   	COPY COMMON 
+		BETWEEN actions
+		AND reachable
+		TO active
+		USING pos;
+}
+
+}
+intersect SetIntersect;
+
+SetUnion MACHINE {
+	ready STATE;
+
+front_shallow LIST 4,5,6;
+front_deep LIST 10,11,12;
+
+front LIST;
+
+COMMAND union {
+	CLEAR front;
+   	COPY ALL
+		IN front_shallow
+		OR front_deep
+		TO front
+		USING dummy;
+}
+
+}
+union SetUnion;
+
+SetDifference MACHINE {
+	hat FLAG;
+	tree FLAG;
+	frog FLAG;
+
+	all LIST hat,tree,frog;
+	forest LIST tree,frog;
+	odd LIST;
+
+	ENTER INIT {
+		COPY DIFFERENCE BETWEEN all AND forest TO odd;
+	}
+}
+diff SetDifference;
