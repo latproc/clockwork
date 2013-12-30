@@ -844,7 +844,9 @@ SET SYMBOL TO SYMBOL  {
 }
 | INCLUDE value IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new IncludeActionTemplate($4, $2);
+    Value *v = $2;
+    current_action = new IncludeActionTemplate($4, *v);
+    delete v;
 }
 | CLEAR SYMBOL {
     if (current_action) current_actions->push_back(current_action);
