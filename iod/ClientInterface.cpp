@@ -29,6 +29,8 @@
 #include "ClientInterface.h"
 #include "IODCommands.h"
 #include "Logger.h"
+#include "value.h"
+#include "MessagingInterface.h"
 
 extern bool machine_is_ready;
 extern boost::mutex thread_protection_mutex;
@@ -71,17 +73,35 @@ void IODCommandThread::operator()() {
             char *data = (char *)malloc(size+1);
             memcpy(data, request.data(), size);
             data[size] = 0;
-            //std::cout << "Command thread received " << data << std::endl;
-            std::istringstream iss(data);
+            std::cout << "Command thread received " << data << std::endl;
+            
             std::list<std::string> parts;
-            std::string ds;
             int count = 0;
-            while (iss >> ds) {
-                parts.push_back(ds);
-                ++count;
-            }
+            std::string ds;
             std::vector<std::string> params(0);
-            std::copy(parts.begin(), parts.end(), std::back_inserter(params));
+            {
+                std::string cmd;
+                std::list<Value> *param_list = 0;
+                if (MessagingInterface::getCommand(data, cmd, &param_list)) {
+                    params.push_back(cmd);
+                    if (param_list) {
+                        std::list<Value>::const_iterator iter = param_list->begin();
+                        while (iter != param_list->end()) {
+                            const Value &v  = *iter++;
+                            params.push_back(v.asString());
+                        }
+                    }
+                }
+                else {
+                    std::istringstream iss(data);
+                    while (iss >> ds) {
+                        parts.push_back(ds);
+                        ++count;
+                    }
+                    std::copy(parts.begin(), parts.end(), std::back_inserter(params));
+                }
+            }
+            
             if (params.empty()) {
                 sendMessage(socket, "Empty message received\n");
                 goto cleanup;
@@ -131,6 +151,9 @@ void IODCommandThread::operator()() {
                 }
                 else if ( (count == 2 || count == 3) && ds == "DESCRIBE") {
                     command = new IODCommandDescribe;
+                }
+                else if (count > 2 && ds == "DATA") {
+                    command = new IODCommandData;
                 }
                 else if (count > 1 && ds == "EC") {
                     command = new IODCommandEtherCATTool;
