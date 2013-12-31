@@ -14,6 +14,15 @@
 
 DynamicValue *DynamicValue::clone() const { return new DynamicValue(); }
 
+Value DynamicValue::operator()() {
+    return SymbolTable::False;
+}
+
+Value DynamicValue::operator()(MachineInstance *m) {
+    setScope(m);
+    return operator()();
+}
+
 std::ostream &DynamicValue::operator<<(std::ostream &out ) const {
     return out << "<dynamic value> (" << last_result << ")";
 }
@@ -86,9 +95,8 @@ std::ostream &BitsetValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const BitsetValue &val) { return val.operator<<(out); }
 
-Value DynamicValue::operator()(MachineInstance*) { return SymbolTable::False; }
-
-Value AssignmentValue::operator()(MachineInstance *mi) {
+Value AssignmentValue::operator()() {
+    MachineInstance *mi = getScope();
     if (src.kind == Value::t_symbol)
         last_result = mi->getValue(src.sValue);
     else

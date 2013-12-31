@@ -32,12 +32,16 @@ class DynamicValue {
 public:
     DynamicValue() { }
     virtual ~DynamicValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value operator()(MachineInstance *scope); // uses the provided machine's scope
+    virtual Value operator()(); // uses the current scope for evaluation
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     Value *lastResult() { return &last_result; }
+    void setScope(MachineInstance *m) { scope = m; }
+    MachineInstance *getScope() { return scope; }
 protected:
     Value last_result;
+    MachineInstance *scope;
 };
 std::ostream &operator<<(std::ostream &, const DynamicValue &);
 
@@ -46,7 +50,7 @@ public:
     AssignmentValue(const char *dest, Value *val)
     : src(*val), dest_name(dest)  { }
     virtual ~AssignmentValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     
