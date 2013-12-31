@@ -42,7 +42,7 @@ struct IncludeActionTemplate : public ActionTemplate {
     }
 
 	std::string list_machine_name; // name of the list to include the machine into
-    Value entry_name;
+    Value entry;
 };
 
 struct IncludeAction : public Action {
@@ -53,7 +53,7 @@ struct IncludeAction : public Action {
     virtual std::ostream &operator<<(std::ostream &out)const;
 
 	std::string list_machine_name;
-    Value entry_name;
+    Value entry;
     MachineInstance *list_machine;
     MachineInstance *entry_machine;
 };

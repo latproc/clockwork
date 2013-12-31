@@ -23,7 +23,7 @@
 #include "Logger.h"
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val)
-: list_machine_name(name), entry_name(val) {
+: list_machine_name(name), entry(val) {
 }
 
 IncludeActionTemplate::~IncludeActionTemplate() {
@@ -34,14 +34,14 @@ Action *IncludeActionTemplate::factory(MachineInstance *mi) {
 }
 
 IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat)
-    : Action(m), list_machine_name(dat->list_machine_name), entry_name(dat->entry_name), list_machine(0), entry_machine(0) {
+    : Action(m), list_machine_name(dat->list_machine_name), entry(dat->entry), list_machine(0), entry_machine(0) {
 }
 
 IncludeAction::IncludeAction() : list_machine(0), entry_machine(0) {
 }
 
 std::ostream &IncludeAction::operator<<(std::ostream &out) const {
-	return out << "Include Action " << list_machine_name << " " << entry_name << "\n";
+	return out << "Include Action " << list_machine_name << " " << entry << "\n";
 }
 
 Action::Status IncludeAction::run() {
@@ -51,12 +51,16 @@ Action::Status IncludeAction::run() {
 	if (list_machine) {
         bool found = false;
         for (int i=0; i<list_machine->parameters.size(); ++i) {
-            if (list_machine->parameters[i].val == entry_name
-                    || list_machine->parameters[i].real_name == entry_name.asString())
+            if (list_machine->parameters[i].val == entry
+                    || list_machine->parameters[i].real_name == entry.asString())
                 found = true;
         }
-		if (!found)
-            list_machine->addParameter(entry_name, owner->lookup(entry_name));
+		if (!found) {
+            if (entry.kind == Value::t_symbol)
+                list_machine->addParameter(entry, owner->lookup(entry));
+            else
+                list_machine->addParameter(entry);
+        }
         status = Complete;
 	}
     else
