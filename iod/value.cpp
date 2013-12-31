@@ -599,7 +599,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
         case t_symbol: out << sValue; break;
-        case t_string: out << '"' << sValue << '"'; break;
+        case t_string: out <<'"'<< sValue << '"'; break;
 #if 0
         case t_list:   { 
             std::ostream_iterator<Value> o_iter(out, ","); 
@@ -662,6 +662,12 @@ std::string Value::asString() const {
     ss << *this;
 	std::string s(ss.str());
     return s;
+}
+
+std::string Value::quoted() const {
+    std::string res = "\"";
+    res += this->asString() + "\"";
+    return res;
 }
 
 bool Value::asInteger(long &x) const {

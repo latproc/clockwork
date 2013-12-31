@@ -50,6 +50,7 @@ public:
     Value(const DynamicValue &dv);
     virtual ~Value();
     std::string asString() const;
+    std::string quoted() const;
 	bool asInteger(long &val) const;
 //	Value operator[](int index);
 //	Value operator[](std::string index);
@@ -60,7 +61,7 @@ public:
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
     DynamicValue *dyn_value;
-    DynamicValue *dynamicValue() { return dyn_value; }
+    DynamicValue *dynamicValue() const { return dyn_value; }
     void setDynamicValue(DynamicValue *dv);
     void setDynamicValue(const DynamicValue &dv);
     
