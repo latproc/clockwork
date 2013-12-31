@@ -24,6 +24,8 @@
 #include <string>
 #include <zmq.hpp>
 #include "Message.h"
+#include "Value.h"
+#include "symboltable.h"
 
 class MessagingInterface {
 public:
@@ -34,6 +36,16 @@ public:
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent();
     static MessagingInterface *create(std::string host, int port);
+    bool sendCommand(std::string cmd, std::list<Value> *params);
+    bool sendCommand(std::string cmd, Value p1 = SymbolTable::Null,
+                     Value p2 = SymbolTable::Null,
+                     Value p3 = SymbolTable::Null);
+    bool sendState(std::string cmd, std::string name, std::string state_name);
+    static char *encodeCommand(std::string cmd, std::list<Value> *params);
+    static char *encodeCommand(std::string cmd, Value p1 = SymbolTable::Null,
+                     Value p2 = SymbolTable::Null,
+                     Value p3 = SymbolTable::Null);
+    static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
 private:
     void connect();
     static MessagingInterface *current;
