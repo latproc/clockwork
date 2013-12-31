@@ -127,6 +127,10 @@ struct IODCommandGetSlaveConfig : public IODCommand {
 	bool run(std::vector<std::string> &params);
 };
 
+struct IODCommandData : public IODCommand {
+	bool run(std::vector<std::string> &params);
+};
+
 
 
 #endif

@@ -522,6 +522,37 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         return false;
     }
 
+
+    bool IODCommandData::run(std::vector<std::string> &params) {
+        //if (params.size() == 4) {
+        MachineInstance *m = MachineInstance::find(params[1].c_str());
+        if (m && m->_type == "LIST") {
+            
+            for (int i=2; i<params.size(); ++i) {
+                m->addParameter(params[i]);
+            }
+            
+            result_str = "OK";
+            return true;
+        }
+        else {
+            error_str = "Unknown device";
+            return false;
+        }
+        /*}
+         else {
+         std::stringstream ss;
+         ss << "Unrecognised parameters in ";
+         std::ostream_iterator<std::string> out(ss, " ");
+         std::copy(params.begin(), params.end(), out);
+         ss << ".  Usage: PROPERTY property_name value";
+         error_str = ss.str();
+         return false;
+         }
+         */
+    }
+
+
     bool IODCommandQuit::run(std::vector<std::string> &params) {
         program_done = true;
         std::stringstream ss;
@@ -707,7 +738,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                 return true;
             }
         }
-        ss << ": Unknown command";
+        ss << ": Unknown command: ";
         error_str = ss.str();
         return false;
     }
