@@ -140,3 +140,20 @@ SetDifference MACHINE {
 	}
 }
 diff SetDifference;
+
+# string lists
+
+names LIST "bill", "ted";
+Logger MACHINE names {
+	task_done STATE;
+	working WHEN SIZE OF names > 0;
+	idle DEFAULT;
+
+	ENTER working { 
+		val := TAKE FIRST FROM names; 
+		LOG val; 
+		SET SELF TO task_done;
+		IF ( val == "ted" ) { INCLUDE "mary" IN names; }
+	}
+}
+logger Logger names;
