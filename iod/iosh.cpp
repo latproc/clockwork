@@ -101,6 +101,9 @@ void process_command(std::list<Value> &params) {
 #endif
 
 extern void yyparse();
+extern FILE *yyin;
+
+bool cmdline_done = false;
 
 int main(int argc, const char * argv[])
 {
@@ -147,7 +150,7 @@ int main(int argc, const char * argv[])
 		std::string line;
 		std::stringstream line_input(line);
 
-		yyparse();
+		do yyparse(); while (!cmdline_done);
 #if 0
         for (;;) {
 #ifndef USE_READLINE

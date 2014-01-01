@@ -12,7 +12,9 @@ static char *buf;
 static int buflen = 0;
 static char *bufp;
 extern YYSTYPE yylval;
-    int yycharno;
+int yycharno;
+
+extern bool cmdline_done;
 
 void append_char(int ch);
 
@@ -86,10 +88,12 @@ void append_char(int ch)
 int get_input(char *buf, int size)
 {
     char *line;
-    if (feof(yyin)) return YY_NULL;
+    if (feof(yyin)) { return YY_NULL; }
     line = readline("> ");
-    if (!line)
-    return YY_NULL;
+    if (!line) {
+		cmdline_done = true;
+    	return YY_NULL;
+	}
     if (strlen(line) > size - 2) {
         yyerror("input line too long");
         return YY_NULL;
