@@ -1,0 +1,103 @@
+%{
+#include <stdlib.h>
+#include "cmdline.h"
+#include "cmdline.tab.hpp"
+#ifdef USE_READLINE
+#include <readline/readline.h>
+#include <readline/history.h>
+#endif
+
+void yyerror(const char *);
+static char *buf;
+static int buflen = 0;
+static char *bufp;
+extern YYSTYPE yylval;
+    int yycharno;
+
+void append_char(int ch);
+
+%}
+%x STRING
+%x COMMENT
+
+%%
+
+[A-Za-z][A-Za-z0-9_.]*       { 
+    yylval.sVal = strdup(yytext);
+    return SYMBOL;
+}
+
+0           {
+    yylval.iVal = atoi(yytext);
+    return INTEGER;
+}
+
+[-]{0,1}[1-9][0-9]* {
+    yylval.iVal = atoi(yytext);
+    return INTEGER;
+}
+
+\"			    {  /*"*/	
+                    BEGIN STRING; 
+					if (!buf) 
+					{ 
+					     buf = (char *)malloc(20); 
+					     buflen = 20; 
+					}
+					bufp = buf;
+					*bufp = 0;
+ 				}
+<STRING>\\n		{ append_char('\n'); }
+<STRING>\\r		{ append_char('\r'); }
+<STRING>\\t		{ append_char('\t'); }
+<STRING>\\[0-3][0-7][0-7] { unsigned char ch = ((yytext[1]-'0')*8 + yytext[2]-'0')*8+yytext[3]-'0'; append_char(ch); }
+<STRING>\\\"	{ /*"*/ append_char('\"'); }
+<STRING>\"		{ /*"*/ BEGIN 0; yylval.sVal = buf; buf = NULL; return STRINGVAL; }
+<STRING>\n		{ append_char('\n'); yylineno++; yycharno=1; }
+<STRING>.		{ append_char(*yytext); }
+
+[ \t]+        ;       /* ignore whitespace */
+
+\'              /*' ignore single quotes */
+
+['-()=+*/;{}.%] {
+    return *yytext;
+}
+
+.               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); } 
+
+%%
+
+int yywrap(void) {
+    return 1;
+}
+
+void append_char(int ch)
+{
+	if (bufp - buf == buflen-1) {
+		buf = (char *)realloc(buf, buflen + 20);
+		bufp = buf + buflen-1;
+		buflen += 20;
+	}
+	*bufp++ = ch;
+	*bufp = 0;
+}
+
+int get_input(char *buf, int size)
+{
+    char *line;
+    if (feof(yyin)) return YY_NULL;
+    line = readline("> ");
+    if (!line)
+    return YY_NULL;
+    if (strlen(line) > size - 2) {
+        yyerror("input line too long");
+        return YY_NULL;
+    }
+    strcpy(buf, line);
+    free(line);
+    add_history(buf);
+
+    return strlen(buf);
+}
+

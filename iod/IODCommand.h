@@ -24,7 +24,9 @@
 #include <stdlib.h>
 #include <string>
 #include <vector>
+#include "value.h"
 
+/*
 class IODString {
 public:
     IODString(char *s) : s_str(0), str(s) { }
@@ -43,6 +45,7 @@ public:
     const char *s_str;
 	char *str;
 };
+*/
 
 struct IODCommand {
 public:
@@ -54,13 +57,13 @@ public:
     const char *error() { return error_str.c_str(); }
     const char *result() { return result_str.c_str(); }
     
-	bool operator()(std::vector<std::string> &params) {
+	bool operator()(std::vector<Value> &params) {
 		done = run(params);
 		return done;
 	}
     
 protected:
-	virtual bool run(std::vector<std::string> &params) = 0;
+	virtual bool run(std::vector<Value> &params) = 0;
 	std::string error_str;
 	std::string result_str;
 };

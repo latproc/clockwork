@@ -27,88 +27,89 @@
 #include "IODCommand.h"
 #include <zmq.hpp>
 #include <map>
+#include "value.h"
 
 void sendMessage(zmq::socket_t &socket, const char *message);
 
 extern std::map<std::string, std::string> message_handlers;
 
 struct IODCommandGetStatus : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandSetStatus : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandEnable : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandResume : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandDisable : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandToggle : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandProperty : public IODCommand {
     IODCommandProperty(const char *raw_message) : raw_message_(raw_message) {}
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
     std::string raw_message_;
 };
 
 struct IODCommandDescribe : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandList : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandListJSON : public IODCommand {
 	static std::set<std::string>no_display;
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandSend : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandQuit : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandHelp : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandDebugShow : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandDebug : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandModbus : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandModbusExport : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandModbusRefresh : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandUnknown : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 #ifdef USE_ETHERCAT
@@ -116,19 +117,19 @@ char *collectSlaveConfig(bool reconfigure);
 #endif
 
 struct IODCommandEtherCATTool : public IODCommand {
-    bool run(std::vector<std::string> &params);
+    bool run(std::vector<Value> &params);
 };
 
 struct IODCommandMasterInfo : public IODCommand {
-    bool run(std::vector<std::string> &params);
+    bool run(std::vector<Value> &params);
 };
 
 struct IODCommandGetSlaveConfig : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 struct IODCommandData : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
 

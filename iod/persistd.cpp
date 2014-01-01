@@ -34,6 +34,10 @@
 #include <boost/foreach.hpp>
 #include <signal.h>
 #include <sys/time.h>
+#include "cJSON.h"
+#include "value.h"
+#include "symboltable.h"
+#include "MessagingInterface.h"
 
 
 namespace po = boost::program_options;
@@ -206,12 +210,30 @@ int main(int argc, const char * argv[]) {
            	data[len] = 0;
 
 			if (verbose) std::cout << data << "\n";		
-            std::istringstream iss(data);
+
 			try {
-            	std::string property, op, value;
-            	iss >> property >> op >> value;
-				store.insert(property, value.c_str());
-				store.save();
+	            std::string cmd;
+	            std::list<Value> *param_list = 0;
+	            if (MessagingInterface::getCommand(data, cmd, &param_list)) {
+					if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
+						std::string property;
+						int i=0;
+						std::list<Value>::const_iterator iter = param_list->begin();
+						Value machine_name = *iter++;
+						Value property_name = *iter++;
+						Value value = *iter++;
+						property = machine_name.asString() + "." + property_name.asString();
+						store.insert(property, value.asString().c_str());
+						store.save();
+					}
+				}
+				else {
+		            std::istringstream iss(data);
+	            	std::string property, op, value;
+	            	iss >> property >> op >> value;
+					store.insert(property, value.c_str());
+					store.save();
+				}
 				free(data);
 			}
 			catch(std::exception e) {

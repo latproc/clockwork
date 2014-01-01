@@ -156,8 +156,20 @@ modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o
 			$(BOOST_PROGRAM_OPTIONS_LIB) \
 			dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
-iosh: iosh.cpp
-	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq -lreadline $(BOOST_SYSTEM_LIB)
+iosh: iosh.cpp value.o cmdline.tab.cpp cmdline.yy.cpp \
+		cmdline.h logger.o DebugExtra.o MessagingInterface.o \
+		symboltable.o cJSON.o
+	g++ $(CFLAGS) $(LDFLAGS) -DUSE_READLINE -o iosh iosh.cpp \
+			value.o cmdline.tab.cpp cmdline.yy.cpp \
+			logger.o DebugExtra.o MessagingInterface.o \
+			symboltable.o cJSON.o \
+			-lzmq -lreadline $(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB)
+
+cmdline.tab.cpp:	cmdline.ypp cmdline.lpp
+	yacc -o $@ -g -v -d cmdline.ypp
+
+cmdline.yy.cpp:	cmdline.lpp
+	lex -o $@ cmdline.lpp
 
 zmq_ecat_monitor: zmq_ecat_monitor.o
 	g++ $(CFLAGS) $(LDFLAGS) -o zmq_ecat_monitor zmq_ecat_monitor.o -lzmq $(BOOST_SYSTEM_LIB)

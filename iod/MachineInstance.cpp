@@ -834,8 +834,8 @@ MachineInstance *MachineInstance::find(const char *name) {
 void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     parameters.push_back(param);
     parameters[parameters.size()-1].machine = mi;
-    if (!mi) mi = lookup(param.asString().c_str());
-    addDependancy(mi);
+    if (!mi && param.kind == Value::t_symbol) mi = lookup(param.asString().c_str());
+    if (mi) addDependancy(mi);
     if (_type == "LIST") {
         setNeedsCheck();
         //if (parameters.size())
@@ -1092,7 +1092,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
 	        ss << _name << " " << " STATE " << new_state << std::flush;
-	        mif->send(ss.str().c_str());
+	        //mif->send(ss.str().c_str());
+            mif->sendState("STATE", _name, new_state.getName());
 		}
 
 		std::string txt = _name + "." + new_state.getName() + "_enter";
@@ -2181,10 +2182,14 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 				if (new_value.asInteger(value))
 					io_interface->setValue( (uint32_t)value);
 			}
-	        mif->send(ss.str().c_str());
+	        //mif->send(ss.str().c_str());
+            mif->sendCommand("PROPERTY", _name, property.c_str(), new_value);
+
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
-				persistentStore->send(ss.str().c_str());
+				//persistentStore->send(ss.str().c_str());
+                persistentStore->sendCommand("PROPERTY", _name, property.c_str(), new_value);
+                
 			}
 			// update modbus with the new value
 			DBG_M_MODBUS << " building modbus name for property " << property << " on " << _name << "\n";

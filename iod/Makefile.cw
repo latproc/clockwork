@@ -134,22 +134,36 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			-lmosquitto
 
-persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o
+persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
+		MessagingInterface.o symboltable.o value.o cJSON.o DebugExtra.o Logger.o 
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
-		value.o symboltable.o Logger.o DebugExtra.o 
+		value.o symboltable.o Logger.o DebugExtra.o \
+		MessagingInterface.o cJSON.o 
 
 modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_SYSTEM_LIB) $(BOOST_THREAD_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) \
-			value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
+			value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o cJSON.o
 
-iosh: iosh.cpp
-	g++ $(CFLAGS) $(LDFLAGS) -o iosh iosh.cpp -lzmq \
-		$(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_SYSTEM_LIB) -lreadline
+iosh: iosh.cpp value.o cmdline.tab.cpp cmdline.yy.cpp \
+		cmdline.h logger.o DebugExtra.o MessagingInterface.o \
+		symboltable.o cJSON.o
+	g++ $(CFLAGS) $(LDFLAGS) -DUSE_READLINE -o iosh iosh.cpp \
+			value.o cmdline.tab.cpp cmdline.yy.cpp \
+			logger.o DebugExtra.o MessagingInterface.o \
+			symboltable.o cJSON.o \
+			-lzmq -lreadline $(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB)
 
+cmdline.tab.cpp:	cmdline.ypp cmdline.lpp
+	yacc -o $@ -g -v -d cmdline.ypp
 
-device_connector:	device_connector.o regular_expressions.o anet.o
+cmdline.yy.cpp:	cmdline.lpp
+	lex -o $@ cmdline.lpp
+
+device_connector:	device_connector.o regular_expressions.o anet.o \
+		MessagingInterface.o symboltable.o value.o cJSON.o DebugExtra.o Logger.o 
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ device_connector.o regular_expressions.o anet.o \
+		MessagingInterface.o symboltable.o value.o cJSON.o DebugExtra.o Logger.o \
 		 $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h

@@ -44,10 +44,10 @@ std::map<std::string, std::string>message_handlers;
 
 extern bool program_done;
 
-bool IODCommandGetStatus::run(std::vector<std::string> &params) {
+bool IODCommandGetStatus::run(std::vector<Value> &params) {
     if (params.size() == 2) {
 		done = false;
-        std::string ds = params[1];
+        std::string ds = params[1].asString();
         IOComponent *device = lookup_device(ds);
         if (device) {
 			done = true;
@@ -60,7 +60,7 @@ bool IODCommandGetStatus::run(std::vector<std::string> &params) {
 			result_str = res;
 		}
 		else {
-    		MachineInstance *machine = MachineInstance::find(params[1].c_str());
+    		MachineInstance *machine = MachineInstance::find(params[1].asString().c_str());
 		    if (machine) {
 				done = true;
 				result_str = machine->getCurrentStateString();
@@ -72,9 +72,9 @@ bool IODCommandGetStatus::run(std::vector<std::string> &params) {
      return done;
    }
 
-bool IODCommandSetStatus::run(std::vector<std::string> &params) {
+bool IODCommandSetStatus::run(std::vector<Value> &params) {
     if (params.size() == 4) {
-        std::string ds = params[1];
+        std::string ds = params[1].asString();
         Output *device = dynamic_cast<Output *>(lookup_device(ds));
         if (device) {
             if (params[3] == "on")
@@ -92,11 +92,11 @@ bool IODCommandSetStatus::run(std::vector<std::string> &params) {
                     do not expect to receive events
                 */
                 if (mi->transitions.size()) {
-				   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), State(params[3].c_str()) );
+				   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), State(params[3].asString().c_str()) );
 				   mi->active_actions.push_front(ssat.factory(mi)); // execute this state change once all other actions are complete
                 }
                 else {
-                    mi->setState(params[3].c_str());
+                    mi->setState(params[3].asString().c_str());
                 }
                 return true;
             }
@@ -114,11 +114,11 @@ bool IODCommandSetStatus::run(std::vector<std::string> &params) {
 }
 
 
-bool IODCommandEnable::run(std::vector<std::string> &params) {
+bool IODCommandEnable::run(std::vector<Value> &params) {
 	std::cout << "received iod command ENABLE " << params[1] << "\n";
 	if (params.size() == 2) {
 		DBG_MSG << "enabling " << params[1] << "\n";
-		MachineInstance *m = MachineInstance::find(params[1].c_str());
+		MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		if (m && !m->enabled()) m->enable();
 		result_str = "OK";
 		return true;
@@ -127,18 +127,18 @@ bool IODCommandEnable::run(std::vector<std::string> &params) {
 	return false;
 }
 
-bool IODCommandResume::run(std::vector<std::string> &params) {
+bool IODCommandResume::run(std::vector<Value> &params) {
 	std::cout << "received iod command RESUME " << params[1] << "\n";
 	if (params.size() == 2) {
 		DBG_MSG << "resuming " << params[1] << "\n";
-		MachineInstance *m = MachineInstance::find(params[1].c_str());
+		MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		if (m && !m->enabled()) m->resume();
 		result_str = "OK";
 		return true;
 	}
 	else if (params.size() == 4 && params[2] == "AT") {
 		DBG_MSG << "resuming " << params[1] << " at state "  << params[3] << "\n";
-		MachineInstance *m = MachineInstance::find(params[1].c_str());
+		MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		if (m && !m->enabled()) m->resume();
 		result_str = "OK";
 		return true;
@@ -147,11 +147,11 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 	return false;
 }
 
-    bool IODCommandDisable::run(std::vector<std::string> &params) {
+    bool IODCommandDisable::run(std::vector<Value> &params) {
 		std::cout << "received iod command DISABLE " << params[1] << "\n";
         if (params.size() == 2) {
 			DBG_MSG << "disabling " << params[1] << "\n";
-			MachineInstance *m = MachineInstance::find(params[1].c_str());
+			MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 			if (m && m->enabled()) m->disable();
 			result_str = "OK";
 			return true;
@@ -161,7 +161,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 	}
 
 
-    bool IODCommandDescribe::run(std::vector<std::string> &params) {
+    bool IODCommandDescribe::run(std::vector<Value> &params) {
         std::cout << "received iod command Describe " << params[1] << "\n";
         bool use_json = false;
         if (params.size() == 3 && params[2] != "JSON") {
@@ -169,7 +169,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
             return false;
         }
         if (params.size() == 2 || params.size() == 3) {
-            MachineInstance *m = MachineInstance::find(params[1].c_str());
+            MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
             cJSON *root;
             if (use_json)
                 root = cJSON_CreateArray();
@@ -198,16 +198,16 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
     }
 
 
-    bool IODCommandToggle::run(std::vector<std::string> &params) {
+    bool IODCommandToggle::run(std::vector<Value> &params) {
         if (params.size() == 2) {
 			DBG_MSG << "toggling " << params[1] << "\n";
-			size_t pos = params[1].find('-');
-			std::string machine_name = params[1];
+			size_t pos = params[1].asString().find('-');
+			std::string machine_name = params[1].asString();
 			if (pos != std::string::npos) machine_name.erase(pos);
             MachineInstance *m = MachineInstance::find(machine_name.c_str());
 		    if (m) {
 				if (pos != std::string::npos) {
-					machine_name = params[1].substr(pos+1);
+					machine_name = params[1].asString().substr(pos+1);
 					m = m->lookup(machine_name);
 					if (!m) {
 						error_str = "No such machine";
@@ -245,7 +245,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 				return false;
 		    }
 				
-            Output *device = dynamic_cast<Output *>(lookup_device(params[1]));
+            Output *device = dynamic_cast<Output *>(lookup_device(params[1].asString()));
             if (device) {
                 if (device->isOn()) device->turnOff();
                 else if (device->isOff()) device->turnOn();
@@ -281,35 +281,35 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
 		}
 	}
 
-    bool IODCommandProperty::run(std::vector<std::string> &params) {
+    bool IODCommandProperty::run(std::vector<Value> &params) {
         //if (params.size() == 4) {
-		    MachineInstance *m = MachineInstance::find(params[1].c_str());
+		    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		    if (m) {
                 if (params.size() == 3)
-                    m->setValue(params[2], "");
+                    m->setValue(params[2].asString(), "");
                 else if (params.size() == 4) {
                     if (m->debug()) {
                         DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
                     }
                     long x;
                     char *p;
-                    x = strtol(params[3].c_str(), &p, 0);
+                    x = strtol(params[3].asString().c_str(), &p, 0);
                     if (*p == 0)
-                        m->setValue(params[2], x);
+                        m->setValue(params[2].asString(), x);
                     else
-                        m->setValue(params[2], params[3].c_str());
+                        m->setValue(params[2].asString(), params[3].asString().c_str());
                 }
                 else {
                     // extra parameters implies the value contains spaces so we find the tail of the parameter string and use that for the property value
-                    size_t pos = raw_message_.find(params[2].c_str());
+                    size_t pos = raw_message_.find(params[2].asString().c_str());
                     if (pos == std::string::npos) {
                         error_str = "Unexpected parameter error ";
                         return false;
                     }
-                    pos += params[2].length();
+                    pos += params[2].asString().length();
                     while (raw_message_[pos] == ' ') ++pos; // skip the parameter spacing
                     const char *p = raw_message_.c_str() + pos;
-                    m->setValue(params[2], p);
+                    m->setValue(params[2].asString(), p);
                 }
 
                 result_str = "OK";
@@ -332,7 +332,7 @@ bool IODCommandResume::run(std::vector<std::string> &params) {
          */
 	}
 
-    bool IODCommandList::run(std::vector<std::string> &params) {
+    bool IODCommandList::run(std::vector<Value> &params) {
         std::ostringstream ss;
         std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
         while (iter != machines.end()) {
@@ -437,7 +437,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 }
 
 
-    bool IODCommandListJSON::run(std::vector<std::string> &params) {
+    bool IODCommandListJSON::run(std::vector<Value> &params) {
         cJSON *root = cJSON_CreateArray();
 		Value tab("");
 		bool limited = false;
@@ -477,22 +477,22 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		machine-object.command or
 		object.command
 */
-    bool IODCommandSend::run(std::vector<std::string> &params) {
+    bool IODCommandSend::run(std::vector<Value> &params) {
 		if (params.size() != 2) {
 			error_str = "Usage: SEND command";
 			return false;
 		}
 		MachineInstance *m = 0;
-		std::string machine_name(params[1]);
-		std::string command(params[1]);
+		std::string machine_name(params[1].asString());
+		std::string command(params[1].asString());
 		if (machine_name.find('-') != std::string::npos) {
 			machine_name.erase(machine_name.find('-'));
-			command = params[1].substr(params[1].find('-')+1);
+			command = params[1].asString().substr(params[1].asString().find('-')+1);
  			if (command.find('.')) {
 				// another level of indirection
 				std::string target = command;
 				target.erase(target.find('.'));
-				command = params[1].substr(params[1].find('.')+1);
+				command = params[1].asString().substr(params[1].asString().find('.')+1);
 				MachineInstance *owner = MachineInstance::find(machine_name.c_str());
 				if (!owner) {
 					error_str = "could not find machine";
@@ -505,7 +505,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		}
 		else if (machine_name.find('.') != std::string::npos) {
 			machine_name.erase(machine_name.find('.'));
-			command = params[1].substr(params[1].find('.')+1);
+			command = params[1].asString().substr(params[1].asString().find('.')+1);
 			m = MachineInstance::find(machine_name.c_str());
 		}
         std::stringstream ss;
@@ -523,9 +523,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 
 
-    bool IODCommandData::run(std::vector<std::string> &params) {
+    bool IODCommandData::run(std::vector<Value> &params) {
         //if (params.size() == 4) {
-        MachineInstance *m = MachineInstance::find(params[1].c_str());
+        MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
         if (m && m->_type == "LIST") {
             
             for (int i=2; i<params.size(); ++i) {
@@ -536,7 +536,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             return true;
         }
         else {
-            error_str = "Unknown device";
+            std::string err ="Unknown device: ";
+            err = err + params[1].asString() + "\n";
+            error_str = strdup(err.c_str());
             return false;
         }
         /*}
@@ -553,7 +555,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 
 
-    bool IODCommandQuit::run(std::vector<std::string> &params) {
+    bool IODCommandQuit::run(std::vector<Value> &params) {
         program_done = true;
         std::stringstream ss;
         ss << "quitting ";
@@ -563,7 +565,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         return true;
     }
 
-    bool IODCommandHelp::run(std::vector<std::string> &params) {
+    bool IODCommandHelp::run(std::vector<Value> &params) {
         std::stringstream ss;
         ss 
 		 << "Commands: \n"
@@ -593,7 +595,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         return true;
     }
 
-    bool IODCommandDebugShow::run(std::vector<std::string> &params) {
+    bool IODCommandDebugShow::run(std::vector<Value> &params) {
 		std::stringstream ss;
 		ss << "Debug status: \n" << *LogState::instance() << "\n" << std::flush;
 		std::string s = ss.str();
@@ -601,7 +603,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		return true;
 	}
 
-    bool IODCommandDebug::run(std::vector<std::string> &params) {
+    bool IODCommandDebug::run(std::vector<Value> &params) {
 		if (params.size() != 3) {
 			std::stringstream ss;
 			ss << "usage: DEBUG debug_group on|off\n\nDebug groups: \n" << *LogState::instance() << std::flush;
@@ -609,9 +611,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 			error_str = s;
 			return false;
 		}
-		int group = LogState::instance()->lookup(params[1]);
+		int group = LogState::instance()->lookup(params[1].asString());
 		if (group == 0) {
-			std::map<std::string, MachineInstance *>::iterator found = machines.find(params[1]);
+			std::map<std::string, MachineInstance *>::iterator found = machines.find(params[1].asString());
 			if (found != machines.end()) {
 				MachineInstance *mi = (*found).second;
 				if (params[2] == "on" || params[2] == "ON") {
@@ -642,24 +644,24 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		return true;
 	}
 
-    bool IODCommandModbus::run(std::vector<std::string> &params) {
+    bool IODCommandModbus::run(std::vector<Value> &params) {
 		if (params.size() != 4) {
 			error_str = "Usage: MODBUS group address value";
 			return false;
 		}
 		int group, address, val;
 		char *end;
-		group = (int)strtol(params[1].c_str(), &end, 0);
+		group = (int)strtol(params[1].asString().c_str(), &end, 0);
 		if (*end) {
 			error_str = "Modbus: group number should be from 1..4";
 			return false;
 		}
-		address = (int)strtol(params[2].c_str(), &end, 0);
+		address = (int)strtol(params[2].asString().c_str(), &end, 0);
 		if (*end) {
 			error_str = "Modbus: address should be from 0..65535";
 			return false;
 		}
-		val = (int)strtol(params[3].c_str(), &end, 0);
+		val = (int)strtol(params[3].asString().c_str(), &end, 0);
 		if (*end) {
 			std::stringstream ss;
 			ss  << "Modbus: value (" << params[3] << ") was expected to be a number from 0..65535\n";
@@ -689,7 +691,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		return true;
 	}
 
-    bool IODCommandModbusExport::run(std::vector<std::string> &params) {
+    bool IODCommandModbusExport::run(std::vector<Value> &params) {
 
 		const char *file_name = modbus_map();
 		const char *backup_file_name = "modbus_mappings.bak";
@@ -711,7 +713,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		return true;
 	}
 
-    bool IODCommandModbusRefresh::run(std::vector<std::string> &params) {
+    bool IODCommandModbusRefresh::run(std::vector<Value> &params) {
 		std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
 		std::stringstream out;
 		while (m_iter != MachineInstance::end()) {
@@ -724,9 +726,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 	}
 
 
-    bool IODCommandUnknown::run(std::vector<std::string> &params) {
+    bool IODCommandUnknown::run(std::vector<Value> &params) {
         std::stringstream ss;
-        std::ostream_iterator<std::string> oi(ss, "");
+        std::ostream_iterator<Value> oi(ss, " ");
         std::copy(params.begin(), params.end(), oi);
         
         if (message_handlers.count(ss.str())) {
@@ -948,7 +950,7 @@ char *collectSlaveConfig(bool reconfigure)
 }
 
 
-    bool IODCommandEtherCATTool::run(std::vector<std::string> &params) {
+    bool IODCommandEtherCATTool::run(std::vector<Value> &params) {
         if (params.size() > 1) {
             int argc = params.size();
             char **argv = (char**)malloc((argc+1) * sizeof(char*));
@@ -986,7 +988,7 @@ char *collectSlaveConfig(bool reconfigure)
         }
     }
 
-    bool IODCommandGetSlaveConfig::run(std::vector<std::string> &params) {
+    bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
         char *res = collectSlaveConfig(false);
         if (res) {
             result_str = res;
@@ -999,7 +1001,7 @@ char *collectSlaveConfig(bool reconfigure)
         }
     }
 
-bool IODCommandMasterInfo::run(std::vector<std::string> &params) {
+bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     //const ec_master_t *master = ECInterface::instance()->getMaster();
     const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();
     cJSON *root = cJSON_CreateObject();
@@ -1032,12 +1034,12 @@ bool IODCommandMasterInfo::run(std::vector<std::string> &params) {
 
 #else
 
-bool IODCommandEtherCATTool::run(std::vector<std::string> &params) {
+bool IODCommandEtherCATTool::run(std::vector<Value> &params) {
     error_str = "EtherCAT Tool is not available";
     return false;
 }
 
-bool IODCommandGetSlaveConfig::run(std::vector<std::string> &params) {
+bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
     cJSON *root = cJSON_CreateObject();
     char *res = cJSON_Print(root);
     cJSON_Delete(root);
@@ -1051,7 +1053,7 @@ bool IODCommandGetSlaveConfig::run(std::vector<std::string> &params) {
         return false;
     }
 }
-bool IODCommandMasterInfo::run(std::vector<std::string> &params) {
+bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     //const ec_master_t *master = ECInterface::instance()->getMaster();
     //const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();
     extern Statistics *statistics;

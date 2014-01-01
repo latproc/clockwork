@@ -46,6 +46,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
+#include "MessagingInterface.h"
+#include "Value.h"
 
 
 struct DeviceStatus {
@@ -55,13 +57,38 @@ struct DeviceStatus {
     DeviceStatus() : status(e_unknown) { }
 };
 
+static const char *stringFromDeviceStatus(DeviceStatus::State status) {
+    switch(status) {
+        case DeviceStatus::e_disconnected:
+            return "disconnected";
+            break;
+        case DeviceStatus::e_connected:
+            return "connected";
+            break;
+        case DeviceStatus::e_timeout:
+            return "timeout";
+            break;
+        case DeviceStatus::e_unknown:
+            return "unknown";
+            break;
+        case DeviceStatus::e_up:
+            return "running";
+            break;
+        case DeviceStatus::e_failed:
+            return "failed";
+            break;
+    }
+    return "unknown";
+}
+
 
 void usage(int argc, const char * argv[]) {
     std::cout << "Usage: " << argv[0]
         << "\n (--host hostname [--port port]) \n"
         << " | (--serial_port portname --serial_settings baud:bits:parity:stop_bits:flow_control )\n"
         << " --property property_name [--client] [--name device_name]\n"
-        << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ] "
+        << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ]\n"
+        << " --no_json --queue queue_name"
         << "\n";
 }
 
@@ -71,8 +98,9 @@ void usage(int argc, const char * argv[]) {
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
-        serial_port_name_(0), serial_settings_(0), watch_(0), collect_duplicates(false), disconnect_on_timeout(true),
-                got_host(false), got_port(true), got_property(false), got_pattern(false)  {
+        serial_port_name_(0), serial_settings_(0), watch_(0), queue_(0), collect_duplicates(false), disconnect_on_timeout(true),
+                got_host(false), got_port(true), got_property(false), got_pattern(false), structured_messaging(true),
+                got_queue(false) {
         setIODHost("localhost");
     }
     ~Options() {
@@ -85,7 +113,8 @@ struct Options {
         // serial implies client
         bool result =
                 ( (got_port && got_host) || (got_serial && got_serial_settings) )
-            && got_property && got_pattern && name_ != 0 && iod_host_ != 0;
+            && got_property && got_pattern && name_ != 0 && iod_host_ != 0
+            && ((sendJSON() && got_queue) || !sendJSON());
         if (!result) {
             std::stringstream msg;
             msg << "\nError:\n";
@@ -102,6 +131,8 @@ struct Options {
                 msg << "  no pattern detected (--pattern text)\n";
             if (!name_)
                 msg << "  no name given (--name)\n";
+            if (sendJSON() && !got_queue)
+                msg << " a queue name is required for structure message (JSON) mode\n";
             std::cerr <<msg.str() << "\n";
         }
         return result;
@@ -196,6 +227,15 @@ struct Options {
     }
     rexp_info *regexpInfo() { return compiled_pattern;}
     rexp_info *regexpInfo() const { return compiled_pattern;}
+    
+    bool sendJSON() const { return structured_messaging; }
+    void setSendJSON(bool which) { structured_messaging = which; }
+    void setQueue(const char *q) {
+        if (queue_) free(queue_);
+        queue_ = strdup(q);
+        got_queue = true;
+    }
+    const char *queue() const { return queue_; }
 
     
 protected:
@@ -211,6 +251,7 @@ protected:
     char *serial_port_name_;
     char *serial_settings_;
     char *watch_;
+    char *queue_;
     bool collect_duplicates;
     bool disconnect_on_timeout;
     
@@ -221,6 +262,8 @@ protected:
     bool got_pattern;
     bool got_serial;
     bool got_serial_settings;
+    bool structured_messaging;
+    bool got_queue;
 };
 
 
@@ -368,8 +411,12 @@ struct IODInterface{
     const int REQUEST_RETRIES;
     const int REQUEST_TIMEOUT;
     
-    void sendMessage(const char *message) {
+    enum Status { s_connected, s_disconnected };
+    
+    bool sendMessage(const char *message) {
         //boost::mutex::scoped_lock lock(interface_mutex);
+        if (status == s_disconnected)
+            connect();
 
         try {
             const char *msg = (message) ? message : "";
@@ -392,16 +439,18 @@ struct IODInterface{
                     	char *data = (char *)malloc(len+1);
                     	memcpy(data, reply.data(), len);
                     	data[len] = 0;
-                    	//std::cout << data << "\n";
+                    	std::cout << data << "\n";
                     	free(data);
-						return;
+                        status = s_connected;
+						return true;
                     }
                     else if (--retries == 0) {
                         // abandon
                         expect_reply = false;
                         std::cerr << "abandoning send of message '" << msg << "'\n";
                         delete socket;
-                        connect();
+                        status = s_disconnected;
+                        return false;
                     }
                     else {
                         // retry
@@ -416,13 +465,17 @@ struct IODInterface{
         catch(std::exception e) {
             std::cerr <<e.what() << "\n";
         }
+        return false;
     }
     
-    void setProperty(const std::string &machine, const std::string &property, const std::string &val) {
-        std::stringstream ss;
+    bool setProperty(const std::string &machine, const std::string &property, const std::string &val) {
+        //std::stringstream ss;
         //std::cout << "val: '" << val << "'\n";
-        ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
-        sendMessage(ss.str().c_str());
+        //ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
+        char *msg = MessagingInterface::encodeCommand("PROPERTY", machine.c_str(), property.c_str(), val.c_str());
+        bool res = sendMessage(msg);
+        free(msg);
+        return res;
     }
     
     void connect() {
@@ -444,7 +497,8 @@ struct IODInterface{
     
     void stop() { done = true; }
     
-    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(2000), context(0), socket(0), options(opts), done(false) {
+    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(2000), context(0),
+            socket(0), options(opts), done(false), status(s_disconnected) {
         context = new zmq::context_t(1);
         connect();
     }
@@ -454,7 +508,7 @@ struct IODInterface{
     //boost::mutex interface_mutex;
     const Options &options;
     bool done;
-
+    Status status;
 };
 
 /** The MatchFunction provides a regular expression interface so that data incoming on the
@@ -480,16 +534,40 @@ struct MatchFunction {
         if (num_sub == 0 || index>0) {
             struct timeval now;
             gettimeofday(&now, 0);
-			if (index == 0 || index == 1) 
-				MatchFunction::instance()->result = match;
-			else 
-				MatchFunction::instance()->result += match;
-			std::string res = MatchFunction::instance()->result;
-            if (index == num_sub && (instance()->options.skippingRepeats() == false || last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
-                instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), res.c_str());
-				last_message = res;
-                last_send.tv_sec = now.tv_sec;
-                last_send.tv_usec = now.tv_usec;
+            if (instance()->options.sendJSON()) { // structured messaging
+                if (index == 0 || index == 1) {
+                    instance()->params.clear();
+                    instance()->params.push_back(instance()->options.queue());
+                }
+                instance()->params.push_back(Value(match, Value::t_string));
+                if (index == num_sub) {
+                    char *msg = MessagingInterface::encodeCommand("DATA", &instance()->params);
+                    if ( (instance()->options.skippingRepeats() == false
+                                            || last_message != msg || last_send.tv_sec +5 <  now.tv_sec)) {
+                        if (instance()->iod_interface.sendMessage(msg)) {
+                            last_message = msg;
+                            last_send.tv_sec = now.tv_sec;
+                            last_send.tv_usec = now.tv_usec;
+                        }
+                        free(msg);
+                    }
+                }
+            }
+            else {
+                if (index == 0 || index == 1)
+                    MatchFunction::instance()->result = match;
+                else
+                    MatchFunction::instance()->result = MatchFunction::instance()->result + " " +match;
+                
+                std::string res = MatchFunction::instance()->result;
+                if (index == num_sub && (instance()->options.skippingRepeats() == false
+                                            || last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
+                    if (instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), res.c_str())) {
+                        last_message = res;
+                        last_send.tv_sec = now.tv_sec;
+                        last_send.tv_usec = now.tv_usec;
+                    }
+                }
             }
         }
         return 0;
@@ -498,7 +576,8 @@ protected:
     static MatchFunction *instance_;
     const Options &options;
     IODInterface &iod_interface;
-	std::string result;
+    std::list<Value> params;
+    std::string result;
 private:
     MatchFunction(const MatchFunction&);
     MatchFunction &operator=(const MatchFunction&);
@@ -532,6 +611,8 @@ struct ConnectionThread {
             const int buffer_size = 100;
             char buf[buffer_size];
             size_t offset = 0;
+            useconds_t retry_delay = 50000; // usec delay before trying to setup
+                                               // the connection initialy 50ms with a back-off algorithim
             
             device_status.status = DeviceStatus::e_disconnected;
             updateProperty();
@@ -542,6 +623,8 @@ struct ConnectionThread {
                     if (options.serialPort()) {
                         connection = setupSerialPort(options.serialPort(), options.serialSettings());
                         if (connection == -1) {
+                            usleep(retry_delay); // pause before trying again
+                            if (retry_delay < 2000000) retry_delay *= 1.2;
                             continue;
                         }
                     }
@@ -549,9 +632,12 @@ struct ConnectionThread {
                         connection = anetTcpConnect(msg_buffer, options.host(), options.port());
                         if (connection == -1) {
                             std::cerr << msg_buffer << "\n";
+                            usleep(retry_delay); // pause before trying again
+                            if (retry_delay < 2000000) retry_delay *= 1.2;
                             continue;
                         }
                     }
+                    retry_delay = 50000;
                     device_status.status = DeviceStatus::e_connected;
                     updateProperty();
                 }
@@ -583,7 +669,10 @@ struct ConnectionThread {
                     if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
                         device_status.status = DeviceStatus::e_timeout;
                         updateProperty();
-                        std::cerr << "select timeout\n";
+                        std::cerr << "select timeout " << select_timeout.tv_sec << select_timeout.tv_sec << "."
+                        << std::setfill('0') << std::setw(3) << (select_timeout.tv_usec / 1000) << "\n";
+                        
+                        // we disconnect from a TCP connection on a timeout but do nothing in the case of a serial port
                         if (!options.serialPort() && options.disconnectOnTimeout()) {
                             close(connection);
                             device_status.status = DeviceStatus::e_disconnected;
@@ -593,7 +682,7 @@ struct ConnectionThread {
                     }
                 }
                 
-                if (device_status.status == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
+                if (options.server() && device_status.status == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
                     // Accept and setup a connection
                     int port;
                     char hostip[16]; // dot notation
@@ -672,7 +761,7 @@ struct ConnectionThread {
                         offset = strlen(buf);
                     }
                     else {
-                        std::cerr << "buffer full\n";
+                        std::cerr << "buffer full: " << buf << "\n";
                         close(connection);
                         device_status.status = DeviceStatus::e_disconnected;
                         updateProperty();
@@ -717,7 +806,8 @@ struct ConnectionThread {
     
     void stop() {
         done = true;
-        if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
+        if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up
+                || device_status.status == DeviceStatus::e_disconnected) {
             done = true;
             close(connection);
         }
@@ -734,28 +824,16 @@ struct ConnectionThread {
         struct timeval now;
         gettimeofday(&now, 0);
         if (last_status.status != device_status.status || now.tv_sec >= last_property_update.tv_sec + 5) {
+            {
+            boost::mutex::scoped_lock lock(connection_mutex);
             last_property_update.tv_sec = now.tv_sec;
             last_property_update.tv_usec = now.tv_usec;
             last_status.status = device_status.status;
-            switch(device_status.status) {
-                case DeviceStatus::e_disconnected:
-                    iod_interface.setProperty(options.name(), "status", "disconnected");
-                    break;
-                case DeviceStatus::e_connected:
-                    iod_interface.setProperty(options.name(), "status", "connected");
-                    break;
-                case DeviceStatus::e_timeout:
-                    iod_interface.setProperty(options.name(), "status", "timeout");
-                    break;
-                case DeviceStatus::e_unknown:
-                    iod_interface.setProperty(options.name(), "status", "unknown");
-                    break;
-                case DeviceStatus::e_up:
-                    iod_interface.setProperty(options.name(), "status", "running");
-                    break;
-                case DeviceStatus::e_failed:
-                    iod_interface.setProperty(options.name(), "status", "failed");
-                    break;
+            }
+            bool sent = false;
+            sent = iod_interface.setProperty(options.name(), "status", stringFromDeviceStatus(device_status.status));
+            if (!sent) {
+                std::cerr << "Failed to set status property " << options.name() << ".status\n";
             }
         }
     }
@@ -914,6 +992,9 @@ int main(int argc, const char * argv[])
         else if (strcmp(argv[i], "--pattern") == 0 && i < argc-1) {
             options.setPattern(argv[++i]);
         }
+        else if (strcmp(argv[i], "--queue") == 0 && i < argc-1) {
+            options.setQueue(argv[++i]);
+        }
         else if (strcmp(argv[i], "--client") == 0) {
             options.clientMode();
         }
@@ -934,6 +1015,9 @@ int main(int argc, const char * argv[])
         }
         else if (strcmp(argv[i], "--no_timeout_disconnect") == 0) {
             options.setDisconnectOnTimeout(false);
+        }
+        else if (strcmp(argv[i], "--no_json") == 0) {
+            options.setSendJSON(false);
         }
         else {
             std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
@@ -968,7 +1052,8 @@ int main(int argc, const char * argv[])
         struct timeval now;
         gettimeofday(&now, 0);
         // TBD once the connection is open, check that data has been received within the last second
-        if (device_status.status == DeviceStatus::e_up || device_status.status == DeviceStatus::e_timeout) {
+        if (device_status.status == DeviceStatus::e_up || device_status.status == DeviceStatus::e_connected
+                || device_status.status == DeviceStatus::e_timeout) {
             std::string msg;
             struct timeval last;
             connection_thread.get_last_message(msg, last);
@@ -981,11 +1066,14 @@ int main(int argc, const char * argv[])
             }
         }
         // send a message to iod
+        if (iod_interface.status == IODInterface::s_disconnected) {
+            std::cerr << "Warning: Disconnected from clockwork\n";
+        }
         
         struct timespec sleep_time;
         struct timespec remain_time;
         sleep_time.tv_sec = 0;
-        sleep_time.tv_nsec = 2000000;
+        sleep_time.tv_nsec = 300000000;
         while (nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
             sleep_time.tv_nsec = remain_time.tv_nsec;
         }

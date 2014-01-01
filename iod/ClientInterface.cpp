@@ -75,27 +75,27 @@ void IODCommandThread::operator()() {
             data[size] = 0;
             std::cout << "Command thread received " << data << std::endl;
             
-            std::list<std::string> parts;
+            std::list<Value> parts;
             int count = 0;
             std::string ds;
-            std::vector<std::string> params(0);
+            std::vector<Value> params(0);
             {
-                std::string cmd;
                 std::list<Value> *param_list = 0;
-                if (MessagingInterface::getCommand(data, cmd, &param_list)) {
-                    params.push_back(cmd);
+                if (MessagingInterface::getCommand(data, ds, &param_list)) {
+                    params.push_back(ds);
                     if (param_list) {
                         std::list<Value>::const_iterator iter = param_list->begin();
                         while (iter != param_list->end()) {
                             const Value &v  = *iter++;
-                            params.push_back(v.asString());
+                            params.push_back(v);
                         }
                     }
+                    count = params.size();
                 }
                 else {
                     std::istringstream iss(data);
                     while (iss >> ds) {
-                        parts.push_back(ds);
+                        parts.push_back(ds.c_str());
                         ++count;
                     }
                     std::copy(parts.begin(), parts.end(), std::back_inserter(params));
@@ -106,7 +106,7 @@ void IODCommandThread::operator()() {
                 sendMessage(socket, "Empty message received\n");
                 goto cleanup;
             }
-            ds = params[0];
+            ds = params[0].asString();
             {
                 boost::mutex::scoped_lock lock(thread_protection_mutex);
                 

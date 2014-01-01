@@ -270,11 +270,17 @@ bool MessagingInterface::sendState(std::string cmd, std::string name, std::strin
     return true;
 }
 
-Value valueFromJSONObject(cJSON *obj) {
+Value valueFromJSONObject(cJSON *obj, cJSON *cjType) {
     if (!obj) return SymbolTable::Null;
+    assert(cjType->type == cJSON_String);
+    const char *type = cjType->valuestring;
     Value res;
-    if (obj->type == cJSON_String)
-        res =  obj->valuestring;
+    if (obj->type == cJSON_String) {
+        if (strcmp(type, "STRING") == 0)
+            res = Value(obj->valuestring, Value::t_string);
+        else
+            res =  obj->valuestring;
+    }
     else if (obj->type == cJSON_NULL) {
         res = SymbolTable::Null;
     }
@@ -312,7 +318,7 @@ bool MessagingInterface::getCommand(const char *msg, std::string &cmd, std::list
                 cJSON *item = cJSON_GetArrayItem(cjParams, i);
                 cJSON *type = cJSON_GetObjectItem(item, "type");
                 cJSON *value = cJSON_GetObjectItem(item, "value");
-                Value item_val = valueFromJSONObject(value);
+                Value item_val = valueFromJSONObject(value, type);
                 if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
             }
         }

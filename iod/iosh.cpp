@@ -34,6 +34,11 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #endif
+#define _MAIN_
+#include "value.h"
+#include "MessagingInterface.h"
+#include <list>
+#include "cmdline.h"
 
 namespace po = boost::program_options;
 
@@ -72,7 +77,30 @@ rl_gets (const char *prompt)
 
   return (line_read);
 }
+
+zmq::socket_t *psocket = 0;
+std::list<Value> params;
+void process_command(std::list<Value> &params) {
+	if (params.size() == 0) return;
+	Value cmd_val = params.front();
+	params.pop_front();
+	std::string cmd = cmd_val.asString();
+	char *msg = MessagingInterface::encodeCommand(cmd, &params);
+	sendMessage(*psocket, msg);
+	size_t size = strlen(msg);
+	zmq::message_t reply;
+	if (psocket->recv(&reply)) {
+        size = reply.size();
+        char *data = (char *)malloc(size+1);
+        memcpy(data, reply.data(), size);
+        data[size] = 0;
+        std::cout << data << "\n";
+        free(data);
+    }
+}
 #endif
+
+extern void yyparse();
 
 int main(int argc, const char * argv[])
 {
@@ -111,11 +139,16 @@ int main(int argc, const char * argv[])
 		}
         zmq::context_t context (1);
         zmq::socket_t socket (context, ZMQ_REQ);
+		psocket = &socket;
+		
         socket.connect(ss.str().c_str());
 		std::string word;
 		std::string msg;
 		std::string line;
 		std::stringstream line_input(line);
+
+		yyparse();
+#if 0
         for (;;) {
 #ifndef USE_READLINE
 			if (!quiet) std::cout << "> " << std::flush;
@@ -159,6 +192,7 @@ int main(int argc, const char * argv[])
 			else
 				msg += " " + word;
         }
+#endif
    }
     catch(std::exception& e) {
         if (zmq_errno())
