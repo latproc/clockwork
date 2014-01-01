@@ -497,7 +497,7 @@ struct IODInterface{
     
     void stop() { done = true; }
     
-    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(2000), context(0),
+    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(100), context(0),
             socket(0), options(opts), done(false), status(s_disconnected) {
         context = new zmq::context_t(1);
         connect();
