@@ -113,7 +113,7 @@ struct Options {
         // serial implies client
         bool result =
                 ( (got_port && got_host) || (got_serial && got_serial_settings) )
-            && got_property && got_pattern && name_ != 0 && iod_host_ != 0
+            && ( (got_property && !got_queue) || (got_queue && !got_property) ) && got_pattern && name_ != 0 && iod_host_ != 0
             && ((sendJSON() && got_queue) || !sendJSON());
         if (!result) {
             std::stringstream msg;
