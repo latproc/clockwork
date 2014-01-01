@@ -118,15 +118,15 @@ struct Options {
         if (!result) {
             std::stringstream msg;
             msg << "\nError:\n";
-            if ( got_serial || got_serial_settings) {
+            if ( (got_serial && !got_serial_settings)  || (got_serial_settings && !got_serial)) {
                 if (got_serial_settings) msg << "  specifying serial_settings requires --serial_port is also given\n";
                 if (got_serial) msg << "  specifying serial_port requires --serial_port_settings is also given\n";
             }
-            else if ( !got_host ) {
+            else if ( !got_host && !got_serial ) {
                 msg << "  --host is required unless serial port is being used\n";
             }
-            if (!got_property)
-                msg << "  no property name detected (--property machine.property)\n";
+            if (!got_property && !got_queue)
+                msg << "  no property name or queue name detected (--property machine.property or --queue queue_name)\n";
             if (!got_pattern)
                 msg << "  no pattern detected (--pattern text)\n";
             if (!name_)

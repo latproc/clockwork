@@ -157,3 +157,13 @@ Logger MACHINE names {
 	}
 }
 logger Logger names;
+
+TestMatch MACHINE {
+	queue LIST;
+	yes WHEN (FIRST OF queue) MATCHES `test`;
+	no DEFAULT;
+
+	ENTER yes { tmp := TAKE FIRST OF queue; LOG tmp; }
+}
+test_match TestMatch;
+
