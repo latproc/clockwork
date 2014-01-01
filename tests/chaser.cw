@@ -5,6 +5,8 @@ Cell MACHINE left, right {
     on WHEN right IS off AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER >= 1000);
     off DEFAULT;
     starting DURING start { SET SELF TO on }
+	ENTER INIT { count := 0; }
+	ENTER on  { count := count + 1; }
 }
 
 led01 Cell(tab:cells) led06, led02;
