@@ -701,9 +701,21 @@ void initialise_machines() {
 		std::ifstream store(persistent_store());
 		char buf[200];
 		while (store.getline(buf, 200, '\n')) {
+			char value_buf[200];
 			std::istringstream in(buf);
 			std::string name, property, value_str;
-			in >> name >> property >> value_str;
+			in >> name >> property;
+            in.get(value_buf, 200, '\n');
+            int n = strlen(value_buf);
+			char *vp = value_buf+1; // skip space delimiter
+            if (vp[0] == '"' && n>2 && vp[n-1] == '"')
+            {
+                vp[n-1] = 0;
+                value_str = vp+1;
+            }
+			else
+				value_str = vp;
+
 			init_values[name].push_back(make_pair(property, value_str.c_str()));
 			std::cout << name <<"." << property << ":" << value_str << "\n";
 		}
