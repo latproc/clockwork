@@ -146,11 +146,11 @@ modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o
 			value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o cJSON.o
 
 iosh: iosh.cpp value.o cmdline.tab.cpp cmdline.yy.cpp \
-		cmdline.h logger.o DebugExtra.o MessagingInterface.o \
+		cmdline.h Logger.o DebugExtra.o MessagingInterface.o \
 		symboltable.o cJSON.o
 	g++ $(CFLAGS) $(LDFLAGS) -DUSE_READLINE -o iosh iosh.cpp \
 			value.o cmdline.tab.cpp cmdline.yy.cpp \
-			logger.o DebugExtra.o MessagingInterface.o \
+			Logger.o DebugExtra.o MessagingInterface.o \
 			symboltable.o cJSON.o \
 			-lzmq -lreadline $(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB)
 

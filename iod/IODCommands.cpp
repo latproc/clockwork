@@ -528,7 +528,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
         if (m && m->_type == "LIST") {
             
-            for (int i=2; i<params.size(); ++i) {
+            for (unsigned int i=2; i<params.size(); ++i) {
                 m->addParameter(params[i]);
             }
             
@@ -955,7 +955,7 @@ char *collectSlaveConfig(bool reconfigure)
             int argc = params.size();
             char **argv = (char**)malloc((argc+1) * sizeof(char*));
             for (int i=0; i<argc; ++i) {
-                argv[i] = strdup(params[i].c_str());
+                argv[i] = strdup(params[i].asString().c_str());
             }
             argv[argc] = 0;
             std::stringstream tool_output;

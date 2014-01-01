@@ -106,7 +106,8 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o \
 			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
-			MachineCommandAction.o HandleMessageAction.o \
+			MachineCommandAction.o HandleMessageAction.o MessagingInterface.o \
+			value.o \
 			CallMethodAction.o IODCommands.o regular_expressions.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
@@ -146,10 +147,11 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			clockwork.o ClientInterface.o MQTTInterface.o -lmosquitto
 
-persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o
+persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
+			MessagingInterface.o cJSON.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
-		value.o symboltable.o Logger.o DebugExtra.o -lzmq
+		value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o cJSON.o -lzmq
 
 modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_THREAD_LIB) \
@@ -157,11 +159,11 @@ modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o
 			dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o
 
 iosh: iosh.cpp value.o cmdline.tab.cpp cmdline.yy.cpp \
-		cmdline.h logger.o DebugExtra.o MessagingInterface.o \
+		cmdline.h Logger.o DebugExtra.o MessagingInterface.o \
 		symboltable.o cJSON.o
 	g++ $(CFLAGS) $(LDFLAGS) -DUSE_READLINE -o iosh iosh.cpp \
 			value.o cmdline.tab.cpp cmdline.yy.cpp \
-			logger.o DebugExtra.o MessagingInterface.o \
+			Logger.o DebugExtra.o MessagingInterface.o \
 			symboltable.o cJSON.o \
 			-lzmq -lreadline $(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB)
 
@@ -174,8 +176,10 @@ cmdline.yy.cpp:	cmdline.lpp
 zmq_ecat_monitor: zmq_ecat_monitor.o
 	g++ $(CFLAGS) $(LDFLAGS) -o zmq_ecat_monitor zmq_ecat_monitor.o -lzmq $(BOOST_SYSTEM_LIB)
 
-device_connector:	device_connector.o regular_expressions.o anet.o
+device_connector:	device_connector.o regular_expressions.o anet.o \
+		value.o MessagingInterface.o Logger.o DebugExtra.o cJSON.o symboltable.o
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ device_connector.o regular_expressions.o anet.o \
+		value.o MessagingInterface.o Logger.o DebugExtra.o cJSON.o symboltable.o \
 		 $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq 
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h

@@ -47,7 +47,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "MessagingInterface.h"
-#include "Value.h"
+#include "value.h"
 
 
 struct DeviceStatus {

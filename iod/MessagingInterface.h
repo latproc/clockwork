@@ -24,7 +24,7 @@
 #include <string>
 #include <zmq.hpp>
 #include "Message.h"
-#include "Value.h"
+#include "value.h"
 #include "symboltable.h"
 
 class MessagingInterface {

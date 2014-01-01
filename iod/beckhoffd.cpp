@@ -41,6 +41,8 @@
 #include "Logger.h"
 #include "IODCommands.h"
 #include "Statistics.h"
+#include "value.h"
+#include "MessagingInterface.h"
 
 //#include "MachineInstance.h"
 
@@ -107,14 +109,14 @@ void checkInputs() {
 
 
 struct BeckhoffdToggle : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
-    bool BeckhoffdToggle::run(std::vector<std::string> &params) {
+    bool BeckhoffdToggle::run(std::vector<Value> &params) {
         if (params.size() == 2) {
 			DBG_MSG << "toggling " << params[1] << "\n";
-			size_t pos = params[1].find('-');
-			std::string machine_name = params[1];
+			size_t pos = params[1].asString().find('-');
+			std::string machine_name = params[1].asString();
 			if (pos != std::string::npos) machine_name.erase(pos);
             Output *device = dynamic_cast<Output *>(lookup_device(machine_name));
             if (device) {
@@ -142,9 +144,9 @@ struct BeckhoffdToggle : public IODCommand {
 
 
 struct BeckhoffdList : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
-bool BeckhoffdList::run(std::vector<std::string> &params) {
+bool BeckhoffdList::run(std::vector<Value> &params) {
     std::map<std::string, IOComponent*>::const_iterator iter = devices.begin();
     std::string res;
     while (iter != devices.end()) {
@@ -156,10 +158,10 @@ bool BeckhoffdList::run(std::vector<std::string> &params) {
 }
 
 struct BeckhoffdListJSON : public IODCommand {
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 };
 
-    bool BeckhoffdListJSON::run(std::vector<std::string> &params) {
+    bool BeckhoffdListJSON::run(std::vector<Value> &params) {
         cJSON *root = cJSON_CreateArray();
         std::map<std::string, IOComponent*>::const_iterator iter = devices.begin();
         while (iter != devices.end()) {
@@ -204,17 +206,17 @@ struct BeckhoffdListJSON : public IODCommand {
 
 struct BeckhoffdProperty : public IODCommand {
 	BeckhoffdProperty(const char *data) : details(data) { };
-	bool run(std::vector<std::string> &params);
+	bool run(std::vector<Value> &params);
 	std::string details;
 };
-bool BeckhoffdProperty::run(std::vector<std::string> &params) {
+bool BeckhoffdProperty::run(std::vector<Value> &params) {
     //if (params.size() == 4) {
-	IOComponent *m = lookup_device(params[1]);
+	IOComponent *m = lookup_device(params[1].asString());
     if (m) {
         if (params.size() == 3) {
             long x;
             char *p;
-            x = strtol(params[2].c_str(), &p, 0);
+            x = strtol(params[2].asString().c_str(), &p, 0);
             if (*p == 0)
                 m->setValue(x);
             else {
@@ -254,21 +256,51 @@ struct CommandThread {
 	            data[size] = 0;
 	            //std::cout << "Received " << data << std::endl;
 	            std::istringstream iss(data);
-	            std::list<std::string> parts;
-	            std::string ds;
+
+	            std::list<Value> parts;
 	            int count = 0;
+	            std::string ds;
+	            std::vector<Value> params(0);
+	            {
+	                std::list<Value> *param_list = 0;
+	                if (MessagingInterface::getCommand(data, ds, &param_list)) {
+	                    params.push_back(ds);
+	                    if (param_list) {
+	                        std::list<Value>::const_iterator iter = param_list->begin();
+	                        while (iter != param_list->end()) {
+	                            const Value &v  = *iter++;
+	                            params.push_back(v);
+	                        }
+	                    }
+	                    count = params.size();
+	                }
+	                else {
+	                    std::istringstream iss(data);
+	                    while (iss >> ds) {
+	                        parts.push_back(ds.c_str());
+	                        ++count;
+	                    }
+	                    std::copy(parts.begin(), parts.end(), std::back_inserter(params));
+	                }
+	            }
+	
+	            if (params.empty()) {
+	                sendMessage(socket, "Empty message received\n");
+	                goto cleanup;
+	            }
+
+
 	            while (iss >> ds) {
 	                parts.push_back(ds);
 	                ++count;
 	            }
             
-	            std::vector<std::string> params(0);
 	            std::copy(parts.begin(), parts.end(), std::back_inserter(params));
-	            ds = params[0];
+	            ds = params[0].asString();
 	            if (ds == "GET" && count>1) {
 	                command = new IODCommandGetStatus;
 	            }
-	            else if (count == 4 && ds == "SET" && params[2] == "TO") {
+	            else if (count == 4 && ds == "SET" && params[2].asString() == "TO") {
 	                command =  new IODCommandSetStatus;
 	            }
 	#ifndef EC_SIMULATOR
@@ -293,7 +325,7 @@ struct CommandThread {
 	            else if (count == 1 && ds == "LIST") {
 	                command = new BeckhoffdList;
 	            }
-	            else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
+	            else if (count >= 2 && ds == "LIST" && params[1].asString() == "JSON") {
 	                command = new BeckhoffdListJSON;
 	            }
 	            else {
@@ -304,6 +336,8 @@ struct CommandThread {
 	            else
 	                sendMessage(socket, command->error());
 	            delete command;
+
+			cleanup:
 
 	            free(data);
             }

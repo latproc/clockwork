@@ -33,7 +33,7 @@ monitor Monitor(tab:Outputs) flash1;
 Flash MACHINE (delay:500)output {
 
 	EXPORT STATES on,off,error,ready;
-	EXPORT COMMANDS start, stop;
+	EXPORT COMMANDS start, stop, toggle;
 	EXPORT READWRITE 32BIT delay;
 	OPTION export rw;
 	OPTION delay 500;
@@ -57,6 +57,13 @@ Flash MACHINE (delay:500)output {
 
     TRANSITION ready TO on USING start;
     TRANSITION on,off TO ready USING stop;
+
+	COMMAND toggle { 
+		IF (started_flag IS on) { SEND stop TO SELF; } 
+		ELSE { SEND start TO SELF; }
+	}
+	TRANSITION on,off TO ready USING toggle;
+	TRANSITION ready TO on USING toggle;
 
     RECEIVE on_enter FROM SELF { 
 		LOG "on"; 
