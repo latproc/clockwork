@@ -48,6 +48,7 @@
 #include <ctype.h>
 #include "MessagingInterface.h"
 #include "value.h"
+#include "cJSON.h"
 
 
 struct DeviceStatus {
@@ -871,9 +872,26 @@ struct PropertyMonitorThread {
                     char *data = (char *)malloc(len+1);
                     memcpy(data, update.data(), len);
                     data[len] = 0;
-                    if (len > (long)match_str.length() && strncmp(match_str.c_str(), data, match_str.length()) == 0) {
-                        std::cout << "Found: " << data << "\n";
-                        connection.send(data + match_str.length());
+                    
+                    std::string command;
+                    std::list<Value> *params = 0;
+                    if (MessagingInterface::getCommand(data, command, &params)) {
+                        if (command == "PROPERTY" && params->size() == 3){
+                            Value machine_name = params->front(); params->pop_front();
+                            Value prop_name = params->front(); params->pop_front();
+                            Value val = params->front();
+                            std::string full_name = machine_name.asString() +  "." + prop_name.asString();
+                            if (full_name == options.watchProperty()) {
+                                std::cerr << "Sending: " << val << "\n";
+                                connection.send(val.asString().c_str());
+                            }
+                        }
+                    }
+                    else {
+                        if (len > (long)match_str.length() && strncmp(match_str.c_str(), data, match_str.length()) == 0) {
+                            std::cout << "Found: " << data << "\n";
+                            connection.send(data + match_str.length());
+                        }
                     }
                     delete data;
                 }
