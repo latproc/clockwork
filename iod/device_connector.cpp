@@ -93,6 +93,24 @@ void usage(int argc, const char * argv[]) {
         << "\n";
 }
 
+
+std::string escapeNonprintables(const char *buf) {
+    const char *hex = "0123456789ABCDEF";
+	std::string res;
+	while (*buf) {
+		if (isprint(*buf)) res += *buf;
+		else if (*buf == '\015') res += "\\r";
+		else if (*buf == '\012') res += "\\n";
+		else if (*buf == '\010') res += "\\t";
+		else {
+			const char tmp[3] = { hex[ (*buf & 0xf0) >> 4], hex[ (*buf & 0x0f)], 0 };
+			res = res + "#{" + tmp + "}";
+		}
+		++buf;
+	}
+	return res;
+}
+
 /** The Options structure provides methods to access parsed values of the commandline parameters
 
  */
@@ -114,8 +132,7 @@ struct Options {
         // serial implies client
         bool result =
                 ( (got_port && got_host) || (got_serial && got_serial_settings) )
-            && ( (got_property && !got_queue) || (got_queue && !got_property) ) && got_pattern && name_ != 0 && iod_host_ != 0
-            && ((sendJSON() && got_queue) || !sendJSON());
+            && (got_property || (got_queue && structured_messaging) ) && got_pattern && name_ != 0 && iod_host_ != 0;
         if (!result) {
             std::stringstream msg;
             msg << "\nError:\n";
@@ -132,8 +149,8 @@ struct Options {
                 msg << "  no pattern detected (--pattern text)\n";
             if (!name_)
                 msg << "  no name given (--name)\n";
-            if (sendJSON() && !got_queue)
-                msg << " a queue name is required for structure message (JSON) mode\n";
+            if (!sendJSON() && got_queue)
+                msg << " structure message (JSON) mode is required for sending to a queue\n";
             std::cerr <<msg.str() << "\n";
         }
         return result;
@@ -544,7 +561,8 @@ struct MatchFunction {
         if (num_sub == 0 || index>0) {
             struct timeval now;
             gettimeofday(&now, 0);
-            if (instance()->options.sendJSON()) { // structured messaging
+            if (instance()->options.sendJSON() && instance()->options.queue()) {
+                // structured messaging, pushing each match to a queue
                 if (index == 0 || index == 1) {
                     instance()->params.clear();
                     instance()->params.push_back(instance()->options.queue());
@@ -563,7 +581,7 @@ struct MatchFunction {
                     }
                 }
             }
-            else {
+            if (instance()->options.property()) {
                 if (index == 0 || index == 1)
                     MatchFunction::instance()->result = match;
                 else
@@ -892,14 +910,14 @@ struct PropertyMonitorThread {
                             Value val = params->front();
                             std::string full_name = machine_name.asString() +  "." + prop_name.asString();
                             if (full_name == options.watchProperty()) {
-                                std::cerr << "Sending: " << val << "\n";
+                                std::cerr << "Sending: " << escapeNonprintables(val.asString().c_str()) << "\n";
                                 connection.send(val.asString().c_str());
                             }
                         }
                     }
                     else {
                         if (len > (long)match_str.length() && strncmp(match_str.c_str(), data, match_str.length()) == 0) {
-                            std::cout << "Found: " << data << "\n";
+                            std::cout << "Found: " << escapeNonprintables(data) << "\n";
                             connection.send(data + match_str.length());
                         }
                     }
