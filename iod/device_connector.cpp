@@ -416,8 +416,10 @@ struct IODInterface{
     
     bool sendMessage(const char *message) {
         //boost::mutex::scoped_lock lock(interface_mutex);
-        if (status == s_disconnected)
+        if (status == s_disconnected) {
             connect();
+            status = s_connected;
+        }
 
         try {
             const char *msg = (message) ? message : "";
@@ -427,10 +429,11 @@ struct IODInterface{
                 size_t len = strlen(msg);
                 zmq::message_t request (len);
                 memcpy ((void *) request.data (), msg, len);
-                socket->send (request);
+                if (socket) socket->send (request);
                 bool expect_reply = true;
                 
                 while (!done && expect_reply) {
+                    if (!socket) { connect(); usleep(100000); continue; }
                     zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
                     zmq::poll( &items[0], 1, REQUEST_TIMEOUT*1000);
                     if (items[0].revents & ZMQ_POLLIN) {
@@ -450,6 +453,7 @@ struct IODInterface{
                         expect_reply = false;
                         std::cerr << "abandoning send of message '" << msg << "'\n";
                         delete socket;
+                        socket = 0;
                         status = s_disconnected;
                         return false;
                     }
@@ -457,6 +461,7 @@ struct IODInterface{
                         // retry
                         std::cerr << "retrying send of message '" << msg << "'\n";
                         delete socket;
+                        socket = 0;
                         connect();
                         socket->send (request);
                     }
@@ -483,6 +488,10 @@ struct IODInterface{
         try {
             std::stringstream ss;
             ss << "tcp://" << options.iodHost() << ":" << 5555;
+            if (socket) {
+                delete socket;
+                socket = 0;
+            }
             socket = new zmq::socket_t (*context, ZMQ_REQ);
             socket->connect(ss.str().c_str());
             int linger = 0; // do not wait at socket close time
@@ -670,11 +679,12 @@ struct ConnectionThread {
                     if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
                         device_status.status = DeviceStatus::e_timeout;
                         updateProperty();
-                        std::cerr << "select timeout " << select_timeout.tv_sec << select_timeout.tv_sec << "."
+                        std::cerr << "select timeout " << select_timeout.tv_sec << "."
                         << std::setfill('0') << std::setw(3) << (select_timeout.tv_usec / 1000) << "\n";
                         
                         // we disconnect from a TCP connection on a timeout but do nothing in the case of a serial port
                         if (!options.serialPort() && options.disconnectOnTimeout()) {
+                            std::cerr << "Closing device connection due to timeout\n";
                             close(connection);
                             device_status.status = DeviceStatus::e_disconnected;
                             updateProperty();
@@ -1086,6 +1096,7 @@ int main(int argc, const char * argv[])
         // send a message to iod
         if (iod_interface.status == IODInterface::s_disconnected) {
             std::cerr << "Warning: Disconnected from clockwork\n";
+            iod_interface.sendMessage("");
         }
         
         struct timespec sleep_time;
