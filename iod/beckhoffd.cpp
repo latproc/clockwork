@@ -172,8 +172,17 @@ struct BeckhoffdListJSON : public IODCommand {
     		cJSON_AddStringToObject(node, "name", name_str.c_str());
 			cJSON_AddStringToObject(node, "class", ioc->type());
 			cJSON_AddNumberToObject(node, "value", ioc->value());
+			cJSON_AddNumberToObject(node, "module", ioc->address.module_position);
+			ECModule *mod = ECInterface::findModule(ioc->address.module_position);
+			if (mod) {
+				cJSON_AddStringToObject(node, "module_name", mod->name.c_str());
+			}
 			if (strcmp(ioc->type(), "Output") == 0)
     				cJSON_AddStringToObject(node, "tab", "Outputs");
+			else if (strcmp(ioc->type(), "AnalogueOutput") == 0)
+    				cJSON_AddStringToObject(node, "tab", "Ana.Out");
+			else if (strcmp(ioc->type(), "AnalogueInput") == 0)
+    				cJSON_AddStringToObject(node, "tab", "Ana.In");
 			else
     				cJSON_AddStringToObject(node, "tab", "Inputs");
 
@@ -254,7 +263,7 @@ struct CommandThread {
 	            char *data = (char *)malloc(size+1);
 	            memcpy(data, request.data(), size);
 	            data[size] = 0;
-	            //std::cout << "Received " << data << std::endl;
+	            std::cout << "Received " << data << std::endl;
 	            std::istringstream iss(data);
 
 	            std::list<Value> parts;
@@ -289,13 +298,6 @@ struct CommandThread {
 	                goto cleanup;
 	            }
 
-
-	            while (iss >> ds) {
-	                parts.push_back(ds);
-	                ++count;
-	            }
-            
-	            std::copy(parts.begin(), parts.end(), std::back_inserter(params));
 	            ds = params[0].asString();
 	            if (ds == "GET" && count>1) {
 	                command = new IODCommandGetStatus;
@@ -412,7 +414,7 @@ void generateIOComponentMappings() {
 							<< " bit_pos: " << module->bit_positions[offset_idx] 
 							<< " offset: " << module->offsets[offset_idx] 
 							<< " bitlen: " << bitlen <<  "\n";
-						IOAddress addr(IOComponent::add_io_entry(name_str, module->offsets[offset_idx], 
+						IOAddress addr(IOComponent::add_io_entry(name_str, position, module->offsets[offset_idx], 
 								module->bit_positions[offset_idx], offset_idx, bitlen));
 						if (bitlen == 1) {
 	            			Output *o = new Output(addr);
@@ -439,7 +441,7 @@ void generateIOComponentMappings() {
 							<< " bit_pos: " << module->bit_positions[offset_idx]
 							<< " offset: " << module->offsets[offset_idx] 
 							<<  " bitlen: " << bitlen << "\n";
-						IOAddress addr(IOComponent::add_io_entry(name_str, module->offsets[offset_idx], 
+						IOAddress addr(IOComponent::add_io_entry(name_str, position, module->offsets[offset_idx], 
 							module->bit_positions[offset_idx], offset_idx, bitlen));
 						if (bitlen == 1) {
 							Input *in = new Input(addr);
@@ -484,7 +486,7 @@ void generateIOComponentMappings() {
 	}
 
 void displayEtherCATModulePDOOffsets() {
-    std::list<ECModule *>::const_iterator iter = ECInterface::modules.begin();
+    std::vector<ECModule *>::const_iterator iter = ECInterface::modules.begin();
     int module_offset_idx = 0;
     while (iter != ECInterface::modules.end()){
 	    ECModule *m = *iter++;

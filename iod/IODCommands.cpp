@@ -358,6 +358,17 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
     cJSON_AddStringToObject(node, "name", name_str.c_str());
     cJSON_AddStringToObject(node, "class", m->_type.c_str());
+ #ifndef EC_SIMULATOR
+    if (m->io_interface) {
+		IOComponent *ioc = m->io_interface;
+		cJSON_AddNumberToObject(node, "module", ioc->address.module_position);
+		ECModule *mod = ECInterface::findModule(ioc->address.module_position);
+		if (mod) {
+			cJSON_AddStringToObject(node, "module_name", mod->name.c_str());
+		}
+	}
+ #endif
+ 
     SymbolTableConstIterator st_iter = m->properties.begin();
     while (st_iter != m->properties.end()) {
 	    std::pair<std::string, Value> item(*st_iter++);
@@ -777,7 +788,10 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 	cJSON_AddNumberToObject(root, "position", slave.position);
 	cJSON_AddNumberToObject(root, "vendor_id", slave.vendor_id);
 	cJSON_AddNumberToObject(root, "revision_number", slave.revision_number);
+	cJSON_AddNumberToObject(root, "alias", slave.alias);
 	cJSON_AddNumberToObject(root, "drawn_current", slave.current_on_ebus);
+	cJSON_AddStringToObject(root, "tab", "Modules");
+	cJSON_AddStringToObject(root, "class", "MODULE");
 	char *name = strdup(slave.name);
 	int name_len = strlen(name);
 	for (int i=0; i<name_len; ++i) name[i] &= 127;
@@ -838,7 +852,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 						c_pdos[j + pdo_pos].entries = 0;
 	                
 					if (pdo.entry_count) {
-						cJSON *json_entries = cJSON_CreateObject();
+						cJSON *json_entries = cJSON_CreateArray();
 						total_entries += pdo.entry_count;
 						assert(total_entries < estimated_max_entries);
 		            	for (k = 0; k < pdo.entry_count; k++) {
@@ -941,8 +955,9 @@ char *collectSlaveConfig(bool reconfigure)
 	char *res = cJSON_Print(root);
 	cJSON_Delete(root);
 
+	/* save a description of the bus configuration */
 	std::ofstream logfile;
-	logfile.open("ecat.log", std::ofstream::out | std::ofstream::app);
+	logfile.open("ecat.log", std::ofstream::out /* | std::ofstream::app */);
 	logfile << res << "\n";
     logfile.close();
 

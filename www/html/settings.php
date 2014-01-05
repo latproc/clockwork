@@ -1,6 +1,7 @@
 <?php session_start();
 $BASE_APPDIR="/opt/latproc/www";
 $APPDIR = $BASE_APPDIR . "/app";
+date_default_timezone_set("Australia/Adelaide");
 
 set_include_path(get_include_path() . ":" . $APPDIR );
 $DBNAME=$APPDIR . '/webio.db';
@@ -8,6 +9,7 @@ $APP_ERRORS = Array();
 function __autoload($class_name) { 
       $BASE_APPDIR="/opt/latproc/www";
       $APPDIR = $BASE_APPDIR . "/app";
+	  date_default_timezone_set("Australia/Adelaide");
       
       switch($class_name) {
           case 'Model':

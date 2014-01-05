@@ -85,7 +85,7 @@ typedef struct ECPDOEntryReg{} ec_pdo_entry_reg_t;
 
 #endif
 #include <time.h>
-#include <list>
+#include <vector>
 #include <string>
 
 long get_diff_in_microsecs(struct timeval *now, struct timeval *then);
@@ -132,7 +132,7 @@ public:
 	bool addModule(ECModule *m, bool reset_io);
 	bool online();
 	bool operational();
-	static std::list<ECModule *>modules;
+	static std::vector<ECModule *>modules;
 	//bool configurePDOs();
 	static ECModule *findModule(int position);
 #endif

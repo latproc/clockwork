@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <string.h>
+#include <list>
 #include <boost/thread.hpp>
 #include "ECInterface.h"
 #include "IOComponent.h"
@@ -67,7 +68,7 @@ ec_slave_config_state_t ECInterface::sc_dig_in_state = {};
 
 #ifndef EC_SIMULATOR
 
-std::list<ECModule *> ECInterface::modules;
+std::vector<ECModule *> ECInterface::modules;
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), entry_details(0) {
 	offsets = new unsigned int[64];
@@ -140,18 +141,24 @@ std::ostream &ECModule::operator <<(std::ostream & out)const {
 
 
 ECModule *ECInterface::findModule(int pos) {
-	std::list<ECModule *>::iterator iter = modules.begin();
+	if (pos < 0 || pos >= modules.size()) return 0;
+	ECModule *m = modules.at(pos);
+	assert(m->position == pos);
+	return m;
+#if 0
+	std::vector<ECModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 		if (m->position == pos) return m;
 	}
 	return 0;
+#endif
 }
 
 bool ECInterface::addModule(ECModule *module, bool reset_io) {
 	
 	if (module) {
-		std::list<ECModule *>::iterator iter = modules.begin();
+		std::vector<ECModule *>::iterator iter = modules.begin();
 		while (iter != modules.end()){
 			ECModule *m = *iter++;
 			if (m->alias == module->alias && m->position == module->position) return false;
@@ -164,7 +171,7 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 
 	// reconfigure io
 	
-	std::list<ECModule *>::iterator iter = modules.begin();
+	std::vector<ECModule *>::iterator iter = modules.begin();
 	int idx = 0;
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
@@ -212,7 +219,7 @@ bool ECInterface::activate() {
 }
 
 bool ECInterface::online() {
-	std::list<ECModule *>::iterator iter = modules.begin();
+	std::vector<ECModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 		if (!m->online()) return false;
@@ -221,7 +228,7 @@ bool ECInterface::online() {
 }
 
 bool ECInterface::operational() {
-	std::list<ECModule *>::iterator iter = modules.begin();
+	std::vector<ECModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 		if (!m->operational()) return false;
@@ -371,7 +378,7 @@ void ECInterface::check_slave_config_states(void)
 #ifndef EC_SIMULATOR
     ec_slave_config_state_t s;
 
-	std::list<ECModule *>::iterator iter = modules.begin();
+	std::vector<ECModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 	    ecrt_slave_config_state(m->slave_config, &s);

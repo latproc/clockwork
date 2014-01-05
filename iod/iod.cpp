@@ -375,7 +375,9 @@ void generateIOComponentModules() {
                             << " offset: " << module->offsets[offset_idx]
                             << " bitlen: " << bitlen <<  "\n";
 						IOAddress addr (	
-                        	IOComponent::add_io_entry(ed->name.c_str(), module->offsets[offset_idx],
+                        	IOComponent::add_io_entry(ed->name.c_str(), 
+								module_position, 
+								module->offsets[offset_idx],
                                 module->bit_positions[offset_idx], offset_idx, bitlen));
 
 						if (bitlen == 1) {
@@ -405,7 +407,9 @@ void generateIOComponentModules() {
                             << " bit_pos: " << module->bit_positions[offset_idx]
                             << " offset: " << module->offsets[offset_idx]
                             <<  " bitlen: " << bitlen << "\n";
-                        IOAddress addr( IOComponent::add_io_entry(ed->name.c_str(), module->offsets[offset_idx],
+                        IOAddress addr( IOComponent::add_io_entry(ed->name.c_str(), 
+							module_position, 
+							module->offsets[offset_idx],
                             module->bit_positions[offset_idx], offset_idx, bitlen));
 
 						if (bitlen == 1) {

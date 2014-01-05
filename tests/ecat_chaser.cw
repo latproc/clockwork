@@ -8,6 +8,7 @@ out3 POINT Outputs,2;
 out4 POINT Outputs,3;
 
 Cell MACHINE output, left, right {
+	OPTION tab test;
     on WHEN right IS off 
 		AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER >= 200);
     off DEFAULT;

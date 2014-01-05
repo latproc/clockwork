@@ -215,9 +215,9 @@ if (json_last_error() != JSON_ERROR_NONE) {
 	display_json_error($res, $reply);
 	$slaves = array();
 }
-//$debug_messages .= "<literal>";
-//$debug_messages .= " " . count($slaves) . " slaves found\n";
-//$debug_messages .= $reply . "</literal><br>\n";
+$debug_messages .= "<literal>";
+$debug_messages .= " " . count($slaves) . " slaves found\n";
+$debug_messages .= $reply . "</literal><br>\n";
 
 /* each tab has a 'refresh' button that refreshes all tabs and navigates
 	back to the tab the user was on. This can be improved with a bit of
@@ -301,11 +301,16 @@ if ($master) $tabs['Master'] = false; // add a master tab if the above MASTER re
 $n = 1;
 foreach ($tabs as $tab => $data) {
   $tabname = 'tabs-' . $n;
-  $tabdata='<div id="'. $tabname . '" name="' . $tab . '"><table>' . "\n";
+  $tabdata='<div id="'. $tabname . '" name="' . $tab . '" ><table>' . "\n";
   if ($tab != 'Modules')
-		$tabdata .= '<thead><tr><th style="width:5%">Enabled</th><th>Name</th><th>State</th><th>Commands</th><th>Messages</th></tr></thead>';
+		$tabdata .= '<thead><tr><th style="width:80px">Enabled</th>'
+			.	'<th>Name</th><th colspan=2>State</th>'
+			.	'<th>Commands</th><th>Messages</th></tr></thead>';
   else
 		$tabdata .= '<thead><tr><th>Name</th><th>Matched Bus Module</th></tr></thead>';
+
+  if ($tab == "Modules")
+	$config_entries = $slaves;
 
   foreach ($config_entries as $curr) {
 	if (!isset($curr->tab)) {
@@ -338,13 +343,13 @@ foreach ($tabs as $tab => $data) {
 		else
 			$status = "unknown";
 		//$debug_messages .= "$point $status <br/>";
-		if ($type != "Input") { 
+		$tabdata .= '<td style="width:80px;"><div syle="width:100%"><div  style="width:20px;margin:0px auto 0px auto"><input type="checkbox"'
+				. ( (isset($curr->enabled) && $curr->enabled) ? 'checked="checked"' : '')
+				.' name="'. $point . '" class="enable_disable"' 
+				.'</div></div></td>';
+		if ($type != "AnalogueInput" && $type != "Input") { 
 			// interactive objects
 			if ($use_ajax) {
-				$tabdata .= '<td><input type="checkbox"'
-				 		. ( (isset($curr->enabled) && $curr->enabled) ? 'checked="checked"' : '')
-						.' name="'. $point . '" class="enable_disable"' 
-						.'</td>';
 				if ($type != "piston") {
 					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td><td>"
 							.  button_image($point, "{$image_prefix}_$status.png");
@@ -402,13 +407,14 @@ foreach ($tabs as $tab => $data) {
 		}
 		else { 
 			// static objects
-			$tabdata .= '<td></td><td>' . $point . ":</td><td>";
+			$tabdata .= '<td class="center">' . $point . ":</td><td style=\"width:64px\">";
 			// TBD rather than a match, use the status property in the response
-			if (preg_match("/.*on.*/",$status))
-				 $tabdata .= image_html($point, $image_prefix . "_on.png");
-			else
-				$tabdata .= image_html($point, $image_prefix . ".png");
-			$tabdata .= " $status</td>\n";
+			//if (preg_match("/.*on.*/",$status))
+			//	 $tabdata .= image_html($point, $image_prefix . "_on.png");
+			//else
+			//	$tabdata .= image_html($point, $image_prefix . ".png");
+			$tabdata .= image_html($point, $image_prefix . "_" . $status . ".png");
+			$tabdata .= "</td><td>$status</td><td></td><td></td>\n";
 		}
 	}
 	else if ($curr->class == "MODULE") {
@@ -419,6 +425,9 @@ foreach ($tabs as $tab => $data) {
 		else
 			$slaves_options = get_slaves_options($slaves);
 		$tabdata .= "<td>" . $curr->name . " " . $curr->position . "</td><td>" . $slaves_options . "</td>";
+	}
+	else {
+		$tabdata .= "<td>unknown</td>:";
 	}
 	$tabdata .= "</tr>";
   }
@@ -476,7 +485,7 @@ $page_body .= "</div>";
 // Page layout. Note from here, no PHP calculation is done, we just render the
 // variables we have collected, notably $page_body, $debug_message, $header_extras
 
-print <<<EOD
+print <<<'EOD'
 <!DOCTYPE html PUBLIC 
   "-//W3C//DTD HTML 4.01 Transitional//EN" 
   "http://www.w3.org/TR/html4/loose.dtd" >
@@ -485,7 +494,13 @@ print <<<EOD
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" >
 	<script type="text/javascript" src="js/jquery-1.7.min.js"></script>
 	<script type="text/javascript" src="js/jquery-ui-1.8.20.custom.min.js"></script>
-    <link type="text/css" href="css/ui-lightness/jquery-ui-1.8.20.custom.css" rel="stylesheet" />   
+    <link type="text/css" href="css/ui-lightness/jquery-ui-1.8.20.custom.css" rel="stylesheet" /> 
+	<style>
+	body { font-family: Helvetica, Arial, sans-serif }
+	table { width:100% }
+	.error_message { font-size:24px; color:#f44; }
+	.center { text-align:center; }
+	</style>
 	<script type="text/javascript">
 	function refresh() {
 		var $tabs = $('#tabs').tabs();
@@ -610,6 +625,8 @@ print <<<EOD
 		setTimeout("refresh()", 900);
 	})
 	</script>
+EOD;
+print <<<EOD
 	$header_extras 
 </head>
 <body>

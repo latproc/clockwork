@@ -31,15 +31,18 @@
 #include "MQTTInterface.h"
 
 struct IOAddress {
+	unsigned int module_position;
     unsigned int io_offset;
     int io_bitpos;
 	uint32_t value;
 	unsigned int bitlen;
 	unsigned int entry_position;
-	IOAddress(unsigned int offs, int bitp, unsigned int entry_pos, unsigned int len=1) : io_offset(offs), io_bitpos(bitp), value(0), bitlen(len),entry_position(entry_pos) { }
-	IOAddress(const IOAddress &other) : io_offset(other.io_offset), io_bitpos(other.io_bitpos), value(other.value), 
+	IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos, unsigned int len=1) 
+		: module_position(module_pos), io_offset(offs), io_bitpos(bitp), value(0), bitlen(len),entry_position(entry_pos) { }
+	IOAddress(const IOAddress &other) 
+		: module_position(other.module_position), io_offset(other.io_offset), io_bitpos(other.io_bitpos), value(other.value), 
 		bitlen(other.bitlen), entry_position(other.entry_position), description(other.description) { }
-	IOAddress() : io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0) {}
+	IOAddress() : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0) {}
 	std::string description;
 };
 
@@ -57,10 +60,14 @@ public:
 	typedef std::list<IOComponent *>::iterator Iterator;
 	static Iterator begin() { return processing_queue.begin(); }
 	static Iterator end() { return processing_queue.end(); }
-	static IOAddress add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1);
+	static IOAddress add_io_entry(const char *name, unsigned int module_pos, 
+		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
 	static void processAll();
+#ifndef EC_SIMULATOR
+	ECModule *owner() { return ECInterface::findModule(address.module_position); }
+#endif
 protected:
 	static std::map<std::string, IOAddress> io_names;
 private:
@@ -131,7 +138,7 @@ class AnalogueOutput : public Output {
 public:
 	AnalogueOutput(IOAddress addr) : Output(addr) { }
 //	AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
-	virtual const char *type() { return "AnalogueInput"; }
+	virtual const char *type() { return "AnalogueOutput"; }
 };
 
 class MQTTPublisher : public IOComponent {

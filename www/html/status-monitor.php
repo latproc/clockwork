@@ -30,8 +30,10 @@ $use_ajax = true; // the 'false' version of this may not actually work
 $banner = "";
 
 // static image generator
-function image_html($name, $filename) {
-	return '<img width=16 name="'.$name.'" src="img/' .  $filename . '"/>';
+function image_html($name, $filename, $item_id = false) {
+	if ($item_id) $id = "id=\"${item_id}\"";
+	else $id = "";
+	return '<img width=20 name="'.$name.'" '.$id.' src="img/' .  $filename . '"/>';
 }
 
 // toggle button html generator
@@ -40,9 +42,9 @@ function button_image($name, $filename, $item_id = false) {
 	$id = "";
 	if ($item_id) $id = "id=\"${item_id}\"";
 	if ($use_ajax)
-		return '<img width=16 class="out" '.$id. ' width=16 name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
+		return '<img width=20 class="out" '.$id. ' name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
 	else
-		return '<input type="image" width=16 '.$id .' name="'.$name.'" src="img/' .  $filename . '"/>';
+		return '<input type="image" width=20 '.$id .' name="'.$name.'" src="img/' .  $filename . '"/>';
 }
 
 // ----------------- utility functions -------------
@@ -124,6 +126,20 @@ if (isset($_REQUEST["describe"])) {
 	echo $reply;
 	return;
 }
+
+/*
+	Handle a user-click on a toggle button for an output
+ */
+
+if (isset($_REQUEST["toggle"])) {
+	$point = $_REQUEST["toggle"];
+	$requester->send('TOGGLE ' . $point);
+	$reply = $requester->recv();
+	$debug_messages .= "TOGGLE " . $point . ": " . $reply . "\n";
+	usleep(100000);
+	echo "$reply"; // ajax version
+	return; // ajax version
+}
 // note: below is ignored if an AJAX request was received
 
 $siteurl="status-monitor.php";
@@ -138,10 +154,27 @@ $siteurl="status-monitor.php";
 	Only machines that have a 'tab' property are displayed.
  */
   $tabdata="";
-
+  $last_module = -1;
+  $module_pos = 0;
+  $tabdata .= '<div class="module rolledup">';
   foreach ($config_entries as $curr) {
 	if ($curr->class != "MODULE"){ //  && (isset($curr->wire) || isset($curr->monitored) && $curr->monitored == "true") ) { 
-        $tabdata .= "<div class=\"item\">";
+		if (isset($curr->module))
+			$module_pos = $curr->module;
+		else
+			$module_pos = 0;
+		if ($last_module != -1 && $module_pos != $last_module) {
+			$tabdata .= '</div>';
+			$tabdata .= '<div class="module rolledup">';
+		}
+		if ($module_pos != $last_module) {
+			$module_name = $curr->module_name;
+			$parts = split(" ", $module_name);
+			$tabdata .= '<h2 style="margin: 1em 0em 0em 0em;">Module '.$module_pos.' '.$parts[0].'</h2>';
+			$tabdata .= "<div class=\"module-name\">$curr->module_name</div>";
+		}
+		$tabdata .= "\n";
+
 		$point = $curr->name;
 		$image_prefix = "input64x64";
 		if (isset($curr->image))
@@ -162,21 +195,33 @@ $siteurl="status-monitor.php";
 			$status = $curr->state;
 		else
 			$status = "unknown";
+
 		$wire = "";
 		if (isset($curr->wire)) $wire = " (" . $curr->wire . ")";
+		if ($type == "Output" && preg_match("/.*on.*/",$status))
+			$fmt_class = "on";
+		else
+			$fmt_class = "off";
+
+        $tabdata .= "<div class=\"item $fmt_class\"". 'name="'.$point.'">';
 		//$debug_messages .= "$point $status <br/>";
-		if ($type != "Input") { 
+		if ($type != "Input" && $type != "AnalogueInput") { 
 			// interactive objects
 			if ($use_ajax) {
 				if ($type != "piston") {
-					$tabdata .= '<div class="itemname" name="'.$point.'">' . $point . "</div> "
-						. '<div class="item_img">' 
-						. button_image($point, "{$image_prefix}_$status.png", 'im_'.$point) . "</div>"
-						. '<div class="item_state" id="mc_' . $point. '">' 
+					$tabdata .= '<div class="itemname out'
+						. '" name="'.$point.'">' . $point . "</div> "
+						. '<div class="item_img">';
+					if ($type == "AnalogueOutput")
+						$tabdata .= button_image($point, "{$image_prefix}.png", 'im_'.$point) . "</div>";
+					else
+						$tabdata .= button_image($point, "{$image_prefix}_$status.png", 'im_'.$point) . "</div>";
+					$tabdata .= '<div class="item_state" id="mc_' . $point. '">' 
 						. htmlspecialchars($status) . "</div>";
 				}
 				else {
-					$tabdata .=  '<div class="itemname" name="'.$point.'">' . $point . '</div><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div>';
+					$tabdata .=  '<div class="itemname" name="'.$point.'">' . $point 
+						. '</div><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div>';
 				}
 				// display properties
 				//if (isset($curr->display)) {
@@ -193,14 +238,23 @@ $siteurl="status-monitor.php";
 		}
 		else { 
 			// static objects
-			$tabdata .=  $point . ":";
+			$tabdata .=  "<div class=\"itemname\">$point:";
 			// TBD rather than a match, use the status property in the response
-			if (preg_match("/.*on.*/",$status))
-				 $tabdata .= image_html($point, $image_prefix . "_on.png");
-			else
-				$tabdata .= image_html($point, $image_prefix . ".png");
+			if ($type != "AnalogueInput" && preg_match("/.*on.*/",$status)) {
+				 $tabdata .= image_html($point, $image_prefix . "_on.png", "im_".$point) . "</div>"
+					. '<div class="item_state" id="mc_' . $point. '">' 
+						
+						. htmlspecialchars($curr->value) . "</div>";
+			}
+			else {
+				$tabdata .= image_html($point, $image_prefix . ".png", "im_".$point) . "</div>"
+						.'<div class="item_state" id="mc_' . $point. '">' 
+						. htmlspecialchars($status) . "</div>";
+			}
 			$tabdata .= "\n";
 		}
+		
+		$last_module = $module_pos;
 	}
     $tabdata .= '</div>';
   }
@@ -214,7 +268,7 @@ $page_body .= $tabdata;
 // Page layout. Note from here, no PHP calculation is done, we just render the
 // variables we have collected, notably $page_body, $debug_message, $header_extras
 
-print <<<EOD
+print <<<'EOD'
 <!DOCTYPE html PUBLIC 
   "-//W3C//DTD HTML 4.01 Transitional//EN" 
   "http://www.w3.org/TR/html4/loose.dtd" >
@@ -227,18 +281,25 @@ print <<<EOD
     <style>
 		body { font-family: Helvetica, Arial, sans-serif }
 	    .error_message { font-size:24px; color:#f44; }
-	    .item { float:left; width:240px; }
+	    .item { margin:2px;float:left; width:290px; }
 	    .debug_messages { display:none; }
-		.itemname { width:120px; height:40px;font-weight:bold;float:left; }
-		.item_img { width:20px; height:40px;float:left; }
-		.item_state { width:80px; padding-left:5px; height:40px;float:left; }
+		.itemname { margin-top:10px;width:150px; height:40px;font-weight:bold;float:left; }
+		.item_img { margin-top:10px; width:20px; height:40px;float:left; }
+		.item_state { margin-top:10px; width:80px; padding-left:5px; height:40px;float:left; }
+		.module-name { font-size:80%; font-style:italic }
+		.on { background-color:#0c0; }
+		.off { background-color:#fff; }
+		.rolledup{ height:68px; overflow-y:hidden }
+		.module { float:left;width:300px; }
     </style>
 	<script type="text/javascript">
 	function refresh() {
+	//return;
 		$.get("index.php", { list: "json"}, 
 			function(data){ 
 				res=JSON.parse(data);
 				$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
+				var $last_module = -1;
 				for (var i = 0; i < res.length; i++) {
 					if (res[i].class != "MODULE") {
 						if (typeof res[i].Cause != 'undefined') {
@@ -260,10 +321,29 @@ print <<<EOD
 						});
 						btn=$("[name="+res[i].name+"]");
 						btn.each(function() {
-							if (typeof res[i].image === "undefined") res[i].image = res[i].class;
-							img= "img/" + res[i].image + "_" + res[i].state + ".png";
-							if ($(this).attr("src") != img) $(this).attr("src",img);
-							if (typeof res[i].type === "undefined" || res[i].type != "piston") {
+							if (typeof res[i].image === "undefined")
+								res[i].image = res[i].class;
+							if (typeof res[i].class === "undefined") {
+								$("#mc_"+res[i].name).each(function(){
+									$(this).html(res[i].state);
+								});
+							}
+							else if (res[i].class == "AnalogueInput") {
+								$("#mc_"+res[i].name).each(function(){
+									$(this).html(res[i].value);
+								});
+							}
+							else if (res[i].class == "AnalogueOutput") {
+								$("#mc_"+res[i].name).each(function(){
+									$(this).html(res[i].value);
+								});
+							}
+							else if (res[i].class != "piston") {
+								img= "img/" + res[i].image + "_" + res[i].state + ".png";
+								
+								$("#im_"+res[i].name).each(function(){
+									$(this).attr("src",img);
+								});
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].state);
 								});
@@ -275,6 +355,12 @@ print <<<EOD
 									maxpos = parseInt(res[i].maxpos);
 									$("#mc_"+res[i].name).each( function() { $(this).progressbar({ max: maxpos }); });
 								}
+							}
+						});
+						btn.select(".item").each(function(){ 
+							if (res[i].class == "Output") {
+								if (res[i].state == "off") {$(this).removeClass("on").addClass("off"); }
+								if (res[i].state == "on") {$(this).removeClass("off").addClass("on"); }
 							}
 						});
 						display_props = typeof res[i].display;
@@ -300,11 +386,12 @@ print <<<EOD
 			//event.preventDefault();
 		});
 		$(".out").each(function(){
-			$(this).click(function(){
-				$.get("index.php", { toggle: $(this).attr("name") }, 
+			$(this).click(function(event){
+				$.get("index.php", { toggle: $(this).attr("name").replace("-",".") }, 
 					function(data){
 						if (data != "OK") alert(data) 
 					});
+				event.preventDefault();
 			})
 		});
 		$( ".piston" ).progressbar({
@@ -314,7 +401,7 @@ print <<<EOD
 	        $(this).css("display","none"); 
 	        $("#info").css("display","none")
 	    })  
-		$(".itemname").each(function(){
+		$(".itemnamex").each(function(){
 		  $(this).click(function(){
     		$.get("index.php", { describe: $(this).attr("name").replace("-",".") },
         	function(data){
@@ -329,10 +416,20 @@ print <<<EOD
 
         	})  
 		  })
-     	})  
+     	})
+     	$(".module").each(function(){
+			$(this).click(function(e){
+				var parentOffset = $(this).offset();
+				var relY = e.pageY - parentOffset.top;
+				if (relY < 80) $(this).toggleClass("rolledup");
+				event.preventDefault();
+			})
+		})	  
 		setTimeout("refresh()", 2000);
 	})
 	</script>
+EOD;
+print <<<EOD
 	$header_extras 
 </head>
 <body>

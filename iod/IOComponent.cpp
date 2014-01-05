@@ -36,8 +36,11 @@ void IOComponent::processAll() {
 	}
 }
 
-IOAddress IOComponent::add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset, unsigned int entry_pos, unsigned int bit_len){
-	IOAddress addr(io_offset, bit_offset, entry_pos, bit_len);
+IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos, 
+		unsigned int io_offset, unsigned int bit_offset, 
+		unsigned int entry_pos, unsigned int bit_len){
+	IOAddress addr(module_pos, io_offset, bit_offset, entry_pos, bit_len);
+	addr.module_position = module_pos;
 	addr.io_offset = io_offset;
 	addr.io_bitpos = bit_offset;
     addr.entry_position = entry_pos;
@@ -64,7 +67,12 @@ void IOComponent::add_subscriber(const char *name, const char *topic) {
 
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
-	out << '[' << address.description<<" "<< address.io_offset << ':' << address.io_bitpos << "." << address.bitlen << "]=" << address.value;
+	out << '[' << address.description<<" "
+		<<address.module_position << " "
+		<< address.io_offset << ':' 
+		<< address.io_bitpos << "." 
+		<< address.bitlen << "]=" 
+		<< address.value;
 	return out;
 }
 
