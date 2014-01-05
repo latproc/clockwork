@@ -24,6 +24,7 @@
 #include <boost/program_options.hpp>
 #include <zmq.hpp>
 #include <sstream>
+#include <string>
 #include <string.h>
 #include "Logger.h"
 #include <inttypes.h>
@@ -144,10 +145,9 @@ int main(int argc, const char * argv[])
 			else if (strcmp(argv[i],"-q") == 0)
 				quiet = true;
 		}
-		std::string url("tcp://");
-		url += host.c_str();
-		url += ":";
-		url += std::to_string(port);
+		std::stringstream ss;
+		ss << "tcp://" << host << ":" << port;
+		std::string url(ss.str());
 		if (!quiet) {
 			 std::cout << "Connecting to " << url << "\n"
 			<< "\nEnter HELP; for help. Note that ';' is required at the end of each command\n"
