@@ -105,6 +105,10 @@ extern FILE *yyin;
 
 bool cmdline_done = false;
 
+void usage(const char *name) {
+	std::cout << name << " [-h host] [-p port]\n";
+}
+
 int main(int argc, const char * argv[])
 {
     try {
@@ -126,17 +130,26 @@ int main(int argc, const char * argv[])
 #endif
 		int port = 5555;
 		bool quiet = false;
+		std::string host = "127.0.0.1";
 		for (int i=1; i<argc; ++i) {
 			if (i<argc-1 && strcmp(argv[i],"-p") == 0) {
 				port = strtol(argv[++i], 0, 0);
 			} 
+			else if (i<argc-1 && strcmp(argv[i],"-h") == 0) {
+				host = argv[++i];
+			} 
+			else if (strcmp(argv[i],"-?") == 0) {
+				usage(argv[0]); exit(0);
+			}
 			else if (strcmp(argv[i],"-q") == 0)
 				quiet = true;
 		}
-		std::stringstream ss;
-		ss << "tcp://127.0.0.1:" << port;
+		std::string url("tcp://");
+		url += host.c_str();
+		url += ":";
+		url += std::to_string(port);
 		if (!quiet) {
-			 std::cout << "Connecting to " << ss.str() << "\n"
+			 std::cout << "Connecting to " << url << "\n"
 			<< "\nEnter HELP; for help. Note that ';' is required at the end of each command\n"
 			<< "  use exit; or ctrl-D to exit this program\n\n";
 		}
@@ -144,7 +157,7 @@ int main(int argc, const char * argv[])
         zmq::socket_t socket (context, ZMQ_REQ);
 		psocket = &socket;
 		
-        socket.connect(ss.str().c_str());
+        socket.connect(url.c_str());
 		std::string word;
 		std::string msg;
 		std::string line;
