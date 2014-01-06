@@ -176,7 +176,7 @@ $siteurl="status-monitor.php";
 			$module_pos = 0;
 		if ($last_module != -1 && $module_pos != $last_module) {
 			$tabdata .= '</div>';
-			$tabdata .= '<div class="module">';
+			$tabdata .= '<div class="module rolledup">';
 		}
 		if ($module_pos != $last_module) {
 			$module_name = $curr->module_name;
@@ -297,8 +297,6 @@ print <<<'EOD'
 	<script type="text/javascript" src="js/jquery-1.10.2.min.js"></script>
 	<script type="text/javascript" src="js/jquery-ui-1.10.3.custom/js/jquery-ui-1.10.3.custom.min.js"></script>
 	<link type="text/css" href="js/jquery-ui-1.10.3.custom/css/smoothness/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" />
-
-    <link type="text/css" href="css/ui-lightness/jquery-ui-1.8.20.custom.css" rel="stylesheet" />   
     <style>
 		body { font-family: Helvetica, Arial, sans-serif }
 	    .error_message { font-size:24px; color:#f44; }

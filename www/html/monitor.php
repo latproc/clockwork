@@ -55,7 +55,7 @@ if ($user->isAdministrator()) {
 
 // static image generator
 function image_html($name, $filename) {
-	return '<img name="'.$name.'" src="img/' .  $filename . '"/>';
+	return '<img name="'.$name.'" width=20 src="img/' .  $filename . '"/>';
 }
 
 // toggle button html generator
@@ -351,9 +351,16 @@ foreach ($tabs as $tab => $data) {
 			// interactive objects
 			if ($use_ajax) {
 				if ($type != "piston") {
-					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td><td>"
-							.  button_image($point, "{$image_prefix}_$status.png");
-					if ($type != "Output") $tabdata .= ' <div id="mc_'.$point.'">' . htmlspecialchars($status) . '</div>';
+					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td>";
+					if ($type == "AnalogueOutput") 
+						$tabdata .= '<td>' . button_image($point, "{$image_prefix}.png")
+							. '</td><td><div id="mc_'.$point.'">' 
+							. htmlspecialchars($curr->value) . '</div>';
+					else if ($type != "Output")  {
+						$tabdata .= "<td>". button_image($point, "{$image_prefix}_$status.png");
+						$tabdata .= '<div id="mc_'.$point.'">' 
+							. htmlspecialchars($status) . '</div>';
+					}
 				}
 				else {
 					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . '</td><td><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div></td>';
@@ -407,14 +414,18 @@ foreach ($tabs as $tab => $data) {
 		}
 		else { 
 			// static objects
+			if ($type != "AnalogueInput" && preg_match("/.*on.*/",$status)) 
+				$image_name = $image_prefix."_on.png";
+			else
+				$image_name = $image_prefix.".png";
+			if ($type != "AnalogueInput")
+				$display_value = htmlspecialchars($status);
+			else
+				$display_value = $curr->value;
+
 			$tabdata .= '<td class="center">' . $point . ":</td><td style=\"width:64px\">";
-			// TBD rather than a match, use the status property in the response
-			//if (preg_match("/.*on.*/",$status))
-			//	 $tabdata .= image_html($point, $image_prefix . "_on.png");
-			//else
-			//	$tabdata .= image_html($point, $image_prefix . ".png");
-			$tabdata .= image_html($point, $image_prefix . "_" . $status . ".png");
-			$tabdata .= "</td><td>$status</td><td></td><td></td>\n";
+			$tabdata .= image_html($point, $image_name, "im_".$point);
+			$tabdata .= "</td><td><div id=\"mc_.$point.\">$display_value</div></td><td></td><td></td>\n";
 		}
 	}
 	else if ($curr->class == "MODULE") {
@@ -492,9 +503,9 @@ print <<<'EOD'
 
 <html> <head> 
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" >
-	<script type="text/javascript" src="js/jquery-1.7.min.js"></script>
-	<script type="text/javascript" src="js/jquery-ui-1.8.20.custom.min.js"></script>
-    <link type="text/css" href="css/ui-lightness/jquery-ui-1.8.20.custom.css" rel="stylesheet" /> 
+	<script type="text/javascript" src="js/jquery-1.10.2.min.js"></script>
+	<script type="text/javascript" src="js/jquery-ui-1.10.3.custom/js/jquery-ui-1.10.3.custom.min.js"></script>
+	<link type="text/css" href="js/jquery-ui-1.10.3.custom/css/smoothness/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" />
 	<style>
 	body { font-family: Helvetica, Arial, sans-serif }
 	table { width:100% }
@@ -506,7 +517,7 @@ print <<<'EOD'
 		var $tabs = $('#tabs').tabs();
 		var selected = $tabs.tabs('option', 'selected')+1;
 		tabname=$('#tabs-'+selected).attr("name")
-	//$("#xx").html("<p>" + tabname + "</p>");
+		//$("#xx").html("<p>" + tabname + "</p>");
 		$.get("monitor.php", { 
 			list: "json", tab: tabname}, 
 			function(data){ 
@@ -517,21 +528,43 @@ print <<<'EOD'
 						btn=$('[name='+res[i].name+']');
 						enabled=res[i].enabled;
 						btn.each(function() {
-							if (enabled && !$(this).attr("checked")) 
-								$(this).attr("checked", true);
-							else if (!enabled && $(this).attr("checked"))
-								$(this).attr("checked", false);
+							//if ($(this).get(0).tagName == 'checkbox') {
+								if (enabled && !$(this).attr("checked")) 
+									$(this).attr("checked", true);
+								else if (!enabled && $(this).attr("checked"))
+									$(this).attr("checked", false);
+							//}
 							
 						});
 						btn=$("[name="+res[i].name+"]");
 						btn.each(function() {
-							if (typeof res[i].image === "undefined") res[i].image = res[i].class;
-							img= "img/" + res[i].image + "_" + res[i].state + ".png";
-							if ($(this).attr("src") != img) $(this).attr("src",img);
-							if (typeof res[i].type === "undefined" || res[i].type != "piston")
+							if (typeof res[i].image === "undefined")
+								res[i].image = res[i].class;
+							if (typeof res[i].class === "undefined") {
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].state);
 								});
+							}
+							else if (res[i].class == "AnalogueInput") {
+								$("#mc_"+res[i].name).each(function(){
+									$(this).html(res[i].value);
+								});
+							}
+							else if (res[i].class == "AnalogueOutput") {
+								$("#mc_"+res[i].name).each(function(){
+									$(this).html(res[i].value);
+								});
+							}
+							else if (res[i].class != "piston") {
+								img= "img/" + res[i].image + "_" + res[i].state + ".png";
+								
+								$("#im_"+res[i].name).each(function(){
+									$(this).attr("src",img);
+								});
+								$("#mc_"+res[i].name).each(function(){
+									$(this).html(res[i].state);
+								});
+							}
 							else {
 								var pos = parseInt(res[i].position);
 								$("#mc_"+res[i].name).each( function() { $(this).progressbar({ value: pos });  });
@@ -539,6 +572,12 @@ print <<<'EOD'
 									maxpos = parseInt(res[i].maxpos);
 									$("#mc_"+res[i].name).each( function() { $(this).progressbar({ max: maxpos }); });
 								}
+							}
+						});
+						btn.select(".item").each(function(){ 
+							if (res[i].class == "Output") {
+								if (res[i].state == "off") {$(this).removeClass("on").addClass("off"); }
+								if (res[i].state == "on") {$(this).removeClass("off").addClass("on"); }
 							}
 						});
 						display_props = typeof res[i].display;
