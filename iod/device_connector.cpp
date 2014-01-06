@@ -530,6 +530,11 @@ struct IODInterface{
         connect();
     }
     
+    ~IODInterface() {
+        if (socket) delete socket;
+        delete context;
+    }
+    
     zmq::context_t *context;
     zmq::socket_t *socket;
     //boost::mutex interface_mutex;
@@ -632,6 +637,7 @@ struct ConnectionThread {
                     device_status.status = DeviceStatus::e_failed;
                     updateProperty();
                     done = true;
+                    delete match;
                     return;
                 }
             }
@@ -921,7 +927,7 @@ struct PropertyMonitorThread {
                             connection.send(data + match_str.length());
                         }
                     }
-                    delete data;
+                    free(data);
                 }
                 catch (std::exception e) {
                     if (zmq_errno())
@@ -959,7 +965,7 @@ struct PropertyMonitorThread {
             ss << "tcp://" << options.iodHost() << ":" << 5556;
             socket = new zmq::socket_t (*context, ZMQ_SUB);
             res = zmq_setsockopt (*socket, ZMQ_SUBSCRIBE, "", 0);
-            if (res) throw new WatchException("error setting zmq socket option");
+            if (res) throw WatchException("error setting zmq socket option");
             socket->connect(ss.str().c_str());
             int linger = 0; // do not wait at socket close time
             socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
