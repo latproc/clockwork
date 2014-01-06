@@ -3,6 +3,8 @@
 
 BOOL MACHINE { true STATE ; false INITIAL; }
 
+/* A light controller iwth the ability to receive turnOn/turnOff commands
+ */
 Light MACHINE output {
     OPTION turn_on_delay 2000;
 	turning_on BOOL;
@@ -17,6 +19,7 @@ Light MACHINE output {
 	ENTER off { SET turning_on TO false }
 	ENTER waitingOn { SET output TO on; }
 }
+/* the lights are connected to general purpose io points, simulated as flags */
 gpio1 FLAG;
 gpio2 FLAG;
 
@@ -24,6 +27,10 @@ led01 Light(turn_on_delay:5000) gpio1;
 led02 Light gpio2;
 lights LIST led01, led02;
 
+/* a light controller for a list of lights, this controller
+	can enable/disable and turn-on or turn-off  the list of
+	lights all at once
+ */
 Controller MACHINE outputs {
 
   waiting WHEN outputs DISABLED;
@@ -38,6 +45,8 @@ Controller MACHINE outputs {
 }
 controller Controller lights;
 
+/* Example, using VARIABLEs as objects in a list */
+
 one VARIABLE 1;
 two VARIABLE 2;
 three VARIABLE 3;
@@ -45,14 +54,17 @@ four VARIABLE 4;
 
 numbers LIST two,four,three,one;
 
+
+/* A sorting machine to sort its parameter into 
+	numeric order
+*/
 Sorter MACHINE input {
-
-COMMAND sort { LOG "sorting"; SORT input }
-
+	COMMAND sort { LOG "sorting"; SORT input }
 }
 sorter Sorter numbers;
 
 
+/* and example of how to use a LIST for FIFO queue operations */
 Queue MACHINE {
 queue LIST 1,2,3;
 	nonempty WHEN queue IS nonempty;
@@ -62,6 +74,7 @@ queue LIST 1,2,3;
 }
 q Queue;
 
+/* Playing with a list of digits */
 digits LIST 0,1,2,3,4,5,6,7,8,9;
 DigitTest MACHINE list {
     OPTION sz 0;
@@ -76,6 +89,9 @@ DigitTest MACHINE list {
 dt DigitTest digits;
 dt2 DigitTest numbers;
 
+/* Demonstration of set functions using LISTs */
+
+/* Set intersection */
 SetIntersect MACHINE {
 	ready STATE;
 
