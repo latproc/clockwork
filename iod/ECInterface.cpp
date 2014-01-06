@@ -141,7 +141,7 @@ std::ostream &ECModule::operator <<(std::ostream & out)const {
 
 
 ECModule *ECInterface::findModule(int pos) {
-	if (pos < 0 || pos >= modules.size()) return 0;
+	if (pos < 0 || (unsigned int)pos >= modules.size()) return 0;
 	ECModule *m = modules.at(pos);
 	assert(m->position == pos);
 	return m;
