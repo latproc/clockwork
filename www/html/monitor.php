@@ -324,20 +324,16 @@ foreach ($tabs as $tab => $data) {
 	if ($curr->class != "MODULE" ) { // modules go on their own tab
 		$point = $curr->name;
 		$image_prefix = "input64x64";
-		if (isset($curr->image))
-			$image_prefix = $curr->image; 
-		else if (isset($curr->type)) {
-			if ($curr->type != "Input")
-				$image_prefix = $curr->type;
-		}
-		else
-			$image_prefix = $curr->class;
 		if (isset($curr->type))
 			$type = $curr->type;	
 		else if (isset($curr->class))
 			$type = $curr->class;	
 		else
 			$type = "Input";
+		if (isset($curr->image))
+			$image_prefix = $curr->image; 
+		else 
+			$image_prefix = $type;
 		if (isset($curr->state)) 
 			$status = $curr->state;
 		else
@@ -524,7 +520,11 @@ print <<<'EOD'
 				res=JSON.parse(data);
 				//$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 				for (var i = 0; i < res.length; i++) {
-					if (res[i].class != "MODULE") {
+					var type = "Input";
+					if (typeof res[i].class !== "undefined") type = res[i].class;
+					if (typeof res[i].type != "undefined")
+						type = res[i].type;
+					if (type != "MODULE") {
 						btn=$('[name='+res[i].name+']');
 						enabled=res[i].enabled;
 						btn.each(function() {
@@ -539,23 +539,23 @@ print <<<'EOD'
 						btn=$("[name="+res[i].name+"]");
 						btn.each(function() {
 							if (typeof res[i].image === "undefined")
-								res[i].image = res[i].class;
+								res[i].image = type;
 							if (typeof res[i].class === "undefined") {
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].state);
 								});
 							}
-							else if (res[i].class == "AnalogueInput") {
+							else if (type == "AnalogueInput") {
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].value);
 								});
 							}
-							else if (res[i].class == "AnalogueOutput") {
+							else if (type == "AnalogueOutput") {
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].value);
 								});
 							}
-							else if (res[i].class != "piston") {
+							else if (type != "piston") {
 								img= "img/" + res[i].image + "_" + res[i].state + ".png";
 								
 								$("#im_"+res[i].name).each(function(){
@@ -575,7 +575,7 @@ print <<<'EOD'
 							}
 						});
 						btn.select(".item").each(function(){ 
-							if (res[i].class == "Output") {
+							if (type == "Output") {
 								if (res[i].state == "off") {$(this).removeClass("on").addClass("off"); }
 								if (res[i].state == "on") {$(this).removeClass("off").addClass("on"); }
 							}
