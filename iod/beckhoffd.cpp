@@ -256,11 +256,12 @@ struct CommandThread {
         
         while (!done) {
             zmq::message_t request;
-            try {
+ 			char *data = 0;
+           try {
 	            //  Wait for next request from client
 	            socket.recv (&request);
 	            size_t size = request.size();
-	            char *data = (char *)malloc(size+1);
+	            data = (char *)malloc(size+1);
 	            memcpy(data, request.data(), size);
 	            data[size] = 0;
 	            std::cout << "Received " << data << std::endl;
@@ -291,6 +292,7 @@ struct CommandThread {
 	                    }
 	                    std::copy(parts.begin(), parts.end(), std::back_inserter(params));
 	                }
+	           
 	            }
 	
 	            if (params.empty()) {
@@ -344,8 +346,9 @@ struct CommandThread {
 	            free(data);
             }
             catch (std::exception e) {
+				if (data) { free(data); data = 0; }
                 //std::cout << e.what() << "\n";
-		//usleep(200000);
+				//usleep(200000);
                 //exit(1);
             }
         } 
