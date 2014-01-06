@@ -140,6 +140,17 @@ if (isset($_REQUEST["toggle"])) {
 	echo "$reply"; // ajax version
 	return; // ajax version
 }
+
+if (isset($_REQUEST["property"])) {
+	$point = $_REQUEST["property"];
+	$requester->send('PROPERTY ' . $point);
+	$reply = $requester->recv();
+	$debug_messages .= "PROPERTY " . $point . ": " . $reply . "\n";
+	usleep(100000);
+	echo "$reply"; // ajax version
+	return; // ajax version
+}
+
 // note: below is ignored if an AJAX request was received
 
 $siteurl="status-monitor.php";
@@ -165,7 +176,7 @@ $siteurl="status-monitor.php";
 			$module_pos = 0;
 		if ($last_module != -1 && $module_pos != $last_module) {
 			$tabdata .= '</div>';
-			$tabdata .= '<div class="module rolledup">';
+			$tabdata .= '<div class="module">';
 		}
 		if ($module_pos != $last_module) {
 			$module_name = $curr->module_name;
@@ -209,15 +220,24 @@ $siteurl="status-monitor.php";
 			// interactive objects
 			if ($use_ajax) {
 				if ($type != "piston") {
-					$tabdata .= '<div class="itemname out'
+					if ($type == "Output") $cls_extra = "out"; else $cls_extra = "";
+					$tabdata .= '<div class="itemname ' . $cls_extra
 						. '" name="'.$point.'">' . $point . "</div> "
 						. '<div class="item_img">';
 					if ($type == "AnalogueOutput")
 						$tabdata .= button_image($point, "{$image_prefix}.png", 'im_'.$point) . "</div>";
 					else
 						$tabdata .= button_image($point, "{$image_prefix}_$status.png", 'im_'.$point) . "</div>";
-					$tabdata .= '<div class="item_state" id="mc_' . $point. '">' 
-						. htmlspecialchars($status) . "</div>";
+					if ($type == 'AnalogueOutput') {
+						$tabdata .= '<div class="item_state" id="mc_' . $point. '">' 
+							. htmlspecialchars($curr->value) 
+							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->value .'"'
+							. 'style="float:left;width:14em;"></div>';
+					}
+					else {
+						$tabdata .= '<div class="item_state" id="mc_' . $point. '">' 
+							. htmlspecialchars($status) . "</div>";
+					}
 				}
 				else {
 					$tabdata .=  '<div class="itemname" name="'.$point.'">' . $point 
@@ -240,18 +260,17 @@ $siteurl="status-monitor.php";
 			// static objects
 			$tabdata .=  "<div class=\"itemname\">$point:";
 			// TBD rather than a match, use the status property in the response
-			if ($type != "AnalogueInput" && preg_match("/.*on.*/",$status)) {
-				 $tabdata .= image_html($point, $image_prefix . "_on.png", "im_".$point) . "</div>"
+			if ($type != "AnalogueInput" && preg_match("/.*on.*/",$status)) 
+				$image_name = $image_prefix."_on.png";
+			else
+				$image_name = $image_prefix.".png";
+			if ($type != "AnalogueInput")
+				$display_value = htmlspecialchars($status);
+			else
+				$display_value = $curr->value;
+			$tabdata .= image_html($point, $image_name, "im_".$point) . "</div>"
 					. '<div class="item_state" id="mc_' . $point. '">' 
-						
-						. htmlspecialchars($curr->value) . "</div>";
-			}
-			else {
-				$tabdata .= image_html($point, $image_prefix . ".png", "im_".$point) . "</div>"
-						.'<div class="item_state" id="mc_' . $point. '">' 
-						. htmlspecialchars($status) . "</div>";
-			}
-			$tabdata .= "\n";
+					. "$display_value</div>\n";
 		}
 		
 		$last_module = $module_pos;
@@ -275,8 +294,10 @@ print <<<'EOD'
 
 <html> <head> 
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" >
-	<script type="text/javascript" src="js/jquery-1.7.min.js"></script>
-	<script type="text/javascript" src="js/jquery-ui-1.8.20.custom.min.js"></script>
+	<script type="text/javascript" src="js/jquery-1.10.2.min.js"></script>
+	<script type="text/javascript" src="js/jquery-ui-1.10.3.custom/js/jquery-ui-1.10.3.custom.min.js"></script>
+	<link type="text/css" href="js/jquery-ui-1.10.3.custom/css/smoothness/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" />
+
     <link type="text/css" href="css/ui-lightness/jquery-ui-1.8.20.custom.css" rel="stylesheet" />   
     <style>
 		body { font-family: Helvetica, Arial, sans-serif }
@@ -313,10 +334,12 @@ print <<<'EOD'
 						btn=$('[name='+res[i].name+']');
 						enabled=res[i].enabled;
 						btn.each(function() {
-							if (enabled && !$(this).attr("checked")) 
-								$(this).attr("checked", true);
-							else if (!enabled && $(this).attr("checked"))
-								$(this).attr("checked", false);
+							//if ($(this).get(0).tagName == 'checkbox') {
+								if (enabled && !$(this).attr("checked")) 
+									$(this).attr("checked", true);
+								else if (!enabled && $(this).attr("checked"))
+									$(this).attr("checked", false);
+							//}
 							
 						});
 						btn=$("[name="+res[i].name+"]");
@@ -382,6 +405,22 @@ print <<<'EOD'
 	}
 	$(function() {
 		$( "#tabs" ).tabs();
+		$( ".anaout-slider" ).slider({
+			min: 0,
+			max: 32767,
+			stop: function( event, ui ) {
+				var machine = $(this).attr("name").replace("-",".");
+				var slider_value = $(this).slider("option", "value");
+				$.get("index.php", { property: machine + " " + slider_value }, 
+					function(data){
+						if (data != "OK") alert(data) 
+					});
+				event.preventDefault();
+			}
+		});
+		$( ".anaout-slider" ).each(function() {
+			$(this).slider("option", "value", $(this).attr("value"))
+		});
 		$("#refresh").click(function(event) {
 			//event.preventDefault();
 		});
