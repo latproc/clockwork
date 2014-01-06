@@ -514,8 +514,8 @@ print <<<'EOD'
 	</style>
 	<script type="text/javascript">
 	function refresh() {
-		var $tabs = $('#tabs').tabs();
-		var selected = $tabs.tabs('option', 'selected')+1;
+		var tabs = $('#tabs').tabs();
+		var selected = tabs.tabs('option', 'active')+1;
 		tabname=$('#tabs-'+selected).attr("name")
 		//$("#xx").html("<p>" + tabname + "</p>");
 		$.get("monitor.php", { 
