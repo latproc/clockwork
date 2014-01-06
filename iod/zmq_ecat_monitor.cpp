@@ -98,7 +98,7 @@ int main(int argc, const char * argv[])
 	            else std::cout << data << "\n";
 #endif
 				std::cout << data << "\n";
-				delete data;
+				free(data);
 	        }
 	    }
     }
