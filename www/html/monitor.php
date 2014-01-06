@@ -54,18 +54,23 @@ if ($user->isAdministrator()) {
 }
 
 // static image generator
-function image_html($name, $filename) {
-	return '<img name="'.$name.'" width=20 src="img/' .  $filename . '"/>';
+function image_html($name, $filename, $item_id = false) {
+	if ($item_id != false) $id = "id=\"${item_id}\"";
+	else $id = "";
+	return '<img width=20 name="'.$name.'" '.$id.' src="img/' .  $filename . '"/>';
 }
 
 // toggle button html generator
-function button_image($name, $filename) {
+function button_image($name, $filename, $item_id = false) {
 	global $use_ajax;
+	$id = "";
+	if ($item_id != false) $id = "id=\"$item_id\"";
 	if ($use_ajax)
-		return '<img class="out" width=16 name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
+		return '<img width=20 class="out" '.$id. ' name="'.$name.'" src="img/' .  $filename . '"/>'. "\n";
 	else
-		return '<input type="image" width=16 name="'.$name.'" src="img/' .  $filename . '"/>';
+		return '<input type="image" width=20 '.$id .' name="'.$name.'" src="img/' .  $filename . '"/>';
 }
+
 
 // ----------------- utility functions -------------
 function display_json_error($res, $reply) {
@@ -349,12 +354,17 @@ foreach ($tabs as $tab => $data) {
 				if ($type != "piston") {
 					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td>";
 					if ($type == "AnalogueOutput") 
-						$tabdata .= '<td>' . button_image($point, "{$image_prefix}.png")
+						$tabdata .= '<td>' . button_image($point, "${image_prefix}.png", "im_". $point)
 							. '</td><td><div id="mc_'.$point.'">' 
 							. htmlspecialchars($curr->value) . '</div>';
 					else if ($type != "Output")  {
-						$tabdata .= "<td>". button_image($point, "{$image_prefix}_$status.png");
+						$tabdata .= "<td>". button_image($point, "${image_prefix}_$status.png", "im_". $point);
 						$tabdata .= '<div id="mc_'.$point.'">' 
+							. htmlspecialchars($status) . '</div>';
+					}
+					else {
+						$tabdata .= "<td>". button_image($point, "${image_prefix}_$status.png", "im_". $point);
+						$tabdata .= '<div style="float:right" id="mc_'.$point.'">' 
 							. htmlspecialchars($status) . '</div>';
 					}
 				}

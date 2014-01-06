@@ -41,11 +41,11 @@ RetractedProx MACHINE piston {
     on WHEN piston.position <= 0;
     off DEFAULT;
 }
-extend_sol FLAG(tab:Piston);
-retract_sol FLAG(tab:Piston);
+extend_sol FLAG(tab:Piston,type:Output);
+retract_sol FLAG(tab:Piston,type:Output);
 piston Piston(tab:Piston) extend_sol, retract_sol;
-extended_prox ExtendedProx(tab:Piston) piston;
-retracted_prox RetractedProx(tab:Piston) piston;
+extended_prox ExtendedProx(tab:Piston,type:Input) piston;
+retracted_prox RetractedProx(tab:Piston,type:Input) piston;
 
 /*
 
