@@ -751,6 +751,16 @@ When a message is sent to the machine defined in this way, a connection
  The connection is help open, ready for more messages.
 \end_layout
 
+\begin_layout Subsection
+Persistence
+\end_layout
+
+\begin_layout Standard
+Machine state and properties are normally initialised on program startup
+ but a machine can also be marked as persistent to cause them to be reinitialise
+d to their last known state with the same property values.
+\end_layout
+
 \begin_layout Section
 Examples
 \end_layout
