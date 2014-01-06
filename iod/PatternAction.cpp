@@ -41,6 +41,7 @@ Action::Status CopyPatternAction::run() {
     if (matches.size()) {
         owner->setValue(dest, matches[0]);
     }
+    release_pattern(info);
 	status = Complete;
 	owner->stop(this);
 	return status;
@@ -82,6 +83,7 @@ Action::Status CopyAllPatternAction::run() {
             res += matches[i];
         owner->setValue(dest, res);
     }
+    release_pattern(info);
 	status = Complete;
 	owner->stop(this);
 	return status;
