@@ -179,10 +179,13 @@ $siteurl="status-monitor.php";
 			$tabdata .= '<div class="module rolledup">';
 		}
 		if ($module_pos != $last_module) {
-			$module_name = $curr->module_name;
+			if (isset($curr->module_name))
+				$module_name = $curr->module_name;
+			else 
+				$module_name = "Clockwork machines";
 			$parts = split(" ", $module_name);
 			$tabdata .= '<h2 style="margin: 1em 0em 0em 0em;">Module '.$module_pos.' '.$parts[0].'</h2>';
-			$tabdata .= "<div class=\"module-name\">$curr->module_name</div>";
+			$tabdata .= "<div class=\"module-name\">$module_name</div>";
 		}
 		$tabdata .= "\n";
 
