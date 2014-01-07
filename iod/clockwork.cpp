@@ -26,12 +26,15 @@
 #include <list>
 #include <string>
 
+#include <boost/utility.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
-#include "boost/filesystem/operations.hpp"
-#include "boost/filesystem/path.hpp"
 #include <sys/stat.h>
+#ifdef __APPLE__
+#include <sys/dir.h>
+#endif
 
 #include "options.h"
 #include "ModbusInterface.h"
@@ -59,26 +62,33 @@ void usage(int argc, char const *argv[])
 }
 
 
-static void list_directory( const std::string &pathToCheck, std::list<std::string> &file_list)
+static void listDirectory( const std::string pathToCheck, std::list<std::string> &file_list)
 {
-    const boost::filesystem::directory_iterator endMarker;
-    
-    for (boost::filesystem::directory_iterator file (pathToCheck);
-         file != endMarker;
-         ++file)
-    {
-        struct stat file_stat;
-        int err = stat(file->path().native().c_str(), &file_stat);
-        if (err == -1) {
-            std::cerr << "Error: " << strerror(errno) << " checking file type for " << (*file) << "\n";
-        }
-        else if (file_stat.st_mode & S_IFDIR){
-            list_directory((*file).path().native().c_str(), file_list);
-        }
-        else if (boost::filesystem::exists (*file) && (*file).path().extension() == ".lpc")
+    boost::filesystem::path dir(pathToCheck.c_str());
+    std::cout << dir << "\n";
+    try {
+        for (boost::filesystem::directory_iterator iter = boost::filesystem::directory_iterator(dir); iter != boost::filesystem::directory_iterator(); iter++)
         {
-            file_list.push_back( (*file).path().native() );
+            boost::filesystem::directory_entry file = *iter;
+            char *path_str = strdup(file.path().native().c_str());
+            struct stat file_stat;
+            int err = stat(path_str, &file_stat);
+            if (err == -1) {
+                std::cerr << "Error: " << strerror(errno) << " checking file type for " << path_str << "\n";
+            }
+            else if (file_stat.st_mode & S_IFDIR){
+                listDirectory(path_str, file_list);
+            }
+            else if (boost::filesystem::exists(file.path()) && file.path().extension() == ".lpc")
+            {
+                file_list.push_back( file.path().native() );
+            }
+            free(path_str);
         }
+    }
+    catch (const boost::filesystem::filesystem_error& ex)
+    {
+        std::cerr << ex.what() << '\n';
     }
 }
 
@@ -591,7 +601,7 @@ int loadConfig(int argc, char const *argv[]) {
                 std::cerr << "Error: " << strerror(errno) << " checking file type for " << argv[i] << "\n";
             }
             else if (file_stat.st_mode & S_IFDIR){
-                list_directory(argv[i], files);
+                listDirectory(argv[i], files);
             }
             else {
                 files.push_back(argv[i]);
