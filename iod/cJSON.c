@@ -117,7 +117,7 @@ static const char *parse_number(cJSON *item,const char *num)
 	    item->valuedouble=n.val._double;
 	}
 	else {
-	    item->valueint=n.val._int;
+	    item->valueint=sign*n.val._int;
 	}
 	item->type=cJSON_Number;
 	return num;
