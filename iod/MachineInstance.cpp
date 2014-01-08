@@ -972,9 +972,35 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 	}
     assert(reexecute == false);
 	if (reexecute || current_state != new_state) {
-		gettimeofday(&start_time,0);
-		gettimeofday(&disabled_time,0);	
 		std::string last = current_state.getName();
+
+#ifndef DISABLE_LEAVE_FUNCTIONS
+        /* notify everyone we are leaving a state */
+        {
+            std::string txt = _name + "." + current_state.getName() + "_leave";
+            Message msg(txt.c_str());
+            stat = execute(msg, this);
+            
+            std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+            while (dep_iter != depends.end()) {
+                MachineInstance *dep = *dep_iter++;
+                if (this == dep) continue;
+                if (!dep->receives(msg, this)) continue;
+                Action *act = dep->executingCommand();
+                if (act) {
+                    if (act->getStatus() == Action::Suspended) act->resume();
+                    DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
+                }
+                //TBD execute the message on the dependant machine
+                dep->execute(msg, this);
+                if (dep->_type == "LIST") {
+                    dep->setNeedsCheck();
+                }
+            }
+        }
+#endif
+		gettimeofday(&start_time,0);
+		gettimeofday(&disabled_time,0);
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
@@ -1126,6 +1152,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 				}
 			}
 		}
+        
 		
 		{
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
@@ -1135,6 +1162,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 	        //mif->send(ss.str().c_str());
             mif->sendState("STATE", _name, new_state.getName());
 		}
+        
+        /* notify everyone we are entering a state */
 
 		std::string txt = _name + "." + new_state.getName() + "_enter";
 		Message msg(txt.c_str());
@@ -1305,6 +1334,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 			}
 		}
 	}
+    // if debugging, generate a log message for the enter function
     if (debug() && _type != "POINT" && LogState::instance()->includes(DebugExtra::instance()->DEBUG_ACTIONS) ) {
 		std::string message_str = _name + "." + current_state.getName() + "_enter";
 		if (message_str != m.getText())
