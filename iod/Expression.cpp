@@ -88,8 +88,8 @@ bool Predicate::usesTimer(Value &timer_val) const {
 			if (left_p->entry.kind == Value::t_symbol 
 					&& (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
 				//DBG_MSG << "Copying timer value " << right_p->entry << "\n";
-				timer_val = right_p->entry;
-				return true; 
+                timer_val = right_p->entry;
+				return true;
 			}
 			else 
 				return false;
@@ -100,6 +100,44 @@ bool Predicate::usesTimer(Value &timer_val) const {
 		return true; 
 	else 
 		return false;
+}
+
+void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
+	if (left_p) {
+        if (!left_p->left_p) {
+            if (left_p->entry.kind == Value::t_symbol
+                && (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
+                clauses.push_back(this);
+                std::cout << "found timer clause (l) " << (*this) << "\n";
+			}
+        }
+        else
+            left_p->findTimerClauses(clauses);
+    }
+    if (right_p) {
+        if (!right_p->left_p) {
+            if (right_p->entry.kind == Value::t_symbol
+                && (right_p->entry.sValue == "TIMER" || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
+                    clauses.push_back(this);
+                    std::cout << "found timer clause (r) " << (*this) << "\n";
+            }
+        }
+        else {
+            right_p->findTimerClauses(clauses);
+        }
+    }
+}
+
+Value &Predicate::getTimerValue() {
+    if (left_p->entry.kind == Value::t_symbol
+        && (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
+        return right_p->entry;
+    }
+    if (right_p->entry.kind == Value::t_symbol
+        && (right_p->entry.sValue == "TIMER" || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
+        return left_p->entry;
+    }
+    return SymbolTable::Null;
 }
 
 void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer events that trigger the supplied machine

@@ -3,8 +3,8 @@
 Test MACHINE {
 
 	Done WHEN b>3, 
-		EXECUTE timeout WHEN TIMER>2000, 
-		EXECUTE error WHEN TIMER>4000;
+		EXECUTE error WHEN TIMER>4000,
+		EXECUTE timeout WHEN TIMER>2000;
 	Error WHEN b==1;
 
 	ENTER INIT { 

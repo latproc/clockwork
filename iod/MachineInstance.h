@@ -65,7 +65,7 @@ class ConditionHandler {
 public:
 	ConditionHandler(const ConditionHandler &other);
 	ConditionHandler &operator=(const ConditionHandler &other);
-	ConditionHandler() : action(0), trigger(0), uses_timer(false), triggered(false) {}
+	ConditionHandler() : timer_val(0), timer_op(opGE), action(0), trigger(0), uses_timer(false), triggered(false) {}
     
     bool check(MachineInstance *machine);
     void reset();
@@ -74,6 +74,7 @@ public:
 	std::string command_name;
 	std::string flag_name;
 	Value timer_val;
+    PredicateOperator timer_op;
 	Action *action;
 	Trigger *trigger;
 	bool uses_timer;

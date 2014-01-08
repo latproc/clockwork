@@ -1050,7 +1050,6 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					//setup triggers for subcondition handlers
 
 					if (ch.uses_timer) {
-
 						long timer_val;
                         ch.reset();
 						if (s.state_name == current_state.getName()) {
@@ -1058,6 +1057,46 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                             //   we should trigger at v.iValue+1
                             //NB_MSG << "setting up trigger for subcondition on state " << s.state_name << "\n";
 
+                            std::list<Predicate *> timer_clauses;
+                            ch.condition.predicate->findTimerClauses(timer_clauses);
+                            std::list<Predicate *>::iterator iter = timer_clauses.begin();
+                            timer_val = LONG_MAX;
+                            while (iter != timer_clauses.end()) {
+                                Predicate *node = *iter++;
+                                Value &tv = node->getTimerValue();
+                                if (tv == SymbolTable::Null) continue;
+                                if (tv.kind == Value::t_symbol) {
+                                    Value v = getValue(ch.timer_val.sValue);
+                                    if (v.kind != Value::t_integer) {
+                                        DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
+                                        continue;
+                                    }
+                                    
+                                    if (v.iValue>=0 && v.iValue < timer_val) {
+                                        timer_val = v.iValue;
+                                        if (node->op == opGT) timer_val;
+                                    }
+                                        
+                                }
+                                else if (tv.kind == Value::t_integer) {
+                                    if (tv.iValue < timer_val) {
+                                        timer_val = tv.iValue;
+                                        if (node->op == opGT) ++timer_val;
+                                    }
+                                }
+                                else {
+                                    DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
+                                    continue;
+                                }
+                            }
+                            if (timer_val < LONG_MAX) {
+                                std::cout << "minimum timer: " << timer_val << " selected\n";
+                                DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
+                                ch.trigger = new Trigger("Timer");
+                                Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
+                            }
+                            
+/*
 							if (ch.timer_val.kind == Value::t_symbol) {
 								Value v = getValue(ch.timer_val.sValue);
 								if (v.kind != Value::t_integer) {
@@ -1076,6 +1115,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 							DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
 							ch.trigger = new Trigger("Timer");
 							Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
+ */
 						}
 					}
 					else if (ch.command_name == "FLAG") {

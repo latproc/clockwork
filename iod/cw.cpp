@@ -468,7 +468,7 @@ int main (int argc, char const *argv[])
         gettimeofday(&now,0);
         int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
         if (1000-delta > 100)
-            usleep(1000-delta);
+            usleep(100); //usleep(1000-delta-2);
         then = now;
     }
     MQTTInterface::instance()->stop();
