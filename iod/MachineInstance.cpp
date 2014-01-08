@@ -41,6 +41,7 @@
 #include "ExecuteMessageAction.h"
 #include "CallMethodAction.h"
 #include "dynamic_value.h"
+#include "options.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -520,7 +521,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	}
     if (!persistentStore) {
         DBG_PROPERTIES << "Initialising persistence feed\n";
-        persistentStore = new MessagingInterface(1, 5557);
+        persistentStore = new MessagingInterface(1, persistent_store_port());
         usleep(200000); // give subscribers a chance to connect before publishing
     }
 }
@@ -555,7 +556,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	}
     if (!persistentStore) {
         DBG_PROPERTIES << "Initialising persistence feed\n";
-        persistentStore = new MessagingInterface(1, 5557);
+        persistentStore = new MessagingInterface(1, persistent_store_port());
         usleep(200000); // give subscribers a chance to connect before publishing
     }
 }

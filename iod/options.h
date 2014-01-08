@@ -41,6 +41,18 @@ const char *debug_config();
 void set_dependency_graph(const char *name);
 const char *dependency_graph();
     
+void set_publisher_port(int port);
+int publisher_port();
+    
+void set_persistent_store_port(int port);
+int persistent_store_port();
+    
+void set_modbus_port(int port);
+int modbus_port();
+
+void set_command_port(int port);
+int command_port();
+    
 #ifdef __cplusplus
 }
 #endif

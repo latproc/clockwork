@@ -30,13 +30,14 @@
 #include "dynamic_value.h"
 #endif
 #include "symboltable.h"
+#include "options.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
 MessagingInterface *MessagingInterface::getCurrent() {
     if (current == 0) {
-        current = new MessagingInterface(1, 5556);
+        current = new MessagingInterface(1, publisher_port());
         usleep(200000); // give current subscribers time to notice us
     }
     return current;

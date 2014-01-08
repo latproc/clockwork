@@ -26,6 +26,10 @@ const char *persistent_store_name  = 0;
 const char *modbus_map_name = 0;
 const char *debug_config_name = 0;
 const char *dependency_graph_name = 0;
+static int publisher_port_num = 5556;
+static int persistent_port_num = 5557;
+static int modbus_port_num = 5558;
+static int command_port_num = 5555;
 
 void set_verbose(int trueOrFalse)
 {
@@ -76,4 +80,38 @@ void set_dependency_graph(const char *name) {
 const char *dependency_graph() {
     return dependency_graph_name;
 }
+
+void set_publisher_port(int port) {
+    publisher_port_num = port;
+}
+
+int publisher_port() {
+    return publisher_port_num;
+}
+
+
+void set_persistent_store_port(int port) {
+    persistent_port_num = port;
+}
+
+int persistent_store_port() {
+    return persistent_port_num;
+}
+
+void set_modbus_port(int port) {
+    modbus_port_num = port;
+}
+
+int modbus_port() {
+    return modbus_port_num;
+}
+
+void set_command_port(int port) {
+    command_port_num = port;
+}
+
+int command_port() {
+    return command_port_num;
+}
+
 

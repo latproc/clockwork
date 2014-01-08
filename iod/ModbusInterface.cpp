@@ -24,6 +24,7 @@
 #include "MessagingInterface.h"
 #include <iomanip>
 #include <utility>
+#include "options.h"
 
  int ModbusAddress::next_discrete = ModbusAddress::first_auto_address; // next free address in the group
  int ModbusAddress::next_coil = ModbusAddress::first_auto_address; // next free address in the group
@@ -111,7 +112,7 @@ static MessagingInterface *modbus_changes = 0;
 
 void ModbusAddress::message(const std::string &msg) {
 	if (modbus_changes == 0) {
-        modbus_changes = new MessagingInterface(1, 5558);
+        modbus_changes = new MessagingInterface(1, modbus_port());
         usleep(200000); // give subscribers time to notice...
     }
 	modbus_changes->send(msg.c_str());

@@ -61,7 +61,6 @@ private:
 	std::string file_name;
 	bool is_dirty;
 };
-const char *persistent_store = "persist.dat";
 
 void PersistentStore::insert(std::string key, std::string value) {
 	init_values[key] = value;

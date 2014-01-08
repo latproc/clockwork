@@ -49,6 +49,7 @@
 #include "MessagingInterface.h"
 #include "value.h"
 #include "cJSON.h"
+#include "options.h"
 
 
 struct DeviceStatus {
@@ -89,7 +90,7 @@ void usage(int argc, const char * argv[]) {
         << " | (--serial_port portname --serial_settings baud:bits:parity:stop_bits:flow_control )\n"
         << " --property property_name [--client] [--name device_name]\n"
         << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ]\n"
-        << " --no_json --queue queue_name"
+        << " --no_json --queue queue_name [--cw_port port] "
         << "\n";
 }
 
@@ -119,7 +120,7 @@ struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
         serial_port_name_(0), serial_settings_(0), watch_(0), queue_(0), collect_duplicates(false), disconnect_on_timeout(true),
                 got_host(false), got_port(true), got_property(false), got_pattern(false), structured_messaging(true),
-                got_queue(false) {
+                got_queue(false), cw_publisher(5556) {
         setIODHost("localhost");
     }
     ~Options() {
@@ -254,6 +255,9 @@ struct Options {
         got_queue = true;
     }
     const char *queue() const { return queue_; }
+    
+    int publisher_port() const { return cw_publisher; }
+    void set_publisher_port(int port) { cw_publisher = port; }
 
     
 protected:
@@ -272,6 +276,7 @@ protected:
     char *queue_;
     bool collect_duplicates;
     bool disconnect_on_timeout;
+    int cw_publisher;
     
     // validation
     bool got_host;
@@ -504,7 +509,7 @@ struct IODInterface{
     void connect() {
         try {
             std::stringstream ss;
-            ss << "tcp://" << options.iodHost() << ":" << 5555;
+            ss << "tcp://" << options.iodHost() << ":" << command_port();
             if (socket) {
                 delete socket;
                 socket = 0;
@@ -962,7 +967,7 @@ struct PropertyMonitorThread {
         try {
             int res;
             std::stringstream ss;
-            ss << "tcp://" << options.iodHost() << ":" << 5556;
+            ss << "tcp://" << options.iodHost() << ":" << options.publisher_port();
             socket = new zmq::socket_t (*context, ZMQ_SUB);
             res = zmq_setsockopt (*socket, ZMQ_SUBSCRIBE, "", 0);
             if (res) throw WatchException("error setting zmq socket option");
@@ -1070,6 +1075,11 @@ int main(int argc, const char * argv[])
         }
         else if (strcmp(argv[i], "--no_json") == 0) {
             options.setSendJSON(false);
+        }
+        else if (strcmp(argv[i], "--cw_port") == 0 && i < argc-1) {
+            int pport = strtol(argv[++i], 0, 10);
+            options.set_publisher_port(pport);
+            set_publisher_port(pport);
         }
         else {
             std::cerr << "Warning: parameter " << argv[i] << " not understood\n";

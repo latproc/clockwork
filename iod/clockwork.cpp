@@ -586,6 +586,18 @@ int loadConfig(int argc, char const *argv[]) {
 		else if (strcmp(argv[i], "-g") == 0 && i < argc-1) { // dependency graph file
 			set_dependency_graph(argv[++i]);
 		}
+		else if (strcmp(argv[i], "-p") == 0 && i < argc-1) { // publisher port
+			set_publisher_port((int)strtol(argv[++i], 0, 10));
+		}
+		else if (strcmp(argv[i], "-ps") == 0 && i < argc-1) { // persistent store port
+			set_persistent_store_port((int)strtol(argv[++i], 0, 10));
+		}
+		else if (strcmp(argv[i], "-mp") == 0 && i < argc-1) { // modbus port
+			set_modbus_port((int)strtol(argv[++i], 0, 10));
+		}
+		else if (strcmp(argv[i], "-cp") == 0 && i < argc-1) { // command port
+			set_command_port((int)strtol(argv[++i], 0, 10));
+		}
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {
             usage(argc, argv);

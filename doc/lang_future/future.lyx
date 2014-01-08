@@ -211,11 +211,11 @@ Passing SELF to an internal object
 \end_layout
 
 \begin_layout Itemize
-Stable states that use timers of other machines
+Stable states that use timers of other machines (retest)
 \end_layout
 
 \begin_layout Itemize
-State changes during stable state evaluation
+State changes during stable state evaluation (details?)
 \end_layout
 
 \begin_layout Subsection
@@ -288,6 +288,10 @@ Wall time (long period timers)
 
 \begin_layout Itemize
 Polling - repeatedly executing a statement
+\end_layout
+
+\begin_layout Itemize
+Retriggering EXECUTE / TAG actions
 \end_layout
 
 \begin_layout Standard
@@ -959,6 +963,30 @@ MIN the current minute within the hour (0..59)
 
 \begin_layout Description
 SEC the current second within the current minute (0..59)
+\end_layout
+
+\begin_layout Standard
+Retriggering of subcondition; syntax:
+\end_layout
+
+\begin_layout LyX-Code
+state WHEN condition,
+\end_layout
+
+\begin_layout LyX-Code
+EXECUTE method WHENEVER condition, 
+\end_layout
+
+\begin_layout LyX-Code
+TAG machine WHENEVER condition,
+\end_layout
+
+\begin_layout LyX-Code
+EXECUTE (DO) method EVERY duration;
+\end_layout
+
+\begin_layout Standard
+
 \end_layout
 
 \begin_layout Subsection

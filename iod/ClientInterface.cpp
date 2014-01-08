@@ -18,6 +18,7 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <stdlib.h>
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -31,6 +32,7 @@
 #include "Logger.h"
 #include "value.h"
 #include "MessagingInterface.h"
+#include "options.h"
 
 extern bool machine_is_ready;
 extern boost::mutex thread_protection_mutex;
@@ -53,7 +55,10 @@ void IODCommandThread::operator()() {
     std::cout << "------------------ Command Thread Started -----------------\n";
     zmq::context_t context (3);
     zmq::socket_t socket (context, ZMQ_REP);
-    socket.bind ("tcp://*:5555");
+    std::stringstream sn;
+    sn << "tcp://0.0.0.0:" << command_port();
+    const char *port = sn.str().c_str();
+    socket.bind (port);
     IODCommand *command = 0;
     
     while (!done) {
