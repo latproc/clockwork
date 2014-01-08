@@ -159,17 +159,21 @@ void IOComponent::idle() {
 			const char *evt;
 			if (address.value != value) 
 			{
-				/* this no longer needs to be published here as the responsible state machine
-					publishes it
-		        MessagingInterface *mif = MessagingInterface::getCurrent();
-		        std::stringstream ss; 
-		        ss << io_name << " STATE " << ((value) ? "on" : "off") << std::flush;
-		        mif->send(ss.str().c_str());
-				 */
-
+                std::list<MachineInstance*>::iterator iter;
+#ifndef DISABLE_LEAVE_FUNCTIONS
+				if (address.value) evt ="on_leave";
+				else evt = "off_leave";
+                iter = depends.begin();
+	            while (iter != depends.end()) {
+	                MachineInstance *m = *iter++;
+					Message msg(evt);
+                    if (m->receives(msg, this)) m->execute(msg, this);
+				}
+#endif
+                
 				if (value) evt = "on_enter";
 				else evt = "off_enter";
-	            std::list<MachineInstance*>::iterator iter = depends.begin();
+	            iter = depends.begin();
 	            while (iter != depends.end()) {
 	                MachineInstance *m = *iter++;
 					Message msg(evt);
