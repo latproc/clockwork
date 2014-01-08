@@ -106,6 +106,7 @@ struct Subcondition {
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
+%token LEAVE
 
 %union {
 	int iVal;
@@ -575,6 +576,7 @@ INTEGER   {
 
 command:
 enter_command
+| leave_command
 | receive_command
 | basic_command
 ;
@@ -647,6 +649,34 @@ ENTER SYMBOL /* state name */ action
     current_machineclass->receives[Message(strdup(msg_name.c_str()))] = mc;
 }
 ;
+
+leave_command:
+LEAVE SYMBOL action
+{
+#ifndef DISABLE_LEAVE_FUNCTIONS
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    std::string msg_name ($2);
+    msg_name += "_leave";
+    
+    DBG_PARSER << "generating leave function " << msg_name << " for " << mc->action_templates.size() << " actions: ";
+    BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+        DBG_PARSER <<"    " << *at << "\n";
+    }
+    DBG_PARSER << "\n";
+    
+    //current_machineclass->enter_functions[Message($2)] = mc;
+    current_machineclass->receives[Message(strdup(msg_name.c_str()))] = mc;
+#else
+    /* raise an error if cw is run on configs with LEAVE functions but the feature is not enabled */
+    std::stringstream ss;
+    ss << "## - Error: " << yyfilename << ":"<< yylineno << " LEAVE methods are disabled in this version ";
+    DBG_PARSER << ss.str() << "\n";
+    error_messages.push_back(ss.str());
+    ++num_errors;
+#endif
+}
 
 receive_command:
 RECEIVE SYMBOL /* message */ action  {
