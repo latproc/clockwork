@@ -65,6 +65,7 @@ GROUP               return GROUP;
 INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;
+LEAVE               return LEAVE;
 IF					return IF;
 IN                  return IN;
 INITIAL             return INITSTATE;
