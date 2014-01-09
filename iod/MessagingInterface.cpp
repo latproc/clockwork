@@ -273,8 +273,13 @@ bool MessagingInterface::sendState(std::string cmd, std::string name, std::strin
 
 Value valueFromJSONObject(cJSON *obj, cJSON *cjType) {
     if (!obj) return SymbolTable::Null;
-    assert(cjType->type == cJSON_String);
-    const char *type = cjType->valuestring;
+    const char *type = 0;
+    if (cjType) {
+        assert(cjType->type == cJSON_String);
+        type = cjType->valuestring;
+    }
+    else
+        type = "STRING";
     Value res;
     if (obj->type == cJSON_String) {
         if (strcmp(type, "STRING") == 0)
@@ -311,15 +316,60 @@ bool MessagingInterface::getCommand(const char *msg, std::string &cmd, std::list
         if (!command) goto failed_getCommand;
         if (command->type != cJSON_String) goto failed_getCommand;
         cmd = command->valuestring;
+        if (cmd == "PROPERTY") {
+            cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
+            int num_params = cJSON_GetArraySize(cjParams);
+            if (num_params) {
+                *params = new std::list<Value>;
+                for (int i=0; i<num_params; ++i) {
+                    cJSON *item = cJSON_GetArrayItem(cjParams, i);
+                    cJSON *type = cJSON_GetObjectItem(item, "type");
+                    cJSON *value = cJSON_GetObjectItem(item, "value");
+                    Value item_val = valueFromJSONObject(value, type);
+                    if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
+                }
+            }
+            else
+                *params = NULL;
+        }
+        else if (cmd == "STATE") {
+            cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
+            int num_params = cJSON_GetArraySize(cjParams);
+            if (num_params) {
+                *params = new std::list<Value>;
+                for (int i=0; i<num_params; ++i) {
+                    cJSON *item = cJSON_GetArrayItem(cjParams, i);
+                    Value item_val = valueFromJSONObject(item, 0);
+                    if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
+                }
+            }
+            else
+                *params = NULL;
+        }
+        cJSON_Delete(obj);
+        return true;
+    }
+failed_getCommand:
+    cJSON_Delete(obj);
+    return false;
+}
+
+bool MessagingInterface::getState(const char *msg, std::string &cmd, std::list<Value> **params)
+{
+    cJSON *obj = cJSON_Parse(msg);
+    if (!obj) return false;
+    {
+        cJSON *command = cJSON_GetObjectItem(obj, "command");
+        if (!command) goto failed_getCommand;
+        if (command->type != cJSON_String) goto failed_getCommand;
+        cmd = command->valuestring;
         cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
         int num_params = cJSON_GetArraySize(cjParams);
         if (num_params) {
             *params = new std::list<Value>;
             for (int i=0; i<num_params; ++i) {
                 cJSON *item = cJSON_GetArrayItem(cjParams, i);
-                cJSON *type = cJSON_GetObjectItem(item, "type");
-                cJSON *value = cJSON_GetObjectItem(item, "value");
-                Value item_val = valueFromJSONObject(value, type);
+                Value item_val = valueFromJSONObject(item, 0);
                 if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
             }
         }
@@ -332,5 +382,4 @@ failed_getCommand:
     cJSON_Delete(obj);
     return false;
 }
-
 
