@@ -83,6 +83,7 @@ $page_body='';
 
 $context = new ZMQContext();
 $requester = new ZMQSocket($context, ZMQ::SOCKET_REQ);
+$requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
 $requester->connect("tcp://localhost:5555");
 
 /* 
@@ -225,12 +226,13 @@ $siteurl="status-monitor.php";
 				if ($type != "piston") {
 					if ($type == "Output") $cls_extra = "out"; else $cls_extra = "";
 					$tabdata .= '<div class="itemname ' . $cls_extra
-						. '" name="'.$point.'">' . $point . "</div> "
-						. '<div class="item_img">';
+						. '" name="'.$point.'">' . $point . "</div> ";
 					if ($type == "AnalogueOutput")
-						$tabdata .= button_image($point, "{$image_prefix}.png", 'im_'.$point) . "</div>";
+						$image_name = "{$image_prefix}.png";
 					else
-						$tabdata .= button_image($point, "{$image_prefix}_$status.png", 'im_'.$point) . "</div>";
+						$image_name = "{$image_prefix}_$status.png";
+					if (file_exists($BASE_APPDIR . "/html/img/$image_name"))
+						$tabdata .= '<div class="item_img">' . button_image($point, $image_name, 'im_'.$point) . "</div>";
 					if ($type == 'AnalogueOutput') {
 						$tabdata .= '<div class="item_state" id="mc_' . $point. '">' 
 							. htmlspecialchars($curr->value) 
@@ -271,7 +273,9 @@ $siteurl="status-monitor.php";
 				$display_value = htmlspecialchars($status);
 			else
 				$display_value = $curr->value;
-			$tabdata .= image_html($point, $image_name, "im_".$point) . "</div>"
+			if (file_exists($BASE_APPDIR . "/html/img/$image_name"))
+				$tabdata .= image_html($point, $image_name, "im_".$point);
+			$tabdata .= "</div>"
 					. '<div class="item_state" id="mc_' . $point. '">' 
 					. "$display_value</div>\n";
 		}
@@ -316,13 +320,16 @@ print <<<'EOD'
     </style>
 	<script type="text/javascript">
 	function refresh() {
-	//return;
 		$.get("index.php", { list: "json"}, 
 			function(data){ 
 				res=JSON.parse(data);
 				$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 				var $last_module = -1;
 				for (var i = 0; i < res.length; i++) {
+					var type = "Input";
+					if (typeof res[i].class !== "undefined") type = res[i].class;
+					if (typeof res[i].type != "undefined")
+						type = res[i].type;
 					if (res[i].class != "MODULE") {
 						if (typeof res[i].Cause != 'undefined') {
 							if (res[i].Cause != "")  {
@@ -346,23 +353,23 @@ print <<<'EOD'
 						btn=$("[name="+res[i].name+"]");
 						btn.each(function() {
 							if (typeof res[i].image === "undefined")
-								res[i].image = res[i].class;
+								res[i].image = type;
 							if (typeof res[i].class === "undefined") {
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].state);
 								});
 							}
-							else if (res[i].class == "AnalogueInput") {
+							else if (type == "AnalogueInput") {
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].value);
 								});
 							}
-							else if (res[i].class == "AnalogueOutput") {
+							else if (type == "AnalogueOutput") {
 								$("#mc_"+res[i].name).each(function(){
 									$(this).html(res[i].value);
 								});
 							}
-							else if (res[i].class != "piston") {
+							else if (type != "piston") {
 								img= "img/" + res[i].image + "_" + res[i].state + ".png";
 								
 								$("#im_"+res[i].name).each(function(){
@@ -382,7 +389,7 @@ print <<<'EOD'
 							}
 						});
 						btn.select(".item").each(function(){ 
-							if (res[i].class == "Output") {
+							if (type == "Output") {
 								if (res[i].state == "off") {$(this).removeClass("on").addClass("off"); }
 								if (res[i].state == "on") {$(this).removeClass("off").addClass("on"); }
 							}
