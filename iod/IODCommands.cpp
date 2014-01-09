@@ -470,6 +470,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         char *res = cJSON_Print(root);
         cJSON_Delete(root);
         bool done;
+		char *p = res; while (*p) { *p &= 0x7f; ++p; }
         if (res) {
             result_str = res;
             free(res);
