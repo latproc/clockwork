@@ -539,14 +539,14 @@ print <<<'EOD'
 						enabled=res[i].enabled;
 						btn.each(function() {
 							//if ($(this).get(0).tagName == 'checkbox') {
-								if (enabled && !$(this).attr("checked")) 
-									$(this).attr("checked", true);
-								else if (!enabled && $(this).attr("checked"))
-									$(this).attr("checked", false);
+								if (enabled && !$(this).prop("checked")) 
+									$(this).prop("checked", true);
+								else if (!enabled && $(this).prop("checked"))
+									$(this).prop("checked", false);
 							//}
 							
 						});
-						btn=$("[name="+res[i].name+"]");
+						//btn=$("[name="+res[i].name+"]");
 						btn.each(function() {
 							if (typeof res[i].image === "undefined")
 								res[i].image = type;
@@ -634,7 +634,7 @@ print <<<'EOD'
         });
 		$(".enable_disable").each(function() {
 			$(this).click(function() {
-				if ($(this).attr("checked")) {
+				if ($(this).prop("checked")) {
 					$.get("monitor.php", { enable: $(this).attr("name") },
 						function(data) {
 							$("#xy").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
