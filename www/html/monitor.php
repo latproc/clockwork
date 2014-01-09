@@ -124,6 +124,7 @@ $page_body='';
 
 $context = new ZMQContext();
 $requester = new ZMQSocket($context, ZMQ::SOCKET_REQ);
+$requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
 $requester->connect("tcp://localhost:5555");
 
 /* 
@@ -348,91 +349,77 @@ foreach ($tabs as $tab => $data) {
 				. ( (isset($curr->enabled) && $curr->enabled) ? 'checked="checked"' : '')
 				.' name="'. $point . '" class="enable_disable"' 
 				.'</div></div></td>';
-		if ($type != "AnalogueInput" && $type != "Input") { 
-			// interactive objects
-			if ($use_ajax) {
-				if ($type != "piston") {
-					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td>";
-					if ($type == "AnalogueOutput") 
-						$tabdata .= '<td>' . button_image($point, "${image_prefix}.png", "im_". $point)
-							. '</td><td><div id="mc_'.$point.'">' 
-							. htmlspecialchars($curr->value) . '</div>';
-					else if ($type != "Output")  {
-						$tabdata .= "<td>". button_image($point, "${image_prefix}_$status.png", "im_". $point);
-						$tabdata .= '<div id="mc_'.$point.'">' 
-							. htmlspecialchars($status) . '</div>';
-					}
-					else {
-						$tabdata .= "<td>". button_image($point, "${image_prefix}_$status.png", "im_". $point);
-						$tabdata .= '<div style="float:right" id="mc_'.$point.'">' 
-							. htmlspecialchars($status) . '</div>';
-					}
-				}
-				else {
-					$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . '</td><td><div class="piston" style="height:20px; width: 80px;"  id="mc_'.$point.'"></div></td>';
-				}
-				$tabdata .= "</td>\n";
-				// display command buttons
-				if (isset($curr->commands)) {
-					$cmds = explode(",", $curr->commands);
-					$tabdata .= "<td>";
-					foreach ($cmds as $cmd) {
-						$tabdata .= '<button class="machine_command" name="' 
-							. htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
-					}
-					$tabdata .= "</td>";
-				}
-				else $tabdata .= "<td></td>";
-				// display properties
-				if (isset($curr->display)) {
-					$tabdata .= "<td>";
-					$props = explode(",", $curr->display);
-					foreach ($props as $prop) {
-						$tabdata .= '<div name="p_' .htmlspecialchars($point ."-". $prop). '">'
-								. htmlspecialchars($prop) .': ';
-						if (isset($curr->$prop)) $tabdata .= htmlspecialchars($curr->$prop);
-						else $tabdata .= '""';
-						$tabdata .= ' </div>';
-					}
-					$tabdata .= "</td>";
-				}
-				else
-					$tabdata .= "<td></td>";
-				// display message buttons
-				if (isset($curr->receives)) {
-					$cmds = explode(",", $curr->receives);
-					$tabdata .= "<td>";
-					foreach ($cmds as $cmd) {
-						$tabdata .= '<button class="machine_command" name="' . htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
-					}
-					$tabdata .= "</td>";
-				}
-				else $tabdata .= "<td></td>";
-			}
-			else {
-				$tabdata .= '<td><form method=post action="?">'. $point . ":</td><td>"; 
-				$tabdata .= ''
-					. '<input type="hidden" name="toggle" value="'. $point. '"/>'
-					. '<input type="hidden" name="s" value='. time(). '/>' 
-					. '</td>' 
-					. "</form></td>\n";
-			}
-		}
-		else { 
-			// static objects
-			if ($type != "AnalogueInput" && preg_match("/.*on.*/",$status)) 
-				$image_name = $image_prefix."_on.png";
-			else
-				$image_name = $image_prefix.".png";
-			if ($type != "AnalogueInput")
-				$display_value = htmlspecialchars($status);
-			else
-				$display_value = $curr->value;
+		$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td>"; 
+		$id = "id=\"mc_$point\"";
 
-			$tabdata .= '<td class="center">' . $point . ":</td><td style=\"width:64px\">";
-			$tabdata .= image_html($point, $image_name, "im_".$point);
-			$tabdata .= "</td><td><div id=\"mc_.$point.\">$display_value</div></td><td></td><td></td>\n";
+		if ($type == "piston") { // pistons have a special layout
+		    $tabdata .= "<td><div class=\"piston\" style=\"height:20px; width: 80px;\" $id ></div></td>";
 		}
+		else {
+		    // analogue values display a value, everything else displays a state name
+		    if ($type == "AnalogueOutput" || $type == "AnalogueInput")
+		        $display_value = htmlspecialchars($curr->value);
+		    else
+		        $display_value = htmlspecialchars($status);
+        
+		    // inputs that are on have an input_on icon, analogues all have the same icon otherwise the icon is based on the state name
+		    if ($type == "Input" && preg_match("/.*on.*/",$status))
+		        $image_name = "${image_prefix}_on.png";
+		    else if ($type == "Input" || $type == "AnalogueOutput" || $type == "AnalogueInput")
+		            $image_name = "${image_prefix}.png";
+		    else 
+		        $image_name = "${image_prefix}_$status.png";
+ 
+		    // if there is no file for the icon, we do not add the image div
+		    if (file_exists($BASE_APPDIR . "/html/img/$image_name")) {
+			    $tabdata .= "<td>";
+		        if ( $type == "AnalogueInput" || $type == "Input")
+		            $tabdata .= image_html($point, $image_name, "im_".$point);
+		        else
+		            $tabdata .= button_image($point, $image_name, "im_". $point);
+				$tabdata .= "</td>";
+		    	$tabdata .= "<td><div class=\"item_state\" $id >$display_value</div></td>";
+		    }
+			else
+		    	$tabdata .= "<td colspan=2><div class=\"item_state\" $id >$display_value</div></td>";
+		}
+		// display command buttons
+		if (isset($curr->commands)) {
+			$cmds = explode(",", $curr->commands);
+			$tabdata .= "<td>";
+			foreach ($cmds as $cmd) {
+				$tabdata .= '<button class="machine_command" name="' 
+					. htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
+			}
+			$tabdata .= "</td>";
+		}
+		else $tabdata .= "<td></td>";
+		// display properties
+		if (isset($curr->display)) {
+			$tabdata .= "<td>";
+			$props = explode(",", $curr->display);
+			foreach ($props as $prop) {
+				$tabdata .= '<div name="p_' .htmlspecialchars($point ."-". $prop). '">'
+						. htmlspecialchars($prop) .': ';
+				if (isset($curr->$prop)) $tabdata .= htmlspecialchars($curr->$prop);
+				else $tabdata .= '""';
+				$tabdata .= ' </div>';
+			}
+			$tabdata .= "</td>";
+		}
+		else
+			$tabdata .= "<td></td>";
+		// display message buttons
+		if (isset($curr->receives)) {
+			$cmds = explode(",", $curr->receives);
+			$tabdata .= "<td>";
+			foreach ($cmds as $cmd) {
+				$tabdata .= '<button class="machine_command" name="' . htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
+			}
+			$tabdata .= "</td>";
+		}
+		else $tabdata .= "<td></td>";
+		
 	}
 	else if ($curr->class == "MODULE") {
 		// modules display the name and position of the module, along with an option list
