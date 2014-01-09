@@ -46,6 +46,7 @@ public:
                      Value p2 = SymbolTable::Null,
                      Value p3 = SymbolTable::Null);
     static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
+    static bool getState(const char *msg, std::string &cmd, std::list<Value> **params);
 private:
     void connect();
     static MessagingInterface *current;
