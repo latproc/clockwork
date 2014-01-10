@@ -24,13 +24,16 @@ class User {
   public function getId() { return $this->id; }
   public static function count() { 
     global $DBNAME;
-	$dbcon = new PDO('sqlite:'.$DBNAME);
-	$sql = 'select count(*) from users;';
-    $row = $dbcon->query($sql)->fetch();
-    if ($row === FALSE) { 
+    $dbcon = new PDO('sqlite:'.$DBNAME);
+    if ($dbcon == false) 
+	throw new Exception("error connecting to the database " . $DBNAME);
+    $sql = 'select count(*) from users;';
+    $res = $dbcon->query($sql);
+    if ($res === false) { 
       throw new Exception("error counting users in " . $DBNAME);
     }
-	return $row[0];
+    $row = $res->fetch();
+    return $row[0];
   }
 }
 ?>
