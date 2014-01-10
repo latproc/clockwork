@@ -1122,11 +1122,10 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                             //NB_MSG << "setting up trigger for subcondition on state " << s.state_name << "\n";
 
                             std::list<Predicate *> timer_clauses;
-                            std::cout << "searcing: " << (*ch.condition.predicate) << "\n";
+                            DBG_PREDICATES << "searcing: " << (*ch.condition.predicate) << "\n";
                             ch.condition.predicate->findTimerClauses(timer_clauses);
                             std::list<Predicate *>::iterator iter = timer_clauses.begin();
                             timer_val = LONG_MAX;
-			    std::cout << "--------" << timer_clauses.size() << " clauses found\n";
                             while (iter != timer_clauses.end()) {
                                 Predicate *node = *iter++;
                                 Value &tv = node->getTimerValue();
@@ -1135,22 +1134,26 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                                     Value v = getValue(tv.sValue);
                                     if (v.kind != Value::t_integer) {
                                         DBG_MSG << _name << " Warning: timer value "<< v << " for state " 
-						<< s.state_name << " subcondition is not numeric\n";
+                                            << s.state_name << " subcondition is not numeric\n";
                                         continue;
                                     }
                                     
                                     if (v.iValue>=0 && v.iValue < timer_val) {
                                         timer_val = v.iValue;
                                         if (node->op == opGT) ++timer_val;
-				    }
-				    else std::cout << "skipping large timer value " << v.iValue << "\n";
+                                    }
+                                    else {
+                                        DBG_PREDICATES << "skipping large timer value " << v.iValue << "\n";
+                                    }
                                 }
                                 else if (tv.kind == Value::t_integer) {
                                     if (tv.iValue < timer_val) {
                                         timer_val = tv.iValue;
                                         if (node->op == opGT) ++timer_val;
                                     }
-				    else std::cout << "skipping a large timer value " << tv.iValue << "\n";
+                                    else {
+                                        DBG_PREDICATES << "skipping a large timer value " << tv.iValue << "\n";
+                                    }
                                 }
                                 else {
                                     DBG_MSG<< _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
