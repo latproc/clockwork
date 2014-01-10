@@ -675,10 +675,11 @@ bool Value::asInteger(long &x) const {
 		x = iValue;
 		return true;
 	}
-	if (kind == t_string) {
+	if (kind == t_string || kind == t_symbol) {
 		char *p;
-		x = strtol(sValue.c_str(), &p, 0);
-		if (*p == 0) return true;
+		const char *v = sValue.c_str();
+		x = strtol(v, &p, 0);
+		if (*p == 0 || p != v ) return true;
 		return false;
 	}
 	else if (kind == t_bool) {
