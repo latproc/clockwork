@@ -8,7 +8,6 @@ PFlag MACHINE {
 flag PFlag;
 
 Test MACHINE {
-	OPTION PERSISTENT "true";
 	GLOBAL flag;
 	f PFlag(tab:Test); # persistent flag
 	g FLAG(tab:Test);  # a normal flag
