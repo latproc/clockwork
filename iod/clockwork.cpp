@@ -212,6 +212,12 @@ void semantic_analysis() {
 	//list_class->disableAutomaticStateChanges();
 	list_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
     
+    MachineClass *ref_class = new MachineClass("REFERENCE");
+    ref_class->states.push_back("ASSIGNED");
+    ref_class->states.push_back("EMPTY");
+	ref_class->default_state = State("EMPTY");
+	ref_class->initial_state = State("EMPTY");
+	//ref_class->disableAutomaticStateChanges();
     
     MachineClass *module_class = new MachineClass("MODULE");
 	module_class->disableAutomaticStateChanges();
@@ -748,9 +754,9 @@ void initialise_machines() {
         while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
 			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
-				std::string name("");
-				if (m->owner) name += m->owner->getName() + ".";
-				name += m->getName();
+				std::string name(m->fullName());
+				//if (m->owner) name += m->owner->getName() + ".";
+				//name += m->getName();
 				m->enable();
 				if (init_values.count(name)) {
 					std::list< PropertyPair > &list = init_values[name];
