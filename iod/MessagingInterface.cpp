@@ -316,7 +316,21 @@ bool MessagingInterface::getCommand(const char *msg, std::string &cmd, std::list
         if (!command) goto failed_getCommand;
         if (command->type != cJSON_String) goto failed_getCommand;
         cmd = command->valuestring;
-        if (cmd == "PROPERTY") {
+        if (cmd == "STATE") {
+            cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
+            int num_params = cJSON_GetArraySize(cjParams);
+            if (num_params) {
+                *params = new std::list<Value>;
+                for (int i=0; i<num_params; ++i) {
+                    cJSON *item = cJSON_GetArrayItem(cjParams, i);
+                    Value item_val = valueFromJSONObject(item, 0);
+                    if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
+                }
+            }
+            else
+                *params = NULL;
+        }
+        else {
             cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
             int num_params = cJSON_GetArraySize(cjParams);
             if (num_params) {
@@ -326,20 +340,6 @@ bool MessagingInterface::getCommand(const char *msg, std::string &cmd, std::list
                     cJSON *type = cJSON_GetObjectItem(item, "type");
                     cJSON *value = cJSON_GetObjectItem(item, "value");
                     Value item_val = valueFromJSONObject(value, type);
-                    if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
-                }
-            }
-            else
-                *params = NULL;
-        }
-        else if (cmd == "STATE") {
-            cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
-            int num_params = cJSON_GetArraySize(cjParams);
-            if (num_params) {
-                *params = new std::list<Value>;
-                for (int i=0; i<num_params; ++i) {
-                    cJSON *item = cJSON_GetArrayItem(cjParams, i);
-                    Value item_val = valueFromJSONObject(item, 0);
                     if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
                 }
             }
