@@ -43,6 +43,12 @@ Action::Status SendMessageAction::run() {
                 if (entry) owner->send(new Message(message.get()), entry);
             }
         }
+        else if (target_machine->_type == "REFERENCE" && target_machine->locals.size()) {
+            for (unsigned int i=0; i<target_machine->locals.size(); ++i) {
+                MachineInstance *entry = target_machine->locals[i].machine;
+                if (entry) owner->send(new Message(message.get()), entry);
+            }
+        }
 	}
 	else {
 		NB_MSG << *this << " Error: cannot find target machine " << target.get() << "\n"; 

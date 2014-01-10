@@ -91,7 +91,7 @@ struct Subcondition {
 
 %token MODULES MODULE DEFAULTS DEFAULT
 %token STATE ENTER NUMBER SEPARATOR OEXPR EEXPR OBRACE
-%token EBRACE QUOTE LE LT GE GT NE EQ ASSIGNED
+%token EBRACE QUOTE LE LT GE GT NE EQ
 %token NOT SET AND OR SQUOTE LOG FLAG
 %token PROPERTY DEFINE COLLECT FROM TEST EXECUTE SPAWN RUN
 %token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
@@ -106,7 +106,7 @@ struct Subcondition {
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
-%token LEAVE
+%token LEAVE ASSIGN
 
 %union {
 	int iVal;
@@ -881,6 +881,10 @@ SET SYMBOL TO SYMBOL  {
 | CLEAR SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ClearListActionTemplate($2);
+}
+| ASSIGN SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new IncludeActionTemplate($4, $2);
 }
 | SET ENTRIES OF SYMBOL FROM BITSET SYMBOL {
     if (current_action) current_actions->push_back(current_action);
