@@ -220,6 +220,7 @@ void StableState::refreshTimer() {
         Value v = owner->getValue(timer_val.sValue);
         if (v.kind != Value::t_integer) {
             NB_MSG << owner->getName() << " Error: timer value for state " << state_name << " is not numeric\n";
+		NB_MSG << "timer_val: " << timer_val << " lookup value: " << v << " type: " << v.kind << "\n";
                 return;
             }
             else
@@ -229,6 +230,7 @@ void StableState::refreshTimer() {
             trigger_time = timer_val.iValue;
         else {
             DBG_SCHEDULER << owner->getName() << " Warning: timer value for state " << state_name << " is not numeric\n";
+		NB_MSG << "timer_val: " << timer_val << " type: " << timer_val.kind << "\n";
             return;
         }
         DBG_SCHEDULER << owner->getName() << " Scheduling timer for " << timer_val*1000 << "us\n";
@@ -1083,6 +1085,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					Value v = getValue(s.timer_val.sValue);
 					if (v.kind != Value::t_integer) {
 						NB_MSG << _name << " Error: timer value for state " << s.state_name << " is not numeric\n";
+						NB_MSG << "timer_val: " << s.timer_val << " lookup value: " << v << " type: " << v.kind << "\n";
 						continue;
 					}
 					else
@@ -1092,6 +1095,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 					timer_val = s.timer_val.iValue;
 				else {
 					DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " is not numeric\n";
+					NB_MSG << "timer_val: " << s.timer_val << " type: " << s.timer_val.kind << "\n";
 					continue;
 				}
                 if (s.condition.predicate->op == opGT) timer_val++;
@@ -1122,31 +1126,34 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                             ch.condition.predicate->findTimerClauses(timer_clauses);
                             std::list<Predicate *>::iterator iter = timer_clauses.begin();
                             timer_val = LONG_MAX;
+			    std::cout << "--------" << timer_clauses.size() << " clauses found\n";
                             while (iter != timer_clauses.end()) {
                                 Predicate *node = *iter++;
                                 Value &tv = node->getTimerValue();
                                 if (tv == SymbolTable::Null) continue;
-                                if (tv.kind == Value::t_symbol) {
-                                    Value v = getValue(ch.timer_val.sValue);
+                                if (tv.kind == Value::t_symbol || tv.kind == Value::t_string) {
+                                    Value v = getValue(tv.sValue);
                                     if (v.kind != Value::t_integer) {
-                                        DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
+                                        DBG_MSG << _name << " Warning: timer value "<< v << " for state " 
+						<< s.state_name << " subcondition is not numeric\n";
                                         continue;
                                     }
                                     
                                     if (v.iValue>=0 && v.iValue < timer_val) {
                                         timer_val = v.iValue;
-                                        if (node->op == opGT) timer_val;
-                                    }
-                                        
+                                        if (node->op == opGT) ++timer_val;
+				    }
+				    else std::cout << "skipping large timer value " << v.iValue << "\n";
                                 }
                                 else if (tv.kind == Value::t_integer) {
                                     if (tv.iValue < timer_val) {
                                         timer_val = tv.iValue;
                                         if (node->op == opGT) ++timer_val;
                                     }
+				    else std::cout << "skipping a large timer value " << tv.iValue << "\n";
                                 }
                                 else {
-                                    DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
+                                    DBG_MSG<< _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
                                     continue;
                                 }
                             }
