@@ -1062,7 +1062,7 @@ A subcondition can be used to repeat an action only while a machine is in
 \end_layout
 
 \begin_layout Standard
-DO command EVERY time_period;
+EXECUTE / DO command EVERY time_period;
 \end_layout
 
 \begin_layout Subsection
