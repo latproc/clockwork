@@ -211,6 +211,7 @@ public:
     void triggerFired(Trigger *trig);
 
     void addParameter(Value param, MachineInstance *machine = 0);
+    void addLocal(Value param, MachineInstance *machine = 0);
     void setProperties(const SymbolTable &props);
     
     // record where in the program this machine was defined
@@ -245,6 +246,8 @@ public:
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
     void setStableState();
+    
+    std::string fullName() const;
     
     //std::string _name;
     std::string _type;

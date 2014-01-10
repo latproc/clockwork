@@ -250,13 +250,14 @@ std::list<MachineClass*> MachineClass::all_machine_classes;
 
 std::map<std::string, MachineClass> MachineClass::machine_classes;
 
+/*
 std::string fullName(const MachineInstance &m) {
 	std::string name;
 	if (m.owner) name = m.owner->getName() + ".";
 	name += m.getName();
 	return name;
 }
-
+*/
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
     if (_type == "LIST") {
@@ -266,7 +267,25 @@ void MachineInstance::setNeedsCheck() {
             dep->setNeedsCheck();
         }
     }
+    else if (_type == "REFERENCE") {
+        std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+        while (dep_iter != depends.end()) {
+            MachineInstance *dep = *dep_iter++;
+            dep->setNeedsCheck();
+        }
+    }
 }
+
+std::string MachineInstance::fullName() const {
+    std::string res = _name;
+    MachineInstance *o = owner;
+    while (o) {
+        res = o->getName() + "." + res;
+        o = o->owner;
+    }
+    return res;
+}
+
 
 #if 0
 void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset){
@@ -510,7 +529,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     current_state_val("undefined"),
     is_active(false)
 {
-    if (_type != "LIST")
+    if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
@@ -545,7 +564,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     is_active(false),
     current_value_holder(0)
 {
-    if (_type != "LIST")
+    if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
@@ -839,10 +858,23 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     if (mi) addDependancy(mi);
     if (_type == "LIST") {
         setNeedsCheck();
-        //if (parameters.size())
-        //    setState(State("nonempty"));
-        //else
-        //    setState(State("empty"));
+    }
+}
+
+void MachineInstance::addLocal(Value param, MachineInstance *mi) {
+    
+    locals.push_back(param);
+    locals[locals.size()-1].machine = mi;
+    if (!mi && param.kind == Value::t_symbol) mi = lookup(param.asString().c_str());
+    std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+    while (dep_iter != depends.end()) {
+        MachineInstance *dep = *dep_iter++;
+        dep->setNeedsCheck();
+    }
+    
+    if (mi) addDependancy(mi);
+    if (_type == "REFERENCE") {
+        setNeedsCheck();
     }
 }
 
@@ -1002,6 +1034,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
+        DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
@@ -1085,6 +1118,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                             //NB_MSG << "setting up trigger for subcondition on state " << s.state_name << "\n";
 
                             std::list<Predicate *> timer_clauses;
+                            std::cout << "searcing: " << (*ch.condition.predicate) << "\n";
                             ch.condition.predicate->findTimerClauses(timer_clauses);
                             std::list<Predicate *>::iterator iter = timer_clauses.begin();
                             timer_val = LONG_MAX;
@@ -1117,7 +1151,8 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                                 }
                             }
                             if (timer_val < LONG_MAX) {
-                                std::cout << "minimum timer: " << timer_val << " selected\n";
+                                ch.timer_val = timer_val;
+                                DBG_MSG << "minimum timer: " << timer_val << " selected\n";
                                 DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
                                 ch.trigger = new Trigger("Timer");
                                 Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
@@ -1159,9 +1194,9 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
 			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
-	        ss << _name << " " << " STATE " << new_state << std::flush;
+	        ss << fullName() << " " << " STATE " << new_state << std::flush;
 	        //mif->send(ss.str().c_str());
-            mif->sendState("STATE", _name, new_state.getName());
+            mif->sendState("STATE", fullName(), new_state.getName());
 		}
         
         /* notify everyone we are entering a state */
@@ -1653,6 +1688,7 @@ void MachineInstance::enable() {
         for (unsigned int i = 0; i<parameters.size(); ++i) {
             if (parameters[i].machine) parameters[i].machine->enable();
         }
+    
     setInitialState();
 	setNeedsCheck();
 	// if any dependent machines are already enabled, make sure they know we are awake
@@ -1750,6 +1786,13 @@ void MachineInstance::setStableState() {
             setState(State("nonempty"));
         else
             setState(State("empty"));
+    }
+    else if (_type == "REFERENCE") {
+        //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
+        if (locals.size())
+            setState(State("ASSIGNED"));
+        else
+            setState(State("EMPTY"));
     }
     else {
 		bool found_match = false;
@@ -1875,7 +1918,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     state_machine = machine_class;
 	DBG_MSG << _name << " is of class " << machine_class->name << "\n";
 	if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states
-            && (machine_class->stable_states.size() || machine_class->name == "LIST") )
+            && (machine_class->stable_states.size() || machine_class->name == "LIST" || machine_class->name == "REFERENCE") )
 		automatic_machines.push_back(this);
     BOOST_FOREACH(StableState &s, machine_class->stable_states) {
         stable_states.push_back(s);
@@ -2254,12 +2297,12 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 					io_interface->setValue( (uint32_t)value);
 			}
 	        //mif->send(ss.str().c_str());
-            mif->sendCommand("PROPERTY", _name, property.c_str(), new_value);
+            mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
 
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
 				//persistentStore->send(ss.str().c_str());
-                persistentStore->sendCommand("PROPERTY", _name, property.c_str(), new_value);
+                persistentStore->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
                 
 			}
 			// update modbus with the new value
@@ -2477,8 +2520,8 @@ void MachineInstance::setupModbusPropertyExports(std::string property_name, Modb
 void MachineInstance::setupModbusInterface() {
 
 	if (modbus_addresses.size() != 0) return; // already done
-	DBG_MODBUS << fullName(*this) << " setting up modbus\n";
-	std::string full_name = fullName(*this);
+	DBG_MODBUS << fullName() << " setting up modbus\n";
+	std::string full_name = fullName();
 
 	bool self_discrete = false;
 	bool self_coil = false;
@@ -2649,7 +2692,7 @@ void MachineInstance::setupModbusInterface() {
 
 
 void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, int new_value) {
-	std::string name = fullName(*this);
+	std::string name = fullName();
 	DBG_M_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
 	if (!modbus_addresses.count(index)) {
