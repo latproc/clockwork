@@ -1,0 +1,31 @@
+#ifndef __PersistentStore_h__
+#define __PersistentStore_h__
+
+#include <utility>
+#include <string>
+#include <iostream>
+#include <map>
+
+class PersistentStore {
+    
+public:
+	typedef std::pair<std::string, Value> PropertyPair;
+    
+	PersistentStore(const std::string &filename) : file_name(filename), is_dirty(false) {
+	}
+    
+	bool dirty() { return is_dirty; }
+	void load();
+	void save();
+	std::ostream &operator<<(std::ostream &out) const;
+	void insert(std::string, std::string);
+    
+	
+	std::map<std::string, Value>init_values;
+private:
+	std::string file_name;
+	bool is_dirty;
+};
+
+
+#endif

@@ -42,6 +42,7 @@
 #include "DebugExtra.h"
 #include "MachineInstance.h"
 #include "clockwork.h"
+#include "PersistentStore.h"
 
 extern int yylineno;
 extern int yycharno;
@@ -723,30 +724,8 @@ void initialise_machines() {
 	std::list<MachineInstance *>::iterator m_iter;
     
 	if (persistent_store()) {
-		// load the store into a map
-		typedef std::pair<std::string, Value> PropertyPair;
-		std::map<std::string, std::list<PropertyPair> >init_values;
-		std::ifstream store(persistent_store());
-		char buf[200];
-		while (store.getline(buf, 200, '\n')) {
-			char value_buf[200];
-			std::istringstream in(buf);
-			std::string name, property, value_str;
-			in >> name >> property;
-            in.get(value_buf, 200, '\n');
-            int n = strlen(value_buf);
-			char *vp = value_buf+1; // skip space delimiter
-            if (vp[0] == '"' && n>2 && vp[n-1] == '"')
-            {
-                vp[n-1] = 0;
-                value_str = vp+1;
-            }
-			else
-				value_str = vp;
-
-			init_values[name].push_back(make_pair(property, value_str.c_str()));
-			std::cout << name <<"." << property << ":" << value_str << "\n";
-		}
+		PersistentStore store("persist.dat");
+		store.load();
         
 		// enable all persistent variables and set their value to the
 		// value in the map.
@@ -758,9 +737,9 @@ void initialise_machines() {
 				//if (m->owner) name += m->owner->getName() + ".";
 				//name += m->getName();
 				m->enable();
-				if (init_values.count(name)) {
-					std::list< PropertyPair > &list = init_values[name];
-					PropertyPair node;
+				if (store.init_values.count(name)) {
+					std::map< std::string, Value > &list = store.init_values;
+                    PersistentStore::PropertyPair node;
 					BOOST_FOREACH(node, list) {
 						long v;
 						DBG_INITIALISATION << name << "initialising " << node.first << " to " << node.second << "\n";
