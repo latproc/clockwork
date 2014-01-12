@@ -596,6 +596,20 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         }
     }
 
+    bool IODCommandNotice::run(std::vector<Value> &params) {
+        std::stringstream msg;
+        int i = 0;
+        for (; i<params.size()-1; ++i) {
+            msg << params.at(i) << " ";
+        }
+        msg << params.at(i);
+        char *msg_str = strdup(msg.str().c_str());
+        MessageLog::instance()->add(msg_str);
+        free(msg_str);
+        result_str = "OK";
+        return true;
+    }
+
     bool IODCommandQuit::run(std::vector<Value> &params) {
         program_done = true;
         std::stringstream ss;

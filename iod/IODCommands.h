@@ -136,5 +136,9 @@ struct IODCommandShowMessages : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandNotice : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 
 #endif

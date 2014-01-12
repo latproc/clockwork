@@ -55,6 +55,8 @@ void IODCommandThread::operator()() {
     std::cout << "------------------ Command Thread Started -----------------\n";
     zmq::context_t context (3);
     zmq::socket_t socket (context, ZMQ_REP);
+    int linger = 0; // do not wait at socket close time
+    socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
     std::stringstream sn;
     sn << "tcp://0.0.0.0:" << command_port();
     const char *port = sn.str().c_str();
@@ -186,6 +188,9 @@ void IODCommandThread::operator()() {
                 }
                 else if (ds == "MESSAGES") {
                     command = new IODCommandShowMessages;
+                }
+                else if (ds == "NOTICE") {
+                    command = new IODCommandNotice;
                 }
                 else {
                     command = new IODCommandUnknown;
