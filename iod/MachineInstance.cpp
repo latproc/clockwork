@@ -859,7 +859,11 @@ MachineInstance *MachineInstance::find(const char *name) {
 void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     parameters.push_back(param);
     parameters[parameters.size()-1].machine = mi;
-    if (!mi && param.kind == Value::t_symbol) mi = lookup(param.asString().c_str());
+    if (!mi && param.kind == Value::t_symbol) {
+        mi = lookup(param);
+        if (mi && !param.cached_machine)
+            param.cached_machine = mi;
+    }
     if (mi) addDependancy(mi);
     if (_type == "LIST") {
         setNeedsCheck();
