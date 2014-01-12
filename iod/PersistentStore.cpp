@@ -60,7 +60,6 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
 	std::pair<std::string, Value>prop;
 	BOOST_FOREACH(prop, init_values) {
 		std::string name = prop.first;
-		std::cerr << name << "\n";
 		size_t pos = name.rfind('.');
 		name.erase(pos);
 		std::string property = prop.first.substr(prop.first.rfind('.') + 1);
@@ -85,7 +84,6 @@ void PersistentStore::save() {
 	}
 	else {
 		try {
-			std::cerr << "num entries: " << init_values.size() << "\n";
 			out << *this << std::flush;
 			out.close();
 		}
