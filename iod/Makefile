@@ -111,14 +111,14 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
 			MachineCommandAction.o HandleMessageAction.o MessagingInterface.o \
 			value.o \
-			CallMethodAction.o IODCommands.o regular_expressions.o
+			CallMethodAction.o IODCommands.o regular_expressions.o MessageLog.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
 			Logger.o State.o cJSON.o options.o MachineInstance.o Dispatcher.o dynamic_value.o \
 			value.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o IODCommands.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o regular_expressions.o \
+			CallMethodAction.o regular_expressions.o MessageLog.o \
 			MQTTInterface.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) \
 			-lethercat -lmosquitto
 

@@ -1660,6 +1660,20 @@ Generally a Machine will only receive events from machines that are passed
  This is probably fine for small systems but less practical for larger systems.
 \end_layout
 
+\begin_layout Subsection
+References
+\end_layout
+
+\begin_layout Standard
+The builtin machine, REFERENCE provides a way to link machines together.
+ When an object is assigned to a reference, the reference enters the ASSIGNED
+ state, when the reference is cleared, it enters the UNASSIGNED state.
+ Other machines can detect these changes by listening for ASSIGNED_enter
+ or UNASSIGNED_enter mesages.
+ If an assignment is attempted to a non-existent machine any preexisting
+ assignment is cleared and the new assignment fails.
+\end_layout
+
 \begin_layout Section
 Details
 \end_layout

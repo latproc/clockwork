@@ -276,6 +276,7 @@ public:
 	// this depends on machine m if it is in m's list of dependants or if the machine
 	// is in this machines listen list.
 	bool dependsOn(Transmitter *m);
+    void notifyDependents(Message &msg);
 	
 	bool needsCheck();
 	void resetTemporaryStringStream();

@@ -1217,26 +1217,30 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 		std::string txt = _name + "." + new_state.getName() + "_enter";
 		Message msg(txt.c_str());
 		stat = execute(msg, this);
-        
-        std::set<MachineInstance*>::iterator dep_iter = depends.begin();
-        while (dep_iter != depends.end()) {
-            MachineInstance *dep = *dep_iter++;
-			if (this == dep) continue;
-			DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is " << current_state.getName() << " using " << msg << "\n";
-			Action *act = dep->executingCommand();
-			if (act) {
-				if (act->getStatus() == Action::Suspended) act->resume();
-				DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
-			}
-			//TBD execute the message on the dependant machine
-			dep->execute(msg, this);
-            if (dep->_type == "LIST") {
-                dep->setNeedsCheck();
-            }
-		}
+        notifyDependents(msg);
 	}
 	return stat;
 }
+
+void MachineInstance::notifyDependents(Message &msg){
+    std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+    while (dep_iter != depends.end()) {
+        MachineInstance *dep = *dep_iter++;
+        if (this == dep) continue;
+        DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is " << current_state.getName() << " using " << msg << "\n";
+        Action *act = dep->executingCommand();
+        if (act) {
+            if (act->getStatus() == Action::Suspended) act->resume();
+            DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
+        }
+        //TBD execute the message on the dependant machine
+        dep->execute(msg, this);
+        if (dep->_type == "LIST") {
+            dep->setNeedsCheck();
+        }
+    }
+}
+
 
 /* findHandler - find a handler for a message by looking through the transition table 
 

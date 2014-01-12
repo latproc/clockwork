@@ -51,9 +51,10 @@ Action::Status IncludeAction::run() {
 
 	if (list_machine) {
         if (list_machine->_type == "REFERENCE") {
+            MachineInstance *old = 0;
             if (list_machine->locals.size()) {
                 // remove old item
-                MachineInstance *old = list_machine->locals.at(0).machine;
+                old = list_machine->locals.at(0).machine;
                 if (old) {
                     std::set<Transmitter*>::iterator found = old->listens.find(list_machine);
                     if (found != old->listens.end()) old->listens.erase(found);
@@ -65,11 +66,16 @@ Action::Status IncludeAction::run() {
             if (entry.kind == Value::t_symbol) {
                 std::string real_name = entry.sValue;
                 //entry.sValue = "ITEM";
-                list_machine->addLocal(entry, owner->lookup(real_name));
+                MachineInstance *new_assignment = owner->lookup(real_name);
+                list_machine->addLocal(entry,new_assignment);
                 Parameter &p = list_machine->locals.at(0);
                 p.real_name = real_name;
                 p.val.sValue = "ITEM";
                 p.val.cached_machine = p.machine;
+                if (old && new_assignment && old != new_assignment) {
+                    Message msg("changed");
+                    list_machine->notifyDependents(msg);
+                }
                 if (p.machine)
                     status = Complete;
                 else

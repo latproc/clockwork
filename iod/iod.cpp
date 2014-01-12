@@ -60,6 +60,7 @@
 #include <signal.h>
 #include "clockwork.h"
 #include "ClientInterface.h"
+#include "MessageLog.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
