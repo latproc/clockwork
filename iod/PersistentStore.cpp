@@ -20,8 +20,8 @@ void PersistentStore::insert(std::string key, std::string value) {
 void PersistentStore::load() {
     // load the store into a map
     typedef std::pair<std::string, Value> PropertyPair;
-    std::map<std::string, std::list<PropertyPair> >init_values;
     std::ifstream store(file_name);
+    if (!store.is_open()) return;
     char buf[200];
     while (store.getline(buf, 200, '\n')) {
         char value_buf[200];
@@ -44,12 +44,14 @@ void PersistentStore::load() {
         long i_value;
         char *endp;
         i_value = strtol(value_str.c_str(), &endp, 10);
+        name = name + "." + property;
         if (*endp == 0)
-            init_values[name].push_back(make_pair(property, i_value));
+            init_values[name] = i_value;
         else
-            init_values[name].push_back(make_pair(property, Value(value_str.c_str(), kind)));
-        std::cout << name <<"." << property << ":" << value_str << "\n";
+            init_values[name] = Value(value_str.c_str(), kind);
+        std::cout << name << ":" << value_str << "\n";
     }
+    store.close();
 	is_dirty = false;
 }
 
@@ -57,6 +59,7 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
 	std::pair<std::string, Value>prop;
 	BOOST_FOREACH(prop, init_values) {
 		std::string name = prop.first;
+		std::cerr << name << "\n";
 		size_t pos = name.rfind('.');
 		name.erase(pos);
 		std::string property = prop.first.substr(prop.first.rfind('.') + 1);
@@ -81,6 +84,7 @@ void PersistentStore::save() {
 	}
 	else {
 		try {
+			std::cerr << "num entries: " << init_values.size() << "\n";
 			out << *this << std::flush;
 			out.close();
 		}
