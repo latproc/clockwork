@@ -1,6 +1,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include <boost/foreach.hpp>
+#include <errno.h>
 
 #include <utility>
 #include <string>
@@ -21,7 +22,7 @@ void PersistentStore::load() {
     // load the store into a map
     typedef std::pair<std::string, Value> PropertyPair;
     std::map<std::string, std::list<PropertyPair> >init_values;
-    std::ifstream store(file_name);
+    std::ifstream store(file_name.c_str());
     char buf[200];
     while (store.getline(buf, 200, '\n')) {
         char value_buf[200];
