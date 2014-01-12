@@ -63,13 +63,44 @@ Action::Status IncludeAction::run() {
                 }
                 list_machine->locals.clear();
             }
+            /*
+             This gets complicated. Clockwork doesn't have a way for values to to refer
+             to machines although internally this happens all the time. 
+             To enable statements like:
+                 x:= TAKE FIRST FROM mylist;
+                 ASSIGN x TO test;
+             we need to be able to use 'x' as if it is the name of a machine whereas it is the
+             name of a property that contains the name of a machine.
+             Thus, below we provide for a second level of indirection and the specific sequence
+             above works but the ASSIGN statement is the only one that currently will be able to handle x properly
+             */
             if (entry.kind == Value::t_symbol) {
-                std::string real_name = entry.sValue;
-                //entry.sValue = "ITEM";
-                MachineInstance *new_assignment = owner->lookup(real_name);
-                list_machine->addLocal(entry,new_assignment);
+                std::string real_name;
+                MachineInstance *new_assignment = 0;
+                if (entry.cached_machine) {
+                    real_name = entry.cached_machine->getName();
+                    new_assignment = entry.cached_machine;
+                    list_machine->addLocal(entry,new_assignment);
+                }
+                else {
+                    real_name = entry.sValue;
+                    //entry.sValue = "ITEM";
+                    new_assignment = owner->lookup(real_name);
+                    if (new_assignment == 0) {
+                        Value ref = owner->getValue(real_name);
+                        if (ref.kind == Value::t_symbol) {
+                            real_name = ref.sValue;
+                            new_assignment = owner->lookup(ref);
+                            list_machine->addLocal(ref,new_assignment);
+                        }
+                        else
+                            list_machine->addLocal(real_name);
+                    }
+                    else
+                        list_machine->addLocal(entry,new_assignment);
+                }
                 Parameter &p = list_machine->locals.at(0);
-                p.real_name = real_name;
+                 p.real_name = real_name;
                 p.val.sValue = "ITEM";
                 p.val.cached_machine = p.machine;
                 if (old && new_assignment && old != new_assignment) {
