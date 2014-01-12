@@ -10,6 +10,7 @@
 #include "DebugExtra.h"
 #include "MachineInstance.h"
 #include "dynamic_value.h"
+#include "MessageLog.h"
 
 
 DynamicValue *DynamicValue::clone() const { return new DynamicValue(); }
@@ -172,6 +173,12 @@ Value PopListFrontValue::operator()(MachineInstance *mi) {
     last_result = false;
     if (machine_list->parameters.size()) {
         last_result = machine_list->parameters[0].val;
+        if (machine_list->parameters[0].machine && !last_result.cached_machine) {
+            last_result.cached_machine = machine_list->parameters[0].machine;
+            std::string msg("Warning parameter with machine pointer was not completely configured: ");
+            msg += last_result.asString();
+            MessageLog::instance()->add(msg.c_str());
+        }
         if (remove_from_list){
             machine_list->parameters.erase(machine_list->parameters.begin());
             if (machine_list->_type == "LIST") {
