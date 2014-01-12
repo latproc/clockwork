@@ -61,6 +61,7 @@
 #include "clockwork.h"
 #include "ClientInterface.h"
 #include "MQTTInterface.h"
+#include "MessageLog.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -218,6 +219,7 @@ void ProcessingThread::operator()()  {
 							machine_is_ready = true;
 							BOOST_FOREACH(std::string &error, error_messages) {
 								std::cerr << error << "\n";
+                                MessageLog::instance()->add(error.c_str());
 							}
 					    }
                         {
@@ -259,6 +261,7 @@ void ProcessingThread::operator()()  {
 int main (int argc, char const *argv[])
 {
 	Logger::instance();
+    MessageLog::setMaxMemory(10000);
 
     Logger::instance()->setLevel(Logger::Debug);
 	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);

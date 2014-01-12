@@ -42,6 +42,7 @@
 #include "CallMethodAction.h"
 #include "dynamic_value.h"
 #include "options.h"
+#include "MessageLog.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -732,7 +733,9 @@ void MachineInstance::idle() {
             stop(curr); // avoid double queueing
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
-				NB_MSG << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
+                std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
+                NB_MSG << ss.str();
+                MessageLog::instance()->add(ss.str().c_str());
 			}
             else if (res != Action::Complete) {
                 DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
@@ -1036,7 +1039,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
-        DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+        //DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);

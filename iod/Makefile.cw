@@ -55,7 +55,8 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	IfCommandAction.cpp		State.cpp			zmq_ecat_monitor.cpp \
 	SortListAction.cpp		SetListEntriesAction.cpp CopyPropertiesAction.cpp IncludeAction.cpp \
 	SetOperationAction.cpp	ClearListAction.cpp		LockAction.cpp			UnlockAction.cpp	clockwork.cpp \
-	ClientInterface.cpp		MQTTInterface.cpp	dynamic_value.cpp value.cpp
+	ClientInterface.cpp		MQTTInterface.cpp	dynamic_value.cpp value.cpp PersistentStore.cpp \
+	MessageLog.cpp
 
 all:	$(APPS)
 
@@ -69,7 +70,8 @@ all:	$(APPS)
 iod.o:	iod.cpp	MessagingInterface.h
 
 iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
-			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
+			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o \
+			Logger.o State.o cJSON.o options.o MachineInstance.o \
 			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
 			SortListAction.o SetListEntriesAction.o CopyPropertiesAction.o \
@@ -77,7 +79,8 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o \
-			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o
+			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
+			PersistentStore.o MessageLog.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
@@ -89,6 +92,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o \
+			PersistentStore.o MessageLog.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lmosquitto
 
@@ -120,7 +124,8 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
-			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o
+			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
+			MessageLog.o PersistentStore.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o MachineInstance.o \
 			cwlang.tab.o cwlang.yy.o Scheduler.o Expression.o FireTriggerAction.o IfCommandAction.o \
@@ -130,16 +135,18 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
-			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
+			ECInterface.o IOComponent.o Message.o MessagingInterface.o MessageLog.o \
+			PersistentStore.o \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			-lmosquitto
 
 persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
-		MessagingInterface.o symboltable.o cJSON.o DebugExtra.o Logger.o options.o
+		MessagingInterface.o symboltable.o cJSON.o DebugExtra.o Logger.o options.o \
+		PersistentStore.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
 		value.o symboltable.o Logger.o DebugExtra.o  options.o \
-		MessagingInterface.o cJSON.o 
+		MessagingInterface.o cJSON.o PersistentStore.o
 
 modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_SYSTEM_LIB) $(BOOST_THREAD_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) \

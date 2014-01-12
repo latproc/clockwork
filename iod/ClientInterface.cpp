@@ -184,6 +184,9 @@ void IODCommandThread::operator()() {
                 else if (ds == "HELP") {
                     command = new IODCommandHelp;
                 }
+                else if (ds == "MESSAGES") {
+                    command = new IODCommandShowMessages;
+                }
                 else {
                     command = new IODCommandUnknown;
                 }

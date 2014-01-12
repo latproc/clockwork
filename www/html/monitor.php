@@ -15,7 +15,7 @@
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Latproc; if not, write to the Free Software
+  along with Latproc; if not, wri∂te to the Free Software
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
@@ -134,8 +134,6 @@ $requester->connect("tcp://localhost:5555");
  */
 
 $current_tab = "";
-if (isset($_REQUEST["tab"]))
-	$current_tab = " " . $_REQUEST["tab"];
 $requester->send('LIST JSON' . $current_tab);
 $reply = $requester->recv();
 $config_entries_json = $reply;
@@ -189,6 +187,12 @@ if (isset($_REQUEST["setproperty"])) {
 }
 if (isset($_REQUEST["describe"])) {
 	$requester->send('DESCRIBE ' . $_REQUEST["describe"] . " JSON");
+	$reply = $requester->recv();
+	echo $reply;
+	return;
+}
+if (isset($_REQUEST["messages"])) {
+	$requester->send('MESSAGES ' . $_REQUEST["messages"]);
 	$reply = $requester->recv();
 	echo $reply;
 	return;
@@ -294,156 +298,168 @@ else if (strlen($anchor)) {
 	Only machines that have a 'tab' property are displayed.
  */
 // build a list of tabs, each with no data initially
+$n = 1;
 $tabs = array('Outputs' => false, 'Inputs' => false);
 foreach ($config_entries as $curr) {
 	if (isset($curr->tab) &&  $curr->tab == 'Modules') continue; // the modules tab is added at the end of the list
-	if (isset($curr->tab) && !in_array($curr->tab, $tabs))
-		$tabs[$curr->tab] = false;	
+	if (isset($curr->tab) && !in_array($curr->tab, $tabs)) {
+		$tabs[$curr->tab] = false;
+		$n++;
+	}
 }
+$messages_tab = $n; $tabs['Messages'] = false;
 $tabs['Modules'] = false;
 if ($master) $tabs['Master'] = false; // add a master tab if the above MASTER request succeeded
-
+debug_message($current_tab);
 // flesh out each tab
 $n = 1;
 foreach ($tabs as $tab => $data) {
   $tabname = 'tabs-' . $n;
   $tabdata='<div id="'. $tabname . '" name="' . $tab . '" ><table>' . "\n";
-  if ($tab != 'Modules')
+  if ($tab != 'Modules' && $tab != 'Messages')
 		$tabdata .= '<thead><tr><th style="width:80px">Enabled</th>'
 			.	'<th>Name</th><th colspan=2>State</th>'
 			.	'<th>Commands</th><th>Messages</th></tr></thead>';
+  else if ($tab == 'Messages')
+		$tabdata .= '<div>Messages</div>';
   else
 		$tabdata .= '<thead><tr><th>Name</th><th>Matched Bus Module</th></tr></thead>';
 
   if ($tab == "Modules")
 	$config_entries = $slaves;
+  if ($tab != "Messages") {
+	foreach ($config_entries as $curr) {
+		if (!isset($curr->tab)) {
+			if ($curr->class == "MODULE")
+				$curr->tab = 'Modules';
+			else
+				continue;
+		}
+		if ($curr->tab != $tab) continue;
+		$tabdata .= '<tr>';
+		if ($curr->class != "MODULE" ) { // modules go on their own tab
+			$point = $curr->name;
+			$image_prefix = "input64x64";
+			if (isset($curr->type))
+				$type = $curr->type;	
+			else if (isset($curr->class))
+				$type = $curr->class;	
+			else
+				$type = "Input";
+			if (isset($curr->image))
+				$image_prefix = $curr->image; 
+			else 
+				$image_prefix = $type;
+			if (isset($curr->state)) 
+				$status = $curr->state;
+			else
+				$status = "unknown";
+			//$debug_messages .= "$point $status <br/>";
+			$tabdata .= '<td style="width:80px;"><div syle="width:100%"><div  style="width:20px;margin:0px auto 0px auto"><input type="checkbox"'
+					. ( (isset($curr->enabled) && $curr->enabled) ? 'checked="checked"' : '')
+					.' name="'. $point . '" class="enable_disable"' 
+					.'</div></div></td>';
+			$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td>"; 
+			$id = "id=\"mc_$point\"";
 
-  foreach ($config_entries as $curr) {
-	if (!isset($curr->tab)) {
-		if ($curr->class == "MODULE")
-			$curr->tab = 'Modules';
-		else
-			continue;
-	}
-	if ($curr->tab != $tab) continue;
-	$tabdata .= '<tr>';
-	if ($curr->class != "MODULE" ) { // modules go on their own tab
-		$point = $curr->name;
-		$image_prefix = "input64x64";
-		if (isset($curr->type))
-			$type = $curr->type;	
-		else if (isset($curr->class))
-			$type = $curr->class;	
-		else
-			$type = "Input";
-		if (isset($curr->image))
-			$image_prefix = $curr->image; 
-		else 
-			$image_prefix = $type;
-		if (isset($curr->state)) 
-			$status = $curr->state;
-		else
-			$status = "unknown";
-		//$debug_messages .= "$point $status <br/>";
-		$tabdata .= '<td style="width:80px;"><div syle="width:100%"><div  style="width:20px;margin:0px auto 0px auto"><input type="checkbox"'
-				. ( (isset($curr->enabled) && $curr->enabled) ? 'checked="checked"' : '')
-				.' name="'. $point . '" class="enable_disable"' 
-				.'</div></div></td>';
-		$tabdata .= '<td class="item_name" name="'.$point.'">'. $point . ":</td>"; 
-		$id = "id=\"mc_$point\"";
+			if ($type == "piston") { // pistons have a special layout
+			    $tabdata .= "<td><div class=\"piston\" style=\"height:20px; width: 80px;\" $id ></div></td>";
+			}
+			else {
+			    // analogue values display a value, everything else displays a state name
+			    if ($type == "AnalogueOutput" || $type == "AnalogueInput")
+			        $display_value = htmlspecialchars($curr->value);
+			    else
+			        $display_value = htmlspecialchars($status);
+       
+			    // inputs that are on have an input_on icon, analogues all have the same icon otherwise the icon is based on the state name
+			    if ($type == "Input" && preg_match("/.*on.*/",$status))
+			        $image_name = "${image_prefix}_on.png";
+			    else if ($type == "Input" || $type == "AnalogueOutput" || $type == "AnalogueInput")
+			            $image_name = "${image_prefix}.png";
+			    else 
+			        $image_name = "${image_prefix}_$status.png";
 
-		if ($type == "piston") { // pistons have a special layout
-		    $tabdata .= "<td><div class=\"piston\" style=\"height:20px; width: 80px;\" $id ></div></td>";
+			    // if there is no file for the icon, we do not add the image div
+			    if (file_exists($BASE_APPDIR . "/html/img/$image_name")) {
+				    $tabdata .= "<td>";
+			        if ( $type == "AnalogueInput" || $type == "Input")
+			            $tabdata .= image_html($point, $image_name, "im_".$point);
+			        else
+			            $tabdata .= button_image($point, $image_name, "im_". $point);
+					$tabdata .= "</td>";
+			    	$tabdata .= "<td><div class=\"item_state\" $id >$display_value</div></td>";
+			    }
+				else
+			    	$tabdata .= "<td colspan=2><div class=\"item_state\" $id >$display_value</div></td>";
+			}
+			// display command buttons
+			if (isset($curr->commands)) {
+				$cmds = explode(",", $curr->commands);
+				$tabdata .= "<td>";
+				foreach ($cmds as $cmd) {
+					$tabdata .= '<button class="machine_command" name="' 
+						. htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
+				}
+				$tabdata .= "</td>";
+			}
+			else $tabdata .= "<td></td>";
+			// display properties
+			if (isset($curr->display)) {
+				$tabdata .= "<td>";
+				$props = explode(",", $curr->display);
+				foreach ($props as $prop) {
+					$tabdata .= '<div name="p_' .htmlspecialchars($point ."-". $prop). '">'
+							. htmlspecialchars($prop) .': ';
+					if (isset($curr->$prop)) $tabdata .= htmlspecialchars($curr->$prop);
+					else $tabdata .= '""';
+					$tabdata .= ' </div>';
+				}
+				$tabdata .= "</td>";
+			}
+			else
+				$tabdata .= "<td></td>";
+			// display message buttons
+			if (isset($curr->receives)) {
+				$cmds = explode(",", $curr->receives);
+				$tabdata .= "<td>";
+				foreach ($cmds as $cmd) {
+					$tabdata .= '<button class="machine_command" name="' . htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
+				}
+				$tabdata .= "</td>";
+			}
+			else $tabdata .= "<td></td>";
+		}
+		else if ($curr->class == "MODULE") {
+			// modules display the name and position of the module, along with an option list
+			// to select matching devices from the bus.
+			if (isset($curr->position) && $curr->position >= 0)
+				$slaves_options = get_slaves_options($slaves, $curr->position);
+			else
+				$slaves_options = get_slaves_options($slaves);
+			$tabdata .= "<td>" . $curr->name . " " . $curr->position . "</td><td>" . $slaves_options . "</td>";
 		}
 		else {
-		    // analogue values display a value, everything else displays a state name
-		    if ($type == "AnalogueOutput" || $type == "AnalogueInput")
-		        $display_value = htmlspecialchars($curr->value);
-		    else
-		        $display_value = htmlspecialchars($status);
-        
-		    // inputs that are on have an input_on icon, analogues all have the same icon otherwise the icon is based on the state name
-		    if ($type == "Input" && preg_match("/.*on.*/",$status))
-		        $image_name = "${image_prefix}_on.png";
-		    else if ($type == "Input" || $type == "AnalogueOutput" || $type == "AnalogueInput")
-		            $image_name = "${image_prefix}.png";
-		    else 
-		        $image_name = "${image_prefix}_$status.png";
- 
-		    // if there is no file for the icon, we do not add the image div
-		    if (file_exists($BASE_APPDIR . "/html/img/$image_name")) {
-			    $tabdata .= "<td>";
-		        if ( $type == "AnalogueInput" || $type == "Input")
-		            $tabdata .= image_html($point, $image_name, "im_".$point);
-		        else
-		            $tabdata .= button_image($point, $image_name, "im_". $point);
-				$tabdata .= "</td>";
-		    	$tabdata .= "<td><div class=\"item_state\" $id >$display_value</div></td>";
-		    }
-			else
-		    	$tabdata .= "<td colspan=2><div class=\"item_state\" $id >$display_value</div></td>";
+			$tabdata .= "<td>unknown</td>:";
 		}
-		// display command buttons
-		if (isset($curr->commands)) {
-			$cmds = explode(",", $curr->commands);
-			$tabdata .= "<td>";
-			foreach ($cmds as $cmd) {
-				$tabdata .= '<button class="machine_command" name="' 
-					. htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
-			}
-			$tabdata .= "</td>";
-		}
-		else $tabdata .= "<td></td>";
-		// display properties
-		if (isset($curr->display)) {
-			$tabdata .= "<td>";
-			$props = explode(",", $curr->display);
-			foreach ($props as $prop) {
-				$tabdata .= '<div name="p_' .htmlspecialchars($point ."-". $prop). '">'
-						. htmlspecialchars($prop) .': ';
-				if (isset($curr->$prop)) $tabdata .= htmlspecialchars($curr->$prop);
-				else $tabdata .= '""';
-				$tabdata .= ' </div>';
-			}
-			$tabdata .= "</td>";
-		}
-		else
-			$tabdata .= "<td></td>";
-		// display message buttons
-		if (isset($curr->receives)) {
-			$cmds = explode(",", $curr->receives);
-			$tabdata .= "<td>";
-			foreach ($cmds as $cmd) {
-				$tabdata .= '<button class="machine_command" name="' . htmlspecialchars($point .".". $cmd) . '">'. htmlspecialchars($cmd) . '</button>'; 
-			}
-			$tabdata .= "</td>";
-		}
-		else $tabdata .= "<td></td>";
-		
+		$tabdata .= "</tr>";
 	}
-	else if ($curr->class == "MODULE") {
-		// modules display the name and position of the module, along with an option list
-		// to select matching devices from the bus.
-		if (isset($curr->position) && $curr->position >= 0)
-			$slaves_options = get_slaves_options($slaves, $curr->position);
-		else
-			$slaves_options = get_slaves_options($slaves);
-		$tabdata .= "<td>" . $curr->name . " " . $curr->position . "</td><td>" . $slaves_options . "</td>";
-	}
-	else {
-		$tabdata .= "<td>unknown</td>:";
-	}
-	$tabdata .= "</tr>";
-  }
-  // end this tab with a 'refresh' button
-  $tabdata .= '</table>'
- 	.'<div><form method=post action=?><input type="hidden" name="anchor" value="'.$tabname.'">'.
+ }
+else {
+	$tabdata .=  "<div id=\"messages\">";
+	$tabs['Messages'] = <<<EOD
+		<div id="tabs-$messages_tab">
+		$tabdata
+EOD;
+}
+ 	// end this tab with a 'refresh' button
+	$tabdata .= '</table>'
+	.'<div><form method=post action=?><input type="hidden" name="anchor" value="'.$tabname.'">'.
 	"<button id=refresh>Refresh</button></form></div>"
 	.'</div>' . "\n";
-  $tabs[$tab] = $tabdata;
-  $n++;
+	$tabs[$tab] = $tabdata;
+	$n++;
 }
-
 // The Master tab, if given, has a custom layout
 if ($master) {
 	$n = 1;
@@ -511,87 +527,100 @@ print <<<'EOD'
 		var selected = tabs.tabs('option', 'active')+1;
 		tabname=$('#tabs-'+selected).attr("name")
 		//$("#xx").html("<p>" + tabname + "</p>");
-		$.get("monitor.php", { 
-			list: "json", tab: tabname}, 
-			function(data){ 
-				res=JSON.parse(data);
-				//$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
-				for (var i = 0; i < res.length; i++) {
-					var type = "Input";
-					if (typeof res[i].class !== "undefined") type = res[i].class;
-					if (typeof res[i].type != "undefined")
-						type = res[i].type;
-					if (type != "MODULE") {
-						btn=$('[name='+res[i].name+']');
-						enabled=res[i].enabled;
-						btn.each(function() {
-							//if ($(this).get(0).tagName == 'checkbox') {
-								if (enabled && !$(this).prop("checked")) 
-									$(this).prop("checked", true);
-								else if (!enabled && $(this).prop("checked"))
-									$(this).prop("checked", false);
-							//}
+		if (tabname== "Messages") {
+			$.get("monitor.php", {"messages": "JSON 50" }, 
+				function(data){ 
+					res=JSON.parse(data);
+					$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
+					$("#messages").html("");
+					for (var i = 0; i < res.length; i++) {
+						$("#messages").append("<pre>" + res[i].message + "</pre>");
+					}
+			})
+		}
+		else {
+			$.get("monitor.php", { 
+				list: "json", tab: tabname}, 
+				function(data){ 
+					res=JSON.parse(data);
+					//$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
+					for (var i = 0; i < res.length; i++) {
+						var type = "Input";
+						if (typeof res[i].class !== "undefined") type = res[i].class;
+						if (typeof res[i].type != "undefined")
+							type = res[i].type;
+						if (type != "MODULE") {
+							btn=$('[name='+res[i].name+']');
+							enabled=res[i].enabled;
+							btn.each(function() {
+								//if ($(this).get(0).tagName == 'checkbox') {
+									if (enabled && !$(this).prop("checked")) 
+										$(this).prop("checked", true);
+									else if (!enabled && $(this).prop("checked"))
+										$(this).prop("checked", false);
+								//}
 							
-						});
-						//btn=$("[name="+res[i].name+"]");
-						btn.each(function() {
-							if (typeof res[i].image === "undefined")
-								res[i].image = type;
-							if (typeof res[i].class === "undefined") {
-								$("#mc_"+res[i].name).each(function(){
-									$(this).html(res[i].state);
-								});
-							}
-							else if (type == "AnalogueInput") {
-								$("#mc_"+res[i].name).each(function(){
-									$(this).html(res[i].value);
-								});
-							}
-							else if (type == "AnalogueOutput") {
-								$("#mc_"+res[i].name).each(function(){
-									$(this).html(res[i].value);
-								});
-							}
-							else if (type != "piston") {
-								img= "img/" + res[i].image + "_" + res[i].state + ".png";
-								
-								$("#im_"+res[i].name).each(function(){
-									$(this).attr("src",img);
-								});
-								$("#mc_"+res[i].name).each(function(){
-									$(this).html(res[i].state);
-								});
-							}
-							else {
-								var pos = parseInt(res[i].position);
-								$("#mc_"+res[i].name).each( function() { $(this).progressbar({ value: pos });  });
-								if (typeof res[i].maxpos !== "undefined" )  {
-									maxpos = parseInt(res[i].maxpos);
-									$("#mc_"+res[i].name).each( function() { $(this).progressbar({ max: maxpos }); });
+							});
+							//btn=$("[name="+res[i].name+"]");
+							btn.each(function() {
+								if (typeof res[i].image === "undefined")
+									res[i].image = type;
+								if (typeof res[i].class === "undefined") {
+									$("#mc_"+res[i].name).each(function(){
+										$(this).html(res[i].state);
+									});
 								}
-							}
-						});
-						btn.select(".item").each(function(){ 
-							if (type == "Output") {
-								if (res[i].state == "off") {$(this).removeClass("on").addClass("off"); }
-								if (res[i].state == "on") {$(this).removeClass("off").addClass("on"); }
-							}
-						});
-						display_props = typeof res[i].display;
-						if (display_props == "string") {
-							props=res[i].display.split(",");
-							n = props.length;
-							for (var j=0; j<n; j++) {
-								attr="[name=p_"+res[i].name+"-"+props[j]+"]";
-								prop=$(attr).each(function() {
-									$(this).html(props[j] + ":" + res[i][props[j]]);
-								});
+								else if (type == "AnalogueInput") {
+									$("#mc_"+res[i].name).each(function(){
+										$(this).html(res[i].value);
+									});
+								}
+								else if (type == "AnalogueOutput") {
+									$("#mc_"+res[i].name).each(function(){
+										$(this).html(res[i].value);
+									});
+								}
+								else if (type != "piston") {
+									img= "img/" + res[i].image + "_" + res[i].state + ".png";
+								
+									$("#im_"+res[i].name).each(function(){
+										$(this).attr("src",img);
+									});
+									$("#mc_"+res[i].name).each(function(){
+										$(this).html(res[i].state);
+									});
+								}
+								else {
+									var pos = parseInt(res[i].position);
+									$("#mc_"+res[i].name).each( function() { $(this).progressbar({ value: pos });  });
+									if (typeof res[i].maxpos !== "undefined" )  {
+										maxpos = parseInt(res[i].maxpos);
+										$("#mc_"+res[i].name).each( function() { $(this).progressbar({ max: maxpos }); });
+									}
+								}
+							});
+							btn.select(".item").each(function(){ 
+								if (type == "Output") {
+									if (res[i].state == "off") {$(this).removeClass("on").addClass("off"); }
+									if (res[i].state == "on") {$(this).removeClass("off").addClass("on"); }
+								}
+							});
+							display_props = typeof res[i].display;
+							if (display_props == "string") {
+								props=res[i].display.split(",");
+								n = props.length;
+								for (var j=0; j<n; j++) {
+									attr="[name=p_"+res[i].name+"-"+props[j]+"]";
+									prop=$(attr).each(function() {
+										$(this).html(props[j] + ":" + res[i][props[j]]);
+									});
+								}
 							}
 						}
 					}
 				}
-			}
-		);
+			);
+		}
     	setTimeout("refresh()", 1000);
 	}
 	$(function() {

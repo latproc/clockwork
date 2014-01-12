@@ -12,6 +12,7 @@ Test MACHINE {
 	f PFlag(tab:Test); # persistent flag
 	g FLAG(tab:Test);  # a normal flag
 
+	calc STATE;
 	x DEFAULT ;
 	ENTER x { flag := flag + 1; f.VALUE := f.VALUE + 1; }
 	ENTER INIT {

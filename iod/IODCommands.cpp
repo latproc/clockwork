@@ -29,6 +29,7 @@
 #include "options.h"
 #include "Statistic.h"
 #include "Statistics.h"
+#include "MessageLog.h"
 #ifdef USE_ETHERCAT
 #include <tool/MasterDevice.h>
 #endif
@@ -566,6 +567,34 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
          */
     }
 
+    bool IODCommandShowMessages::run(std::vector<Value> &params) {
+        MessageLog *log = MessageLog::instance();
+        bool use_json = params.size() >= 2 && params[1].asString() == "JSON";
+        long num = 0;
+        int idx = 1;
+        if (params.size() > idx && params[idx].asString() == "JSON") { use_json = true; ++idx; }
+        if (params.size() > idx && params[idx].asInteger(num)) { ++idx; }
+        
+        cJSON *result = log->toJSON((unsigned int)num);
+        if (result) {
+            if (use_json) {
+                char *text = cJSON_Print(result);
+                result_str = text;
+                free(text);
+            }
+            else {
+                char *res = log->toString((unsigned int)num);
+                result_str = res;
+                free(res);
+            }
+            cJSON_Delete(result);
+            return true;
+        }
+        else {
+            error_str = "Failed to read the error log";
+            return false;
+        }
+    }
 
     bool IODCommandQuit::run(std::vector<Value> &params) {
         program_done = true;
@@ -601,6 +630,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		 << "SET machine_name TO state_name\n"
 		 << "SLAVES\n"
 		 << "TOGGLE output_name\n"
+         << "ERRORS [JSON]\n"
 		;
 		std::string s = ss.str();
         result_str = s;

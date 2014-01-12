@@ -1,3 +1,26 @@
+PFLAG MACHINE {
+	OPTION PERSISTENT true;
+	OPTION export rw;
+
+	on WHEN VALUE IS on;
+	off DEFAULT;
+
+	COMMAND turnOn {
+		VALUE := on;
+	}
+
+	COMMAND turnOff {
+		VALUE := off;
+	}
+
+	ENTER INIT {
+		VALUE := off;
+	}
+
+	TRANSITION off TO on ON turnOn;
+	TRANSITION on TO off ON turnOff;
+}
+
 VIRTUALLASTMOVED MACHINE INPUT, O_A, O_B {
     OPTION NoMoveTimer 110;
 
@@ -16,7 +39,7 @@ VIRTUALLASTMOVED MACHINE INPUT, O_A, O_B {
     ENTER INIT { LOG NoMoveTimer }
 }
 
-in FLAG (tab:tests);
+in PFLAG (tab:tests);
 a FLAG (tab:tests);
 b FLAG (tab:tests);
 #test VIRTUALLASTMOVED (tab:tests) in, a, b;
@@ -40,7 +63,7 @@ VIRTUALACTUATOR MACHINE Input, O_A, O_B {
             LOG "VIRTUALLASTMOVED timer updated to " + NoMoveTimer;
                 Last.NoMoveTimer := NoMoveTimer;
         }
-        
+        LEAVE INIT { Last.NoMoveTimer := NoMoveTimer; } 
 }
 
 VIN_a MACHINE actuator {

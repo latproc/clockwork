@@ -21,6 +21,7 @@
 #include "LogAction.h"
 #include "Logger.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
 
 Action *LogActionTemplate::factory(MachineInstance *mi) {
     return new LogAction(mi, *this);
@@ -28,22 +29,26 @@ Action *LogActionTemplate::factory(MachineInstance *mi) {
 
 Action::Status LogAction::run() {
 	owner->start(this);
+    std::stringstream ss;
     if (!predicate) {
         Value prop(owner->getValue(message.asString()));
         if (prop != SymbolTable::Null) {
-            std::cout << "------- " << owner->getName() << ": " << prop << " -------\n";
-            DBG_MSG << "------- " << owner->getName() << ": " << prop << " -------\n";
+            ss << "------- " << owner->getName() << ": " << prop << " -------\n";
+            std::cout << ss.str();
+            DBG_MSG << ss.str();
+            MessageLog::instance()->add(ss.str().c_str());
         }
         else {
-            std::cout << "------- " << owner->getName() << ": " << message << " -------\n";
-            DBG_MSG << "------- " << owner->getName() << ": " << message << " -------\n";
+            ss << "------- " << owner->getName() << ": " << message << " -------\n";
         }
     }
     else {
         Value val = predicate->evaluate(owner);
-        std::cout << "------- " << owner->getName() << ": " << val << " -------\n";
-        DBG_MSG << "------- " << owner->getName() << ": " << val << " -------\n";
+        ss << "------- " << owner->getName() << ": " << val << " -------\n";
     }
+    std::cout << ss.str();
+    DBG_MSG << ss.str();
+    MessageLog::instance()->add(ss.str().c_str());
 	status = Complete;
 	owner->stop(this);
 	return status;

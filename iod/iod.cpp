@@ -243,6 +243,7 @@ void ProcessingThread::operator()()  {
 					machine_is_ready = true;
 					BOOST_FOREACH(std::string &error, error_messages) {
 						std::cerr << error << "\n";
+						MessageLog::instance()->add(error.c_str());
 					}
 			    }
 				{
@@ -441,9 +442,10 @@ void generateIOComponentModules() {
 		}
 }
 
-int main (int argc, char const *argv[])
+int main(int argc, char const *argv[])
 {
 	Logger::instance();
+	MessageLog::setMaxMemory(10000);
 	ControlSystemMachine machine;
 
     Logger::instance()->setLevel(Logger::Debug);
