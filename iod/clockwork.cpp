@@ -43,6 +43,7 @@
 #include "MachineInstance.h"
 #include "clockwork.h"
 #include "PersistentStore.h"
+#include "MessageLog.h"
 
 extern int yylineno;
 extern int yycharno;
@@ -737,8 +738,9 @@ void initialise_machines() {
 				//if (m->owner) name += m->owner->getName() + ".";
 				//name += m->getName();
 				m->enable();
-				if (store.init_values.count(name)) {
-					std::map< std::string, Value > &list = store.init_values;
+                std::map<std::string, std::map<std::string, Value> >::iterator found = store.init_values.find(name);
+                if (found != store.init_values.end()) {
+					std::map< std::string, Value > &list((*found).second);
                     PersistentStore::PropertyPair node;
 					BOOST_FOREACH(node, list) {
 						long v;

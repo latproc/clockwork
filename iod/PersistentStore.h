@@ -17,11 +17,12 @@ public:
 	bool dirty() { return is_dirty; }
 	void load();
 	void save();
+    void split(std::string &name, std::string& prop) const;
 	std::ostream &operator<<(std::ostream &out) const;
-	void insert(std::string, std::string);
+	void insert(std::string machine, std::string property, std::string value);
     
 	
-	std::map<std::string, Value>init_values;
+	std::map<std::string, std::map<std::string, Value> >init_values;
 private:
 	std::string file_name;
 	bool is_dirty;

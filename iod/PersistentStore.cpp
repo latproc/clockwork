@@ -13,8 +13,18 @@
 #include "PersistentStore.h"
 
 
-void PersistentStore::insert(std::string key, std::string value) {
-	init_values[key] = value;
+void PersistentStore::insert(std::string machine, std::string key, std::string value) {
+    
+    std::map<std::string, std::map<std::string, Value> >::iterator found = init_values.find(machine);
+    if (found == init_values.end()) {
+        std::map<std::string, Value> entry;
+        entry[key] = value;
+        init_values[machine] = entry;
+    }
+    else {
+        std::map<std::string, Value> &entry = (*found).second;
+        entry[key] = value;
+    }
 	is_dirty = true;
 }
 
@@ -45,25 +55,32 @@ void PersistentStore::load() {
         long i_value;
         char *endp;
         i_value = strtol(value_str.c_str(), &endp, 10);
-        name = name + "." + property;
         if (*endp == 0)
-            init_values[name] = i_value;
+            insert(name, property, Value(i_value).asString());
         else
-            init_values[name] = Value(value_str.c_str(), kind);
-        std::cout << name << ":" << value_str << "\n";
+            insert(name, property, Value(value_str.c_str(), kind).asString());
+        std::cout << name << "." << property << ":" << value_str << "\n";
     }
     store.close();
 	is_dirty = false;
 }
 
+/* split prop into name, property */
+void PersistentStore::split(std::string &name, std::string& prop) const {
+    name = prop;
+    size_t pos = name.rfind('.');
+    name.erase(pos);
+    prop = prop.substr(prop.rfind('.') + 1);
+}
+
 std::ostream &PersistentStore::operator<<(std::ostream &out) const {
-	std::pair<std::string, Value>prop;
+	std::pair<std::string, std::map<std::string, Value> >prop;
 	BOOST_FOREACH(prop, init_values) {
-		std::string name = prop.first;
-		size_t pos = name.rfind('.');
-		name.erase(pos);
-		std::string property = prop.first.substr(prop.first.rfind('.') + 1);
-		out << name << " " << property << " " << prop.second << "\n";
+        std::map<std::string, Value> &entries(prop.second);
+        PersistentStore::PropertyPair entry;
+        BOOST_FOREACH(entry, entries) {
+            out << prop.first << " " << entry.first << " " << entry.second << "\n";
+        }
 	}
 	return out;
 }
