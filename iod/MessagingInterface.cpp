@@ -214,7 +214,7 @@ char *MessagingInterface::encodeCommand(std::string cmd, std::list<Value> *param
         }
     }
     cJSON_AddItemToObject(msg, "params", cjParams);
-    char *res = cJSON_Print(msg);
+    char *res = cJSON_PrintUnformatted(msg);
     cJSON_Delete(msg);
     return res;
 }
@@ -264,7 +264,7 @@ bool MessagingInterface::sendState(std::string cmd, std::string name, std::strin
     cJSON_AddStringToObject(cjParams, "name", name.c_str());
     cJSON_AddStringToObject(cjParams, "state", state_name.c_str());
     cJSON_AddItemToObject(msg, "params", cjParams);
-    char *res = cJSON_Print(msg);
+    char *res = cJSON_PrintUnformatted(msg);
     cJSON_Delete(msg);
     send(res);
     free(res);
