@@ -48,18 +48,51 @@ Action::Status IncludeAction::run() {
 	owner->start(this);
     if (!list_machine)
         list_machine = owner->lookup(list_machine_name);
+
 	if (list_machine) {
-        bool found = false;
-        for (int i=0; i<list_machine->parameters.size(); ++i) {
-            if (list_machine->parameters[i].val == entry
-                    || list_machine->parameters[i].real_name == entry.asString())
-                found = true;
-        }
-		if (!found) {
-            if (entry.kind == Value::t_symbol)
-                list_machine->addParameter(entry, owner->lookup(entry));
+        if (list_machine->_type == "REFERENCE") {
+            if (list_machine->locals.size()) {
+                // remove old item
+                MachineInstance *old = list_machine->locals.at(0).machine;
+                if (old) {
+                    std::set<Transmitter*>::iterator found = old->listens.find(list_machine);
+                    if (found != old->listens.end()) old->listens.erase(found);
+                    std::set<MachineInstance*>::iterator dep_found = list_machine->depends.find(old);
+                    if (dep_found != list_machine->depends.end()) list_machine->depends.erase(dep_found);
+                }
+                list_machine->locals.clear();
+            }
+            if (entry.kind == Value::t_symbol) {
+                std::string real_name = entry.sValue;
+                //entry.sValue = "ITEM";
+                list_machine->addLocal(entry, owner->lookup(real_name));
+                Parameter &p = list_machine->locals.at(0);
+                p.real_name = real_name;
+                p.val.sValue = "ITEM";
+                p.val.cached_machine = p.machine;
+                if (p.machine)
+                    status = Complete;
+                else
+                    status = Failed;
+            }
             else
-                list_machine->addParameter(entry);
+                status = Failed;
+            owner->stop(this);
+            return status;
+        }
+        else {
+            bool found = false;
+            for (int i=0; i<list_machine->parameters.size(); ++i) {
+                if (list_machine->parameters[i].val == entry
+                        || list_machine->parameters[i].real_name == entry.asString())
+                    found = true;
+            }
+            if (!found) {
+                if (entry.kind == Value::t_symbol)
+                    list_machine->addParameter(entry, owner->lookup(entry));
+                else
+                    list_machine->addParameter(entry);
+            }
         }
         status = Complete;
 	}

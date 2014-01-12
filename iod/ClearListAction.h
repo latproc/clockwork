@@ -39,7 +39,7 @@ struct ClearListActionTemplate : public ActionTemplate {
     
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
-       return out << "Clear List " << dest_name << "\n";
+       return out << "Clear List or Reference " << dest_name << "\n";
     }
 
     std::string dest_name;
