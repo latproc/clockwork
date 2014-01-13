@@ -722,7 +722,12 @@ void MachineInstance::idle() {
 		return;
 	}
     if (!state_machine) {
-        DBG_M_ACTIONS << " machine " << _name << " has no state machine\n";
+        std::stringstream ss;
+        ss << " machine " << _name << " has no state machine";
+        char *log_msg = strdup(ss.str().c_str());
+        MessageLog::instance()->add(log_msg);
+        DBG_M_ACTIONS << log_msg << "\n";
+        free(log_msg);
         return;
     }
 
@@ -1698,16 +1703,32 @@ void MachineInstance::resume() {
 	setNeedsCheck();
 }
 
-void MachineInstance::enable() { 
+void MachineInstance::enable() {
+    if (is_enabled) return;
     is_enabled = true; 
     error_state = 0; 
     clearAllActions(); 
     for (unsigned int i = 0; i<locals.size(); ++i) {
-        locals[i].machine->enable();
+        if (!locals[i].machine) {
+            std::stringstream ss;
+            ss << "No machine found for " << locals[i].val << " in " << _name;
+            char *msg = strdup(ss.str().c_str());
+            MessageLog::instance()->add(msg);
+            free(msg);
+        }
+        else
+            locals[i].machine->enable();
     }
     if (_type == "LIST") // enabling a list enables the members
         for (unsigned int i = 0; i<parameters.size(); ++i) {
             if (parameters[i].machine) parameters[i].machine->enable();
+            else {
+                std::stringstream ss;
+                ss << "No machine found for parameter " << parameters[i].val << " in " << _name;
+                char *msg = strdup(ss.str().c_str());
+                MessageLog::instance()->add(msg);
+                free(msg);
+            }
         }
     
     setInitialState();
