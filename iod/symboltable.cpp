@@ -29,7 +29,7 @@
 #include <utility>
 #include "DebugExtra.h"
 
-Value SymbolTable::Null(-432576);
+Value SymbolTable::Null(Value::t_empty);
 Value SymbolTable::True(true);
 Value SymbolTable::False(false);
 Value SymbolTable::Zero(0);
