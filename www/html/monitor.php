@@ -124,38 +124,15 @@ $page_body='';
 
 $context = new ZMQContext();
 $requester = new ZMQSocket($context, ZMQ::SOCKET_REQ);
-$requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
 $requester->connect("tcp://localhost:5555");
+$requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
 
-/* 
-	retrieve a list of the points to define the initial layout;after this, the 
-	javascript updates the status but the layout is not changed unless a refresh
-	is done.
- */
-
-$current_tab = "";
-$requester->send('LIST JSON' . $current_tab);
-$reply = $requester->recv();
-$config_entries_json = $reply;
-$config_entries = json_decode($reply);
-$res = json_last_error();
-if (json_last_error() != JSON_ERROR_NONE) {
-	display_json_error($res, $reply);
-	$config_entries = array();
-}
-//$debug_messages .= "\n" . count($config_entries) . " items found\n";
-//$debug_messages .= var_export($config_entries, true);
-
-//$debug_messages .= "Request: " . var_export($_REQUEST, true) . "\n";
-/*
-	AJAX handlers for a status update and other commands
- */
-
-if (isset($_REQUEST["list"])) {
-	echo $config_entries_json;
+if (isset($_REQUEST["messages"])) {
+	$requester->send('MESSAGES ' . $_REQUEST["messages"]);
+	$reply = $requester->recv();
+	echo $reply;
 	return;
 }
-
 if (isset($_REQUEST["quit"])) {
 	$requester->send('QUIT');
 	$reply = $requester->recv();
@@ -191,12 +168,35 @@ if (isset($_REQUEST["describe"])) {
 	echo $reply;
 	return;
 }
-if (isset($_REQUEST["messages"])) {
-	$requester->send('MESSAGES ' . $_REQUEST["messages"]);
-	$reply = $requester->recv();
-	echo $reply;
+/* 
+	retrieve a list of the points to define the initial layout;after this, the 
+	javascript updates the status but the layout is not changed unless a refresh
+	is done.
+ */
+
+$current_tab = "";
+$requester->send('LIST JSON' . $current_tab);
+$reply = $requester->recv();
+$config_entries_json = $reply;
+$config_entries = json_decode($reply);
+$res = json_last_error();
+if (json_last_error() != JSON_ERROR_NONE) {
+	display_json_error($res, $reply);
+	$config_entries = array();
+}
+//$debug_messages .= "\n" . count($config_entries) . " items found\n";
+//$debug_messages .= var_export($config_entries, true);
+
+//$debug_messages .= "Request: " . var_export($_REQUEST, true) . "\n";
+/*
+	AJAX handlers for a status update and other commands
+ */
+
+if (isset($_REQUEST["list"])) {
+	echo $config_entries_json;
 	return;
 }
+
 // note: below is ignored if an AJAX request was received
 
 /*
