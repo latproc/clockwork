@@ -725,7 +725,7 @@ void initialise_machines() {
 	std::list<MachineInstance *>::iterator m_iter;
     
 	if (persistent_store()) {
-		PersistentStore store("persist.dat");
+		PersistentStore store(persistent_store());
 		store.load();
         
 		// enable all persistent variables and set their value to the
