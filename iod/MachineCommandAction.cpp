@@ -23,6 +23,8 @@
 #include "Logger.h"
 #include "IOComponent.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
+#include <sstream>
 
 void MachineCommandTemplate::setActionTemplates(std::list<ActionTemplate*> &new_actions) {
     BOOST_FOREACH(ActionTemplate *at, new_actions) {
@@ -74,8 +76,6 @@ std::ostream &MachineCommand::operator<<(std::ostream &out)const {
 	return out;
 }
 
-
-
 Action::Status MachineCommand::runActions() {
     while (current_step < actions.size()) {
         Action *a = actions[current_step]->retain();
@@ -84,8 +84,11 @@ Action::Status MachineCommand::runActions() {
 		DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
 		Action::Status stat = (*a)();
         if (stat == Action::Failed) {
-            NB_MSG << " action: " << *a <<" running on " << owner->getName() << " failed to start (" << a->error() << ")\n";
-			error_str = a->error() ;
+            std::stringstream ss;
+            ss << " action: " << *a <<" running on " << owner->getName() << " failed to start (" << a->error() << ")\n";
+            char *err_msg = strdup(ss.str().c_str());
+            MessageLog::instance()->add(err_msg);
+			error_str = err_msg;
             return Failed; // action failed to start
         }
         if (stat == Action::NeedsRetry) {
@@ -106,8 +109,13 @@ Action::Status MachineCommand::runActions() {
 //		x = owner->executingCommand();
 //		if (x==a) { DBG_M_ACTIONS << "stop doesn't work\n"; exit(2); }
 		if (owner->executingCommand() != this) {
-			DBG_M_ACTIONS << "ERROR: command executing (" << *owner->executingCommand() <<") is not " << *this << "\n"
-        ; }
+            std::stringstream ss;
+            ss << "ERROR: command executing (" << *owner->executingCommand() <<") is not " << *this;
+            char *err_msg = strdup(ss.str().c_str());
+            MessageLog::instance()->add(err_msg);
+			DBG_M_ACTIONS << err_msg << "\n";
+            free(err_msg);
+        }
 		setBlocker(0);
         ++current_step;
         DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
@@ -121,6 +129,19 @@ Action::Status MachineCommand::run() {
 	owner->start(this);
 	status = Running;
     current_step = 0;
+    if (state_name.get() && strlen(state_name.get()) &&
+        owner->getCurrent().getName() != state_name.get()) {
+        std::stringstream ss;
+        ss << "Command was ignored due to a mismatch of current state (" << owner->getCurrent().getName()
+            << ") and state required by the command (" << state_name << ")";
+        char *err_msg = strdup(ss.str().c_str());
+        MessageLog::instance()->add(err_msg);
+        DBG_M_ACTIONS << err_msg << "\n";
+        result_str = err_msg;
+		status = Complete;
+		owner->stop(this);
+        return status; // no steps to run
+    }
     if (current_step == actions.size()) {
         result_str = "command finished: nothing to do\n";
 		//DBG_M_ACTIONS << command_name.get() << " " << result_str.get() << "\n";
@@ -132,8 +153,11 @@ Action::Status MachineCommand::run() {
     // attempt to run commands until one `blocks' on a timer
 	Action::Status stat = runActions();
     if (stat  == Failed) {
-        error_str = "Failed to start an action";
-		NB_MSG << owner->getName() << ": " << command_name.get() << " " << error_str.get() << "\n";
+        std::stringstream ss; ss << owner->getName() << ": " << command_name.get() << " Failed to start an action: " << *this;
+        char *msg = strdup(ss.str().c_str());
+        MessageLog::instance()->add(msg);
+        NB_MSG << msg << "\n";
+        error_str = msg;
 		status = stat;
 		owner->stop(this);
         return Failed;
