@@ -155,6 +155,8 @@ int main(int argc, const char * argv[])
 		}
         zmq::context_t context (1);
         zmq::socket_t socket (context, ZMQ_REQ);
+        int linger = 0; // do not wait at socket close time
+        socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 		psocket = &socket;
 		
         socket.connect(url.c_str());
