@@ -116,6 +116,7 @@ WAITFOR             return WAITFOR;
 WHEN                return WHEN;
 WHERE               return WHERE;
 WITH                return WITH;
+WITHIN              return WITHIN;
 
 [A-Za-z][A-Za-z0-9_.]*       { 
     yylval.sVal = strdup(yytext);

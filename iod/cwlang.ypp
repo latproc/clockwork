@@ -106,7 +106,7 @@ struct Subcondition {
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
-%token LEAVE ASSIGN
+%token LEAVE ASSIGN WITHIN
 
 %union {
 	int iVal;
@@ -584,7 +584,30 @@ enter_command
 basic_command:
 COMMAND SYMBOL /* command name */ action {
 	// commands are essentially messages
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+    mc->setActionTemplates(*current_actions);
+    if (current_machineclass->receives.count(Message($2)) == 0) {
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+    	    DBG_PARSER << *at << " ";
+    	}
+    	DBG_PARSER << "\n";
+        
+	    current_machineclass->receives[Message($2)] = mc;
+	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+	}
+    else {
+        std::stringstream ss;
+        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	current_actions->clear();
+}
+| COMMAND SYMBOL /* command name */ WITHIN SYMBOL action {
+	// commands are essentially messages
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
     mc->setActionTemplates(*current_actions);
     if (current_machineclass->receives.count(Message($2)) == 0) {
     	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
@@ -607,7 +630,7 @@ COMMAND SYMBOL /* command name */ action {
 }
 | COMMAND SYMBOL /* command name */ property_block action {
 	// commands are essentially messages
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     if (current_machineclass->receives.count(Message($2)) == 0) {
     	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
@@ -633,7 +656,7 @@ COMMAND SYMBOL /* command name */ action {
 enter_command:
 ENTER SYMBOL /* state name */ action
 {
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
     std::string msg_name ($2);
@@ -654,7 +677,7 @@ leave_command:
 LEAVE SYMBOL action
 {
 #ifndef DISABLE_LEAVE_FUNCTIONS
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
     std::string msg_name ($2);
@@ -686,7 +709,7 @@ RECEIVE SYMBOL /* message */ action  {
     }
     DBG_PARSER << "\n";
     if (current_machineclass->receives.count(Message($2)) == 0) {
-        MachineCommandTemplate *mc = new MachineCommandTemplate($2, $2);
+        MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
         current_machineclass->receives[Message(strdup($2))] = mc;
@@ -710,7 +733,7 @@ RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ action  {
     }
     DBG_PARSER << "\n";
     if (current_machineclass->receives.count(Message(msg_name.get())) == 0) {
-        MachineCommandTemplate *mc = new MachineCommandTemplate(msg_name.get(), msg_name.get());
+        MachineCommandTemplate *mc = new MachineCommandTemplate(msg_name.get(), "");
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
         current_machineclass->receives[Message(strdup(msg_name.get()))] = mc;
@@ -960,7 +983,7 @@ SET SYMBOL TO SYMBOL  {
 		current_actions->push_back(current_action); 
 		current_action = 0; 
 	}
-    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "unnamed_command");
+    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "");
 	mc->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
@@ -975,13 +998,13 @@ SET SYMBOL TO SYMBOL  {
 		current_actions->push_back(current_action); 
 		current_action = 0; 
 	}
-    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "unnamed_command");
+    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "");
 	mc->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
 	current_actions = current_actions_stack.back();
 	current_actions_stack.pop_back();
-    MachineCommandTemplate *mc2 = new MachineCommandTemplate("unnamed_command", "unnamed_command");
+    MachineCommandTemplate *mc2 = new MachineCommandTemplate("unnamed_command", "");
 	mc2->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
