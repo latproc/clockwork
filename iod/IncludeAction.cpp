@@ -21,6 +21,7 @@
 #include "IncludeAction.h"
 #include "MachineInstance.h"
 #include "Logger.h"
+#include "MessageLog.h"
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val)
 : list_machine_name(name), entry(val) {
@@ -86,18 +87,29 @@ Action::Status IncludeAction::run() {
                     real_name = entry.sValue;
                     //entry.sValue = "ITEM";
                     new_assignment = owner->lookup(real_name);
-                    if (new_assignment == 0) {
+                    bool done = false;
+                    if (new_assignment) {
+                        list_machine->addLocal(entry,new_assignment);
+                        done = true;
+                    }
+                    else {
                         Value ref = owner->getValue(real_name);
                         if (ref.kind == Value::t_symbol) {
                             real_name = ref.sValue;
                             new_assignment = owner->lookup(ref);
                             list_machine->addLocal(ref,new_assignment);
+                            done = true;
                         }
-                        else
-                            list_machine->addLocal(real_name);
                     }
-                    else
+                    if (!done) {
+                        std::stringstream ss;
+                        ss << owner->fullName()
+                            << " failed to lookup machine: " << entry << " for assignment. Treating it as a string";
+                        char *err_msg = strdup(ss.str().c_str());
+                        MessageLog::instance()->add(err_msg);
+                        free(err_msg);
                         list_machine->addLocal(entry,new_assignment);
+                    }
                 }
                 Parameter &p = list_machine->locals.at(0);
                  p.real_name = real_name;
@@ -109,8 +121,10 @@ Action::Status IncludeAction::run() {
                 }
                 if (p.machine)
                     status = Complete;
-                else
+                else {
+                    result_str = "assignment failed";
                     status = Failed;
+                }
             }
             else
                 status = Failed;
@@ -133,8 +147,14 @@ Action::Status IncludeAction::run() {
         }
         status = Complete;
 	}
-    else
+    else {
+        std::stringstream ss;
+        ss << "Cannot find a machine named " << list_machine_name << " for assignment of " << entry;
+        char *err_msg = strdup(ss.str().c_str());
+        MessageLog::instance()->add(err_msg);
+        error_str = err_msg;
         status = Failed;
+    }
     owner->stop(this);
 	return status;
 }
