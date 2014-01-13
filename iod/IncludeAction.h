@@ -38,7 +38,7 @@ struct IncludeActionTemplate : public ActionTemplate {
     
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
-       return out << "IncludeAction template "  << list_machine_name << " " << "\n";
+       return out << "IncludeAction template "  << list_machine_name << " " << entry << "\n";
     }
 
 	std::string list_machine_name; // name of the list to include the machine into
