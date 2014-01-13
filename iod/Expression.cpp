@@ -258,6 +258,7 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
     cached_entry = 0;
     lookup_error = false;
     last_calculation = 0;
+    needs_reevaluation = true;
 }
 
 Predicate &Predicate::operator=(const Predicate &other) {
@@ -272,7 +273,14 @@ Predicate &Predicate::operator=(const Predicate &other) {
     cached_entry = 0; // do not preserve cached the value pointer
     lookup_error = false;
     last_calculation = 0;
+    needs_reevaluation = true;
 	return *this;
+}
+
+void Predicate::flushCache() {
+    cached_entry = 0;
+    last_calculation = 0;
+    needs_reevaluation = true;
 }
 
 Condition::Condition(Predicate*p) : predicate(0) {
@@ -335,7 +343,19 @@ std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iter
     return out;
 }
 
-const Value *resolve(Predicate *p, MachineInstance *m, bool left) {
+class ClearFlagOnReturn {
+public:
+    ClearFlagOnReturn(bool *val) : to_clear(val) { }
+    ~ClearFlagOnReturn() { *to_clear = false; }
+private:
+    bool *to_clear;
+};
+
+const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+    if (reevaluate) {
+        p->flushCache();
+    }
+    ClearFlagOnReturn(&p->needs_reevaluation);
 	// return the cached pointer to the value if we have one
 	if (p->cached_entry)
         return p->cached_entry;
@@ -535,18 +555,18 @@ ExprNode eval_stack(MachineInstance *m, Stack &stack){
     return o;
 }
 
-void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left) {
+void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
     if (p->left_p) {
-        prep(stack, p->left_p, m, true);   
+        prep(stack, p->left_p, m, true, reevaluate);
 		//if (p->left_p->mi)
         //    std::cout << *(p->left_p) << " refers to a machine\n";
-        prep(stack, p->right_p, m, false);
+        prep(stack, p->right_p, m, false, reevaluate);
 		//if (p->left_p->mi)
         //    std::cout << *(p->right_p) << " refers to a state\n";
         stack.push(p->op);
     }
     else {
-        const Value *result = resolve(p, m, left);
+        const Value *result = resolve(p, m, left, reevaluate);
 		stack.push(ExprNode(*result, &p->entry));
     }
 }
@@ -561,7 +581,7 @@ void Stack::clear() {
 Value Predicate::evaluate(MachineInstance *m) {
 	Stack stack;
     stack.clear();
-    prep(stack, this, m, true);
+    prep(stack, this, m, true, needs_reevaluation);
     //		if (m && m->debug()) {
     //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
     //		}
@@ -574,7 +594,7 @@ bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
 #if 1
         stack.clear();
-	    prep(stack, predicate, m, true);
+	    prep(stack, predicate, m, true, predicate->needs_reevaluation);
 //		if (m && m->debug()) {
 //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
 //		}
