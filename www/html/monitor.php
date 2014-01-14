@@ -388,7 +388,14 @@ foreach ($tabs as $tab => $data) {
 			        else
 			            $tabdata .= button_image($point, $image_name, "im_". $point);
 					$tabdata .= "</td>";
-			    	$tabdata .= "<td><div class=\"item_state\" $id >$display_value</div></td>";
+					if ($type == 'AnalogueOutput') {
+						$tabdata .= '<td><div class="item_state" id="mc_' . $point. '">' 
+							. htmlspecialchars($curr->value) 
+							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->value .'"'
+							. 'style="float:left;width:14em;"></div></td>';
+					}
+					else
+				    	$tabdata .= "<td><div class=\"item_state\" $id >$display_value</div></td>";
 			    }
 				else
 			    	$tabdata .= "<td colspan=2><div class=\"item_state\" $id >$display_value</div></td>";
@@ -625,6 +632,22 @@ print <<<'EOD'
 	}
 	$(function() {
 		$( "#tabs" ).tabs();
+		$( ".anaout-slider" ).slider({
+			min: 0,
+			max: 32767,
+			stop: function( event, ui ) {
+				var machine = $(this).attr("name").replace("-",".");
+				var slider_value = $(this).slider("option", "value");
+				$.get("index.php", { property: machine + " value " + slider_value }, 
+					function(data){
+						if (data != "OK") alert(data) 
+					});
+				event.preventDefault();
+			}
+		});
+		$( ".anaout-slider" ).each(function() {
+			$(this).slider("option", "value", $(this).attr("value"))
+		});
 		$("#refresh").click(function(event) {
 			//event.preventDefault();
 		});
