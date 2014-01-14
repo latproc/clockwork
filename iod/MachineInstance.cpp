@@ -1386,7 +1386,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 								}
 							}
 							MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
-						    MachineCommandTemplate mc("stable_state_test", "stable_state_test");
+						    MachineCommandTemplate mc("stable_state_test", "");
 						    mc.setActionTemplate(&temp);
 							IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
 							this->push(new IfCommandAction(this, &ifcat));
