@@ -48,13 +48,22 @@ Action::Status ClearListAction::run() {
     if (!dest_machine)
         dest_machine = owner->lookup(dest);
 	if (dest_machine && dest_machine->_type == "LIST" ) {
+#if 0
+        // TBD needs further testing
+        for (int i=0; i<dest_machine->parameters.size(); ++i) {
+            Parameter &p = dest_machine->parameters[i];
+            if (p.machine) {
+                dest_machine->stopListening(p.machine);
+                p.machine->removeDependancy(dest_machine);
+            }
+        }
+#endif
         dest_machine->parameters.clear();
         dest_machine->setNeedsCheck();
         status = Complete;
 	}
 	else if (dest_machine && dest_machine->_type == "REFERENCE" ) {
-        dest_machine->locals.clear();
-        dest_machine->setNeedsCheck();
+        dest_machine->removeLocal(0);
         status = Complete;
 	}
     else
