@@ -108,7 +108,7 @@ Action::Status MachineCommand::runActions() {
 		}
 //		x = owner->executingCommand();
 //		if (x==a) { DBG_M_ACTIONS << "stop doesn't work\n"; exit(2); }
-		if (owner->executingCommand() != this) {
+		if (owner->executingCommand() && owner->executingCommand() != this) {
             std::stringstream ss;
             ss << "ERROR: command executing (" << *owner->executingCommand() <<") is not " << *this;
             char *err_msg = strdup(ss.str().c_str());
