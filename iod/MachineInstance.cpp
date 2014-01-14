@@ -616,9 +616,9 @@ void MachineInstance::describe(std::ostream &out) {
         out << "Locals:\n";
         for (unsigned int i = 0; i<locals.size(); ++i) {
 			if (locals[i].machine)
-            	out << "  " << locals[i].machine->getName()  << ":   " << locals[i].machine->getCurrent().getName() << "\n";
+            	out << "  " <<locals[i].val << " (" << locals[i].machine->getName()  << "):   " << locals[i].machine->getCurrent().getName() << "\n";
 			else
-	            out << "  Missing machine\n";
+	            out << locals[i].val <<"  Missing machine\n";
         }
     }
     if (listens.size()) {
@@ -634,6 +634,22 @@ void MachineInstance::describe(std::ostream &out) {
             }
 			else
 				if (t) out << "  " << t->getName() << "\n";
+			
+        }
+        out << "\n";
+    }
+    if (depends.size()) {
+        out << "Dependant machines: \n";
+        std::set<MachineInstance *>::iterator iter = depends.begin();
+        while (iter != depends.end()) {
+            MachineInstance *machine = *iter++;
+            if (machine) {
+                out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   " << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
+                if (machine->owner) out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
+                out << "\n";
+            }
+			else
+				out << " NULL\n";
 			
         }
         out << "\n";
@@ -675,11 +691,23 @@ void MachineInstance::describe(std::ostream &out) {
 }
 
 void MachineInstance::listenTo(MachineInstance *m) {
-    if (!listens.count(m)) listens.insert(m);
+    if (!listens.count(m)) {
+        listens.insert(m);
+        for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+            StableState &s = stable_states[ss_idx];
+            if (s.condition.predicate) s.condition.predicate->flushCache();
+        }
+        setNeedsCheck();
+    }
 }
 
 void MachineInstance::stopListening(MachineInstance *m) {
     listens.erase(m);
+    for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+        StableState &s = stable_states[ss_idx];
+        if (s.condition.predicate) s.condition.predicate->flushCache();
+    }
+    setNeedsCheck();
 }
 
 bool checkDepend(std::set<Transmitter*>&checked, Transmitter *seek, Transmitter *test) {
@@ -700,6 +728,14 @@ void MachineInstance::addDependancy(MachineInstance *m) {
 	if (m && m != this && !depends.count(m)) {
 		depends.insert(m); 
 		DBG_M_DEPENDANCIES << _name << " added dependant machine " << m->getName() << "\n";
+	}
+}
+
+void MachineInstance::removeDependancy(MachineInstance *m) {
+	if (m && m != this && depends.count(m)) {
+        std::set<MachineInstance*>::iterator found = depends.find(m);
+		depends.erase(found);
+		DBG_M_DEPENDANCIES << _name << " removed dependant machine " << m->getName() << "\n";
 	}
 }
 
@@ -876,20 +912,61 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
 }
 
 void MachineInstance::addLocal(Value param, MachineInstance *mi) {
-    
     locals.push_back(param);
     locals[locals.size()-1].machine = mi;
     if (!mi && param.kind == Value::t_symbol) mi = lookup(param.asString().c_str());
     std::set<MachineInstance*>::iterator dep_iter = depends.begin();
     while (dep_iter != depends.end()) {
         MachineInstance *dep = *dep_iter++;
+        if (mi) {
+            mi->addDependancy(dep);
+            dep->listenTo(mi);
+        }
         dep->setNeedsCheck();
     }
     
-    if (mi) addDependancy(mi);
+    if (mi) {
+        mi->addDependancy(this); listenTo(mi);
+        for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+            StableState &s = stable_states[ss_idx];
+            if (s.condition.predicate) s.condition.predicate->flushCache();
+        }
+    }
     if (_type == "REFERENCE") {
         setNeedsCheck();
+        /*if (owner) {
+            std::set<MachineInstance*>::iterator dep_iter = owner->depends.begin();
+            while (dep_iter != owner->depends.end()) {
+                MachineInstance *dep = *dep_iter++;
+                if (mi){
+                    mi->addDependancy(dep);
+                    dep->listenTo(mi);
+                }
+                dep->setNeedsCheck();
+            }
+        }*/
     }
+}
+
+void MachineInstance::removeLocal(int index) {
+    Parameter &p = locals[0];
+    if (p.machine) {
+        stopListening(p.machine);
+        p.machine->removeDependancy(this);
+    }
+    // each dependency of the reference should no longer be dependant on changees to the entry
+    std::set<MachineInstance*>::iterator dep_iter =depends.begin();
+    if (p.machine)
+        while (dep_iter != depends.end()) {
+            MachineInstance *dep = *dep_iter++;
+            p.machine->removeDependancy(dep);
+            dep->stopListening(p.machine);
+            dep->setNeedsCheck();
+        }
+    std::vector<Parameter>::iterator iter = locals.begin();
+    while (index-- && iter != locals.end()) iter++;
+    if (iter != locals.end()) locals.erase(iter);
+    setNeedsCheck();
 }
 
 void MachineInstance::setProperties(const SymbolTable &props) {
@@ -2161,6 +2238,11 @@ const Value &MachineInstance::getValue(std::string property) {
 			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
 			return v;
 		}
+        else if (_type == "REFERENCE" && name == "ITEM" && locals.size() == 0) {
+            // permit references items to be not always available so that these can be
+            // added and removed as the program executes
+            return SymbolTable::Null;
+        }
 		else {
 			resetTemporaryStringStream();
 			ss << "could not find machine named " << name << " for property " << property;

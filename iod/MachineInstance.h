@@ -212,6 +212,7 @@ public:
 
     void addParameter(Value param, MachineInstance *machine = 0);
     void addLocal(Value param, MachineInstance *machine = 0);
+    void removeLocal(int index);
     void setProperties(const SymbolTable &props);
     
     // record where in the program this machine was defined
@@ -272,6 +273,7 @@ public:
 	const char *getCurrentStateString() { return current_state.getName().c_str(); }
 	
 	void addDependancy(MachineInstance *m);
+	void removeDependancy(MachineInstance *m);
 	
 	// this depends on machine m if it is in m's list of dependants or if the machine
 	// is in this machines listen list.
