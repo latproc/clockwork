@@ -132,7 +132,7 @@ Action::Status MachineCommand::run() {
     if (state_name.get() && strlen(state_name.get()) &&
         owner->getCurrent().getName() != state_name.get()) {
         std::stringstream ss;
-        ss << "Command was ignored due to a mismatch of current state (" << owner->getCurrent().getName()
+        ss << "Command " << (*this) << " was ignored due to a mismatch of current state (" << owner->getCurrent().getName()
             << ") and state required by the command (" << state_name << ")";
         char *err_msg = strdup(ss.str().c_str());
         MessageLog::instance()->add(err_msg);
