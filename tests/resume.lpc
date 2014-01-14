@@ -63,6 +63,7 @@ manager Manager(tab:Test);
 STARTUP MACHINE {
     ready INITIAL;
     #ENTER ready { ENABLE time_clock }
+	ENTER ready { ENABLE monitor }
     
     COMMAND start {
         LOG "starting";
@@ -72,3 +73,9 @@ STARTUP MACHINE {
     COMMAND resume { RESUME manager AT lunch; }
 }
 startup STARTUP(tab:Test);
+
+Monitor MACHINE manager {
+	headless WHEN manager IS undefined;
+	ok DEFAULT;
+}
+monitor Monitor(tab:Test) manager;
