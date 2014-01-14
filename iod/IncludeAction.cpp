@@ -57,10 +57,8 @@ Action::Status IncludeAction::run() {
                 // remove old item
                 old = list_machine->locals.at(0).machine;
                 if (old) {
-                    std::set<Transmitter*>::iterator found = old->listens.find(list_machine);
-                    if (found != old->listens.end()) old->listens.erase(found);
-                    std::set<MachineInstance*>::iterator dep_found = list_machine->depends.find(old);
-                    if (dep_found != list_machine->depends.end()) list_machine->depends.erase(dep_found);
+                    old->removeDependancy(list_machine);
+                    list_machine->stopListening(old);
                 }
                 list_machine->locals.clear();
             }
@@ -82,10 +80,11 @@ Action::Status IncludeAction::run() {
                     real_name = entry.cached_machine->getName();
                     new_assignment = entry.cached_machine;
                     list_machine->addLocal(entry,new_assignment);
+                    new_assignment->addDependancy(owner);
+                    owner->listenTo(new_assignment);
                 }
                 else {
                     real_name = entry.sValue;
-                    //entry.sValue = "ITEM";
                     new_assignment = owner->lookup(real_name);
                     bool done = false;
                     if (new_assignment) {
@@ -109,6 +108,10 @@ Action::Status IncludeAction::run() {
                         MessageLog::instance()->add(err_msg);
                         free(err_msg);
                         list_machine->addLocal(entry,new_assignment);
+                    }
+                    else {
+                        new_assignment->addDependancy(owner);
+                        owner->listenTo(new_assignment);
                     }
                 }
                 Parameter &p = list_machine->locals.at(0);
@@ -140,7 +143,30 @@ Action::Status IncludeAction::run() {
             }
             if (!found) {
                 if (entry.kind == Value::t_symbol)
+#if 0
+                {
+                    // TBD needs further testing
+                    MachineInstance *machine = owner->lookup(entry);
+                    if (!machine) {
+                        Value v = owner->getValue(entry.sValue);
+                        if (v.kind == Value::t_symbol) {
+                            machine = owner->lookup(v.sValue);
+                            if (machine) {
+                                if (!v.cached_machine) v.cached_machine = machine;
+                                list_machine->addParameter(v, machine);
+                            }
+                            else
+                                list_machine->addParameter(v);
+                        }
+                        else
+                            list_machine->addParameter(v);
+                    }
+                    else
+                        list_machine->addParameter(entry, machine);
+                }
+#else
                     list_machine->addParameter(entry, owner->lookup(entry));
+#endif
                 else
                     list_machine->addParameter(entry);
             }
