@@ -414,8 +414,13 @@ foreach ($tabs as $tab => $data) {
 			// display properties
 			if (isset($curr->display)) {
 				$tabdata .= "<td>";
+				$hidden = array();
+				if (isset($curr->hidden)) {
+					$hidden = explode(",",$curr->hidden);
+				}
 				$props = explode(",", $curr->display);
 				foreach ($props as $prop) {
+					if ($prop=="hidden" || in_array($prop,$hidden)) continue;
 					$tabdata .= '<div name="p_' .htmlspecialchars($point ."-". $prop). '">'
 							. htmlspecialchars($prop) .': ';
 					if (isset($curr->$prop)) $tabdata .= htmlspecialchars($curr->$prop);
@@ -612,6 +617,12 @@ print <<<'EOD'
 									if (res[i].state == "on") {$(this).removeClass("off").addClass("on"); }
 								}
 							});
+							hidden_props = typeof res[i].hidden;
+							//TBD
+							//var hidden = [];
+							//if (hidden_props == "string") {
+							//	hidden = res[i].hidden.split(",");
+							//}
 							display_props = typeof res[i].display;
 							if (display_props == "string") {
 								props=res[i].display.split(",");
