@@ -175,7 +175,11 @@ if (isset($_REQUEST["describe"])) {
  */
 
 $current_tab = "";
-$requester->send('LIST JSON' . $current_tab);
+if (isset($_REQUEST["list"]) && isset($_REQUEST["tab"])) {
+	$current_tab = $_REQUEST["tab"];
+}
+
+$requester->send('LIST JSON' . ' ' . $current_tab);
 $reply = $requester->recv();
 $config_entries_json = $reply;
 $config_entries = json_decode($reply);
@@ -301,7 +305,7 @@ else if (strlen($anchor)) {
 $n = 1;
 $tabs = array('Outputs' => false, 'Inputs' => false);
 foreach ($config_entries as $curr) {
-	if (isset($curr->tab) &&  $curr->tab == 'Modules') continue; // the modules tab is added at the end of the list
+	if (isset($curr->tab) &&  ($curr->tab == 'Modules' || $curr->tab == "Vis3D") ) continue; // the modules tab is added at the end of the list
 	if (isset($curr->tab) && !in_array($curr->tab, $tabs)) {
 		$tabs[$curr->tab] = false;
 		$n++;
