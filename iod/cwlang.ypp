@@ -106,7 +106,7 @@ struct Subcondition {
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
-%token LEAVE ASSIGN WITHIN
+%token LEAVE ASSIGN WITHIN PUSH
 
 %union {
 	int iVal;
@@ -896,6 +896,16 @@ SET SYMBOL TO SYMBOL  {
     current_action = new IncludeActionTemplate($4, $2);
 }
 | INCLUDE value IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    Value *v = $2;
+    current_action = new IncludeActionTemplate($4, *v);
+    delete v;
+}
+| PUSH SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new IncludeActionTemplate($4, $2);
+}
+| PUSH value TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     Value *v = $2;
     current_action = new IncludeActionTemplate($4, *v);

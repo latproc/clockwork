@@ -87,6 +87,7 @@ OPTION              return OPTION;
 OR                  return OR;
 PROPERTIES          return PROPERTIES;
 PROPERTY			return PROPERTY;
+PUSH				return PUSH;
 READONLY            return READONLY;
 READWRITE           return READWRITE;
 REPLACE             return REPLACE;
