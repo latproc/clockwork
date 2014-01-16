@@ -287,21 +287,29 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 		    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		    if (m) {
                 if (params.size() == 3)
-                    m->setValue(params[2].asString(), "");
+				{
+                    m->setValue("VALUE", params[2]);
+				}
                 else if (params.size() == 4) {
                     if (m->debug()) {
                         DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
                     }
-                    long x;
-                    char *p;
-                    x = strtol(params[3].asString().c_str(), &p, 0);
-                    if (*p == 0)
-                        m->setValue(params[2].asString(), x);
-                    else
-                        m->setValue(params[2].asString(), params[3].asString().c_str());
+					if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
+	                    long x;
+	                    char *p;
+	                    x = strtol(params[3].asString().c_str(), &p, 0);
+	                    if (*p == 0)
+	                        m->setValue(params[2].asString(), x);
+	                    else
+	                        m->setValue(params[2].asString(), params[3]);
+					}
+					else {
+	                    m->setValue(params[2].asString(), params[3]);
+					}
                 }
                 else {
-                    // extra parameters implies the value contains spaces so we find the tail of the parameter string and use that for the property value
+                    // extra parameters implies the value contains spaces so 
+					// we find the tail of the parameter string and use that for the property value
                     size_t pos = raw_message_.find(params[2].asString().c_str());
                     if (pos == std::string::npos) {
                         error_str = "Unexpected parameter error ";
@@ -571,7 +579,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         MessageLog *log = MessageLog::instance();
         bool use_json = params.size() >= 2 && params[1].asString() == "JSON";
         long num = 0;
-        int idx = 1;
+        unsigned int idx = 1;
         if (params.size() > idx && params[idx].asString() == "JSON") { use_json = true; ++idx; }
         if (params.size() > idx && params[idx].asInteger(num)) { ++idx; }
         
@@ -598,7 +606,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 
     bool IODCommandNotice::run(std::vector<Value> &params) {
         std::stringstream msg;
-        int i = 0;
+        unsigned int i = 0;
         for (; i<params.size()-1; ++i) {
             msg << params.at(i) << " ";
         }
