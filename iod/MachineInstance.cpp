@@ -2414,11 +2414,19 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
 	        ss << _name << "." << property << " VALUE " << new_value << std::flush;
-			if (property == "VALUE" && io_interface) {
+			if ( (property == "VALUE" || property == "value") && io_interface) {
+				char buf[100];
 				errno = 0;
 				long value =0; // TBD deal with sign
 				if (new_value.asInteger(value))
+				{
+					snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value); 
 					io_interface->setValue( (uint32_t)value);
+				}
+				else {
+					snprintf(buf, 100, "%s: could not set value to %s\n", _name.c_str(), new_value.asString().c_str());
+				}
+				MessageLog::instance()->add(buf);
 			}
 	        //mif->send(ss.str().c_str());
             mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
