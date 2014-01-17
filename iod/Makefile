@@ -42,7 +42,7 @@ BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
 CFLAGS = $(SIMULATED) -g -pedantic -Wall -Wno-unused-variable -Wno-variadic-macros \
-	-Wunused-but-set-variable \
+	-Wno-unused-but-set-variable \
 	$(EXTRAINCS) -DUSE_ETHERCAT
 CC = g++ $(CFLAGS)
 LDFLAGS = $(EXTRALIBS)

@@ -84,6 +84,9 @@ std::ostream &operator<<(std::ostream&out, const IOComponent &ioc) {
 unsigned char mem[1000];
 #define EC_READ_BIT(offset, bitpos) ( (*offset) & (1 << (bitpos)) )
 #define EC_WRITE_BIT(offset, bitpos, val) *(offset) |=  ( 1<< (bitpos))
+#define EC_READ_S8(offset) 0
+#define EC_READ_S16(offset) 0
+#define EC_READ_S32(offset) 0
 #define EC_READ_U8(offset) 0
 #define EC_READ_U16(offset) 0
 #define EC_READ_U32(offset) 0
@@ -200,11 +203,11 @@ void IOComponent::idle() {
         else {
 			uint32_t val = 0;
 			if (address.bitlen == 8) 
-				val = EC_READ_U8(offset);
+				val = EC_READ_S8(offset);
 			else if (address.bitlen == 16) 
-				val = EC_READ_U16(offset);
+				val = EC_READ_S16(offset);
 			else if (address.bitlen == 32) 
-				val = EC_READ_U32(offset);
+				val = EC_READ_S32(offset);
             else {
                 val = 0;
             }

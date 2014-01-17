@@ -34,7 +34,7 @@ struct IOAddress {
 	unsigned int module_position;
     unsigned int io_offset;
     int io_bitpos;
-	uint32_t value;
+	int32_t value;
 	unsigned int bitlen;
 	unsigned int entry_position;
 	IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos, unsigned int len=1) 
