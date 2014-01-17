@@ -92,7 +92,7 @@ public:
 	void turnOff();
 	bool isOn();
 	bool isOff();
-	uint32_t value() { if (address.bitlen == 1) { if (isOn()) return 1; else return 0; } else return address.value; }
+	int32_t value() { if (address.bitlen == 1) { if (isOn()) return 1; else return 0; } else return address.value; }
 	void setValue(uint32_t new_value);
 	virtual const char *type() { return "IOComponent"; }
 	std::ostream &operator<<(std::ostream &out) const;
