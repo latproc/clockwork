@@ -150,7 +150,7 @@ void IOComponent::idle() {
 	}
 */
 	if (address.bitlen == 1) {
-		unsigned int value = EC_READ_BIT(offset, bitpos);
+		int32_t value = EC_READ_BIT(offset, bitpos);
 		if (!value && last_event == e_on) {
 			EC_WRITE_BIT(offset, bitpos, 1);			
 		}
@@ -201,7 +201,7 @@ void IOComponent::idle() {
 			address.value = pending_value;
         }
         else {
-			uint32_t val = 0;
+			int32_t val = 0;
 			if (address.bitlen == 8) 
 				val = EC_READ_S8(offset);
 			else if (address.bitlen == 16) 
