@@ -26,6 +26,9 @@ ExprTest  MACHINE  {
 }
 expr_test  ExprTest(tab:Tests);
 
+NegativeVariableTest MACHINE { OPTION k 3; ok WHEN -k == -3; failed DEFAULT; } 
+negative_variable_test NegativeVariableTest;
+
 Calc MACHINE {
     OPTION a 5;
     OPTION b 3;
