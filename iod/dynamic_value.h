@@ -105,14 +105,14 @@ private:
 
 class IncludesValue : public DynamicValue {
 public:
-    IncludesValue(const char *entry_str, const char *list) : entry_name(entry_str), machine_list_name(list), machine_list(0)  { }
+    IncludesValue(Value val, const char *list) : entry(val), machine_list_name(list), machine_list(0)  { }
     virtual ~IncludesValue() {}
     virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     
 private:
-    std::string entry_name;
+    Value entry;
     std::string machine_list_name;
     MachineInstance *machine_list;
 };

@@ -515,7 +515,12 @@ INTEGER   {
 }
 | SYMBOL INCLUDES SYMBOL {
     $$ =  new Value(new IncludesValue($3, $1));
-};
+}
+| SYMBOL INCLUDES value {
+    Value *v = $3;
+    $$ =  new Value(new IncludesValue(*v, $1));
+    delete v;
+}
 | ANY SYMBOL ARE SYMBOL {
     $$ = new Value(AnyInValue($4, $2));
 }

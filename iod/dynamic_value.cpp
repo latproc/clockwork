@@ -80,7 +80,7 @@ std::ostream &operator<<(std::ostream &out, const CountValue &val) { return val.
 
 DynamicValue *IncludesValue::clone() const { return new IncludesValue(*this); }
 std::ostream &IncludesValue::operator<<(std::ostream &out ) const {
-    return out << machine_list_name << " INCLUDES " << entry_name;
+    return out << machine_list_name << " INCLUDES " << entry;
 }
 std::ostream &operator<<(std::ostream &out, const IncludesValue &val) { return val.operator<<(out); }
 
@@ -210,7 +210,8 @@ Value IncludesValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  { last_result = false; return last_result; }
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
-        if (entry_name == machine_list->parameters[i].val.asString() || entry_name == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
+        if (entry == machine_list->parameters[i].val )  { last_result = true; return last_result; }
+        if (entry.asString() == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
     }
     last_result = false; return last_result;
 }
