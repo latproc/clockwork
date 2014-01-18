@@ -474,6 +474,9 @@ expression:
 value {
     $$ = new Predicate(*$1); delete $1;
 }
+|'(' value ')' {
+    $$ = new Predicate(*$2); delete $2;
+}
 |'(' predicate ')' {
     $$ = $2;
 }
@@ -498,6 +501,7 @@ value {
 | expression '|' expression { $$ = new Predicate($1, opBitOr, $3);}
 | expression '^' expression { $$ = new Predicate($1, opBitXOr, $3);}
 | '!' expression { $$ = new Predicate(0, opNegate, $2);}
+| '-' expression { $$ = new Predicate(new Predicate(-1), opTimes, $2);}
 | expression MATCHES PATTERN {
     Value pat($3, Value::t_string);
     $$ = new Predicate($1, opMatch, new Predicate( pat )); }
@@ -566,8 +570,14 @@ INTEGER   {
 | TAKE FIRST FROM SYMBOL {
     $$ = new Value(new PopListFrontValue($4));
 }
+| TAKE ITEM SYMBOL FROM SYMBOL {
+    $$ = new Value(ItemAtPosValue($5, new Value($3)));
+}
 | TAKE ITEM value FROM SYMBOL {
     $$ = new Value(ItemAtPosValue($5, $3));
+}
+| ITEM SYMBOL OF SYMBOL {
+    $$ = new Value(ItemAtPosValue($4, new Value($2), false));
 }
 | ITEM value OF SYMBOL {
     $$ = new Value(ItemAtPosValue($4, $2, false));

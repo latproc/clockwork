@@ -220,25 +220,31 @@ Value ItemAtPosValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  { last_result = false; return last_result; }
     if (machine_list->parameters.size()) {
-        long idx = 0;
-        if (index.kind == Value::t_symbol)
-            if (mi->getValue(index.sValue).asInteger(idx)) {
-                if (idx>=0 && idx < machine_list->parameters.size()) {
-                    last_result = machine_list->parameters[idx].val;
-                    if (remove_from_list) {
-                        machine_list->parameters.erase(machine_list->parameters.begin()+idx);
-                        if (machine_list->_type == "LIST") {
-                            machine_list->setNeedsCheck();
-                        }
-                    }
-                    return last_result;
-                }
+        long idx = -1;
+        if (index.kind == Value::t_symbol) {
+            if (!mi->getValue(index.sValue).asInteger(idx)) {
+                MessageLog::instance()->add("non-numeric index when evaluating ITEM AT pos");
+                last_result = false; return last_result;
             }
         }
-    else {
-        long idx = 0;
-        if (index.asInteger(idx)) {
+        else if (index.kind == Value::t_integer) {
+            idx = index.iValue;
+        }
+        else {
+            if (!index.asInteger(idx)) {
+                MessageLog::instance()->add("non-numeric index when evaluating ITEM AT pos");
+                last_result = false;
+                return last_result;
+            }
+        }
+        if (idx>=0 && idx < machine_list->parameters.size()) {
             last_result = machine_list->parameters[idx].val;
+            if (remove_from_list) {
+                machine_list->parameters.erase(machine_list->parameters.begin()+idx);
+                if (machine_list->_type == "LIST") {
+                    machine_list->setNeedsCheck();
+                }
+            }
             return last_result;
         }
     }
