@@ -22,6 +22,7 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 #include "MessageLog.h"
+#include <sstream>
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val)
 : list_machine_name(name), entry(val) {
@@ -51,6 +52,13 @@ Action::Status IncludeAction::run() {
         list_machine = owner->lookup(list_machine_name);
 
 	if (list_machine) {
+/*
+		std::stringstream ss;
+		ss << "inserting " << entry << " kind: " << entry.kind << "\n";
+		char *msg = strdup(ss.str().c_str());
+		MessageLog::instance()->add(msg);
+		free(msg);
+*/
         if (list_machine->_type == "REFERENCE") {
             MachineInstance *old = 0;
             if (list_machine->locals.size()) {
@@ -143,12 +151,20 @@ Action::Status IncludeAction::run() {
             }
             if (!found) {
                 if (entry.kind == Value::t_symbol)
-#if 0
+#if 1
                 {
                     // TBD needs further testing
                     MachineInstance *machine = owner->lookup(entry);
                     if (!machine) {
                         Value v = owner->getValue(entry.sValue);
+/*
+							std::stringstream ss;
+							ss << "adding value " << v << " kind: " << v.kind << " to list " << list_machine->fullName() << "\n";
+							char *buf = strdup(ss.str().c_str());
+							MessageLog::instance()->add(buf);
+							NB_MSG << buf;
+							free(buf);
+*/
                         if (v.kind == Value::t_symbol) {
                             machine = owner->lookup(v.sValue);
                             if (machine) {
@@ -158,8 +174,9 @@ Action::Status IncludeAction::run() {
                             else
                                 list_machine->addParameter(v);
                         }
-                        else
+                        else {
                             list_machine->addParameter(v);
+						}
                     }
                     else
                         list_machine->addParameter(entry, machine);
