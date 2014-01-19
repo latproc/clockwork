@@ -92,7 +92,7 @@ std::ostream &operator<<(std::ostream &out, const SizeValue &val) { return val.o
 
 DynamicValue *BitsetValue::clone() const { return new BitsetValue(*this); }
 std::ostream &BitsetValue::operator<<(std::ostream &out ) const {
-    return out << "BITSET FROM " << machine_list << state;
+    return out << "BITSET FROM " << *machine_list << state;
 }
 std::ostream &operator<<(std::ostream &out, const BitsetValue &val) { return val.operator<<(out); }
 
