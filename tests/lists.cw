@@ -179,7 +179,19 @@ TestMatch MACHINE {
 	yes WHEN (FIRST OF queue) MATCHES `test`;
 	no DEFAULT;
 
-	ENTER yes { tmp := TAKE FIRST OF queue; LOG tmp; }
+	ENTER yes { tmp := TAKE FIRST FROM queue; LOG tmp; }
 }
 test_match TestMatch;
 
+BitsetComparisonTest MACHINE {
+	l1 LIST f1,f2;
+	l2 LIST f3,f4;
+
+	f1 FLAG; f2 FLAG; f3 FLAG; f4 FLAG;
+
+	ok WHEN BITSET FROM l1 == BITSET FROM l2;
+	failed DEFAULT;
+
+	ENTER INIT { SET f2 TO on; SET f4 TO on; }
+}
+bitset_comparison_test BitsetComparisonTest;
