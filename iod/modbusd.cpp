@@ -123,7 +123,7 @@ std::cout << "Updated Modbus memory for reg " << addr << " to " << (value  & 0xf
 // ------------ Command interface -----------
 
 struct IODCommandUnknown : public IODCommand {
-    bool run(std::vector<std::string> &params) {
+    bool run(std::vector<Value> &params) {
         std::stringstream ss;
         ss << "Unknown command: ";
         std::ostream_iterator<std::string> oi(ss, " ");
@@ -449,6 +449,7 @@ struct ModbusServerThread {
 		    }
 		}
 		modbus_free(modbus_context);
+		modbus_context = 0;
 		
     }
     ModbusServerThread() : done(false) {
