@@ -49,26 +49,26 @@ std::ostream &operator<<(std::ostream &out, const PopListFrontValue &val) { retu
 
 DynamicValue *AssignmentValue::clone() const { return new AssignmentValue(*this); }
 std::ostream &AssignmentValue::operator<<(std::ostream &out ) const {
-    return out << dest_name << " BECOMES " << src;
+    return out << dest_name << " BECOMES " << src << "(" << last_result <<")";
 }
 std::ostream &operator<<(std::ostream &out, const AssignmentValue &val) { return val.operator<<(out); }
 
 DynamicValue *ItemAtPosValue::clone() const { return new ItemAtPosValue(*this); }
 std::ostream &ItemAtPosValue::operator<<(std::ostream &out ) const {
-    return out << "ITEM " << index << " OF " << machine_list_name;
+    return out << "ITEM " << index << " OF " << machine_list_name << "(" << last_result <<")";
 }
 std::ostream &operator<<(std::ostream &out, const ItemAtPosValue &val) { return val.operator<<(out); }
 
 DynamicValue *AnyInValue::clone() const { return new AnyInValue(*this); }
 std::ostream &AnyInValue::operator<<(std::ostream &out ) const {
-    return out << "ANY " << machine_list_name << " IN " << state;
+    return out << "ANY " << machine_list_name << " IN " << state << "(" << last_result <<")";
 }
 std::ostream &operator<<(std::ostream &out, const AnyInValue &val) { return val.operator<<(out); }
 
 
 DynamicValue *AllInValue::clone() const { return new AllInValue(*this); }
 std::ostream &AllInValue::operator<<(std::ostream &out ) const {
-    return out << "ALL " << machine_list_name << " ARE " << state;
+    return out << "ALL " << machine_list_name << " ARE " << state << "(" << last_result <<")";
 }
 std::ostream &operator<<(std::ostream &out, const AllInValue &val) { return val.operator<<(out); }
 
@@ -80,21 +80,21 @@ std::ostream &operator<<(std::ostream &out, const CountValue &val) { return val.
 
 DynamicValue *IncludesValue::clone() const { return new IncludesValue(*this); }
 std::ostream &IncludesValue::operator<<(std::ostream &out ) const {
-    return out << machine_list_name << " INCLUDES " << entry;
+    return out << machine_list_name << " INCLUDES " << entry << "(" << last_result <<")";
 }
 std::ostream &operator<<(std::ostream &out, const IncludesValue &val) { return val.operator<<(out); }
 
 DynamicValue *SizeValue::clone() const { return new SizeValue(*this); }
 std::ostream &SizeValue::operator<<(std::ostream &out ) const {
-    return out << "SIZE OF " << machine_list_name;
+    return out << "SIZE OF " << machine_list_name << "(" << last_result <<")";
 }
 std::ostream &operator<<(std::ostream &out, const SizeValue &val) { return val.operator<<(out); }
 
 DynamicValue *BitsetValue::clone() const { return new BitsetValue(*this); }
 std::ostream &BitsetValue::operator<<(std::ostream &out ) const {
-    out << "BITSET FROM ";
-    if (machine_list) out << *machine_list; else out << machine_list_name;
-    out << state;
+    out << "BITSET FROM " << machine_list_name;
+    if (!machine_list) out << "( no machine )";
+    out << " (" << last_result <<")";
     return out;
 }
 std::ostream &operator<<(std::ostream &out, const BitsetValue &val) { return val.operator<<(out); }
