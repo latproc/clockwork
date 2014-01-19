@@ -354,7 +354,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
     current_machineclass->states.push_back($1);
 
-    MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1);
+    MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
     current_machineclass->commands[$3] = mc;
@@ -365,7 +365,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
     current_machineclass->states.push_back($1);
     
-    MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1);
+    MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     properties = property_stack.back();
     property_stack.pop_back();
     if (properties.exists("TIMEOUT")) {

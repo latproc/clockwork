@@ -37,7 +37,7 @@ void MachineCommandTemplate::setActionTemplate(ActionTemplate *at) {
 
 
 MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
-: Action(mi), command_name(mct->command_name), state_name(mct->state_name), timeout(0), timeout_trigger(0) {
+: Action(mi), command_name(mct->command_name), state_name(mct->state_name), timeout(0), timeout_trigger(0), switch_state(mct->switch_state) {
     BOOST_FOREACH(ActionTemplate *t, mct->action_templates) {
         //DBG_M_ACTIONS << "copying action " << (*t) << " for machine " << mi->_name << "\n";
         actions.push_back(t->factory(mi));
@@ -130,7 +130,7 @@ Action::Status MachineCommand::run() {
 	status = Running;
     current_step = 0;
     if (state_name.get() && strlen(state_name.get()) &&
-        owner->getCurrent().getName() != state_name.get()) {
+        owner->getCurrent().getName() != state_name.get() && !switch_state) {
         std::stringstream ss;
         ss << "Command " << (*this) << " was ignored due to a mismatch of current state (" << owner->getCurrent().getName()
             << ") and state required by the command (" << state_name << ")";

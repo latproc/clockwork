@@ -44,8 +44,8 @@ class MachineInstance;
 	
 class MachineCommandTemplate : public ActionTemplate {
 public:
-    MachineCommandTemplate(CStringHolder cmd_name, CStringHolder state)
-    : command_name(cmd_name), state_name(state), timeout(0) { }
+    MachineCommandTemplate(CStringHolder cmd_name, CStringHolder state, bool auto_switch = false)
+    : command_name(cmd_name), state_name(state), timeout(0), switch_state(auto_switch) { }
     virtual Action *factory(MachineInstance *mi);
 
     std::ostream &operator<<(std::ostream &out) const {
@@ -58,6 +58,7 @@ public:
     CStringHolder command_name;
     CStringHolder state_name;
     long timeout;
+    bool switch_state;
 };
 
 class MachineCommand : public Action {
@@ -80,6 +81,7 @@ private:
     CStringHolder state_name;
     long timeout;
     Trigger *timeout_trigger;
+    bool switch_state;
 };
 
 #endif
