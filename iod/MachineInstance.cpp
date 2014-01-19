@@ -333,11 +333,14 @@ void MachineInstance::resetTemporaryStringStream() {
 }
 
 MachineInstance *MachineInstance::lookup(Parameter &param) {
-	assert(param.val.kind == Value::t_symbol);
-	if (!param.machine) {
-		param.machine = lookup(param.real_name);
-	}
-	return param.machine;
+    if (param.val.kind == Value::t_symbol) {
+        if (!param.machine) {
+            param.machine = lookup(param.real_name);
+        }
+        return param.machine;
+    }
+    else
+        return 0;
 }
 
 MachineInstance *MachineInstance::lookup(Value &val) {
