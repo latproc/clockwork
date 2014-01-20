@@ -21,7 +21,6 @@
 #include <iostream>
 #include <iterator>
 #include <stdio.h>
-#include <boost/program_options.hpp>
 #include <zmq.hpp>
 #include <sstream>
 #include <string>
@@ -40,8 +39,6 @@
 #include "MessagingInterface.h"
 #include <list>
 #include "cmdline.h"
-
-namespace po = boost::program_options;
 
 void sendMessage(zmq::socket_t &socket, const char *message) {
     const char *msg = (message) ? message : "";
@@ -91,13 +88,13 @@ void process_command(std::list<Value> &params) {
 	size_t size = strlen(msg);
 	zmq::message_t reply;
 	if (psocket->recv(&reply)) {
-        size = reply.size();
-        char *data = (char *)malloc(size+1);
-        memcpy(data, reply.data(), size);
-        data[size] = 0;
-        std::cout << data << "\n";
-        free(data);
-    }
+		size = reply.size();
+		char *data = (char *)malloc(size+1);
+		memcpy(data, reply.data(), size);
+		data[size] = 0;
+		std::cout << data << "\n";
+		free(data);
+	}
 }
 #endif
 
@@ -113,22 +110,6 @@ void usage(const char *name) {
 int main(int argc, const char * argv[])
 {
     try {
-        
-#if 0
-        po::options_description desc("Allowed options");
-        desc.add_options()
-        ("help", "produce help message")
-        ("server", "run as server")
-        ;
-        po::variables_map vm;        
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        po::notify(vm);    
-        if (vm.count("help")) {
-            std::cout << desc << "\n";
-            return 1;
-        }
-        if (vm.count("server")) {
-#endif
 		int port = 5555;
 		bool quiet = false;
 		std::string host = "127.0.0.1";
@@ -153,64 +134,19 @@ int main(int argc, const char * argv[])
 			<< "\nEnter HELP; for help. Note that ';' is required at the end of each command\n"
 			<< "  use exit; or ctrl-D to exit this program\n\n";
 		}
-        zmq::context_t context (1);
-        zmq::socket_t socket (context, ZMQ_REQ);
-        int linger = 0; // do not wait at socket close time
-        socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+		zmq::context_t context (1);
+		zmq::socket_t socket (context, ZMQ_REQ);
+		int linger = 0; // do not wait at socket close time
+		socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 		psocket = &socket;
-		
-        socket.connect(url.c_str());
+
+		socket.connect(url.c_str());
 		std::string word;
 		std::string msg;
 		std::string line;
 		std::stringstream line_input(line);
 
 		do yyparse(); while (!cmdline_done);
-#if 0
-        for (;;) {
-#ifndef USE_READLINE
-			if (!quiet) std::cout << "> " << std::flush;
-			if (!(std::cin >> word)) break;
-#else
-			if (!(line_input >> word)) {
-				const char *line_str = rl_gets("> ");
-				if (line_str == NULL) break;
-				line = line_str;
-				line_input.clear();
-				line_input.str(line);
-				if (!(line_input >> word)) continue;
-			}
-#endif
-			size_t stmt_end;
-			if ( (stmt_end = word.rfind(';')) != std::string::npos) {
-				if (stmt_end > word.length()) continue;
-				word.erase(stmt_end); // ignore everything after the ';'
-				if (word.length()) {
-					if (msg.length()) msg += " ";
-					msg += word;
-				}
-				if (msg == "exit" || msg == "EXIT") break;
-				sendMessage(socket, msg.c_str());
-				size_t size = msg.length();
-	            zmq::message_t reply;
-                int retries = 3;
-				while (retries-- && !socket.recv(&reply)) { }
-                if (retries) {
-                    size = reply.size();
-                    char *data = (char *)malloc(size+1);
-                    memcpy(data, reply.data(), size);
-                    data[size] = 0;
-                    std::cout << data << "\n";
-                    free(data);
-                }
-                else
-                    std::cout << "reply interrupted\n";
-				msg = "";
-			}
-			else
-				msg += " " + word;
-        }
-#endif
    }
     catch(std::exception& e) {
         if (zmq_errno())
