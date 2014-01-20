@@ -30,6 +30,7 @@
 #include <inttypes.h>
 #include <fstream>
 #include "symboltable.h"
+#include "value.h"
 #include <list>
 #include <utility>
 #include <boost/foreach.hpp>
@@ -40,6 +41,7 @@
 #include <modbus/modbus.h>
 #include <bitset>
 #include "MessagingInterface.h"
+#include "cJSON.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -62,10 +64,11 @@ time_t now;
 #define OUT (time(&now) == last) ? dummy : std::cout
 
 //class IODInterfaceThread;
-struct IODCommandInterface;
+//struct IODCommandInterface;
 
 //IODInterfaceThread *g_iod_interface;
-IODCommandInterface *g_iodcmd;
+//IODCommandInterface *g_iodcmd;
+MessagingInterface *g_iodcmd;
 static modbus_mapping_t *modbus_mapping = 0;
 static modbus_t *modbus_context = 0;
 
@@ -84,6 +87,25 @@ void activate_address(std::string& addr_str) {
     }
 }
 
+void insert(int group, int addr, const char *value, int len) {
+	char buf[20];
+	snprintf(buf, 19, "%d.%d", group, addr);
+	std::string addr_str(buf);
+	if (len % 2 != 0) len++;// pad
+	uint16_t *dest = 0;
+	if (group == 3)
+		dest = &modbus_mapping->tab_input_registers[addr];
+	else if (group == 4)
+		dest = &modbus_mapping->tab_registers[addr];
+	uint16_t as_int=0;
+	const uint8_t *p = (uint8_t *)value;
+	for (int i=0; i<len/2; ++i) {
+		for (int j=0; j<2; ++j) {
+			as_int += (as_int<<8)+*p++;
+		}
+		*dest++ = as_int;
+	}
+}
 void insert(int group, int addr, int value, int len) {
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
@@ -161,6 +183,7 @@ struct IODInterfaceThread {
 };
 #endif
 
+#if 0
 struct IODCommandInterface {
 	IODCommandInterface() : REQUEST_TIMEOUT(2000), REQUEST_RETRIES(3), context(0), socket(0){
 	    context = new zmq::context_t(1);
@@ -175,7 +198,7 @@ struct IODCommandInterface {
 
     const int REQUEST_TIMEOUT;
     const int REQUEST_RETRIES;
-    
+
     char *sendMessage(const char *message) {
         try {
             const char *msg = (message) ? message : "";
@@ -234,6 +257,8 @@ struct IODCommandInterface {
     zmq::context_t *context;
     zmq::socket_t *socket;
 };
+#endif
+
 
 int getInt(uint8_t *p) {
 	int x = *p++;
@@ -476,30 +501,59 @@ std::string getIODSyncCommand(int group, int addr, int new_value) {
 char *sendIOD(int group, int addr, int new_value) {
 	std::string s(getIODSyncCommand(group, addr, new_value));
 	if (g_iodcmd) 
-		return g_iodcmd->sendMessage(s.c_str());
+		return g_iodcmd->send(s.c_str());
 	else 	
 		return strdup("IOD interface not ready\n");
 }
 
 char *sendIODMessage(const std::string &s) {
 	if (g_iodcmd) 
-		return g_iodcmd->sendMessage(s.c_str());
+		return g_iodcmd->send(s.c_str());
 	else 	
 		return strdup("IOD interface not ready\n");
 }
 
 void loadData(const char *initial_settings) {
-	std::istringstream init(initial_settings);
+    cJSON *obj = cJSON_Parse(initial_settings);
+    if (!obj){ 
+		std::istringstream init(initial_settings);
 
-	char buf[200];
-    while (init.getline(buf, 200, '\n')) {
-        std::istringstream iss(buf);
-        int group, addr, len;
-		int value;
-		std::string name;
-        iss >> group >> addr >> name >> len >> value;
-		if (debug) std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
-		insert(group, addr-1, value, len);
+		char buf[200];
+	    while (init.getline(buf, 200, '\n')) {
+	        std::istringstream iss(buf);
+	        int group, addr, len;
+			int value;
+			std::string name;
+	        iss >> group >> addr >> name >> len >> value;
+			if (debug) std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
+			insert(group, addr-1, value, len);
+		}
+	}
+	else
+    {
+		int num_params = cJSON_GetArraySize(obj);
+		if (num_params) {
+			for (int i=0; i<num_params; ++i) {
+				cJSON *item = cJSON_GetArrayItem(obj, i);
+				if (item->type == cJSON_Array) {
+					Value group = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 0), 0);
+					Value addr = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 1), 0);
+					Value name = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 2), 0);
+					Value len = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 3), 0);
+					Value value = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
+					if (value.kind == Value::t_string) 
+						insert(group.iValue, addr.iValue, value.asString().c_str(), len.iValue);
+					else
+						insert(group.iValue, addr.iValue, value.iValue, len.iValue);
+				}
+				else
+				{
+					char *node = cJSON_Print(item);
+					std::cerr << "item " << i << " is not of the expected format: " << node << "\n";
+					free(node);
+				}
+			}
+		}
 	}
 }
 
@@ -534,6 +588,8 @@ int main(int argc, const char * argv[]) {
 	desc.add_options()
 	("help", "produce help message")
 	("debug","enable debug")
+	("host", "remote host (localhost)")
+	("port", "clockwork port (5558)")
 	;
 	po::variables_map vm;   
 	po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -543,9 +599,15 @@ int main(int argc, const char * argv[]) {
 		return 1;
 	}
 	int port = 5558;
+	std::string host("localhost");
+	// backward compatibility
 	if (argc > 2 && strcmp(argv[1],"-p") == 0) {
 		port = strtol(argv[2], 0, 0);
+		std::cerr << "NOTICE: the -p option is deprecated, please use --port\n";
 	}
+	if (vm.count("port")) port = vm["port"].as<int>();
+	if (vm.count("host")) host = vm["host"].as<std::string>();
+	
 
 	if (vm.count("debug")) {
 		LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
@@ -566,7 +628,7 @@ int main(int argc, const char * argv[]) {
 	}
 
 	std::cout << "-------- Starting Command Interface ---------\n" << std::flush;	
-	g_iodcmd = new IODCommandInterface;
+	g_iodcmd = MessagingInterface::create(host, port);
 	
 	// initialise memory
 	{
@@ -575,7 +637,7 @@ int main(int argc, const char * argv[]) {
 		do {	
 			active_addresses.clear();
 			initialised_address.clear();
-			initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
+			initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
 			if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0) {
 				loadData(initial_settings);
 				free(initial_settings);
@@ -617,16 +679,60 @@ int main(int argc, const char * argv[]) {
            	char *data = (char *)malloc(len+1);
            	memcpy(data, update.data(), len);
            	data[len] = 0;
-            std::istringstream iss(data);
-			std::string cmd;
-			iss >> cmd;
+
+            std::list<Value> parts;
+            int count = 0;
+            std::string ds;
+            std::vector<Value> params(0);
+            {
+                std::list<Value> *param_list = 0;
+                if (MessagingInterface::getCommand(data, ds, &param_list)) {
+                    params.push_back(ds);
+                    if (param_list) {
+                        std::list<Value>::const_iterator iter = param_list->begin();
+                        while (iter != param_list->end()) {
+                            const Value &v  = *iter++;
+                            params.push_back(v);
+                        }
+                    }
+                    count = params.size();
+                }
+                else {
+                    std::istringstream iss(data);
+                    while (iss >> ds) {
+                        parts.push_back(ds.c_str());
+                        ++count;
+                    }
+                    std::copy(parts.begin(), parts.end(), std::back_inserter(params));
+                }
+            }
+            std::string cmd(params[0].asString());
+
+            //std::istringstream iss(data);
+			//std::string cmd;
+			//iss >> cmd;
 			if (cmd == "UPDATE") {
             	int group, addr, len, value;
 				std::string name;
-            	iss >> group >> addr >> name >> len >> value;
+				
+				assert(params.size() >= 6);
+				assert(params[1].kind == Value::t_integer);
+				assert(params[2].kind == Value::t_integer);
+				assert(params[3].kind == Value::t_string);
+				assert(params[4].kind == Value::t_integer);
+				
+				group = params[1].iValue;
+				addr = params[2].iValue;
+				name = params[3].sValue;
+				len = params[4].iValue;
+            	//iss >> group >> addr >> name >> len >> value;
 	
-				if (debug) std::cout << "IOD: " << group << " " << addr << " " << name << " " << len << " " << value <<  "\n";
-				insert(group, addr-1, value, len);
+				if (debug) std::cout << "IOD: " << group << " " << addr << " " << name << " " << len << " " << params[5] <<  "\n";
+				if (params[5].kind == Value::t_string) {
+					insert(group, addr-1, params[5].asString().c_str(), len);
+				}
+				else
+					insert(group, addr-1, params[5].iValue, len);
 			}
 			else if (cmd == "STARTUP") {
 #if 1
@@ -641,10 +747,9 @@ int main(int argc, const char * argv[]) {
 #endif
 			}
 			else if (cmd == "DEBUG") {
-				std::string which;
-				if(iss >> which) {
-					debug = (which == "ON") ? true : false;
-				}
+				assert(params.size() >= 2);
+				assert(params[1].kind == Value::t_symbol);
+				debug =  (params[1].sValue == "ON") ? true : false;
 			}
         }
     }

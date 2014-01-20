@@ -195,3 +195,19 @@ BitsetComparisonTest MACHINE {
 	ENTER INIT { SET f2 TO on; SET f4 TO on; }
 }
 bitset_comparison_test BitsetComparisonTest;
+
+a FLAG; b FLAG; c FLAG;
+l LIST a,b,c;
+PopAndPushTest MACHINE list {
+	l2 LIST;
+
+	ENTER INIT { 
+		s := ITEM 0 OF list;
+		PUSH s TO l2;
+		s := ITEM 1 OF list;
+		PUSH s TO l2;
+	}
+}
+pop_and_push_test PopAndPushTest l;
+
+

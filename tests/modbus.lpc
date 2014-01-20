@@ -30,6 +30,24 @@ sample_flag2 FLAG (export:rw, tab:Tests);
 }
 monitor Monitor(tab:Outputs) flash1;
 
+count FLAG (export:rw, tab:Tests); # counter should count while this is on
+Counter MACHINE run_flag {
+	OPTION i 0;
+	counting WHEN run_flag IS on;
+	check STATE;
+	idle DEFAULT;
+	ENTER counting { i := i+1; LOG i; SET SELF TO check;}
+}
+counter Counter count;
+
+Error MACHINE {
+	EXPORT READONLY 16BIT cause;
+	error FLAG(export:ro,tab:Test);
+	OPTION cause "No Error";
+	ENTER INIT { SET Error TO on }
+}
+M_Error Error;
+
 Flash MACHINE (delay:500)output {
 
 	EXPORT STATES on,off,error,ready;

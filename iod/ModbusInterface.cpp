@@ -123,11 +123,17 @@ void ModbusAddress::update(Group group, int addr, const char *str_value, int len
         modbus_changes = new MessagingInterface(1, 5558);
         usleep(200000); // give subscribers time to notice...
     }
-	std::cerr << "Warning: modbus string values are not yet supported\n";
-	std::stringstream ss;
-	ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " \"" << str_value << "\"" <<  "\n";
-	std::string s = ss.str();
-	modbus_changes->send(s.c_str());
+    std::list<Value>params;
+    params.push_back(group);
+    params.push_back(addr);
+    params.push_back(Value(name.c_str(),Value::t_string));
+    params.push_back(len);
+    params.push_back(Value(str_value,Value::t_string));
+    modbus_changes->sendCommand("UPDATE", &params);
+	//std::stringstream ss;
+	//ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " \"" << str_value << "\"" <<  "\n";
+	//std::string s = ss.str();
+	//modbus_changes->send(s.c_str());
 }
 
 void ModbusAddress::update(Group group, int addr, int new_value, int len) {
@@ -135,10 +141,17 @@ void ModbusAddress::update(Group group, int addr, int new_value, int len) {
         modbus_changes = new MessagingInterface(1, 5558);
         usleep(200000); // give subscribers time to notice...
     }
-    std::stringstream ss;
-	ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " " << new_value <<  "\n";
-	std::string s = ss.str();
-	modbus_changes->send(s.c_str());
+    std::list<Value>params;
+    params.push_back(group);
+    params.push_back(addr);
+    params.push_back(Value(name.c_str(),Value::t_string));
+    params.push_back(len);
+    params.push_back(new_value);
+    modbus_changes->sendCommand("UPDATE", &params);
+    //std::stringstream ss;
+	//ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " " << new_value <<  "\n";
+	//std::string s = ss.str();
+	//modbus_changes->send(s.c_str());
 }
 
 void ModbusAddress::update(int index, int new_value, int len) {

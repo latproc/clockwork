@@ -68,4 +68,27 @@ Accumulator2 MACHINE {
 }
 accumulator2 Accumulator;
 
+Cutter MACHINE {
+	Done STATE;
+	NotDone INITIAL;
+}
+c1 Cutter; c3 Cutter;
+c2 Cutter; c4 Cutter;
+cutters LIST c1,c2,c3,c4;
+f1 FLAG; f2 FLAG;
+front LIST f1,f2;
+
+Monitor MACHINE {
+	Front STATE;
+	Back INITIAL;
+}
+monitor Monitor;
+
+
+EvalTest MACHINE M_Monitor, L_Front, L_Cutters {
+	Front WHEN M_Monitor IS Front && ANY L_Front ARE on 
+		|| SELF IS Front && ALL L_Cutters ARE Done == FALSE;
+	Unknown DEFAULT;
+}
+eval_test EvalTest monitor, front, cutters;
 

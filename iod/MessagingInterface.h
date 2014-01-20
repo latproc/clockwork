@@ -25,22 +25,24 @@
 #include <zmq.hpp>
 #include "Message.h"
 #include "value.h"
-#include "symboltable.h"
+#include "symboltable.h" 
+#include "cJSON.h"
 
 class MessagingInterface {
 public:
     MessagingInterface(int num_threads, int port);
     MessagingInterface(std::string host, int port);
     ~MessagingInterface();
-    void send(const char *msg);
+    char *send(const char *msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent();
     static MessagingInterface *create(std::string host, int port);
-    bool sendCommand(std::string cmd, std::list<Value> *params);
-    bool sendCommand(std::string cmd, Value p1 = SymbolTable::Null,
+	static Value valueFromJSONObject(cJSON *obj, cJSON *cjType);
+    char *sendCommand(std::string cmd, std::list<Value> *params);
+    char *sendCommand(std::string cmd, Value p1 = SymbolTable::Null,
                      Value p2 = SymbolTable::Null,
                      Value p3 = SymbolTable::Null);
-    bool sendState(std::string cmd, std::string name, std::string state_name);
+    char *sendState(std::string cmd, std::string name, std::string state_name);
     static char *encodeCommand(std::string cmd, std::list<Value> *params);
     static char *encodeCommand(std::string cmd, Value p1 = SymbolTable::Null,
                      Value p2 = SymbolTable::Null,

@@ -1,5 +1,6 @@
+0:01007	count	Discrete
 1:01002	flash1.error_flag	Discrete
-1:01000	monitor.sample_flag	Discrete
+1:01003	monitor.sample_flag	Discrete
 0:01000	monitor.sample_flag2	Discrete
 1:01001	flash1.started_flag	Discrete
 3:01000	A	Signed_int_16
@@ -17,3 +18,5 @@
 4:01003	flash1.delay	Signed_int_32
 4:01005	flash1.a	Signed_int_16
 4:01006	flash1.b	Signed_int_16
+4:02000 M_Error.cause	Signed_int_16
+1:01000	M_Error.error	Discrete

@@ -100,7 +100,7 @@ MessagingInterface::~MessagingInterface() {
 }
 
 
-void MessagingInterface::send(const char *txt) {
+char *MessagingInterface::send(const char *txt) {
     if (!is_publisher){
         DBG_MESSAGING << "sending message " << txt << " on " << url << "\n";
     }
@@ -116,7 +116,7 @@ void MessagingInterface::send(const char *txt) {
             bool expect_reply = true;
             while (expect_reply) {
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                zmq::poll( &items[0], 1, 5000);
+                zmq::poll( &items[0], 1, 50000);
                 if (items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
                     if (socket->recv(&reply)) {
@@ -124,9 +124,8 @@ void MessagingInterface::send(const char *txt) {
                         char *data = (char *)malloc(len+1);
                         memcpy(data, reply.data(), len);
                         data[len] = 0;
-                        std::cout << url << ": " << data << "\n";
-                        free(data);
-                        return;
+                        //std::cout << url << ": " << data << "\n";
+                        return data;
                     }
                 }
                 else
@@ -143,6 +142,7 @@ void MessagingInterface::send(const char *txt) {
         else
             std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
 	}
+    return 0;
 }
 
 static std::string valueType(const Value &v) {
@@ -228,11 +228,11 @@ char *MessagingInterface::encodeCommand(std::string cmd, Value p1, Value p2, Val
 }
 
 
-bool MessagingInterface::sendCommand(std::string cmd, std::list<Value> *params) {
-    char *res = encodeCommand(cmd, params);
-    send(res);
-    free(res);
-    return true;
+char *MessagingInterface::sendCommand(std::string cmd, std::list<Value> *params) {
+    char *request = encodeCommand(cmd, params);
+    char *response = send(request);
+    free(request);
+    return response;
 }
 
 /* TBD, this may need to be optimised, one approach would be to use a 
@@ -247,7 +247,7 @@ bool MessagingInterface::sendCommand(std::string cmd, std::list<Value> *params) 
  
  */
 
-bool MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value p3)
+char *MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value p3)
 {
     std::list<Value>params;
     params.push_back(p1);
@@ -256,7 +256,7 @@ bool MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value 
     return sendCommand(cmd, &params);
 }
 
-bool MessagingInterface::sendState(std::string cmd, std::string name, std::string state_name)
+char *MessagingInterface::sendState(std::string cmd, std::string name, std::string state_name)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "command", cmd.c_str());
@@ -264,14 +264,14 @@ bool MessagingInterface::sendState(std::string cmd, std::string name, std::strin
     cJSON_AddStringToObject(cjParams, "name", name.c_str());
     cJSON_AddStringToObject(cjParams, "state", state_name.c_str());
     cJSON_AddItemToObject(msg, "params", cjParams);
-    char *res = cJSON_PrintUnformatted(msg);
+    char *request = cJSON_PrintUnformatted(msg);
     cJSON_Delete(msg);
-    send(res);
-    free(res);
-    return true;
+    char *response = send(request);
+    free (request);
+    return response;
 }
 
-Value valueFromJSONObject(cJSON *obj, cJSON *cjType) {
+Value MessagingInterface::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
     if (!obj) return SymbolTable::Null;
     const char *type = 0;
     if (cjType) {
