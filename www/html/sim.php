@@ -45,7 +45,7 @@ print <<<EOD
 						var z_pos = res[i].z_pos;
 						obj.position.x = x_pos;
 						if (res[i].active != "true") {
-							obj.position.y = -10000; //y_pos;
+							obj.position.y = -30000; //y_pos;
 						}
 						else
 							obj.position.y = y_pos;
@@ -96,6 +96,18 @@ print <<<EOD
 					if (typeof model.x_len != "undefined") len = model.x_len;
 					return makeCube(len, 50, 700, 0x8080cc);
 				}
+				else if (model.model == "carriage") {
+					var xlen = 1200;
+					var zlen = 300;
+					if (typeof model.x_len != "undefined") xlen = model.x_len;
+					if (typeof model.z_len != "undefined") zlen = model.z_len;
+					return makeCube(xlen, 50, zlen, 0x0080cc);
+				}
+				else if (model.model == "cylinder") {
+					var ylen = 100;
+					if (typeof model.y_len != "undefined") ylen = model.y_len;
+					return makeCube(50, ylen, 50, 0xcc00cc);
+				}
 				else {
 					alert("unknown model: " + model);
 					return makeCube(50, 50, 50, 0xcccccc);
@@ -110,9 +122,10 @@ print <<<EOD
             renderer.setSize( window.innerWidth, window.innerHeight );
             document.body.appendChild( renderer.domElement );
 
-			camera.position.y = 800;
-			camera.position.x = 1000;
-            camera.position.z = 5000;
+			camera.position.y = 1500;
+			camera.position.x = 7000;
+            camera.position.z = -2000;
+			camera.lookAt(new THREE.Vector3( -3000, 0, 0 ));
             
             function render() {
             	requestAnimationFrame(render);
