@@ -84,6 +84,7 @@ $page_body='';
 $context = new ZMQContext();
 $requester = new ZMQSocket($context, ZMQ::SOCKET_REQ);
 $requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
+$requester->setSockOpt(ZMQ::SOCKOPT_BACKLOG, 1);
 $requester->connect("tcp://localhost:5555");
 
 /* 

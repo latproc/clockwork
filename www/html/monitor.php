@@ -126,6 +126,7 @@ $context = new ZMQContext();
 $requester = new ZMQSocket($context, ZMQ::SOCKET_REQ);
 $requester->connect("tcp://localhost:5555");
 $requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
+$requester->setSockOpt(ZMQ::SOCKOPT_BACKLOG, 1);
 
 if (isset($_REQUEST["messages"])) {
 	$requester->send('MESSAGES ' . $_REQUEST["messages"]);
