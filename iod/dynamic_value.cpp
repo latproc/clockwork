@@ -111,7 +111,11 @@ Value AssignmentValue::operator()() {
 
 Value AnyInValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list) { last_result = false; return last_result; }
+    if (!machine_list) {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ANY IN "<<state<<" test\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
@@ -121,21 +125,34 @@ Value AnyInValue::operator()(MachineInstance *mi) {
     last_result = false; return last_result;
 }
 Value AllInValue::operator()(MachineInstance *mi) {
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list) { last_result = false; return last_result; }
-    if (machine_list->parameters.size() == 0) { last_result = false; return last_result; }
+    if (machine_list == NULL) {
+        machine_list = mi->lookup(machine_list_name);
+    }
+    if (!machine_list) {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ALL "<<state<<" test\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
+    if (machine_list->parameters.size() == 0) {  last_result = false; return last_result; }
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
         
-        if (state != machine_list->parameters[i].machine->getCurrent().getName()) { last_result = false; return last_result; }
+        if (state != machine_list->parameters[i].machine->getCurrent().getName()) {
+            last_result = false; return last_result;
+        }
     }
-    last_result = true; return last_result;
+    last_result = true;
+    return last_result;
 }
 
 Value CountValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list) return false;
+    if (!machine_list) {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for COUNT "<<state<<" test\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        return false;
+    }
     if (machine_list->parameters.size() == 0) return 0;
     int result = 0;
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
@@ -150,14 +167,22 @@ Value CountValue::operator()(MachineInstance *mi) {
 
 Value SizeValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  { last_result = false; return last_result; }
+    if (!machine_list)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for SIZE test\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     last_result = machine_list->parameters.size();
     return last_result;
 }
 
 Value PopListBackValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  { last_result = false; return last_result; }
+    if (!machine_list)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     long i = machine_list->parameters.size() - 1;
     last_result = false;
     if (i>=0) {
@@ -172,7 +197,11 @@ Value PopListBackValue::operator()(MachineInstance *mi) {
 
 Value PopListFrontValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  { last_result = false; return last_result; }
+    if (!machine_list)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     last_result = false;
     if (machine_list->_type == "REFERENECE") {
         if (machine_list->locals.size()) {
@@ -211,7 +240,11 @@ Value PopListFrontValue::operator()(MachineInstance *mi) {
 
 Value IncludesValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  { last_result = false; return last_result; }
+    if (!machine_list)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (entry == machine_list->parameters[i].val )  { last_result = true; return last_result; }
         if (entry.asString() == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
@@ -221,7 +254,11 @@ Value IncludesValue::operator()(MachineInstance *mi) {
 
 Value ItemAtPosValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  { last_result = false; return last_result; }
+    if (!machine_list)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     if (machine_list->parameters.size()) {
         long idx = -1;
         if (index.kind == Value::t_symbol) {
@@ -257,7 +294,11 @@ Value ItemAtPosValue::operator()(MachineInstance *mi) {
 
 Value BitsetValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  { last_result = false; return last_result; }
+    if (!machine_list)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     unsigned long val = 0;
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         MachineInstance *entry = machine_list->parameters[i].machine;
@@ -275,7 +316,11 @@ Value BitsetValue::operator()(MachineInstance *mi) {
 DynamicValue *EnabledValue::clone() const { return new EnabledValue(*this); }
 Value EnabledValue::operator()(MachineInstance *mi) {
     if (machine == NULL) machine = mi->lookup(machine_name);
-    if (!machine)  { last_result = false; return last_result; }
+    if (!machine)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for ENABLED test\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     last_result = machine->enabled();
     return last_result;
 }
@@ -288,7 +333,11 @@ std::ostream &operator<<(std::ostream &out, const EnabledValue &val) { return va
 DynamicValue *DisabledValue::clone() const { return new DisabledValue(*this); }
 Value DisabledValue::operator()(MachineInstance *mi) {
     if (machine == NULL) machine = mi->lookup(machine_name);
-    if (!machine)  { last_result = false; return last_result; }
+    if (!machine)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for DISABLED test\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
     last_result = !machine->enabled();
     return last_result;
 }
