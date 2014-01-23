@@ -320,7 +320,7 @@ debug_message($current_tab);
 $n = 1;
 foreach ($tabs as $tab => $data) {
   $tabname = 'tabs-' . $n;
-  $tabdata='<div id="'. $tabname . '" name="' . $tab . '" ><table>' . "\n";
+  $tabdata='<div id="'. $tabname . '" name="' . $tab . '" ><table class="data">' . "\n";
   if ($tab != 'Modules' && $tab != 'Messages')
 		$tabdata .= '<thead><tr><th style="width:80px">Enabled</th>'
 			.	'<th>Name</th><th colspan=2>State</th>'
@@ -333,6 +333,7 @@ foreach ($tabs as $tab => $data) {
   if ($tab == "Modules")
 	$config_entries = $slaves;
   if ($tab != "Messages") {
+	$rownum = 1;
 	foreach ($config_entries as $curr) {
 		if (!isset($curr->tab)) {
 			if ($curr->class == "MODULE")
@@ -341,7 +342,8 @@ foreach ($tabs as $tab => $data) {
 				continue;
 		}
 		if ($curr->tab != $tab) continue;
-		$tabdata .= '<tr>';
+		$row_class = ($rownum % 2 == 1) ? "odd" : "even";
+		$tabdata .= "<tr class=\"$row_class\">";
 		if ($curr->class != "MODULE" ) { // modules go on their own tab
 			$point = $curr->name;
 			$image_prefix = "input64x64";
@@ -460,6 +462,7 @@ foreach ($tabs as $tab => $data) {
 			$tabdata .= "<td>unknown</td>:";
 		}
 		$tabdata .= "</tr>";
+		$rownum++;
 	}
  }
 else {
@@ -469,13 +472,13 @@ else {
 		$tabdata
 EOD;
 }
+	$n++;
  	// end this tab with a 'refresh' button
 	$tabdata .= '</table>'
 	.'<div><form method=post action=?><input type="hidden" name="anchor" value="'.$tabname.'">'.
 	"<button id=refresh>Refresh</button></form></div>"
 	.'</div>' . "\n";
 	$tabs[$tab] = $tabdata;
-	$n++;
 }
 // The Master tab, if given, has a custom layout
 if ($master) {
@@ -537,6 +540,9 @@ print <<<'EOD'
 	table { width:100% }
 	.error_message { font-size:24px; color:#f44; }
 	.center { text-align:center; }
+	tr.odd { background-color:#e8e8e8 }
+	tr.even { background-color:#ffffff }
+	table.data { border-spacing:0px; }
 	</style>
 	<script type="text/javascript">
 	function refresh() {
