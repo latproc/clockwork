@@ -405,6 +405,7 @@ void semantic_analysis() {
                     << " (" << mi->parameters[i].real_name << ")"
                     << " found for " << mi->getName();
 					error_messages.push_back(ss.str());
+					MessageLog::instance()->add(ss.str().c_str());
 				}
             }
 		    else
