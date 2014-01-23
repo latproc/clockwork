@@ -33,18 +33,15 @@ Action::Status LogAction::run() {
     if (!predicate) {
         Value prop(owner->getValue(message.asString()));
         if (prop != SymbolTable::Null) {
-            ss << "------- " << owner->getName() << ": " << prop << " -------\n";
-            std::cout << ss.str();
-            DBG_MSG << ss.str();
-            MessageLog::instance()->add(ss.str().c_str());
+            ss << "------- " << owner->fullName() << ": " << prop << " -------\n";
         }
         else {
-            ss << "------- " << owner->getName() << ": " << message << " -------\n";
+            ss << "------- " << owner->fullName() << ": " << message << " -------\n";
         }
     }
     else {
         Value val = predicate->evaluate(owner);
-        ss << "------- " << owner->getName() << ": " << val << " -------\n";
+        ss << "------- " << owner->fullName() << ": " << val << " -------\n";
     }
     std::cout << ss.str();
     DBG_MSG << ss.str();
