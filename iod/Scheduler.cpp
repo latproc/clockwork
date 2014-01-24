@@ -45,6 +45,11 @@ bool ScheduledItem::operator<(const ScheduledItem& other) const {
     return false;
 }
 
+bool ScheduledItem::operator>=(const ScheduledItem& other) const {
+    if (delivery_time.tv_sec > other.delivery_time.tv_sec) return true;
+    if (delivery_time.tv_sec == other.delivery_time.tv_sec) return delivery_time.tv_usec >= other.delivery_time.tv_usec;
+    return false;
+}
 
 void PriorityQueue::push(ScheduledItem *item) {
 	std::list<ScheduledItem*>::iterator iter = queue.begin();
@@ -83,16 +88,22 @@ Scheduler::Scheduler() {
 	next_time.tv_usec = 0;
 }
 
-void Scheduler::add(ScheduledItem*item) {
-    DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
-	DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
-	items.push(item);
-	next_time = next()->delivery_time;
-	DBG_SCHEDULER << "After schedule::add() " << *this << "\n";
+bool CompareSheduledItems::operator()(const ScheduledItem *a, const ScheduledItem *b) const {
+    bool result = (*a) >= (*b);
+    return result;
 }
 
+void Scheduler::add(ScheduledItem*item) {
+    DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
+	//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
+	items.push(item);
+	next_time = next()->delivery_time;
+	//DBG_SCHEDULER << "After schedule::add() " << *this << "\n";
+}
+
+/*
 std::ostream &Scheduler::operator<<(std::ostream &out) const  {
-    std::list<ScheduledItem*>::const_iterator iter = items.queue.begin();
+    std::list<ScheduledItem*>::const_iterator iter = items.begin();
 	while (iter != items.queue.end()) {
         ScheduledItem *item = *iter++;
         struct timeval now;
@@ -111,6 +122,7 @@ std::ostream &Scheduler::operator<<(std::ostream &out) const  {
 std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
     return m.operator<<(out);
 }
+ */
 
 bool Scheduler::ready() {
 	if (empty()) return false;
@@ -131,7 +143,7 @@ bool Scheduler::ready() {
 void Scheduler::idle() {
 	while ( ready()) {
 		ScheduledItem *item = next();
-		DBG_SCHEDULER << "Scheduled item " << (*item) << " is ready. (" << items.size() << " items)\n"<< *this;
+		DBG_SCHEDULER << "Scheduled item " << (*item) << " is ready. \n"; //(" << items.size() << " items)\n"<< *this;
 		pop();
 		next_time.tv_sec = 0;
 		if (item->package) {

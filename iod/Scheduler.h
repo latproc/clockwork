@@ -12,7 +12,7 @@
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
-
+/Users/martin/projects/latproc/github/latproc/iod/IfCommandAction.h
   You should have received a copy of the GNU General Public License
   along with Latproc; if not, write to the Free Software
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -25,6 +25,8 @@
 #include <string>
 #include <list>
 #include <sys/time.h>
+#include <queue>
+#include <vector>
 
 #include "Action.h"
 #include "Message.h"
@@ -36,12 +38,14 @@ struct ScheduledItem {
 	struct timeval delivery_time;
 	// this operator produces a reverse ordering because the standard priority queue is a max value queue.
 	bool operator<(const ScheduledItem& other) const;
+	bool operator>=(const ScheduledItem& other) const;
 	ScheduledItem(long when, Package *p);
 	ScheduledItem(long when, Action *a);
     std::ostream &operator <<(std::ostream &out) const;
 };
 
 std::ostream &operator <<(std::ostream &out, const ScheduledItem &item);
+
 
 class PriorityQueue {
 public:
@@ -59,10 +63,16 @@ protected:
 	PriorityQueue &operator=(const PriorityQueue& other);
 };
 
+
+class CompareSheduledItems {
+public:
+    bool operator()(const ScheduledItem *a, const ScheduledItem *b) const;
+};
+
 class Scheduler {
 public:
 	static Scheduler *instance() { if (!instance_) instance_ = new Scheduler(); return instance_; }
-    std::ostream &operator<<(std::ostream &out) const;
+    //std::ostream &operator<<(std::ostream &out) const;
 	void add(ScheduledItem*);
 	ScheduledItem *next() const { if (items.empty()) return 0; else return items.top(); }
 	void pop() { items.pop(); }
@@ -75,10 +85,11 @@ protected:
     Scheduler();
 	~Scheduler() {}
 	static Scheduler *instance_;
-	PriorityQueue items;
+    std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
+    //PriorityQueue items;
 	struct timeval next_time;
 };
 
-std::ostream &operator<<(std::ostream &out, const Scheduler &m);
+//std::ostream &operator<<(std::ostream &out, const Scheduler &m);
 
 #endif
