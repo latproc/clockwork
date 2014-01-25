@@ -93,7 +93,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                     do not expect to receive events
                 */
                 if (mi->transitions.size()) {
-				   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), State(params[3].asString().c_str()) );
+				   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), params[3] );
 				   mi->active_actions.push_front(ssat.factory(mi)); // execute this state change once all other actions are complete
                 }
                 else {
@@ -779,14 +779,23 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 
     bool IODCommandModbusRefresh::run(std::vector<Value> &params) {
 		std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
-		std::stringstream out;
+		cJSON *result = cJSON_CreateArray();
 		while (m_iter != MachineInstance::end()) {
-			(*m_iter)->refreshModbus(out);
+			(*m_iter)->refreshModbus(result);
 			m_iter++;
 		}
-		std::string s(out.str());
-		result_str = s;
-		return true;
+		//std::string s(out.str());
+        if (result) {
+            char *r_str = cJSON_Print(result);
+            result_str = r_str;
+            free(r_str);
+            cJSON_Delete(result);
+            return true;
+        }
+        else {
+            error_str = "Failed to load modbus initial data";
+            return false;
+        }
 	}
 
 

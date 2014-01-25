@@ -782,10 +782,11 @@ action  {
 ;
 
 action:
-SET SYMBOL TO SYMBOL  { 
+SET SYMBOL TO value  {
     DBG_PARSER << "set action: set " << $2 << " to " << $4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetStateActionTemplate($2, $4);
+    current_action = new SetStateActionTemplate($2, *$4);
+    delete $4;
 }
 | WAIT value /* wait for timer */ { 
     DBG_PARSER << " wait action: wait " << *$2 << "\n"; 

@@ -43,6 +43,7 @@
 #include "dynamic_value.h"
 #include "options.h"
 #include "MessageLog.h"
+#include "cJSON.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -1407,7 +1408,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					}
 					if (!found) {
 						DBG_M_STATECHANGES << "no stable state condition test for " << t.dest.getName() << " pushing state change\n";
-						MoveStateActionTemplate msat("SELF", t.dest);
+						MoveStateActionTemplate msat("SELF", t.dest.getName());
 						MoveStateAction *msa = new MoveStateAction(this, msat);
 						DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus() << ") " << *msa << "\n";
 						this->push(msa);
@@ -1469,7 +1470,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
    	 		const Transition &t = *iter++;
    	 		if ( (t.trigger.getText() == m.getText() || t.trigger.getText() == short_name) && current_state == t.source) {
 				DBG_M_MESSAGING << _name << " received message" << m.getText() << "; pushing state change\n";
-				MoveStateActionTemplate msat("SELF", t.dest);
+				MoveStateActionTemplate msat("SELF", t.dest.getName());
 				MoveStateAction *msa = new MoveStateAction(this, msat);
 				DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus() << ") " << *msa << "\n";
 				return msa;
@@ -2252,6 +2253,7 @@ const Value &MachineInstance::getValue(std::string property) {
 			error_messages.push_back(ss.str());
 			++num_errors;
 			DBG_MSG << ss.str() << "\n";
+            MessageLog::instance()->add(ss.str().c_str());
 			return SymbolTable::Null;
 		}
 	}
@@ -2286,9 +2288,10 @@ const Value &MachineInstance::getValue(std::string property) {
 			}
 			else {
 				resetTemporaryStringStream();
-				ss << _name << " failed to find the machine for global: " << property;
+				ss << fullName() << " failed to find the machine for global: " << property;
 				DBG_PROPERTIES << ss.str() << "\n";
 				error_messages.push_back(ss.str());
+                MessageLog::instance()->add(ss.str().c_str());
 				++num_errors;
 			}
 		}
@@ -2333,34 +2336,27 @@ const Value &MachineInstance::getValue(std::string property) {
 		}
 		
 	}
-	//is this a state?
-	bool found = false;
-    if (state_machine) {
-        BOOST_FOREACH(State &s, state_machine->states) {
-            if (s.getName() == property) {
-                found = true;
-                break;
-            }
-        }
-    }
-//	if (!found) {
-//		std::stringstream ss;
-//		ss << _name << " could not find property " << property;
-//		error_messages.push_back(ss.str());
-//		++num_errors;
-//	}
 	return SymbolTable::Null;
 }
 
 bool MachineInstance::hasState(const std::string &state_name) const {
-	//is this a state?
+	//is state_name a valid state?
     if (state_machine) {
-        BOOST_FOREACH(State &s, state_machine->states) {
+        std::list<State>::const_iterator iter = state_machine->states.begin();
+        while (iter != state_machine->states.end()) {
+            const State &s = *iter++;
             if (s.getName() == state_name) {
                 return true;
             }
         }
     }
+#if 0
+    else {
+        char buf[100];
+        snprintf(buf,100,"%s does not have a state; %s", fullName().c_str(), state_name.c_str());
+       MessageLog::instance()->add(buf);
+    }
+#endif
     return false;
 }
 
@@ -2466,15 +2462,17 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 					case ModbusAddress::coil:
 					case ModbusAddress::input_register:
 					case ModbusAddress::holding_register: {
-						long intVal;
-						if (ma.length() == 1 || ma.length() == 2) {
-							if (new_value.asInteger(intVal)) {
-								ma.update((int)intVal);
-							}	
-							else {
-								DBG_M_MODBUS << property_name << " does not have an integer value\n";
-							}
-						}
+                        if (new_value.kind == Value::t_integer) {
+                            long intVal;
+                            if (ma.length() == 1 || ma.length() == 2) {
+                                if (new_value.asInteger(intVal)) {
+                                    ma.update((int)intVal);
+                                }	
+                                else {
+                                    DBG_M_MODBUS << property_name << " does not have an integer value\n";
+                                }
+                            }
+                        }
 						else if (new_value.kind == Value::t_string || new_value.kind == Value::t_symbol){
 							ma.update(new_value.sValue);
 						}
@@ -2509,7 +2507,7 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 	}
 }
 
-void MachineInstance::refreshModbus(std::ostream &out) {
+void MachineInstance::refreshModbus(cJSON *json_array) {
 
 	std::map<int, std::string>::iterator iter = modbus_addresses.begin();
 	while (iter != modbus_addresses.end()) {
@@ -2528,45 +2526,62 @@ void MachineInstance::refreshModbus(std::ostream &out) {
 			NB_MSG << full_name << " index ("<<group<<"," <<addr<<")" << (*iter).first << " should be " << (*iter).second << "\n";
 		}
 		int length = info.length();
-		std::string value("0");
+		Value value(0);
 		switch(info.getSource()) {
 			case ModbusAddress::machine:
 				if (_type == "VARIABLE" || _type=="CONSTANT") {
-					value = properties.lookup("VALUE").asString();
+					value = properties.lookup("VALUE");
 				}
 				else if (current_state.getName() == "on")
-					value = "1";
+					value = 1;
 				else 
-					value = "0";
+					value = 0;
 				break;
 			case ModbusAddress::state:
-				value =  (_name + "." + current_state.getName() == (*iter).second) ? "1" : "0";
+				value =  (_name + "." + current_state.getName() == (*iter).second) ? 1 : 0;
 				break;
 			case ModbusAddress::command:
-				value = "0";
+				value = 0;
 				break;
 			case ModbusAddress::property:
 				if (properties.exists( short_name.c_str() ))
-					value = properties.lookup( short_name.c_str() ).asString();
+					value = properties.lookup( short_name.c_str() );
 				else {
 					MachineInstance *mi = lookup( (*iter).second );
 					if (mi && (mi->_type == "VARIABLE" || mi->_type == "CONSTANT") ) {
-						const Value &x = mi->getValue("VALUE");
-						value = x.asString();
+						value = mi->getValue("VALUE");
 					}
 					else {
-						NB_MSG << "Error: " << full_name <<" has not been initialised\n";
+                        std::stringstream ss; ss << "Error: " << full_name <<" has not been initialised\n";
+                        char *msg = strdup(ss.str().c_str());
+                        MessageLog::instance()->add(msg);
+                        NB_MSG << msg;
+                        free(msg);
 					}
 				}
 				break;
 			case ModbusAddress::unknown:
 				value = "UNKNOWN";
 		}
-		if (owner)
-			out << group << " " << addr << " " << owner->getName() << "." << full_name << " " << length << " " << value << "\n";
-		else
-			out << group << " " << addr << " " << full_name << " " << length << " " << value << "\n";
-		
+        cJSON *item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateNumber(group));
+        cJSON_AddItemToArray(item, cJSON_CreateNumber(addr));
+		if (owner) {
+            std::string name(owner->getName());
+            name += ".";
+            name += full_name;
+            cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
+        }
+		else {
+            cJSON_AddItemToArray(item, cJSON_CreateString(full_name.c_str()));
+			//out << group << " " << addr << " " << full_name << " " << length << " " << value <<"\n";
+		}
+        cJSON_AddItemToArray(item, cJSON_CreateNumber(length));
+        if (value.kind == Value::t_string || value.kind == Value::t_symbol)
+            cJSON_AddItemToArray(item, cJSON_CreateString(value.sValue.c_str()));
+        else
+            cJSON_AddItemToArray(item, cJSON_CreateNumber(value.iValue));
+        cJSON_AddItemToArray(json_array, item);
 		iter++;
 	}
 }
@@ -2854,11 +2869,11 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 			//assert(addr.getOffset() == 0);
 
 			if (new_value) {
-				SetStateActionTemplate ssat(CStringHolder("SELF"), State("on") );
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "on" );
 				active_actions.push_front(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			else {
-				SetStateActionTemplate ssat(CStringHolder("SELF"), State("off") );
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "off" );
 				active_actions.push_front(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			return;

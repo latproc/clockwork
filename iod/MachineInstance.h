@@ -198,6 +198,7 @@ struct HardwareAddress {
 
 class IOComponent;
 class MQTTModule;
+struct cJSON;
 
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
 public:
@@ -287,7 +288,7 @@ public:
 	//static void updateAllTimers(PollType which);
 	//void updateTimer(long dt);
     static void checkStableStates();
-	static int countAutomaticMachines() { return automatic_machines.size(); }
+	static size_t countAutomaticMachines() { return automatic_machines.size(); }
 	static void displayAutomaticMachines();
 	static void displayAll();
     
@@ -329,7 +330,7 @@ public:
 	std::map<int, std::string>modbus_addresses;
 	void setupModbusInterface();
 	void setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, int size);
-	void refreshModbus(std::ostream &out); // update all exported values
+	void refreshModbus(cJSON *json_array); // update all exported values
 	int getModbusValue(ModbusAddress &addr, unsigned int offset, int len);
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value);
 	void exportModbusMapping(std::ostream &out);

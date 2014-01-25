@@ -39,11 +39,42 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
     //std::map<std::string, MachineInstance*>::iterator pos = machines.find(target.get());
     //if (pos != machines.end()) {
     owner->start(this);
+    
+    if (new_state.kind != Value::t_symbol) {
+        std::stringstream ss;
+        ss << owner->fullName() << " " << new_state << " must be a symbol" << std::flush;
+        error_str = strdup(ss.str().c_str());
+        status = Failed;
+        owner->stop(this);
+        return status; 
+    }
+    
     machine = owner->lookup(target.get());
     if (machine) {
 		if (machine->getName() != target.get()) {
 	    	DBG_M_ACTIONS << owner->getName() << " lookup for " << target.get() << " returned " << machine->getName() << "\n"; 
 		}
+        State value(new_state.sValue.c_str());
+        if (!machine->hasState(new_state.sValue)) {
+            const Value &deref = machine->getValue(new_state.sValue.c_str());
+            if (deref.kind != Value::t_symbol) {
+                std::stringstream ss;
+                ss << owner->fullName() << " " << deref << " must be a symbol" << std::flush;
+                error_str = strdup(ss.str().c_str());
+                status = Failed;
+                owner->stop(this);
+                return status; 
+            }
+            else if (!machine->hasState(deref.sValue.c_str())){
+                std::stringstream ss;
+                ss << owner->fullName() << " does not have a state " << new_state << std::flush;
+                error_str = strdup(ss.str().c_str());
+                status = Failed;
+                owner->stop(this);
+                return status;
+            }
+            value = deref.sValue.c_str();
+        }
         //machine = (*pos).second;
 		if (machine->io_interface) {
             std::string txt(machine->io_interface->getStateString());

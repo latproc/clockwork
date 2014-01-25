@@ -31,24 +31,25 @@
 class MachineInstance;
 
 struct SetStateActionTemplate : public ActionTemplate {
-    SetStateActionTemplate(CStringHolder targ, State newstate) : target(targ), value(newstate) { }
+    SetStateActionTemplate(CStringHolder targ, Value newstate) : target(targ), new_state(newstate) { }
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
-        return out << target.get() << " " << value.getName();
+        return out << target.get() << " " << new_state;
     }
     CStringHolder target;
-    State value;
+    Value new_state;
     std::string trigger_event;
 	Condition condition;
 };
 
 struct SetStateAction : public Action {
     SetStateAction(MachineInstance *mi, SetStateActionTemplate &t) 
-	    : Action(mi), target(t.target), value(t.value), machine(0) { }
+	    : Action(mi), target(t.target), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0) { }
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
     CStringHolder target;
+    Value new_state; // new state as given by the program (may be a property name)
     State value;
     MachineInstance *machine;
 	Condition condition;
@@ -57,7 +58,7 @@ protected:
 };
 
 struct MoveStateActionTemplate : public SetStateActionTemplate {
-    MoveStateActionTemplate(CStringHolder targ, State newstate) : SetStateActionTemplate(targ, newstate) { }
+    MoveStateActionTemplate(CStringHolder targ, Value newstate) : SetStateActionTemplate(targ, newstate) { }
     virtual Action *factory(MachineInstance *mi);
 };
 
