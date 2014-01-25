@@ -351,15 +351,7 @@ private:
     bool *to_clear;
 };
 
-const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
-    if (reevaluate) {
-        p->flushCache();
-    }
-    ClearFlagOnReturn(&p->needs_reevaluation);
-	// return the cached pointer to the value if we have one
-	if (p->cached_entry)
-        return p->cached_entry;
-
+const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
 	Value *v = &p->entry;
 	p->clearError();
 	if (v->kind == Value::t_symbol) {
@@ -446,6 +438,17 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluat
         return &SymbolTable::False;
     }
 	return v;
+}
+
+const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+    if (reevaluate) {
+        p->flushCache();
+    }
+    ClearFlagOnReturn(&p->needs_reevaluation);
+	// return the cached pointer to the value if we have one
+	if (p->cached_entry)
+        return p->cached_entry;
+    return resolveCacheMiss(p, m, left, reevaluate);
 }
 
 #if 0
