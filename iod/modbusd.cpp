@@ -88,6 +88,7 @@ void activate_address(std::string& addr_str) {
 }
 
 void insert(int group, int addr, const char *value, int len) {
+	std::cout << "g:"<<group<<addr<<" \""<<value<<"\" " << len << "\n";
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
 	std::string addr_str(buf);
@@ -100,6 +101,7 @@ void insert(int group, int addr, const char *value, int len) {
 	uint16_t as_int=0;
 	const uint8_t *p = (uint8_t *)value;
 	for (int i=0; i<len/2; ++i) {
+		as_int = 0;
 		for (int j=0; j<2; ++j) {
 			as_int += (as_int<<8)+*p++;
 		}
@@ -107,6 +109,7 @@ void insert(int group, int addr, const char *value, int len) {
 	}
 }
 void insert(int group, int addr, int value, int len) {
+	std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
 	std::string addr_str(buf);
@@ -416,10 +419,10 @@ struct ModbusServerThread {
 								<< "\n";
 						}
 						else if (fc == 3) {
-							if (debug) std::cout << "connection " << conn << " got rw_register " << addr << "\n";
+							/*if (debug) */std::cout << "connection " << conn << " got rw_register " << addr << "\n";
 						}
 						else if (fc == 4) {
-							if (debug) std::cout << "connection " << conn << " got register " << addr << "\n";
+							/*if (debug) */std::cout << "connection " << conn << " got register " << addr << "\n";
 						}
 						else if (fc == 15 || fc == 16) {
 							if (fc == 15) {
@@ -541,6 +544,7 @@ void loadData(const char *initial_settings) {
 					Value name = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 2), 0);
 					Value len = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 3), 0);
 					Value value = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
+					if (debug) std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
 					if (value.kind == Value::t_string) 
 						insert(group.iValue, addr.iValue, value.asString().c_str(), len.iValue);
 					else
@@ -589,7 +593,8 @@ int main(int argc, const char * argv[]) {
 	("help", "produce help message")
 	("debug","enable debug")
 	("host", "remote host (localhost)")
-	("port", "clockwork port (5558)")
+	("cwout", "clockwork outgoing port (5555)")
+	("cwin", "clockwork incoming port (5558)")
 	;
 	po::variables_map vm;   
 	po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -598,14 +603,16 @@ int main(int argc, const char * argv[]) {
 		std::cout << desc << "\n";
 		return 1;
 	}
-	int port = 5558;
+	int cw_out = 5555;
+	int cw_in = 5558;
 	std::string host("localhost");
 	// backward compatibility
 	if (argc > 2 && strcmp(argv[1],"-p") == 0) {
-		port = strtol(argv[2], 0, 0);
+		cw_in = strtol(argv[2], 0, 0);
 		std::cerr << "NOTICE: the -p option is deprecated, please use --port\n";
 	}
-	if (vm.count("port")) port = vm["port"].as<int>();
+	if (vm.count("cwout")) cw_out = vm["cwout"].as<int>();
+	if (vm.count("cwin")) cw_in = vm["cwin"].as<int>();
 	if (vm.count("host")) host = vm["host"].as<std::string>();
 	
 
@@ -621,14 +628,8 @@ int main(int argc, const char * argv[]) {
 		modbus_context = 0;
 		return 1;
 	}
-	modbus_context = modbus_new_tcp("localhost", 1502);
-	if (!modbus_context) {
-		std::cerr << "Error creating a libmodbus TCP interface\n";
-		return 1;
-	}
-
 	std::cout << "-------- Starting Command Interface ---------\n" << std::flush;	
-	g_iodcmd = MessagingInterface::create(host, port);
+	g_iodcmd = MessagingInterface::create(host, cw_out);
 	
 	// initialise memory
 	{
@@ -647,6 +648,12 @@ int main(int argc, const char * argv[]) {
 		} while (!initial_settings);
 	}
 
+	modbus_context = modbus_new_tcp("localhost", 1502);
+	if (!modbus_context) {
+		std::cerr << "Error creating a libmodbus TCP interface\n";
+		return 1;
+	}
+
 	//std::cout << "-------- Starting to listen to IOD ---------\n" << std::flush;	
 	//IODInterfaceThread iod_interface;
 	//g_iod_interface = &iod_interface;
@@ -661,11 +668,11 @@ int main(int argc, const char * argv[]) {
 	
     try {
         
-		std::cout << "Listening on port " << port << "\n";
+		std::cout << "Listening on port " << cw_in << "\n";
         // client
         int res;
 		std::stringstream ss;
-		ss << "tcp://localhost:" << port;
+		ss << "tcp://localhost:" << cw_in;
         zmq::context_t context (1);
         zmq::socket_t subscriber (context, ZMQ_SUB);
         res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
@@ -679,6 +686,7 @@ int main(int argc, const char * argv[]) {
            	char *data = (char *)malloc(len+1);
            	memcpy(data, update.data(), len);
            	data[len] = 0;
+			std::cout << "recieved: "<<data<<" from clockwork\n";
 
             std::list<Value> parts;
             int count = 0;
