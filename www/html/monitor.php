@@ -26,6 +26,7 @@
  */
 
 define("REQUEST_TIMEOUT", 100);
+define("DSN", "tcp://localhost:5555");
 
 if ((!isset($user))) {
 	// not logged in, show a link to the login page
@@ -123,7 +124,8 @@ function zmqrequest($client, $request) {
 	$poll->add($client, ZMQ::POLL_IN);
 	$events = $poll->poll($read, $write, REQUEST_TIMEOUT);
 	if ($events > 0) {
-		return $client->recv();
+		$result = $client->recv();
+		return $result;
 	}
 	return false;
 }
@@ -138,9 +140,9 @@ $page_body='';
 
 $context = new ZMQContext();
 $requester = new ZMQSocket($context, ZMQ::SOCKET_REQ);
-$requester->connect("tcp://localhost:5555");
-$requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
-$requester->setSockOpt(ZMQ::SOCKOPT_BACKLOG, 1);
+$requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 5);
+$requester->connect('tcp://localhost:5555');
+$requester->setSockOpt(ZMQ::SOCKOPT_BACKLOG, 0);
 
 if (isset($_REQUEST["messages"])) {
 	$reply = zmqrequest($requester,'MESSAGES ' . $_REQUEST["messages"]);
