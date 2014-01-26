@@ -23,7 +23,7 @@
  * error messages.
  */
 
-define("REQUEST_TIMEOUT", 1000);
+define("REQUEST_TIMEOUT", 100);
 $debug_messages = "";
 $use_ajax = true; // the 'false' version of this may not actually work
 

@@ -25,7 +25,7 @@
  *  displays the result in user-defined tabs, along with control buttons
  */
 
-define("REQUEST_TIMEOUT", 1000);
+define("REQUEST_TIMEOUT", 100);
 
 if ((!isset($user))) {
 	// not logged in, show a link to the login page
@@ -125,7 +125,7 @@ function zmqrequest($client, $request) {
 	if ($events > 0) {
 		return $client->recv();
 	}
-	return "[]";
+	return false;
 }
 
 
