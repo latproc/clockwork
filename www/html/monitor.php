@@ -143,50 +143,36 @@ $requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
 $requester->setSockOpt(ZMQ::SOCKOPT_BACKLOG, 1);
 
 if (isset($_REQUEST["messages"])) {
-	//$requester->send('MESSAGES ' . $_REQUEST["messages"]);
-	zmqrequest($requester,'MESSAGES ' . $_REQUEST["messages"]);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'MESSAGES ' . $_REQUEST["messages"]);
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["quit"])) {
-	//$requester->send('QUIT');
-	zmqrequest($requester,'QUIT');
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'QUIT');
 	$debug_messages = $reply;
 }
 if (isset($_REQUEST["send"])) {
-	//$requester->send('SEND ' . $_REQUEST["send"]);
-	zmqrequest($requester,'SEND ' . $_REQUEST["send"]);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'SEND ' . $_REQUEST["send"]);
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["enable"])) {
-	//$requester->send('ENABLE ' . $_REQUEST["enable"]);
-	zmqrequest($requester,'ENABLE ' . $_REQUEST["enable"]);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'ENABLE ' . $_REQUEST["enable"]);
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["disable"])) {
-	//$requester->send('DISABLE ' . $_REQUEST["disable"]);
-	zmqrequest($requester,'DISABLE ' . $_REQUEST["disable"]);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'DISABLE ' . $_REQUEST["disable"]);
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["setproperty"])) {
-	//$requester->send('SET ' . $_REQUEST["setproperty"]);
-	zmqrequest($requester,'SET ' . $_REQUEST["setproperty"]);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'SET ' . $_REQUEST["setproperty"]);
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["describe"])) {
-	//$requester->send('DESCRIBE ' . $_REQUEST["describe"] . " JSON");
-	zmqrequest($requester,'DESCRIBE ' . $_REQUEST["describe"] . " JSON");
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'DESCRIBE ' . $_REQUEST["describe"] . " JSON");
 	echo $reply;
 	return;
 }
@@ -201,9 +187,7 @@ if (isset($_REQUEST["list"]) && isset($_REQUEST["tab"])) {
 	$current_tab = $_REQUEST["tab"];
 }
 
-//$requester->send('LIST JSON' . ' ' . $current_tab);
-zmqrequest($requester,'LIST JSON' . ' ' . $current_tab);
-$reply = $requester->recv();
+$reply = zmqrequest($requester,'LIST JSON' . ' ' . $current_tab);
 $config_entries_json = $reply;
 $config_entries = json_decode($reply);
 $res = json_last_error();
@@ -230,8 +214,7 @@ if (isset($_REQUEST["list"])) {
 	obtain the master information, if available. This is general
 	status information and is displayed on a 'Master' tab
  */
-$requester->send('MASTER');
-$reply = $requester->recv();
+$reply = zmqrequest($requester,'MASTER');
 $master = json_decode($reply);
 $res = json_last_error();
 if (json_last_error() != JSON_ERROR_NONE) {
@@ -244,8 +227,7 @@ if (json_last_error() != JSON_ERROR_NONE) {
 	list in a 'Modules' tab, to help link the configured machines to the
 	devices actually available on the bus.
  */
-$requester->send('SLAVES');
-$reply = $requester->recv();
+$reply = zmqrequest($requester,'SLAVES');
 $slaves = json_decode($reply);
 $res = json_last_error();
 if (json_last_error() != JSON_ERROR_NONE) {
@@ -268,8 +250,7 @@ if (isset($_REQUEST["anchor"])) $anchor='#'. $_REQUEST["anchor"];
  */
 if (isset($_REQUEST["query"])) {
 	$q = $_REQUEST["query"];
-	$requester->send('EC ' . $q);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'EC ' . $q);
 	$debug_messages .= "EC " . $q . ": " . $reply . "\n";
 	usleep(100000); // TBD is this necessary any more?
 }
@@ -280,8 +261,7 @@ if (isset($_REQUEST["query"])) {
 
 if (isset($_REQUEST["toggle"])) {
 	$point = $_REQUEST["toggle"];
-	$requester->send('TOGGLE ' . $point);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'TOGGLE ' . $point);
 	$debug_messages .= "TOGGLE " . $point . ": " . $reply . "\n";
 	usleep(100000);
 	echo "$reply"; // ajax version
