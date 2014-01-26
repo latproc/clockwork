@@ -23,11 +23,24 @@
  * error messages.
  */
 
-
+define("REQUEST_TIMEOUT", 1000);
 $debug_messages = "";
 $use_ajax = true; // the 'false' version of this may not actually work
 
 $banner = "";
+
+// ZMQ Poll for request with timeout
+function zmqrequest($client, $request) {
+  $read = $write = array();
+  $client->send($request);
+  $poll = new ZMQPoll();
+  $poll->add($client, ZMQ::POLL_IN);
+  $events = $poll->poll($read, $write, REQUEST_TIMEOUT);
+  if ($events > 0) {
+    return $client->recv();
+  }
+  return "[]";
+}
 
 // static image generator
 function image_html($name, $filename, $item_id = false) {
@@ -96,8 +109,7 @@ $requester->connect("tcp://localhost:5555");
 $current_tab = "";
 if (isset($_REQUEST["tab"]))
 	$current_tab = " " . $_REQUEST["tab"];
-$requester->send('LIST JSON' . $current_tab);
-$reply = $requester->recv();
+$reply = zmqrequest($requester, 'LIST JSON' . $current_tab);
 $config_entries_json = $reply;
 $config_entries = json_decode($reply);
 $res = json_last_error();
@@ -118,13 +130,11 @@ if (isset($_REQUEST["list"])) {
 }
 
 if (isset($_REQUEST["quit"])) {
-	$requester->send('QUIT');
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'QUIT');
 	$debug_messages = $reply;
 }
 if (isset($_REQUEST["describe"])) {
-	$requester->send('DESCRIBE ' . $_REQUEST["describe"] . " JSON");
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'DESCRIBE ' . $_REQUEST["describe"] . " JSON");
 	echo $reply;
 	return;
 }
@@ -135,8 +145,7 @@ if (isset($_REQUEST["describe"])) {
 
 if (isset($_REQUEST["toggle"])) {
 	$point = $_REQUEST["toggle"];
-	$requester->send('TOGGLE ' . $point);
-	$reply = $requester->recv();
+	$reply = zmqrequest($requester,'TOGGLE ' . $point);
 	$debug_messages .= "TOGGLE " . $point . ": " . $reply . "\n";
 	usleep(100000);
 	echo "$reply"; // ajax version
@@ -145,7 +154,7 @@ if (isset($_REQUEST["toggle"])) {
 
 if (isset($_REQUEST["property"])) {
 	$point = $_REQUEST["property"];
-	$requester->send('PROPERTY ' . $point);
+	$reply = zmqrequest($requester,'PROPERTY ' . $point);
 	$reply = $requester->recv();
 	$debug_messages .= "PROPERTY " . $point . ": " . $reply . "\n";
 	usleep(100000);
