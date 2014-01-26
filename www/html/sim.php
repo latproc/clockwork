@@ -75,6 +75,7 @@ print <<<EOD
 	</head>
 	<body>
 		<script src="js/three.js"></script>
+		<script src="js/OrbitControls.js"></script>
 		<script>
 			function makeCube(x,y,z,c) {
 	            var geometry = new THREE.CubeGeometry(x,y,z);
@@ -115,25 +116,24 @@ print <<<EOD
 			}
 		
 			scene = new THREE.Scene();
-            var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 20000 );
+      var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 20000 );
 			elements = [];
 
-            var renderer = new THREE.WebGLRenderer();
-            renderer.setSize( window.innerWidth, window.innerHeight );
-            document.body.appendChild( renderer.domElement );
+      var renderer = new THREE.WebGLRenderer();
+      renderer.setSize( window.innerWidth, window.innerHeight );
+      document.body.appendChild( renderer.domElement );
 
 			camera.position.y = 1500;
 			camera.position.x = 7000;
-            camera.position.z = -2000;
+      camera.position.z = -2000;
 			camera.lookAt(new THREE.Vector3( -3000, 0, 0 ));
-            
-            function render() {
-            	requestAnimationFrame(render);
-                //cube.rotation.x += 0.01;
-                //cube.rotation.y += 0.01;
-            	renderer.render(scene, camera);
-            }
-            render();		
+      controls = new THREE.OrbitControls(camera, renderer.domElement);      
+      function render() {
+       	requestAnimationFrame(render);
+       	renderer.render(scene, camera);
+				controls.update();
+      }
+      render();		
 			</script>
 			<div class="info"></div>
 	</body>
