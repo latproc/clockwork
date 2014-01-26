@@ -195,14 +195,14 @@ void IODCommandThread::operator()() {
                 else {
                     command = new IODCommandUnknown;
                 }
-            }
-            if ((*command)(params)) {
-                //std::cout << command->result() << "\n";
-                sendMessage(socket, command->result());
-            }
-            else {
-                NB_MSG << command->error() << "\n";
-                sendMessage(socket, command->error());
+                if ((*command)(params)) {
+                    //std::cout << command->result() << "\n";
+                    sendMessage(socket, command->result());
+                }
+                else {
+                    NB_MSG << command->error() << "\n";
+                    sendMessage(socket, command->error());
+                }
             }
             delete command;
             
