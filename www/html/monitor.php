@@ -25,6 +25,7 @@
  *  displays the result in user-defined tabs, along with control buttons
  */
 
+define("REQUEST_TIMEOUT", 1000);
 
 if ((!isset($user))) {
 	// not logged in, show a link to the login page
@@ -115,6 +116,19 @@ function get_slaves_options($slaves, $selected=false) {
 	return $slaves_options;
 }
 
+function zmqrequest($client, $request) {
+	$read = $write = array();
+	$client->send($request);
+	$poll = new ZMQPoll();
+	$poll->add($client, ZMQ::POLL_IN);
+	$events = $poll->poll($read, $write, REQUEST_TIMEOUT);
+	if ($events > 0) {
+		return $client->recv();
+	}
+	return "[]";
+}
+
+
 //             Program starts here 
 
 //         PART I - collect data
@@ -129,42 +143,49 @@ $requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 0);
 $requester->setSockOpt(ZMQ::SOCKOPT_BACKLOG, 1);
 
 if (isset($_REQUEST["messages"])) {
-	$requester->send('MESSAGES ' . $_REQUEST["messages"]);
+	//$requester->send('MESSAGES ' . $_REQUEST["messages"]);
+	zmqrequest($requester,'MESSAGES ' . $_REQUEST["messages"]);
 	$reply = $requester->recv();
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["quit"])) {
-	$requester->send('QUIT');
+	//$requester->send('QUIT');
+	zmqrequest($requester,'QUIT');
 	$reply = $requester->recv();
 	$debug_messages = $reply;
 }
 if (isset($_REQUEST["send"])) {
-	$requester->send('SEND ' . $_REQUEST["send"]);
+	//$requester->send('SEND ' . $_REQUEST["send"]);
+	zmqrequest($requester,'SEND ' . $_REQUEST["send"]);
 	$reply = $requester->recv();
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["enable"])) {
-	$requester->send('ENABLE ' . $_REQUEST["enable"]);
+	//$requester->send('ENABLE ' . $_REQUEST["enable"]);
+	zmqrequest($requester,'ENABLE ' . $_REQUEST["enable"]);
 	$reply = $requester->recv();
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["disable"])) {
-	$requester->send('DISABLE ' . $_REQUEST["disable"]);
+	//$requester->send('DISABLE ' . $_REQUEST["disable"]);
+	zmqrequest($requester,'DISABLE ' . $_REQUEST["disable"]);
 	$reply = $requester->recv();
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["setproperty"])) {
-	$requester->send('SET ' . $_REQUEST["setproperty"]);
+	//$requester->send('SET ' . $_REQUEST["setproperty"]);
+	zmqrequest($requester,'SET ' . $_REQUEST["setproperty"]);
 	$reply = $requester->recv();
 	echo $reply;
 	return;
 }
 if (isset($_REQUEST["describe"])) {
-	$requester->send('DESCRIBE ' . $_REQUEST["describe"] . " JSON");
+	//$requester->send('DESCRIBE ' . $_REQUEST["describe"] . " JSON");
+	zmqrequest($requester,'DESCRIBE ' . $_REQUEST["describe"] . " JSON");
 	$reply = $requester->recv();
 	echo $reply;
 	return;
@@ -180,7 +201,8 @@ if (isset($_REQUEST["list"]) && isset($_REQUEST["tab"])) {
 	$current_tab = $_REQUEST["tab"];
 }
 
-$requester->send('LIST JSON' . ' ' . $current_tab);
+//$requester->send('LIST JSON' . ' ' . $current_tab);
+zmqrequest($requester,'LIST JSON' . ' ' . $current_tab);
 $reply = $requester->recv();
 $config_entries_json = $reply;
 $config_entries = json_decode($reply);
