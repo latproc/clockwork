@@ -383,6 +383,7 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 				return p->cached_entry;
             }
             else if (m->hasState(v->sValue)) {
+                v->kind = Value::t_string; // this value seems to refer to a state so avoid the above tests from here on
                 return v;
             }
 			else {
