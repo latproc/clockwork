@@ -15,3 +15,11 @@ OtherTest MACHINE {
 o OtherTest;
 test CommandTest (tab:Test) o;
 
+RestrictedReceive MACHINE {
+
+	a INITIAL;
+	b STATE;
+
+	RECEIVE test WITHIN a { LOG "test received" }
+}
+restricted_receive RestrictedReceive;
