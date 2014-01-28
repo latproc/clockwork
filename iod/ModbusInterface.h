@@ -123,6 +123,7 @@ public:
 	virtual ~ModbusAddressable();
 	void updateModbus(int new_value);
 	virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value) {} // sent to the owner when the interface changes a value
+	virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value) {} // sent to the owner when the interface changes a value
 	virtual int getModbusValue(ModbusAddress &addr, unsigned int offset, int len) = 0;
 };
 

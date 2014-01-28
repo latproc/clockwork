@@ -48,6 +48,8 @@ Error MACHINE {
 }
 M_Error Error;
 
+RESPONSE VARIABLE(export:rw) "";
+
 Flash MACHINE (delay:500)output {
 
 	EXPORT STATES on,off,error,ready;

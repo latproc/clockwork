@@ -18,5 +18,6 @@
 4:01003	flash1.delay	Signed_int_32
 4:01005	flash1.a	Signed_int_16
 4:01006	flash1.b	Signed_int_16
+4:03000 RESPONSE	Signed_int_16
 4:02000 M_Error.cause	Signed_int_16
-1:01000	M_Error.error	Discrete
+1:01008	M_Error.error	Discrete

@@ -88,7 +88,7 @@ void activate_address(std::string& addr_str) {
 }
 
 void insert(int group, int addr, const char *value, int len) {
-	std::cout << "g:"<<group<<addr<<" \""<<value<<"\" " << len << "\n";
+	std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
 	std::string addr_str(buf);
@@ -98,15 +98,15 @@ void insert(int group, int addr, const char *value, int len) {
 		dest = &modbus_mapping->tab_input_registers[addr];
 	else if (group == 4)
 		dest = &modbus_mapping->tab_registers[addr];
-	uint16_t as_int=0;
-	const uint8_t *p = (uint8_t *)value;
-	for (int i=0; i<len/2; ++i) {
-		as_int = 0;
-		for (int j=0; j<2; ++j) {
-			as_int += (as_int<<8)+*p++;
-		}
-		*dest++ = as_int;
+	uint8_t *p = (uint8_t *)value;
+	std::cout << "string length: " << (int)(*p) << "\n";
+	uint8_t *q = (uint8_t*)dest;
+	int i=0;
+	for (i=0; i<len/2; ++i) {
+		*q++ = *(p+1);
+		*q++ = *p++; p++;
 	}
+	//while (i++<127) { *q++ = 0; }
 }
 void insert(int group, int addr, int value, int len) {
 	std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
@@ -156,112 +156,7 @@ struct IODCommandUnknown : public IODCommand {
         error_str = strdup(ss.str().c_str());
         return false;
     }
-};
-
-#if 0
-struct IODInterfaceThread {
-    void operator()() {
-		std::cout << "------------------ IOD Interface Thread Started -----------------\n";
-        context = new zmq::context_t(1);
-        if (!socket)
-			socket = new zmq::socket_t(*context, ZMQ_REQ);
-        socket->connect ("tcp://localhost:5555");
-		is_ready = true;
-    }
-    IODInterfaceThread() : done(false), is_ready(false), context(0), socket(0){
-	}
-	~IODInterfaceThread() { 
-		if (socket) delete socket;
-		socket = 0;
-		if (context) delete context;
-		context = 0;
-	}
-
-    void stop() { done = true; }
-	bool ready() { return is_ready; }
-    bool done;
-	bool is_ready;
-    zmq::context_t *context;
-    zmq::socket_t *socket;
-};
-#endif
-
-#if 0
-struct IODCommandInterface {
-	IODCommandInterface() : REQUEST_TIMEOUT(2000), REQUEST_RETRIES(3), context(0), socket(0){
-	    context = new zmq::context_t(1);
-		connect();
-	}
-	~IODCommandInterface() { 
-		if (socket) delete socket;
-		socket = 0;
-		if (context) delete context;
-		context = 0;
-	}
-
-    const int REQUEST_TIMEOUT;
-    const int REQUEST_RETRIES;
-
-    char *sendMessage(const char *message) {
-        try {
-            const char *msg = (message) ? message : "";
-
-            int retries = REQUEST_RETRIES;
-            while (retries) {
-                size_t len = strlen(msg);
-                zmq::message_t request (len);
-                memcpy ((void *) request.data (), msg, len);
-                socket->send (request);
-                bool expect_reply = true;
-                
-                while (expect_reply) {
-                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                    zmq::poll( &items[0], 1, REQUEST_TIMEOUT*1000);
-                    if (items[0].revents & ZMQ_POLLIN) {
-                        zmq::message_t reply;
-                        socket->recv(&reply);
-	                    len = reply.size();
-	                    char *data = (char *)malloc(len+1);
-	                    memcpy(data, reply.data(), len);
-	                    data[len] = 0;
-	                    if (debug || strcmp(data, "OK") ) std::cout << data << "\n";
-						return data;
-                    }
-                    else if (--retries == 0) {
-                        // abandon
-                        expect_reply = false;
-                        std::cerr << "abandoning message " << msg << "\n" << std::flush;
-                        delete socket;
-                        connect();
-                    }
-                    else {
-                        // retry
-                        std::cerr << "retrying message " << msg << "\n" << std::flush;
-                        delete socket;
-                        connect();
-                        socket->send (request);
-                    }
-                }
-            }
-        }
-        catch(std::exception e) {
-            std::cerr <<e.what() << "\n";
-        }
-		return 0;
-    }
-
-	void connect() {
-		socket = new zmq::socket_t(*context, ZMQ_REQ);
-	    socket->connect ("tcp://localhost:5555");
-        int linger = 0; // do not wait at socket close time
-        socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-	}
-
-    zmq::context_t *context;
-    zmq::socket_t *socket;
-};
-#endif
-
+}; 
 
 int getInt(uint8_t *p) {
 	int x = *p++;
@@ -329,6 +224,7 @@ struct ModbusServerThread {
 	
 					modbus_set_socket(modbus_context, conn); // tell modbus to use this current connection
 			        n = modbus_receive(modbus_context, query);
+					char *previous_value = 0; // used to see if a string value is different between ram and connection
 			        if (n != -1) {
 						std::list<std::string>iod_sync_commands;
 						memcpy(query_backup, query, n);
@@ -337,7 +233,18 @@ struct ModbusServerThread {
 						int fc = query[function_code_offset];
 						// ensure changes to coils are not sent to iod if they are not required
 						bool ignore_coil_change = false; 
-						if (fc == 5) {  // coil write function
+						if (fc == 3) {
+							int num_bytes = query[function_code_offset+4];
+							char *src = (char*) &modbus_mapping->tab_registers[addr]; //(char*) &query[function_code_offset+6];
+							previous_value = (char *)malloc(num_bytes+1);
+							char *dest = previous_value;
+							for (int i=0; i<num_bytes/2; ++i) {
+								*dest++ = *(src+1);
+								*dest++ = *src++;
+								src++;
+							}
+						}
+						else if (fc == 5) {  // coil write function
 							ignore_coil_change = (query_backup[function_code_offset + 3] && modbus_mapping->tab_bits[addr]);
 							if (ignore_coil_change) std::cout << "ignoring coil change " << addr    
 								<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
@@ -419,10 +326,25 @@ struct ModbusServerThread {
 								<< "\n";
 						}
 						else if (fc == 3) {
-							/*if (debug) */std::cout << "connection " << conn << " got rw_register " << addr << "\n";
+							/*if (debug) std::cout << "connection " << conn << " got rw_register " << addr << "\n";*/
+							int num_bytes = query_backup[function_code_offset+4];
+							char *src = (char*) &modbus_mapping->tab_registers[addr];
+							char *new_value = (char *)malloc(num_bytes+1);
+							char *dest = new_value;
+							for (int i=0; i<num_bytes/2; ++i) {
+								*dest++ = *(src+1);
+								*dest++ = *src++;
+								src++;
+							}
+							if (strncmp(new_value, previous_value, num_bytes) != 0) {
+								std::cout << "connection " << conn << " num bytes: " << num_bytes << " rw register " << addr << "\n";								
+							}
+							free(new_value); free(previous_value);
 						}
 						else if (fc == 4) {
-							/*if (debug) */std::cout << "connection " << conn << " got register " << addr << "\n";
+							/*if (debug) std::cout << "connection " << conn << " got register " << addr << "\n";*/
+							int num_bytes = query_backup[function_code_offset+5];
+							std::cout << "connection " << conn << " num bytes: " << num_bytes << " register " << addr << "\n";
 						}
 						else if (fc == 15 || fc == 16) {
 							if (fc == 15) {
@@ -544,11 +466,12 @@ void loadData(const char *initial_settings) {
 					Value name = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 2), 0);
 					Value len = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 3), 0);
 					Value value = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
-					if (debug) std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
+					//if (debug) 
+					std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
 					if (value.kind == Value::t_string) 
-						insert(group.iValue, addr.iValue, value.asString().c_str(), len.iValue);
+						insert(group.iValue, addr.iValue-1, value.asString().c_str(), strlen(value.asString().c_str()));
 					else
-						insert(group.iValue, addr.iValue, value.iValue, len.iValue);
+						insert(group.iValue, addr.iValue-1, value.iValue, len.iValue);
 				}
 				else
 				{
@@ -737,7 +660,7 @@ int main(int argc, const char * argv[]) {
 	
 				if (debug) std::cout << "IOD: " << group << " " << addr << " " << name << " " << len << " " << params[5] <<  "\n";
 				if (params[5].kind == Value::t_string) {
-					insert(group, addr-1, params[5].asString().c_str(), len);
+					insert(group, addr-1, params[5].asString().c_str(), strlen(params[5].asString().c_str()));
 				}
 				else
 					insert(group, addr-1, params[5].iValue, len);

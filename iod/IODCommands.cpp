@@ -713,8 +713,10 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 			error_str = "Usage: MODBUS group address value";
 			return false;
 		}
-		int group, address, val;
+		int group, address;
 		char *end;
+        assert(params[1].kind == Value::t_integer); //group
+        assert(params[2].kind == Value::t_integer); //addr
 		group = (int)strtol(params[1].asString().c_str(), &end, 0);
 		if (*end) {
 			error_str = "Modbus: group number should be from 1..4";
@@ -725,20 +727,20 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 			error_str = "Modbus: address should be from 0..65535";
 			return false;
 		}
-		val = (int)strtol(params[3].asString().c_str(), &end, 0);
-		if (*end) {
-			std::stringstream ss;
-			ss  << "Modbus: value (" << params[3] << ") was expected to be a number from 0..65535\n";
-			std::string s = ss.str();
-			error_str = s;
-			return false;
-		}
 		ModbusAddress found = ModbusAddress::lookup(group, address);
 		if (found.getGroup() != ModbusAddress::none) {
 			if (found.getOwner()) {
 				// the address found will refer to the base address, so we provide the actual offset
 				assert(address == found.getAddress());
-				found.getOwner()->modbusUpdated(found, address - found.getAddress(), val);
+                if (params[3].kind == Value::t_integer) {
+                    found.getOwner()->modbusUpdated(found, address - found.getAddress(), (int)params[3].iValue);
+                }
+                else if (params[3].kind == Value::t_bool) {
+                    found.getOwner()->modbusUpdated(found, address - found.getAddress(), (params[3].bValue) ? 1 : 0);
+                }
+                else if (params[3].kind == Value::t_bool) {
+                    found.getOwner()->modbusUpdated(found, address - found.getAddress(), params[3].sValue.c_str());
+                }
 			}
 			else {
 				DBG_MODBUS << "no owner for Modbus address " << found << "\n";

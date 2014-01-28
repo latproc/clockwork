@@ -316,7 +316,7 @@ public:
 	void resume();
 	void resume(const std::string &state_name);
 	void disable();
-	bool enabled() { return is_enabled; }
+	bool enabled() const { return is_enabled; }
 	void clearAllActions();
 
 	// basic lock functionality 
@@ -333,6 +333,7 @@ public:
 	void refreshModbus(cJSON *json_array); // update all exported values
 	int getModbusValue(ModbusAddress &addr, unsigned int offset, int len);
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value);
+	void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value);
 	void exportModbusMapping(std::ostream &out);
 	bool isModbusExported() { return modbus_exported != none; }
 	
