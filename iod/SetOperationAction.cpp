@@ -224,7 +224,6 @@ Action::Status SelectSetOperation::doOperation() {
     long to_copy;
     if (source_a_machine) {
         if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
-        std::cout << " to copy: " << to_copy;
         for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
             Value &a(source_a_machine->parameters.at(i).val);
             if (a.kind == Value::t_symbol) {
@@ -238,7 +237,6 @@ Action::Status SelectSetOperation::doOperation() {
                     dest_machine->addParameter(a);
                     ++num_copied;
                     if (num_copied >= to_copy) break;
-                    std::cout << ".. copied: " << to_copy << ".. ";
                 }
             }
             else {
@@ -247,7 +245,6 @@ Action::Status SelectSetOperation::doOperation() {
         }
         source_a_machine->removeLocal(0);
     }
-    std::cout << "done\n";
     status = Complete;
     return status;
 }
