@@ -974,31 +974,36 @@ SET SYMBOL TO value  {
 }
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate($4, $6, $8, $10, soIntersect, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soIntersect, 0);
 }
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate($4, $6, $8, "", soIntersect, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soIntersect, 0);
 }
 | COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL  /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate($4, $6, $8, "", soDifference, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soDifference, 0);
 }
 | COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate($4, $6, $8, $10, soDifference, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soDifference, 0);
 }
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL  /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate($4, $6, $8, "", soUnion, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soUnion, 0);
 }
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate($4, $6, $8, $10, soUnion, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soUnion, 0);
 }
 | COPY ALL FROM SYMBOL TO SYMBOL WHERE predicate /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate($4, SymbolTable::Null, $6, "", soSelect, $8);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8);
+}
+| COPY value FROM SYMBOL TO SYMBOL WHERE predicate /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8);
+    delete $2;
 }
 | SORT SYMBOL {
     if (current_action) current_actions->push_back(current_action);

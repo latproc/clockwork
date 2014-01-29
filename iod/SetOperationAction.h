@@ -37,7 +37,7 @@ struct SetOperationActionTemplate : public ActionTemplate {
     // The names are to be evaluated in the
     // scope where the command is used.
     
-	SetOperationActionTemplate(Value a, Value b, Value destination, Value property, SetOperation op, Predicate *pred);
+	SetOperationActionTemplate(Value num, Value a, Value b, Value destination, Value property, SetOperation op, Predicate *pred);
     ~SetOperationActionTemplate();
     
     virtual Action *factory(MachineInstance *mi);
@@ -46,6 +46,7 @@ struct SetOperationActionTemplate : public ActionTemplate {
             << " to " << dest_name<< " using " << property_name << "\n";
     }
 
+    Value count;
     std::string src_a_name;
     std::string src_b_name;
     std::string dest_name;
@@ -63,6 +64,7 @@ struct SetOperationAction : public Action {
     virtual std::ostream &operator<<(std::ostream &out)const;
 
 protected:
+    Value count;
 	Value source_a;
 	Value source_b;
     Value dest;

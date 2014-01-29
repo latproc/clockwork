@@ -22,10 +22,10 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 
-SetOperationActionTemplate::SetOperationActionTemplate(Value a, Value b,
+SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value b,
                                                        Value destination, Value property, SetOperation op,
                                                        Predicate *pred)
-    : src_a_name(a.asString()), src_b_name(b.asString()),
+    : count(num), src_a_name(a.asString()), src_b_name(b.asString()),
       dest_name(destination.asString()), property_name(property.asString()), operation(op),
       condition(pred) {
 }
@@ -43,7 +43,7 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
 }
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
-    : Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
+    : count(dat->count), Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
         dest(dat->dest_name), dest_machine(0),  operation(dat->operation),
         property_name(dat->property_name), condition(dat->condition) {
 }
@@ -220,7 +220,11 @@ SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationAct
 }
 
 Action::Status SelectSetOperation::doOperation() {
+    int num_copied = 0;
+    long to_copy;
     if (source_a_machine) {
+        if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+        std::cout << " to copy: " << to_copy;
         for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
             Value &a(source_a_machine->parameters.at(i).val);
             if (a.kind == Value::t_symbol) {
@@ -230,8 +234,12 @@ Action::Status SelectSetOperation::doOperation() {
                 source_a_machine->locals[0].val.sValue = "ITEM";
                 source_a_machine->locals[0].real_name = a.sValue;
                 if (!mi) throw new SetOperationException();
-                if (condition(owner) && !MachineIncludesParameter(dest_machine,a))
+                if (condition(owner) && !MachineIncludesParameter(dest_machine,a)) {
                     dest_machine->addParameter(a);
+                    ++num_copied;
+                    if (num_copied >= to_copy) break;
+                    std::cout << ".. copied: " << to_copy << ".. ";
+                }
             }
             else {
                 if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
@@ -239,6 +247,7 @@ Action::Status SelectSetOperation::doOperation() {
         }
         source_a_machine->removeLocal(0);
     }
+    std::cout << "done\n";
     status = Complete;
     return status;
 }

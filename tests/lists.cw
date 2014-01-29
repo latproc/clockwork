@@ -211,3 +211,21 @@ PopAndPushTest MACHINE list {
 pop_and_push_test PopAndPushTest l;
 
 
+sat1 FLAG;
+sat2 FLAG;
+sat3 FLAG;
+sat_list LIST sat1, sat2, sat3;
+
+SelectAllTest MACHINE list {
+	temp LIST;
+	two LIST;
+	COMMAND run { 
+		CLEAR temp;
+		CLEAR two;
+		COPY ALL FROM list TO temp WHERE list.ITEM IS on;
+		COPY 2 FROM list TO two WHERE list.ITEM IS off;
+	}
+}
+select_all_test SelectAllTest sat_list;
+
+
