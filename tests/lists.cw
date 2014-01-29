@@ -219,11 +219,13 @@ sat_list LIST sat1, sat2, sat3;
 SelectAllTest MACHINE list {
 	temp LIST;
 	two LIST;
+	saved LIST;
 	COMMAND run { 
 		CLEAR temp;
 		CLEAR two;
 		COPY ALL FROM list TO temp WHERE list.ITEM IS on;
 		COPY 2 FROM list TO two WHERE list.ITEM IS off;
+		MOVE ALL FROM temp TO saved;
 	}
 }
 select_all_test SelectAllTest sat_list;
