@@ -24,10 +24,10 @@
 
 SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value b,
                                                        Value destination, Value property, SetOperation op,
-                                                       Predicate *pred)
+                                                       Predicate *pred, bool remove)
     : count(num), src_a_name(a.asString()), src_b_name(b.asString()),
-      dest_name(destination.asString()), property_name(property.asString()), operation(op),
-      condition(pred) {
+      dest_name(destination.asString()), condition(pred), property_name(property.asString()), operation(op),
+      remove_selected(remove) {
 }
 
 SetOperationActionTemplate::~SetOperationActionTemplate() {
@@ -45,7 +45,7 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
     : count(dat->count), Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
         dest(dat->dest_name), dest_machine(0),  operation(dat->operation),
-        property_name(dat->property_name), condition(dat->condition) {
+        property_name(dat->property_name), condition(dat->condition), remove_selected(dat->remove_selected) {
 }
 
 SetOperationAction::SetOperationAction() : dest_machine(0) {
@@ -224,7 +224,8 @@ Action::Status SelectSetOperation::doOperation() {
     long to_copy;
     if (source_a_machine) {
         if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
-        for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
+        unsigned int i=0;
+        while (i < source_a_machine->parameters.size()) {
             Value &a(source_a_machine->parameters.at(i).val);
             if (a.kind == Value::t_symbol) {
                 MachineInstance *mi = owner->lookup(a);
@@ -233,15 +234,28 @@ Action::Status SelectSetOperation::doOperation() {
                 source_a_machine->locals[0].val.sValue = "ITEM";
                 source_a_machine->locals[0].real_name = a.sValue;
                 if (!mi) throw new SetOperationException();
-                if (condition(owner) && !MachineIncludesParameter(dest_machine,a)) {
-                    dest_machine->addParameter(a);
-                    ++num_copied;
+                if ( (!condition.predicate || condition(owner)) ){
+                    if (!MachineIncludesParameter(dest_machine,a)) {
+                        dest_machine->addParameter(a);
+                        ++num_copied;
+                    }
+                    if (remove_selected) {
+                        source_a_machine->removeLocal(0);
+                        mi->stopListening(source_a_machine);
+                        mi->removeDependancy(source_a_machine);
+                        source_a_machine->removeDependancy(mi);
+                        source_a_machine->stopListening(mi);
+                        source_a_machine->parameters.erase(source_a_machine->parameters.begin()+i);
+                        source_a_machine->setNeedsCheck();
+                    }
                     if (num_copied >= to_copy) break;
+                    if (remove_selected) continue; // skip the increment to next parameter
                 }
             }
             else {
                 if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
             }
+            ++i;
         }
         source_a_machine->removeLocal(0);
     }

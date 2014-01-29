@@ -106,7 +106,7 @@ struct Subcondition {
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
-%token LEAVE ASSIGN WITHIN PUSH
+%token LEAVE ASSIGN WITHIN PUSH MOVE
 
 %union {
 	int iVal;
@@ -974,35 +974,62 @@ SET SYMBOL TO value  {
 }
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soIntersect, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soIntersect, 0, false);
 }
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soIntersect, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soIntersect, 0, false);
 }
 | COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL  /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soDifference, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soDifference, 0, false);
 }
 | COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soDifference, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soDifference, 0, false);
 }
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL  /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soUnion, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soUnion, 0, false);
 }
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soUnion, 0);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soUnion, 0, false);
 }
-| COPY ALL FROM SYMBOL TO SYMBOL WHERE predicate /*property*/{
+| COPY ALL FROM SYMBOL TO SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, 0, false);
 }
-| COPY value FROM SYMBOL TO SYMBOL WHERE predicate /*property*/{
+| COPY value FROM SYMBOL TO SYMBOL{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, 0, false);
+    delete $2;
+}
+| COPY ALL FROM SYMBOL TO SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8, false);
+}
+| COPY value FROM SYMBOL TO SYMBOL WHERE predicate{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, false);
+    delete $2;
+}
+| MOVE ALL FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, 0, true);
+}
+| MOVE value FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, 0, true);
+    delete $2;
+}
+| MOVE ALL FROM SYMBOL TO SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
+}
+| MOVE value FROM SYMBOL TO SYMBOL WHERE predicate{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
     delete $2;
 }
 | SORT SYMBOL {

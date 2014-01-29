@@ -81,6 +81,7 @@ MACHINE             return STATEMACHINE;
 MATCHES             return MATCHES;
 MODULE              return MODULE;
 MODULES             return MODULES;
+MOVE                return MOVE;
 NOT                 return NOT;
 OF                  return OF;
 ON					return ON;
