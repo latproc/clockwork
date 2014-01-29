@@ -23,9 +23,11 @@
 #include "Logger.h"
 
 SetOperationActionTemplate::SetOperationActionTemplate(Value a, Value b,
-                                                       Value destination, Value property, SetOperation op)
+                                                       Value destination, Value property, SetOperation op,
+                                                       Predicate *pred)
     : src_a_name(a.asString()), src_b_name(b.asString()),
-      dest_name(destination.asString()), property_name(property.asString()), operation(op) {
+      dest_name(destination.asString()), property_name(property.asString()), operation(op),
+      condition(pred) {
 }
 
 SetOperationActionTemplate::~SetOperationActionTemplate() {
@@ -36,13 +38,14 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
         case soIntersect: return new IntersectSetOperation(mi, this);
         case soUnion: return new UnionSetOperation(mi, this);
         case soDifference:return new DifferenceSetOperation(mi, this);
+        case soSelect: return new SelectSetOperation(mi, this);
     }
 }
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
     : Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
         dest(dat->dest_name), dest_machine(0),  operation(dat->operation),
-        property_name(dat->property_name) {
+        property_name(dat->property_name), condition(dat->condition) {
 }
 
 SetOperationAction::SetOperationAction() : dest_machine(0) {
@@ -208,4 +211,36 @@ Action::Status DifferenceSetOperation::doOperation() {
     status = Complete;
     return status;
 }
+
+
+SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat)
+: SetOperationAction(m, dat)
+{
+    
+}
+
+Action::Status SelectSetOperation::doOperation() {
+    if (source_a_machine) {
+        for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
+            Value &a(source_a_machine->parameters.at(i).val);
+            if (a.kind == Value::t_symbol) {
+                MachineInstance *mi = owner->lookup(a);
+                source_a_machine->removeLocal(0);
+                source_a_machine->addLocal(a, mi);
+                source_a_machine->locals[0].val.sValue = "ITEM";
+                source_a_machine->locals[0].real_name = a.sValue;
+                if (!mi) throw new SetOperationException();
+                if (condition(owner) && !MachineIncludesParameter(dest_machine,a))
+                    dest_machine->addParameter(a);
+            }
+            else {
+                if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
+            }
+        }
+        source_a_machine->removeLocal(0);
+    }
+    status = Complete;
+    return status;
+}
+
 

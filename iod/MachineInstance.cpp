@@ -906,8 +906,13 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     parameters[parameters.size()-1].machine = mi;
     if (!mi && param.kind == Value::t_symbol) {
         mi = lookup(param);
-        if (mi && !param.cached_machine)
-            param.cached_machine = mi;
+        if (mi) {
+            if (!param.cached_machine) param.cached_machine = mi;
+            parameters[parameters.size()-1].real_name = mi->fullName();
+        }
+    }
+    else if (mi) {
+        parameters[parameters.size()-1].real_name = mi->fullName();
     }
     if (mi) addDependancy(mi);
     if (_type == "LIST") {
@@ -953,7 +958,8 @@ void MachineInstance::addLocal(Value param, MachineInstance *mi) {
 }
 
 void MachineInstance::removeLocal(int index) {
-    Parameter &p = locals[0];
+    if (locals.size() <= index) return;
+    Parameter &p = locals[index];
     if (p.machine) {
         stopListening(p.machine);
         p.machine->removeDependancy(this);
@@ -967,6 +973,7 @@ void MachineInstance::removeLocal(int index) {
             dep->stopListening(p.machine);
             dep->setNeedsCheck();
         }
+    localised_names.erase(p.val.sValue);
     std::vector<Parameter>::iterator iter = locals.begin();
     while (index-- && iter != locals.end()) iter++;
     if (iter != locals.end()) locals.erase(iter);

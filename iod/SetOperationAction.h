@@ -24,10 +24,11 @@
 #include <iostream>
 #include "Action.h"
 #include "symboltable.h"
+#include "Expression.h"
 
 class MachineInstance;
 
-enum SetOperation { soIntersect, soUnion, soDifference };
+enum SetOperation { soIntersect, soUnion, soDifference, soSelect };
 
 struct SetOperationActionTemplate : public ActionTemplate {
     
@@ -36,7 +37,7 @@ struct SetOperationActionTemplate : public ActionTemplate {
     // The names are to be evaluated in the
     // scope where the command is used.
     
-	SetOperationActionTemplate(Value a, Value b, Value destination, Value property, SetOperation op);
+	SetOperationActionTemplate(Value a, Value b, Value destination, Value property, SetOperation op, Predicate *pred);
     ~SetOperationActionTemplate();
     
     virtual Action *factory(MachineInstance *mi);
@@ -49,6 +50,7 @@ struct SetOperationActionTemplate : public ActionTemplate {
     std::string src_b_name;
     std::string dest_name;
     std::string property_name;
+    Condition condition;
     SetOperation operation;
 };
 
@@ -64,6 +66,7 @@ protected:
 	Value source_a;
 	Value source_b;
     Value dest;
+    Condition condition;
     std::string property_name;
 	MachineInstance *source_a_machine;
 	MachineInstance *source_b_machine;
@@ -83,6 +86,11 @@ struct UnionSetOperation : public SetOperationAction {
 
 struct DifferenceSetOperation : public SetOperationAction {
 	DifferenceSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
+	Status doOperation();
+};
+
+struct SelectSetOperation : public SetOperationAction {
+	SelectSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
 	Status doOperation();
 };
 
