@@ -345,8 +345,7 @@ MachineInstance *MachineInstance::lookup(Parameter &param) {
 }
 
 MachineInstance *MachineInstance::lookup(Value &val) {
-	assert(val.kind == Value::t_symbol);
-    if (!val.cached_machine) {
+    if (!val.cached_machine && (val.kind == Value::t_symbol || val.kind == Value::t_string)) {
 		val.cached_machine = lookup(val.sValue);
     }
     return val.cached_machine;
@@ -914,10 +913,28 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     else if (mi) {
         parameters[parameters.size()-1].real_name = mi->fullName();
     }
-    if (mi) addDependancy(mi);
+    if (mi) {
+        addDependancy(mi);
+        listenTo(mi);
+        mi->addDependancy(this);
+        mi->listenTo(this);
+    }
     if (_type == "LIST") {
         setNeedsCheck();
     }
+}
+
+void MachineInstance::removeParameter(int which) {
+    if (which <0 || which >= parameters.size()) return;
+    MachineInstance *m = parameters[which].machine;
+    if (m) {
+        m->removeDependancy(this);
+        m->stopListening(this);
+        removeDependancy(m);
+        stopListening(m);
+    }
+    parameters.erase(parameters.begin()+which);
+    setNeedsCheck();
 }
 
 void MachineInstance::addLocal(Value param, MachineInstance *mi) {
