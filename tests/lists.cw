@@ -233,7 +233,8 @@ select_all_test SelectAllTest sat_list;
 it1 FLAG(size:3);
 it2 FLAG(size:4);
 it3 FLAG(size:3);
-sizes LIST it1,it2,it3;
+it4 FLAG(size:2);
+sizes LIST it1,it2,it3,it4;
 itm1 FLAG(length:1);
 itm2 FLAG(length:2);
 itm3 FLAG(length:3);
@@ -246,7 +247,7 @@ IntersectionTest MACHINE source, selector {
     COMMAND run {
         CLEAR result;
         COPY ALL FROM source TO result SELECT USING selector WHERE source.ITEM.length == selector.ITEM.size;
-		MOVE ALL FROM result TO threes SELECT USING selector WHERE result.ITEM.length == selector.ITEM.size &&  result.ITEM IS on;
+		MOVE 2 FROM result TO threes SELECT USING selector WHERE result.ITEM.length == selector.ITEM.size &&  result.ITEM IS on;
     }
 }
 intersection_test IntersectionTest items, sizes;

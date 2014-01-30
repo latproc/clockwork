@@ -149,8 +149,10 @@ Action::Status IntersectSetOperation::doOperation() {
             if (condition.predicate) {
                 bool matched = false;
                 if (condition(owner)) {
-                    dest_machine->addParameter(a, v1.cached_machine);
-                    ++num_copied;
+                    if (!MachineIncludesParameter(dest_machine,a)) {
+                        dest_machine->addParameter(a, v1.cached_machine);
+                        ++num_copied;
+                    }
                     matched = true;
                     if (remove_selected) {
                         source_a_machine->removeLocal(0);
