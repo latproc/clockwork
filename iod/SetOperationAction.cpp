@@ -156,12 +156,15 @@ Action::Status IntersectSetOperation::doOperation() {
                     matched = true;
                     if (remove_selected) {
                         source_a_machine->removeLocal(0);
+                        source_a_machine->removeParameter(i);
+/*
                         mi->stopListening(source_a_machine);
                         mi->removeDependancy(source_a_machine);
                         source_a_machine->removeDependancy(mi);
                         source_a_machine->stopListening(mi);
                         source_a_machine->parameters.erase(source_a_machine->parameters.begin()+i);
                         source_a_machine->setNeedsCheck();
+ */
                     }
                 }
                 if (num_copied >= to_copy) goto doneIntersectOperation;
@@ -292,12 +295,15 @@ Action::Status SelectSetOperation::doOperation() {
                     }
                     if (remove_selected) {
                         source_a_machine->removeLocal(0);
+                        source_a_machine->removeParameter(i);
+                        /*
                         mi->stopListening(source_a_machine);
                         mi->removeDependancy(source_a_machine);
                         source_a_machine->removeDependancy(mi);
                         source_a_machine->stopListening(mi);
                         source_a_machine->parameters.erase(source_a_machine->parameters.begin()+i);
                         source_a_machine->setNeedsCheck();
+                         */
                     }
                     if (num_copied >= to_copy) break;
                     if (remove_selected) continue; // skip the increment to next parameter
