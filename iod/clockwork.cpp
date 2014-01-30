@@ -94,7 +94,7 @@ static void listDirectory( const std::string pathToCheck, std::list<std::string>
     }
 }
 
-void load_preset_modbus_mappings() {
+int load_preset_modbus_mappings() {
 	// load preset modbus mappings
 	std::ifstream modbus_mappings_file(modbus_map());
 	if (!modbus_mappings_file) {
@@ -157,13 +157,14 @@ void load_preset_modbus_mappings() {
 		}
 		if (errors) {
 			std::cerr << errors << " errors. aborting.\n";
-			exit(1);
+			return 1;
 		}
 		if (max_disc>= ModbusAddress::nextDiscrete()) ModbusAddress::setNextDiscrete(max_disc+1);
 		if (max_coil>= ModbusAddress::nextCoil()) ModbusAddress::setNextCoil(max_coil+1);
 		if (max_input>= ModbusAddress::nextInputRegister()) ModbusAddress::setNextInputRegister(max_input+1);
 		if (max_holding>= ModbusAddress::nextHoldingRegister()) ModbusAddress::setNextHoldingRegister(max_holding+1);
 	}
+    return 0; // no error
 }
 
 void semantic_analysis() {
@@ -610,7 +611,7 @@ int loadConfig(int argc, char const *argv[]) {
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {
             usage(argc, argv);
-            exit(2);
+            return 2;
         }
 		else if (*(argv[i]) == '-') {
 			files.push_back(argv[i]);
@@ -646,7 +647,8 @@ int loadConfig(int argc, char const *argv[]) {
 	
     std::cout << (argc-1) << " arguments\n";
     
-    load_preset_modbus_mappings();
+    int modbus_result = load_preset_modbus_mappings();
+    if (modbus_result) return modbus_result;
     
     
     /* load configuration from files named on the commandline */
@@ -699,7 +701,7 @@ int loadConfig(int argc, char const *argv[]) {
 			std::cerr << error << "\n";
 		}
         printf("Errors detected. Aborting\n");
-        exit(2);
+        return 2;
     }
     
     semantic_analysis();
@@ -712,7 +714,7 @@ int loadConfig(int argc, char const *argv[]) {
     if (num_errors > 0)
     {
         printf("Errors detected. Aborting\n");
-        exit(2);
+        return 2;
     }
     
 	std::cout << " Configuration loaded. " << MachineInstance::countAutomaticMachines() << " automatic machines\n";
