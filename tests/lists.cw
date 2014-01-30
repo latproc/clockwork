@@ -230,4 +230,25 @@ SelectAllTest MACHINE list {
 }
 select_all_test SelectAllTest sat_list;
 
+it1 FLAG(size:3);
+it2 FLAG(size:4);
+it3 FLAG(size:3);
+sizes LIST it1,it2,it3;
+itm1 FLAG(length:1);
+itm2 FLAG(length:2);
+itm3 FLAG(length:3);
+itm4 FLAG(length:4);
+items LIST itm1, itm2, itm3, itm4;
+
+IntersectionTest MACHINE source, selector {
+    threes LIST;
+    result LIST;
+    COMMAND run {
+        CLEAR result;
+        COPY ALL FROM source TO result SELECT USING selector WHERE source.ITEM.length == selector.ITEM.size;
+		MOVE ALL FROM result TO threes SELECT USING selector WHERE result.ITEM.length == selector.ITEM.size &&  result.ITEM IS on;
+    }
+}
+intersection_test IntersectionTest items, sizes;
+
 

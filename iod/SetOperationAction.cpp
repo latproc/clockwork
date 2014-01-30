@@ -118,27 +118,76 @@ IntersectSetOperation::IntersectSetOperation(MachineInstance *m, const SetOperat
     
 }
 
+void setListItem(MachineInstance *list, const Value &item) {
+    list->removeLocal(0);
+    list->addLocal(item, item.cached_machine);
+    list->locals[0].val.sValue = "ITEM";
+    list->locals[0].real_name = item.sValue;
+}
+
 Action::Status IntersectSetOperation::doOperation() {
-    for (unsigned int i=0; i < source_a_machine->parameters.size(); ++i) {
+    unsigned int num_copied = 0;
+    long to_copy;
+    if (!source_a_machine) {
+        status = Failed;
+        return status;
+    }
+    if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+    unsigned int i=0;
+    while (i < source_a_machine->parameters.size()) {
         Value &a(source_a_machine->parameters.at(i).val);
+        MachineInstance *mi = owner->lookup(a);
+        if (!mi) { ++i; continue; }
+        assert(a.cached_machine);
+        setListItem(source_a_machine, a);
         for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
             Value &b(source_b_machine->parameters.at(j).val);
+            if (!b.cached_machine) owner->lookup(b);
+            if (!b.cached_machine) continue;
             Value v1(a);
-            if (v1.kind == Value::t_symbol && (b.kind == Value::t_string || b.kind == Value::t_integer)) {
-                if (CompareSymbolAndValue(owner, v1, property_name, b)) {
+            setListItem(source_b_machine, b);
+            if (condition.predicate) {
+                bool matched = false;
+                if (condition(owner)) {
                     dest_machine->addParameter(a, v1.cached_machine);
-                    break;
+                    ++num_copied;
+                    matched = true;
+                    if (remove_selected) {
+                        source_a_machine->removeLocal(0);
+                        mi->stopListening(source_a_machine);
+                        mi->removeDependancy(source_a_machine);
+                        source_a_machine->removeDependancy(mi);
+                        source_a_machine->stopListening(mi);
+                        source_a_machine->parameters.erase(source_a_machine->parameters.begin()+i);
+                        source_a_machine->setNeedsCheck();
+                    }
                 }
+                if (num_copied >= to_copy) goto doneIntersectOperation;
+                if (matched && remove_selected) goto intersectSkipToNextSourceItem; // skip the increment to next parameter
+                if (matched) break; // already matched this item, no need to keep looking
             }
-            else if (b.kind == Value::t_symbol && (v1.kind == Value::t_string || v1.kind == Value::t_integer)) {
-                if (CompareSymbolAndValue(owner, b, property_name, v1)) {
-                    dest_machine->addParameter(a, v1.cached_machine);
-                    break;
+            else {
+                if (v1.kind == Value::t_symbol && (b.kind == Value::t_string || b.kind == Value::t_integer)) {
+                    if (CompareSymbolAndValue(owner, v1, property_name, b)) {
+                        dest_machine->addParameter(a, v1.cached_machine);
+                        break;
+                    }
                 }
+                else if (b.kind == Value::t_symbol && (v1.kind == Value::t_string || v1.kind == Value::t_integer)) {
+                    if (CompareSymbolAndValue(owner, b, property_name, v1)) {
+                        dest_machine->addParameter(a, v1.cached_machine);
+                        break;
+                    }
+                }
+                else if (a == b) dest_machine->addParameter(a);
             }
-            else if (a == b) dest_machine->addParameter(a);
         }
+        ++i;
+    intersectSkipToNextSourceItem: ;
     }
+doneIntersectOperation:
+    source_b_machine->removeLocal(0);
+    source_b_machine->removeLocal(0);
     status = Complete;
     return status;
 }
