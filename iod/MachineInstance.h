@@ -212,6 +212,7 @@ public:
     void triggerFired(Trigger *trig);
 
     void addParameter(Value param, MachineInstance *machine = 0);
+    void removeParameter(int which);
     void addLocal(Value param, MachineInstance *machine = 0);
     void removeLocal(int index);
     void setProperties(const SymbolTable &props);
