@@ -240,9 +240,14 @@ void SymbolTable::clear() {
 std::ostream &SymbolTable::operator <<(std::ostream & out) const {
     SymbolTableConstIterator iter = st.begin();
     const char *delim = "";
+    size_t column = 1;
     while (iter != st.end()) {
-        out << delim << (*iter).first << ':' << (*iter).second;
-        delim = ",";
+        size_t len = strlen(delim) + (*iter).first.length() + (*iter).second.asString().length()+1;
+        out << delim;
+        if (column >= 100) { out << "\n    "; column = 5;}
+        column += len;
+        out << (*iter).first << ':' << (*iter).second;
+        delim = ", ";
         iter++;
     }
     return out;
