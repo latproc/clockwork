@@ -44,6 +44,7 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
     : count(dat->count), Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
+        source_a_machine(0), source_b_machine(0),
         dest(dat->dest_name), dest_machine(0),  operation(dat->operation),
         property_name(dat->property_name), condition(dat->condition), remove_selected(dat->remove_selected) {
 }
@@ -143,7 +144,7 @@ Action::Status IntersectSetOperation::doOperation() {
         for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
             Value &b(source_b_machine->parameters.at(j).val);
             if (!b.cached_machine) owner->lookup(b);
-            if (!b.cached_machine) continue;
+            if (!b.cached_machine) { continue; }
             Value v1(a);
             setListItem(source_b_machine, b);
             if (condition.predicate) {
