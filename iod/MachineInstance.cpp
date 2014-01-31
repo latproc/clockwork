@@ -902,7 +902,6 @@ MachineInstance *MachineInstance::find(const char *name) {
 
 void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     parameters.push_back(param);
-    parameters[parameters.size()-1].machine = mi;
     if (!mi && param.kind == Value::t_symbol) {
         mi = lookup(param);
         if (mi) {
@@ -913,6 +912,7 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
     else if (mi) {
         parameters[parameters.size()-1].real_name = mi->fullName();
     }
+    parameters[parameters.size()-1].machine = mi;
     if (mi) {
         addDependancy(mi);
         listenTo(mi);
