@@ -49,6 +49,9 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
 }
 
 #ifdef USE_READLINE
+
+void initialise_machine_names(char *data);
+
 /* A static variable for holding the line. */
 static char *line_read = (char *)NULL;
 
@@ -78,8 +81,8 @@ rl_gets (const char *prompt)
 
 zmq::socket_t *psocket = 0;
 std::list<Value> params;
-void process_command(std::list<Value> &params) {
-	if (params.size() == 0) return;
+char *send_command(std::list<Value> &params) {
+	if (params.size() == 0) return 0;
 	Value cmd_val = params.front();
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
@@ -92,10 +95,20 @@ void process_command(std::list<Value> &params) {
 		char *data = (char *)malloc(size+1);
 		memcpy(data, reply.data(), size);
 		data[size] = 0;
-		std::cout << data << "\n";
-		free(data);
+        
+        if (cmd == "LIST") initialise_machine_names(data);
+        return data;
 	}
+    return 0;
 }
+void process_command(std::list<Value> &params) {
+    char * data = send_command(params);
+    if (data) {
+        std::cout << data << "\n";
+        free(data);
+    }
+}
+
 #endif
 
 extern void yyparse();
@@ -105,6 +118,135 @@ bool cmdline_done = false;
 
 void usage(const char *name) {
 	std::cout << name << " [-h host] [-p port]\n";
+}
+
+std::list<char *>machine_names;
+std::list<const char *>commands;
+char *machine_name_generator (const char *text, int state);
+char *command_generator (const char *text, int state);
+
+/* Attempt to complete on the contents of TEXT.  START and END bound the
+ region of rl_line_buffer that contains the word to complete.  TEXT is
+ the word to complete.  We can use the entire contents of rl_line_buffer
+ in case we want to do some simple parsing.  Return the array of matches,
+ or NULL if there aren't any. */
+char **my_rl_completion (const char *text, int start, int end)
+{
+    char **matches;
+    
+    matches = (char **)NULL;
+    
+    if (start == 0)
+        matches = rl_completion_matches (text, command_generator);
+    else
+        matches = rl_completion_matches (text, machine_name_generator);
+    return (matches);
+}
+
+/* Generator function for command completion.  STATE lets us know whether
+ to start from scratch; without any state (i.e. STATE == 0), then we
+ start at the top of the list. */
+char *command_generator (const char *text, int state)
+{
+    static std::list<const char *>::iterator iter;
+    static int len;
+    char *name;
+    
+    /* If this is a new word to complete, initialize now.  This includes
+     saving the length of TEXT for efficiency, and initializing the iterator
+     */
+    if (!state)
+    {
+        iter = commands.begin();
+        len = strlen (text);
+    }
+    
+    /* Return the next name which partially matches from the command list. */
+    while (iter != commands.end())
+    {
+        const char *name = *iter++;
+        if (strncmp (name, text, len) == 0)
+            return (strdup(name));
+    }
+    rl_attempted_completion_over = 1;
+    /* If no names matched, then return NULL. */
+    return ((char *)NULL);
+}
+
+/* Generator function for machine name completion.  STATE lets us know whether
+ to start from scratch; without any state (i.e. STATE == 0), then we
+ start at the top of the list. */
+char *machine_name_generator (const char *text, int state)
+{
+    static std::list<char *>::iterator iter;
+    static int len;
+    char *name;
+    
+    /* If this is a new word to complete, initialize now.  This includes
+     saving the length of TEXT for efficiency, and initializing the iterator
+     */
+    if (!state)
+    {
+        iter = machine_names.begin();
+        len = strlen (text);
+    }
+    
+//    const char *search = text + strlen(text)-1;
+//    while (search>text && (isalnum(*search) || strchr("_.-",*search))) search--;
+//    if (search>text) ++search;
+//    std::cout << text << "\n" << search << "\n";
+
+    /* Return the next name which partially matches from the command list. */
+    while (iter != machine_names.end())
+    {
+        char *name = *iter++;
+        if (strncmp (name, text, len) == 0)
+            return (strdup(name));
+    }
+    rl_attempted_completion_over = 1;
+    /* If no names matched, then return NULL. */
+    return ((char *)NULL);
+}
+
+void cleanup() {
+    std::list<char *>::iterator iter = machine_names.begin();
+    while (iter != machine_names.end()) { char *name = *iter; free(name); iter = machine_names.erase(iter); }
+}
+
+void initialise_machine_names(char *data) {
+    std::list<Value> params;
+    params.push_back("LIST");
+    bool did_alloc = false;
+    if (!data) data = send_command(params);
+    if (data) {
+        cleanup();
+        char buf[500];
+        char *p = data, *q = buf;
+        while (*p) {
+            if (*p != ' ') {
+                if (q-buf<499) *q++ = *p++;
+            }
+            else {
+                *q = 0; machine_names.push_back(strdup(buf));
+                q = buf;
+                while (*p && *p++ != '\n') ;
+            }
+        }
+    }
+    if (did_alloc) free(data);
+}
+
+void initialise_commands() {
+    commands.push_back("DESCRIBE");
+    commands.push_back("DISABLE");
+    commands.push_back("ENABLE");
+    commands.push_back("LIST");
+    commands.push_back("MESSAGES");
+    commands.push_back("PROPERTY");
+    commands.push_back("RESUME");
+    commands.push_back("SEND");
+    commands.push_back("SET");
+    commands.push_back("TOGGLE");
 }
 
 int main(int argc, const char * argv[])
@@ -145,6 +287,11 @@ int main(int argc, const char * argv[])
 		std::string msg;
 		std::string line;
 		std::stringstream line_input(line);
+        
+        // readline completion function
+        rl_attempted_completion_function = my_rl_completion;
+        initialise_machine_names(0);
+        initialise_commands();
 
 		do yyparse(); while (!cmdline_done);
    }
@@ -153,12 +300,13 @@ int main(int argc, const char * argv[])
             std::cerr << zmq_strerror(zmq_errno()) << "\n";
         else
             std::cerr << e.what() << "\n";
+        cleanup();
         return 1;
     }
     catch(...) {
         std::cerr << "Exception of unknown type!\n";
     }
-
+    cleanup();
     return 0;
 }
 
