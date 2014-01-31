@@ -40,9 +40,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
     //if (pos != machines.end()) {
     owner->start(this);
     
-    if (new_state.kind != Value::t_symbol) {
+    if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
         std::stringstream ss;
-        ss << owner->fullName() << " " << new_state << " must be a symbol" << std::flush;
+        ss << owner->fullName() << " " << new_state << " must be a symbol or string" << std::flush;
         error_str = strdup(ss.str().c_str());
         status = Failed;
         owner->stop(this);
@@ -57,9 +57,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
         State value(new_state.sValue.c_str());
         if (!machine->hasState(new_state.sValue)) {
             const Value &deref = machine->getValue(new_state.sValue.c_str());
-            if (deref.kind != Value::t_symbol) {
+            if (deref.kind != Value::t_symbol && deref.kind != Value::t_string) {
                 std::stringstream ss;
-                ss << owner->fullName() << " " << deref << " must be a symbol" << std::flush;
+                ss << owner->fullName() << " " << deref << " must be a symbol or string" << std::flush;
                 error_str = strdup(ss.str().c_str());
                 status = Failed;
                 owner->stop(this);
