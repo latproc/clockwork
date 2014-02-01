@@ -36,8 +36,8 @@ struct EnableActionTemplate : public ActionTemplate {
     }
 
 	std::string machine_name;
-    const char *property_name;
-    const char *property_value;
+    char *property_name;
+    char *property_value;
 };
 
 struct EnableAction : public Action {
@@ -49,8 +49,8 @@ struct EnableAction : public Action {
 
 	std::string machine_name;
 	MachineInstance *machine;
-    const char *property_name;
-    const char *property_value;
+    char *property_name;
+    char *property_value;
 };
 
 #endif

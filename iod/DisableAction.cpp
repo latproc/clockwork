@@ -18,6 +18,7 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <stdlib.h>
 #include "DisableAction.h"
 #include "MachineInstance.h"
 #include "Logger.h"
@@ -31,8 +32,8 @@ DisableActionTemplate::DisableActionTemplate(const std::string &name, const char
 }
 
 DisableActionTemplate::~DisableActionTemplate() {
-    delete property_name;
-    delete property_value;
+    free(property_name);
+    free(property_value);
 }
 
 Action *DisableActionTemplate::factory(MachineInstance *mi) {
@@ -47,8 +48,8 @@ DisableAction::DisableAction(MachineInstance *m, const DisableActionTemplate *da
 
 
 DisableAction::~DisableAction() {
-    delete property_name;
-    delete property_value;
+    free(property_name);
+    free(property_value);
 }
 
 

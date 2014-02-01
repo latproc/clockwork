@@ -31,8 +31,8 @@ EnableActionTemplate::EnableActionTemplate(const std::string &name, const char *
 }
 
 EnableActionTemplate::~EnableActionTemplate() {
-    delete property_name;
-    delete property_value;
+    free(property_name);
+    free(property_value);
 }
                                            
 Action *EnableActionTemplate::factory(MachineInstance *mi) {
@@ -46,8 +46,8 @@ EnableAction::EnableAction(MachineInstance *m, const EnableActionTemplate *dat)
 }
 
 EnableAction::EnableAction() {
-    delete property_name;
-    delete property_value;
+    free(property_name);
+    free(property_value);
 }
 
 std::ostream &EnableAction::operator<<(std::ostream &out) const {
