@@ -217,7 +217,7 @@ bool Value::operator==(const Value &other) const {
 
     if (a != b) return false; // different types cannot be equal (yet)
     switch (kind) {
-        case t_empty: return true;
+        case t_empty: return b == t_empty;
             break;
         case t_integer: 
 			return iValue == other.iValue;
@@ -250,7 +250,7 @@ bool Value::operator!=(const Value &other) const {
 
 	if (a != b) return true;
     switch (kind) {
-        case t_empty: return false;
+        case t_empty: return b != t_empty;
             break;
         case t_integer: 
 			return iValue != other.iValue;
