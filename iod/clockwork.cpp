@@ -396,8 +396,10 @@ void semantic_analysis() {
                         std::cout << "Error: in the definition of " << mi->getName() << ", " <<
                         p_i.sValue << " has type " << found->_type << " but should be MODULE or MQTTBROKER\n";
                     }
-                    else { // TBD why the else clause?
+                    else {
                         mi->parameters[i].machine = found;
+                        found->addDependancy(mi);
+                        mi->listenTo(found);
 					}
                 }
                 else {
