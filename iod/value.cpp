@@ -31,24 +31,23 @@
 #include "dynamic_value.h"
 
 void Value::setDynamicValue(DynamicValue *dv) {
-    if (kind == t_dynamic) { delete dyn_value; dyn_value = 0; }
+    if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
     kind = t_dynamic;
-    dyn_value = dv;
+    dyn_value = DynamicValue::ref(dv);
 }
 
-void Value::setDynamicValue(const DynamicValue &dv) {
-    if (kind == t_dynamic) { delete dyn_value; dyn_value = 0; }
+void Value::setDynamicValue(DynamicValue &dv) {
+    if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
     kind = t_dynamic;
-    dyn_value = dv.clone();
+    dyn_value = DynamicValue::ref(&dv);
 }
 
 Value::~Value() {
-    if (kind == t_dynamic) { delete dyn_value; dyn_value = 0; }
+    if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
 }
 
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),
-    sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(0) {
-        if (other.dyn_value) dyn_value = other.dyn_value->clone();
+    sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValue::ref(other.dyn_value)) {
 //    if (kind == t_list) {
 //        std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
 //    }
@@ -60,19 +59,19 @@ Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(
 //    }
 }
 
-Value::Value(const DynamicValue &dv) : kind(t_dynamic) {
-    dyn_value = dv.clone();
+Value::Value(DynamicValue &dv) : kind(t_dynamic) {
+    dyn_value = DynamicValue::ref(&dv);
 }
 
 // this form takes ownership of the passed DynamiValue rather than makes a clone
 Value::Value(DynamicValue *dv) : kind(t_dynamic) {
-    dyn_value = dv;
+    dyn_value = DynamicValue::ref(dv);
 }
 
 Value Value::operator=(const Value &orig){
 //    listValue.erase(listValue.begin(), listValue.end());
     kind=orig.kind;
-    if (dyn_value) { delete dyn_value; dyn_value = 0; }
+    if (dyn_value) { dyn_value = dyn_value->deref(); }
     switch (kind) {
         case t_bool:
             bValue = orig.bValue;
@@ -85,7 +84,7 @@ Value Value::operator=(const Value &orig){
             sValue = orig.sValue;
             break;
         case t_dynamic:
-            dyn_value = orig.dyn_value->clone();
+            dyn_value = DynamicValue::ref(orig.dyn_value);
             kind=orig.kind;
             break;
 #if 0

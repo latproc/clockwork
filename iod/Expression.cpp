@@ -251,7 +251,10 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
 	op = other.op;
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
-    dyn_value = other.dyn_value; // note shared copy, should be a shared pointer
+    if (other.dyn_value)
+        dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
+    else
+        dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached values in this clone
 	priority = other.priority;
 	mi = 0;
@@ -266,7 +269,10 @@ Predicate &Predicate::operator=(const Predicate &other) {
 	op = other.op;
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
-    dyn_value = other.dyn_value; // note shared copy, should be a shared pointer
+    if (other.dyn_value)
+        dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
+    else
+        dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached machine pointers in this clone
 	priority = other.priority;
 	mi = 0;
@@ -311,7 +317,7 @@ std::ostream &Stack::operator<<(std::ostream&out) const {
 		}
 		else {
             if (n.node) out << *n.node;
-			out << " (" << n.val<< ") ";
+			out << " (" << *n.val<< ") ";
 		}
     }
     return out;
@@ -385,8 +391,10 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 				return p->cached_entry;
             }
             else if (m->hasState(v->sValue)) {
-                v->kind = Value::t_string; // this value seems to refer to a state so avoid the above tests from here on
-                return v;
+                //v->kind = Value::t_string; // this value seems to refer to a state so avoid the above tests from here on
+                //return v;
+				p->cached_entry = m->getCurrentStateVal();
+				return p->cached_entry;
             }
 			else {
 				const Value *prop = &m->getValue(v->sValue); // property lookup
@@ -434,7 +442,6 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 	}
     else if (v->kind == Value::t_dynamic) {
         DynamicValue *dv = v->dynamicValue();
-        assert(v);
         return v;
         if (dv) {
             dv->operator()(m);
@@ -521,44 +528,50 @@ ExprNode eval_stack(MachineInstance *m, Stack &work){
     ExprNode a(eval_stack(m, work));
     assert(a.kind != ExprNode::t_op);
     assert(b.kind != ExprNode::t_op);
-    if (a.val.kind == Value::t_dynamic)
-        a.val = a.val.dynamicValue()->operator()(m);
-    if (b.val.kind == Value::t_dynamic)
-        b.val = b.val.dynamicValue()->operator()(m);
+    Value tmp_dyn_a, tmp_dyn_b;
+    if (a.val->kind == Value::t_dynamic) {
+        tmp_dyn_a = a.val->dynamicValue()->operator()(m);
+        a.val = &tmp_dyn_a;
+    }
+    if (b.val->kind == Value::t_dynamic) {
+        tmp_dyn_b = b.val->dynamicValue()->operator()(m);
+        b.val = &tmp_dyn_b;
+    }
     switch (o.op) {
-        case opGE: return a.val >= b.val;
-        case opGT: return a.val > b.val;
-        case opLE: return a.val <= b.val;
-        case opLT: return a.val < b.val;
-        case opEQ: return a.val == b.val;
-        case opNE: return a.val != b.val;
-        case opAND: return a.val && b.val;
-        case opOR: return a.val || b.val;
-		case opNOT: return !b.val;
-		case opUnaryMinus: return - b.val; 
-		case opPlus:  return a.val + b.val;
-		case opMinus: return a.val - b.val;
-		case opTimes: return a.val * b.val;
-		case opDivide:return a.val / b.val;
-		case opMod:   return a.val % b.val;
-        case opBitAnd: return a.val & b.val;
-        case opBitOr: return a.val | b.val;
-        case opNegate: return ~ b.val;
-        case opBitXOr: return a.val ^ b.val;
-		case opAssign:return b.val;
-        case opMatch: return matches(a.val.asString().c_str(), b.val.asString().c_str());
+        case opGE: return *a.val >= *b.val;
+        case opGT: return *a.val > *b.val;
+        case opLE: return *a.val <= *b.val;
+        case opLT: return *a.val < *b.val;
+        case opEQ: return *a.val == *b.val;
+        case opNE: return *a.val != *b.val;
+        case opAND: return *a.val && *b.val;
+        case opOR: return *a.val || *b.val;
+		case opNOT: return !(*b.val);
+		case opUnaryMinus: return - *b.val;
+		case opPlus:  return *a.val + *b.val;
+		case opMinus: return *a.val - *b.val;
+		case opTimes: return *a.val * *b.val;
+		case opDivide:return *a.val / *b.val;
+		case opMod:   return *a.val % *b.val;
+        case opBitAnd: return *a.val & *b.val;
+        case opBitOr: return *a.val | *b.val;
+        case opNegate: return ~ *b.val;
+        case opBitXOr: return *a.val ^ *b.val;
+		case opAssign:return *b.val;
+        case opMatch: return matches(a.val->asString().c_str(), b.val->asString().c_str());
         case opAny:
         case opCount:
         case opAll:
         case opIncludes:
         {
-            DynamicValue *dv = b.val.dynamicValue();
-            if (dv) return dv->operator()(m);
-            return SymbolTable::False;
+            //DynamicValue *dv = b.val->dynamicValue();
+            //if (dv) return dv->operator()(m);
+            //return SymbolTable::False;
+            return b.val;
         }
             break;
 		case opNone:
-            return 0;
+            return Value(0);
     }
     return o;
 }
@@ -575,7 +588,7 @@ void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
     }
     else {
         const Value *result = resolve(p, m, left, reevaluate);
-		stack.push(ExprNode(*result, &p->entry));
+		stack.push(ExprNode(result, &p->entry));
     }
 }
 
@@ -603,7 +616,9 @@ bool Condition::operator()(MachineInstance *m) {
 //		if (m && m->debug()) {
 //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
 //		}
-	    last_result = eval_stack(m, stack).val;
+        std::cout << m->getName() << " Expression Stack: " << stack << "\n";
+        Stack work(stack);
+	    last_result = eval_stack(m, work).val;
         std::stringstream ss;
         ss << last_result << " " << *predicate;
         last_evaluation = ss.str();
