@@ -29,7 +29,7 @@
 #include <utility>
 #include "DebugExtra.h"
 
-Value SymbolTable::Null(-432576);
+Value SymbolTable::Null;
 Value SymbolTable::True(true);
 Value SymbolTable::False(false);
 Value SymbolTable::Zero(0);
@@ -194,12 +194,12 @@ bool SymbolTable::exists(const char *name) {
 }
 
 Value &SymbolTable::lookup(const char *name) {
-    if (this != keywords && keywords->exists(name))
-        return keywords->lookup(name);
-
+    if (this != keywords) {
+        Value &res = keywords->lookup(name);
+        if (res != SymbolTable::Null) return res;
+    }
     SymbolTableIterator iter = st.find(name);
-    if (iter != st.end())
-        return (*iter).second;
+    if (iter != st.end()) return (*iter).second;
     return SymbolTable::Null;
 }
 
