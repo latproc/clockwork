@@ -4,11 +4,12 @@ Test MACHINE {
 	c STATE;
 
 	x WHEN last == "b";
-	none DEFAULT;
 
 ENTER c { last:="c"; LOG "c" }
 ENTER b { last:="b"; LOG "b" }
 ENTER a { last:="a"; LOG "a" }
+
+ENTER INIT { SET SELF TO last }
 
 COMMAND C {}
 COMMAND B {}
@@ -18,4 +19,4 @@ TRANSITION INIT,a,b TO c USING C;
 TRANSITION INIT,a,c TO b USING B;
 TRANSITION INIT,b,c TO a USING A;
 }
-test Test (last:"",tab:Tests);
+test Test (last:"INIT",tab:Tests);
