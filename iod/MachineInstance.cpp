@@ -480,10 +480,12 @@ public:
     MachineValue(MachineInstance *mi): machine_instance(mi) { }
     Value operator()(MachineInstance *m)  {
         if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
-            return machine_instance->getValue("VALUE");
+            last_result = machine_instance->getValue("VALUE");
+            return last_result;
         }
         else {
-            return *machine_instance->getCurrentStateVal();
+            last_result = *machine_instance->getCurrentStateVal();
+            return last_result;
         }
     }
     DynamicValue *clone() const;
@@ -496,10 +498,12 @@ public:
     VariableValue(MachineInstance *mi): machine_instance(mi) { }
     virtual Value operator()(MachineInstance *m) {
         if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
-            return machine_instance->getValue("VALUE");
+            last_result = machine_instance->getValue("VALUE");
+            return last_result;
         }
         else {
-            return machine_instance->getCurrentStateVal();
+            last_result = *machine_instance->getCurrentStateVal();
+            return last_result;
         }
     }
     DynamicValue *clone() const;
