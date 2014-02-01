@@ -58,8 +58,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
         if (!machine->hasState(new_state.sValue)) {
             const Value &deref = machine->getValue(new_state.sValue.c_str());
             if (deref.kind != Value::t_symbol && deref.kind != Value::t_string) {
+                machine->getValue(new_state.sValue.c_str());
                 std::stringstream ss;
-                ss << owner->fullName() << " " << deref << " must be a symbol or string" << std::flush;
+                ss << owner->fullName() << " " << deref << " ("<<deref.kind<<")" << " must be a symbol or string" << std::flush;
                 error_str = strdup(ss.str().c_str());
                 status = Failed;
                 owner->stop(this);
