@@ -11,7 +11,7 @@ Test1 MACHINE names{
 	# toggle the enabled flag to activate this
 	s3 WHEN enabled IS on AND FIRST OF names == "Sally" AND SIZE OF names ==3;
 	# this should be true initially
-	s3 WHEN names INCLUDES "Mary" AND FIRST OF names == "Sally" AND SIZE OF names ==3;
+	s4 WHEN names INCLUDES "Mary" AND FIRST OF names == "Sally" AND SIZE OF names ==3;
 	# use the pull command to activate this
 	j WHEN FIRST OF names == "Jim";
 
