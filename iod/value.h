@@ -47,7 +47,7 @@ public:
     Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), dyn_value(0) { }
     Value(const Value&other);
     Value(DynamicValue *dv);
-    Value(const DynamicValue &dv);
+    Value(DynamicValue &dv);
     virtual ~Value();
     std::string asString() const;
     std::string quoted() const;
@@ -63,7 +63,7 @@ public:
     DynamicValue *dyn_value;
     DynamicValue *dynamicValue() const { return dyn_value; }
     void setDynamicValue(DynamicValue *dv);
-    void setDynamicValue(const DynamicValue &dv);
+    void setDynamicValue(DynamicValue &dv);
     
     Value operator=(const Value &orig);
 

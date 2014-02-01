@@ -149,6 +149,7 @@ Action::Status IntersectSetOperation::doOperation() {
             setListItem(source_b_machine, b);
             if (condition.predicate) {
                 bool matched = false;
+                condition.predicate->flushCache();
                 if (condition(owner)) {
                     if (!MachineIncludesParameter(dest_machine,a)) {
                         dest_machine->addParameter(a, v1.cached_machine);
@@ -289,6 +290,7 @@ Action::Status SelectSetOperation::doOperation() {
                 source_a_machine->locals[0].val.sValue = "ITEM";
                 source_a_machine->locals[0].real_name = a.sValue;
                 if (!mi) throw new SetOperationException();
+                if (condition.predicate) condition.predicate->flushCache();
                 if ( (!condition.predicate || condition(owner)) ){
                     if (!MachineIncludesParameter(dest_machine,a)) {
                         dest_machine->addParameter(a);

@@ -118,8 +118,8 @@ void Dispatcher::idle() {
             if (mi && mi->_type == "EXTERNAL") {
                 DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to " << to->getName() <<  "\n";
                 {
-                    Value host = mi->getValue("HOST");
-                    Value port_val = mi->getValue("PORT");
+                    Value host = mi->properties.lookup("HOST");
+                    Value port_val = mi->properties.lookup("PORT");
                     long port;
                     if (port_val.asInteger(port)) {
                         MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port);

@@ -526,7 +526,7 @@ INTEGER   {
     delete v;
 }
 | ANY SYMBOL ARE SYMBOL {
-    $$ = new Value(AnyInValue($4, $2));
+    $$ = new Value(new AnyInValue($4, $2));
 }
 | ALL SYMBOL ARE SYMBOL {
     $$ = new Value(new AllInValue($4, $2));
@@ -571,16 +571,16 @@ INTEGER   {
     $$ = new Value(new PopListFrontValue($4));
 }
 | TAKE ITEM SYMBOL FROM SYMBOL {
-    $$ = new Value(ItemAtPosValue($5, new Value($3)));
+    $$ = new Value(new ItemAtPosValue($5, new Value($3)));
 }
 | TAKE ITEM value FROM SYMBOL {
-    $$ = new Value(ItemAtPosValue($5, $3));
+    $$ = new Value(new ItemAtPosValue($5, $3));
 }
 | ITEM SYMBOL OF SYMBOL {
-    $$ = new Value(ItemAtPosValue($4, new Value($2), false));
+    $$ = new Value(new ItemAtPosValue($4, new Value($2), false));
 }
 | ITEM value OF SYMBOL {
-    $$ = new Value(ItemAtPosValue($4, $2, false));
+    $$ = new Value(new ItemAtPosValue($4, $2, false));
 }
 | LAST OF SYMBOL {
     $$ = new Value(new PopListBackValue($3, false));

@@ -30,8 +30,8 @@
 class MachineInstance;
 class DynamicValue {
 public:
-    DynamicValue() { }
-    virtual ~DynamicValue() {}
+    DynamicValue() :scope(0), refs(0){ }
+    virtual ~DynamicValue()  {}
     virtual Value operator()(MachineInstance *scope); // uses the provided machine's scope
     virtual Value operator()(); // uses the current scope for evaluation
     virtual DynamicValue *clone() const;
@@ -39,9 +39,15 @@ public:
     Value *lastResult() { return &last_result; }
     void setScope(MachineInstance *m) { scope = m; }
     MachineInstance *getScope() { return scope; }
+    static DynamicValue *ref(DynamicValue*dv) { if (!dv) return 0; else dv->refs++; return dv; }
+    DynamicValue *deref() { --refs; if (!refs) {delete this; return 0;} else return this; }
 protected:
     Value last_result;
     MachineInstance *scope;
+    int refs;
+    DynamicValue(const DynamicValue &other) : last_result(other.last_result), scope(other.scope), refs(1) { }
+private:
+    DynamicValue &operator=(const DynamicValue &other);
 };
 std::ostream &operator<<(std::ostream &, const DynamicValue &);
 

@@ -488,6 +488,9 @@ public:
             return last_result;
         }
     }
+    std::ostream &operator<<(std::ostream &out ) const {
+        return out << machine_instance->getName() << " (" << last_result <<")";
+    }
     DynamicValue *clone() const;
 protected:
     MachineInstance *machine_instance;
@@ -521,6 +524,28 @@ DynamicValue *VariableValue::clone() const {
     return vv;
 }
 
+class MachineTimerValue : public DynamicValue {
+public:
+    MachineTimerValue(MachineInstance *mi): machine_instance(mi) { }
+    Value operator()(MachineInstance *m)  {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        long msecs = (long)get_diff_in_microsecs(&now, &m->start_time)/1000;
+        last_result = msecs;
+        return last_result;
+    }
+    Value *getLastResult() { return &last_result; }
+    DynamicValue *clone() const;
+protected:
+    MachineInstance *machine_instance;
+    friend class MachineInstance;
+};
+
+DynamicValue *MachineTimerValue::clone() const {
+    MachineTimerValue *mtv = new MachineTimerValue(*this);
+    return mtv;
+}
+
 MachineInstance::MachineInstance(InstanceType instance_type) 
         : Receiver(""), 
     _type("Undefined"), 
@@ -533,6 +558,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     state_machine(0),
     current_state("undefined"),
     is_enabled(false),
+    timer_val(0),
     locked(0),
     modbus_exported(none),
     saved_state("undefined"),
@@ -541,6 +567,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     current_value_holder(0),
     last_state_evaluation_time(0)
 {
+    timer_val.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
@@ -569,6 +596,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     state_machine(0), 
     current_state("undefined"),
     is_enabled(false),
+    timer_val(0),
     locked(0),
     modbus_exported(none),
     saved_state("undefined"),
@@ -577,6 +605,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     current_value_holder(0),
     last_state_evaluation_time(0)
 {
+    timer_val.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
@@ -838,15 +867,11 @@ long get_diff_in_microsecs(struct timeval *now, struct timeval *then) {
  */
 
 const Value *MachineInstance::getTimerVal() {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    long msecs = get_diff_in_microsecs(&now, &start_time)/1000;
-	timer_val = msecs;
-	if (debug()) {
-		DBG_PREDICATES << _name << " TIMER is " << msecs << "\n";
-	}
-	return &timer_val;
+    MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(timer_val.dynamicValue());
+    mtv->operator()(this);
+    return mtv->getLastResult();
 }
+
 void MachineInstance::processAll(PollType which) {
     bool builtins = false;
     if (which == BUILTINS)
@@ -1796,7 +1821,7 @@ void MachineInstance::resume() {
 		// time we were disabled
 		struct timeval now;
 		gettimeofday(&now, 0);
-		long dt = get_diff_in_microsecs(&now, &disabled_time);
+		long dt = (long)get_diff_in_microsecs(&now, &disabled_time);
 		start_time.tv_usec += dt % 1000000L;
 		start_time.tv_sec += dt / 1000000L;
 		if (start_time.tv_usec >= 1000000L) {
@@ -2263,6 +2288,113 @@ Trigger *MachineInstance::setupTrigger(const std::string &machine_name, const st
 	trigger_name += suffix;
 	DBG_M_MESSAGING << _name << " is waiting for message " << trigger_name << " from " << machine_name << "\n";
 	return new Trigger(trigger_name);
+}
+
+Value *MachineInstance::resolve(std::string property) {
+	if (property.find('.') != std::string::npos) {
+		// property is on another machine
+		std::string name = property;
+		name.erase(name.find('.'));
+		std::string prop = property.substr(property.find('.')+1 );
+		MachineInstance *other = lookup(name);
+		if (other) {
+			return other->resolve(prop);
+		}
+        else if (_type == "REFERENCE" && name == "ITEM" && locals.size() == 0) {
+            // permit references items to be not always available so that these can be
+            // added and removed as the program executes
+            return &SymbolTable::Null;
+        }
+		else {
+			resetTemporaryStringStream();
+			ss << "could not find machine named " << name << " for property " << property;
+			error_messages.push_back(ss.str());
+			++num_errors;
+			DBG_MSG << ss.str() << "\n";
+            MessageLog::instance()->add(ss.str().c_str());
+			return &SymbolTable::Null;
+		}
+	}
+	else {
+	    // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
+        
+		// variables may refer to an initialisation value passed in as a parameter.
+		if (_type == "VARIABLE" || _type == "CONSTANT") {
+			for (unsigned int i=0; i<parameters.size(); ++i) {
+				if (state_machine->parameters[i].val.kind == Value::t_symbol
+                    && property == state_machine->parameters[i].val.sValue
+                    ) {
+					DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
+					return &parameters[i].val;
+				}
+			}
+		}
+		// use the global value if its name is mentioned in this machine's list of globals
+        if (!state_machine) {
+			resetTemporaryStringStream();
+            ss << _name << " could not find a machine definition: " << _type;
+            DBG_PROPERTIES << ss.str() << "\n";
+            error_messages.push_back(ss.str());
+            MessageLog::instance()->add(ss.str().c_str());
+            ++num_errors;
+            return &SymbolTable::Null;
+        }
+		else if (state_machine->global_references.count(property)) {
+			MachineInstance *m = state_machine->global_references[property];
+			if (m) {
+				DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from " << m->fullName() << "\n";
+				return &m->properties.lookup("VALUE");
+			}
+			else {
+				resetTemporaryStringStream();
+				ss << fullName() << " failed to find the machine for global: " << property;
+				DBG_PROPERTIES << ss.str() << "\n";
+				error_messages.push_back(ss.str());
+                MessageLog::instance()->add(ss.str().c_str());
+				++num_errors;
+			}
+		}
+	    DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
+		if (property == "TIMER") {
+			// we do not use the precalculated timer here since this may be being accessed
+			// within an action handler of a nother machine and will not have been updated
+			// since the last evaluation of stable states.
+            DBG_M_PROPERTIES << getName() << " timer: " << timer_val << "\n";
+            timer_val.dynamicValue()->operator()(this);
+			return &timer_val;
+		}
+		else if (SymbolTable::isKeyword(property.c_str())) {
+			return &SymbolTable::getKeyValue(property.c_str());
+		}
+	    else {
+            Value *x = &properties.lookup(property.c_str());
+            if (*x == SymbolTable::Null) {
+                if (state_machine) {
+                    Value *class_property = &state_machine->properties.lookup(property.c_str());
+                    if (class_property == &SymbolTable::Null) {
+                        DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+                        if (globals.exists(property.c_str()))
+                            return &globals.lookup(property.c_str());
+                    }
+                }
+            }
+            else {
+                DBG_M_PROPERTIES << "found property " << property << " " << x->asString() << "\n";
+                return x;
+            }
+        }
+		
+		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
+		MachineInstance *m = lookup(property);
+		if (m) {
+			if (m->_type == "VARIABLE" || m->_type == "CONSTANT")
+				return &m->properties.lookup("VALUE");
+			else
+				return new Value(new MachineValue(m)); //&m->current_state_val;
+		}
+		
+	}
+	return &SymbolTable::Null;
 }
 
 const Value &MachineInstance::getValue(std::string property) {

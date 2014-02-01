@@ -738,7 +738,7 @@ void initialise_machines() {
 		m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
-			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
+			if (m && (m->_type == "CONSTANT" || m->properties.lookup("PERSISTENT") == "true") ) {
 				std::string name(m->fullName());
 				//if (m->owner) name += m->owner->getName() + ".";
 				//name += m->getName();
@@ -763,7 +763,7 @@ void initialise_machines() {
 		m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
-			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
+			if (m && (m->_type == "CONSTANT" || m->properties.lookup("PERSISTENT") == "true") ) {
 				m->enable();
             }
         }
@@ -800,7 +800,7 @@ void initialise_machines() {
 	m_iter = MachineInstance::begin();
 	while (m_iter != MachineInstance::end()) {
 		MachineInstance *m = *m_iter++;
-		Value enable = m->getValue("startup_enabled");
+		Value enable = m->properties.lookup("startup_enabled");
 		if (enable == SymbolTable::Null || enable == true) {
 			if (!only_startup || (only_startup && m->_type == "STARTUP") ) m->enable();
 		}

@@ -34,7 +34,7 @@ std::ostream &PopListBackValue::operator<<(std::ostream &out ) const {
     if (remove_from_list)
         return out << " TAKE LAST FROM " << machine_list_name;
     else
-        return out << " LAST OF " << machine_list_name;
+        return out << " LAST OF " << machine_list_name<< " (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const PopListBackValue &val) { return val.operator<<(out); }
 
@@ -43,7 +43,7 @@ std::ostream &PopListFrontValue::operator<<(std::ostream &out ) const {
     if (remove_from_list)
         return out << " TAKE FIRST FROM " << machine_list_name;
     else
-        return out << " FIRST OF " << machine_list_name;
+        return out << " FIRST OF " << machine_list_name << " (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const PopListFrontValue &val) { return val.operator<<(out); }
 
@@ -349,7 +349,7 @@ std::ostream &operator<<(std::ostream &out, const DisabledValue &val) { return v
 
 DynamicValue *CastValue::clone() const { return new CastValue(*this); }
 Value CastValue::operator()(MachineInstance *mi) {
-    Value val = mi->getValue(property);
+    Value val = mi->properties.lookup(property.c_str());
     if (kind == "STRING")
         last_result = val.asString();
     else if (kind == "NUMBER") {
