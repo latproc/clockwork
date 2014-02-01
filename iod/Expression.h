@@ -51,6 +51,10 @@ struct Stack {
     std::list<ExprNode>stack;
     std::ostream &operator<<(std::ostream &out)const;
     std::ostream &traverse(std::ostream &out, std::list<ExprNode>::const_iterator &iter, std::list<ExprNode>::const_iterator &end) const;
+    Stack(const Stack&other) { std::copy(other.stack.begin(), other.stack.end(), std::back_inserter(stack)); }
+    Stack() { }
+    private:
+        Stack &operator=(const Stack&other);
 };
 
 struct Predicate {
@@ -98,6 +102,7 @@ struct Predicate {
 	bool lookup_error;
 	std::string error_str;
     bool needs_reevaluation;
+    Stack stack;
 };
 
 std::ostream &operator <<(std::ostream &out, const Predicate &p);

@@ -346,7 +346,9 @@ std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iter
 class ClearFlagOnReturn {
 public:
     ClearFlagOnReturn(bool *val) : to_clear(val) { }
-    ~ClearFlagOnReturn() { *to_clear = false; }
+    ~ClearFlagOnReturn() {
+        *to_clear = false;
+    }
 private:
     bool *to_clear;
 };
@@ -432,6 +434,8 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 	}
     else if (v->kind == Value::t_dynamic) {
         DynamicValue *dv = v->dynamicValue();
+        assert(v);
+        return v;
         if (dv) {
             dv->operator()(m);
             return dv->lastResult();
@@ -445,7 +449,7 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluat
     if (reevaluate) {
         p->flushCache();
     }
-    ClearFlagOnReturn(&p->needs_reevaluation);
+    ClearFlagOnReturn cfor(&p->needs_reevaluation);
 	// return the cached pointer to the value if we have one
 	if (p->cached_entry)
         return p->cached_entry;
@@ -510,11 +514,11 @@ Value eval(Predicate *p, MachineInstance *m, bool left){
 ExprNode eval_stack();
 void prep(Predicate *p, MachineInstance *m, bool left);
 
-ExprNode eval_stack(MachineInstance *m, Stack &stack){
-    ExprNode o = stack.pop();
+ExprNode eval_stack(MachineInstance *m, Stack &work){
+    ExprNode o = work.pop();
     if (o.kind != ExprNode::t_op) return o;
-    ExprNode b(eval_stack(m, stack));
-    ExprNode a(eval_stack(m, stack));
+    ExprNode b(eval_stack(m, work));
+    ExprNode a(eval_stack(m, work));
     assert(a.kind != ExprNode::t_op);
     assert(b.kind != ExprNode::t_op);
     if (a.val.kind == Value::t_dynamic)
@@ -583,13 +587,10 @@ void Stack::clear() {
 }
 
 Value Predicate::evaluate(MachineInstance *m) {
-	Stack stack;
-    stack.clear();
-    prep(stack, this, m, true, needs_reevaluation);
-    //		if (m && m->debug()) {
-    //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
-    //		}
-    Value res = eval_stack(m, stack).val;
+    //stack.clear();
+    if (stack.stack.size() == 0) prep(stack, this, m, true, needs_reevaluation);
+    Stack work(stack);
+    Value res = eval_stack(m, work).val;
     return res;
 }
 
@@ -597,8 +598,8 @@ Value Predicate::evaluate(MachineInstance *m) {
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
 #if 1
-        stack.clear();
-	    prep(stack, predicate, m, true, predicate->needs_reevaluation);
+        //stack.clear();
+	    if (stack.stack.size() == 0) prep(stack, predicate, m, true, predicate->needs_reevaluation);
 //		if (m && m->debug()) {
 //			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
 //		}
@@ -606,7 +607,7 @@ bool Condition::operator()(MachineInstance *m) {
         std::stringstream ss;
         ss << last_result << " " << *predicate;
         last_evaluation = ss.str();
-        stack.clear();
+        //stack.clear();
 	    if (last_result.kind == Value::t_bool) return last_result.bValue;
 #else
 		Value res(eval(predicate, m, false));
