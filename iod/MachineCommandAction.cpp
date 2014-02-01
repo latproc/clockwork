@@ -153,7 +153,7 @@ Action::Status MachineCommand::run() {
     // attempt to run commands until one `blocks' on a timer
 	Action::Status stat = runActions();
     if (stat  == Failed) {
-        std::stringstream ss; ss << owner->getName() << ": " << command_name.get() << " Failed to start an action: " << *this;
+        std::stringstream ss; ss << owner->fullName() << ": " << command_name.get() << " Failed to start an action: " << *this;
         char *msg = strdup(ss.str().c_str());
         MessageLog::instance()->add(msg);
         NB_MSG << msg << "\n";
