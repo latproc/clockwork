@@ -71,9 +71,6 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 }
 
 Condition::~Condition() {
-//    if (predicate)
-//       std::cout << "DELETING predicate " << *predicate << "\n";
-    stack.clear();
     delete predicate;
 }
 
@@ -287,6 +284,7 @@ void Predicate::flushCache() {
     cached_entry = 0;
     last_calculation = 0;
     needs_reevaluation = true;
+    stack.stack.clear();
 }
 
 Condition::Condition(Predicate*p) : predicate(0) {
@@ -344,7 +342,7 @@ std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iter
     }
     else {
         if (n.node) out << *n.node;
-        out << " ("<< n.val << ") ";
+        out << " ("<< *n.val << ") ";
     }
     return out;
 }
@@ -359,7 +357,7 @@ private:
     bool *to_clear;
 };
 
-const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
 	Value *v = &p->entry;
 	p->clearError();
 	if (v->kind == Value::t_symbol) {
@@ -368,15 +366,14 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 		if (p->mi)
 			found = p->mi;
 		else {
+#if 0
+            const Value *prop = 0;
+#endif
 			// before looking up machines, check for specific keywords
 		 	if (left && v->sValue == "DEFAULT") { // default state has a low priority but always returns true
 				p->cached_entry = &SymbolTable::True;
 				return p->cached_entry;
-				}
-			if (v->sValue == "TIMER") {
-                p->last_calculation = (m->getTimerVal());
-                return p->last_calculation;
-			}
+            }
 			else if (v->sValue == "SELF") {
 				//v = m->getCurrent().getName();
 				p->cached_entry = m->getCurrentStateVal();
@@ -391,13 +388,19 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 				return p->cached_entry;
             }
             else if (m->hasState(v->sValue)) {
-                //v->kind = Value::t_string; // this value seems to refer to a state so avoid the above tests from here on
-                //return v;
-				p->cached_entry = m->getCurrentStateVal();
+				p->cached_entry = v;
 				return p->cached_entry;
             }
+#if 1
+            else {
+                return m->resolve(v->sValue);
+            }
+#else
+            else if ((prop = &m->properties.lookup(v->sValue.c_str()))) {
+                return prop;
+            }
 			else {
-				const Value *prop = &m->getValue(v->sValue); // property lookup
+				prop = &m->getValue(v->sValue); // property lookup
 				if (*prop != SymbolTable::Null) {
 	                // do not cache timer values. TBD subclass Value for dynamic values..
 	                if ( !stringEndsWith(v->sValue, ".TIMER"))
@@ -408,7 +411,7 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 				}
 			}
 			found = m->lookup(p->entry);
-			p->mi = found; // cache the machine we just looked up with the predcate
+			p->mi = found; // cache the machine we just looked up with the predicate
 			if (p->mi) {
 				// found a machine, make sure we get to hear if that machine changes state or if its properties change
 				if (p->mi != m) {
@@ -422,6 +425,7 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 				p->setErrorString(ss.str());
 				//DBG_MSG << p->errorString() << "\n";
 			}
+#endif
 		}
 		// if we found a reference to a machine but that machine is a variable or constant, we
 		// are actually interested in its 'VALUE' property
@@ -452,7 +456,7 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
 	return v;
 }
 
-const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
     if (reevaluate) {
         p->flushCache();
     }
@@ -463,101 +467,47 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluat
     return resolveCacheMiss(p, m, left, reevaluate);
 }
 
-#if 0
-Value eval(Predicate *p, MachineInstance *m, bool left){
-	if (p->left_p) {
-		Value l(eval(p->left_p, m, true));
-		Value r(eval(p->right_p, m, false));
-		Value res;
-	    switch (p->op) {
-			case opGE:     res = l >= r; break;
-			case opGT:     res = l > r; break;
-			case opLE:     res = l <= r; break;
-			case opLT:     res = l < r; break;
-			case opEQ:     res = l == r; break;
-			case opNE:     res = l != r; break;
-			case opAND:    res = l && r; break;
-			case opOR:     res = l || r; break;
-			case opNOT:    res = !r; break;
-			case opUnaryMinus: res = -r; break;
-			case opPlus:   res = l + r; break;
-			case opMinus:  res = l - r; break;
-			case opTimes:  res = l * r; break;
-			case opDivide: res = l / r; break;
-			case opMod:    res = l % r; break;
-            case opBitAnd: res = l & r; break;
-            case opBitOr: res = l | r; break;
-            case opNegate: res = ~r; break;
-            case opBitXOr: res = l ^ r; break;
-			case opAssign: res =l = r; break;
-            case opMatch:
-                res = matches(l.asString().c_str(), r.asString().c_str());
-                break;
-            case opAny: res = any_in_state(p->entry); break;
-            case opAll: res = all_in_state(p->entry); break;
-            case opCount: res = count(p->entry); break;
-            case opIncludes:
-                res = includes(p->entry); break;
-	        case opNone:   res = 0;
-	    }
-		
-		if (m && m->debug()) {
-
-			if (p->op == opNOT) {
-				DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
-			}
-			else {
-				DBG_PREDICATES << " expr: " << *(p->left_p) << " " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
-			}
-
-		}
-		return res;
-	}
-	else
-		return resolve(p, m, left);
-}
-#endif
-
 ExprNode eval_stack();
 void prep(Predicate *p, MachineInstance *m, bool left);
 
 ExprNode eval_stack(MachineInstance *m, Stack &work){
-    ExprNode o = work.pop();
+    ExprNode o(work.pop());
     if (o.kind != ExprNode::t_op) return o;
     ExprNode b(eval_stack(m, work));
     ExprNode a(eval_stack(m, work));
     assert(a.kind != ExprNode::t_op);
     assert(b.kind != ExprNode::t_op);
-    Value tmp_dyn_a, tmp_dyn_b;
-    if (a.val->kind == Value::t_dynamic) {
-        tmp_dyn_a = a.val->dynamicValue()->operator()(m);
-        a.val = &tmp_dyn_a;
+    Value lhs, rhs;
+    if (a.val && a.val->kind == Value::t_dynamic) {
+        lhs = a.val->dynamicValue()->operator()(m);
     }
-    if (b.val->kind == Value::t_dynamic) {
-        tmp_dyn_b = b.val->dynamicValue()->operator()(m);
-        b.val = &tmp_dyn_b;
+    else lhs = *a.val;
+    if (b.val && b.val->kind == Value::t_dynamic) {
+        rhs = b.val->dynamicValue()->operator()(m);
+        
     }
+    else rhs = *b.val;
     switch (o.op) {
-        case opGE: return *a.val >= *b.val;
-        case opGT: return *a.val > *b.val;
-        case opLE: return *a.val <= *b.val;
-        case opLT: return *a.val < *b.val;
-        case opEQ: return *a.val == *b.val;
-        case opNE: return *a.val != *b.val;
-        case opAND: return *a.val && *b.val;
-        case opOR: return *a.val || *b.val;
-		case opNOT: return !(*b.val);
-		case opUnaryMinus: return - *b.val;
-		case opPlus:  return *a.val + *b.val;
-		case opMinus: return *a.val - *b.val;
-		case opTimes: return *a.val * *b.val;
-		case opDivide:return *a.val / *b.val;
-		case opMod:   return *a.val % *b.val;
-        case opBitAnd: return *a.val & *b.val;
-        case opBitOr: return *a.val | *b.val;
-        case opNegate: return ~ *b.val;
-        case opBitXOr: return *a.val ^ *b.val;
-		case opAssign:return *b.val;
+        case opGE: return lhs >= rhs;
+        case opGT: return lhs > rhs;
+        case opLE: return lhs <= rhs;
+        case opLT: return lhs < rhs;
+        case opEQ: return lhs == rhs;
+        case opNE: return lhs != rhs;
+        case opAND: return lhs && rhs;
+        case opOR: return lhs || rhs;
+		case opNOT: return !(rhs);
+		case opUnaryMinus: return - rhs;
+		case opPlus:  return lhs + rhs;
+		case opMinus: return lhs - rhs;
+		case opTimes: return lhs * rhs;
+		case opDivide:return lhs / rhs;
+		case opMod:   return lhs % rhs;
+        case opBitAnd: return lhs & rhs;
+        case opBitOr: return lhs | rhs;
+        case opNegate: return ~ rhs;
+        case opBitXOr: return lhs ^ rhs;
+		case opAssign:return rhs;
         case opMatch: return matches(a.val->asString().c_str(), b.val->asString().c_str());
         case opAny:
         case opCount:
@@ -587,8 +537,15 @@ void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         stack.push(p->op);
     }
     else {
-        const Value *result = resolve(p, m, left, reevaluate);
-		stack.push(ExprNode(result, &p->entry));
+        Value *result = resolve(p, m, left, reevaluate);
+        if (*result == SymbolTable::Null)
+            result = &p->entry;
+        p->last_calculation = result;
+        if (p->entry.kind == Value::t_dynamic) {
+            stack.push(ExprNode(result, &p->entry));
+        }
+        else
+            stack.push(ExprNode(result, &p->entry));
     }
 }
 
@@ -601,33 +558,27 @@ void Stack::clear() {
 
 Value Predicate::evaluate(MachineInstance *m) {
     //stack.clear();
-    if (stack.stack.size() == 0) prep(stack, this, m, true, needs_reevaluation);
+    if (stack.stack.size() == 0)
+        prep(stack, this, m, true, needs_reevaluation);
     Stack work(stack);
-    Value res = eval_stack(m, work).val;
+    Value res = *(eval_stack(m, work).val);
     return res;
 }
 
 
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
-#if 1
-        //stack.clear();
-	    if (stack.stack.size() == 0) prep(stack, predicate, m, true, predicate->needs_reevaluation);
-//		if (m && m->debug()) {
-//			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
-//		}
-        std::cout << m->getName() << " Expression Stack: " << stack << "\n";
-        Stack work(stack);
-	    last_result = eval_stack(m, work).val;
+        //predicate->stack.stack.clear();
+	    if (predicate->stack.stack.size() == 0)
+            prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation);
+        std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
+        Stack work(predicate->stack);
+	    ExprNode res(eval_stack(m, work));
+        last_result = *res.val;
         std::stringstream ss;
         ss << last_result << " " << *predicate;
         last_evaluation = ss.str();
-        //stack.clear();
 	    if (last_result.kind == Value::t_bool) return last_result.bValue;
-#else
-		Value res(eval(predicate, m, false));
-	    if (res.kind == Value::t_bool) return res.bValue;
-#endif
 	}
     return false;
 }

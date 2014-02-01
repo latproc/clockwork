@@ -240,8 +240,9 @@ public:
     MachineInstance *lookup(Value &val);
     MachineInstance *lookup(const char *);
     MachineInstance *lookup(const std::string &name);
-    const Value &getValue(std::string property);
+    const Value &getValue(std::string property); // provides the current value of an object accessible in the scope of this machine
     void setValue(std::string property, Value new_value);
+    Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
     
     void setStateMachine(MachineClass *machine_class);
     bool stateExists(State &s);
@@ -307,8 +308,8 @@ public:
 	void setInitialState() { if (state_machine) setState(state_machine->initial_state); }
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
-	const Value *getCurrentStateVal() { return &current_state_val; }
-    const Value *getCurrentValue() { return &current_value_holder; }
+	Value *getCurrentStateVal() { return &current_state_val; }
+    Value *getCurrentValue() { return &current_value_holder; }
 
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;

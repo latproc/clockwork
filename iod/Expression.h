@@ -34,16 +34,18 @@ std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
 struct ExprNode {
     ExprNode(Value *a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
-    ExprNode(Value a, const Value *name = NULL) :tmpval(a), val(&tmpval), node(name), kind(t_int) {  }
-	ExprNode(bool a, const Value *name = NULL) : tmpval(a), val(&tmpval), node(name), kind(t_int) {  }
-    ExprNode(PredicateOperator o) : op(o), kind(t_op) { } 
-    ExprNode(const ExprNode &other) : val(other.val), node(other.node), op(other.op), kind(other.kind) {  }
+    ExprNode(Value a, const Value *name = NULL) :tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
+	ExprNode(bool a, const Value *name = NULL) : tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
+    ExprNode(PredicateOperator o) : val(0), node(0), op(o), kind(t_op) { }
+    ExprNode(const ExprNode &other) : tmpval(other.tmpval), val(other.val), node(other.node), op(other.op), kind(other.kind) { if (other.val == &other.tmpval) val = &tmpval; }
     ~ExprNode();
     Value tmpval;
     Value *val;
     const Value *node;
     PredicateOperator op;
     enum { t_int, t_op } kind;
+private:
+    ExprNode &operator=(const ExprNode &other);
 };
 
 struct Stack {
@@ -66,7 +68,7 @@ struct Predicate {
     Value entry;
 	MachineInstance *mi;
     DynamicValue *dyn_value;
-	const Value *cached_entry;
+	Value *cached_entry;
     const Value *last_calculation; // for dynamic values, retains the last value for display only
 	bool error() { return lookup_error; }
 	const std::string &errorString() { return error_str; }
@@ -111,7 +113,6 @@ std::ostream &operator <<(std::ostream &out, const Predicate &p);
 
 struct Condition {
     Predicate *predicate;
-	Stack stack;
     std::string last_evaluation;
     Value last_result;
     bool operator()(MachineInstance *m);
