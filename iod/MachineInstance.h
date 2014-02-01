@@ -387,6 +387,7 @@ protected:
     bool is_active; // is this machine active or passive?
     Value current_value_holder;
 	std::stringstream ss; // saves recreating string stream for temporary use
+    uint64_t last_state_evaluation_time;
 	
 private:
 	static std::map<std::string, HardwareAddress> hw_names;

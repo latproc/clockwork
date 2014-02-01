@@ -533,7 +533,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     modbus_exported(none),
     saved_state("undefined"),
     current_state_val("undefined"),
-    is_active(false)
+    is_active(false),
+    current_value_holder(0),
+    last_state_evaluation_time(0)
 {
     if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
@@ -568,7 +570,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     saved_state("undefined"),
     current_state_val("undefined"),
     is_active(false),
-    current_value_holder(0)
+    current_value_holder(0),
+    last_state_evaluation_time(0)
 {
     if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
@@ -673,7 +676,7 @@ void MachineInstance::describe(std::ostream &out) {
     const Value *current_timer_val = getTimerVal();
     out << "Timer: " << *current_timer_val << "\n";
     if (stable_states.size()) {
-        out << "Last stable state evaluation:\n";
+        out << "Last stable state evaluation ("<< last_state_evaluation_time << "):\n";
         for (unsigned int i=0; i<stable_states.size(); ++i) {
             out << "  " << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
             if (stable_states[i].condition.last_result == true) {
@@ -1920,7 +1923,11 @@ void MachineInstance::setStableState() {
         DBG_M_AUTOSTATES << _name << " aborting stable states check due to command execution\n";
 		return;
 	}
-	
+    {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        last_state_evaluation_time = now.tv_sec * 1000000 + now.tv_usec;
+    }
 	// we must not set our stable state if objects we depend on are still updating their own state
 	needs_check = 0;
 
@@ -2331,24 +2338,26 @@ const Value &MachineInstance::getValue(std::string property) {
 		else if (SymbolTable::isKeyword(property.c_str())) {
 			return SymbolTable::getKeyValue(property.c_str());
 		}
-	    else if (!properties.exists(property.c_str())) {
-            if (state_machine) {
-                if (!state_machine->properties.exists(property.c_str())) {
-                    DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
-                    if (globals.exists(property.c_str()))
-                        return globals.lookup(property.c_str());
-                }
-                else {
-                    DBG_M_PROPERTIES << "using property " << property << "from class\n";
-                    return state_machine->properties.lookup(property.c_str()); 
+	    else {
+            Value &x = properties.lookup(property.c_str());
+            if (x == SymbolTable::Null) {
+                if (state_machine) {
+                    if (!state_machine->properties.exists(property.c_str())) {
+                        DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+                        if (globals.exists(property.c_str()))
+                            return globals.lookup(property.c_str());
+                    }
+                    else {
+                        DBG_M_PROPERTIES << "using property " << property << "from class\n";
+                        return state_machine->properties.lookup(property.c_str()); 
+                    }
                 }
             }
-	    }
-		else {
-			Value &x = properties.lookup(property.c_str());
-			DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
-			return x;
-		}
+            else {
+                DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
+                return x;
+            }
+        }
 		
 		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
 		MachineInstance *m = lookup(property);
