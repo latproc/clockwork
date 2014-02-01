@@ -247,9 +247,27 @@ IntersectionTest MACHINE source, selector {
     COMMAND run {
         CLEAR result;
         COPY ALL FROM source TO result SELECT USING selector WHERE source.ITEM.length == selector.ITEM.size;
-		MOVE 2 FROM result TO threes SELECT USING selector WHERE result.ITEM.length == selector.ITEM.size &&  result.ITEM IS on;
+		MOVE 2 FROM result TO threes SELECT USING selector WHERE result.ITEM.length+-1 == selector.ITEM.size+-1 &&  result.ITEM IS on;
     }
 }
 intersection_test IntersectionTest items, sizes;
 
+dept1 FLAG;
+dept2 FLAG;
+dept3 FLAG;
+depts LIST dept1,dept2,dept3;
+
+DependancyTest MACHINE items {
+
+	on WHEN ALL items ARE on;
+	off DEFAULT;
+
+	COMMAND clear { CLEAR items; }
+	COMMAND setup { 
+		PUSH dept1 TO items; 
+		PUSH dept2 TO items; 
+		PUSH dept3 TO items; 
+	}
+}
+dependancy_test DependancyTest depts;
 
