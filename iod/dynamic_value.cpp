@@ -349,7 +349,7 @@ std::ostream &operator<<(std::ostream &out, const DisabledValue &val) { return v
 
 DynamicValue *CastValue::clone() const { return new CastValue(*this); }
 Value CastValue::operator()(MachineInstance *mi) {
-    Value val = mi->getValue(property);
+    Value val = mi->properties.lookup(property.c_str());
     if (kind == "STRING")
         last_result = val.asString();
     else if (kind == "NUMBER") {
