@@ -748,7 +748,7 @@ print <<<EOD
 <fieldset><legend>IO Control</legend>
 <div style="position:relative;background-color:white">
   <div id="hideinfo" style="height:18px;width:64px;text-align:center;font-size:16px;position:absolute;left:600px;top:80px;display:none;z-index:1000;background-color:yellow;">hide</div>
-  <div id="info" style="border:1px solid black;position:absolute;left:100px;top:100px;width:800px;height:500px;background-color:white;overflow:scroll;display:none;z-index:1000;" >
+  <div id="info" style="border:1px solid black;position:absolute; left:100px;top:100px;width:800px;height:500px;background-color:white; overflow:auto;display:none;z-index:1000;" >
   </div>
 </div>
 $page_body
