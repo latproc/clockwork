@@ -587,10 +587,9 @@ void Stack::clear() {
 }
 
 Value Predicate::evaluate(MachineInstance *m) {
-    //stack.clear();
-    if (stack.stack.size() == 0) prep(stack, this, m, true, needs_reevaluation);
-    Stack work(stack);
-    Value res = eval_stack(m, work).val;
+    stack.clear();
+        prep(stack, this, m, true, needs_reevaluation);
+    Value res = eval_stack(m, stack).val;
     return res;
 }
 
@@ -598,16 +597,14 @@ Value Predicate::evaluate(MachineInstance *m) {
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
 #if 1
-        //stack.clear();
-	    if (stack.stack.size() == 0) prep(stack, predicate, m, true, predicate->needs_reevaluation);
-//		if (m && m->debug()) {
-//			DBG_PREDICATES << m->getName() << " Expression Stack: " << stack << "\n";
-//		}
+        stack.clear();
+        prep(stack, predicate, m, true, predicate->needs_reevaluation);
+
 	    last_result = eval_stack(m, stack).val;
         std::stringstream ss;
         ss << last_result << " " << *predicate;
         last_evaluation = ss.str();
-        //stack.clear();
+        stack.clear();
 	    if (last_result.kind == Value::t_bool) return last_result.bValue;
 #else
 		Value res(eval(predicate, m, false));
