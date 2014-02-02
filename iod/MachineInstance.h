@@ -363,6 +363,7 @@ public:
 	static void sort();
     
     void setNeedsCheck();
+    long lastStateEvaluationTime() { return last_state_evaluation_time; }
 
 private:
 	int needs_check;
@@ -376,7 +377,7 @@ protected:
     State current_state;
 	Action::Status setState(State new_state, bool reexecute = false);
 	bool is_enabled;
-	Value timer_val;
+	Value state_timer;
 	MachineInstance *locked;
 	ModbusAddress modbus_address;
 	std::vector<std::string>state_names; // used for mapping modbus offsets to states

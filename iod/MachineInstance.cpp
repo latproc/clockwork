@@ -534,6 +534,9 @@ public:
         last_result = msecs;
         return last_result;
     }
+    std::ostream &operator<<(std::ostream &out ) const {
+        return out << machine_instance->getName() << ".TIMER (" << last_result <<")";
+    }
     Value *getLastResult() { return &last_result; }
     DynamicValue *clone() const;
 protected:
@@ -558,7 +561,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     state_machine(0),
     current_state("undefined"),
     is_enabled(false),
-    timer_val(0),
+    state_timer(0),
     locked(0),
     modbus_exported(none),
     saved_state("undefined"),
@@ -567,7 +570,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     current_value_holder(0),
     last_state_evaluation_time(0)
 {
-    timer_val.setDynamicValue(new MachineTimerValue(this));
+    state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
@@ -596,7 +599,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     state_machine(0), 
     current_state("undefined"),
     is_enabled(false),
-    timer_val(0),
+    state_timer(0),
     locked(0),
     modbus_exported(none),
     saved_state("undefined"),
@@ -605,7 +608,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     current_value_holder(0),
     last_state_evaluation_time(0)
 {
-    timer_val.setDynamicValue(new MachineTimerValue(this));
+    state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
         current_value_holder.setDynamicValue(new MachineValue(this));
 	if (instance_type == MACHINE_INSTANCE) {
@@ -709,7 +712,10 @@ void MachineInstance::describe(std::ostream &out) {
     const Value *current_timer_val = getTimerVal();
     out << "Timer: " << *current_timer_val << "\n";
     if (stable_states.size()) {
-        out << "Last stable state evaluation ("<< last_state_evaluation_time << "):\n";
+        struct timeval now;
+		gettimeofday(&now, 0);
+        long now_t = now.tv_sec * 1000000 + now.tv_usec;
+        out << "Last stable state evaluation ("<< last_state_evaluation_time << " now-" << (now_t - last_state_evaluation_time) << "):\n";
         for (unsigned int i=0; i<stable_states.size(); ++i) {
             out << "  " << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
             if (stable_states[i].condition.last_result == true) {
@@ -867,7 +873,7 @@ long get_diff_in_microsecs(struct timeval *now, struct timeval *then) {
  */
 
 const Value *MachineInstance::getTimerVal() {
-    MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(timer_val.dynamicValue());
+    MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(state_timer.dynamicValue());
     mtv->operator()(this);
     return mtv->getLastResult();
 }
@@ -2359,9 +2365,9 @@ Value *MachineInstance::resolve(std::string property) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
-            DBG_M_PROPERTIES << getName() << " timer: " << timer_val << "\n";
-            timer_val.dynamicValue()->operator()(this);
-			return &timer_val;
+            state_timer.dynamicValue()->operator()(this);
+            DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			return &state_timer;
 		}
         else if ( (res = lookupState(property)) != &SymbolTable::Null ) {
             return res;
@@ -2472,9 +2478,9 @@ const Value &MachineInstance::getValue(std::string property) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
-            DBG_M_PROPERTIES << getName() << " timer: " << timer_val << "\n";
             getTimerVal();
-			return timer_val; 
+            DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			return state_timer;
 		}
 		else if (SymbolTable::isKeyword(property.c_str())) {
 			return SymbolTable::getKeyValue(property.c_str());
@@ -2537,6 +2543,11 @@ bool MachineInstance::hasState(const std::string &state_name) const {
                 return true;
             }
         }
+        /*std::list<Transition>::const_iterator trans_i = transitions.begin();
+        while (trans_i != transitions.end()) {
+            const Transition &t = *trans_i++;
+            if (t.dest)
+        }*/
     }
 #if 0
     else {
