@@ -120,6 +120,6 @@ Action::Status WaitForAction::checkComplete() {
 }
 
 std::ostream &WaitForAction::operator<<(std::ostream &out) const {
-    return out << "WaitForAction " << machine->getName() << " IS " << state.getName();
+    return out << "WaitForAction " << target << " IS " << state.getName();
 }
 
