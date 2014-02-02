@@ -571,7 +571,7 @@ bool Condition::operator()(MachineInstance *m) {
         //predicate->stack.stack.clear();
 	    if (predicate->stack.stack.size() == 0)
             prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation);
-        std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
+        //std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
         Stack work(predicate->stack);
 	    ExprNode res(eval_stack(m, work));
         last_result = *res.val;
