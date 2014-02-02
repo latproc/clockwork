@@ -43,7 +43,8 @@ BTTestScript MACHINE test {
 BTDriver MACHINE test {
     script BTTestScript test;
     ok WHEN script IS ok;
-    error WHEN SELF IS error || script IS working && script.TIMER > 10000;
+    error WHEN  SELF IS error || SELF IS waiting && TIMER > 10000;
+    waiting WHEN script IS working;
     idle DEFAULT;
 
     COMMAND run { SEND run TO script; }
