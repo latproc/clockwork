@@ -119,8 +119,12 @@ Value AnyInValue::operator()(MachineInstance *mi) {
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
+        //std::cout << mi->getName() << " machine " << machine_list->parameters[i].machine->getName()
+       // << " is  "<< machine_list->parameters[i].machine->getCurrent().getName() <<" want " << state << "\n";
         
-        if (state == machine_list->parameters[i].machine->getCurrent().getName()) { last_result = true; return last_result; }
+        if (state == machine_list->parameters[i].machine->getCurrent().getName()) {
+            last_result = true; return last_result;
+        }
     }
     last_result = false; return last_result;
 }
