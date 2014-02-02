@@ -85,7 +85,7 @@ Action::Status MachineCommand::runActions() {
 		Action::Status stat = (*a)();
         if (stat == Action::Failed) {
             std::stringstream ss;
-            ss << " action: " << *a <<" running on " << owner->getName() << " failed to start (" << a->error() << ")\n";
+            ss << " action: " << *a <<" running on " << owner->fullName() << " failed to start (" << a->error() << ")\n";
             char *err_msg = strdup(ss.str().c_str());
             MessageLog::instance()->add(err_msg);
 			error_str = err_msg;
