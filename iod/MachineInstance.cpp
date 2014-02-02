@@ -2317,7 +2317,7 @@ Value *MachineInstance::resolve(std::string property) {
 	}
 	else {
 	    // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
-        
+        Value *res = 0;
 		// variables may refer to an initialisation value passed in as a parameter.
 		if (_type == "VARIABLE" || _type == "CONSTANT") {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
@@ -2363,12 +2363,15 @@ Value *MachineInstance::resolve(std::string property) {
             timer_val.dynamicValue()->operator()(this);
 			return &timer_val;
 		}
+        else if ( (res = lookupState(property)) != &SymbolTable::Null ) {
+            return res;
+        }
 		else if (SymbolTable::isKeyword(property.c_str())) {
 			return &SymbolTable::getKeyValue(property.c_str());
 		}
 	    else {
-            Value *x = &properties.lookup(property.c_str());
-            if (*x == SymbolTable::Null) {
+            Value *res = &properties.lookup(property.c_str());
+            if (*res == SymbolTable::Null) {
                 if (state_machine) {
                     Value *class_property = &state_machine->properties.lookup(property.c_str());
                     if (class_property == &SymbolTable::Null) {
@@ -2379,8 +2382,8 @@ Value *MachineInstance::resolve(std::string property) {
                 }
             }
             else {
-                DBG_M_PROPERTIES << "found property " << property << " " << x->asString() << "\n";
-                return x;
+                DBG_M_PROPERTIES << "found property " << property << " " << res->asString() << "\n";
+                return res;
             }
         }
 		
@@ -2392,8 +2395,10 @@ Value *MachineInstance::resolve(std::string property) {
 			else
 				return new Value(new MachineValue(m)); //&m->current_state_val;
 		}
-		
 	}
+    char buf[200];
+    snprintf(buf,200,"%s: no such property or machine: %s",fullName().c_str(), property.c_str());
+    MessageLog::instance()->add(buf);
 	return &SymbolTable::Null;
 }
 
@@ -2506,6 +2511,20 @@ const Value &MachineInstance::getValue(std::string property) {
 		
 	}
 	return SymbolTable::Null;
+}
+
+Value *MachineInstance::lookupState(const std::string &state_name) {
+	//is state_name a valid state?
+    if (state_machine) {
+        std::list<State>::iterator iter = state_machine->states.begin();
+        while (iter != state_machine->states.end()) {
+            State &s = *iter++;
+            if (s.getName() == state_name) {
+                return s.getNameValue();
+            }
+        }
+    }
+    return &SymbolTable::Null;
 }
 
 bool MachineInstance::hasState(const std::string &state_name) const {

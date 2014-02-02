@@ -22,22 +22,24 @@
 #include <iostream>
 #include "State.h"
 
-State::State(const char *msg) :text(msg), val(0) {
+State::State(const char *msg) :text(msg), val(0), name(msg, Value::t_string) {
     
 }
 
-State::State(int v) :text("INTEGER"), val(v) {
+State::State(int v) :text("INTEGER"), val(v), name("INTEGER", Value::t_string) {
     
 }
 
 State::State(const State &orig){
     text = orig.text;
     val = orig.val;
+    name = Value(orig.name);
 }
 
 State &State::operator=(const State &other) {
     text = other.text;
     val = other.val;
+    name = other.name;
     return *this;
 }
 

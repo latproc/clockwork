@@ -23,6 +23,7 @@
 
 #include <ostream>
 #include <string>
+#include "value.h"
 
 struct StateFunc {
     virtual ~StateFunc() {}
@@ -40,6 +41,7 @@ public:
     virtual bool operator==(const State &other) const;
     virtual bool operator!=(const State &other) const;
     const std::string getName() const { return text; }
+    Value *getNameValue() { return &name; }
 	int getIntValue() { return val; }
 	StateFunc enter;
 	StateFunc leave;
@@ -47,6 +49,7 @@ public:
 private:
     std::string text;
     int val;
+    Value name;
 };
 
 std::ostream &operator<<(std::ostream &out, const State &m);

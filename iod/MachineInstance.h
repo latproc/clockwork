@@ -247,6 +247,7 @@ public:
     void setStateMachine(MachineClass *machine_class);
     bool stateExists(State &s);
     bool hasState(const std::string &state_name) const;
+    Value *lookupState(const std::string &state_name);
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
     void setStableState();
