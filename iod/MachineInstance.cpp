@@ -268,14 +268,14 @@ void MachineInstance::setNeedsCheck() {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            dep->setNeedsCheck();
+            if (!dep->needsCheck()) dep->setNeedsCheck();
         }
     }
     else if (_type == "REFERENCE") {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            dep->setNeedsCheck();
+            if (!dep->needsCheck()) dep->setNeedsCheck();
         }
     }
 }
