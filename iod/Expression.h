@@ -75,18 +75,23 @@ struct Predicate {
 	void clearError() { lookup_error = false; }
 	void setErrorString(const std::string &err) { error_str = err; lookup_error = true; }
 	
-    Predicate(Value *v) : left_p(0), op(opNone), right_p(0), entry(*v), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {
+    Predicate(Value *v) : left_p(0), op(opNone), right_p(0), entry(*v), mi(0), dyn_value(0), cached_entry(0),
+            last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
         if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") priority = 1;
     }
-    Predicate(Value &v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {
+    Predicate(Value &v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
+            last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
         if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") priority = 1;
     }
-    Predicate(const char *s) : left_p(0), op(opNone), right_p(0), entry(s), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {
+    Predicate(const char *s) : left_p(0), op(opNone), right_p(0), entry(s), mi(0), dyn_value(0), cached_entry(0),
+            last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
         if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") priority = 1;
     }
-    Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {}
+    Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
+            last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {}
     Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r), 	
-		mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {}
+		mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0),
+        lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {}
     ~Predicate();
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);
@@ -107,6 +112,7 @@ struct Predicate {
 	std::string error_str;
     bool needs_reevaluation;
     Stack stack;
+    long last_evaluation_time;
 };
 
 std::ostream &operator <<(std::ostream &out, const Predicate &p);

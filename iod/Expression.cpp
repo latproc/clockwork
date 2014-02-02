@@ -472,7 +472,13 @@ void prep(Predicate *p, MachineInstance *m, bool left);
 
 ExprNode eval_stack(MachineInstance *m, Stack &work){
     ExprNode o(work.pop());
-    if (o.kind != ExprNode::t_op) return o;
+    if (o.kind != ExprNode::t_op) {
+        if (o.val && o.val->kind == Value::t_dynamic) {
+            o.val->dynamicValue()->operator()(m);
+            return o.val->dynamicValue()->lastResult();
+        }
+        return o;
+    }
     ExprNode b(eval_stack(m, work));
     ExprNode a(eval_stack(m, work));
     assert(a.kind != ExprNode::t_op);
@@ -568,8 +574,10 @@ Value Predicate::evaluate(MachineInstance *m) {
 
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
-        //predicate->stack.stack.clear();
-	    if (predicate->stack.stack.size() == 0)
+        struct timeval now;
+        //if (predicate->last_evaluation_time < m->lastStateEvaluationTime() )
+        //    predicate->stack.stack.clear();
+	    if (predicate->stack.stack.size() == 0 )
             prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation);
         //std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
         Stack work(predicate->stack);
@@ -577,6 +585,9 @@ bool Condition::operator()(MachineInstance *m) {
         last_result = *res.val;
         std::stringstream ss;
         ss << last_result << " " << *predicate;
+        gettimeofday(&now, 0);
+        long t = now.tv_sec*1000000 + now.tv_usec;
+        predicate->last_evaluation_time = t;
         last_evaluation = ss.str();
 	    if (last_result.kind == Value::t_bool) return last_result.bValue;
 	}
