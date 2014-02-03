@@ -223,7 +223,7 @@ void initialise_machine_names(char *data) {
         char buf[500];
         char *p = data, *q = buf;
         while (*p) {
-            if (*p != ' ') {
+            if (*p != ' ' && *p != '\n') {
                 if (q-buf<499) *q++ = *p++;
             }
             else {
@@ -240,6 +240,7 @@ void initialise_commands() {
     commands.push_back("DESCRIBE");
     commands.push_back("DISABLE");
     commands.push_back("ENABLE");
+    commands.push_back("GET");
     commands.push_back("LIST");
     commands.push_back("MESSAGES");
     commands.push_back("PROPERTY");
