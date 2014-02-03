@@ -67,6 +67,7 @@ INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;
 ITEM                return ITEM;
+ITEMS               return ITEMS;
 LEAVE               return LEAVE;
 IF					return IF;
 IN                  return IN;

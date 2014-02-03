@@ -106,7 +106,7 @@ struct Subcondition {
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
-%token LEAVE ASSIGN WITHIN PUSH MOVE
+%token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS
 
 %union {
 	int iVal;
@@ -1013,6 +1013,16 @@ SET SYMBOL TO value  {
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soUnion, 0, false);
+}
+| COPY ITEM value FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $5, SymbolTable::Null, $7, "", soSelect, 0, false, *$3, *$3);
+    delete $3;
+}
+| COPY ITEMS value TO value OF SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $7, SymbolTable::Null, $9, "", soSelect, 0, false, *$3, *$5);
+    delete $3; delete $5;
 }
 | COPY ALL FROM SYMBOL TO SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
