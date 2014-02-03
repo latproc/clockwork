@@ -605,7 +605,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
             std::copy(listValue.begin(), listValue.end(), o_iter);
             out << "(" << listValue.size() << " values)"; 
         }
-            breawk;
+            break;
         case t_map: {
             if (mapValue.size())
                 out << "(Properties)";

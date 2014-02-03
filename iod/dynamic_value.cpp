@@ -317,6 +317,7 @@ ItemAtPosValue::ItemAtPosValue(const ItemAtPosValue &other) {
     machine_list_name = other.machine_list_name;
     machine_list = 0;
     remove_from_list = other.remove_from_list;
+    index = other.index;
 }
 Value ItemAtPosValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
