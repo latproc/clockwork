@@ -13,7 +13,9 @@
 #include "MessageLog.h"
 
 
-DynamicValue *DynamicValue::clone() const { return new DynamicValue(); }
+DynamicValue *DynamicValue::clone() const {
+    return new DynamicValue(*this);
+}
 
 Value DynamicValue::operator()() {
     return SymbolTable::False;
@@ -29,24 +31,6 @@ std::ostream &DynamicValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const DynamicValue &val) { return val.operator<<(out); }
 
-DynamicValue *PopListBackValue::clone() const { return new PopListBackValue(*this); }
-std::ostream &PopListBackValue::operator<<(std::ostream &out ) const {
-    if (remove_from_list)
-        return out << " TAKE LAST FROM " << machine_list_name;
-    else
-        return out << " LAST OF " << machine_list_name<< " (" << last_result << ")";
-}
-std::ostream &operator<<(std::ostream &out, const PopListBackValue &val) { return val.operator<<(out); }
-
-DynamicValue *PopListFrontValue::clone() const { return new PopListFrontValue(*this); }
-std::ostream &PopListFrontValue::operator<<(std::ostream &out ) const {
-    if (remove_from_list)
-        return out << " TAKE FIRST FROM " << machine_list_name;
-    else
-        return out << " FIRST OF " << machine_list_name << " (" << last_result << ")";
-}
-std::ostream &operator<<(std::ostream &out, const PopListFrontValue &val) { return val.operator<<(out); }
-
 DynamicValue *AssignmentValue::clone() const { return new AssignmentValue(*this); }
 std::ostream &AssignmentValue::operator<<(std::ostream &out ) const {
     return out << dest_name << " BECOMES " << src << "(" << last_result <<")";
@@ -59,9 +43,13 @@ std::ostream &ItemAtPosValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const ItemAtPosValue &val) { return val.operator<<(out); }
 
-DynamicValue *AnyInValue::clone() const { return new AnyInValue(*this); }
+DynamicValue *AnyInValue::clone() const {
+    return new AnyInValue(*this);
+}
+
+
 std::ostream &AnyInValue::operator<<(std::ostream &out ) const {
-    return out << "ANY " << machine_list_name << " IN " << state << "(" << last_result <<")";
+    return out << "ANY " << machine_list_name << " ARE " << state << "(" << last_result <<")";
 }
 std::ostream &operator<<(std::ostream &out, const AnyInValue &val) { return val.operator<<(out); }
 
@@ -99,6 +87,11 @@ std::ostream &BitsetValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const BitsetValue &val) { return val.operator<<(out); }
 
+
+AssignmentValue::AssignmentValue(const AssignmentValue &other) {
+    src = other.src;
+    dest_name = other.dest_name;
+}
 Value AssignmentValue::operator()() {
     MachineInstance *mi = getScope();
     if (src.kind == Value::t_symbol)
@@ -109,8 +102,15 @@ Value AssignmentValue::operator()() {
     return last_result;
 }
 
+AnyInValue::AnyInValue(const AnyInValue &other) {
+    state = other.state;
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+}
+
 Value AnyInValue::operator()(MachineInstance *mi) {
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+    if (machine_list == NULL)
+        machine_list = mi->lookup(machine_list_name);
     if (!machine_list) {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ANY IN "<<state<<" test\n";
         MessageLog::instance()->add(ss.str().c_str());
@@ -127,6 +127,13 @@ Value AnyInValue::operator()(MachineInstance *mi) {
         }
     }
     last_result = false; return last_result;
+}
+
+
+AllInValue::AllInValue(const AllInValue &other) {
+    state = other.state;
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
 }
 Value AllInValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) {
@@ -150,6 +157,13 @@ Value AllInValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 
+
+CountValue::CountValue(const CountValue &other) {
+    state = other.state;
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+}
+
 Value CountValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list) {
@@ -169,6 +183,31 @@ Value CountValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 
+IncludesValue::IncludesValue(const IncludesValue &other) {
+    entry = other.entry;
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+}
+
+Value IncludesValue::operator()(MachineInstance *mi) {
+    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+    if (!machine_list)  {
+        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+        MessageLog::instance()->add(ss.str().c_str());
+        last_result = false; return last_result;
+    }
+    for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+        if (entry == machine_list->parameters[i].val )  { last_result = true; return last_result; }
+        if (entry.asString() == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
+    }
+    last_result = false; return last_result;
+}
+
+SizeValue::SizeValue(const SizeValue &other) {
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+}
+
 Value SizeValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
@@ -179,6 +218,23 @@ Value SizeValue::operator()(MachineInstance *mi) {
     last_result = machine_list->parameters.size();
     return last_result;
 }
+
+
+PopListBackValue::PopListBackValue(const PopListBackValue &other) {
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+    remove_from_list = other.remove_from_list;
+}
+
+DynamicValue *PopListBackValue::clone() const { return new PopListBackValue(*this); }
+std::ostream &PopListBackValue::operator<<(std::ostream &out ) const {
+    if (remove_from_list)
+        return out << " TAKE LAST FROM " << machine_list_name;
+    else
+        return out << " LAST OF " << machine_list_name<< " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const PopListBackValue &val) { return val.operator<<(out); }
+
 
 Value PopListBackValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
@@ -198,6 +254,20 @@ Value PopListBackValue::operator()(MachineInstance *mi) {
     }
     return last_result;
 }
+
+PopListFrontValue::PopListFrontValue(const PopListFrontValue &other) {
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+    remove_from_list = other.remove_from_list;
+}
+DynamicValue *PopListFrontValue::clone() const { return new PopListFrontValue(*this); }
+std::ostream &PopListFrontValue::operator<<(std::ostream &out ) const {
+    if (remove_from_list)
+        return out << " TAKE FIRST FROM " << machine_list_name;
+    else
+        return out << " FIRST OF " << machine_list_name << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const PopListFrontValue &val) { return val.operator<<(out); }
 
 Value PopListFrontValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
@@ -242,20 +312,12 @@ Value PopListFrontValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 
-Value IncludesValue::operator()(MachineInstance *mi) {
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        last_result = false; return last_result;
-    }
-    for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
-        if (entry == machine_list->parameters[i].val )  { last_result = true; return last_result; }
-        if (entry.asString() == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
-    }
-    last_result = false; return last_result;
-}
 
+ItemAtPosValue::ItemAtPosValue(const ItemAtPosValue &other) {
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+    remove_from_list = other.remove_from_list;
+}
 Value ItemAtPosValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
@@ -296,6 +358,12 @@ Value ItemAtPosValue::operator()(MachineInstance *mi) {
     last_result = false; return last_result;
 }
 
+
+BitsetValue::BitsetValue(const BitsetValue &other) {
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+    state = other.state;
+}
 Value BitsetValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
@@ -317,6 +385,11 @@ Value BitsetValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 
+
+EnabledValue::EnabledValue(const EnabledValue &other) {
+    machine_name = other.machine_name;
+    machine = 0;
+}
 DynamicValue *EnabledValue::clone() const { return new EnabledValue(*this); }
 Value EnabledValue::operator()(MachineInstance *mi) {
     if (machine == NULL) machine = mi->lookup(machine_name);
@@ -334,6 +407,10 @@ std::ostream &EnabledValue::operator<<(std::ostream &out ) const {
 std::ostream &operator<<(std::ostream &out, const EnabledValue &val) { return val.operator<<(out); }
 
 
+DisabledValue::DisabledValue(const DisabledValue &other) {
+    machine_name = other.machine_name;
+    machine = 0;
+}
 DynamicValue *DisabledValue::clone() const { return new DisabledValue(*this); }
 Value DisabledValue::operator()(MachineInstance *mi) {
     if (machine == NULL) machine = mi->lookup(machine_name);
@@ -351,6 +428,10 @@ std::ostream &DisabledValue::operator<<(std::ostream &out ) const {
 std::ostream &operator<<(std::ostream &out, const DisabledValue &val) { return val.operator<<(out); }
 
 
+CastValue::CastValue(const CastValue &other) {
+    property = other.property;
+    kind = other.kind;
+}
 DynamicValue *CastValue::clone() const { return new CastValue(*this); }
 Value CastValue::operator()(MachineInstance *mi) {
     Value val = mi->properties.lookup(property.c_str());
