@@ -24,10 +24,10 @@
 
 SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value b,
                                                        Value destination, Value property, SetOperation op,
-                                                       Predicate *pred, bool remove)
+                                                       Predicate *pred, bool remove, Value start, Value end)
     : count(num), src_a_name(a.asString()), src_b_name(b.asString()),
       dest_name(destination.asString()), condition(pred), property_name(property.asString()), operation(op),
-      remove_selected(remove) {
+      remove_selected(remove), start_pos(start), end_pos(end) {
 }
 
 SetOperationActionTemplate::~SetOperationActionTemplate() {
@@ -43,7 +43,7 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
 }
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
-    : count(dat->count), Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
+    : scope(m), count(dat->count), Action(m), source_a(dat->src_a_name), source_b(dat->src_b_name),
         source_a_machine(0), source_b_machine(0),
         dest(dat->dest_name), dest_machine(0),  operation(dat->operation),
         property_name(dat->property_name), condition(dat->condition), remove_selected(dat->remove_selected) {
@@ -134,6 +134,12 @@ Action::Status IntersectSetOperation::doOperation() {
         return status;
     }
     if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+    if (start_pos.kind == Value::t_integer) {
+        
+    }
+    if (start_pos >= 0) {
+        
+    }
     unsigned int i=0;
     while (i < source_a_machine->parameters.size()) {
         Value &a(source_a_machine->parameters.at(i).val);
@@ -272,16 +278,34 @@ Action::Status DifferenceSetOperation::doOperation() {
 SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat)
 : SetOperationAction(m, dat)
 {
-    
+    if (start_pos.kind == Value::t_symbol || start_pos.kind == Value::t_string) {
+        Value v = m->properties.lookup(start_pos.sValue.c_str());
+        if (!v.asInteger(sp)) sp = 0;
+    }
+    else {
+        if (!start_pos.asInteger(sp)) sp = 0;
+    }
+    if (sp == -1) sp = 0;
+    if (ep == -1) start_pos = 0;
+    if (end_pos.kind == Value::t_symbol || end_pos.kind == Value::t_string) {
+        Value v = m->properties.lookup(start_pos.sValue.c_str());
+        if (!v.asInteger(ep)) ep = 0;
+    }
+    else {
+        if (!start_pos.asInteger(ep)) ep = 0;
+    }
+    if (ep == -1) count = -1; else count = ep - sp + 1;
 }
 
 Action::Status SelectSetOperation::doOperation() {
     int num_copied = 0;
     long to_copy;
     if (source_a_machine) {
-        if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+        if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
         unsigned int i=0;
         while (i < source_a_machine->parameters.size()) {
+            if (i<sp) continue;
+            if (i>ep) break;
             Value &a(source_a_machine->parameters.at(i).val);
             if (a.kind == Value::t_symbol) {
                 MachineInstance *mi = owner->lookup(a);

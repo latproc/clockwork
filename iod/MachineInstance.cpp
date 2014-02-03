@@ -263,19 +263,20 @@ std::string fullName(const MachineInstance &m) {
 }
 */
 void MachineInstance::setNeedsCheck() {
+    std::cout << fullName() << " needs check\n";
     ++needs_check;
     if (_type == "LIST") {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            if (!dep->needsCheck()) dep->setNeedsCheck();
+            dep->setNeedsCheck();
         }
     }
     else if (_type == "REFERENCE") {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            if (!dep->needsCheck()) dep->setNeedsCheck();
+            dep->setNeedsCheck();
         }
     }
 }
@@ -1994,6 +1995,8 @@ void MachineInstance::setStableState() {
 			//		if ( (s.trigger && s.trigger->enabled() && s.trigger->fired() && s.condition(this) )
 			//			|| (!s.trigger && s.condition(this)) ) {
 			if (!found_match) {
+                if (s.state_name == "Start")
+                    int xx = 1;
                 if (s.condition(this)) {
                     DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
                     if (current_state.getName() != s.state_name) {

@@ -37,7 +37,7 @@ struct SetOperationActionTemplate : public ActionTemplate {
     // The names are to be evaluated in the
     // scope where the command is used.
     
-	SetOperationActionTemplate(Value num, Value a, Value b, Value destination, Value property, SetOperation op, Predicate *pred, bool remove);
+	SetOperationActionTemplate(Value num, Value a, Value b, Value destination, Value property, SetOperation op, Predicate *pred, bool remove, Value start = -1, Value end = -1);
     ~SetOperationActionTemplate();
     
     virtual Action *factory(MachineInstance *mi);
@@ -54,6 +54,8 @@ struct SetOperationActionTemplate : public ActionTemplate {
     SetOperation operation;
     Condition condition;
     bool remove_selected;
+    Value start_pos;
+    Value end_pos;
 };
 
 struct SetOperationAction : public Action {
@@ -65,6 +67,7 @@ struct SetOperationAction : public Action {
     virtual std::ostream &operator<<(std::ostream &out)const;
 
 protected:
+    MachineInstance *scope;
     Value count;
 	Value source_a;
 	Value source_b;
@@ -76,6 +79,10 @@ protected:
     MachineInstance *dest_machine;
     SetOperation operation;
     bool remove_selected;
+    Value start_pos;
+    Value end_pos;
+    long sp;
+    long ep;
 };
 
 struct IntersectSetOperation : public SetOperationAction {

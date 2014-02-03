@@ -248,10 +248,12 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
 	op = other.op;
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
-    if (other.dyn_value)
-        dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
-    else
-        dyn_value = 0;
+    if (other.entry.dyn_value) {
+        entry.dyn_value = DynamicValue::ref(other.entry.dyn_value->clone());
+        //dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
+    }
+    //else
+    //    dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached values in this clone
 	priority = other.priority;
 	mi = 0;
@@ -266,10 +268,12 @@ Predicate &Predicate::operator=(const Predicate &other) {
 	op = other.op;
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
-    if (other.dyn_value)
-        dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
-    else
-        dyn_value = 0;
+    if (other.entry.dyn_value) {
+        entry.dyn_value = DynamicValue::ref(other.entry.dyn_value->clone());
+        //dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
+    }
+    //else
+    //    dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached machine pointers in this clone
 	priority = other.priority;
 	mi = 0;
@@ -523,7 +527,7 @@ ExprNode eval_stack(MachineInstance *m, Stack &work){
             //DynamicValue *dv = b.val->dynamicValue();
             //if (dv) return dv->operator()(m);
             //return SymbolTable::False;
-            return b.val;
+            return a.val;
         }
             break;
 		case opNone:
@@ -568,6 +572,10 @@ Value Predicate::evaluate(MachineInstance *m) {
         prep(stack, this, m, true, needs_reevaluation);
     Stack work(stack);
     Value res = *(eval_stack(m, work).val);
+    struct timeval now;
+    gettimeofday(&now, 0);
+    long t = now.tv_sec*1000000 + now.tv_usec;
+    last_evaluation_time = t;
     return res;
 }
 
