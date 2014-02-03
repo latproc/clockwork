@@ -144,7 +144,7 @@ Action::Status IncludeAction::run() {
         }
         else {
             bool found = false;
-            for (int i=0; i<list_machine->parameters.size(); ++i) {
+            for (unsigned int i=0; i<list_machine->parameters.size(); ++i) {
                 if (list_machine->parameters[i].val == entry
                         || list_machine->parameters[i].real_name == entry.asString())
                     found = true;
