@@ -263,7 +263,6 @@ std::string fullName(const MachineInstance &m) {
 }
 */
 void MachineInstance::setNeedsCheck() {
-    std::cout << fullName() << " needs check\n";
     ++needs_check;
     if (_type == "LIST") {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
