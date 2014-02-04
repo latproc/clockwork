@@ -30,7 +30,7 @@
 class MachineInstance;
 class DynamicValue {
 public:
-    DynamicValue() :scope(0), refs(0){ }
+    DynamicValue() :scope(0), refs(0), last_process_time(0){ }
     virtual ~DynamicValue()  {}
     virtual Value operator()(MachineInstance *scope); // uses the provided machine's scope
     virtual Value operator()(); // uses the current scope for evaluation
@@ -45,6 +45,7 @@ protected:
     Value last_result;
     MachineInstance *scope;
     int refs;
+    uint64_t last_process_time;
     DynamicValue(const DynamicValue &other) : last_result(other.last_result), scope(0), refs(1) { }
 private:
     DynamicValue &operator=(const DynamicValue &other);

@@ -12,6 +12,11 @@
 #include "dynamic_value.h"
 #include "MessageLog.h"
 
+static uint64_t currentTime() {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return now.tv_sec * 1000000 + now.tv_usec;
+}
 
 DynamicValue *DynamicValue::clone() const {
     return new DynamicValue(*this);
@@ -109,6 +114,14 @@ AnyInValue::AnyInValue(const AnyInValue &other) {
 }
 
 Value AnyInValue::operator()(MachineInstance *mi) {
+    if (last_process_time <= mi->lastStateEvaluationTime()) {
+        last_process_time = currentTime();
+    }
+    else {
+        std::cout << "avoiding recalc of " << *this << "\n";
+        return last_result;
+    }
+    
     if (machine_list == NULL)
         machine_list = mi->lookup(machine_list_name);
     if (!machine_list) {
@@ -136,6 +149,14 @@ AllInValue::AllInValue(const AllInValue &other) {
     machine_list = 0;
 }
 Value AllInValue::operator()(MachineInstance *mi) {
+    if (last_process_time <= mi->lastStateEvaluationTime()) {
+        last_process_time = currentTime();
+    }
+    else {
+        std::cout << "avoiding recalc of " << *this << "\n";
+        return last_result;
+    }
+
     if (machine_list == NULL) {
         machine_list = mi->lookup(machine_list_name);
     }
@@ -165,6 +186,11 @@ CountValue::CountValue(const CountValue &other) {
 }
 
 Value CountValue::operator()(MachineInstance *mi) {
+    if (last_process_time <= mi->lastStateEvaluationTime()) {
+        last_process_time = currentTime();
+    }
+    else return last_result;
+
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list) {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for COUNT "<<state<<" test\n";
@@ -190,6 +216,12 @@ IncludesValue::IncludesValue(const IncludesValue &other) {
 }
 
 Value IncludesValue::operator()(MachineInstance *mi) {
+    if (last_process_time <= mi->lastStateEvaluationTime()) {
+        last_process_time = currentTime();
+    }
+    else
+        return last_result;
+
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
@@ -209,6 +241,12 @@ SizeValue::SizeValue(const SizeValue &other) {
 }
 
 Value SizeValue::operator()(MachineInstance *mi) {
+    if (last_process_time <= mi->lastStateEvaluationTime()) {
+        last_process_time = currentTime();
+    }
+    else
+        return last_result;
+
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for SIZE test\n";
@@ -247,6 +285,12 @@ Value PopListBackValue::operator()(MachineInstance *mi) {
     last_result = false;
     if (i>=0) {
         last_result = machine_list->parameters[i].val;
+        if (machine_list->parameters[i].machine && !last_result.cached_machine) {
+            last_result.cached_machine = machine_list->parameters[i].machine;
+            std::string msg("Warning parameter with machine pointer was not completely configured: ");
+            msg += last_result.asString();
+            MessageLog::instance()->add(msg.c_str());
+        }
         if (remove_from_list){
             machine_list->parameters.pop_back();
             machine_list->setNeedsCheck();
@@ -277,7 +321,7 @@ Value PopListFrontValue::operator()(MachineInstance *mi) {
         last_result = false; return last_result;
     }
     last_result = false;
-    if (machine_list->_type == "REFERENECE") {
+    if (machine_list->_type == "REFERENCE") {
         if (machine_list->locals.size()) {
             last_result = machine_list->locals[0].val;
             if (machine_list->locals[0].machine && !last_result.cached_machine) {
@@ -320,6 +364,11 @@ ItemAtPosValue::ItemAtPosValue(const ItemAtPosValue &other) {
     index = other.index;
 }
 Value ItemAtPosValue::operator()(MachineInstance *mi) {
+    if (last_process_time <= mi->lastStateEvaluationTime()) {
+        last_process_time = currentTime();
+    }
+    else return last_result;
+
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
@@ -366,6 +415,11 @@ BitsetValue::BitsetValue(const BitsetValue &other) {
     state = other.state;
 }
 Value BitsetValue::operator()(MachineInstance *mi) {
+    if (last_process_time <= mi->lastStateEvaluationTime()) {
+        last_process_time = currentTime();
+    }
+    else return last_result;
+
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
