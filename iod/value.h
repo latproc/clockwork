@@ -36,15 +36,15 @@ public:
 	typedef std::list<Value*> List;
 //    typedef std::map<std::string, Value> Map;
 
-    Value() : kind(t_empty), cached_machine(0), dyn_value(0) { }
-    Value(Kind k) : kind(k), cached_machine(0), dyn_value(0) { }
-    Value(bool v) : kind(t_bool), bValue(v), cached_machine(0), dyn_value(0) { }
-    Value(long v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
-    Value(int v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
-    Value(unsigned int v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
-    Value(unsigned long v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0) { }
-    Value(const char *str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), dyn_value(0) { }
-    Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), dyn_value(0) { }
+    Value() : kind(t_empty), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(Kind k) : kind(k), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(bool v) : kind(t_bool), bValue(v), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(long v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(int v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(unsigned int v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(unsigned long v) : kind(t_integer), iValue(v), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(const char *str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), dyn_value(0),cached_value(0) { }
+    Value(std::string str, Kind k = t_symbol) : kind(k), sValue(str), cached_machine(0), dyn_value(0),cached_value(0) { }
     Value(const Value&other);
     Value(DynamicValue *dv);
     Value(DynamicValue &dv);
@@ -61,6 +61,8 @@ public:
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
     DynamicValue *dyn_value;
+    Value *cached_value;
+    
     DynamicValue *dynamicValue() const { return dyn_value; }
     void setDynamicValue(DynamicValue *dv);
     void setDynamicValue(DynamicValue &dv);

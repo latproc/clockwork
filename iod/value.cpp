@@ -47,7 +47,8 @@ Value::~Value() {
 }
 
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),
-    sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValue::ref(other.dyn_value)) {
+    sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValue::ref(other.dyn_value)),
+    cached_value(0) {
 //    if (kind == t_list) {
 //        std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
 //    }
@@ -59,12 +60,12 @@ Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(
 //    }
 }
 
-Value::Value(DynamicValue &dv) : kind(t_dynamic) {
+Value::Value(DynamicValue &dv) : kind(t_dynamic),cached_value(0) {
     dyn_value = DynamicValue::ref(&dv);
 }
 
 // this form takes ownership of the passed DynamiValue rather than makes a clone
-Value::Value(DynamicValue *dv) : kind(t_dynamic) {
+Value::Value(DynamicValue *dv) : kind(t_dynamic),cached_value(0) {
     dyn_value = DynamicValue::ref(dv);
 }
 
@@ -103,6 +104,7 @@ Value Value::operator=(const Value &orig){
             break;
     }
     cached_machine = orig.cached_machine;
+    cached_value = orig.cached_value;
     return *this;
 }
 
