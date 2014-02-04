@@ -24,6 +24,7 @@
 #include <ostream>
 #include <string>
 #include <limits.h>
+#include <sys/time.h>
 
 class Statistic {
 public:
@@ -40,6 +41,7 @@ public:
 		ssq += new_value*new_value;
 	}
 	void report(std::ostream &out) {
+        if (count == 0) { out << text << "\tNo data\n"; }
 		float ave = (count==0) ? 0 : sum/count;
 		out << text << '\t' << count << '\t' << min_value << '\t' << max_value << '\t' << ave << "\n";
 	}
@@ -76,5 +78,28 @@ private:
 };
 
 std::ostream &operator<<(std::ostream &out, const Statistic &m);
+
+class CaptureDuration {
+public:
+    CaptureDuration(Statistic &stat) :statistic(stat) {
+        struct timeval now;
+        gettimeofday(&now,0);
+        start = now.tv_sec*1000000L + now.tv_usec;
+    }
+    
+    ~CaptureDuration() {
+        struct timeval now;
+        gettimeofday(&now,0);
+        uint64_t duration = now.tv_sec*1000000L + now.tv_usec - start;
+        statistic.add(duration);
+    };
+    
+private:
+    Statistic &statistic;
+    uint64_t start;
+    
+};
+
+#
 
 #endif
