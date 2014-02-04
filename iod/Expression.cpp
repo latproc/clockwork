@@ -483,20 +483,21 @@ ExprNode eval_stack(MachineInstance *m, Stack &work){
         }
         return o;
     }
+    Value lhs, rhs;
     ExprNode b(eval_stack(m, work));
+    assert(b.kind != ExprNode::t_op);
+    if (b.val && b.val->kind == Value::t_dynamic) {
+        rhs = b.val->dynamicValue()->operator()(m);
+        if (o.op == opAND && rhs.kind == Value::t_bool && rhs.bValue == false) return rhs;
+        if (o.op == opOR && rhs.kind == Value::t_bool && rhs.bValue == true) return rhs;
+    }
+    else rhs = *b.val;
     ExprNode a(eval_stack(m, work));
     assert(a.kind != ExprNode::t_op);
-    assert(b.kind != ExprNode::t_op);
-    Value lhs, rhs;
     if (a.val && a.val->kind == Value::t_dynamic) {
         lhs = a.val->dynamicValue()->operator()(m);
     }
     else lhs = *a.val;
-    if (b.val && b.val->kind == Value::t_dynamic) {
-        rhs = b.val->dynamicValue()->operator()(m);
-        
-    }
-    else rhs = *b.val;
     switch (o.op) {
         case opGE: return lhs >= rhs;
         case opGT: return lhs > rhs;
