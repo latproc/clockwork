@@ -36,6 +36,7 @@
 #include "ModbusInterface.h"
 #include "SetStateAction.h"
 #include "MachineCommandAction.h"
+#include "Statistic.h"
 
 extern SymbolTable globals;
 
@@ -240,7 +241,9 @@ public:
     MachineInstance *lookup(Value &val);
     MachineInstance *lookup(const char *);
     MachineInstance *lookup(const std::string &name);
-    const Value &getValue(std::string property); // provides the current value of an object accessible in the scope of this machine
+    Value &getValue(std::string property); // provides the current value of an object accessible in the scope of this machine
+    Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
+    Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
     void setValue(std::string property, Value new_value);
     Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
     
@@ -364,6 +367,7 @@ public:
     
     void setNeedsCheck();
     long lastStateEvaluationTime() { return last_state_evaluation_time; }
+    void updateLastEvaluationTime();
 
 private:
 	int needs_check;
@@ -390,7 +394,9 @@ protected:
     bool is_active; // is this machine active or passive?
     Value current_value_holder;
 	std::stringstream ss; // saves recreating string stream for temporary use
-    uint64_t last_state_evaluation_time;
+    uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
+    Statistic stable_states_stats;
+    Statistic message_handling_stats;
 	
 private:
 	static std::map<std::string, HardwareAddress> hw_names;

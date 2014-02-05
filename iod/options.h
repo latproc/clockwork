@@ -52,6 +52,9 @@ int modbus_port();
 
 void set_command_port(int port);
 int command_port();
+
+void enable_statistics(bool which);
+int keep_statistics();
     
 #ifdef __cplusplus
 }

@@ -149,7 +149,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
         if (trigger) trigger->disable();
     }
     else {
-        DBG_AUTOSTATES <<"condition: " << (condition.predicate) << "\n";
+        DBG_AUTOSTATES <<"condition: " << (*condition.predicate) << "\n";
         if (!trigger) { DBG_AUTOSTATES << "    condition does not have a timer\n"; }
         if (triggered) {DBG_AUTOSTATES <<"     condition " << (condition.predicate) << " already triggered\n";}
         if (condition(machine)) {DBG_AUTOSTATES <<"    condition " << (condition.predicate) << " passes\n";}
@@ -264,6 +264,7 @@ std::string fullName(const MachineInstance &m) {
 */
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
+    //updateLastEvaluationTime();
     if (_type == "LIST") {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
@@ -568,7 +569,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     current_state_val("undefined"),
     is_active(false),
     current_value_holder(0),
-    last_state_evaluation_time(0)
+    last_state_evaluation_time(0),
+    stable_states_stats("StableState processing"),
+    message_handling_stats("Message handling")
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -606,7 +609,9 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     current_state_val("undefined"),
     is_active(false),
     current_value_holder(0),
-    last_state_evaluation_time(0)
+    last_state_evaluation_time(0),
+    stable_states_stats("StableState processing"),
+    message_handling_stats("Message handling")
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -696,8 +701,14 @@ void MachineInstance::describe(std::ostream &out) {
         }
         out << "\n";
     }
+    if (keep_statistics()) {
+        out << "Statistics\n";
+        stable_states_stats.report(out);
+        message_handling_stats.report(out);
+        out << "\n";
+    }
     if (!active_actions.empty()) {
-        out << "active actions:\n";
+        out << "active actions: (" << active_actions.size() << ")\n";
         displayActive(out);
     }
     if (properties.size()) {
@@ -811,6 +822,7 @@ void MachineInstance::idle() {
         free(log_msg);
         return;
     }
+    CaptureDuration cd(message_handling_stats);
 
 	Action *curr = executingCommand();
 	while (curr) {
@@ -1947,8 +1959,14 @@ void MachineInstance::push(Action *new_action) {
 	return;
 }
 
+void MachineInstance::updateLastEvaluationTime() {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    last_state_evaluation_time = now.tv_sec * 1000000 + now.tv_usec;
+}
 
 void MachineInstance::setStableState() {
+    CaptureDuration cd(stable_states_stats);
 	DBG_M_AUTOSTATES << _name << " checking stable states\n";
 	if (!state_machine || !state_machine->allow_auto_states) {
         DBG_M_AUTOSTATES << _name << " aborting stable states check due to configuration\n";
@@ -1958,13 +1976,9 @@ void MachineInstance::setStableState() {
         DBG_M_AUTOSTATES << _name << " aborting stable states check due to command execution\n";
 		return;
 	}
-    {
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        last_state_evaluation_time = now.tv_sec * 1000000 + now.tv_usec;
-    }
 	// we must not set our stable state if objects we depend on are still updating their own state
 	needs_check = 0;
+    updateLastEvaluationTime();
 
     if (io_interface) {
 	 	setState(io_interface->getStateString());
@@ -2410,7 +2424,23 @@ Value *MachineInstance::resolve(std::string property) {
 	return &SymbolTable::Null;
 }
 
-const Value &MachineInstance::getValue(std::string property) {
+Value *MachineInstance::getValuePtr(Value &property) {
+    if (property.cached_value) return property.cached_value;
+    assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
+    Value &res = getValue(property.sValue);
+    property.cached_value = &res;
+    return property.cached_value;
+}
+
+Value &MachineInstance::getValue(Value &property) {
+    if (property.cached_value) return *property.cached_value;
+    assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
+    Value &res = getValue(property.sValue);
+    property.cached_value = &res;
+    return res;
+}
+
+Value &MachineInstance::getValue(std::string property) {
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine
 		std::string name = property;
@@ -2418,7 +2448,7 @@ const Value &MachineInstance::getValue(std::string property) {
 		std::string prop = property.substr(property.find('.')+1 );
 		MachineInstance *other = lookup(name);
 		if (other) {
-			const Value &v = other->getValue(prop);
+			Value &v = other->getValue(prop);
 			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
 			return v;
 		}
@@ -2603,17 +2633,17 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 				return;
 			}
 		}
-		setNeedsCheck();
 	    // try the current instance ofthe machine, then the machine class and finally the global symbols
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
         Value &prev_value = properties.lookup(property.c_str());
-        bool changed = (prev_value != new_value);
-		{
+        bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
+		if (changed ){
+            setNeedsCheck();
             properties.add(property, new_value, SymbolTable::ST_REPLACE);
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
 			resetTemporaryStringStream();
-			if (owner) ss << owner->getName() << ".";
-	        ss << _name << "." << property << " VALUE " << new_value << std::flush;
+			//if (owner) ss << owner->getName() << ".";
+	        //ss << _name << "." << property << " VALUE " << new_value << std::flush;
 			if ( (property == "VALUE" || property == "value") && io_interface) {
 				char buf[100];
 				errno = 0;

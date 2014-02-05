@@ -30,6 +30,7 @@ static int publisher_port_num = 5556;
 static int persistent_port_num = 5557;
 static int modbus_port_num = 5558;
 static int command_port_num = 5555;
+static bool keep_stats = true;
 
 void set_verbose(int trueOrFalse)
 {
@@ -112,6 +113,14 @@ void set_command_port(int port) {
 
 int command_port() {
     return command_port_num;
+}
+
+void enable_statistics(bool which) {
+    keep_stats = which;
+}
+
+int keep_statistics() {
+    return keep_stats;
 }
 
 

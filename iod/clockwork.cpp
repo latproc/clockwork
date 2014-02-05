@@ -610,6 +610,12 @@ int loadConfig(int argc, char const *argv[]) {
 		else if (strcmp(argv[i], "-cp") == 0 && i < argc-1) { // command port
 			set_command_port((int)strtol(argv[++i], 0, 10));
 		}
+		else if (strcmp(argv[i], "--stats") == 0 ) { // command port
+			enable_statistics(true);
+		}
+		else if (strcmp(argv[i], "--nostats") == 0 ) { // command port
+			enable_statistics(false);
+		}
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {
             usage(argc, argv);

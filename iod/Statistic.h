@@ -25,6 +25,7 @@
 #include <string>
 #include <limits.h>
 #include <sys/time.h>
+#include "options.h"
 
 class Statistic {
 public:
@@ -82,16 +83,20 @@ std::ostream &operator<<(std::ostream &out, const Statistic &m);
 class CaptureDuration {
 public:
     CaptureDuration(Statistic &stat) :statistic(stat) {
-        struct timeval now;
-        gettimeofday(&now,0);
-        start = now.tv_sec*1000000L + now.tv_usec;
+        if (keep_statistics()) {
+            struct timeval now;
+            gettimeofday(&now,0);
+            start = now.tv_sec*1000000L + now.tv_usec;
+        }
     }
     
     ~CaptureDuration() {
-        struct timeval now;
-        gettimeofday(&now,0);
-        uint64_t duration = now.tv_sec*1000000L + now.tv_usec - start;
-        statistic.add(duration);
+        if (keep_statistics()) {
+            struct timeval now;
+            gettimeofday(&now,0);
+            uint64_t duration = now.tv_sec*1000000L + now.tv_usec - start;
+            statistic.add(duration);
+        }
     };
     
 private:
