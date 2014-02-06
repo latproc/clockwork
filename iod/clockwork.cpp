@@ -786,6 +786,7 @@ void initialise_machines() {
             || mi->isModbusExported()
             || mi->uses_timer
             || mi->mq_interface
+            || mi->stable_states.size() > 0
             ) {
             mi->markActive();
             DBG_INITIALISATION << mi->getName() << " is active\n";
