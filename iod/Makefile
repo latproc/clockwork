@@ -65,7 +65,7 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	LockAction.cpp			UnlockAction.cpp	clockwork.cpp \
 	ClientInterface.cpp		MQTTInterface.cpp dynamic_value.cpp value.cpp IncludeAction.cpp \
 	SortListAction.cpp SetListEntriesAction.cpp CopyPropertiesAction.cpp \
-	MessageLog.cpp
+	MessageLog.cpp filtering.cpp
 
 all:	$(APPS)
 
@@ -89,7 +89,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			State.o cJSON.o options.o MachineInstance.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
-			PersistentStore.o MessageLog.o
+			PersistentStore.o MessageLog.o filtering.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o dynamic_value.o value.o symboltable.o \
@@ -103,7 +103,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			MachineInstance.o cwlang.tab.o cwlang.yy.o Scheduler.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
-			PersistentStore.o MessageLog.o \
+			PersistentStore.o MessageLog.o filtering.o \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) $(BOOST_SYSTEM_LIB) \
 			$(TOOLLIB) -lethercat -lmosquitto
 
@@ -112,7 +112,7 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
 			MachineCommandAction.o HandleMessageAction.o MessagingInterface.o \
-			value.o \
+			value.o filtering.o \
 			CallMethodAction.o IODCommands.o regular_expressions.o MessageLog.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o \
@@ -120,7 +120,7 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			value.o symboltable.o Scheduler.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o IODCommands.o \
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o regular_expressions.o MessageLog.o \
+			CallMethodAction.o regular_expressions.o MessageLog.o filtering.o \
 			MQTTInterface.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) \
 			-lethercat -lmosquitto
 
@@ -138,7 +138,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
-			PersistentStore.o MessageLog.o
+			PersistentStore.o MessageLog.o filtering.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o \
@@ -150,7 +150,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			IncludeAction.o LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o PatternAction.o regular_expressions.o \
-			PersistentStore.o MessageLog.o \
+			PersistentStore.o MessageLog.o filtering.o \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			clockwork.o ClientInterface.o MQTTInterface.o -lmosquitto
 
