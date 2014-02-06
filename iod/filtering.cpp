@@ -70,6 +70,16 @@ void LongBuffer::set(unsigned int n, long value)
 }
 
 
+float LongBuffer::getFloatAtOffset(int offset) const
+{
+    return get(offset);
+}
+
+float LongBuffer::getFloatAtIndex(int idx) const
+{
+    return buf[idx];
+}
+
 float FloatBuffer::getFloatAtOffset(int offset) const
 {
     return get(offset);

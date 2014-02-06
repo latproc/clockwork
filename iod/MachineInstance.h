@@ -368,6 +368,8 @@ public:
     void setNeedsCheck();
     long lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
+    
+    virtual long filter(long val) { return val; }
 
 private:
 	int needs_check;

@@ -422,15 +422,20 @@ void generateIOComponentModules() {
 							in->addDependent(m);
 						}
 						else {
-							AnalogueInput *in = 0;
-							if (m->_type == "COUNTERRATE")
-								in = new CounterRate(addr);
-							else
-								in = new AnalogueInput(addr);
-							devices[m->getName().c_str()] = in;
-							in->setName(m->getName().c_str());
-							m->io_interface = in;
-							in->addDependent(m);
+							if (m->_type == "COUNTERRATE") {
+								CounterRate *in = new CounterRate(addr);
+								devices[m->getName().c_str()] = in;
+								in->setName(m->getName().c_str());
+								m->io_interface = in;
+								in->addDependent(m);
+							}
+							else {
+								AnalogueInput *in = new AnalogueInput(addr);
+								devices[m->getName().c_str()] = in;
+								in->setName(m->getName().c_str());
+								m->io_interface = in;
+								in->addDependent(m);
+							}
 						}
 					}
 #endif
