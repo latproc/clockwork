@@ -521,7 +521,7 @@ int main (int argc, char const *argv[])
 	statistics = new Statistics;
 	ControlSystemMachine machine;
     Logger::instance()->setLevel(Logger::Debug);
-	ECInterface::FREQUENCY=5000;
+	ECInterface::FREQUENCY=1000;
 
 #ifndef EC_SIMULATOR
 	collectSlaveConfig(true); // load slave information from the EtherCAT master and configure the domain

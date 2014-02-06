@@ -381,7 +381,7 @@ bool machine_dependencies( MachineInstance *a, MachineInstance *b) {
 void MachineInstance::sort() {
 	std::vector<MachineInstance*> tmp(all_machines.size());	
 	std::copy(all_machines.begin(), all_machines.end(), tmp.begin());
-    std::sort(tmp.begin(), tmp.end(), machine_dependencies);
+//  std::sort(tmp.begin(), tmp.end(), machine_dependencies);
 	all_machines.clear();
 	std::copy(tmp.begin(), tmp.end(), back_inserter(all_machines));
 	
@@ -1626,8 +1626,8 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (from && event_name.find('.') == std::string::npos)
 		event_name = from->getName() + "." + m.getText();
     
-    if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER" 
-			|| _type == "ANALOGINPUT"  || _type == "ANALOGOUTPUT" || _type == "STATUS_FLAG" ) {
+//    if (_type == "POINT" || _type == "SUBSCRIBER" || _type == "PUBLISHER" 
+//			|| _type == "ANALOGINPUT"  || _type == "ANALOGOUTPUT" || _type == "STATUS_FLAG" ) {
         if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
             //std::string state_name = m.getText();
             //if (state_name.find('_') != std::string::npos)
@@ -1644,7 +1644,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
             // a POINT won't have an actions that depend on triggers so it's safe to return now
             return Action::Complete;
         }
-    }
+ //   }
 
     // fire the triggers on any suspended commands that might be waiting for them.
 	if (executingCommand()) {
