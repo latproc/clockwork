@@ -130,6 +130,21 @@ void set_bits(uint8_t *offset, unsigned int bitpos, unsigned int bitlen, uint32_
     
 }
 
+uint32_t IOComponent::filter(uint32_t val) {
+    return val;
+}
+
+uint32_t CounterRate::filter(uint32_t val) {
+    struct timeval now;
+    gettimeofday(&now, 0);
+    long now_t = now.tv_sec * 1000000 + now.tv_usec;
+    times.append(now_t);
+    positions.append(val);
+    if (positions.length() < 4) return 0;
+    return positions.slopeFromLeastSquaresFit(times) * 1000;
+}
+
+
 const char *IOComponent::getStateString() {
 	if (last_event == e_on) return "turning_on";
 	else if (last_event == e_off) return "turning_off";
@@ -212,11 +227,11 @@ void IOComponent::idle() {
                 val = 0;
             }
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
-			//	<< std::hex << (int)*((uint8_t*)(offset+xx)); }
+			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
 			if (address.value != val) {
                 //address.value = get_bits(offset, bitpos, address.bitlen);
-			    address.value = val;
+			    address.value = filter(val);
                 last_event = e_none;
                 const char *evt = "property_change";
                 std::list<MachineInstance*>::iterator iter = depends.begin();

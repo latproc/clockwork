@@ -358,10 +358,12 @@ bool MachineInstance::uses(MachineInstance *other) {
 	if (_type == "MODULE") return false;
 	if (other->_type == "POINT") return true;
 	if (other->_type == "ANALOGINPUT") return true;
+	if (other->_type == "COUNTERRATE") return true;
 	if (other->_type == "ANALOGOUTPUT") return true;
 	if (other->_type == "STATUS_FLAG") return true;
 	if (_type == "POINT") return false;
 	if (_type == "ANALOGINPUT") return true;
+	if (_type == "COUNTERRATE") return true;
 	if (_type == "ANALOGOUTPUT") return true;
 	if (_type == "STATUS_FLAG") return true;
 	if (other->_type == "FLAG") return true;
@@ -638,7 +640,6 @@ MachineInstance::~MachineInstance() {
     active_machines.remove(this);
     Dispatcher::instance()->removeReceiver(this);
 }
-
 
 void MachineInstance::describe(std::ostream &out) {
     out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n"

@@ -29,6 +29,7 @@
 #include "ECInterface.h"
 #include "Message.h"
 #include "MQTTInterface.h"
+#include "filtering.h"
 
 struct IOAddress {
 	unsigned int module_position;
@@ -102,6 +103,9 @@ public:
 	void addDependent(MachineInstance *m) {
 		depends.push_back(m);
 	}
+    
+    virtual uint32_t filter(uint32_t);
+
 	std::list<MachineInstance*>depends;
 
 
@@ -132,6 +136,17 @@ public:
 	AnalogueInput(IOAddress addr) : IOComponent(addr) { }
 //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "AnalogueInput"; }
+};
+
+class CounterRate : public IOComponent {
+public:
+	CounterRate(IOAddress addr) : IOComponent(addr), times(20), positions(20) { }
+    //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
+	virtual const char *type() { return "AnalogueInput"; }
+    virtual uint32_t filter(uint32_t raw);
+private:
+    LongBuffer times;
+    FloatBuffer positions;
 };
 
 class AnalogueOutput : public Output {

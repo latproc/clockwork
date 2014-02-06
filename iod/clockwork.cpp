@@ -198,6 +198,18 @@ void semantic_analysis() {
 	ain_class->disableAutomaticStateChanges();
 	ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
     
+    
+    MachineClass *cr_class = new MachineClass("COUNTERRATE");
+    cr_class->parameters.push_back(Parameter("module"));
+    cr_class->parameters.push_back(Parameter("offset"));
+    cr_class->states.push_back("stable");
+    cr_class->states.push_back("unstable");
+    cr_class->states.push_back("off");
+	cr_class->default_state = State("off");
+	cr_class->initial_state = State("off");
+	cr_class->disableAutomaticStateChanges();
+	cr_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+
     MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
     aout_class->parameters.push_back(Parameter("module"));
     aout_class->parameters.push_back(Parameter("offset"));
