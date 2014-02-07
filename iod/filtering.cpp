@@ -113,10 +113,11 @@ float FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
   float sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f;
   float sumXsquared = 0.0f, sumYsquared = 0.0f;
   int n = length()-1;
+	if (n<=0) return 0;
   float t0 = time_buf.get(n);
   for (int i = n; i>0; i--)
   {
-    float y = (get(i) - get(n)) * 0.337f; // degrees
+    float y = (get(i) - get(n));
     float x = time_buf.get(i) - t0;
     sumX += x;
     sumY += y;
@@ -125,6 +126,7 @@ float FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
     sumXY += x*y;
   }
   float denom = (float)n*sumXsquared - sumX*sumX;
+	if (fabs(denom) < 0.00001f ) return 0.0f;
   float m = ((float)n * sumXY - sumX*sumY) / denom;
   //float c = (sumXsquared * sumY - sumXY * sumX) / denom;
   return m;
