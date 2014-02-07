@@ -27,6 +27,7 @@
 #include "Scheduler.h"
 #include "FireTriggerAction.h"
 #include "dynamic_value.h"
+#include "MessageLog.h"
 
 std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
     std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
@@ -434,7 +435,11 @@ Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reeval
 		// if we found a reference to a machine but that machine is a variable or constant, we
 		// are actually interested in its 'VALUE' property
 		if (found) {
-            p->cached_entry = found->getCurrentValue();
+            Value *res = found->getCurrentValue();
+            if (*res == SymbolTable::Null)
+                p->cached_entry = 0;
+            else
+                p->cached_entry = res;
             return p->cached_entry;
             /*
 			if (found->_type == "VARIABLE" || found->_type == "CONSTANT") {
@@ -449,13 +454,7 @@ Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reeval
 		}
 	}
     else if (v->kind == Value::t_dynamic) {
-        DynamicValue *dv = v->dynamicValue();
         return v;
-        if (dv) {
-            dv->operator()(m);
-            return dv->lastResult();
-        }
-        return &SymbolTable::False;
     }
 	return v;
 }
@@ -537,20 +536,30 @@ ExprNode eval_stack(MachineInstance *m, Stack &work){
     return o;
 }
 
-void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+/*
+ TBD : add a preliminary check for a state test, of one of the
+ two forms:   machine IS state  or   state IS machine
+ 
+ If this is the situation, we identify the machine and state and resolve
+ the state within the scope of that machine.
+ 
+ */
+
+bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
     if (p->left_p) {
-        prep(stack, p->left_p, m, true, reevaluate);
+        if (!prep(stack, p->left_p, m, true, reevaluate)) return false;
 		//if (p->left_p->mi)
         //    std::cout << *(p->left_p) << " refers to a machine\n";
-        prep(stack, p->right_p, m, false, reevaluate);
+        if (!prep(stack, p->right_p, m, false, reevaluate)) return false;
 		//if (p->left_p->mi)
         //    std::cout << *(p->right_p) << " refers to a state\n";
         stack.push(p->op);
     }
     else {
         Value *result = resolve(p, m, left, reevaluate);
-        if (*result == SymbolTable::Null)
-            result = &p->entry;
+        if (*result == SymbolTable::Null) {
+            return false; //result = &p->entry;
+        }
         p->last_calculation = result;
         if (p->entry.kind == Value::t_dynamic) {
             stack.push(ExprNode(result, &p->entry));
@@ -558,6 +567,7 @@ void prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         else
             stack.push(ExprNode(result, &p->entry));
     }
+    return true;
 }
 
 ExprNode::~ExprNode() {
@@ -570,7 +580,12 @@ void Stack::clear() {
 Value Predicate::evaluate(MachineInstance *m) {
     //stack.clear();
     if (stack.stack.size() == 0)
-        prep(stack, this, m, true, needs_reevaluation);
+        if (!prep(stack, this, m, true, needs_reevaluation)) {
+            std::stringstream ss;
+            ss << "Predicate failed to resolve: " << *this << "\n";
+            MessageLog::instance()->add(ss.str().c_str());
+            return false;
+        }
     Stack work(stack);
     Value res = *(eval_stack(m, work).val);
     struct timeval now;
@@ -580,14 +595,18 @@ Value Predicate::evaluate(MachineInstance *m) {
     return res;
 }
 
-
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
         struct timeval now;
         //if (predicate->last_evaluation_time < m->lastStateEvaluationTime() )
         //    predicate->stack.stack.clear();
 	    if (predicate->stack.stack.size() == 0 )
-            prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation);
+            if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {
+                std::stringstream ss;
+                ss << "Condition failed: predicate failed to resolve: " << *this->predicate << "\n";
+                MessageLog::instance()->add(ss.str().c_str());
+                return false;
+            }
         //std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
         Stack work(predicate->stack);
 	    ExprNode res(eval_stack(m, work));
