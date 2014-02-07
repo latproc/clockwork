@@ -492,7 +492,8 @@ public:
         }
     }
     std::ostream &operator<<(std::ostream &out ) const {
-        return out << machine_instance->getName() << " (" << last_result <<")";
+        return out << machine_instance->getName();
+        if (last_result != SymbolTable::Null) out << " (" << last_result.asString() <<")";
     }
     DynamicValue *clone() const;
 protected:
