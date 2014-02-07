@@ -289,7 +289,6 @@ void Predicate::flushCache() {
     cached_entry = 0;
     last_calculation = 0;
     needs_reevaluation = true;
-    stack.stack.clear();
 }
 
 Condition::Condition(Predicate*p) : predicate(0) {
@@ -546,6 +545,25 @@ ExprNode eval_stack(MachineInstance *m, Stack &work){
  */
 
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+    if (p->left_p && p->left_p->op == opNone && p->right_p && p->right_p->op == opNone && (p->op == opEQ || p->op == opNE)) {
+        if (p->left_p->entry.kind == Value::t_symbol && p->right_p->entry.kind == Value::t_symbol) {
+            MachineInstance *lhm = m->lookup(p->left_p->entry);
+            MachineInstance *rhm = m->lookup(p->right_p->entry);
+            if (lhm && !rhm) {
+                if (lhm->hasState(p->right_p->entry.sValue)) {
+                    p->right_p->entry.kind = Value::t_string;
+                    p->left_p->entry.setDynamicValue(new MachineValue(lhm, p->left_p->entry.sValue));
+                }
+            }
+            else if (rhm && !lhm) {
+                if (rhm->hasState(p->left_p->entry.sValue)) {
+                    p->left_p->entry.kind = Value::t_string;
+                    p->right_p->entry.setDynamicValue(new MachineValue(rhm, p->right_p->entry.sValue));
+                }
+            }
+        }
+    }
+    
     if (p->left_p) {
         if (!prep(stack, p->left_p, m, true, reevaluate)) return false;
 		//if (p->left_p->mi)

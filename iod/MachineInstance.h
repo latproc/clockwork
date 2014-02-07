@@ -422,5 +422,26 @@ private:
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
 
+#include "dynamic_value.h"
+class MachineValue : public DynamicValue {
+public:
+    MachineValue(MachineInstance *mi, std::string name): machine_instance(mi), local_name(name) { }
+    Value operator()(MachineInstance *m)  {
+        if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
+            last_result = machine_instance->getValue("VALUE");
+            return last_result;
+        }
+        else {
+            last_result = *machine_instance->getCurrentStateVal();
+            return last_result;
+        }
+    }
+    std::ostream &operator<<(std::ostream &out ) const;
+    DynamicValue *clone() const;
+protected:
+    MachineInstance *machine_instance;
+    std::string local_name;
+};
+
 
 #endif

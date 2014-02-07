@@ -44,6 +44,7 @@
 #include "clockwork.h"
 #include "PersistentStore.h"
 #include "MessageLog.h"
+#include "symboltable.h"
 
 extern int yylineno;
 extern int yycharno;
@@ -364,6 +365,12 @@ void semantic_analysis() {
         else if ((*c_iter).second) {
 			MachineClass *machine_class = (*c_iter).second;
             m->setStateMachine(machine_class);
+            // make sure that analogue machines have a value property
+            if (machine_class->name == "ANALOGOUTPUT"
+                || machine_class->name == "ANALOGINPUT"
+                || machine_class->name == "COUNTERRATE"
+                )
+                m->properties.add("VALUE", 0, SymbolTable::NO_REPLACE);
         }
         else {
             std::cout << "Error: no state machine defined for instance " << (*c_iter).first << "\n";

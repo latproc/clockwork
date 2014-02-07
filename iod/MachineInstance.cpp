@@ -478,27 +478,12 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 
 /* Machine instances have different ways of reporting their 'current value', depending on the type of machine */
 
-class MachineValue : public DynamicValue {
-public:
-    MachineValue(MachineInstance *mi): machine_instance(mi) { }
-    Value operator()(MachineInstance *m)  {
-        if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
-            last_result = machine_instance->getValue("VALUE");
-            return last_result;
-        }
-        else {
-            last_result = *machine_instance->getCurrentStateVal();
-            return last_result;
-        }
-    }
-    std::ostream &operator<<(std::ostream &out ) const {
-        return out << machine_instance->getName();
-        if (last_result != SymbolTable::Null) out << " (" << last_result.asString() <<")";
-    }
-    DynamicValue *clone() const;
-protected:
-    MachineInstance *machine_instance;
-};
+std::ostream &MachineValue::operator<<(std::ostream &out ) const {
+    out << local_name << " (" << machine_instance->getName();
+    if (last_result != SymbolTable::Null) out << " (" << last_result.asString() <<")";
+    out << ")";
+    return out;
+}
 
 class VariableValue : public DynamicValue {
 public:
@@ -579,7 +564,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
-        current_value_holder.setDynamicValue(new MachineValue(this));
+        current_value_holder.setDynamicValue(new MachineValue(this, _name));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
@@ -620,7 +605,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
-        current_value_holder.setDynamicValue(new MachineValue(this));
+        current_value_holder.setDynamicValue(new MachineValue(this, _name));
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
@@ -2420,7 +2405,7 @@ Value *MachineInstance::resolve(std::string property) {
 			if (m->_type == "VARIABLE" || m->_type == "CONSTANT")
 				return &m->properties.lookup("VALUE");
 			else
-				return new Value(new MachineValue(m)); //&m->current_state_val;
+				return new Value(new MachineValue(m, property)); //&m->current_state_val;
 		}
 	}
     char buf[200];
