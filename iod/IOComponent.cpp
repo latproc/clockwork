@@ -149,8 +149,8 @@ uint32_t CounterRate::filter(uint32_t val) {
     times.append(delta_t);
     positions.append(val);
     if (positions.length() < 4) return 0;
-    float speed = positions.slopeFromLeastSquaresFit(times) * 500000;
-
+    //float speed = positions.difference(positions.length()-1, 0) / times.difference(times.length()-1,0) * 1000000;
+    float speed = positions.slopeFromLeastSquaresFit(times) * 250000;
 		return speed;
 }
 
