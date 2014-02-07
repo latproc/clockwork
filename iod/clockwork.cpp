@@ -371,6 +371,9 @@ void semantic_analysis() {
                 || machine_class->name == "COUNTERRATE"
                 )
                 m->properties.add("VALUE", 0, SymbolTable::NO_REPLACE);
+            if (machine_class->name == "COUNTERRATE")
+                m->properties.add("position", 0, SymbolTable::NO_REPLACE);
+
         }
         else {
             std::cout << "Error: no state machine defined for instance " << (*c_iter).first << "\n";
