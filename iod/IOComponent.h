@@ -140,11 +140,13 @@ public:
 
 class CounterRate : public IOComponent {
 public:
-	CounterRate(IOAddress addr) : IOComponent(addr), times(20), positions(20) { }
+	CounterRate(IOAddress addr);
     //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
-	virtual const char *type() { return "CounterRate"; }
+		virtual const char *type() { return "CounterRate"; }
     virtual uint32_t filter(uint32_t raw);
+		uint32_t position;
 private:
+		uint64_t start_t;
     LongBuffer times;
     FloatBuffer positions;
 };

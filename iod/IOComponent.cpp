@@ -134,14 +134,24 @@ uint32_t IOComponent::filter(uint32_t val) {
     return val;
 }
 
-uint32_t CounterRate::filter(uint32_t val) {
+CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) { 
     struct timeval now;
     gettimeofday(&now, 0);
-    long now_t = now.tv_sec * 1000000 + now.tv_usec;
-    times.append(now_t);
+    start_t = now.tv_sec * 1000000 + now.tv_usec;
+}
+
+uint32_t CounterRate::filter(uint32_t val) {
+		position = val;
+    struct timeval now;
+    gettimeofday(&now, 0);
+    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+		uint64_t delta_t = now_t - start_t;
+    times.append(delta_t);
     positions.append(val);
     if (positions.length() < 4) return 0;
-    return positions.slopeFromLeastSquaresFit(times) * 1000;
+    float speed = positions.slopeFromLeastSquaresFit(times) * 500000;
+
+		return speed;
 }
 
 
@@ -231,7 +241,7 @@ void IOComponent::idle() {
 			//  << ":" << std::dec << val <<" "; }
 			if (address.value != val) {
                 //address.value = get_bits(offset, bitpos, address.bitlen);
-			    address.value = filter(val);
+						    address.value = filter(val);
                 last_event = e_none;
                 const char *evt = "property_change";
                 std::list<MachineInstance*>::iterator iter = depends.begin();
