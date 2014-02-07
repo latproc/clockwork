@@ -379,7 +379,7 @@ foreach ($tabs as $tab => $data) {
 			else {
 			    // analogue values display a value, everything else displays a state name
 			    if ($type == "AnalogueOutput" || $type == "AnalogueInput")
-			        $display_value = htmlspecialchars($curr->value);
+			        $display_value = htmlspecialchars($curr->VALUE);
 			    else
 			        $display_value = htmlspecialchars($status);
        
@@ -401,8 +401,8 @@ foreach ($tabs as $tab => $data) {
 					$tabdata .= "</td>";
 					if ($type == 'AnalogueOutput') {
 						$tabdata .= '<td><div class="item_state" id="mc_' . $point. '">' 
-							. htmlspecialchars($curr->value) 
-							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->value .'"'
+							. htmlspecialchars($curr->VALUE) 
+							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->VALUE .'"'
 							. 'style="float:left;width:14em;"></div></td>';
 					}
 					else
@@ -599,12 +599,12 @@ print <<<'EOD'
 								}
 								else if (type == "AnalogueInput") {
 									$("#mc_"+res[i].name).each(function(){
-										$(this).html(res[i].value);
+										$(this).html(res[i].VALUE);
 									});
 								}
 								else if (type == "AnalogueOutput") {
 									$("#mc_"+res[i].name).each(function(){
-										$(this).html(res[i].value);
+										$(this).html(res[i].VALUE);
 									});
 								}
 								else if (type != "piston") {
