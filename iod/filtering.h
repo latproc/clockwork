@@ -14,6 +14,7 @@ public:
     float average(int n);
     int length();
     Buffer(int buf_size);
+	virtual ~Buffer() { }
 private:
     Buffer(const Buffer &);
     Buffer &operator=(const Buffer&);
@@ -28,7 +29,8 @@ public:
     void append(long val);
     long get(unsigned int n) const;
     void set(unsigned int n, long value);
-    LongBuffer(int buf_size) : Buffer(buf_size) { }
+    LongBuffer(int buf_size) : Buffer(buf_size) { buf = new long[BUFSIZE]; }
+	~LongBuffer() { delete[] buf; }
 private:
     LongBuffer(const LongBuffer &);
     LongBuffer &operator=(const LongBuffer&);
@@ -44,8 +46,9 @@ public:
     void append( float val);
     float get(unsigned int n) const;
     void set(unsigned int n, float value);
-    FloatBuffer(int buf_size) : Buffer(buf_size) { }
     float slopeFromLeastSquaresFit(const LongBuffer &time_buf);
+    FloatBuffer(int buf_size) : Buffer(buf_size) { buf = new float[BUFSIZE]; }
+	~FloatBuffer() { delete[] buf; }
 private:
     FloatBuffer(const FloatBuffer &);
     FloatBuffer &operator=(const FloatBuffer&);

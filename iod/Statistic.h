@@ -43,8 +43,10 @@ public:
 	}
 	void report(std::ostream &out) {
         if (count == 0) { out << text << "\tNo data\n"; }
-		float ave = (count==0) ? 0 : sum/count;
-		out << text << '\t' << count << '\t' << min_value << '\t' << max_value << '\t' << ave << "\n";
+		else {
+			float ave = (count==0) ? 0 : sum/count;
+			out << text << '\t' << count << '\t' << min_value << '\t' << max_value << '\t' << ave << "\n";
+		}
 	}
 #if 0	
 	float rollingAverage(){

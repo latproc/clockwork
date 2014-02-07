@@ -294,7 +294,7 @@ void generateIOComponentModules() {
 		while (iter != machines.end()) {
 			MachineInstance *m = (*iter).second; iter++;
 			--remaining;
-			if ( (m->_type == "POINT" || m->_type == "ANALOGINPUT" 
+			if ( (m->_type == "POINT" || m->_type == "ANALOGINPUT"  || m->_type == "COUNTERRATE"
 					|| m->_type == "STATUS_FLAG" || m->_type == "ANALOGOUTPUT" ) && m->parameters.size() > 1) {
 				// points should have two parameters, the name of the io module and the bit offset
 				//Parameter module = m->parameters[0];
@@ -424,14 +424,18 @@ void generateIOComponentModules() {
 						else {
 							if (m->_type == "COUNTERRATE") {
 								CounterRate *in = new CounterRate(addr);
-								devices[m->getName().c_str()] = in;
+								char *nm = strdup(m->getName().c_str());
+								devices[nm] = in;
+								free(nm);
 								in->setName(m->getName().c_str());
 								m->io_interface = in;
 								in->addDependent(m);
 							}
 							else {
 								AnalogueInput *in = new AnalogueInput(addr);
-								devices[m->getName().c_str()] = in;
+								char *nm = strdup(m->getName().c_str());
+								devices[nm] = in;
+								free(nm);
 								in->setName(m->getName().c_str());
 								m->io_interface = in;
 								in->addDependent(m);
