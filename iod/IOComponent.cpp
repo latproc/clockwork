@@ -149,10 +149,104 @@ uint32_t CounterRate::filter(uint32_t val) {
     times.append(delta_t);
     positions.append(val);
     if (positions.length() < 4) return 0;
-    float speed = positions.slopeFromLeastSquaresFit(times) * 500000;
-
+    uint64_t ds = positions.get(positions.length()-1) - positions.get(0);
+    uint64_t dt = times.get(times.length()-1) - times.get(0);
+    if (dt < 0.000001) return 0;
+    float speed = ds / dt * 1000000;
+    //float speed = positions.slopeFromLeastSquaresFit(times) * 1000000;
 		return speed;
 }
+
+/* The Speed Controller class */
+
+/*
+    the user provides settings that the controller uses in its
+    calculations. The main input from the user is a speed set point and
+    this is set via the setValue() method used by other IOComponents.
+    Clockwork has a spefic test for this class and after updating properties
+    on this class an update() is called.
+ */
+
+class PID_Settings {
+public:
+    bool property_changed;
+    uint32_t max_forward;
+    uint32_t max_reverse;
+    float Kp;
+    uint32_t set_point;
+    
+	float estimated_speed;
+	float Pe; 		// used for process error: SetPoint - EstimatedSpeed;
+	float current; 	// current power level this is our PV (control variable)
+	float last_pos;
+	uint64_t position;
+	uint64_t measure_time;
+	uint64_t last_time;
+	float last_power;
+    uint32_t slow_speed;
+    uint32_t full_speed;
+    uint32_t stopping_time;
+    uint32_t stopping_distance;
+    uint32_t tolerance;
+    uint32_t min_update_time;
+    uint32_t deceleration_allowance;
+    float deceleration_rate;
+
+    PID_Settings() : property_changed(true),
+        max_forward(16383),
+        max_reverse(-16383),
+        Kp(20.0),
+        set_point(0),
+        estimated_speed(0.0f),
+        Pe(0.0f),
+        current(0),
+        last_pos(0.0f),
+        position(0),
+        measure_time(0),
+        last_time(0),
+        last_power(0),
+        slow_speed(200),
+        full_speed(1000),
+        stopping_time(300),
+        stopping_distance(2000),
+        tolerance(10),
+        min_update_time(20),
+        deceleration_allowance(20),
+        deceleration_rate(0.8f)
+    { }
+};
+
+uint32_t PIDController::filter(uint32_t raw) {
+    return raw;
+}
+
+PIDController::PIDController(IOAddress addr) : Output(addr), config(0) {
+    config = new PID_Settings();
+}
+
+PIDController::~PIDController() {
+    delete config;
+}
+
+void PIDController::update() {
+    config->property_changed = true;
+}
+
+void PIDController::idle() {
+    //calculate..
+    
+    if (config->property_changed) {
+        config->property_changed = false;
+    }
+    
+    if (last_event == e_change) {
+        //config->
+    }
+    
+    IOComponent::idle();
+}
+
+/* ---------- */
 
 
 const char *IOComponent::getStateString() {
