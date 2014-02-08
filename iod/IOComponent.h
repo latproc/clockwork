@@ -131,22 +131,26 @@ public:
 	virtual const char *type() { return "Input"; }
 };
 
+class InputFilterSettings;
 class AnalogueInput : public IOComponent {
 public:
 	AnalogueInput(IOAddress addr) : IOComponent(addr) { }
 //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "AnalogueInput"; }
+    virtual uint32_t filter(uint32_t raw);
+    void update(); // clockwork uses this to notify of updates
+    InputFilterSettings *config;
 };
 
 class CounterRate : public IOComponent {
 public:
 	CounterRate(IOAddress addr);
     //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
-		virtual const char *type() { return "CounterRate"; }
+    virtual const char *type() { return "CounterRate"; }
     virtual uint32_t filter(uint32_t raw);
-		uint32_t position;
+    uint32_t position;
 private:
-		uint64_t start_t;
+    uint64_t start_t;
     LongBuffer times;
     FloatBuffer positions;
 };
@@ -156,6 +160,19 @@ public:
 	AnalogueOutput(IOAddress addr) : Output(addr) { }
 //	AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "AnalogueOutput"; }
+};
+
+class PID_Settings;
+class PIDController : public Output {
+public:
+	PIDController(IOAddress addr);
+    ~PIDController();
+    //	AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
+	virtual const char *type() { return "SpeedController"; }
+    void idle();
+    virtual uint32_t filter(uint32_t raw);
+    void update(); // clockwork uses this to notify of updates
+    PID_Settings *config;
 };
 
 class MQTTPublisher : public IOComponent {

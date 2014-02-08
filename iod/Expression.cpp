@@ -616,8 +616,8 @@ Value Predicate::evaluate(MachineInstance *m) {
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
         struct timeval now;
-        //if (predicate->last_evaluation_time < m->lastStateEvaluationTime() )
-        //    predicate->stack.stack.clear();
+        if (predicate->last_evaluation_time < m->lastStateEvaluationTime() )
+            predicate->stack.stack.clear();
 	    if (predicate->stack.stack.size() == 0 )
             if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {
                 std::stringstream ss;

@@ -192,6 +192,7 @@ void semantic_analysis() {
     MachineClass *ain_class = new MachineClass("ANALOGINPUT");
     ain_class->parameters.push_back(Parameter("module"));
     ain_class->parameters.push_back(Parameter("offset"));
+    ain_class->parameters.push_back(Parameter("filter_settings"));
     ain_class->states.push_back("stable");
     ain_class->states.push_back("unstable");
 	ain_class->default_state = State("stable");
@@ -219,6 +220,18 @@ void semantic_analysis() {
 	aout_class->default_state = State("stable");
 	aout_class->initial_state = State("stable");
 	aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+    
+    MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
+    pid_class->parameters.push_back(Parameter("module"));
+    pid_class->parameters.push_back(Parameter("offset"));
+    pid_class->parameters.push_back(Parameter("settings"));
+    pid_class->parameters.push_back(Parameter("position"));
+    pid_class->parameters.push_back(Parameter("speed"));
+    pid_class->states.push_back("stable");
+    pid_class->states.push_back("unstable");
+	pid_class->default_state = State("stable");
+	pid_class->initial_state = State("stable");
+	pid_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
     MachineClass *list_class = new MachineClass("LIST");
     list_class->states.push_back("empty");

@@ -254,6 +254,20 @@ std::list<MachineClass*> MachineClass::all_machine_classes;
 
 std::map<std::string, MachineClass> MachineClass::machine_classes;
 
+/* Factory methods */
+
+MachineInstance *MachineInstanceFactory::create(MachineInstance::InstanceType instance_type) {
+    return new MachineInstance(instance_type);
+}
+
+MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type) {
+    if (strcmp(type, "COUNTERRATE") == 0)
+        return new CounterRateInstance(name, type, instance_type);
+    else
+        return new MachineInstance(name, type, instance_type);
+}
+
+
 /*
 std::string fullName(const MachineInstance &m) {
 	std::string name;
@@ -264,7 +278,7 @@ std::string fullName(const MachineInstance &m) {
 */
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
-    //updateLastEvaluationTime();
+    updateLastEvaluationTime();
     if (_type == "LIST") {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
@@ -538,7 +552,22 @@ DynamicValue *MachineTimerValue::clone() const {
     return mtv;
 }
 
-MachineInstance::MachineInstance(InstanceType instance_type) 
+class CounterRateFilterSettings {
+public:
+    
+};
+
+CounterRateInstance::CounterRateInstance(InstanceType instance_type) :MachineInstance(instance_type) {
+    settings = new CounterRateFilterSettings();
+}
+CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type)
+        : MachineInstance(name, type, instance_type) {
+    settings = new CounterRateFilterSettings();
+}
+CounterRateInstance::~CounterRateInstance() { delete settings; }
+
+
+MachineInstance::MachineInstance(InstanceType instance_type)
         : Receiver(""), 
     _type("Undefined"), 
     io_interface(0),
@@ -1623,10 +1652,10 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
                 setState("off");
             }
             else if (m.getText() == "property_change" ) {
-								if (_type == "COUNTERRATE") {
-									CounterRate *cr = dynamic_cast<CounterRate*>(io_interface);
-                	setValue("position", cr->position);
-								}
+                if (_type == "COUNTERRATE") {
+                    CounterRate *cr = dynamic_cast<CounterRate*>(io_interface);
+                    setValue("position", cr->position);
+                }
                 setValue("VALUE", io_interface->address.value);
             }
             // a POINT won't have an actions that depend on triggers so it's safe to return now
@@ -2160,7 +2189,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                 DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter " << p.val.sValue << "\n";
             }
             else {
-                newp.machine = new MachineInstance(p.val.sValue.c_str(), p.machine->_type.c_str());
+                newp.machine = MachineInstanceFactory::create(p.val.sValue.c_str(), p.machine->_type.c_str());
                 newp.machine->setProperties(p.machine->properties);
                 newp.machine->setDefinitionLocation(p.machine->definition_file.c_str(), p.machine->definition_line);
                 listenTo(newp.machine);
@@ -2174,11 +2203,16 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                     MachineClass *newsm = (*c_iter).second;
                     newp.machine->setStateMachine(newsm);
                     if (newsm->parameters.size() != p.machine->parameters.size()) {
+                        // LISTS can have any number of parameters
+                        // POINTs and ANALOGINPUTs can have 2 or three parameters
                         if (newsm->name == "LIST") {
                             DBG_MSG << "List has " << p.machine->parameters.size() << " parameters\n";
                             p.machine->setNeedsCheck();
                         }
-                        if (newsm->name != "LIST" && (newsm->name != "POINT" || newsm->parameters.size() < 2 || newsm->parameters.size() >3 ) ) {
+                        if (newsm->name != "LIST"
+                            && ( (newsm->name != "POINT" && newsm->name != "ANALOGINPUT")
+                                    || newsm->parameters.size() < 2 || newsm->parameters.size() >3 )
+                        ) {
                             resetTemporaryStringStream();
                             ss << "## - Error: Machine " << newsm->name << " requires " 
                                 << newsm->parameters.size()
@@ -2579,6 +2613,15 @@ bool MachineInstance::hasState(const std::string &state_name) const {
     }
 #endif
     return false;
+}
+
+void CounterRateInstance::setValue(std::string property, Value new_value) {
+    if (new_value.kind == Value::t_symbol) {
+        new_value = lookup(new_value.sValue.c_str());
+    }
+    long val;
+    if (!new_value.asInteger(val)) val = 0;
+    properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
 }
 
 void MachineInstance::setValue(std::string property, Value new_value) {

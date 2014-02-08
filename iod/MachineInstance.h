@@ -202,11 +202,15 @@ class MQTTModule;
 struct cJSON;
 
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
+    friend class MachineInstanceFactory;
 public:
     enum PollType { BUILTINS, NO_BUILTINS};
 	enum InstanceType { MACHINE_INSTANCE, MACHINE_TEMPLATE };
+protected:
     MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
     MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+    
+public:
     virtual ~MachineInstance();
 	virtual Receiver *asReceiver() { return this; }
     
@@ -244,7 +248,7 @@ public:
     Value &getValue(std::string property); // provides the current value of an object accessible in the scope of this machine
     Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
     Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
-    void setValue(std::string property, Value new_value);
+    virtual void setValue(std::string property, Value new_value);
     Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
     
     void setStateMachine(MachineClass *machine_class);
@@ -403,6 +407,7 @@ protected:
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
+    MachineInstance(const MachineInstance &other);
     static std::list<MachineInstance*> all_machines;
     static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
     static std::list<MachineInstance*> active_machines; // machines that require idle() processing
@@ -421,6 +426,23 @@ private:
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
+
+class CounterRateFilterSettings;
+class CounterRateInstance : public MachineInstance {
+protected:
+    CounterRateInstance(InstanceType instance_type = MACHINE_INSTANCE);
+    CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+public:
+    ~CounterRateInstance();
+    void setValue(std::string property, Value new_value);
+
+private:
+    CounterRateInstance &operator=(const MachineInstance &orig);
+    CounterRateInstance(const MachineInstance &other);
+    CounterRateFilterSettings *settings;
+    
+    friend class MachineInstanceFactory;
+};
 
 #include "dynamic_value.h"
 class MachineValue : public DynamicValue {
@@ -443,5 +465,10 @@ protected:
     std::string local_name;
 };
 
+class MachineInstanceFactory {
+public:
+    static MachineInstance *create(MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
+    static MachineInstance *create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
+};
 
 #endif

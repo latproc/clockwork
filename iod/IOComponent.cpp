@@ -134,27 +134,51 @@ uint32_t IOComponent::filter(uint32_t val) {
     return val;
 }
 
-CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) { 
+class InputFilterSettings {
+public:
+    bool property_changed;
+    uint32_t noise_tolerance; // filter out changes with +/- this range
+    LongBuffer positions;
+    uint32_t last_sent; // this is the value to send unless the read value moves away from the mean
+    uint16_t buffer_len;
+    
+    InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(4), last_sent(0), buffer_len(4) { }
+};
+
+uint32_t AnalogueInput::filter(uint32_t raw) {
+    if (config->property_changed) {
+        config->property_changed = false;
+    }
+    config->positions.append(raw);
+    uint32_t mean = (config->positions.average(4) + 0.5f);
+    if ( abs(mean - config->last_sent) > config->noise_tolerance) {
+        config->last_sent = mean;
+    }
+    return config->last_sent;
+}
+
+void AnalogueInput::update() {
+    config->property_changed = true;
+}
+
+CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) {
     struct timeval now;
     gettimeofday(&now, 0);
     start_t = now.tv_sec * 1000000 + now.tv_usec;
 }
 
 uint32_t CounterRate::filter(uint32_t val) {
-		position = val;
+    position = val;
     struct timeval now;
     gettimeofday(&now, 0);
     uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-		uint64_t delta_t = now_t - start_t;
+    uint64_t delta_t = now_t - start_t;
     times.append(delta_t);
     positions.append(val);
     if (positions.length() < 4) return 0;
-    uint64_t ds = positions.get(positions.length()-1) - positions.get(0);
-    uint64_t dt = times.get(times.length()-1) - times.get(0);
-    if (dt < 0.000001) return 0;
-    float speed = ds / dt * 1000000;
-    //float speed = positions.slopeFromLeastSquaresFit(times) * 1000000;
-		return speed;
+    //float speed = positions.difference(positions.length()-1, 0) / times.difference(times.length()-1,0) * 1000000;
+    float speed = positions.slopeFromLeastSquaresFit(times) * 250000;
+    return speed;
 }
 
 /* The Speed Controller class */

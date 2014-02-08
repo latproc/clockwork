@@ -69,7 +69,7 @@ std::list<MachineClass *> all_classes;
     
 static MachineInstance *addMachine(const char *name, const char *type, 
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
-    MachineInstance *machine = new MachineInstance(CStringHolder(name), type, instance_type);
+                MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
     machine->setDefinitionLocation(yyfilename, yylineno);
 
     if (machines.find(name) == machines.end())
@@ -338,9 +338,7 @@ local_instantiation ';'
             << current_machine->properties.size() << " num params: " << current_machine->parameters.size() << "\n";
 	    char *name = strdup(current_machine->getName().c_str());
         Parameter p(name);
-        p.machine = current_machine; //new MachineInstance(name, current_machine->_type.c_str());
-        //std::copy(current_machine->parameters.begin(), current_machine->parameters.end(),back_inserter(p.machine->parameters));
-        //p.machine->setProperties(current_machine->properties);
+        p.machine = current_machine;
         current_locals.push_back(p);
     }
 }
@@ -1134,7 +1132,7 @@ SET SYMBOL TO value  {
 local_instantiation:
 SYMBOL SYMBOL parameters  
 {
-    current_machine = new MachineInstance($1, $2, MachineInstance::MACHINE_TEMPLATE);
+    current_machine = MachineInstanceFactory::create($1, $2, MachineInstance::MACHINE_TEMPLATE);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
     current_parameters.clear();
     
@@ -1144,7 +1142,7 @@ SYMBOL SYMBOL parameters
 | SYMBOL SYMBOL property_block parameters 
 {
     DBG_PARSER << "local variable with properties\n";
-    current_machine = new MachineInstance($1, $2, MachineInstance::MACHINE_TEMPLATE);
+    current_machine = MachineInstanceFactory::create($1, $2, MachineInstance::MACHINE_TEMPLATE);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
     current_parameters.clear();
     current_machine->setDefinitionLocation(yyfilename, yylineno);
@@ -1156,7 +1154,7 @@ SYMBOL SYMBOL parameters
 | SYMBOL CONDITION expression
 {
     DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
-    current_machine = new MachineInstance($1, "CONDITION", MachineInstance::MACHINE_TEMPLATE);
+    current_machine = MachineInstanceFactory::create($1, "CONDITION", MachineInstance::MACHINE_TEMPLATE);
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(current_machine->parameters));
     current_parameters.clear();
     current_machine->setDefinitionLocation(yyfilename, yylineno);
@@ -1172,7 +1170,7 @@ SYMBOL SYMBOL parameters
 instantiation:
 SYMBOL SYMBOL parameters  
 {
-    current_machine = new MachineInstance($1, $2);
+    current_machine = MachineInstanceFactory::create($1, $2);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
     current_parameters.clear();
 
@@ -1181,7 +1179,7 @@ SYMBOL SYMBOL parameters
 }
 | SYMBOL SYMBOL property_block parameters 
 {
-    current_machine = new MachineInstance($1, $2);
+    current_machine = MachineInstanceFactory::create($1, $2);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
     current_parameters.clear();
     current_machine->setDefinitionLocation(yyfilename, yylineno);
