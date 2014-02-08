@@ -435,6 +435,7 @@ protected:
 public:
     ~CounterRateInstance();
     void setValue(std::string property, Value new_value);
+    long filter(long val);
 
 private:
     CounterRateInstance &operator=(const MachineInstance &orig);

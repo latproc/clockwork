@@ -406,7 +406,16 @@ void semantic_analysis() {
             if (mi->getStateMachine()->name == "LIST") {
                 DBG_MSG << "List has " << mi->parameters.size() << " parameters\n";
             }
-            else if (mi->getStateMachine()->name != "POINT" || mi->getStateMachine()->parameters.size() < 2 || mi->getStateMachine()->parameters.size() >3) {
+            else if ((mi->getStateMachine()->name == "POINT"
+                      && mi->getStateMachine()->parameters.size() >= 2
+                      && mi->getStateMachine()->parameters.size() <= 3)
+                || (mi->getStateMachine()->name == "COUNTERRATE"
+                    && (mi->getStateMachine()->parameters.size() == 2
+                    || mi->getStateMachine()->parameters.size() == 0 ) )
+            ) {
+                
+            }
+            else {
                 std::stringstream ss;
                 ss << "## - Error: Machine " << mi->getStateMachine()->name << " requires "
                 << mi->getStateMachine()->parameters.size()

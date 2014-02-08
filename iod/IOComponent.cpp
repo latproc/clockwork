@@ -168,6 +168,8 @@ CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positio
 }
 
 uint32_t CounterRate::filter(uint32_t val) {
+    return IOComponent::filter(val);
+/* disabled since this is now implemented at the MachineInstance level
     position = val;
     struct timeval now;
     gettimeofday(&now, 0);
@@ -179,6 +181,7 @@ uint32_t CounterRate::filter(uint32_t val) {
     //float speed = positions.difference(positions.length()-1, 0) / times.difference(times.length()-1,0) * 1000000;
     float speed = positions.slopeFromLeastSquaresFit(times) * 250000;
     return speed;
+ */
 }
 
 /* The Speed Controller class */

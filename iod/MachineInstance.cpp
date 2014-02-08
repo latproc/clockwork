@@ -554,18 +554,49 @@ DynamicValue *MachineTimerValue::clone() const {
 
 class CounterRateFilterSettings {
 public:
-    
+    uint32_t position;
+    uint64_t start_t;
+    LongBuffer times;
+    FloatBuffer positions;
+    CounterRateFilterSettings(unsigned int sz) : times(sz), positions(sz) {
+        struct timeval now;
+        gettimeofday(&now, 0);
+        start_t = now.tv_sec * 1000000 + now.tv_usec;
+    }
 };
 
 CounterRateInstance::CounterRateInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-    settings = new CounterRateFilterSettings();
+    settings = new CounterRateFilterSettings(16);
 }
 CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type)
         : MachineInstance(name, type, instance_type) {
-    settings = new CounterRateFilterSettings();
+    settings = new CounterRateFilterSettings(16);
 }
 CounterRateInstance::~CounterRateInstance() { delete settings; }
 
+void CounterRateInstance::setValue(std::string property, Value new_value) {
+    if (new_value.kind == Value::t_symbol) {
+        new_value = lookup(new_value.sValue.c_str());
+    }
+    long val;
+    if (!new_value.asInteger(val)) val = 0;
+    //properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
+    MachineInstance::setValue(property, filter((uint32_t)val));
+}
+
+long CounterRateInstance::filter(long val) {
+    settings->position = (uint32_t)val;
+    struct timeval now;
+    gettimeofday(&now, 0);
+    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+    uint64_t delta_t = now_t - settings->start_t;
+    settings->times.append(delta_t);
+    settings->positions.append(val);
+    if (settings->positions.length() < 4) return 0;
+    //float speed = positions.difference(positions.length()-1, 0) / times.difference(times.length()-1,0) * 1000000;
+    float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 250000;
+    return speed;
+}
 
 MachineInstance::MachineInstance(InstanceType instance_type)
         : Receiver(""), 
@@ -2209,10 +2240,13 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                             DBG_MSG << "List has " << p.machine->parameters.size() << " parameters\n";
                             p.machine->setNeedsCheck();
                         }
-                        if (newsm->name != "LIST"
-                            && ( (newsm->name != "POINT" && newsm->name != "ANALOGINPUT")
-                                    || newsm->parameters.size() < 2 || newsm->parameters.size() >3 )
-                        ) {
+                        if (newsm->name == "LIST"
+                            || ( (newsm->name == "POINT" || newsm->name == "ANALOGINPUT")
+                                    && newsm->parameters.size() >= 2 && newsm->parameters.size() <=3 )
+                            || ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 2 || newsm->parameters.size() == 0) )
+                            ) {
+                        }
+                        else {
                             resetTemporaryStringStream();
                             ss << "## - Error: Machine " << newsm->name << " requires " 
                                 << newsm->parameters.size()
@@ -2613,15 +2647,6 @@ bool MachineInstance::hasState(const std::string &state_name) const {
     }
 #endif
     return false;
-}
-
-void CounterRateInstance::setValue(std::string property, Value new_value) {
-    if (new_value.kind == Value::t_symbol) {
-        new_value = lookup(new_value.sValue.c_str());
-    }
-    long val;
-    if (!new_value.asInteger(val)) val = 0;
-    properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
 }
 
 void MachineInstance::setValue(std::string property, Value new_value) {
