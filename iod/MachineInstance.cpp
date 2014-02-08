@@ -582,6 +582,7 @@ void CounterRateInstance::setValue(std::string property, Value new_value) {
     if (!new_value.asInteger(val)) val = 0;
     //properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
     MachineInstance::setValue(property, filter((uint32_t)val));
+    MachineInstance::setValue("position", val);
 }
 
 long CounterRateInstance::filter(long val) {
