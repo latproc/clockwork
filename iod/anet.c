@@ -181,7 +181,7 @@ int anetTcpNonBlockConnect(char *err, char *addr, int port)
  * (unless error or EOF condition is encountered) */
 size_t anetRead(int fd, char *buf, size_t count)
 {
-    size_t nread, totlen = 0;
+    int nread, totlen = 0;
     while(totlen != count) {
         nread = read(fd,buf,count-totlen);
         if (nread == 0) return totlen;
@@ -196,7 +196,7 @@ size_t anetRead(int fd, char *buf, size_t count)
  * (unless error is encountered) */
 size_t anetWrite(int fd, char *buf, size_t count)
 {
-    size_t nwritten, totlen = 0;
+    int nwritten, totlen = 0;
     while(totlen != count) {
         nwritten = write(fd,buf,count-totlen);
         if (nwritten == 0) return totlen;
