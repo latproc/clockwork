@@ -202,6 +202,7 @@ void semantic_analysis() {
     
     
     MachineClass *cr_class = new MachineClass("COUNTERRATE");
+    cr_class->parameters.push_back(Parameter("position_input"));
     cr_class->parameters.push_back(Parameter("module"));
     cr_class->parameters.push_back(Parameter("offset"));
     cr_class->states.push_back("stable");
@@ -384,8 +385,11 @@ void semantic_analysis() {
                 || machine_class->name == "COUNTERRATE"
                 )
                 m->properties.add("VALUE", 0, SymbolTable::NO_REPLACE);
-            if (machine_class->name == "COUNTERRATE")
+            if (machine_class->name == "COUNTERRATE") {
                 m->properties.add("position", 0, SymbolTable::NO_REPLACE);
+                MachineInstance *pos = m->lookup(m->parameters[0]);
+                if (pos) pos->setValue("VALUE", 0);
+            }
 
         }
         else {
@@ -410,8 +414,8 @@ void semantic_analysis() {
                       && mi->getStateMachine()->parameters.size() >= 2
                       && mi->getStateMachine()->parameters.size() <= 3)
                 || (mi->getStateMachine()->name == "COUNTERRATE"
-                    && (mi->getStateMachine()->parameters.size() == 2
-                    || mi->getStateMachine()->parameters.size() == 0 ) )
+                    && (mi->getStateMachine()->parameters.size() == 3
+                    || mi->getStateMachine()->parameters.size() == 1 ) )
             ) {
                 
             }

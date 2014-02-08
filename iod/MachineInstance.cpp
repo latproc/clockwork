@@ -583,6 +583,8 @@ void CounterRateInstance::setValue(std::string property, Value new_value) {
     //properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
     MachineInstance::setValue(property, filter((uint32_t)val));
     MachineInstance::setValue("position", val);
+    MachineInstance *pos = lookup(parameters[0]);
+    if (pos) pos->setValue("VALUE", new_value);
 }
 
 long CounterRateInstance::filter(long val) {
@@ -1684,10 +1686,6 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
                 setState("off");
             }
             else if (m.getText() == "property_change" ) {
-                if (_type == "COUNTERRATE") {
-                    CounterRate *cr = dynamic_cast<CounterRate*>(io_interface);
-                    setValue("position", cr->position);
-                }
                 setValue("VALUE", io_interface->address.value);
             }
             // a POINT won't have an actions that depend on triggers so it's safe to return now
@@ -2244,7 +2242,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                         if (newsm->name == "LIST"
                             || ( (newsm->name == "POINT" || newsm->name == "ANALOGINPUT")
                                     && newsm->parameters.size() >= 2 && newsm->parameters.size() <=3 )
-                            || ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 2 || newsm->parameters.size() == 0) )
+                            || ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 3 || newsm->parameters.size() == 1) )
                             ) {
                         }
                         else {
