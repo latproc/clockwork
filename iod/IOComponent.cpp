@@ -357,6 +357,7 @@ void IOComponent::idle() {
             else {
                 val = 0;
             }
+
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
