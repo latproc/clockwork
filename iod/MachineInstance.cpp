@@ -256,13 +256,17 @@ std::map<std::string, MachineClass> MachineClass::machine_classes;
 
 /* Factory methods */
 
+/*
 MachineInstance *MachineInstanceFactory::create(MachineInstance::InstanceType instance_type) {
     return new MachineInstance(instance_type);
 }
+*/
 
 MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type) {
-    if (strcmp(type, "COUNTERRATE") == 0)
+    if (strcmp(type, "COUNTERRATE") == 0) {
+				std::cout << " Created a CounterRate -------------------------\n";
         return new CounterRateInstance(name, type, instance_type);
+		}
     else
         return new MachineInstance(name, type, instance_type);
 }
@@ -554,11 +558,17 @@ DynamicValue *MachineTimerValue::clone() const {
 
 class CounterRateFilterSettings {
 public:
+    bool property_changed;
+    uint32_t noise_tolerance; // filter out changes with +/- this range
+    uint32_t last_sent; // this is the value to send unless the read value moves away from the mean
+
     uint32_t position;
     uint64_t start_t;
     LongBuffer times;
+		LongBuffer readings;
     FloatBuffer positions;
-    CounterRateFilterSettings(unsigned int sz) : times(sz), positions(sz) {
+    CounterRateFilterSettings(unsigned int sz) : property_changed(false),
+				noise_tolerance(20),last_sent(0), position(0), start_t(0), times(sz), readings(8), positions(sz) {
         struct timeval now;
         gettimeofday(&now, 0);
         start_t = now.tv_sec * 1000000 + now.tv_usec;
@@ -575,26 +585,40 @@ CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, 
 CounterRateInstance::~CounterRateInstance() { delete settings; }
 
 void CounterRateInstance::setValue(std::string property, Value new_value) {
+	if (property == "VALUE") {
     if (new_value.kind == Value::t_symbol) {
         new_value = lookup(new_value.sValue.c_str());
     }
     long val;
     if (!new_value.asInteger(val)) val = 0;
-    //properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
-    MachineInstance::setValue(property, filter((uint32_t)val));
-    MachineInstance::setValue("position", val);
-    MachineInstance *pos = lookup(parameters[0]);
-    if (pos) pos->setValue("VALUE", new_value);
-}
 
-long CounterRateInstance::filter(long val) {
-    settings->position = (uint32_t)val;
+    if (settings->property_changed) {
+        settings->property_changed = false;
+    }
+    settings->readings.append(val);
     struct timeval now;
     gettimeofday(&now, 0);
     uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
     uint64_t delta_t = now_t - settings->start_t;
     settings->times.append(delta_t);
-    settings->positions.append(val);
+
+    uint32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
+    if ( abs(mean - settings->last_sent) > settings->noise_tolerance) {
+        settings->last_sent = mean;
+    }
+		
+		settings->positions.append(settings->last_sent);
+    //properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
+    MachineInstance::setValue(property, filter((uint32_t)settings->last_sent));
+    MachineInstance::setValue("position", settings->last_sent);
+    MachineInstance *pos = lookup(parameters[0]);
+    if (pos) pos->setValue("VALUE", settings->last_sent);
+	}
+	else MachineInstance::setValue(property, new_value);
+}
+
+long CounterRateInstance::filter(long val) {
+
     if (settings->positions.length() < 4) return 0;
     //float speed = positions.difference(positions.length()-1, 0) / times.difference(times.length()-1,0) * 1000000;
     float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 250000;
@@ -1027,7 +1051,7 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
 }
 
 void MachineInstance::removeParameter(int which) {
-    if (which <0 || which >= parameters.size()) return;
+    if (which <0 || which >= (int)parameters.size()) return;
     MachineInstance *m = parameters[which].machine;
     if (m) {
         m->removeDependancy(this);
@@ -1077,7 +1101,7 @@ void MachineInstance::addLocal(Value param, MachineInstance *mi) {
 }
 
 void MachineInstance::removeLocal(int index) {
-    if (locals.size() <= index) return;
+    if ((int)locals.size() <= index) return;
     Parameter &p = locals[index];
     if (p.machine) {
         stopListening(p.machine);
