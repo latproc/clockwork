@@ -104,7 +104,7 @@ public:
 		depends.push_back(m);
 	}
     
-    virtual uint32_t filter(uint32_t);
+    virtual int32_t filter(int32_t);
 
 	std::list<MachineInstance*>depends;
 
@@ -137,7 +137,7 @@ public:
 	AnalogueInput(IOAddress addr) : IOComponent(addr) { }
 //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "AnalogueInput"; }
-    virtual uint32_t filter(uint32_t raw);
+    virtual int32_t filter(int32_t raw);
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
 };
@@ -147,8 +147,8 @@ public:
 	CounterRate(IOAddress addr);
     //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
     virtual const char *type() { return "CounterRate"; }
-    virtual uint32_t filter(uint32_t raw);
-    uint32_t position;
+    virtual int32_t filter(int32_t raw);
+    int32_t position;
 private:
     uint64_t start_t;
     LongBuffer times;
@@ -170,7 +170,7 @@ public:
     //	AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "SpeedController"; }
     void idle();
-    virtual uint32_t filter(uint32_t raw);
+    virtual int32_t filter(int32_t raw);
     void update(); // clockwork uses this to notify of updates
     PID_Settings *config;
 };

@@ -301,8 +301,17 @@ void generateIOComponentModules() {
 				//Parameter offset = m->parameters[1];
 				//Value params = p.val;
 				//if (params.kind == Value::t_list && params.listValue.size() > 1) {
-					std::string name = m->parameters[0].real_name;
-					unsigned int entry_position = m->parameters[1].val.iValue;
+					std::string name;
+					unsigned int entry_position = 0;
+					if (m->_type == "COUNTERRATE") {
+						name = m->parameters[1].real_name;
+						entry_position = m->parameters[2].val.iValue;
+					}
+					else {
+						name = m->parameters[0].real_name;
+						entry_position = m->parameters[1].val.iValue;
+					}
+	
 					std::cerr << "Setting up point " << m->getName() << " " << entry_position << " on module " << name << "\n";
 					MachineInstance *module_mi = MachineInstance::find(name.c_str());
 					if (!module_mi) {
@@ -445,7 +454,7 @@ void generateIOComponentModules() {
 #endif
 				}
 				else {
-					if (m->_type != "POINT" && m->_type != "STATUS_FLAG"
+					if (m->_type != "POINT" && m->_type != "STATUS_FLAG" && m->_type != "COUNTERRATE"
 							&& m->_type != "ANALOGINPUT" && m->_type != "ANALOGOUTPUT" )
 						DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
 					else  

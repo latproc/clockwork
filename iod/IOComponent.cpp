@@ -130,7 +130,7 @@ void set_bits(uint8_t *offset, unsigned int bitpos, unsigned int bitlen, uint32_
     
 }
 
-uint32_t IOComponent::filter(uint32_t val) {
+int32_t IOComponent::filter(int32_t val) {
     return val;
 }
 
@@ -145,7 +145,7 @@ public:
     InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(4), last_sent(0), buffer_len(4) { }
 };
 
-uint32_t AnalogueInput::filter(uint32_t raw) {
+int32_t AnalogueInput::filter(int32_t raw) {
     if (config->property_changed) {
         config->property_changed = false;
     }
@@ -167,7 +167,7 @@ CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positio
     start_t = now.tv_sec * 1000000 + now.tv_usec;
 }
 
-uint32_t CounterRate::filter(uint32_t val) {
+int32_t CounterRate::filter(int32_t val) {
     return IOComponent::filter(val);
 /* disabled since this is now implemented at the MachineInstance level
     position = val;
@@ -243,7 +243,7 @@ public:
     { }
 };
 
-uint32_t PIDController::filter(uint32_t raw) {
+int32_t PIDController::filter(int32_t raw) {
     return raw;
 }
 
@@ -357,6 +357,7 @@ void IOComponent::idle() {
             else {
                 val = 0;
             }
+
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
