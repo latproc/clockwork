@@ -630,18 +630,18 @@ void CounterRateInstance::setValue(std::string property, Value new_value) {
 long CounterRateInstance::filter(long val) {
     if (settings->positions.length() < 4) return 0;
     //float speed = settings->positions.difference(settings->positions.length()-1, 0) / settings->times.difference(settings->times.length()-1,0) * 250000;
-    float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 250000;
+    float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
     return speed;
 }
 
 
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-    settings = new CounterRateFilterSettings(32);
+    settings = new CounterRateFilterSettings(8);
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 : MachineInstance(name, type, instance_type) {
-    settings = new CounterRateFilterSettings(32);
+    settings = new CounterRateFilterSettings(8);
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
@@ -2799,14 +2799,14 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 				long value =0; // TBD deal with sign
 				if (new_value.asInteger(value))
 				{
-					snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value); 
+					//snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
 					io_interface->setValue( (uint32_t)value);
 					properties.add("VALUE", value, SymbolTable::ST_REPLACE);
 				}
 				else {
 					snprintf(buf, 100, "%s: could not set value to %s\n", _name.c_str(), new_value.asString().c_str());
+                    MessageLog::instance()->add(buf);
 				}
-				MessageLog::instance()->add(buf);
 			}
 	        //mif->send(ss.str().c_str());
             mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
