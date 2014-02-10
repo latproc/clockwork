@@ -145,6 +145,9 @@ public:
     InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(4), last_sent(0), buffer_len(4) { }
 };
 
+AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
+	config = new InputFilterSettings();
+}
 int32_t AnalogueInput::filter(int32_t raw) {
     if (config->property_changed) {
         config->property_changed = false;
