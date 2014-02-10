@@ -24,6 +24,7 @@
 #include <numeric>
 #include <functional>
 #include <sstream>
+#include <stdio.h>
 #include "Logger.h"
 #include <boost/foreach.hpp>
 #include <utility>
