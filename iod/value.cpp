@@ -658,11 +658,23 @@ void Value::addItem(std::string key, Value val) {
 #endif
 
 std::string Value::asString() const {
-    if (kind == t_string) return this->sValue;
-    std::ostringstream ss;
-    ss << *this;
-	std::string s(ss.str());
-    return s;
+    switch (kind) {
+        case t_bool:
+            return (bValue) ? "true" : "false";
+            break;
+        case t_integer:
+            return std::to_string(iValue);
+        case t_empty: return "null";
+        case t_symbol:
+        case t_string:
+            return sValue;
+        case t_dynamic:
+            if (DynamicValue().lastResult()) return DynamicValue().lastResult()->asString();
+            
+        default:
+            break;
+    }
+    return "";
 }
 
 std::string Value::quoted() const {
