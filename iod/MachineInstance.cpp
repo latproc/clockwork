@@ -554,23 +554,26 @@ DynamicValue *MachineTimerValue::clone() const {
 
 class CounterRateFilterSettings {
 public:
-    uint32_t position;
+    int32_t position;
+    int32_t velocity;
     uint64_t start_t;
+    uint64_t update_t;
     LongBuffer times;
     FloatBuffer positions;
     CounterRateFilterSettings(unsigned int sz) : times(sz), positions(sz) {
         struct timeval now;
         gettimeofday(&now, 0);
         start_t = now.tv_sec * 1000000 + now.tv_usec;
+        update_t = start_t;
     }
 };
 
 CounterRateInstance::CounterRateInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-    settings = new CounterRateFilterSettings(16);
+    settings = new CounterRateFilterSettings(32);
 }
 CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type)
         : MachineInstance(name, type, instance_type) {
-    settings = new CounterRateFilterSettings(16);
+    settings = new CounterRateFilterSettings(32);
 }
 CounterRateInstance::~CounterRateInstance() { delete settings; }
 
@@ -581,22 +584,23 @@ void CounterRateInstance::setValue(std::string property, Value new_value) {
     long val;
     if (!new_value.asInteger(val)) val = 0;
     //properties.add("VALUE", filter((uint32_t)val), SymbolTable::ST_REPLACE);
-    MachineInstance::setValue(property, filter((uint32_t)val));
+    settings->velocity = filter((int32_t)val);
+    MachineInstance::setValue(property, settings->velocity);
     MachineInstance::setValue("position", val);
     MachineInstance *pos = lookup(parameters[0]);
     if (pos) pos->setValue("VALUE", new_value);
 }
 
 long CounterRateInstance::filter(long val) {
-    settings->position = (uint32_t)val;
+    settings->position = (int32_t)val;
     struct timeval now;
     gettimeofday(&now, 0);
-    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-    uint64_t delta_t = now_t - settings->start_t;
+    settings->update_t = now.tv_sec * 1000000 + now.tv_usec;
+    uint64_t delta_t = settings->update_t - settings->start_t;
     settings->times.append(delta_t);
     settings->positions.append(val);
     if (settings->positions.length() < 4) return 0;
-    //float speed = positions.difference(positions.length()-1, 0) / times.difference(times.length()-1,0) * 1000000;
+    //float speed = settings->positions.difference(settings->positions.length()-1, 0) / settings->times.difference(settings->times.length()-1,0) * 250000;
     float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 250000;
     return speed;
 }
@@ -944,12 +948,29 @@ const Value *MachineInstance::getTimerVal() {
 
 void MachineInstance::processAll(PollType which) {
     bool builtins = false;
+    struct timeval now;
+    gettimeofday(&now, 0);
+    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
     if (which == BUILTINS)
 		builtins = true;
 	//MachineInstance::updateAllTimers(which);
     std::list<MachineInstance *>::iterator iter = active_machines.begin();
     while (iter != active_machines.end()) {
+        /* To compute a counterrate, the device needs a continual suppliy of input readings. 
+            The process of polling the hardware will normally do this but when running a simulation
+            we need some help. The following hack provides the solution until a proper method can be developed.
+         */
         MachineInstance *m = *iter++;
+        if (m->_type == "COUNTERRATE" && !m->io_interface) {
+            CounterRateInstance *cri = dynamic_cast<CounterRateInstance*>(m);
+            if (cri && cri->getSettings()->update_t + 5000 < now_t) {
+                uint64_t update_t = cri->getSettings()->update_t;
+                long new_val = (long)(cri->getSettings()->position + cri->getSettings()->velocity * (now_t-update_t) / 1000000.0f );
+                std::cout << new_val << "\n";
+                cri->setValue("VALUE", new_val);
+                //cri->setValue("VALUE", (long)(cri->getSettings()->position));
+            }
+        }
 		if ( (builtins && m->_type == "POINT") || (!builtins && (m->_type != "POINT" || m->mq_interface)) ) {
 			m->idle();
 		}

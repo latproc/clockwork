@@ -436,7 +436,7 @@ public:
     ~CounterRateInstance();
     void setValue(std::string property, Value new_value);
     long filter(long val);
-
+    CounterRateFilterSettings *getSettings() { return settings; }
 private:
     CounterRateInstance &operator=(const MachineInstance &orig);
     CounterRateInstance(const MachineInstance &other);
