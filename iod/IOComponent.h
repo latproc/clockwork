@@ -99,6 +99,8 @@ public:
 	std::ostream &operator<<(std::ostream &out) const;
 	IOAddress address;
 	uint32_t pending_value;
+    uint64_t read_time; // the last read time
+
 	
 	void addDependent(MachineInstance *m) {
 		depends.push_back(m);

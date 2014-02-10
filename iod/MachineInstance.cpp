@@ -634,14 +634,35 @@ long CounterRateInstance::filter(long val) {
     return speed;
 }
 
+void CounterRateInstance::idle() {
+    if (!io_interface) {
+        struct timeval now;
+        gettimeofday(&now, 0);
+        uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+        if (settings->update_t + 2000 < now_t) {
+            long new_val = (long)((float)settings->position + settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
+            setValue("VALUE", new_val);
+        }
+    }
+}
+
+void RateEstimatorInstance::idle() {
+    if (needsCheck()) {
+        needs_check = 0;
+        MachineInstance *pos_m = lookup(parameters[0]);
+        long pos;
+        if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
+            setValue("VALUE", pos);
+    }
+}
 
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-    settings = new CounterRateFilterSettings(8);
+    settings = new CounterRateFilterSettings(64);
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 : MachineInstance(name, type, instance_type) {
-    settings = new CounterRateFilterSettings(8);
+    settings = new CounterRateFilterSettings(64);
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
@@ -650,14 +671,19 @@ void RateEstimatorInstance::setValue(std::string property, Value new_value) {
         if (new_value.kind == Value::t_symbol) {
             new_value = lookup(new_value.sValue.c_str());
         }
+        MachineInstance *pos = lookup(parameters[0]);
+        if (pos && pos->io_interface)
+            settings->update_t = pos->io_interface->read_time;
+        else {
+            struct timeval now;
+            gettimeofday(&now, 0);
+            settings->update_t = now.tv_sec * 1000000 + now.tv_usec;
+        }
         long val;
         if (!new_value.asInteger(val)) val = 0;
         if (settings->property_changed) {
             settings->property_changed = false;
         }
-        struct timeval now;
-        gettimeofday(&now, 0);
-        settings->update_t = now.tv_sec * 1000000 + now.tv_usec;
         uint64_t delta_t = settings->update_t - settings->start_t;
         settings->times.append(delta_t);
         settings->position = (int32_t)val;
@@ -1020,28 +1046,6 @@ const Value *MachineInstance::getTimerVal() {
     MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(state_timer.dynamicValue());
     mtv->operator()(this);
     return mtv->getLastResult();
-}
-
-void CounterRateInstance::idle() {
-    if (!io_interface) {
-        struct timeval now;
-        gettimeofday(&now, 0);
-        uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-        if (settings->update_t + 5000 < now_t) {
-            long new_val = (long)((float)settings->position + settings->velocity * 5 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
-            setValue("VALUE", new_val);
-        }
-    }
-}
-
-void RateEstimatorInstance::idle() {
-    if (needsCheck()) {
-        needs_check = 0;
-        MachineInstance *pos_m = lookup(parameters[0]);
-        long pos;
-        if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
-            setValue("VALUE", pos);
-    }
 }
 
 void MachineInstance::processAll(PollType which) {

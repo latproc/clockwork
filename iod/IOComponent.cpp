@@ -27,8 +27,13 @@
 
 std::list<IOComponent *> IOComponent::processing_queue;
 std::map<std::string, IOAddress> IOComponent::io_names;
+static uint64_t current_time;
 
 void IOComponent::processAll() {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    current_time = now.tv_sec * 1000000 + now.tv_usec;
+    
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
