@@ -134,7 +134,7 @@ public:
 class InputFilterSettings;
 class AnalogueInput : public IOComponent {
 public:
-	AnalogueInput(IOAddress addr) : IOComponent(addr) { }
+	AnalogueInput(IOAddress addr);
 //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "AnalogueInput"; }
     virtual uint32_t filter(uint32_t raw);
