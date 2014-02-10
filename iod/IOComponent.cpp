@@ -164,6 +164,8 @@ void AnalogueInput::update() {
     config->property_changed = true;
 }
 
+Counter::Counter(IOAddress addr) : IOComponent(addr) { }
+
 CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) {
     struct timeval now;
     gettimeofday(&now, 0);

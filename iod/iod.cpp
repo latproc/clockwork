@@ -295,6 +295,7 @@ void generateIOComponentModules() {
 			MachineInstance *m = (*iter).second; iter++;
 			--remaining;
 			if ( (m->_type == "POINT" || m->_type == "ANALOGINPUT"  || m->_type == "COUNTERRATE"
+					|| m->_type == "COUNTER" || m->_type == "RATEESTIMATOR" 
 					|| m->_type == "STATUS_FLAG" || m->_type == "ANALOGOUTPUT" ) && m->parameters.size() > 1) {
 				// points should have two parameters, the name of the io module and the bit offset
 				//Parameter module = m->parameters[0];
@@ -440,6 +441,15 @@ void generateIOComponentModules() {
 								m->io_interface = in;
 								in->addDependent(m);
 							}
+							else if (m->_type == "COUNTER") {
+								Counter *in = new Counter(addr);
+								char *nm = strdup(m->getName().c_str());
+								devices[nm] = in;
+								free(nm);
+								in->setName(m->getName().c_str());
+								m->io_interface = in;
+								in->addDependent(m);
+							}
 							else {
 								AnalogueInput *in = new AnalogueInput(addr);
 								char *nm = strdup(m->getName().c_str());
@@ -455,6 +465,7 @@ void generateIOComponentModules() {
 				}
 				else {
 					if (m->_type != "POINT" && m->_type != "STATUS_FLAG" && m->_type != "COUNTERRATE"
+							&& m->_type != "COUNTER"
 							&& m->_type != "ANALOGINPUT" && m->_type != "ANALOGOUTPUT" )
 						DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
 					else  

@@ -200,9 +200,31 @@ void semantic_analysis() {
 	ain_class->disableAutomaticStateChanges();
 	ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
     
+    MachineClass *cnt_class = new MachineClass("COUNTER");
+    cnt_class->parameters.push_back(Parameter("module"));
+    cnt_class->parameters.push_back(Parameter("offset"));
+    cnt_class->states.push_back("stable");
+    cnt_class->states.push_back("unstable");
+    cnt_class->states.push_back("off");
+	cnt_class->default_state = State("off");
+	cnt_class->initial_state = State("off");
+	cnt_class->disableAutomaticStateChanges();
+	cnt_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+    
+    MachineClass *re_class = new MachineClass("RATEESTIMATOR");
+    re_class->parameters.push_back(Parameter("position_input"));
+    re_class->parameters.push_back(Parameter("settings"));
+    re_class->states.push_back("stable");
+    re_class->states.push_back("unstable");
+    re_class->states.push_back("off");
+	re_class->default_state = State("off");
+	re_class->initial_state = State("off");
+	re_class->disableAutomaticStateChanges();
+	re_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+	re_class->properties.add("position", Value(0), SymbolTable::ST_REPLACE);
     
     MachineClass *cr_class = new MachineClass("COUNTERRATE");
-    cr_class->parameters.push_back(Parameter("position_input"));
+    cr_class->parameters.push_back(Parameter("position_output"));
     cr_class->parameters.push_back(Parameter("module"));
     cr_class->parameters.push_back(Parameter("offset"));
     cr_class->states.push_back("stable");
@@ -212,6 +234,7 @@ void semantic_analysis() {
 	cr_class->initial_state = State("off");
 	cr_class->disableAutomaticStateChanges();
 	cr_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+	cr_class->properties.add("position", Value(0), SymbolTable::ST_REPLACE);
 
     MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
     aout_class->parameters.push_back(Parameter("module"));
@@ -382,13 +405,17 @@ void semantic_analysis() {
             // make sure that analogue machines have a value property
             if (machine_class->name == "ANALOGOUTPUT"
                 || machine_class->name == "ANALOGINPUT"
+                || machine_class->name == "COUNTER"
                 || machine_class->name == "COUNTERRATE"
+                || machine_class->name == "RATEESTIMATOR"
                 )
                 m->properties.add("VALUE", 0, SymbolTable::NO_REPLACE);
-            if (machine_class->name == "COUNTERRATE") {
+            if (machine_class->name == "COUNTERRATE" || machine_class->name == "RATEESTIMATOR") {
                 m->properties.add("position", 0, SymbolTable::NO_REPLACE);
-                MachineInstance *pos = m->lookup(m->parameters[0]);
-                if (pos) pos->setValue("VALUE", 0);
+                if (machine_class->name == "COUNTERRATE") {
+                    MachineInstance *pos = m->lookup(m->parameters[0]);
+                    if (pos) pos->setValue("VALUE", 0);
+                }
             }
 
         }
@@ -836,6 +863,7 @@ void initialise_machines() {
             || mi->mq_interface
             || mi->stable_states.size() > 0
             || mi->_type == "COUNTERRATE"
+            || mi->_type == "RATEESTIMATOR"
             ) {
             mi->markActive();
             DBG_INITIALISATION << mi->getName() << " is active\n";

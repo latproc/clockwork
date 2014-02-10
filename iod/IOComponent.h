@@ -135,17 +135,22 @@ class InputFilterSettings;
 class AnalogueInput : public IOComponent {
 public:
 	AnalogueInput(IOAddress addr);
-//	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "AnalogueInput"; }
     virtual int32_t filter(int32_t raw);
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
 };
 
+class Counter : public IOComponent {
+public:
+	Counter(IOAddress addr);
+	virtual const char *type() { return "Counter"; }
+    void update(); // clockwork uses this to notify of updates
+};
+
 class CounterRate : public IOComponent {
 public:
 	CounterRate(IOAddress addr);
-    //	AnalogueInput(unsigned int offset, int bitpos, unsigned int bitlen) : IOComponent(offset, bitpos, bitlen) { }
     virtual const char *type() { return "CounterRate"; }
     virtual int32_t filter(int32_t raw);
     int32_t position;

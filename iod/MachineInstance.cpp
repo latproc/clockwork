@@ -264,9 +264,11 @@ MachineInstance *MachineInstanceFactory::create(MachineInstance::InstanceType in
 
 MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type) {
     if (strcmp(type, "COUNTERRATE") == 0) {
-				std::cout << " Created a CounterRate -------------------------\n";
         return new CounterRateInstance(name, type, instance_type);
-		}
+    }
+    else if (strcmp(type, "RATEESTIMATOR") == 0) {
+        return new RateEstimatorInstance(name, type, instance_type);
+    }
     else
         return new MachineInstance(name, type, instance_type);
 }
@@ -377,10 +379,13 @@ bool MachineInstance::uses(MachineInstance *other) {
 	if (other->_type == "POINT") return true;
 	if (other->_type == "ANALOGINPUT") return true;
 	if (other->_type == "COUNTERRATE") return true;
+	if (other->_type == "COUNTER") return true;
+	if (other->_type == "COUNTERRATE") return true;
 	if (other->_type == "ANALOGOUTPUT") return true;
 	if (other->_type == "STATUS_FLAG") return true;
 	if (_type == "POINT") return false;
 	if (_type == "ANALOGINPUT") return true;
+	if (other->_type == "COUNTER") return true;
 	if (_type == "COUNTERRATE") return true;
 	if (_type == "ANALOGOUTPUT") return true;
 	if (_type == "STATUS_FLAG") return true;
@@ -612,8 +617,6 @@ void CounterRateInstance::setValue(std::string property, Value new_value) {
         settings->position = (int32_t)settings->last_sent;
         settings->positions.append(settings->position);
         settings->velocity = (int32_t)filter((int32_t)settings->position);
-        if (settings->velocity)
-            int x = 1;
 
         MachineInstance::setValue(property, settings->velocity);
         MachineInstance::setValue("position", settings->position);
@@ -630,6 +633,53 @@ long CounterRateInstance::filter(long val) {
     float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 250000;
     return speed;
 }
+
+
+
+RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
+    settings = new CounterRateFilterSettings(32);
+}
+RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
+: MachineInstance(name, type, instance_type) {
+    settings = new CounterRateFilterSettings(32);
+}
+RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
+
+void RateEstimatorInstance::setValue(std::string property, Value new_value) {
+	if (property == "VALUE") {
+        if (new_value.kind == Value::t_symbol) {
+            new_value = lookup(new_value.sValue.c_str());
+        }
+        long val;
+        if (!new_value.asInteger(val)) val = 0;
+        if (settings->property_changed) {
+            settings->property_changed = false;
+        }
+        struct timeval now;
+        gettimeofday(&now, 0);
+        settings->update_t = now.tv_sec * 1000000 + now.tv_usec;
+        uint64_t delta_t = settings->update_t - settings->start_t;
+        settings->times.append(delta_t);
+        settings->position = (int32_t)val;
+        settings->positions.append(settings->position);
+        settings->velocity = (int32_t)filter((int32_t)settings->position);
+        
+        MachineInstance::setValue(property, settings->velocity);
+        MachineInstance::setValue("position", settings->position);
+    }
+    else
+        MachineInstance::setValue(property, new_value);
+}
+
+long RateEstimatorInstance::filter(long val) {
+    if (settings->positions.length() < 4) return 0;
+    //float speed = settings->positions.difference(settings->positions.length()-1, 0) / settings->times.difference(settings->times.length()-1,0) * 250000;
+    float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
+    return speed;
+}
+
+
+
 
 MachineInstance::MachineInstance(InstanceType instance_type)
         : Receiver(""), 
@@ -972,11 +1022,30 @@ const Value *MachineInstance::getTimerVal() {
     return mtv->getLastResult();
 }
 
+void CounterRateInstance::idle() {
+    if (!io_interface) {
+        struct timeval now;
+        gettimeofday(&now, 0);
+        uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+        if (settings->update_t + 5000 < now_t) {
+            long new_val = (long)((float)settings->position + settings->velocity * 5 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
+            setValue("VALUE", new_val);
+        }
+    }
+}
+
+void RateEstimatorInstance::idle() {
+    if (needsCheck()) {
+        needs_check = 0;
+        MachineInstance *pos_m = lookup(parameters[0]);
+        long pos;
+        if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
+            setValue("VALUE", pos);
+    }
+}
+
 void MachineInstance::processAll(PollType which) {
     bool builtins = false;
-    struct timeval now;
-    gettimeofday(&now, 0);
-    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
     if (which == BUILTINS)
 		builtins = true;
 	//MachineInstance::updateAllTimers(which);
@@ -987,17 +1056,7 @@ void MachineInstance::processAll(PollType which) {
             we need some help. The following hack provides the solution until a proper method can be developed.
          */
         MachineInstance *m = *iter++;
-        if (m->_type == "COUNTERRATE" && !m->io_interface) {
-            CounterRateInstance *cri = dynamic_cast<CounterRateInstance*>(m);
-            if (cri && cri->getSettings()->update_t + 5000 < now_t) {
-                uint64_t update_t = cri->getSettings()->update_t;
-                long new_val = (long)((float)cri->getSettings()->position + cri->getSettings()->velocity * 5 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
-
-                cri->setValue("VALUE", new_val);
-                //cri->setValue("VALUE", (long)(cri->getSettings()->position));
-            }
-        }
-		if ( (builtins && m->_type == "POINT") || (!builtins && (m->_type != "POINT" || m->mq_interface)) ) {
+        if ( (builtins && m->_type == "POINT") || (!builtins && (m->_type != "POINT" || m->mq_interface)) ) {
 			m->idle();
 		}
 	}
@@ -2287,7 +2346,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                             p.machine->setNeedsCheck();
                         }
                         if (newsm->name == "LIST"
-                            || ( (newsm->name == "POINT" || newsm->name == "ANALOGINPUT")
+                            || ( (newsm->name == "POINT" || newsm->name == "ANALOGINPUT" || newsm->name == "COUNTER")
                                     && newsm->parameters.size() >= 2 && newsm->parameters.size() <=3 )
                             || ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 3 || newsm->parameters.size() == 1) )
                             ) {
@@ -2725,18 +2784,6 @@ void MachineInstance::setValue(std::string property, Value new_value) {
                 global_machine->setValue("VALUE", new_value);
 			return;
 		}
-		if (property != "VALUE" && property != _name) {
-			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
-			MachineInstance *global_machine = lookup(property);
-			if (global_machine) {
-			 	if ( global_machine->_type != "CONSTANT" ) {
-					global_machine->setValue("VALUE", new_value);
-					return;
-				}
-				NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
-				return;
-			}
-		}
 	    // try the current instance ofthe machine, then the machine class and finally the global symbols
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
         Value &prev_value = properties.lookup(property.c_str());
@@ -2818,6 +2865,18 @@ void MachineInstance::setValue(std::string property, Value new_value) {
 			}
 			else
 				DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
+		}
+		if (prev_value == SymbolTable::Null && property != "VALUE" && property != _name) {
+			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
+			MachineInstance *global_machine = lookup(property);
+			if (global_machine) {
+			 	if ( global_machine->_type != "CONSTANT" ) {
+					global_machine->setValue("VALUE", new_value);
+					return;
+				}
+				NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
+				return;
+			}
 		}
         
         if (_type == "PUBLISHER" && mq_interface && property == "message" )

@@ -375,7 +375,7 @@ public:
     
     virtual long filter(long val) { return val; }
 
-private:
+protected:
 	int needs_check;
 public:
 	bool uses_timer;
@@ -436,10 +436,29 @@ public:
     ~CounterRateInstance();
     void setValue(std::string property, Value new_value);
     long filter(long val);
+    virtual void idle();
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
-    CounterRateInstance &operator=(const MachineInstance &orig);
-    CounterRateInstance(const MachineInstance &other);
+    CounterRateInstance &operator=(const CounterRateInstance &orig);
+    CounterRateInstance(const CounterRateInstance &other);
+    CounterRateFilterSettings *settings;
+    
+    friend class MachineInstanceFactory;
+};
+
+class RateEstimatorInstance : public MachineInstance {
+protected:
+    RateEstimatorInstance(InstanceType instance_type = MACHINE_INSTANCE);
+    RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+public:
+    ~RateEstimatorInstance();
+    void setValue(std::string property, Value new_value);
+    long filter(long val);
+    virtual void idle();
+    CounterRateFilterSettings *getSettings() { return settings; }
+private:
+    RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);
+    RateEstimatorInstance(const RateEstimatorInstance &other);
     CounterRateFilterSettings *settings;
     
     friend class MachineInstanceFactory;
