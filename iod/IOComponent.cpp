@@ -360,7 +360,7 @@ void IOComponent::idle() {
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
-			if (address.value != val) {
+			if (address.value != val || strcmp(type(), "CounterRate") == 0) {
                 //address.value = get_bits(offset, bitpos, address.bitlen);
 						    address.value = filter(val);
                 last_event = e_none;
