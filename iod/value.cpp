@@ -663,13 +663,17 @@ std::string Value::asString() const {
             return (bValue) ? "true" : "false";
             break;
         case t_integer:
-            return std::to_string(iValue);
+        {
+            char buf[25];
+            snprintf(buf, 25, "%ld", iValue);
+            return buf;
+        }
         case t_empty: return "null";
         case t_symbol:
         case t_string:
             return sValue;
         case t_dynamic:
-            if (DynamicValue().lastResult()) return DynamicValue().lastResult()->asString();
+            return "<dynamic value>";
             
         default:
             break;
