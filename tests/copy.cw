@@ -6,7 +6,7 @@ front LIST;
 middle LIST;
 back LIST;
 
-done LIST, c,b,a;
+done LIST c,b,a;
 front_done LIST;
 middle_done LIST;
 back_done LIST;

@@ -48,6 +48,8 @@
 extern int num_errors;
 extern std::list<std::string>error_messages;
 
+static uint64_t process_time; // used for idle calculations for rate estimation
+
 MessagingInterface *persistentStore = 0;
 
 Parameter::Parameter(Value v) : val(v), machine(0) {
@@ -658,11 +660,11 @@ void RateEstimatorInstance::idle() {
 
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-    settings = new CounterRateFilterSettings(64);
+    settings = new CounterRateFilterSettings(32);
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 : MachineInstance(name, type, instance_type) {
-    settings = new CounterRateFilterSettings(64);
+    settings = new CounterRateFilterSettings(32);
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
@@ -675,9 +677,7 @@ void RateEstimatorInstance::setValue(std::string property, Value new_value) {
         if (pos && pos->io_interface)
             settings->update_t = pos->io_interface->read_time;
         else {
-            struct timeval now;
-            gettimeofday(&now, 0);
-            settings->update_t = now.tv_sec * 1000000 + now.tv_usec;
+            settings->update_t = process_time;
         }
         long val;
         if (!new_value.asInteger(val)) val = 0;
@@ -699,8 +699,11 @@ void RateEstimatorInstance::setValue(std::string property, Value new_value) {
 
 long RateEstimatorInstance::filter(long val) {
     if (settings->positions.length() < 4) return 0;
-    //float speed = settings->positions.difference(settings->positions.length()-1, 0) / settings->times.difference(settings->times.length()-1,0) * 250000;
-    float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
+    float speed = 0;
+    if (false && settings->positions.length() < settings->positions.BUFSIZE)
+        speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
+    else
+        speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
     return speed;
 }
 
@@ -1050,6 +1053,10 @@ const Value *MachineInstance::getTimerVal() {
 
 void MachineInstance::processAll(PollType which) {
     bool builtins = false;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    process_time = now.tv_sec * 1000000 + now.tv_usec;
+    
     if (which == BUILTINS)
 		builtins = true;
 	//MachineInstance::updateAllTimers(which);
