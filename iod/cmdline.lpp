@@ -88,6 +88,7 @@ void append_char(int ch)
 int get_input(char *buf, int size)
 {
     char *line;
+    static char *last_read = (char *)NULL;
     if (feof(yyin)) { return YY_NULL; }
     line = readline("> ");
     if (!line) {
@@ -100,8 +101,17 @@ int get_input(char *buf, int size)
     }
     strcpy(buf, line);
     free(line);
-    add_history(buf);
-
+    
+    if (strlen(buf)) {
+        if (last_read && strcmp(buf, last_read) != 0) {
+            free(last_read);
+            last_read = 0;
+        }
+        if (!last_read) {
+            add_history (buf);
+            last_read = strdup(buf);
+        }
+    }
     return strlen(buf);
 }
 

@@ -54,6 +54,7 @@ void initialise_machine_names(char *data);
 
 /* A static variable for holding the line. */
 static char *line_read = (char *)NULL;
+static char *last_read = (char *)NULL;
 
 /* Read a string, and return a pointer to it.
    Returns NULL on EOF. */
@@ -65,7 +66,7 @@ rl_gets (const char *prompt)
   if (line_read)
     {
       free (line_read);
-      line_read = (char *)NULL;
+      line_read = 0;
     }
 
   /* Get a line from the user. */
@@ -73,8 +74,16 @@ rl_gets (const char *prompt)
 
   /* If the line has any text in it,
      save it on the history. */
-  if (line_read && *line_read)
-    add_history (line_read);
+    if (line_read && strlen(line_read)) {
+        if (last_read && strcmp(line_read, last_read) != 0) {
+            free(last_read);
+            last_read = 0;
+        }
+        if (!last_read) {
+            add_history (line_read);
+            last_read = strdup(line_read);
+        }
+    }
 
   return (line_read);
 }
