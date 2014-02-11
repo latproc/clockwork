@@ -148,7 +148,7 @@ public:
     uint32_t last_sent; // this is the value to send unless the read value moves away from the mean
     uint16_t buffer_len;
     
-    InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(4), last_sent(0), buffer_len(4) { }
+    InputFilterSettings() :property_changed(true), noise_tolerance(12), positions(8), last_sent(0), buffer_len(4) { }
 };
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
@@ -159,7 +159,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
         config->property_changed = false;
     }
     config->positions.append(raw);
-    uint32_t mean = (config->positions.average(4) + 0.5f);
+    uint32_t mean = (config->positions.average(8) + 0.5f);
     if ( abs(mean - config->last_sent) > config->noise_tolerance) {
         config->last_sent = mean;
     }
