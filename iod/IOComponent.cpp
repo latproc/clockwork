@@ -37,6 +37,7 @@ void IOComponent::processAll() {
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
+		ioc->read_time = current_time;
 		ioc->idle();
 	}
 }
