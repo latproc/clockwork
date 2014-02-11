@@ -648,23 +648,28 @@ void CounterRateInstance::idle() {
     }
 }
 
+void RateEstimatorInstance::setNeedsCheck() {
+    if (!needs_check)
+        MachineInstance::setNeedsCheck();
+}
+
 void RateEstimatorInstance::idle() {
-    if (needsCheck()) {
-        needs_check = 0;
+    if (needsCheck() || (process_time - settings->update_t > 100000 && !io_interface) ) {
         MachineInstance *pos_m = lookup(parameters[0]);
         long pos;
         if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
-            setValue("VALUE", pos);
+        setValue("VALUE", pos);
+        needs_check = 0;
     }
 }
 
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-    settings = new CounterRateFilterSettings(32);
+    settings = new CounterRateFilterSettings(16);
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 : MachineInstance(name, type, instance_type) {
-    settings = new CounterRateFilterSettings(32);
+    settings = new CounterRateFilterSettings(16);
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 

@@ -369,7 +369,7 @@ public:
 
 	static void sort();
     
-    void setNeedsCheck();
+    virtual void setNeedsCheck();
     long lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
     
@@ -454,6 +454,7 @@ public:
     ~RateEstimatorInstance();
     void setValue(std::string property, Value new_value);
     long filter(long val);
+    virtual void setNeedsCheck();
     virtual void idle();
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
