@@ -1791,7 +1791,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		NB_MSG << _name << " error: dropping empty message\n";
 		return Action::Failed;
 	}
-	setNeedsCheck(); // TBD is this necessary?
+	//setNeedsCheck(); // TBD is this necessary? ######--- check
 	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
 	std::string event_name(m.getText());
 	if (from && event_name.find('.') == std::string::npos)
@@ -1922,7 +1922,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
-	setNeedsCheck();
+//	setNeedsCheck(); ########------- 
 //	if (active_actions.back() != a) {
 //		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 //		return;
@@ -2025,8 +2025,8 @@ void MachineInstance::resume() {
             locals[i].machine->resume();
         }
         setState(current_state, true);
+		setNeedsCheck();
 	} 
-	setNeedsCheck();
 }
 
 void MachineInstance::enable() {
@@ -2102,21 +2102,21 @@ void MachineInstance::resume(const std::string &state_name) {
 		clearAllActions();
 		is_enabled = true; 
 		error_state = 0;
-        // resume all local machines first so that setState() can
-        // execute any necessary methods on local machines
-        for (unsigned int i = 0; i<locals.size(); ++i) {
-            locals[i].machine->resume();
-        }
-		setState(state_name.c_str(), true);
-	}
-    else if (state_name == "ALL") {
-        // resume all local machines that have not already been enabled
-        for (unsigned int i = 0; i<locals.size(); ++i) {
-            if (!locals[i].machine->enabled())
-                locals[i].machine->resume();
-        }
+    // resume all local machines first so that setState() can
+    // execute any necessary methods on local machines
+    for (unsigned int i = 0; i<locals.size(); ++i) {
+      locals[i].machine->resume();
     }
-	setNeedsCheck();
+		setState(state_name.c_str(), true);
+	  setNeedsCheck();
+	}
+  else if (state_name == "ALL") {
+    // resume all local machines that have not already been enabled
+    for (unsigned int i = 0; i<locals.size(); ++i) {
+      if (!locals[i].machine->enabled())
+        locals[i].machine->resume();
+      }
+    }
 }
 
 
