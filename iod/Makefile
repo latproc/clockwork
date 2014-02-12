@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # 
 
-APPS = iod iosh persistd device_connector zmq_ecat_monitor beckhoffd #modbusd cw
+APPS = iod iosh persistd device_connector zmq_ecat_monitor beckhoffd modbusd #cw
 SIMULATED=#-DEC_SIMULATOR=1
 
 # add any extra include or library directory paths as necessary
@@ -161,12 +161,10 @@ persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra
 		value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o cJSON.o \
 		options.o PersistentStore.o -lzmq
 
-modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o options.o cJSON.o \
-			MachineInstance.o
+modbusd:	modbusd.cpp value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o options.o cJSON.o 
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_THREAD_LIB) \
 			$(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_SYSTEM_LIB) \
-			dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o options.o cJSON.o \
-			MachineInstance.o
+			value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o cJSON.o options.o
 
 iosh: iosh.cpp value.o cmdline.tab.cpp cmdline.yy.cpp \
 		cmdline.h Logger.o DebugExtra.o MessagingInterface.o \
