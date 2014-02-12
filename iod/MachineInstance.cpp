@@ -2179,8 +2179,6 @@ void MachineInstance::setStableState() {
 			//		if ( (s.trigger && s.trigger->enabled() && s.trigger->fired() && s.condition(this) )
 			//			|| (!s.trigger && s.condition(this)) ) {
 			if (!found_match) {
-                if (s.state_name == "Start")
-                    int xx = 1;
                 if (s.condition(this)) {
                     DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
                     if (current_state.getName() != s.state_name) {
