@@ -40,6 +40,18 @@ print <<<EOD
 							if (typeof obj == "undefined") alert("get failed");
 							else scene.add(obj);
 						}
+						if (res[i].model == "beam" || res[i].model == "presence") {
+							if (res[i].STATE == "on")
+								obj.material.color.setHex(0x00ff00);
+							else
+								obj.material.color.setHex(0xff0000);
+						}
+						if (typeof res[i].color != "undefined") {
+							if (res[i].color == "red")
+								obj.material.color.setHex(0xff0000);
+							else if (res[i].color == "green")
+								obj.material.color.setHex(0x00ff00);
+						}
 						var x_pos = res[i].x_pos;
 						var y_pos = res[i].y_pos;
 						var z_pos = res[i].z_pos;
@@ -79,7 +91,7 @@ print <<<EOD
 		<script>
 			function makeCube(x,y,z,c) {
 	            var geometry = new THREE.CubeGeometry(x,y,z);
-	            var material = new THREE.MeshBasicMaterial( { color: c } );
+	            var material = new THREE.MeshBasicMaterial( { color: c, opacity: 0.8, transparent: true } );
 	            return new THREE.Mesh( geometry, material );
 			}
 			function makeObj(model) {
@@ -87,7 +99,9 @@ print <<<EOD
 					return makeCube(10, 10, 1000, 0xff0000);
 				}
 				else if (model.model == "presence") {
-					return makeCube(1000, 10, 10, 0xff0000);
+					var len = 1000;
+					if (typeof model.x_len != "undefined") len = model.x_len; 
+					return makeCube(len, 10, 10, 0xff0000);
 				}
 				else if (model.model == "bale") {
 					return makeCube(1200, 500, 500, 0x0000ff);
