@@ -596,7 +596,7 @@ CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, 
 }
 CounterRateInstance::~CounterRateInstance() { delete settings; }
 
-void CounterRateInstance::setValue(std::string property, Value new_value) {
+void CounterRateInstance::setValue(const std::string &property, Value new_value) {
 	if (property == "VALUE") {
         if (new_value.kind == Value::t_symbol) {
             new_value = lookup(new_value.sValue.c_str());
@@ -674,7 +674,7 @@ RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * ty
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
-void RateEstimatorInstance::setValue(std::string property, Value new_value) {
+void RateEstimatorInstance::setValue(const std::string &property, Value new_value) {
 	if (property == "VALUE") {
         if (new_value.kind == Value::t_symbol) {
             new_value = lookup(new_value.sValue.c_str());
@@ -2768,7 +2768,7 @@ bool MachineInstance::hasState(const std::string &state_name) const {
     return false;
 }
 
-void MachineInstance::setValue(std::string property, Value new_value) {
+void MachineInstance::setValue(const std::string &property, Value new_value) {
 	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine
