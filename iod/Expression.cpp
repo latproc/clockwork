@@ -470,8 +470,8 @@ Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
 ExprNode eval_stack();
 void prep(Predicate *p, MachineInstance *m, bool left);
 
-ExprNode eval_stack(MachineInstance *m, Stack &work){
-    ExprNode o(work.pop());
+ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter){
+    ExprNode o(*stack_iter++);
     if (o.kind != ExprNode::t_op) {
         if (o.val && o.val->kind == Value::t_dynamic) {
             o.val->dynamicValue()->operator()(m);
@@ -480,7 +480,7 @@ ExprNode eval_stack(MachineInstance *m, Stack &work){
         return o;
     }
     Value lhs, rhs;
-    ExprNode b(eval_stack(m, work));
+    ExprNode b(eval_stack(m, stack_iter));
     assert(b.kind != ExprNode::t_op);
     if (b.val && b.val->kind == Value::t_dynamic) {
         rhs = b.val->dynamicValue()->operator()(m);
@@ -488,7 +488,7 @@ ExprNode eval_stack(MachineInstance *m, Stack &work){
         if (o.op == opOR && rhs.kind == Value::t_bool && rhs.bValue == true) return rhs;
     }
     else rhs = *b.val;
-    ExprNode a(eval_stack(m, work));
+    ExprNode a(eval_stack(m, stack_iter));
     assert(a.kind != ExprNode::t_op);
     if (a.val && a.val->kind == Value::t_dynamic) {
         lhs = a.val->dynamicValue()->operator()(m);
@@ -602,7 +602,8 @@ Value Predicate::evaluate(MachineInstance *m) {
             MessageLog::instance()->add(ss.str().c_str());
             return false;
         }
-    Stack work(stack);
+    //Stack work(stack);
+    std::list<ExprNode>::const_iterator work = stack.stack.begin();
     Value res = *(eval_stack(m, work).val);
     struct timeval now;
     gettimeofday(&now, 0);
@@ -624,7 +625,8 @@ bool Condition::operator()(MachineInstance *m) {
                 return false;
             }
         //std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
-        Stack work(predicate->stack);
+        //Stack work(predicate->stack);
+        std::list<ExprNode>::const_iterator work = predicate->stack.stack.begin();
 	    ExprNode res(eval_stack(m, work));
         last_result = *res.val;
         std::stringstream ss;
