@@ -66,11 +66,12 @@ Action::Status HandleMessageAction::run() {
 			return status;
 		}
 	}
-	std::stringstream ss;
-	ss<< "no handler for " << *this << "\n" << std::flush;
-	std::string s = ss.str();
-	DBG_M_MESSAGING << s.c_str() << "\n";
-	result_str = strdup(ss.str().c_str());
+    if (owner->debug()) {
+        char buf[100];
+        snprintf(buf, 100, "no handler for handling %s\n", package.message->getText().c_str() );
+        DBG_M_MESSAGING << buf << "\n";
+        result_str = strdup(buf);
+    }
 	status = Complete;
 	owner->stop(this);
 	return status;
