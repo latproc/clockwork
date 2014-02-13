@@ -504,8 +504,9 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 /* Machine instances have different ways of reporting their 'current value', depending on the type of machine */
 
 std::ostream &MachineValue::operator<<(std::ostream &out ) const {
-    out << local_name << " (" << machine_instance->getName();
-    if (last_result != SymbolTable::Null) out << " (" << last_result.asString() <<")";
+    
+    if (last_result != SymbolTable::Null) out << machine_instance->getName() << " (" << last_result.asString() <<")";
+    else out << local_name << " (" << machine_instance->getName();
     out << ")";
     return out;
 }
