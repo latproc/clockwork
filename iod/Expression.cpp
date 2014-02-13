@@ -106,7 +106,6 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
             if (left_p->entry.kind == Value::t_symbol
                 && (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
                 clauses.push_back(this);
-                std::cout << "found timer clause (l) " << (*this) << "\n";
 			}
         }
         else
@@ -117,7 +116,6 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
             if (right_p->entry.kind == Value::t_symbol
                 && (right_p->entry.sValue == "TIMER" || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
                     clauses.push_back(this);
-                    std::cout << "found timer clause (r) " << (*this) << "\n";
             }
         }
         else {

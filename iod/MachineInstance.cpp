@@ -1503,7 +1503,6 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                             }
                             if (timer_val < LONG_MAX) {
                                 ch.timer_val = timer_val;
-                                DBG_MSG << "minimum timer: " << timer_val << " selected\n";
                                 DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
                                 ch.trigger = new Trigger("Timer");
                                 Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
