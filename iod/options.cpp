@@ -30,7 +30,7 @@ static int publisher_port_num = 5556;
 static int persistent_port_num = 5557;
 static int modbus_port_num = 5558;
 static int command_port_num = 5555;
-static bool keep_stats = true;
+static bool keep_stats = false;
 
 void set_verbose(int trueOrFalse)
 {
