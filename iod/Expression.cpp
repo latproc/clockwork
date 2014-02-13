@@ -233,9 +233,9 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
         out << ")";
     }
     else {
-        out << " " << entry << " ";
-        if (cached_entry) out <<"(" << *cached_entry << ") ";
-        else if (last_calculation) out << "(" << *last_calculation << ") ";
+        if (cached_entry) out <<" (" << *cached_entry << ") ";
+        else if (last_calculation) out << " (" << *last_calculation << ") ";
+        else out << " " << entry;
 	}
     return out;
 }
