@@ -572,14 +572,14 @@ public:
 	// analogue filter fields
     uint32_t noise_tolerance; // filter out changes with +/- this range
     int32_t last_sent; // this is the value to send unless the read value moves away from the mean
-	LongBuffer readings;
 
     uint64_t start_t;
     uint64_t update_t;
     LongBuffer times;
+	LongBuffer readings;
     FloatBuffer positions;
-    CounterRateFilterSettings(unsigned int sz) : property_changed(false),
-				noise_tolerance(20),last_sent(0), position(0), start_t(0), times(sz), readings(8), positions(sz) {
+    CounterRateFilterSettings(unsigned int sz) : position(0), velocity(0), property_changed(false),
+				noise_tolerance(20),last_sent(0), start_t(0), times(sz), readings(8), positions(sz) {
         struct timeval now;
         gettimeofday(&now, 0);
         start_t = now.tv_sec * 1000000 + now.tv_usec;
