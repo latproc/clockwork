@@ -2506,7 +2506,7 @@ Value *MachineInstance::resolve(std::string property) {
         }
 		else {
 			resetTemporaryStringStream();
-			ss << "could not find machine named " << name << " for property " << property;
+			ss << fullName() << " could not find machine named " << name << " for property " << property;
 			error_messages.push_back(ss.str());
 			++num_errors;
 			DBG_MSG << ss.str() << "\n";
