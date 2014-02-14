@@ -116,8 +116,20 @@ void IODCommandThread::operator()() {
             {
                 boost::mutex::scoped_lock lock(thread_protection_mutex);
                 
-                if (ds == "GET" && count>1) {
+                if (count == 1 && ds == "LIST") {
+                    command = new IODCommandList;
+                }
+                else if (ds == "GET" && count>1) {
                     command = new IODCommandGetStatus;
+                }
+                else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
+                    command = new IODCommandModbusExport;
+                }
+                else if (ds == "MODBUS" && count == 2 && params[1] == "REFRESH") {
+                    command = new IODCommandModbusRefresh;
+                }
+                else if (ds == "MODBUS") {
+                    command = new IODCommandModbus;
                 }
                 else if (count == 4 && ds == "SET" && params[2] == "TO") {
                     command =  new IODCommandSetStatus;
@@ -130,9 +142,6 @@ void IODCommandThread::operator()() {
                 }
                 else if (count == 2 && ds == "TOGGLE") {
                     command = new IODCommandToggle;
-                }
-                else if (count == 1 && ds == "LIST") {
-                    command = new IODCommandList;
                 }
                 else if (count == 2 && ds == "SEND") {
                     command = new IODCommandSend;
@@ -172,15 +181,6 @@ void IODCommandThread::operator()() {
                 }
                 else if (ds == "PROPERTY") {
                     command = new IODCommandProperty(data);
-                }
-                else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
-                    command = new IODCommandModbusExport;
-                }
-                else if (ds == "MODBUS" && count == 2 && params[1] == "REFRESH") {
-                    command = new IODCommandModbusRefresh;
-                }
-                else if (ds == "MODBUS") {
-                    command = new IODCommandModbus;
                 }
                 else if (ds == "HELP") {
                     command = new IODCommandHelp;
