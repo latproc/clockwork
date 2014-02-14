@@ -144,6 +144,11 @@ Value &Value::operator=(const Value &orig){
     return *this;
 }
 
+Value &Value::operator=(bool val) {
+    *this = Value(val);
+    return *this;
+}
+
 Value &Value::operator=(int val) {
     *this = Value(val);
     return *this;

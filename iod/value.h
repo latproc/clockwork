@@ -69,6 +69,7 @@ public:
     void setDynamicValue(DynamicValue &dv);
     
     Value &operator=(const Value &orig);
+    Value &operator=(bool);
     Value &operator=(int);
     Value &operator=(long);
     Value &operator=(unsigned long);
