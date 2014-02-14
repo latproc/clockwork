@@ -19,6 +19,17 @@ AnyOnTest MACHINE a,b{
 }
 test_machine AnyOnTest l1,l2;
 
+it1 FLAG;
+it2 FLAG;
+it3 FLAG;
+l3 LIST it1, it2, it3;
+IndirectTest MACHINE items {
+	ENTER INIT { SET it2 TO on; state := on }
+	ok  WHEN ANY items ARE state;
+	not_ok DEFAULT;
+}
+indirect_test IndirectTest l3;
+
 TestScript MACHINE test {
 
     ok WHEN SELF IS ok || SELF IS working;
@@ -41,10 +52,10 @@ TestScript MACHINE test {
     }
 }
 
-Driver MACHINE test {
+Driver MACHINE test, test2 {
     script TestScript test;
-    ok WHEN script IS ok;
     error WHEN  SELF IS error || SELF IS waiting && TIMER > 10000;
+    ok WHEN script IS ok AND test2 IS ok;
     waiting WHEN script IS working;
     idle DEFAULT;
 
@@ -52,4 +63,4 @@ Driver MACHINE test {
     COMMAND abort { DISABLE script; ENABLE script; }
     ENTER error { LOG "error"; CALL abort ON SELF }
 }
-driver Driver test_machine;
+driver Driver test_machine, indirect_test;
