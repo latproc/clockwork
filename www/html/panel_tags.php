@@ -61,7 +61,31 @@ function zmqrequest($client, $request) {
 	}
 	return false;
 }
-
+function modbusToPanel($curr) {
+	$row = array();
+	$n=$curr[3];
+	$type="Unknown";
+	if ($curr[0] == 0 || $curr[0] == 1)
+		$type='Discrete';
+	else if ($curr[0] == 3 || $curr[0] == 4) {
+		$type = 'Signed_int_16';
+		if ($n == 2)
+			$type = 'Signed_int_32';
+		else if ($n > 2)
+			$type = 'Ascii_string';
+	}
+	$row = array();
+	$row[] = 211;
+	$row[] = '6HEAD';
+	$row[] = $curr[2];
+	$row[] = $type;
+	$row[] = $n;
+	$row[] = 'FALSE';
+	$row[] = "'" . $curr[0] . substr("xx" . $curr[1],2,4);
+	$row[] = 0;
+	$row[] = 0;
+	return $row;
+}
 
 $debug_messages = "";
 $header_extras='';
@@ -81,20 +105,13 @@ if (isset($_REQUEST["modbus"])) {
 		display_json_error($res, $reply);
 		$entries = array();
 	}
-	$config = array();
+	$config = array(
+		array('ProtocolID','DeviceName','TagName','DataType','DataCount',
+				'Retentive','Address','ArrayStart','ArrayEnd')
+	);
+
 	foreach ($entries as $curr) {
-		$n=1;
-		if ($curr[3] == "Ascii_string") $n=128;
-		$row = array();
-		$row[] = 211;
-		$row[] = 'SIXHEAD';
-		$row[] = $curr[2];
-		$row[] = $curr[4];
-		$row[] = $n;
-		$row[5] = "'" . $curr[0] . substr("xx" .$curr[1],2,4);
-		$row[] = 0;
-		$row[] = 0;
-		$config[] = $row;
+		$config[] = modbusToPanel($curr);
 	}
 	echo json_encode($config);
 	return;
@@ -119,19 +136,11 @@ if (isset($_REQUEST["download"])) {
 	header( 'Content-Type: text/csv' );
 	header( 'Content-Disposition: attachment;filename="panel.csv"');
 	$fp = fopen('php://output', 'w');
+	fputcsv($fp,array('ProtocolID','DeviceName','TagName','DataType','DataCount',
+				'Retentive','Address','ArrayStart','ArrayEnd'));
+	
 	foreach ($config_entries as $curr) {
-		$n=1;
-		if ($curr[3] == "Ascii_string") $n=128;
-		$row = array();
-		$row[0] = 211;
-		$row[1] = 'SIXHEAD';
-		$row[2] = $curr[2];
-		$row[3] = $curr[4];
-		$row[4] = $n;
-		$row[5] = "'" . $curr[0] . substr("xx" .$curr[1],2,4);
-		$row[6] = 0;
-		$row[7] = 0;
-		fputcsv($fp, $row);
+		fputcsv($fp, modbusToPanel($curr));
 	}
 	fclose($fp);
 	return;
