@@ -124,7 +124,7 @@ Action::Status IncludeAction::run() {
                 }
                 Parameter &p = list_machine->locals.at(0);
                  p.real_name = real_name;
-                p.val.sValue = "ITEM";
+                p.val = Value("ITEM");
                 p.val.cached_machine = p.machine;
                 if (old && new_assignment && old != new_assignment) {
                     Message msg("changed");
