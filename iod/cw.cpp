@@ -237,7 +237,6 @@ void ProcessingThread::operator()()  {
 							statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
                             //} while (delta <100);
                             Scheduler::instance()->idle();
-                            //MachineInstance::updateAllTimers(MachineInstance::NO_BUILTINS);
                             MachineInstance::checkStableStates();
                             gettimeofday(&end_t, 0);
                             delta = get_diff_in_microsecs(&end_t, &start_t);

@@ -23,6 +23,7 @@
 
 #include <list>
 #include <map>
+#include <set>
 #include <vector>
 #include <sstream>
 #include <sys/time.h>
@@ -154,6 +155,7 @@ public:
     std::vector<Parameter> parameters;
     std::vector<Parameter> locals;
     std::list<State> states;
+    std::set<std::string> state_names;
     std::vector<StableState> stable_states;
     std::map<std::string, MachineCommandTemplate*> commands;
     std::map<Message, MachineCommandTemplate*> enter_functions;
@@ -175,6 +177,7 @@ public:
     std::string name;
     static std::list<MachineClass*> all_machine_classes;
 	bool allow_auto_states;
+    int token_id;
 };
 
 /*

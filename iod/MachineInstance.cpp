@@ -1066,6 +1066,7 @@ void MachineInstance::processAll(PollType which) {
     if (which == BUILTINS)
 		builtins = true;
 	//MachineInstance::updateAllTimers(which);
+    int point_token = Tokeniser::instance()->getTokenId("POINT");
     std::list<MachineInstance *>::iterator iter = active_machines.begin();
     while (iter != active_machines.end()) {
         /* To compute a counterrate, the device needs a continual suppliy of input readings. 
@@ -1073,7 +1074,8 @@ void MachineInstance::processAll(PollType which) {
             we need some help. The following hack provides the solution until a proper method can be developed.
          */
         MachineInstance *m = *iter++;
-        if ( (builtins && m->_type == "POINT") || (!builtins && (m->_type != "POINT" || m->mq_interface)) ) {
+        bool point = m->state_machine->token_id == point_token;
+        if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
 			m->idle();
 		}
 	}
@@ -1283,6 +1285,8 @@ std::ostream &MachineInstance::operator<<(std::ostream &out)const  {
 }
 
 bool MachineInstance::stateExists(State &seek) {
+    //return (state_machine->state_names.count(seek.getName()) != 0);
+
     std::list<State>::const_iterator iter = state_machine->states.begin();
     while (iter != state_machine->states.end()) {
         if (*iter == seek) return true;
@@ -1875,6 +1879,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"), name(class_name), allow_auto_states(true) {
+    token_id = Tokeniser::instance()->getTokenId(class_name);
     all_machine_classes.push_back(this);
 }
 
@@ -2745,6 +2750,8 @@ Value *MachineInstance::lookupState(const std::string &state_name) {
 bool MachineInstance::hasState(const std::string &state_name) const {
 	//is state_name a valid state?
     if (state_machine) {
+//        bool x = state_machine->state_names.count(state_name) != 0;
+
         std::list<State>::const_iterator iter = state_machine->states.begin();
         while (iter != state_machine->states.end()) {
             const State &s = *iter++;

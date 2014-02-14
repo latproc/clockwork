@@ -38,6 +38,27 @@ bool SymbolTable::initialised = false;
 SymbolTable *SymbolTable::keywords = 0;
 std::set<std::string> *SymbolTable::reserved = 0;
 
+Tokeniser* Tokeniser::_instance = 0;
+
+int Tokeniser::getTokenId(const char *name) {
+    std::map<std::string, int>::iterator found = tokens.find(name);
+    if (found != tokens.end()) {
+        return (*found).second;
+    }
+    tokens[name] = ++next;
+    return next;
+}
+
+int Tokeniser::getTokenId(const std::string &name) {
+    std::map<std::string, int>::iterator found = tokens.find(name);
+    if (found != tokens.end()) {
+        return (*found).second;
+    }
+    tokens[name] = ++next;
+    return next;
+}
+
+
 SymbolTable::SymbolTable() {
     if (!initialised) {
         initialised = true;

@@ -34,6 +34,18 @@ typedef std::pair<std::string, Value> SymbolTableNode;
 typedef std::map<std::string, Value>::iterator SymbolTableIterator;
 typedef std::map<std::string, Value>::const_iterator SymbolTableConstIterator;
 
+class Tokeniser {
+public:
+    static Tokeniser* instance() { if (!_instance) _instance = new Tokeniser(); return _instance; }
+    int getTokenId(const char *name);
+    int getTokenId(const std::string &);
+private:
+    static Tokeniser *_instance;
+    std::map<std::string,int> tokens;
+    int next;
+    Tokeniser() : next(0) { }
+};
+
 class SymbolTable {
 public: 
     SymbolTable();

@@ -41,7 +41,7 @@ Counter MACHINE run_flag {
 counter Counter count;
 
 Error MACHINE {
-	EXPORT READONLY 16BIT cause;
+	EXPORT READONLY STRING 40 cause;
 	error FLAG(export:ro,tab:Test);
 	OPTION cause "No Error";
 	ENTER INIT { SET Error TO on }

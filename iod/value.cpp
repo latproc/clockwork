@@ -31,6 +31,38 @@
 #include "DebugExtra.h"
 #include "dynamic_value.h"
 
+Value::Value() : kind(t_empty), cached_machine(0),
+        dyn_value(0),cached_value(0), token_id(0) { }
+
+Value::Value(Kind k) : kind(k), cached_machine(0),
+        dyn_value(0),cached_value(0), token_id(0) { }
+
+Value::Value(bool v) : kind(t_bool), bValue(v),
+        cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+
+Value::Value(long v) : kind(t_integer), iValue(v),
+        cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+
+Value::Value(int v) : kind(t_integer), iValue(v),
+        cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+
+Value::Value(unsigned int v) : kind(t_integer),
+        iValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+
+Value::Value(unsigned long v) : kind(t_integer),
+        iValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+
+Value::Value(const char *str, Kind k)
+    : kind(k), sValue(str), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
+        if (kind == t_symbol) token_id = Tokeniser::instance()->getTokenId(str);
+}
+
+Value::Value(std::string str, Kind k)
+    : kind(k), sValue(str), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
+        if (kind == t_symbol) token_id = Tokeniser::instance()->getTokenId(str);
+}
+
+
 void Value::setDynamicValue(DynamicValue *dv) {
     if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
     kind = t_dynamic;
@@ -49,7 +81,7 @@ Value::~Value() {
 
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),
     sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValue::ref(other.dyn_value)),
-    cached_value(0) {
+    cached_value(0), token_id(other.token_id) {
 //    if (kind == t_list) {
 //        std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
 //    }
@@ -82,8 +114,11 @@ Value Value::operator=(const Value &orig){
             iValue = orig.iValue;
             break;
         case t_string:
+            sValue = orig.sValue;
+            break;
         case t_symbol:
             sValue = orig.sValue;
+            token_id = orig.token_id;
             break;
         case t_dynamic:
             dyn_value = DynamicValue::ref(orig.dyn_value);
@@ -206,6 +241,8 @@ bool Value::operator==(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
+    if (a == t_symbol && b == t_symbol) return token_id == other.token_id;
+    
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
@@ -218,13 +255,13 @@ bool Value::operator==(const Value &other) const {
 	}
 
     if (a != b) return false; // different types cannot be equal (yet)
-    switch (kind) {
+    switch (a) {
         case t_empty: return b == t_empty;
             break;
         case t_integer: 
 			return iValue == other.iValue;
 			break;
-		case t_symbol:
+		case t_symbol: assert(false); return token_id == other.token_id;
         case t_string: return sValue == other.sValue;
             break;            
         case t_bool: return bValue == other.bValue;
@@ -239,6 +276,8 @@ bool Value::operator!=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
 
+    if (a == t_symbol && b == t_symbol) return token_id != other.token_id;
+
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
@@ -251,14 +290,17 @@ bool Value::operator!=(const Value &other) const {
 	}
 
 	if (a != b) return true;
-    switch (kind) {
+    switch (a) {
         case t_empty: return b != t_empty;
             break;
         case t_integer: 
 			return iValue != other.iValue;
 			break;
 		case t_symbol:
-        case t_string: return sValue != other.sValue;
+            assert(false);
+            return token_id != other.token_id;
+        case t_string:
+            return sValue != other.sValue;
             break;            
         case t_bool: return bValue != other.bValue;
             break;            
@@ -436,6 +478,7 @@ Value &Value::operator+(const Value &other) {
         else {
             sValue = new_value.asString();
             kind = t_string;
+            token_id = 0;
         }
 		return *this;
 	}
@@ -443,7 +486,7 @@ Value &Value::operator+(const Value &other) {
 		case t_integer: iValue += other.iValue; break;
 		case t_bool: bValue |= other.bValue;
 		case t_symbol:
-		case t_string: sValue += other.asString();
+		case t_string: sValue += other.asString(); token_id = 0; break;
 		default: ;
 	}
 	return *this;
