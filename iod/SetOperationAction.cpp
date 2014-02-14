@@ -144,7 +144,7 @@ IntersectSetOperation::IntersectSetOperation(MachineInstance *m, const SetOperat
 void setListItem(MachineInstance *list, const Value &item) {
     list->removeLocal(0);
     list->addLocal(item, item.cached_machine);
-    list->locals[0].val.sValue = "ITEM";
+    list->locals[0].val = Value("ITEM");
     list->locals[0].real_name = item.sValue;
 }
 
@@ -329,7 +329,7 @@ Action::Status SelectSetOperation::doOperation() {
                 MachineInstance *mi = owner->lookup(a);
                 source_a_machine->removeLocal(0);
                 source_a_machine->addLocal(a, mi);
-                source_a_machine->locals[0].val.sValue = "ITEM";
+                source_a_machine->locals[0].val = Value("ITEM");
                 source_a_machine->locals[0].real_name = a.sValue;
                 if (!mi) throw new SetOperationException();
                 if (condition.predicate) condition.predicate->flushCache();
