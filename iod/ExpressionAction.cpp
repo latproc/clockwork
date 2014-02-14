@@ -36,13 +36,6 @@ Action::Status ExpressionAction::run() {
                 owner->setValue(lhs.get(), v.iValue + rhs.iValue);
 			break;
 		case ExpressionActionTemplate::opSet:
-			/*if (v.kind == Value::t_integer)
-				v.iValue = rhs.iValue;
-			else if (v.kind == Value::t_bool)
-				v.bValue = rhs.bValue;
-			else if (v.kind == Value::t_symbol)
-				v.sValue = rhs.sValue;
-			*/
 			if (rhs.kind == Value::t_symbol) {
 				const Value &rhs_v = owner->getValue(rhs.sValue);
 				if (rhs_v == SymbolTable::Null) {
