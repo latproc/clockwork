@@ -261,6 +261,7 @@ EXPORT access_type size_type name_list ';' {
         int len = 1;
         if ( $3 == WORD) len = 1;
         else if ($3 == DOUBLEWORD) len = 2;
+        else if ($3 == STRINGTYPE) len = (int)current_value.iValue;
         else {
             std::cerr<< "Unexpected export size token: " << $3 << "\n";
         }
@@ -272,7 +273,6 @@ EXPORT access_type size_type name_list ';' {
             std::cerr<< "Unexpected access type token: " << $2 << "\n";
         }
     }
-
     current_name_list.clear();
 }
 | EXPORT STATES name_list ';' {
@@ -299,7 +299,7 @@ READONLY { $$ = READONLY; }
 size_type:
 WORD { $$ = WORD; }
 | DOUBLEWORD { $$ = DOUBLEWORD; }
-| STRINGTYPE { $$ = STRINGTYPE; }
+| STRINGTYPE INTEGER { $$ = STRINGTYPE; current_value = $2; }
 ;
 
 machine_instantiation:
