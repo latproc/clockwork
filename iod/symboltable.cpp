@@ -40,6 +40,20 @@ std::set<std::string> *SymbolTable::reserved = 0;
 
 Tokeniser* Tokeniser::_instance = 0;
 
+int ClockworkToken::POINT;
+int ClockworkToken::LIST;
+int ClockworkToken::TIMER;
+
+Tokeniser* Tokeniser::instance() {
+    if (!_instance) {
+        _instance = new Tokeniser();
+        ClockworkToken::POINT = _instance->getTokenId("POINT");
+        ClockworkToken::LIST = _instance->getTokenId("LIST");
+        ClockworkToken::TIMER = _instance->getTokenId("TIMER");
+    }
+    return _instance;
+}
+
 int Tokeniser::getTokenId(const char *name) {
     std::map<std::string, int>::iterator found = tokens.find(name);
     if (found != tokens.end()) {
@@ -100,6 +114,11 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
     return *this;
 }
 
+static bool isKeyword(const Value &name) {
+    if (name.kind == Value::t_symbol || name.kind == Value::t_string)
+        return isKeyword(name.sValue.c_str());
+    return false;
+}
 
 /* Symbol table key values, calculated every time they are referenced */
 bool SymbolTable::isKeyword(const char *name)
@@ -116,7 +135,7 @@ Value &SymbolTable::getKeyValue(const char *name) {
             struct timeval now;
             gettimeofday(&now,0);
             unsigned long msecs = (now.tv_sec % 1000) * 1000 + (now.tv_usec + 500) / 1000;
-            res.iValue = msecs;
+            res = msecs;
             return res;
         }
         // the remaining values are all time fields
@@ -155,7 +174,7 @@ Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
         if (strcmp("TIMEZONE", name) == 0) {
-            res.sValue = lt.tm_zone;
+            res = lt.tm_zone;
             return res;
         }
         if (strcmp("TIMESTAMP", name) == 0) {
@@ -163,7 +182,7 @@ Value &SymbolTable::getKeyValue(const char *name) {
             ctime_r(&now, buf);
             size_t n = strlen(buf);
             if (n>1 && buf[n-1] == '\n') buf[n-1] = 0;
-            res.sValue = buf;
+            res = buf;
             return res;
         }
         return res;

@@ -84,7 +84,8 @@ bool Predicate::usesTimer(Value &timer_val) const {
 	if (left_p) {
 		if (!left_p->left_p) {
 			if (left_p->entry.kind == Value::t_symbol 
-					&& (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
+                && (left_p->entry.token_id == ClockworkToken::TIMER
+                    || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
 				//DBG_MSG << "Copying timer value " << right_p->entry << "\n";
                 timer_val = right_p->entry;
 				return true;
@@ -94,7 +95,7 @@ bool Predicate::usesTimer(Value &timer_val) const {
 		}
 		return left_p->usesTimer(timer_val) || right_p->usesTimer(timer_val);
 	}
-	if (entry.kind == Value::t_symbol && entry.sValue == "TIMER")
+	if (entry.kind == Value::t_symbol && entry.token_id == ClockworkToken::TIMER)
 		return true; 
 	else 
 		return false;
@@ -104,7 +105,8 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
 	if (left_p) {
         if (!left_p->left_p) {
             if (left_p->entry.kind == Value::t_symbol
-                && (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
+                && (left_p->entry.token_id == ClockworkToken::TIMER
+                    || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
                 clauses.push_back(this);
 			}
         }
@@ -114,7 +116,7 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
     if (right_p) {
         if (!right_p->left_p) {
             if (right_p->entry.kind == Value::t_symbol
-                && (right_p->entry.sValue == "TIMER" || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
+                && (right_p->entry.token_id == ClockworkToken::TIMER || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
                     clauses.push_back(this);
             }
         }
@@ -126,11 +128,11 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
 
 Value &Predicate::getTimerValue() {
     if (left_p->entry.kind == Value::t_symbol
-        && (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
+        && (left_p->entry.token_id == ClockworkToken::TIMER || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
         return right_p->entry;
     }
     if (right_p->entry.kind == Value::t_symbol
-        && (right_p->entry.sValue == "TIMER" || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
+        && (right_p->entry.token_id == ClockworkToken::TIMER || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
         return left_p->entry;
     }
     return SymbolTable::Null;
@@ -146,8 +148,9 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
 	if (left_p && left_p) left_p->scheduleTimerEvents(target);
     
     // clauses like (machine.TIMER >= 10)
-    if (left_p && left_p->entry.kind == Value::t_symbol && left_p->entry.sValue == "TIMER" && right_p) {
-        //DBG_MSG << "schedule timer event for entry " <<  left_p->entry << "\n";
+    if (left_p && left_p->entry.kind == Value::t_symbol
+            && left_p->entry.token_id == ClockworkToken::TIMER && right_p) {
+
         if (right_p->entry.kind == Value::t_symbol && target->getValue(right_p->entry.sValue).asInteger(current_time))
             ;
         else if (right_p->entry.asInteger(scheduled_time))
@@ -172,7 +175,8 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     }
     
     // clauses like (10 <= machine.TIMER)
-    else if (right_p && right_p->entry.kind == Value::t_symbol && right_p->entry.sValue == "TIMER" && left_p) {
+    else if (right_p && right_p->entry.kind == Value::t_symbol
+                && right_p->entry.token_id == ClockworkToken::TIMER && left_p) {
         if (left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(current_time))
             ;
         else if (left_p->entry.asInteger(scheduled_time))
@@ -180,7 +184,8 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
-    else if (right_p && left_p && right_p->entry.kind == Value::t_symbol && stringEndsWith(right_p->entry.sValue,".TIMER")) {
+    else if (right_p && left_p && right_p->entry.kind == Value::t_symbol
+                    && stringEndsWith(right_p->entry.sValue,".TIMER")) {
         if (left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(current_time))
             ;
         else if (left_p->entry.asInteger(scheduled_time)) {
@@ -216,7 +221,9 @@ void Predicate::clearTimerEvents(MachineInstance *target) // clear all timer eve
 {
 	if (left_p) {
         left_p->clearTimerEvents(target);
-        if (entry.kind == Value::t_symbol && (left_p->entry.sValue == "TIMER" || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
+        if (entry.kind == Value::t_symbol
+                && (left_p->entry.token_id == ClockworkToken::TIMER
+                        || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
             DBG_SCHEDULER << "clear timer event for entry " << entry << "\n";
         }
     }

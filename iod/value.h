@@ -68,7 +68,12 @@ public:
     void setDynamicValue(DynamicValue *dv);
     void setDynamicValue(DynamicValue &dv);
     
-    Value operator=(const Value &orig);
+    Value &operator=(const Value &orig);
+    Value &operator=(int);
+    Value &operator=(long);
+    Value &operator=(unsigned long);
+    Value &operator=(const char *);
+    Value &operator=(std::string);
 
     bool operator>=(const Value &other) const;
     bool operator<=(const Value &other) const;

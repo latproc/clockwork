@@ -36,7 +36,7 @@ typedef std::map<std::string, Value>::const_iterator SymbolTableConstIterator;
 
 class Tokeniser {
 public:
-    static Tokeniser* instance() { if (!_instance) _instance = new Tokeniser(); return _instance; }
+    static Tokeniser* instance();
     int getTokenId(const char *name);
     int getTokenId(const std::string &);
 private:
@@ -44,6 +44,13 @@ private:
     std::map<std::string,int> tokens;
     int next;
     Tokeniser() : next(0) { }
+};
+
+class ClockworkToken {
+public:
+    static int POINT;
+    static int LIST;
+    static int TIMER;
 };
 
 class SymbolTable {
@@ -70,6 +77,7 @@ public:
     size_t size() const { return st.size(); }
 	bool empty() const { return st.empty(); }
     
+    static bool isKeyword(const Value &name);
     static bool isKeyword(const char *name);
     static Value &getKeyValue(const char *name);
     

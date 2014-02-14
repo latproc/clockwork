@@ -102,7 +102,7 @@ Value::Value(DynamicValue *dv) : kind(t_dynamic),cached_value(0) {
     dyn_value = DynamicValue::ref(dv);
 }
 
-Value Value::operator=(const Value &orig){
+Value &Value::operator=(const Value &orig){
 //    listValue.erase(listValue.begin(), listValue.end());
     kind=orig.kind;
     if (dyn_value) { dyn_value = dyn_value->deref(); }
@@ -143,6 +143,34 @@ Value Value::operator=(const Value &orig){
     cached_value = orig.cached_value;
     return *this;
 }
+
+Value &Value::operator=(int val) {
+    *this = Value(val);
+    return *this;
+}
+
+Value &Value::operator=(long val) {
+    *this = Value(val);
+    return *this;
+}
+
+Value &Value::operator=(unsigned long val) {
+    *this = Value(val);
+    return *this;
+}
+
+Value &Value::operator=(const char *val) {
+    *this = Value(val);
+    return *this;
+}
+
+Value &Value::operator=(std::string val) {
+    *this = Value(val);
+    return *this;
+}
+
+
+
 
 std::string Value::name() const {
     switch(kind) {
