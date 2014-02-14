@@ -176,9 +176,10 @@ struct ProcessingThread {
 
 	ControlSystemMachine machine;
     int sequence;
+    bool data_ready;
 };
 
-ProcessingThread::ProcessingThread(): sequence(0) {	}
+ProcessingThread::ProcessingThread(): sequence(0), data_ready(false) {	}
 
 void ProcessingThread::operator()()  {
 	
@@ -190,10 +191,11 @@ void ProcessingThread::operator()()  {
     {
         struct timeval start_t, end_t;
         {
-            boost::mutex::scoped_lock lock(io_mutex);
-            io_updated.wait(io_mutex);
-        }
-        {
+            boost::unique_lock<boost::mutex> lock(io_mutex);
+            while (!data_ready)
+                io_updated.wait(io_mutex);
+        //}
+        //{
 			{
 				gettimeofday(&start_t, 0);
 				if (machine_is_ready) {
@@ -246,6 +248,7 @@ void ProcessingThread::operator()()  {
 				std::cout << std::flush;
 			}
             ++sequence;
+            data_ready = false;
         }
         
         gettimeofday(&end_t, 0);
@@ -426,7 +429,7 @@ int main (int argc, char const *argv[])
             assert(remaining==0);
         }
 	}
-	MachineInstance::displayAll();
+	//MachineInstance::displayAll();
 #ifdef EC_SIMULATOR
 		wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
 #endif
@@ -455,8 +458,9 @@ int main (int argc, char const *argv[])
         MQTTInterface::instance()->collectState();
         ECInterface::instance()->collectState();
         {
-        boost::mutex::scoped_lock lock(io_mutex);
-        io_updated.notify_all();
+            boost::unique_lock<boost::mutex> lock(io_mutex);
+            processMonitor.data_ready = true;
+            io_updated.notify_one();
         }
 //        if (ECInterface::sig_alarms == user_alarms) {
 //            boost::mutex::scoped_lock lock(model_mutex);

@@ -504,8 +504,9 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 /* Machine instances have different ways of reporting their 'current value', depending on the type of machine */
 
 std::ostream &MachineValue::operator<<(std::ostream &out ) const {
-    out << local_name << " (" << machine_instance->getName();
-    if (last_result != SymbolTable::Null) out << " (" << last_result.asString() <<")";
+    
+    if (last_result != SymbolTable::Null) out << machine_instance->getName() << " (" << last_result.asString() <<")";
+    else out << local_name << " (" << machine_instance->getName();
     out << ")";
     return out;
 }
@@ -571,14 +572,14 @@ public:
 	// analogue filter fields
     uint32_t noise_tolerance; // filter out changes with +/- this range
     int32_t last_sent; // this is the value to send unless the read value moves away from the mean
-	LongBuffer readings;
 
     uint64_t start_t;
     uint64_t update_t;
     LongBuffer times;
+	LongBuffer readings;
     FloatBuffer positions;
-    CounterRateFilterSettings(unsigned int sz) : property_changed(false),
-				noise_tolerance(20),last_sent(0), position(0), start_t(0), times(sz), readings(8), positions(sz) {
+    CounterRateFilterSettings(unsigned int sz) : position(0), velocity(0), property_changed(false),
+				noise_tolerance(20),last_sent(0), start_t(0), times(sz), readings(8), positions(sz) {
         struct timeval now;
         gettimeofday(&now, 0);
         start_t = now.tv_sec * 1000000 + now.tv_usec;
@@ -595,7 +596,7 @@ CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, 
 }
 CounterRateInstance::~CounterRateInstance() { delete settings; }
 
-void CounterRateInstance::setValue(std::string property, Value new_value) {
+void CounterRateInstance::setValue(const std::string &property, Value new_value) {
 	if (property == "VALUE") {
         if (new_value.kind == Value::t_symbol) {
             new_value = lookup(new_value.sValue.c_str());
@@ -673,7 +674,7 @@ RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * ty
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
-void RateEstimatorInstance::setValue(std::string property, Value new_value) {
+void RateEstimatorInstance::setValue(const std::string &property, Value new_value) {
 	if (property == "VALUE") {
         if (new_value.kind == Value::t_symbol) {
             new_value = lookup(new_value.sValue.c_str());
@@ -1503,7 +1504,6 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
                             }
                             if (timer_val < LONG_MAX) {
                                 ch.timer_val = timer_val;
-                                DBG_MSG << "minimum timer: " << timer_val << " selected\n";
                                 DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
                                 ch.trigger = new Trigger("Timer");
                                 Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
@@ -2768,7 +2768,7 @@ bool MachineInstance::hasState(const std::string &state_name) const {
     return false;
 }
 
-void MachineInstance::setValue(std::string property, Value new_value) {
+void MachineInstance::setValue(const std::string &property, Value new_value) {
 	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine

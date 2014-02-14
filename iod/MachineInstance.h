@@ -248,7 +248,7 @@ public:
     Value &getValue(std::string property); // provides the current value of an object accessible in the scope of this machine
     Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
     Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
-    virtual void setValue(std::string property, Value new_value);
+    virtual void setValue(const std::string &property, Value new_value);
     Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
     
     void setStateMachine(MachineClass *machine_class);
@@ -326,7 +326,7 @@ public:
 	void resume();
 	void resume(const std::string &state_name);
 	void disable();
-	bool enabled() const { return is_enabled; }
+	inline bool enabled() const { return is_enabled; }
 	void clearAllActions();
 
 	// basic lock functionality 
@@ -434,7 +434,7 @@ protected:
     CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 public:
     ~CounterRateInstance();
-    void setValue(std::string property, Value new_value);
+    void setValue(const std::string &property, Value new_value);
     long filter(long val);
     virtual void idle();
     CounterRateFilterSettings *getSettings() { return settings; }
@@ -452,7 +452,7 @@ protected:
     RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 public:
     ~RateEstimatorInstance();
-    void setValue(std::string property, Value new_value);
+    void setValue(const std::string &property, Value new_value);
     long filter(long val);
     virtual void setNeedsCheck();
     virtual void idle();

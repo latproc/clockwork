@@ -80,7 +80,6 @@ void IODCommandThread::operator()() {
             char *data = (char *)malloc(size+1);
             memcpy(data, request.data(), size);
             data[size] = 0;
-            std::cout << "Command thread received " << data << std::endl;
             
             std::list<Value> parts;
             int count = 0;
