@@ -287,6 +287,7 @@ std::string fullName(const MachineInstance &m) {
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
     updateLastEvaluationTime();
+    if (!state_machine) return;
     if (state_machine->token_id == ClockworkToken::LIST) {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
@@ -452,7 +453,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
     //ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
     if (seek_machine_name == "SELF" || seek_machine_name == _name) { 
 		//ss << "...self";
-		if (state_machine->token_id == ClockworkToken::CONDITION && owner)
+		if (state_machine->token_id == ClockworkToken::tokCONDITION && owner)
 			found = owner;
 		else
 			found = this; 
