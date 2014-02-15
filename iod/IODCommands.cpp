@@ -109,6 +109,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
         char *text = (char *)malloc(len+1);
         sprintf(text, "%s%s", msg_text, ds.c_str());
         error_str = text;
+        free(text);
         return false;
     }
     error_str = "Usage: SET device TO state";
@@ -560,7 +561,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         else {
             std::string err ="Unknown device: ";
             err = err + params[1].asString() + "\n";
-            error_str = strdup(err.c_str());
+            error_str = err.c_str();
             return false;
         }
         /*}
