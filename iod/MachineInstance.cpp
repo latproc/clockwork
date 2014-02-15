@@ -2406,7 +2406,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     }
     // a list has many parameters but the list class does not.
     // nevertheless, the parameters and dependencies still need to be setup.
-    if (_type == "LIST") {
+    if (state_machine->token_id == ClockworkToken::LIST) {
         for (unsigned int i=0; i<parameters.size(); ++i) {
             parameters[i].real_name = parameters[i].val.sValue;
             MachineInstance *m = lookup(parameters[i].real_name);
@@ -2510,7 +2510,7 @@ Value *MachineInstance::resolve(std::string property) {
 		if (other) {
 			return other->resolve(prop);
 		}
-        else if (_type == "REFERENCE" && name == "ITEM" && locals.size() == 0) {
+        else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
             // permit references items to be not always available so that these can be
             // added and removed as the program executes
             return &SymbolTable::Null;
@@ -2529,7 +2529,8 @@ Value *MachineInstance::resolve(std::string property) {
 	    // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
         Value *res = 0;
 		// variables may refer to an initialisation value passed in as a parameter.
-		if (_type == "VARIABLE" || _type == "CONSTANT") {
+		if (state_machine->token_id == ClockworkToken::VARIABLE
+            || state_machine->token_id == ClockworkToken::CONSTANT) {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
 				if (state_machine->parameters[i].val.kind == Value::t_symbol
                     && property == state_machine->parameters[i].val.sValue
@@ -2600,7 +2601,8 @@ Value *MachineInstance::resolve(std::string property) {
 		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
 		MachineInstance *m = lookup(property);
 		if (m) {
-			if (m->_type == "VARIABLE" || m->_type == "CONSTANT")
+			if (m->state_machine->token_id == ClockworkToken::VARIABLE
+                || m->state_machine->token_id == ClockworkToken::CONSTANT)
 				return &m->properties.lookup("VALUE");
 			else
 				return new Value(new MachineValue(m, property)); //&m->current_state_val;
@@ -2640,7 +2642,7 @@ Value &MachineInstance::getValue(std::string property) {
 			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
 			return v;
 		}
-        else if (_type == "REFERENCE" && name == "ITEM" && locals.size() == 0) {
+        else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
             // permit references items to be not always available so that these can be
             // added and removed as the program executes
             return SymbolTable::Null;
@@ -2659,7 +2661,8 @@ Value &MachineInstance::getValue(std::string property) {
 	    // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 	
 		// variables may refer to an initialisation value passed in as a parameter. 
-		if (_type == "VARIABLE" || _type == "CONSTANT") {
+		if (state_machine->token_id == ClockworkToken::VARIABLE
+            || state_machine->token_id == ClockworkToken::CONSTANT) {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
 				if (state_machine->parameters[i].val.kind == Value::t_symbol 
 						&& property == state_machine->parameters[i].val.sValue
@@ -2729,7 +2732,8 @@ Value &MachineInstance::getValue(std::string property) {
 		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
 		MachineInstance *m = lookup(property);
 		if (m) {
-			if (m->_type == "VARIABLE" || m->_type == "CONSTANT") 
+			if (m->state_machine->token_id == ClockworkToken::VARIABLE
+                || m->state_machine->token_id == ClockworkToken::CONSTANT)
 				return m->getValue("VALUE");
 			else
 				return *m->getCurrentStateVal();
