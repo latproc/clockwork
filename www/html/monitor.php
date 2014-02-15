@@ -52,7 +52,8 @@ $use_ajax = true; // the 'false' version of this may not actually work
 $banner = "<p>Logged in as " . $user->getName() . "."
 	. " <a href=\"admin.php?m=logout\">Logout</a>";
 if ($user->isAdministrator()) {
-	$banner .= ' <a href="admin.php?registration">Administration</a>';
+	$banner .= ' <a href="admin.php?registration">Administration</a>'
+		. ' <a href="panel_tags.php">Panel Tags</a>';
 }
 
 // static image generator
