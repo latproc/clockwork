@@ -52,6 +52,10 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::POINT = _instance->getTokenId("POINT");
         ClockworkToken::LIST = _instance->getTokenId("LIST");
         ClockworkToken::TIMER = _instance->getTokenId("TIMER");
+        ClockworkToken::REFERENCE = _instance->getTokenId("REFERENCE");
+        ClockworkToken::ITEM = _instance->getTokenId("ITEM");
+        ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
+        ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
     }
     return _instance;
 }

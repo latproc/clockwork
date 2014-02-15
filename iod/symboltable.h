@@ -52,6 +52,10 @@ public:
     static int EXTERNAL;
     static int LIST;
     static int TIMER;
+    static int REFERENCE;
+    static int ITEM;
+    static int VARIABLE;
+    static int CONSTANT;
 };
 
 class SymbolTable {
