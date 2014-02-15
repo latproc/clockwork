@@ -839,14 +839,15 @@ std::cout << error_str <<  " " << params[2] << "\n";
         cJSON *result = cJSON_CreateArray();
         while (m_iter != MachineInstance::end()) {
             MachineInstance *m = *m_iter++;
-            if (m->stable_states_stats.getCount() || m->message_handling_stats.getCount()) {
+            if (m->stable_states_stats.getCount()) {
                 cJSON *stat = cJSON_CreateArray();
                 cJSON_AddItemToArray(stat, cJSON_CreateString(m->fullName().c_str()));
                 cJSON_AddItemToArray(stat, cJSON_CreateString(m->stable_states_stats.getName().c_str()));
                 m->stable_states_stats.reportArray(stat);
                 cJSON_AddItemToArray(result, stat);
-                
-                stat = cJSON_CreateArray();
+            }
+            if ( m->message_handling_stats.getCount()) {
+                cJSON *stat = cJSON_CreateArray();
                 cJSON_AddItemToArray(stat, cJSON_CreateString(m->fullName().c_str()));
                 cJSON_AddItemToArray(stat, cJSON_CreateString(m->message_handling_stats.getName().c_str()));
                 m->message_handling_stats.reportArray(stat);
