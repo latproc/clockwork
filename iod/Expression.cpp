@@ -258,8 +258,10 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
         entry.dyn_value = DynamicValue::ref(other.entry.dyn_value->clone());
         //dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
     }
-    //else
-    //    dyn_value = 0;
+    if (other.dyn_value)
+        dyn_value = new Value(DynamicValue::ref(other.dyn_value->dyn_value));
+    else
+        dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached values in this clone
 	priority = other.priority;
 	mi = 0;
@@ -278,8 +280,10 @@ Predicate &Predicate::operator=(const Predicate &other) {
         entry.dyn_value = DynamicValue::ref(other.entry.dyn_value->clone());
         //dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
     }
-    //else
-    //    dyn_value = 0;
+    if (other.dyn_value)
+        dyn_value = new Value(DynamicValue::ref(other.dyn_value->dyn_value));
+    else
+        dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached machine pointers in this clone
 	priority = other.priority;
 	mi = 0;
@@ -294,6 +298,10 @@ void Predicate::flushCache() {
     cached_entry = 0;
     last_calculation = 0;
     needs_reevaluation = true;
+    if (dyn_value) {
+        delete dyn_value;
+        dyn_value = 0;
+    }
     /*if (op == opNone) {
         if (entry.kind == Value::t_dynamic) {
             //entry.dyn_value->flushCache();
@@ -505,13 +513,13 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         if (o.op == opAND && rhs.kind == Value::t_bool && rhs.bValue == false) return rhs;
         if (o.op == opOR && rhs.kind == Value::t_bool && rhs.bValue == true) return rhs;
     }
-    else rhs = *b.val;
+    else if (b.val) rhs = *b.val;
     ExprNode a(eval_stack(m, stack_iter));
     assert(a.kind != ExprNode::t_op);
     if (a.val && a.val->kind == Value::t_dynamic) {
         lhs = a.val->dynamicValue()->operator()(m);
     }
-    else lhs = *a.val;
+    else if (a.val) lhs = *a.val;
     switch (o.op) {
         case opGE: return lhs >= rhs;
         case opGT: return lhs > rhs;
@@ -568,13 +576,13 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
             if (lhm && !rhm) {
                 if (lhm->hasState(p->right_p->entry.sValue)) {
                     p->right_p->entry.kind = Value::t_string;
-                    p->left_p->entry.setDynamicValue(new MachineValue(lhm, p->left_p->entry.sValue));
+                    p->left_p->dyn_value = new Value(new MachineValue(lhm, p->left_p->entry.sValue));
                 }
             }
             else if (rhm && !lhm) {
                 if (rhm->hasState(p->left_p->entry.sValue)) {
                     p->left_p->entry.kind = Value::t_string;
-                    p->right_p->entry.setDynamicValue(new MachineValue(rhm, p->right_p->entry.sValue));
+                    p->right_p->dyn_value = new Value(new MachineValue(rhm, p->right_p->entry.sValue));
                 }
             }
         }
@@ -596,7 +604,10 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         }
         p->last_calculation = result;
         //std::cout << " result: " << *result << "\n";
-        if (p->entry.kind == Value::t_dynamic) {
+        if (p->dyn_value) {
+            stack.push(ExprNode(result, p->dyn_value));
+        }
+        else if (p->entry.kind == Value::t_dynamic) {
             stack.push(ExprNode(result, &p->entry));
         }
         else
