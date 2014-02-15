@@ -61,7 +61,7 @@ function zmqrequest($client, $request) {
 	}
 	return false;
 }
-function modbusToPanel($curr) {
+function modbusToPanel($device, $curr) {
 	$row = array();
 	$n=$curr[3];
 	$type="Unknown";
@@ -76,7 +76,7 @@ function modbusToPanel($curr) {
 	}
 	$row = array();
 	$row[] = 211;
-	$row[] = '6HEAD';
+	$row[] = $device;
 	$row[] = $curr[2];
 	$row[] = $type;
 	$row[] = $n;
@@ -97,7 +97,19 @@ $requester->setSockOpt(ZMQ::SOCKOPT_LINGER, 5);
 $requester->connect('tcp://localhost:5555');
 $requester->setSockOpt(ZMQ::SOCKOPT_BACKLOG, 0);
 
+$device = "localhost";
+$reply = zmqrequest($requester,'INFO JSON');
+$entries = json_decode($reply);
+$res = json_last_error();
+if (json_last_error() != JSON_ERROR_NONE) {
+	display_json_error($res, $reply);
+	$entries = array();
+}
+if ( is_array($entries) && count($entries))
+	$device = $entries[0];
+
 if (isset($_REQUEST["modbus"])) {
+
 	$reply = zmqrequest($requester,'MODBUS ' . $_REQUEST["modbus"]);
 	$entries = json_decode($reply);
 	$res = json_last_error();
@@ -111,7 +123,7 @@ if (isset($_REQUEST["modbus"])) {
 	);
 
 	foreach ($entries as $curr) {
-		$config[] = modbusToPanel($curr);
+		$config[] = modbusToPanel($device, $curr);
 	}
 	echo json_encode($config);
 	return;
@@ -140,7 +152,7 @@ if (isset($_REQUEST["download"])) {
 				'Retentive','Address','ArrayStart','ArrayEnd'));
 	
 	foreach ($config_entries as $curr) {
-		fputcsv($fp, modbusToPanel($curr));
+		fputcsv($fp, modbusToPanel($device, $curr));
 	}
 	fclose($fp);
 	return;

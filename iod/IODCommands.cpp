@@ -18,6 +18,7 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <stdlib.h>
 #include "IODCommands.h"
 #include "MachineInstance.h"
 #include "IOComponent.h"
@@ -658,6 +659,36 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         result_str = s;
         return true;
     }
+
+    bool IODCommandInfo::run(std::vector<Value> &params) {
+        const char *device = device_name();
+        if (!device) device = "localhost";
+        const char *version = "version: 0.0";
+        char *res = 0;
+        if (params.size() >1 && params[1] == "JSON") {
+            cJSON *info = cJSON_CreateArray();
+            cJSON_AddStringToObject(info, "NAME", device);
+            cJSON_AddStringToObject(info, "VERSION", version);
+            res = cJSON_Print(info);
+            cJSON_Delete(info);
+            
+        }
+        else {
+            res = (char *)malloc(100);
+            snprintf(res,100, "DEVICE:\t%s\nVERSION\t%s\n", device, version);
+        }
+        if (res) {
+            result_str = res;
+            free(res);
+            done = true;
+        }
+        else {
+            error_str = "No System Information available";
+            done = false;
+        }
+        return done;
+    }
+
 
     bool IODCommandDebugShow::run(std::vector<Value> &params) {
 		std::stringstream ss;

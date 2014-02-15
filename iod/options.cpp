@@ -18,6 +18,8 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <stdlib.h>
+#include <string.h>
 #include "options.h"
 
 static int opt_verbose = 0;
@@ -31,6 +33,11 @@ static int persistent_port_num = 5557;
 static int modbus_port_num = 5558;
 static int command_port_num = 5555;
 static bool keep_stats = false;
+static char *dev_name = 0;
+
+const char *device_name() { return dev_name; }
+void set_device_name(const char *new_name) { if (dev_name) free(dev_name); dev_name = strdup(new_name); }
+
 
 void set_verbose(int trueOrFalse)
 {

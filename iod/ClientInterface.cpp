@@ -191,6 +191,9 @@ void IODCommandThread::operator()() {
                 else if (ds == "NOTICE") {
                     command = new IODCommandNotice;
                 }
+                else if (ds == "INFO") {
+                    command = new IODCommandInfo;
+                }
                 else {
                     command = new IODCommandUnknown;
                 }

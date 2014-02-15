@@ -3025,14 +3025,20 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 		}
 		if (owner)
 			out << group << ":" << std::setfill('0') << std::setw(5) << addr
-			<< "\t" << owner->getName() << "." << (*iter).second
+			<< "\t" << owner->getName() << "." << ((group==0) ? "cmd_": "") << (*iter).second
 			<< "\t" << data_type
 			<< "\n";
-		else
-			out << group << ":" << std::setfill('0') << std::setw(5) << addr 
-			<< "\t" << (*iter).second 
+		else {
+            std::string name((*iter).second);
+            size_t found = name.rfind(".");
+            if (group == 0 && found != std::string::npos) {
+                name.replace(found, 1, ".cmd_");
+            }
+			out << group << ":" << std::setfill('0') << std::setw(5) << addr
+			<< "\t" << name
 			<< "\t" << data_type
 			<< "\n";
+        }
 		iter++;
 	}
 	

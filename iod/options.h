@@ -56,6 +56,9 @@ int command_port();
 void enable_statistics(bool which);
 int keep_statistics();
     
+const char *device_name();
+void set_device_name(const char *new_name);
+    
 #ifdef __cplusplus
 }
 #endif

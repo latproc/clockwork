@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #include <list>
 #include <string>
+#include <unistd.h>
 
 #include <boost/utility.hpp>
 #include <boost/filesystem.hpp>
@@ -169,6 +170,18 @@ int load_preset_modbus_mappings() {
 }
 
 void semantic_analysis() {
+    char host_name[100];
+    int err = gethostname(host_name, 100);
+    if (err == -1) strcpy(host_name, "localhost");
+    MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
+    settings_class->states.push_back("ready");
+	settings_class->default_state = State("ready");
+	settings_class->initial_state = State("ready");
+	settings_class->disableAutomaticStateChanges();
+	settings_class->properties.add("INFO", "Clockwork host", SymbolTable::ST_REPLACE);
+	settings_class->properties.add("NAME", host_name, SymbolTable::ST_REPLACE);
+	settings_class->properties.add("VERSION", "0.0", SymbolTable::ST_REPLACE);
+    
     MachineClass *point_class = new MachineClass("POINT");
     point_class->parameters.push_back(Parameter("module"));
     point_class->parameters.push_back(Parameter("offset"));
@@ -685,6 +698,9 @@ int loadConfig(int argc, char const *argv[]) {
 		else if (strcmp(argv[i], "-cp") == 0 && i < argc-1) { // command port
 			set_command_port((int)strtol(argv[++i], 0, 10));
 		}
+		else if (strcmp(argv[i], "--name") == 0 && i < argc-1) { // command port
+			set_device_name(argv[++i]);
+		}
 		else if (strcmp(argv[i], "--stats") == 0 ) { // command port
 			enable_statistics(true);
 		}
@@ -850,6 +866,13 @@ void initialise_machines() {
         }
     }
     
+    // check if a host info structure has been made
+	bool sysinfo = machine_classes.count("SYSTEMSETTINGS") > 0;
+    if (!sysinfo) {
+        
+    }
+
+    
     // prepare the list of machines that will be processed at idle time
     m_iter = MachineInstance::begin();
     int num_passive = 0;
@@ -876,7 +899,6 @@ void initialise_machines() {
         }
     }
     std::cout << num_passive << " passive and " << num_active << " active machines\n";
-    
     
 	// enable all other machines
     
