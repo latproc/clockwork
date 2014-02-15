@@ -123,8 +123,11 @@ void Dispatcher::idle() {
                     long port;
                     if (port_val.asInteger(port)) {
                         MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port);
-                        std::stringstream ss;
-                        mif->send(m.getText().c_str());
+                        Value protocol = mi->properties.lookup("PROTOCOL");
+                        if (protocol == "RAW")
+                            mif->send(m.getText().c_str());
+                        else if (protocol == "CLOCKWORK")
+                            mif->sendCommand(m.getText());
                     }
                 }
             }

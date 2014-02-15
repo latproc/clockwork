@@ -49,6 +49,7 @@ private:
 class ClockworkToken {
 public:
     static int POINT;
+    static int EXTERNAL;
     static int LIST;
     static int TIMER;
 };

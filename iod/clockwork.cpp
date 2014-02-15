@@ -335,6 +335,7 @@ void semantic_analysis() {
     MachineClass *mc_external = new MachineClass("EXTERNAL");
     mc_external->options["HOST"] = "localhost";
     mc_external->options["PORT"] = 5600;
+    mc_external->options["PROTOCOL"] = "raw";
     
     std::map<std::string, MachineInstance*> machine_instances;
     

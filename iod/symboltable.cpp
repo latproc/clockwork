@@ -40,6 +40,7 @@ std::set<std::string> *SymbolTable::reserved = 0;
 
 Tokeniser* Tokeniser::_instance = 0;
 
+int ClockworkToken::EXTERNAL;
 int ClockworkToken::POINT;
 int ClockworkToken::LIST;
 int ClockworkToken::TIMER;
@@ -47,6 +48,7 @@ int ClockworkToken::TIMER;
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
         _instance = new Tokeniser();
+        ClockworkToken::EXTERNAL = _instance->getTokenId("EXTERNAL");
         ClockworkToken::POINT = _instance->getTokenId("POINT");
         ClockworkToken::LIST = _instance->getTokenId("LIST");
         ClockworkToken::TIMER = _instance->getTokenId("TIMER");
