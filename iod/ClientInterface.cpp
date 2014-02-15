@@ -167,6 +167,9 @@ void IODCommandThread::operator()() {
                 else if ( (count == 2 || count == 3) && ds == "DESCRIBE") {
                     command = new IODCommandDescribe;
                 }
+                else if ( ds == "STATS" ) {
+                    command = new IODCommandPerformance;
+                }
                 else if (count > 2 && ds == "DATA") {
                     command = new IODCommandData;
                 }

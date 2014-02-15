@@ -404,6 +404,7 @@ protected:
     Value current_value_holder;
 	std::stringstream ss; // saves recreating string stream for temporary use
     uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
+public:
     Statistic stable_states_stats;
     Statistic message_handling_stats;
 	

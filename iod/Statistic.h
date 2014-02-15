@@ -26,6 +26,7 @@
 #include <limits.h>
 #include <sys/time.h>
 #include "options.h"
+#include "cJSON.h"
 
 class Statistic {
 public:
@@ -48,6 +49,22 @@ public:
 			out << text << '\t' << count << '\t' << min_value << '\t' << max_value << '\t' << ave << "\n";
 		}
 	}
+    void reportArray(cJSON *obj) {
+        float ave = (count==0) ? 0 : sum/count;
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(count));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(min_value));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(max_value));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(ave));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(sum));
+    }
+    void report(cJSON *obj) {
+        float ave = (count==0) ? 0 : sum/count;
+        cJSON_AddNumberToObject(obj, "count", count);
+        cJSON_AddNumberToObject(obj, "min", min_value);
+        cJSON_AddNumberToObject(obj, "max", max_value);
+        cJSON_AddNumberToObject(obj, "ave", ave);
+        cJSON_AddNumberToObject(obj, "sum", sum);
+    }
 #if 0	
 	float rollingAverage(){
 		int c=periods.size();
@@ -56,7 +73,7 @@ public:
 		for(int i=0;i<c;i++){
 			s+=average(i);
 		}
-			return s/c;
+        return s/c;
 	}
 #endif
 	static void add(Statistic*new_stat) { stats.push_back(new_stat); }
@@ -67,6 +84,9 @@ public:
 			stat->report(out);
 		}
 	}
+    const std::string &getName() const { return text; }
+    int getCount() { return count; }
+    float getSum() { return sum; }
     
 private:
     Statistic(const Statistic &orig);

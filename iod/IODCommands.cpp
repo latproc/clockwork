@@ -834,6 +834,38 @@ std::cout << error_str <<  " " << params[2] << "\n";
         }
 	}
 
+    bool IODCommandPerformance::run(std::vector<Value> &params) {
+        std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
+        cJSON *result = cJSON_CreateArray();
+        while (m_iter != MachineInstance::end()) {
+            MachineInstance *m = *m_iter++;
+            if (m->stable_states_stats.getCount() || m->message_handling_stats.getCount()) {
+                cJSON *stat = cJSON_CreateArray();
+                cJSON_AddItemToArray(stat, cJSON_CreateString(m->fullName().c_str()));
+                cJSON_AddItemToArray(stat, cJSON_CreateString(m->stable_states_stats.getName().c_str()));
+                m->stable_states_stats.reportArray(stat);
+                cJSON_AddItemToArray(result, stat);
+                
+                stat = cJSON_CreateArray();
+                cJSON_AddItemToArray(stat, cJSON_CreateString(m->fullName().c_str()));
+                cJSON_AddItemToArray(stat, cJSON_CreateString(m->message_handling_stats.getName().c_str()));
+                m->message_handling_stats.reportArray(stat);
+                cJSON_AddItemToArray(result, stat);
+            }
+        }
+        //std::string s(out.str());
+        if (result) {
+            char *r_str = cJSON_Print(result);
+            result_str = r_str;
+            free(r_str);
+            cJSON_Delete(result);
+            return true;
+        }
+        else {
+            error_str = "Failed to load modbus initial data";
+            return false;
+        }
+    }
 
     bool IODCommandUnknown::run(std::vector<Value> &params) {
         std::stringstream ss;
