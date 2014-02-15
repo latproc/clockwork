@@ -746,16 +746,18 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		}
 		int group, address;
 		char *end;
-        assert(params[1].kind == Value::t_integer); //group
-        assert(params[2].kind == Value::t_integer); //addr
+//        assert(params[1].kind == Value::t_integer); //group
+//        assert(params[2].kind == Value::t_integer); //addr
 		group = (int)strtol(params[1].asString().c_str(), &end, 0);
 		if (*end) {
 			error_str = "Modbus: group number should be from 1..4";
+std::cout << error_str <<  " " << params[1] << "\n";
 			return false;
 		}
 		address = (int)strtol(params[2].asString().c_str(), &end, 0);
 		if (*end) {
 			error_str = "Modbus: address should be from 0..65535";
+std::cout << error_str <<  " " << params[2] << "\n";
 			return false;
 		}
 		ModbusAddress found = ModbusAddress::lookup(group, address);
