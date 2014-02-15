@@ -56,6 +56,7 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::ITEM = _instance->getTokenId("ITEM");
         ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
         ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
+        ClockworkToken::CONDITION = _instance->getTokenId("CONDITION");
     }
     return _instance;
 }

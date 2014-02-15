@@ -56,6 +56,7 @@ public:
     static int ITEM;
     static int VARIABLE;
     static int CONSTANT;
+    static int CONDITION;
 };
 
 class SymbolTable {
