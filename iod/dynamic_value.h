@@ -41,6 +41,7 @@ public:
     MachineInstance *getScope() { return scope; }
     static DynamicValue *ref(DynamicValue*dv) { if (!dv) return 0; else dv->refs++; return dv; }
     DynamicValue *deref() { --refs; if (!refs) {delete this; return 0;} else return this; }
+    virtual void flushCache();
 protected:
     Value last_result;
     MachineInstance *scope;

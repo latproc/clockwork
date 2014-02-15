@@ -294,6 +294,16 @@ void Predicate::flushCache() {
     cached_entry = 0;
     last_calculation = 0;
     needs_reevaluation = true;
+    if (op == opNone) {
+        if (entry.kind == Value::t_dynamic) {
+            //entry.dyn_value->flushCache();
+            entry = entry.sValue; // force resolution of dynamic values again
+        }
+        entry.cached_machine = 0;
+        entry.cached_value = &SymbolTable::Null;
+    }
+    if (left_p) left_p->flushCache();
+    if (right_p) right_p->flushCache();
 }
 
 Condition::Condition(Predicate*p) : predicate(0) {
@@ -584,6 +594,7 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
             return false; //result = &p->entry;
         }
         p->last_calculation = result;
+        //std::cout << " result: " << *result << "\n";
         if (p->entry.kind == Value::t_dynamic) {
             stack.push(ExprNode(result, &p->entry));
         }

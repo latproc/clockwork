@@ -26,6 +26,11 @@ Value DynamicValue::operator()() {
     return SymbolTable::False;
 }
 
+void DynamicValue::flushCache() {
+    last_result = SymbolTable::Null;
+    last_process_time = 0;
+}
+
 Value DynamicValue::operator()(MachineInstance *m) {
     setScope(m);
     return operator()();

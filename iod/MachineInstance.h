@@ -472,7 +472,10 @@ private:
 class MachineValue : public DynamicValue {
 public:
     MachineValue(MachineInstance *mi, std::string name): machine_instance(mi), local_name(name) { }
+    void setMachineInstance(MachineInstance *mi) { machine_instance = mi; }
     Value operator()(MachineInstance *m)  {
+        if (!machine_instance) { machine_instance = m->lookup(local_name); }
+        if (!machine_instance) { last_result = SymbolTable::Null; return last_result; }
         if (machine_instance->_type == "VARIABLE" || machine_instance->_type == "CONSTANT") {
             last_result = machine_instance->getValue("VALUE");
             return last_result;
@@ -484,6 +487,7 @@ public:
     }
     std::ostream &operator<<(std::ostream &out ) const;
     DynamicValue *clone() const;
+    virtual void flushCache();
 protected:
     MachineInstance *machine_instance;
     std::string local_name;

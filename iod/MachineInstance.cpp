@@ -506,10 +506,16 @@ std::ostream &operator<<(std::ostream &out, const MachineInstance &m) { return m
 std::ostream &MachineValue::operator<<(std::ostream &out ) const {
     
     if (last_result != SymbolTable::Null) out << machine_instance->getName() << " (" << last_result.asString() <<")";
-    else out << local_name << " (" << machine_instance->getName();
+    else out << local_name << " (" <<  (( machine_instance) ? machine_instance->getName() : "NULL");
     out << ")";
     return out;
 }
+
+void MachineValue::flushCache() {
+    machine_instance = 0;
+    DynamicValue::flushCache();
+}
+
 
 class VariableValue : public DynamicValue {
 public:

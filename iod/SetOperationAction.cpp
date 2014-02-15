@@ -146,6 +146,9 @@ void setListItem(MachineInstance *list, const Value &item) {
     list->addLocal(item, item.cached_machine);
     list->locals[0].val = Value("ITEM");
     list->locals[0].real_name = item.sValue;
+    list->locals[0].machine = item.cached_machine;
+    if (list->locals[0].machine)
+        list->locals[0].machine->getCurrentValue()->setDynamicValue(new MachineValue(list->locals[0].machine, item.sValue));
 }
 
 Action::Status IntersectSetOperation::doOperation() {
@@ -171,7 +174,10 @@ Action::Status IntersectSetOperation::doOperation() {
             setListItem(source_b_machine, b);
             if (condition.predicate) {
                 bool matched = false;
+                condition.last_result = SymbolTable::Null;
                 condition.predicate->flushCache();
+                condition.predicate->stack.clear();
+                //std::cout << "testing: " << a << " and " << b << "\n";
                 if (condition(owner)) {
                     if (!MachineIncludesParameter(dest_machine,a)) {
                         dest_machine->addParameter(a, v1.cached_machine);
@@ -182,7 +188,7 @@ Action::Status IntersectSetOperation::doOperation() {
                         source_a_machine->removeLocal(0);
                         source_a_machine->removeParameter(i);
 /*
-                        mi->stopListening(source_a_machine);
+                        mi->stopListening(source_a_mchine);
                         mi->removeDependancy(source_a_machine);
                         source_a_machine->removeDependancy(mi);
                         source_a_machine->stopListening(mi);
