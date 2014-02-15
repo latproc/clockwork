@@ -44,6 +44,11 @@ int ClockworkToken::EXTERNAL;
 int ClockworkToken::POINT;
 int ClockworkToken::LIST;
 int ClockworkToken::TIMER;
+int ClockworkToken::REFERENCE;
+int ClockworkToken::tokITEM;
+int ClockworkToken::VARIABLE;
+int ClockworkToken::CONSTANT;
+int ClockworkToken::tokCONDITION;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -53,10 +58,10 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::LIST = _instance->getTokenId("LIST");
         ClockworkToken::TIMER = _instance->getTokenId("TIMER");
         ClockworkToken::REFERENCE = _instance->getTokenId("REFERENCE");
-        ClockworkToken::ITEM = _instance->getTokenId("ITEM");
+        ClockworkToken::tokITEM = _instance->getTokenId("ITEM");
         ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
         ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
-        ClockworkToken::CONDITION = _instance->getTokenId("CONDITION");
+        ClockworkToken::tokCONDITION = _instance->getTokenId("CONDITION");
     }
     return _instance;
 }
@@ -149,35 +154,33 @@ Value &SymbolTable::getKeyValue(const char *name) {
         static time_t last = 0L;
         time_t now = time(0);
         struct tm lt;
-        if (last != now) {
-            localtime_r(&now, &lt);
-        }
+        localtime_r(&now, &lt);
         if (strcmp("SECONDS", name) == 0) {
-            res.iValue = lt.tm_sec;
+            res = lt.tm_sec;
             return res;
         }
         if (strcmp("MINUTE", name) == 0) {
-            res.iValue = lt.tm_min;
+            res = lt.tm_min;
             return res;
         }
         if (strcmp("HOUR", name) == 0) {
-            res.iValue = lt.tm_hour;
+            res = lt.tm_hour;
             return res;
         }
         if (strcmp("DAY", name) == 0) {
-            res.iValue = lt.tm_mday;
+            res = lt.tm_mday;
             return res;
         }
         if (strcmp("MONTH", name) == 0) {
-            res.iValue = lt.tm_mon+1;
+            res = lt.tm_mon+1;
             return res;
         }
         if (strcmp("YEAR", name) == 0) {
-            res.iValue = lt.tm_year + 1900;
+            res = lt.tm_year + 1900;
             return res;
         }
         if (strcmp("YR", name) == 0) {
-            res.iValue = lt.tm_year - 100;
+            res = lt.tm_year - 100;
             return res;
         }
         if (strcmp("TIMEZONE", name) == 0) {

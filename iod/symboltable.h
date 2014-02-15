@@ -48,15 +48,15 @@ private:
 
 class ClockworkToken {
 public:
-    static int POINT;
-    static int EXTERNAL;
-    static int LIST;
-    static int TIMER;
-    static int REFERENCE;
-    static int ITEM;
-    static int VARIABLE;
+    static int tokCONDITION;
     static int CONSTANT;
-    static int CONDITION;
+    static int EXTERNAL;
+    static int tokITEM;
+    static int LIST;
+    static int POINT;
+    static int REFERENCE;
+    static int TIMER;
+    static int VARIABLE;
 };
 
 class SymbolTable {
