@@ -146,7 +146,7 @@ if (isset($_REQUEST["download"])) {
 	}
 
 	header( 'Content-Type: text/csv' );
-	header( 'Content-Disposition: attachment;filename="panel.csv"');
+	header( 'Content-Disposition: attachment;filename="'.$device.'_tags.csv"');
 	$fp = fopen('php://output', 'w');
 	fputcsv($fp,array('ProtocolID','DeviceName','TagName','DataType','DataCount',
 				'Retentive','Address','ArrayStart','ArrayEnd'));
