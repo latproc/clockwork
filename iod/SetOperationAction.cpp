@@ -225,10 +225,12 @@ doneIntersectOperation:
     source_b_machine->removeLocal(0);
     std::stringstream ss;
     const char *delim="";
+    ss << "[";
     for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
         ss << delim << dest_machine->parameters[i].val;
-        delim = ", ";
+        delim = ",";
     }
+    ss << "]";
     dest_machine->setValue("DEBUG", ss.str().c_str());
     status = Complete;
     return status;
@@ -269,10 +271,12 @@ Action::Status UnionSetOperation::doOperation() {
         }
     std::stringstream ss;
     const char *delim="";
+    ss << "[";
     for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
         ss << delim << dest_machine->parameters[i].val;
-        delim = ", ";
+        delim = ",";
     }
+    ss << "]";
     dest_machine->setValue("DEBUG", ss.str().c_str());
     
     status = Complete;
@@ -308,10 +312,12 @@ Action::Status DifferenceSetOperation::doOperation() {
     }
     std::stringstream ss;
     const char *delim="";
+    ss << "[";
     for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
         ss << delim << dest_machine->parameters[i].val;
-        delim = ", ";
+        delim = ",";
     }
+    ss << "]";
     dest_machine->setValue("DEBUG", ss.str().c_str());
     status = Complete;
     return status;
@@ -390,10 +396,12 @@ Action::Status SelectSetOperation::doOperation() {
     }
     std::stringstream ss;
     const char *delim="";
+    ss << "[";
     for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
         ss << delim << dest_machine->parameters[i].val;
-        delim = ", ";
+        delim = ",";
     }
+    ss << "]";
     dest_machine->setValue("DEBUG", ss.str().c_str());
     status = Complete;
     return status;
