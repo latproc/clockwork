@@ -294,16 +294,17 @@ void Predicate::flushCache() {
     cached_entry = 0;
     last_calculation = 0;
     needs_reevaluation = true;
-    if (op == opNone) {
+    /*if (op == opNone) {
         if (entry.kind == Value::t_dynamic) {
             //entry.dyn_value->flushCache();
             entry = entry.sValue; // force resolution of dynamic values again
         }
-        entry.cached_machine = 0;
-        entry.cached_value = &SymbolTable::Null;
+        //entry.cached_machine = 0;
+        //entry.cached_value = &SymbolTable::Null;
     }
     if (left_p) left_p->flushCache();
-    if (right_p) right_p->flushCache();
+    if (right_p) right_p->flushCache();*/
+     
 }
 
 Condition::Condition(Predicate*p) : predicate(0) {
