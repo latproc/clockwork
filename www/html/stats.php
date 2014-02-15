@@ -111,7 +111,8 @@ if (isset($_REQUEST["download"])) {
 
 $banner = "<p>Logged in as " . $user->getName() . ". <a href=\"admin.php?m=logout\">Logout</a>";
 if ($user->isAdministrator()) {
-	$banner .= '&nbsp;&nbsp;<a href="admin.php?registration">Administration</a>';
+	$banner .= '&nbsp;&nbsp;<a href="admin.php?registration">Administration</a>'
+		. '&nbsp;&nbsp;<a href="monitor.php">Monitor</a>';
 }
 $banner .= "<p>";
 
