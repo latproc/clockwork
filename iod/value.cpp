@@ -76,7 +76,7 @@ void Value::setDynamicValue(DynamicValue &dv) {
 }
 
 Value::~Value() {
-    if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
+    if (kind == t_dynamic) { if (dyn_value) dyn_value = dyn_value->deref(); }
 }
 
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),
