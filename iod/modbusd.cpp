@@ -169,6 +169,15 @@ void display(uint8_t *p, int len) {
 	printf("\n");
 }
 
+static unsigned long start_t = 0;
+
+std::ostream &timestamp(std::ostream &out) {
+    struct timeval now;
+    gettimeofday(&now, 0);
+    unsigned long t = now.tv_sec*1000000 + now.tv_usec - start_t;
+		return out << (t / 1000) << "\n";
+}
+
 struct ModbusServerThread {
 	
     void operator()() {
@@ -197,30 +206,30 @@ struct ModbusServerThread {
 				if (!FD_ISSET(conn, &activity)) continue;
 			
 				if (conn == socket) { // new connection
-                    struct sockaddr_in panel_in;
-                    socklen_t addr_size = sizeof(panel_in);
+					struct sockaddr_in panel_in;
+					socklen_t addr_size = sizeof(panel_in);
 
-                    memset(&panel_in, 0, sizeof(struct sockaddr_in));
+					memset(&panel_in, 0, sizeof(struct sockaddr_in));
 					int panel_fd;
-                    if ( (panel_fd = accept(socket, (struct sockaddr *)&panel_in, &addr_size)) == -1) {
-                        perror("accept");
-                    } else {
+					if ( (panel_fd = accept(socket, (struct sockaddr *)&panel_in, &addr_size)) == -1) {
+						perror("accept");
+					} else {
 						int option = 1;
 					    int res = setsockopt(panel_fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(int)); 
 						if (res == -1) { perror("setsockopt"); }
 					    res = setsockopt(panel_fd, SOL_SOCKET, SO_KEEPALIVE, &option, sizeof(int)); 
 						if (res == -1) { perror("setsockopt"); }
-                        FD_SET(panel_fd, &connections);
-                        if (panel_fd > max_fd) max_fd = panel_fd;;
-						std::cout << "new connection: " << panel_fd << "\n";
+						FD_SET(panel_fd, &connections);
+						if (panel_fd > max_fd) max_fd = panel_fd;;
+						std::cout << timestamp << " new connection: " << panel_fd << "\n";
 					}
 
 				}
 				else {
 		
-			        uint8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
-			        uint8_t query_backup[MODBUS_TCP_MAX_ADU_LENGTH];
-			        int n; 
+					uint8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
+					uint8_t query_backup[MODBUS_TCP_MAX_ADU_LENGTH];
+					int n; 
 	
 					modbus_set_socket(modbus_context, conn); // tell modbus to use this current connection
 			        n = modbus_receive(modbus_context, query);
@@ -314,19 +323,22 @@ struct ModbusServerThread {
 
 						// post process - make sure iod is informed of the change
 						if (fc == 2) {
-							if (debug) std::cout << "connection " << conn << " read coil " << addr << "\n";
+							//if (debug) 
+								std::cout << timestamp << " connection " << conn << " read coil " << addr << "\n";
 						} 
 						else if (fc == 1) {
 							char buf[20];
 							snprintf(buf, 19, "%d.%d", 1, addr);
 							std::string addr_str(buf);
 							if (active_addresses.find(addr_str) != active_addresses.end() ) 
-								if (debug) std::cout << "connection " << conn << " read discrete " << addr  
+								//if (debug) 
+									std::cout << timestamp << " connection " << conn << " read discrete " << addr  
 									<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
 								<< "\n";
 						}
 						else if (fc == 3) {
-							/*if (debug) std::cout << "connection " << conn << " got rw_register " << addr << "\n";*/
+							/*if (debug)  */
+									std::cout << timestamp << " connection " << conn << " got rw_register " << addr << "\n";
 							int num_bytes = query_backup[function_code_offset+4];
 							char *src = (char*) &modbus_mapping->tab_registers[addr];
 							char *new_value = (char *)malloc(num_bytes+1);
@@ -342,7 +354,8 @@ struct ModbusServerThread {
 							free(new_value); free(previous_value);
 						}
 						else if (fc == 4) {
-							/*if (debug) std::cout << "connection " << conn << " got register " << addr << "\n";*/
+							/*if (debug) */
+								std::cout << timestamp << " connection " << conn << " got register " << addr << "\n";
 							int num_bytes = query_backup[function_code_offset+5];
 							std::cout << "connection " << conn << " num bytes: " << num_bytes << " register " << addr << "\n";
 						}
@@ -352,12 +365,13 @@ struct ModbusServerThread {
 								snprintf(buf, 19, "%d.%d", 0, addr);
 								std::string addr_str(buf);
 								if (active_addresses.find(addr_str) != active_addresses.end() ) 
-									if (debug)std::cout << "connection " << conn << " write multi discrete " 
-										<< addr << "\n"; //<< " n:" << len << "\n";
+									//if (debug)
+										std::cout << timestamp << " connection " << conn << " write multi discrete " 
+											<< addr << "\n"; //<< " n:" << len << "\n";
 							}
 							else if (fc == 16) {
-								if (debug) 
-									std::cout << "write multiple register " << addr  << "\n"; 
+								//if (debug) 
+									std::cout << timestamp << " write multiple register " << addr  << "\n"; 
 							}
 							std::list<std::string>::iterator iter = iod_sync_commands.begin();
 							while (iter != iod_sync_commands.end()) {
@@ -371,7 +385,8 @@ struct ModbusServerThread {
 							if (!ignore_coil_change) {
 								char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
 								if (res) free(res);
-								if (debug) std::cout << " Updating coil " << addr << " from connection " << conn 
+								//if (debug) 
+									std::cout << timestamp << " Updating coil " << addr << " from connection " << conn 
 										<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
 							}
 						}
@@ -379,18 +394,21 @@ struct ModbusServerThread {
 							int val = getInt( &query[function_code_offset+5]);
 							char *res = sendIOD(4, addr+1, modbus_mapping->tab_registers[addr]);
 							if (res) free(res);
-							if (debug) std::cout << " Updating register " << addr << " to " << val << " from connection " << conn << "\n";
+							//if (debug) 
+							std::cout << timestamp << " Updating register " << addr << " to " << val << " from connection " << conn << "\n";
 						}
 						else 
-							if (debug) std::cout << " function code: " << (int)query_backup[function_code_offset] << "\n";
+							//if (debug) 
+							std::cout << timestamp << " function code: " << (int)query_backup[function_code_offset] << "\n";
 						if (n == -1) {
-							if (debug) std::cout << "Error: " << modbus_strerror(errno) << "\n";
+							//if (debug) 
+							std::cout << timestamp << " Error: " << modbus_strerror(errno) << "\n";
 
 						}
 			        } else {
 			            /* Connection closed by the client or error */
-						std::cout << "Error: " << modbus_strerror(errno) << "\n";
-						std::cout << "Modbus connection " << conn << " lost\n";
+						std::cout << timestamp << " Error: " << modbus_strerror(errno) << "\n";
+						std::cout << timestamp << " Modbus connection " << conn << " lost\n";
 						close(conn);
 						if (conn == max_fd) --max_fd;
 						FD_CLR(conn, &connections);
@@ -510,6 +528,9 @@ bool setup_signals()
 }
 
 int main(int argc, const char * argv[]) {
+    struct timeval now;
+    gettimeofday(&now, 0);
+    start_t = now.tv_sec*1000000 + now.tv_usec;
 
 	po::options_description desc("Allowed options");
 	desc.add_options()
