@@ -90,6 +90,7 @@ public:
             gettimeofday(&now,0);
             start = now.tv_sec*1000000L + now.tv_usec;
         }
+        else start = 0;
     }
     
     ~CaptureDuration() {
