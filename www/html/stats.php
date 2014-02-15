@@ -136,7 +136,7 @@ print <<<EOD
 	</style>
 	<script type="text/Javascript">
 		function setData(id, dataset) {
-			d3.select("#addresses")
+			d3.select(id)
 			    .append("table")
 			    .style("border-collapse", "collapse")
 			    .style("border", "2px black solid")
@@ -161,16 +161,16 @@ print <<<EOD
 			function(data){
 				//if (data != "OK") alert(data);
 				var dataset = JSON.parse(data);
-				$("#addresses").html("");
-				setData("#addresses",dataset);
+				$("#details").html("");
+				setData("#details",dataset);
 /*
 				var i = 0;
 				while (i < dataset.length) {
 					//if (i==0) alert(dataset[i].stats[0]);
 					for (var j=0; j<dataset[j].stats.length; j++)
 					{
-						//setData("#addresses", dataset[i].stats[j]);
-						$("#addresses").append("<div>"+dataset[i].name+","+dataset[i].stats[j]+"</div>");
+						//setData("#details", dataset[i].stats[j]);
+						$("#details").append("<div>"+dataset[i].name+","+dataset[i].stats[j]+"</div>");
 					}
 					i++;
 				}
@@ -188,7 +188,7 @@ print <<<EOD
 						else
 							i++;
 					}
-					setData("#data", res);
+					setData("#details", res);
 				});
 			*/
 			event.preventDefault();
@@ -200,10 +200,7 @@ print <<<EOD
 </head>
 <body>
 $banner
-<div><form method=post action=?><input type="hidden" name="download" value="true">
-<button id=download>Download</button></form></div>
-<div id="addresses" class="lhs"></div>
-<div id="data" class="rhs"></div>
+<div id="details" class="lhs"></div>
 </body>
 </html>
 EOD;
