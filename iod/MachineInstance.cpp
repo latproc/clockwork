@@ -2984,10 +2984,19 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
             std::string name(owner->getName());
             name += ".";
             name += full_name;
+            size_t found = name.rfind(".");
+            if (group == 0 && found != std::string::npos) {
+                name.replace(found, 1, ".cmd_");
+            }
             cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
         }
 		else {
-            cJSON_AddItemToArray(item, cJSON_CreateString(full_name.c_str()));
+            std::string name(full_name);
+            size_t found = name.rfind(".");
+            if (group == 0 && found != std::string::npos) {
+                name.replace(found, 1, ".cmd_");
+            }
+            cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
 			//out << group << " " << addr << " " << full_name << " " << length << " " << value <<"\n";
 		}
         cJSON_AddItemToArray(item, cJSON_CreateNumber(length));
