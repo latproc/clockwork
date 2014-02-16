@@ -112,10 +112,10 @@ void Dispatcher::idle() {
 		DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
         Receiver *to = p->receiver;
         Transmitter *from = p->transmitter;
-        Message m(p->message->getText().c_str());
+        Message m(p->message); //TBD is this copy necessary
         if (to) {
             MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
-            if (mi && mi->_type == "EXTERNAL") {
+            if (mi && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL) {
                 DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to " << to->getName() <<  "\n";
                 {
                     Value host = mi->properties.lookup("HOST");
@@ -127,7 +127,7 @@ void Dispatcher::idle() {
                         if (protocol == "RAW")
                             mif->send(m.getText().c_str());
                         else if (protocol == "CLOCKWORK")
-                            mif->sendCommand(m.getText());
+                            mif->send(m);
                     }
                 }
             }
