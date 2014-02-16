@@ -71,7 +71,8 @@ bool CompareValues(Value a, Value &b){
 
 bool CompareSymbolAndValue(MachineInstance*scope, Value &sym, std::string &prop, Value &b){
     MachineInstance *mi = scope->lookup(sym);
-    if (!mi) throw new SetOperationException();
+    if (!mi) throw
+        new SetOperationException();
     return CompareValues(mi->getValue(prop), b);
 }
 
@@ -147,8 +148,6 @@ void setListItem(MachineInstance *list, const Value &item) {
     list->locals[0].val = Value("ITEM");
     list->locals[0].real_name = item.sValue;
     list->locals[0].machine = item.cached_machine;
-    if (list->locals[0].machine)
-        list->locals[0].machine->getCurrentValue()->setDynamicValue(new MachineValue(list->locals[0].machine, item.sValue));
 }
 
 Action::Status IntersectSetOperation::doOperation() {
@@ -364,7 +363,8 @@ Action::Status SelectSetOperation::doOperation() {
                 source_a_machine->addLocal(a, mi);
                 source_a_machine->locals[0].val = Value("ITEM");
                 source_a_machine->locals[0].real_name = a.sValue;
-                if (!mi) throw new SetOperationException();
+                if (!mi)
+                    throw new SetOperationException();
                 if (condition.predicate) condition.predicate->flushCache();
                 if ( (!condition.predicate || condition(owner)) ){
                     if (!MachineIncludesParameter(dest_machine,a)) {
