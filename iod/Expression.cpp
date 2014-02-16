@@ -242,7 +242,7 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
     }
     else {
         if (cached_entry) out <<" (" << *cached_entry << ") ";
-        else if (last_calculation) out << " (" << *last_calculation << ") ";
+        else if (last_calculation) out << entry <<  " (" << *last_calculation << ") ";
         else out << " " << entry;
 	}
     return out;
