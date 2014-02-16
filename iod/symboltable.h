@@ -57,6 +57,7 @@ public:
     static int REFERENCE;
     static int TIMER;
     static int VARIABLE;
+    static int PUBLISHER;
 };
 
 class SymbolTable {

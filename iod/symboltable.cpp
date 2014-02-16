@@ -49,6 +49,7 @@ int ClockworkToken::tokITEM;
 int ClockworkToken::VARIABLE;
 int ClockworkToken::CONSTANT;
 int ClockworkToken::tokCONDITION;
+int ClockworkToken::PUBLISHER;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -62,6 +63,7 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
         ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
         ClockworkToken::tokCONDITION = _instance->getTokenId("CONDITION");
+        ClockworkToken::PUBLISHER = _instance->getTokenId("PUBLISHER");
     }
     return _instance;
 }
