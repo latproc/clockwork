@@ -78,6 +78,7 @@ Condition::~Condition() {
 Predicate::~Predicate() {
     delete left_p;
     delete right_p;
+    if (dyn_value) delete dyn_value;
 }
 
 bool Predicate::usesTimer(Value &timer_val) const {
