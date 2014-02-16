@@ -41,7 +41,6 @@ Action::Status HandleMessageAction::run() {
 		<< package.transmitter->getName() << " to " << owner->getName() << "\n";
 	handler = owner->findHandler(*package.message, package.transmitter, package.needs_receipt);
 	if (handler) {
-        handler->retain();
 		suspend();
 		Status stat = (*handler)();
 		if ( stat == Failed ) {
