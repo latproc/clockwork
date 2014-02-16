@@ -1652,7 +1652,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 						    MachineCommandTemplate mc("stable_state_test", "");
 						    mc.setActionTemplate(&temp);
 							IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
-							this->push(new IfCommandAction(this, &ifcat));
+                            Action *a = new IfCommandAction(this, &ifcat);
+							this->push(a);
 							found = true;
 						}
 					}
@@ -1706,7 +1707,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
                 }
 
 				// no matching command, just perform the transition
-				MoveStateActionTemplate temp(strdup(_name.c_str()), strdup(t.dest.getName().c_str()) );
+				MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
 				return new MoveStateAction(this, temp);
 			}
 		}
@@ -2314,7 +2315,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     BOOST_FOREACH(handler, machine_class->receives) {
         //DBG_M_INITIALISATION << "setting receive handler for " << handler.first << "\n";
         MachineCommand *mc = new MachineCommand(this, handler.second);
-        mc->retain();
+        //mc->retain();
         receives_functions[handler.first] = mc;
     }
 	// Warning: enter_functions are not used. TBD
@@ -2605,8 +2606,10 @@ Value *MachineInstance::resolve(std::string property) {
 			if (m->state_machine->token_id == ClockworkToken::VARIABLE
                 || m->state_machine->token_id == ClockworkToken::CONSTANT)
 				return &m->properties.lookup("VALUE");
-			else
-				return new Value(new MachineValue(m, property)); //&m->current_state_val;
+			else {
+				//return new Value(new MachineValue(m, property));
+                return &m->current_value_holder;
+            }
 		}
 	}
     char buf[200];
@@ -2819,6 +2822,26 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 	    // try the current instance ofthe machine, then the machine class and finally the global symbols
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
         Value &prev_value = properties.lookup(property.c_str());
+
+		if (prev_value == SymbolTable::Null && property != "VALUE" && property != _name) {
+			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
+			MachineInstance *global_machine = lookup(property);
+			if (global_machine) {
+			 	if ( global_machine->state_machine->token_id != ClockworkToken::CONSTANT ) {
+					global_machine->setValue("VALUE", new_value);
+					return;
+				}
+				NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
+				return;
+			}
+		}
+        
+        if (state_machine->token_id == ClockworkToken::PUBLISHER && mq_interface && property == "message" )
+        {
+            std::string old_val(properties.lookup(property.c_str()).asString());
+            mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
+        }
+
         bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 		if (changed ){
             setNeedsCheck();
@@ -2841,8 +2864,12 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				}
 			}
 	        //mif->send(ss.str().c_str());
-            mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
-
+            //mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
+            {
+                Message property_change("PROPERTY", Message::makeParams(fullName(), property.c_str(), new_value));
+                mif->send(property_change);
+            }
+            
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
 				//persistentStore->send(ss.str().c_str());
@@ -2861,14 +2888,14 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				property_name += ".";
 				property_name += property;
 			}
-
+            
 			if (modbus_exports.count(property_name)){
 				ModbusAddress ma = modbus_exports[property_name];
 				if (property == "VALUE") {
 					DBG_M_MODBUS << property_name << " modbus address " << ma << "\n";
 				}
 				switch(ma.getGroup()) {
-					case ModbusAddress::none: 
+					case ModbusAddress::none:
 						DBG_M_MODBUS << property_name << " export type is 'none'\n";
 						break;
 					case ModbusAddress::discrete:
@@ -2880,7 +2907,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
                             if (ma.length() == 1 || ma.length() == 2) {
                                 if (new_value.asInteger(intVal)) {
                                     ma.update((int)intVal);
-                                }	
+                                }
                                 else {
                                     DBG_M_MODBUS << property_name << " does not have an integer value\n";
                                 }
@@ -2898,25 +2925,6 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 			else
 				DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
 		}
-		if (prev_value == SymbolTable::Null && property != "VALUE" && property != _name) {
-			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
-			MachineInstance *global_machine = lookup(property);
-			if (global_machine) {
-			 	if ( global_machine->_type != "CONSTANT" ) {
-					global_machine->setValue("VALUE", new_value);
-					return;
-				}
-				NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
-				return;
-			}
-		}
-        
-        if (_type == "PUBLISHER" && mq_interface && property == "message" )
-        {
-            std::string old_val(properties.lookup(property.c_str()).asString());
-            mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
-        }
-
         // only tell dependent machines to recheck predicates if the property
         // actually changes value
         if (changed) {
