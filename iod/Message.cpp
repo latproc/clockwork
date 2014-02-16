@@ -34,8 +34,8 @@ long Transmitter::next_id;
 
 
 // in this form, the message takes ownership of the parameters
-Message::Message(CStringHolder msg, Parameters *p) :text(msg.get()), params(p) {
-    
+Message::Message(CStringHolder msg, std::list<Value> *param_list) :text(msg.get()), params(0) {
+    params = param_list;
 }
 
 // in this form, the message takes ownership of the parameters
