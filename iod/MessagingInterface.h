@@ -28,7 +28,7 @@
 #include "symboltable.h" 
 #include "cJSON.h"
 
-class MessagingInterface {
+class MessagingInterface : public Receiver {
 public:
     MessagingInterface(int num_threads, int port);
     MessagingInterface(std::string host, int port);
@@ -50,6 +50,10 @@ public:
                      Value p3 = SymbolTable::Null);
     static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
     static bool getState(const char *msg, std::string &cmd, std::list<Value> **params);
+    
+    //Receiver interface
+    virtual bool receives(const Message&, Transmitter *t);
+    virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false );
     
 private:
     void connect();

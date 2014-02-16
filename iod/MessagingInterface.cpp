@@ -56,7 +56,7 @@ MessagingInterface *MessagingInterface::create(std::string host, int port) {
         return interfaces[id];
 }
 
-MessagingInterface::MessagingInterface(int num_threads, int port) {
+MessagingInterface::MessagingInterface(int num_threads, int port) : Receiver("messaging_interface") {
     context = new zmq::context_t(num_threads);
     socket = new zmq::socket_t(*context, ZMQ_PUB);
     is_publisher = true;
@@ -66,7 +66,7 @@ MessagingInterface::MessagingInterface(int num_threads, int port) {
     socket->bind(url.c_str());
 }
 
-MessagingInterface::MessagingInterface(std::string host, int port) {
+MessagingInterface::MessagingInterface(std::string host, int port) :Receiver("messaging_interface") {
     if (host == "*") {
         context = new zmq::context_t(1);
         socket = new zmq::socket_t(*context, ZMQ_PUB);
@@ -98,6 +98,14 @@ MessagingInterface::~MessagingInterface() {
     delete socket;
     delete context;
 }
+
+bool MessagingInterface::receives(const Message&, Transmitter *t) {
+    return true;
+}
+void MessagingInterface::handle(const Message&msg, Transmitter *from, bool needs_receipt ) {
+    send(msg);
+}
+
 
 char *MessagingInterface::send(const char *txt) {
     if (!is_publisher){
