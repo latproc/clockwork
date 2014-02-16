@@ -27,7 +27,7 @@
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 #include <algorithm>
-#include "Value.h"
+#include "value.h"
 
 // Used to generate a unique id for each transmitter.
 long Transmitter::next_id;
