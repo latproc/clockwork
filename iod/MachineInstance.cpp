@@ -2864,12 +2864,13 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				}
 			}
 	        //mif->send(ss.str().c_str());
-            //mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
-            {
+            mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
+            /*
+             {
                 Message property_change("PROPERTY", Message::makeParams(fullName(), property.c_str(), new_value));
                 mif->send(property_change);
             }
-            
+            */
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
 				//persistentStore->send(ss.str().c_str());
