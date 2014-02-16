@@ -50,10 +50,12 @@ Action::Status CallMethodAction::run() {
 		std::string short_name(message.get());
 		if (short_name.rfind('.') != std::string::npos) {
 			short_name.substr(short_name.rfind('.'));
-			owner->execute(new Message(short_name.c_str()), target_machine);
+            Message msg(short_name.c_str());
+			owner->execute(msg, target_machine);
 		}
-		else
-			owner->execute(new Message(message.get()), target_machine);
+		else {
+			owner->execute(Message(message.get()), target_machine);
+        }
 		status = Action::Complete;
 		owner->stop(this);
 		return status;
