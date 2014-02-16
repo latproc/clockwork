@@ -28,6 +28,8 @@
 #include <string.h>
 #include <list>
 #include <boost/thread/mutex.hpp>
+#include "value.h"
+#include "symboltable.h"
 
 class CStringHolder {
 public:
@@ -52,20 +54,26 @@ public:
 
 class Message {
 public:
-    Message() {}
-    Message(Message *m) : text(m->text) {}
-    Message(CStringHolder msg);
+    typedef std::list<Value> Parameters;
+
+    Message() : text(""), params(0) {}
+    Message(Message *m, Parameters *p = 0);
+    Message(CStringHolder msg, Parameters *p = 0);
     Message(const Message &orig);
     Message &operator=(const Message &other);
+    ~Message();
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const Message &other) const;
     bool operator==(const char *msg) const;
     bool operator<(const Message &other) const { return text < other.text; }
     bool operator>(const Message &other) const { return text > other.text; }
     const std::string getText() const { return text; }
+    const std::list<Value> *getParams() const { return params; }
     
+    static std::list<Value> *makeParams(Value p1, Value p2 = SymbolTable::Null, Value p3 = SymbolTable::Null, Value p4 = SymbolTable::Null);
 private:
     std::string text;
+    std::list<Value> *params;
 };
 
 std::ostream &operator<<(std::ostream &out, const Message &m);

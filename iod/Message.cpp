@@ -21,26 +21,58 @@
 #include <iostream>
 #include <string.h>
 #include <iostream>
+#include <list>
 #include "Message.h"
 #include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
+#include <algorithm>
+#include "Value.h"
 
 // Used to generate a unique id for each transmitter.
 long Transmitter::next_id;
 
 
-Message::Message(CStringHolder msg) :text(msg.get()) {
+// in this form, the message takes ownership of the parameters
+Message::Message(CStringHolder msg, Parameters *p) :text(msg.get()), params(p) {
     
 }
 
-Message::Message(const Message &orig){
-    text = orig.text;
+// in this form, the message takes ownership of the parameters
+Message::Message(Message *m, Parameters *p) : text(m->text), params(p) { }
+
+Message::Message(const Message &orig) : text(orig.text), params(0) {
+    if (orig.params) {
+        params = new std::list<Value>();
+        std::copy(orig.params->begin(), orig.params->end(), back_inserter(*params));
+    }
 }
 
-Message &Message::operator=(const Message &other) {
+Message &Message::operator=(const Message &other){
     text = other.text;
+    if (other.params) {
+        params = new std::list<Value>();
+        std::copy(other.params->begin(), other.params->end(), back_inserter(*params));
+    }
+    else params = 0;
     return *this;
+}
+
+Message::~Message() {
+    if (params) {
+        params->clear();
+        delete params;
+        params = 0;
+    }
+}
+
+std::list<Value> *Message::makeParams(Value p1, Value p2, Value p3, Value p4) {
+    std::list<Value> *params = new std::list<Value>();
+    params->push_back(p1);
+    if (p2 != SymbolTable::Null) params->push_back(p2); else return params;
+    if (p3 != SymbolTable::Null) params->push_back(p3); else return params;
+    if (p4 != SymbolTable::Null) params->push_back(p4);
+    return params;
 }
 
 void Receiver::enqueue(const Package &package) { 
