@@ -99,7 +99,6 @@ MessagingInterface::~MessagingInterface() {
     delete context;
 }
 
-
 char *MessagingInterface::send(const char *txt) {
     if (!is_publisher){
         DBG_MESSAGING << "sending message " << txt << " on " << url << "\n";
@@ -143,6 +142,13 @@ char *MessagingInterface::send(const char *txt) {
             std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
 	}
     return 0;
+}
+
+char *MessagingInterface::send(const Message&msg) {
+    char *text = encodeCommand(msg.getText(), msg.getParams());
+    char *res = send(text);
+    free(text);
+    return res;
 }
 
 static std::string valueType(const Value &v) {

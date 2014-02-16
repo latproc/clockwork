@@ -34,6 +34,7 @@ public:
     MessagingInterface(std::string host, int port);
     ~MessagingInterface();
     char *send(const char *msg);
+    char *send(const Message &msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent();
     static MessagingInterface *create(std::string host, int port);
@@ -49,6 +50,7 @@ public:
                      Value p3 = SymbolTable::Null);
     static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
     static bool getState(const char *msg, std::string &cmd, std::list<Value> **params);
+    
 private:
     void connect();
     static MessagingInterface *current;
