@@ -98,6 +98,7 @@ char *send_command(std::list<Value> &params) {
 	char *msg = MessagingInterface::encodeCommand(cmd, &params);
 	sendMessage(*psocket, msg);
 	size_t size = strlen(msg);
+    free(msg);
 	zmq::message_t reply;
 	if (psocket->recv(&reply)) {
 		size = reply.size();
