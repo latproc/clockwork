@@ -56,7 +56,23 @@ static boost::mutex q_mutex;
 static boost::condition_variable_any cond;
 
 const int MemSize = 65536;
-bool debug = false;
+int debug = 0;
+const int COILS 	= 1;
+const int REGS 		= 1 << 1;
+const int TOPLC 	= 1 << 2;
+const int TOPANEL = 1 << 3;
+const int IOD			= 1 << 4;
+
+const int VERBOSE_TOPLC 	= 1 << 8;
+
+const int DEBUG_LIB 		= 1 << 15;
+
+const int DEBUG_ALL = 0xffff;
+const int NOTLIB = DEBUG_ALL ^ DEBUG_LIB;
+
+#define DEBUG_VERBOSE_TOPLC (debug & VERBOSE_TOPLC)
+#define DEBUG_BASIC ( debug & NOTLIB )
+#define DEBUG_ANY ( debug )
 
 std::stringstream dummy;
 time_t last = 0;
@@ -175,7 +191,7 @@ std::ostream &timestamp(std::ostream &out) {
     struct timeval now;
     gettimeofday(&now, 0);
     unsigned long t = now.tv_sec*1000000 + now.tv_usec - start_t;
-		return out << (t / 1000) << "\n";
+		return out << (t / 1000) ;
 }
 
 struct ModbusServerThread {
@@ -232,9 +248,9 @@ struct ModbusServerThread {
 					int n; 
 	
 					modbus_set_socket(modbus_context, conn); // tell modbus to use this current connection
-			        n = modbus_receive(modbus_context, query);
+					n = modbus_receive(modbus_context, query);
 					char *previous_value = 0; // used to see if a string value is different between ram and connection
-			        if (n != -1) {
+			    if (n != -1) {
 						std::list<std::string>iod_sync_commands;
 						memcpy(query_backup, query, n);
 						int addr = getInt( &query[function_code_offset+1]);
@@ -272,7 +288,7 @@ struct ModbusServerThread {
 									std::string addr_str(buf);
 
 									if (active_addresses.find(addr_str) != active_addresses.end()) {
-										if (debug) std::cout << "updating cw with new discrete: " << addr 
+										if (DEBUG_BASIC) std::cout << "updating cw with new discrete: " << addr 
 											<< " (" << (int)(modbus_mapping->tab_bits[addr]) <<")"
 											<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
 											<< "\n";
@@ -281,7 +297,7 @@ struct ModbusServerThread {
 
 										if ( !initialised_address[addr_str] ||  ( val != 0 && modbus_mapping->tab_bits[addr] == 0 ) 
 												|| (!val && modbus_mapping->tab_bits[addr] ) ) {
-											if (debug) std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
+											if (DEBUG_BASIC) std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
 											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, (val) ? 1 : 0) );
 											initialised_address[addr_str] = true;
 										}
@@ -308,7 +324,7 @@ struct ModbusServerThread {
 									val = getInt(data);
 									data += 2;
 									if (!initialised_address[addr_str] || val != modbus_mapping->tab_registers[addr]) {
-										if (debug) std::cout << " Updating register " << addr 
+										if (DEBUG_BASIC) std::cout << " Updating register " << addr 
 											<< " to " << val << " from connection " << conn << "\n";									
 										iod_sync_commands.push_back( getIODSyncCommand(4, addr+1, val) );
 										initialised_address[addr_str] = true;
@@ -319,11 +335,11 @@ struct ModbusServerThread {
 						}
 
 						// process the request, updating our ram as appropriate
-			            n = modbus_reply(modbus_context, query, n, modbus_mapping);
+						n = modbus_reply(modbus_context, query, n, modbus_mapping);
 
 						// post process - make sure iod is informed of the change
 						if (fc == 2) {
-							//if (debug) 
+							if (DEBUG_VERBOSE_TOPLC) 
 								std::cout << timestamp << " connection " << conn << " read coil " << addr << "\n";
 						} 
 						else if (fc == 1) {
@@ -331,13 +347,13 @@ struct ModbusServerThread {
 							snprintf(buf, 19, "%d.%d", 1, addr);
 							std::string addr_str(buf);
 							if (active_addresses.find(addr_str) != active_addresses.end() ) 
-								//if (debug) 
+								if (DEBUG_BASIC) 
 									std::cout << timestamp << " connection " << conn << " read discrete " << addr  
 									<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
 								<< "\n";
 						}
 						else if (fc == 3) {
-							/*if (debug)  */
+							if (DEBUG_VERBOSE_TOPLC)
 									std::cout << timestamp << " connection " << conn << " got rw_register " << addr << "\n";
 							int num_bytes = query_backup[function_code_offset+4];
 							char *src = (char*) &modbus_mapping->tab_registers[addr];
@@ -354,10 +370,10 @@ struct ModbusServerThread {
 							free(new_value); free(previous_value);
 						}
 						else if (fc == 4) {
-							/*if (debug) */
-								std::cout << timestamp << " connection " << conn << " got register " << addr << "\n";
 							int num_bytes = query_backup[function_code_offset+5];
-							std::cout << "connection " << conn << " num bytes: " << num_bytes << " register " << addr << "\n";
+							if (DEBUG_VERBOSE_TOPLC)
+								std::cout << timestamp << " connection " << conn 
+										<< " num bytes: " << num_bytes << " got register " << addr << "\n";
 						}
 						else if (fc == 15 || fc == 16) {
 							if (fc == 15) {
@@ -365,12 +381,12 @@ struct ModbusServerThread {
 								snprintf(buf, 19, "%d.%d", 0, addr);
 								std::string addr_str(buf);
 								if (active_addresses.find(addr_str) != active_addresses.end() ) 
-									//if (debug)
+									if (DEBUG_BASIC)
 										std::cout << timestamp << " connection " << conn << " write multi discrete " 
 											<< addr << "\n"; //<< " n:" << len << "\n";
 							}
 							else if (fc == 16) {
-								//if (debug) 
+								if (DEBUG_BASIC) 
 									std::cout << timestamp << " write multiple register " << addr  << "\n"; 
 							}
 							std::list<std::string>::iterator iter = iod_sync_commands.begin();
@@ -385,23 +401,23 @@ struct ModbusServerThread {
 							if (!ignore_coil_change) {
 								char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
 								if (res) free(res);
-								//if (debug) 
+								if (DEBUG_BASIC) 
 									std::cout << timestamp << " Updating coil " << addr << " from connection " << conn 
-										<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
+										<< ((query_backup[function_code_offset + 3]) ? " on" : " off") << "\n";
 							}
 						}
 						else if (fc == 6) {
 							int val = getInt( &query[function_code_offset+5]);
 							char *res = sendIOD(4, addr+1, modbus_mapping->tab_registers[addr]);
 							if (res) free(res);
-							//if (debug) 
+							if (DEBUG_BASIC) 
 							std::cout << timestamp << " Updating register " << addr << " to " << val << " from connection " << conn << "\n";
 						}
 						else 
-							//if (debug) 
+							if (DEBUG_BASIC) 
 							std::cout << timestamp << " function code: " << (int)query_backup[function_code_offset] << "\n";
 						if (n == -1) {
-							//if (debug) 
+							if (DEBUG_BASIC) 
 							std::cout << timestamp << " Error: " << modbus_strerror(errno) << "\n";
 
 						}
@@ -435,9 +451,14 @@ struct ModbusServerThread {
 };
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
-	std::stringstream ss;
-	ss << "MODBUS " << group << " " << addr << " " << new_value;
-	std::string s(ss.str());
+	char *msg = MessagingInterface::encodeCommand("MODBUS", group, addr, new_value);
+	sendIODMessage(msg);
+	//std::stringstream ss;
+	//ss << "MODBUS " << group << " " << addr << " " << new_value;
+	//std::string s(ss.str());
+	if (DEBUG_BASIC) std::cout << "IOD command: " << msg << "\n";
+	std::string s(msg);
+	free(msg);
 	return s;
 }
 
@@ -445,15 +466,19 @@ char *sendIOD(int group, int addr, int new_value) {
 	std::string s(getIODSyncCommand(group, addr, new_value));
 	if (g_iodcmd) 
 		return g_iodcmd->send(s.c_str());
-	else 	
+	else {
+		if (DEBUG_BASIC) std::cout << "IOD interface not ready\n";
 		return strdup("IOD interface not ready\n");
+	}
 }
 
 char *sendIODMessage(const std::string &s) {
 	if (g_iodcmd) 
 		return g_iodcmd->send(s.c_str());
-	else 	
+	else {
+		if (DEBUG_BASIC) std::cout << "IOD interface not ready\n";
 		return strdup("IOD interface not ready\n");
+	}
 }
 
 void loadData(const char *initial_settings) {
@@ -467,7 +492,7 @@ void loadData(const char *initial_settings) {
 	        int group, addr, len;
 			int value;
 			std::string name;
-	        iss >> group >> addr >> name >> len >> value;
+      iss >> group >> addr >> name >> len >> value;
 			if (debug) std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
 			insert(group, addr-1, value, len);
 		}
@@ -484,7 +509,7 @@ void loadData(const char *initial_settings) {
 					Value name = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 2), 0);
 					Value len = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 3), 0);
 					Value value = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
-					//if (debug) 
+					if (DEBUG_BASIC) 
 					std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
 					if (value.kind == Value::t_string) 
 						insert(group.iValue, addr.iValue-1, value.asString().c_str(), strlen(value.asString().c_str()));
@@ -535,7 +560,7 @@ int main(int argc, const char * argv[]) {
 	po::options_description desc("Allowed options");
 	desc.add_options()
 	("help", "produce help message")
-	("debug","enable debug")
+	("debug",po::value<int>(&debug)->default_value(0), "set debug level")
 	("host", "remote host (localhost)")
 	("cwout", "clockwork outgoing port (5555)")
 	("cwin", "clockwork incoming port (5558)")
@@ -558,11 +583,11 @@ int main(int argc, const char * argv[]) {
 	if (vm.count("cwout")) cw_out = vm["cwout"].as<int>();
 	if (vm.count("cwin")) cw_in = vm["cwin"].as<int>();
 	if (vm.count("host")) host = vm["host"].as<std::string>();
+	if (vm.count("debug")) debug = vm["debug"].as<int>();
 	
 
-	if (vm.count("debug")) {
+	if (debug & DEBUG_LIB) {
 		LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
-		debug = true;
 	}
 
 	modbus_mapping = modbus_mapping_new(10000, 10000, 10000, 10000);
