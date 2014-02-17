@@ -114,10 +114,13 @@ public:
 	void setName(std::string new_name) { io_name = new_name; }
 	std::string io_name;
 
+    typedef std::map<std::string, IOComponent*> DeviceList;
+    static IOComponent::DeviceList devices;
 protected:
 	int getStatus(); 
 };
 std::ostream &operator<<(std::ostream&out, const IOComponent &);
+
 
 class Output : public IOComponent {
 public:

@@ -29,6 +29,19 @@ std::list<IOComponent *> IOComponent::processing_queue;
 std::map<std::string, IOAddress> IOComponent::io_names;
 static uint64_t current_time;
 
+IOComponent::DeviceList IOComponent::devices;
+
+//IOComponent* lookup_device(const std::string name);
+//void checkInputs();
+
+IOComponent* lookup_device(const std::string name) {
+    IOComponent::DeviceList::iterator device_iter = IOComponent::devices.find(name);
+    if (device_iter != IOComponent::devices.end())
+        return (*device_iter).second;
+    return 0;
+}
+// in a simulated environment, we provide a way to wire components together
+
 void IOComponent::processAll() {
     struct timeval now;
     gettimeofday(&now, NULL);
