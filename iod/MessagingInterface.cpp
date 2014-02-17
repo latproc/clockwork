@@ -36,11 +36,11 @@ MessagingInterface *MessagingInterface::current = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
 MessagingInterface *MessagingInterface::getCurrent() {
-    if (current == 0) {
-        current = new MessagingInterface(1, publisher_port());
+    if (MessagingInterface::current == 0) {
+        MessagingInterface::current = new MessagingInterface(1, publisher_port());
         usleep(200000); // give current subscribers time to notice us
     }
-    return current;
+    return MessagingInterface::current;
 }
 
 MessagingInterface *MessagingInterface::create(std::string host, int port) {
@@ -94,7 +94,7 @@ void MessagingInterface::connect() {
 }
 
 MessagingInterface::~MessagingInterface() {
-    if (current == this) current = 0;
+    if (MessagingInterface::current == this) MessagingInterface::current = 0;
     delete socket;
     delete context;
 }
