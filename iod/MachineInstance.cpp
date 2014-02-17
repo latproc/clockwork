@@ -2864,13 +2864,15 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				}
 			}
 	        //mif->send(ss.str().c_str());
-            mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
-            /*
+            //mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
+        
              {
-                Message property_change("PROPERTY", Message::makeParams(fullName(), property.c_str(), new_value));
-                mif->send(property_change);
+                Message::Parameters *p = Message::makeParams(fullName().c_str(), property.c_str(), new_value);
+                Message *property_change = new Message("PROPERTY", p);
+                this->send(property_change, mif);
+                //mif->send(property_change);
             }
-            */
+            
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
 				//persistentStore->send(ss.str().c_str());
@@ -3152,6 +3154,21 @@ void MachineInstance::setupModbusInterface() {
 							export_type=coil;
 						}
 					}
+                    else if (type=="AnalogueInput") {
+                        self_reg = true;
+                        export_type=reg;
+                    }
+                    else if (type=="AnalogueOutput") {
+                        // default to readonly export
+                        if (export_type_val=="rw") {
+                            self_rwreg = true;
+                            export_type=rw_reg;
+                        }
+                        else {
+                            self_reg = true;
+                            export_type=reg;
+                        }
+                    }
 				}
 			}
 			else
