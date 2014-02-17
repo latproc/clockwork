@@ -182,6 +182,15 @@ void semantic_analysis() {
 	settings_class->properties.add("NAME", host_name, SymbolTable::ST_REPLACE);
 	settings_class->properties.add("VERSION", "0.0", SymbolTable::ST_REPLACE);
     
+    MachineClass *cw_class = new MachineClass("CLOCKWORK");
+    cw_class->states.push_back("ready");
+	cw_class->default_state = State("ready");
+	cw_class->initial_state = State("ready");
+	cw_class->disableAutomaticStateChanges();
+	cw_class->properties.add("PROTOCOL", "CLOCKWORK", SymbolTable::ST_REPLACE);
+	cw_class->properties.add("HOST", "localhost", SymbolTable::ST_REPLACE);
+	cw_class->properties.add("PORT", 5600, SymbolTable::ST_REPLACE);
+    
     MachineClass *point_class = new MachineClass("POINT");
     point_class->parameters.push_back(Parameter("module"));
     point_class->parameters.push_back(Parameter("offset"));
