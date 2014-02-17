@@ -23,6 +23,7 @@
 #include "Dispatcher.h"
 #include "Message.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
 #include "DebugExtra.h"
 #include "Logger.h"
 #include "MessagingInterface.h"
@@ -118,12 +119,21 @@ void Dispatcher::idle() {
             if (mi && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL) {
                 DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to " << to->getName() <<  "\n";
                 {
-                    Value host = mi->properties.lookup("HOST");
-                    Value port_val = mi->properties.lookup("PORT");
+                    // The machine no parameters take the properties from the machine
+                    MachineInstance *remote = mi;
+                    if (mi->parameters.size() > 0) {
+                        remote = mi->lookup(mi->parameters[0]);
+                         // the host and port properties are specifed by the first parameter
+                        char buf[100];
+                        snprintf(buf, 100, "Error dispatching message,  EXTERNAL configuration: %s not found", mi->parameters[0].val.sValue.c_str());
+                        MessageLog::instance()->add(buf);
+                    }
+                    Value host = remote->properties.lookup("HOST");
+                    Value port_val = remote->properties.lookup("PORT");
+                    Value protocol = mi->properties.lookup("PROTOCOL");
                     long port;
                     if (port_val.asInteger(port)) {
                         MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port);
-                        Value protocol = mi->properties.lookup("PROTOCOL");
                         if (protocol == "RAW")
                             mif->send(m.getText().c_str());
                         else if (protocol == "CLOCKWORK")
