@@ -18,6 +18,7 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <dlfcn.h>
 #include <cassert>
 #include <iostream>
 #include <algorithm>
@@ -25,6 +26,7 @@
 #include <time.h>
 #include <utility>
 #include <vector>
+#include "Plugin.h"
 #include "MachineInstance.h"
 #include "State.h"
 #include "Dispatcher.h"
@@ -62,7 +64,6 @@ std::ostream &Parameter::operator<< (std::ostream &out)const {
 Parameter::Parameter(const Parameter &orig) {
     val = orig.val; machine = orig.machine; properties = orig.properties;
 }
-
 
 bool Action::debug() {
 	return owner && owner->debug();
@@ -103,8 +104,6 @@ Transition &Transition::operator=(const Transition &other) {
     }
     return *this;
 }
-
-
 
 ConditionHandler::ConditionHandler(const ConditionHandler &other)
     : condition(other.condition),
@@ -1084,6 +1083,9 @@ void MachineInstance::processAll(PollType which) {
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
 			m->idle();
+            if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
+                m->state_machine->plugin->poll_actions(m);
+            }
 		}
 	}
 }
@@ -1094,7 +1096,12 @@ void MachineInstance::checkStableStates() {
         MachineInstance *m = *iter++;
 		if ( m->enabled() && m->executingCommand() == NULL
                 && (m->needsCheck() || m->_type == "CONDITION" ) )
+        {
 			m->setStableState();
+            if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
+                m->state_machine->plugin->state_check(m);
+            }
+        }
 	}
 }
 
@@ -1886,7 +1893,8 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	active_actions.push_front(hma);
 }
 
-MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"), name(class_name), allow_auto_states(true) {
+MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
+        name(class_name), allow_auto_states(true), token_id(0), plugin(0) {
     token_id = Tokeniser::instance()->getTokenId(class_name);
     all_machine_classes.push_back(this);
 }
@@ -2305,7 +2313,8 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     state_machine = machine_class;
 	DBG_MSG << _name << " is of class " << machine_class->name << "\n";
 	if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states
-            && (machine_class->stable_states.size() || machine_class->name == "LIST" || machine_class->name == "REFERENCE") )
+            && (machine_class->stable_states.size() || machine_class->name == "LIST" || machine_class->name == "REFERENCE"
+                || (machine_class->plugin && machine_class->plugin->state_check)) )
 		automatic_machines.push_back(this);
     BOOST_FOREACH(StableState &s, machine_class->stable_states) {
         stable_states.push_back(s);
@@ -2842,6 +2851,9 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
             mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
         }
 
+        if (new_value.kind == Value::t_integer && state_machine && state_machine->plugin && state_machine->plugin->filter) {
+            new_value.iValue = state_machine->plugin->filter(this, new_value.iValue);
+        }
         bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 		if (changed ){
             setNeedsCheck();
@@ -2863,10 +2875,10 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
                     MessageLog::instance()->add(buf);
 				}
 			}
-	        //mif->send(ss.str().c_str());
-            //mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
+	        mif->send(ss.str().c_str());
+            mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
         
-             {
+             if (false){
                 Message::Parameters *p = Message::makeParams(fullName().c_str(), property.c_str(), new_value);
                 Message *property_change = new Message("PROPERTY", p);
                 this->send(property_change, mif);

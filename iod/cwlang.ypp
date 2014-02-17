@@ -1,5 +1,7 @@
 %{
 
+#include <stdlib.h>
+#include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
@@ -35,6 +37,7 @@
 #include "SortListAction.h"
 #include "ClearListAction.h"
 #include "SetOperationAction.h"
+#include "Plugin.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -106,7 +109,7 @@ struct Subcondition {
 %token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
-%token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS
+%token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 
 %union {
 	int iVal;
@@ -251,6 +254,7 @@ GLOBAL global_references ';'
 | stable_state
 | transitory_state
 | transition_entry
+| plugin_entry
 ;
 
 export_clause:
@@ -1195,6 +1199,22 @@ SYMBOL SYMBOL parameters
     property_stack.pop_back();
     current_machine->setProperties(properties);
     properties.clear();
+}
+;
+
+plugin_entry:
+PLUGIN STRINGVAL ';' {
+    const char *library_name = $2;
+    void *mylib_handle = dlopen(library_name, RTLD_LAZY);
+    if (mylib_handle) {
+        PluginManager::instance()->registerPlugin(current_machineclass->name, mylib_handle);
+        plugin_func state_check = (plugin_func)dlsym(mylib_handle, "check_states");
+        plugin_func poll_actions = (plugin_func)dlsym(mylib_handle, "poll_actions");
+        plugin_filter filter = (plugin_filter)dlsym(mylib_handle, "filter");
+
+        Plugin *pi = new Plugin(state_check, poll_actions, filter);
+        current_machineclass->plugin = pi;
+    }
 }
 ;
 

@@ -33,6 +33,7 @@
 #include "State.h"
 #include "Action.h"
 #include <boost/foreach.hpp>
+#include "Plugin.h"
 #include "Expression.h"
 #include "ModbusInterface.h"
 #include "SetStateAction.h"
@@ -178,6 +179,10 @@ public:
     static std::list<MachineClass*> all_machine_classes;
 	bool allow_auto_states;
     int token_id;
+    Plugin *plugin;
+private:
+    MachineClass();
+    MachineClass(const MachineClass &other);
 };
 
 /*
@@ -204,7 +209,7 @@ class IOComponent;
 class MQTTModule;
 struct cJSON;
 
-class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
+class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner, public PluginScope {
     friend class MachineInstanceFactory;
 public:
     enum PollType { BUILTINS, NO_BUILTINS};

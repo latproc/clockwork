@@ -897,6 +897,7 @@ void initialise_machines() {
             || mi->stable_states.size() > 0
             || mi->_type == "COUNTERRATE"
             || mi->_type == "RATEESTIMATOR"
+            || mi->getStateMachine()->plugin
             ) {
             mi->markActive();
             DBG_INITIALISATION << mi->getName() << " is active\n";

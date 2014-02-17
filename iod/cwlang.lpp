@@ -15,6 +15,7 @@ void append_char(int ch);
 %x COMMENT
 %x HASHCOMMENT
 %x PATTERNSTR
+%x PLUGIN_CODE
 
 %%
 
@@ -88,6 +89,7 @@ OF                  return OF;
 ON					return ON;
 OPTION              return OPTION;
 OR                  return OR;
+PLUGIN              return PLUGIN;
 PROPERTIES          return PROPERTIES;
 PROPERTY			return PROPERTY;
 PUSH				return PUSH;
@@ -136,6 +138,11 @@ WITHIN              return WITHIN;
     yylval.iVal = atoi(yytext);
     return INTEGER;
 }
+
+"%BEGIN_PLUGIN"			BEGIN PLUGIN_CODE;
+<PLUGIN_CODE>"%END_PLUGIN"	BEGIN 0;
+<PLUGIN_CODE>\n		{yylineno++; yycharno=1; }
+<PLUGIN_CODE>.		;
 
 "/*"			BEGIN COMMENT;
 <COMMENT>"*/"	BEGIN 0;
