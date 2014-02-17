@@ -37,10 +37,6 @@
 
 extern Statistics *statistics;
 
-typedef std::map<std::string, IOComponent*> DeviceList;
-extern DeviceList devices;
-IOComponent* lookup_device(const std::string name);
-
 std::map<std::string, std::string>message_handlers;
 
 
@@ -50,7 +46,7 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
     if (params.size() == 2) {
 		done = false;
         std::string ds = params[1].asString();
-        IOComponent *device = lookup_device(ds);
+        IOComponent *device = IOComponent::lookup_device(ds);
         if (device) {
 			done = true;
 			std::string res = device->getStateString();
@@ -77,7 +73,7 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
 bool IODCommandSetStatus::run(std::vector<Value> &params) {
     if (params.size() == 4) {
         std::string ds = params[1].asString();
-        Output *device = dynamic_cast<Output *>(lookup_device(ds));
+        Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(ds));
         if (device) {
             if (params[3] == "on")
                 device->turnOn();
@@ -248,7 +244,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 				return false;
 		    }
 				
-            Output *device = dynamic_cast<Output *>(lookup_device(params[1].asString()));
+            Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(params[1].asString()));
             if (device) {
                 if (device->isOn()) device->turnOff();
                 else if (device->isOff()) device->turnOn();
@@ -407,7 +403,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         free(cs);
     }
     else {
-           IOComponent *device = lookup_device(m->getName().c_str());
+           IOComponent *device = IOComponent::lookup_device(m->getName().c_str());
            if (device) {
                const char *state = device->getStateString();
                cJSON_AddStringToObject(node, "state", state);
@@ -983,7 +979,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 					cJSON_AddNumberToObject(json_pdo, "index", pdo.index);
 					cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.entry_count);
 					cJSON_AddStringToObject(json_pdo, "name", (const char *)pdo.name);
-	                //std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
+	       //std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
 					c_pdos[j + pdo_pos].index = pdo.index;
 					c_pdos[j + pdo_pos].n_entries = (unsigned int) pdo.entry_count;
 					if (pdo.entry_count)
@@ -998,13 +994,15 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 		            	for (k = 0; k < pdo.entry_count; k++) {
 							cJSON *json_entry = cJSON_CreateObject();
 		            	    m.getPdoEntry(&entry, slave.position, i, j, k);
-	                	  	std::cout << " entry: " << k 
+#if 0
+							std::cout << " entry: " << k 
 								<< "{" 
 								<< entry_pos << ", "
 								<< std::hex << (int)entry.index <<", " 
 								<< (int)entry.subindex<<", " 
 								<< (int)entry.bit_length <<", "
 								<<'"' << entry.name<<"\"}";
+#endif
 							c_entries[entry_pos].index = entry.index;
 							c_entries[entry_pos].subindex = entry.subindex;
 							c_entries[entry_pos].bit_length = entry.bit_length;

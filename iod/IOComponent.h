@@ -114,8 +114,9 @@ public:
 	void setName(std::string new_name) { io_name = new_name; }
 	std::string io_name;
 
-    typedef std::map<std::string, IOComponent*> DeviceList;
-    static IOComponent::DeviceList devices;
+	typedef std::map<std::string, IOComponent*> DeviceList;
+	static IOComponent::DeviceList devices;
+	static IOComponent* lookup_device(const std::string name);
 protected:
 	int getStatus(); 
 };

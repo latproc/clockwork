@@ -55,18 +55,7 @@ SymbolTable globals;
 
 void usage(int argc, char *argv[]);
 
-typedef std::map<std::string, IOComponent*> DeviceList;
-DeviceList devices;
-
-IOComponent* lookup_device(const std::string name);
 void checkInputs();
-
-IOComponent* lookup_device(const std::string name) {
-    DeviceList::iterator device_iter = devices.find(name);
-    if (device_iter != devices.end()) 
-        return (*device_iter).second;
-    return 0;
-}
 
 Statistics *statistics = NULL;
 std::list<Statistic *> Statistic::stats;
@@ -85,11 +74,11 @@ void checkInputs() {
     std::map<std::string, StringList>::iterator iter = wiring.begin();
     while (iter != wiring.end()) {
         const std::pair<std::string, StringList> &link = *iter++;
-        Output *device = dynamic_cast<Output*>(lookup_device(link.first));
+        Output *device = dynamic_cast<Output*>(IOComponent::lookup_device(link.first));
         if (device) {
             StringList::const_iterator linked_devices = link.second.begin();
             while (linked_devices != link.second.end()) {
-                Input *end_point = dynamic_cast<Input*>(lookup_device(*linked_devices++));
+                Input *end_point = dynamic_cast<Input*>(IOComponent::lookup_device(*linked_devices++));
                 SimulatedRawInput *in = 0;
                 if (end_point)
                    in  = dynamic_cast<SimulatedRawInput*>(end_point->access_raw_device());
@@ -118,7 +107,7 @@ struct BeckhoffdToggle : public IODCommand {
 			size_t pos = params[1].asString().find('-');
 			std::string machine_name = params[1].asString();
 			if (pos != std::string::npos) machine_name.erase(pos);
-            Output *device = dynamic_cast<Output *>(lookup_device(machine_name));
+            Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(machine_name));
             if (device) {
                 if (device->isOn()) 
 					device->turnOff();
@@ -147,9 +136,9 @@ struct BeckhoffdList : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 bool BeckhoffdList::run(std::vector<Value> &params) {
-    std::map<std::string, IOComponent*>::const_iterator iter = devices.begin();
+    std::map<std::string, IOComponent*>::const_iterator iter = IOComponent::devices.begin();
     std::string res;
-    while (iter != devices.end()) {
+    while (iter != IOComponent::devices.end()) {
 	    res = res + (*iter).first + "\n";
 		iter++;
     }
@@ -163,8 +152,8 @@ struct BeckhoffdListJSON : public IODCommand {
 
     bool BeckhoffdListJSON::run(std::vector<Value> &params) {
         cJSON *root = cJSON_CreateArray();
-        std::map<std::string, IOComponent*>::const_iterator iter = devices.begin();
-        while (iter != devices.end()) {
+        std::map<std::string, IOComponent*>::const_iterator iter = IOComponent::devices.begin();
+        while (iter != IOComponent::devices.end()) {
 			std::string name_str = (*iter).first;
             IOComponent *ioc = (*iter++).second;
 			if (name_str == "!") continue; //TBD
@@ -221,7 +210,7 @@ struct BeckhoffdProperty : public IODCommand {
 };
 bool BeckhoffdProperty::run(std::vector<Value> &params) {
     //if (params.size() == 4) {
-	IOComponent *m = lookup_device(params[1].asString());
+	IOComponent *m = IOComponent::lookup_device(params[1].asString());
     if (m) {
         if (params.size() == 3) {
             long x;
@@ -424,13 +413,13 @@ void generateIOComponentMappings() {
 	            			Output *o = new Output(addr);
 							o->setName(name_str);
 	            			output_list.push_back(o);
-	            			devices[name_str] = o;
+	            			IOComponent::devices[name_str] = o;
 						}
 						else {
 	            			AnalogueOutput *o = new AnalogueOutput(addr);
 							o->setName(name_str);
 	            			output_list.push_back(o);
-	            			devices[name_str] = o;
+	            			IOComponent::devices[name_str] = o;
 						}
 					}
 					else {
@@ -450,13 +439,13 @@ void generateIOComponentMappings() {
 						if (bitlen == 1) {
 							Input *in = new Input(addr);
 							in->setName(name_str);
-							devices[name_str] = in;
+							IOComponent::devices[name_str] = in;
 							free(name_str);
 						}
 						else {
 							AnalogueInput *in = new AnalogueInput(addr);
 							in->setName(name_str);
-							devices[name_str] = in;
+							IOComponent::devices[name_str] = in;
 							free(name_str);
 						}
 					}

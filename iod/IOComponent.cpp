@@ -31,10 +31,7 @@ static uint64_t current_time;
 
 IOComponent::DeviceList IOComponent::devices;
 
-//IOComponent* lookup_device(const std::string name);
-//void checkInputs();
-
-IOComponent* lookup_device(const std::string name) {
+IOComponent* IOComponent::lookup_device(const std::string name) {
     IOComponent::DeviceList::iterator device_iter = IOComponent::devices.find(name);
     if (device_iter != IOComponent::devices.end())
         return (*device_iter).second;

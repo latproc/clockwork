@@ -79,18 +79,6 @@ boost::condition_variable_any model_updated;
 boost::mutex ecat_mutex;
 boost::condition_variable_any ecat_polltime;
 
-
-
-typedef std::map<std::string, IOComponent*> DeviceList;
-DeviceList devices;
-
-IOComponent* lookup_device(const std::string name) {
-    DeviceList::iterator device_iter = devices.find(name);
-    if (device_iter != devices.end()) 
-        return (*device_iter).second;
-    return 0;
-}
-
 #ifdef EC_SIMULATOR
 
 // in a simulated environment, we provide a way to wire components together
@@ -104,11 +92,11 @@ void checkInputs() {
     std::map<std::string, StringList>::iterator iter = wiring.begin();
     while (iter != wiring.end()) {
         const std::pair<std::string, StringList> &link = *iter++;
-        Output *device = dynamic_cast<Output*>(lookup_device(link.first));
+        Output *device = dynamic_cast<Output*>(IOComponent::lookup_device(link.first));
         if (device) {
             StringList::const_iterator linked_devices = link.second.begin();
             while (linked_devices != link.second.end()) {
-                Input *end_point = dynamic_cast<Input*>(lookup_device(*linked_devices++));
+                Input *end_point = dynamic_cast<Input*>(IOComponent::lookup_device(*linked_devices++));
                 SimulatedRawInput *in = 0;
                 if (end_point)
                    in  = dynamic_cast<SimulatedRawInput*>(end_point->access_raw_device());
@@ -395,7 +383,7 @@ void generateIOComponentModules() {
 						if (bitlen == 1) {
 							Output *o = new Output(addr);
 							output_list.push_back(o);
-							devices[m->getName().c_str()] = o;
+							IOComponent::devices[m->getName().c_str()] = o;
 							o->setName(m->getName().c_str());
 							m->io_interface = o;
 							o->addDependent(m);
@@ -403,7 +391,7 @@ void generateIOComponentModules() {
 						else {
                             AnalogueOutput *o = new AnalogueOutput(addr);
 							output_list.push_back(o);
-							devices[m->getName().c_str()] = o;
+							IOComponent::devices[m->getName().c_str()] = o;
 							o->setName(m->getName().c_str());
 							m->io_interface = o;
 							o->addDependent(m);
@@ -426,7 +414,7 @@ void generateIOComponentModules() {
 
 						if (bitlen == 1) {
 							Input *in = new Input(addr);
-							devices[m->getName().c_str()] = in;
+							IOComponent::devices[m->getName().c_str()] = in;
 							in->setName(m->getName().c_str());
 							m->io_interface = in;
 							in->addDependent(m);
@@ -435,7 +423,7 @@ void generateIOComponentModules() {
 							if (m->_type == "COUNTERRATE") {
 								CounterRate *in = new CounterRate(addr);
 								char *nm = strdup(m->getName().c_str());
-								devices[nm] = in;
+								IOComponent::devices[nm] = in;
 								free(nm);
 								in->setName(m->getName().c_str());
 								m->io_interface = in;
@@ -444,7 +432,7 @@ void generateIOComponentModules() {
 							else if (m->_type == "COUNTER") {
 								Counter *in = new Counter(addr);
 								char *nm = strdup(m->getName().c_str());
-								devices[nm] = in;
+								IOComponent::devices[nm] = in;
 								free(nm);
 								in->setName(m->getName().c_str());
 								m->io_interface = in;
@@ -453,7 +441,7 @@ void generateIOComponentModules() {
 							else {
 								AnalogueInput *in = new AnalogueInput(addr);
 								char *nm = strdup(m->getName().c_str());
-								devices[nm] = in;
+								IOComponent::devices[nm] = in;
 								free(nm);
 								in->setName(m->getName().c_str());
 								m->io_interface = in;
