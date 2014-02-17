@@ -2935,6 +2935,9 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 							DBG_M_MODBUS << "unable to export " << property_name << "\n";
 						}
 					}
+                    case ModbusAddress::string: {
+                        ma.update(new_value.asString());
+                    }
 				}
 			}
 			else
@@ -3070,6 +3073,7 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 			out << group << ":" << std::setfill('0') << std::setw(5) << addr
 			<< "\t" << owner->getName() << "." << ((group==0) ? "cmd_": "") << (*iter).second
 			<< "\t" << data_type
+            << "\t" << info.length()
 			<< "\n";
 		else {
             std::string name((*iter).second);
@@ -3080,6 +3084,7 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 			out << group << ":" << std::setfill('0') << std::setw(5) << addr
 			<< "\t" << name
 			<< "\t" << data_type
+            << "\t" << info.length()
 			<< "\n";
         }
 		iter++;
@@ -3124,7 +3129,10 @@ void MachineInstance::setupModbusPropertyExports(std::string property_name, Modb
 			addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name); 
 		break;
 		case ModbusAddress::holding_register:
-			addModbusExport(name, ModbusAddress::holding_register, size, this, ModbusAddress::property, full_name+name); 
+			addModbusExport(name, ModbusAddress::holding_register, size, this, ModbusAddress::property, full_name+name);
+        break;
+        case ModbusAddress::string:
+            addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name);
 		break;
 		default: ;
 	}
@@ -3140,7 +3148,7 @@ void MachineInstance::setupModbusInterface() {
 	bool self_coil = false;
 	bool self_reg = false;
 	bool self_rwreg = false;
-	
+	long str_length = 0;
 	
 	// workout the export type for this machine
 	ExportType export_type = none;
@@ -3205,8 +3213,16 @@ void MachineInstance::setupModbusInterface() {
 					export_type=rw_reg32;
 				}
 				else if (export_type_val=="str") {
+                    Value &export_size = properties.lookup("strlen");
 					self_reg = true; 
 					export_type=str;
+                    export_size.asInteger(str_length);
+				}
+				else if (export_type_val=="rw_str") {
+                    Value &export_size = properties.lookup("strlen");
+					self_rwreg = true;
+					export_type=str;
+                    export_size.asInteger(str_length);
 				}
 				else {
 					self_discrete = true;
@@ -3237,7 +3253,7 @@ void MachineInstance::setupModbusInterface() {
 			else if (export_type == reg32) {
 				len = 2;
 			}
-			else if (export_type == str) {
+			else if (export_type == str && str_length == 0) {
 				len=80;
 			}
 			modbus_address = addModbusExport(_name, ModbusAddress::input_register, len, this, ModbusAddress::machine, full_name);
@@ -3247,6 +3263,9 @@ void MachineInstance::setupModbusInterface() {
 			int len = 1;
 			if (export_type == rw_reg32) {
 				len = 2;
+			}
+			else if (export_type == str && str_length == 0) {
+				len=80;
 			}
 			addModbusExport(_name, ModbusAddress::holding_register, len, this, ModbusAddress::machine, full_name);
 			//modbus_exports[name(_name].setName(full_name);
@@ -3290,7 +3309,11 @@ void MachineInstance::setupModbusInterface() {
 				setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 2);
 				break;
 			case str:
-				DBG_M_MSG <<" Warning: String property export not supported\n";
+                if (self_reg)
+                    setupModbusPropertyExports(property_name, ModbusAddress::input_register, (int)str_length);
+                else
+                    setupModbusPropertyExports(property_name, ModbusAddress::holding_register, (int)str_length);
+				break;
 		}
 	}
 

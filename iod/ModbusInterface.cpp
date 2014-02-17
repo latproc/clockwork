@@ -67,6 +67,8 @@ ModbusAddress ModbusAddress::alloc(ModbusAddress::Group g, unsigned int n, Modbu
 			address = next_input_register; next_input_register+=n; break;
 		case holding_register: 
 			address = next_holding_register; next_holding_register+=n; break;
+		case string:
+			address = next_input_register; next_input_register+=n; break;
 		default: return ModbusAddress();
 	}
 	DBG_MODBUS << "Modbus allocated " << n << " addresses in group " << (int)g << " starting at " << address<< "\n"; 
@@ -90,10 +92,13 @@ ModbusAddress::ModbusAddress(ModbusAddress::Group g, int a, int n, ModbusAddress
 				next_coil = address + 1; break;
 		case input_register:  
 			if (address >= next_input_register) 
-				next_input_register=address + 1; break;
+				next_input_register=address + n; break;
 		case holding_register: 
 			if (address >= next_holding_register) 
-				next_holding_register=address + 1; break;
+				next_holding_register=address + n; break;
+		case string:
+			if (address >= next_holding_register)
+				next_holding_register=address + n; break;
 			default: ;
 	}
 	DBG_MODBUS << "Modbus recording " << n << " addresses in group " << (int)g << " starting at " << address<< "\n"; 

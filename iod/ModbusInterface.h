@@ -40,7 +40,7 @@ public:
 class ModbusAddressable;
 class ModbusAddress {
 public:
-	enum Group {coil, discrete, none, input_register, holding_register };
+	enum Group {coil, discrete, none, input_register, holding_register, string };
 	enum Source {unknown, machine, state, command, property};
 	static Group toGroup(int g) { if (g<0 || g>4) return none; else return (Group)g; }
 	
