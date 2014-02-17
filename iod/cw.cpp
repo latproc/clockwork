@@ -82,20 +82,6 @@ boost::condition_variable_any model_updated;
 boost::condition_variable_any ecat_polltime;
 
 
-typedef std::map<std::string, IOComponent*> DeviceList;
-DeviceList devices;
-
-//IOComponent* lookup_device(const std::string name);
-//void checkInputs();
-
-IOComponent* lookup_device(const std::string name) {
-    DeviceList::iterator device_iter = devices.find(name);
-    if (device_iter != devices.end()) 
-        return (*device_iter).second;
-    return 0;
-}
-// in a simulated environment, we provide a way to wire components together
-
 typedef std::list<std::string> StringList;
 std::map<std::string, StringList> wiring;
 
