@@ -673,11 +673,11 @@ void RateEstimatorInstance::idle() {
 
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-    settings = new CounterRateFilterSettings(16);
+    settings = new CounterRateFilterSettings(4);
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 : MachineInstance(name, type, instance_type) {
-    settings = new CounterRateFilterSettings(16);
+    settings = new CounterRateFilterSettings(4);
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
@@ -3291,32 +3291,32 @@ void MachineInstance::setupModbusInterface() {
 
 void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, const char *new_value) {
 	std::string name = fullName();
-	DBG_M_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
+	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
 	if (!modbus_addresses.count(index)) {
-        std::stringstream ss;
+ 		std::stringstream ss;
 		ss << name << " Error: bad modbus address lookup for " << base_addr << "\n";
         MessageLog::instance()->add(ss.str().c_str());
 		return;
 	}
 	std::string item_name = modbus_addresses[index];
 	if (!modbus_exports.count(item_name)) {
-        std::stringstream ss;
+		std::stringstream ss;
 		ss << name << " Error: bad modbus name lookup for " << item_name << "\n";
         MessageLog::instance()->add(ss.str().c_str());
 		return;
 	}
 	ModbusAddress addr = modbus_exports[item_name];
-	DBG_M_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";
+	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";
     
-    if (addr.getGroup() == ModbusAddress::holding_register) {
-		DBG_M_MODBUS << name << " holding register update\n";
+	if (addr.getGroup() == ModbusAddress::holding_register) {
+		DBG_MODBUS << name << " holding register update\n";
 		std::string property_name = modbus_addresses[index];
-		DBG_M_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
-        if (property_name == _name)
-            setValue("VALUE", new_value);
-        else
-            setValue(property_name, new_value);
+		DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+		if (property_name == _name)
+			setValue("VALUE", new_value);
+		else
+			setValue(property_name, new_value);
 	}
 	else {
 		NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
@@ -3326,7 +3326,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 
 void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, int new_value) {
 	std::string name = fullName();
-	DBG_M_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
+	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
 	if (!modbus_addresses.count(index)) {
 		NB_MSG << name << " Error: bad modbus address lookup for " << base_addr << "\n";
@@ -3338,19 +3338,24 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 		return;
 	}
 	ModbusAddress addr = modbus_exports[item_name];
-	DBG_M_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";	
+	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";	
 
 	if (addr.getGroup() == ModbusAddress::coil || addr.getGroup() == ModbusAddress::discrete){
 		
 		if (addr.getSource() == ModbusAddress::machine) {
 			// crosscheck - the machine must have been exported read/write
-			assert(properties.exists("export"));
+			if (!properties.exists("export")) {
+				char buf[100];
+				snprintf(buf, 100, "received a modbus update for machine %s but that machine has no export property\n", name.c_str());
+				MessageLog::instance()->add(buf);
+			}
 			//Value &export_type = properties.lookup("export");
             // disabling this test because does not seem valid when talking with a PLC instead of a panel
 			//assert( (export_type.kind == Value::t_string || export_type.kind == Value::t_symbol)
 			//	&& export_type.sValue == "rw");
 			//assert(addr.getOffset() == 0);
 
+			DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
 			if (new_value) {
 				SetStateActionTemplate ssat(CStringHolder("SELF"), "on" );
 				active_actions.push_front(ssat.factory(this)); // execute this state change once all other actions are complete
@@ -3364,7 +3369,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 		else if (addr.getSource() == ModbusAddress::command) {
 			if (new_value) {
 				std::string &cmd_name = modbus_addresses[index];
-				DBG_M_MODBUS << _name << " executing command " << cmd_name << "\n";
+				DBG_MODBUS << _name << " executing command " << cmd_name << "\n";
 				// execute this command once all other actions are complete
 				handle(Message(cmd_name.c_str()), this, true); // fire the trigger when the command is done
 			}
@@ -3372,20 +3377,20 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 		}
 		else if (addr.getSource() == ModbusAddress::property) {
 			std::string property_name = modbus_addresses[index];
-			DBG_M_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+			DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
             if (name == _name)
                 setValue("VALUE", new_value);
             else
                 setValue(property_name, new_value);
 		}
 		else
-			DBG_M_MODBUS << _name << " received update for out-of-range coil" << offset << "\n";
+			DBG_MODBUS << _name << " received update for out-of-range coil" << offset << "\n";
 		
 	}
 	else if (addr.getGroup() == ModbusAddress::holding_register) {
-		DBG_M_MODBUS << name << " holding register update\n";
+		DBG_MODBUS << name << " holding register update\n";
 		std::string property_name = modbus_addresses[index];
-		DBG_M_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+		DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
         if (property_name == _name)
             setValue("VALUE", new_value);
         else
