@@ -589,6 +589,7 @@ struct MatchFunction {
                         }
                         free(msg);
                     }
+                    else if (msg) free(msg);
                 }
             }
             if (instance()->options.property()) {
