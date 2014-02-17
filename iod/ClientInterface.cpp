@@ -100,8 +100,12 @@ void IODCommandThread::operator()() {
                 }
                 else {
                     std::istringstream iss(data);
-                    while (iss >> ds) {
-                        parts.push_back(ds.c_str());
+										std::string tmp;
+										iss >> ds;
+                    parts.push_back(ds.c_str());
+										++count;
+                    while (iss >> tmp) {
+                        parts.push_back(tmp.c_str());
                         ++count;
                     }
                     std::copy(parts.begin(), parts.end(), std::back_inserter(params));
@@ -198,10 +202,10 @@ void IODCommandThread::operator()() {
                     command = new IODCommandInfo;
                 }
                 else {
+										std::cout << "unknown command " << data << "\n";
                     command = new IODCommandUnknown;
                 }
                 if ((*command)(params)) {
-                    //std::cout << command->result() << "\n";
                     sendMessage(socket, command->result());
                 }
                 else {

@@ -743,48 +743,57 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     bool IODCommandModbus::run(std::vector<Value> &params) {
 		if (params.size() != 4) {
 			error_str = "Usage: MODBUS group address value";
+			std::cout << error_str <<  " " << params[1] << "\n";
 			return false;
 		}
-		int group, address;
+		long group, address, val;
 		char *end;
-//        assert(params[1].kind == Value::t_integer); //group
-//        assert(params[2].kind == Value::t_integer); //addr
-		group = (int)strtol(params[1].asString().c_str(), &end, 0);
-		if (*end) {
-			error_str = "Modbus: group number should be from 1..4";
-std::cout << error_str <<  " " << params[1] << "\n";
+		if (!params[1].asInteger(group) || !params[2].asInteger(address)) {
+			std::stringstream ss;
+			ss << "malformed modbus command: " << params[0] <<" " << params[1] <<" " << params[2] <<" " << params[3];
+			error_str = ss.str();
+			MessageLog::instance()->add(ss.str().c_str());
 			return false;
 		}
-		address = (int)strtol(params[2].asString().c_str(), &end, 0);
-		if (*end) {
-			error_str = "Modbus: address should be from 0..65535";
-std::cout << error_str <<  " " << params[2] << "\n";
-			return false;
-		}
+		DBG_MODBUS << "modbus group: " << group << " addresss " << address << " value " << params[3] << "\n";
 		ModbusAddress found = ModbusAddress::lookup(group, address);
 		if (found.getGroup() != ModbusAddress::none) {
 			if (found.getOwner()) {
 				// the address found will refer to the base address, so we provide the actual offset
 				assert(address == found.getAddress());
-                if (params[3].kind == Value::t_integer) {
-                    found.getOwner()->modbusUpdated(found, address - found.getAddress(), (int)params[3].iValue);
-                }
-                else if (params[3].kind == Value::t_bool) {
-                    found.getOwner()->modbusUpdated(found, address - found.getAddress(), (params[3].bValue) ? 1 : 0);
-                }
-                else if (params[3].kind == Value::t_bool) {
-                    found.getOwner()->modbusUpdated(found, address - found.getAddress(), params[3].sValue.c_str());
-                }
+    		if (params[3].kind == Value::t_integer) {
+       		found.getOwner()->modbusUpdated(found, address - found.getAddress(), (int)params[3].iValue);
+        }
+        else if (params[3].kind == Value::t_bool) {
+        	found.getOwner()->modbusUpdated(found, address - found.getAddress(), (params[3].bValue) ? 1 : 0);
+				}
+        else if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
+					long val;
+					if (params[3].asInteger(val))
+	       		found.getOwner()->modbusUpdated(found, address - found.getAddress(), val);
+					else
+	       		found.getOwner()->modbusUpdated(found, address - found.getAddress(), params[3].sValue.c_str());
+ 				}
+				else {
+					std::stringstream ss;
+					ss << "unexpected value type " << params[3].kind << " for modbus value\n";
+					std::cout << ss.str() << "\n";
+					error_str = ss.str();
+					return false;
+				}
 			}
 			else {
 				DBG_MODBUS << "no owner for Modbus address " << found << "\n";
 				error_str = "Modbus: ignoring unregistered address\n";
+				std::cout << error_str << "\n";
+				return false;
 			}
 		}
 		else {
 			std::stringstream ss;
 			ss << "failed to find Modbus Address matching group: " << group << ", address: " << address;
 			error_str = ss.str();
+			std::cout << error_str << "\n";
 			return false;
 		}
 		result_str = "OK";
