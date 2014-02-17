@@ -62,6 +62,7 @@ const int REGS 		= 1 << 1;
 const int TOPLC 	= 1 << 2;
 const int TOPANEL = 1 << 3;
 const int IOD			= 1 << 4;
+const int STRTYPE	= 1 << 5;
 
 const int VERBOSE_TOPLC 	= 1 << 8;
 
@@ -70,6 +71,7 @@ const int DEBUG_LIB 		= 1 << 15;
 const int DEBUG_ALL = 0xffff;
 const int NOTLIB = DEBUG_ALL ^ DEBUG_LIB;
 
+#define DEBUG_STRINGS (debug & STRTYPE)
 #define DEBUG_VERBOSE_TOPLC (debug & VERBOSE_TOPLC)
 #define DEBUG_BASIC ( debug & NOTLIB )
 #define DEBUG_ANY ( debug )
@@ -110,19 +112,22 @@ void insert(int group, int addr, const char *value, int len) {
 	std::string addr_str(buf);
 	if (len % 2 != 0) len++;// pad
 	uint16_t *dest = 0;
+	int str_len = strlen(value);
+
 	if (group == 3)
 		dest = &modbus_mapping->tab_input_registers[addr];
 	else if (group == 4)
 		dest = &modbus_mapping->tab_registers[addr];
+
 	uint8_t *p = (uint8_t *)value;
-	std::cout << "string length: " << (int)(*p) << "\n";
+	if (DEBUG_STRINGS) std::cout << "string length: " << (int)(*p) << "\n";
 	uint8_t *q = (uint8_t*)dest;
 	int i=0;
 	for (i=0; i<len/2; ++i) {
-		*q++ = *(p+1);
-		*q++ = *p++; p++;
+		if (i+1<str_len) *q++ = *(p+1); else *q++ = 0;
+		if (i<str_len) *q++ = *p++; else *q++ = 0;
+		if (i+1<str_len) p++;
 	}
-	//while (i++<127) { *q++ = 0; }
 }
 void insert(int group, int addr, int value, int len) {
 	std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
