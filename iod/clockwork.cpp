@@ -111,16 +111,20 @@ int load_preset_modbus_mappings() {
 		int max_coil = 0;
 		int max_input = 0;
 		int max_holding = 0;
+        bool generate_length = false; // backward compatibility for old mappings files
 		while (modbus_mappings_file.getline(buf, 200,'\n')) {
 			++lineno;
 			std::stringstream line(buf);
 			std::cout << buf << "\n";
 			std::string group_addr, group, addr, name, type;
+            int length = 1;
 			line >> group_addr ;
 			size_t pos = group_addr.find(':');
 			if (pos != std::string::npos) {
 				group = group_addr;
 				line >> name >> type;
+                if (!(line >> length) )
+                    generate_length = true;
 				group.erase(pos);
 				addr = group_addr;
 				addr = group_addr.substr(pos+1);
@@ -141,14 +145,13 @@ int load_preset_modbus_mappings() {
 						++errors;
 						continue;
 					}
-					int len = 1;
-					if (type == "Signed_int_32") len = 2;
+					if (generate_length && type == "Signed_int_32") length = 2;
 					if (group_num == 0) { if (addr_num >= max_coil) max_coil = addr_num+1; }
 					else if (group_num == 1) { if (addr_num >= max_disc) max_disc = addr_num+1; }
 					else if (group_num == 3) { if (addr_num >= max_input) max_input = addr_num+1; }
 					else if (group_num == 4) { if (addr_num >= max_holding) max_holding = addr_num+1; }
-					DBG_MODBUS << "Loaded modbus mapping " << group_num << " " << addr << " " << len << "\n";
-					ModbusAddressDetails details(group_num, addr_num, len);
+					DBG_MODBUS << "Loaded modbus mapping " << group_num << " " << addr << " " << length << "\n";
+					ModbusAddressDetails details(group_num, addr_num, length);
 					ModbusAddress::preset_modbus_mapping[name] = details;
 				}
 			}
