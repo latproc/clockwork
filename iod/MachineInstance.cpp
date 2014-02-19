@@ -521,7 +521,8 @@ class VariableValue : public DynamicValue {
 public:
     VariableValue(MachineInstance *mi): machine_instance(mi) { }
     virtual Value operator()(MachineInstance *m) {
-        if (machine_instance->getStateMachine()->token_id == ClockworkToken::VARIABLE || machine_instance->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
+        if (machine_instance->getStateMachine()->token_id == ClockworkToken::VARIABLE 
+			|| machine_instance->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
             last_result = machine_instance->getValue("VALUE");
             return last_result;
         }
@@ -2612,9 +2613,13 @@ Value *MachineInstance::resolve(std::string property) {
 		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
 		MachineInstance *m = lookup(property);
 		if (m) {
-			if (m->state_machine->token_id == ClockworkToken::VARIABLE
-                || m->state_machine->token_id == ClockworkToken::CONSTANT)
+			if ( m->state_machine && (m->state_machine->token_id == ClockworkToken::VARIABLE
+                || m->state_machine->token_id == ClockworkToken::CONSTANT) ) {
 				return &m->properties.lookup("VALUE");
+			}
+			else if (m->_type == "VARIABLE" || m->_type == "CONSTANT") {
+				return &m->properties.lookup("VALUE");
+			}
 			else {
 				//return new Value(new MachineValue(m, property));
                 return &m->current_value_holder;
