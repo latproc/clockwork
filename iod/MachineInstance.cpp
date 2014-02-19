@@ -3348,6 +3348,7 @@ void MachineInstance::setupModbusInterface() {
 }
 
 void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, const char *new_value) {
+	setNeedsCheck(); // TBD hack
 	std::string name = fullName();
 	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
@@ -3383,6 +3384,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 }
 
 void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, int new_value) {
+	setNeedsCheck(); // TBD hack
 	std::string name = fullName();
 	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
