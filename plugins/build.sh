@@ -21,5 +21,8 @@ cat "$script" | awk '
 	$1 ~ /^%BEGIN_PLUGIN/ { copy=1; }  
 	' >plugin_$$.cpp
 
-g++ -dynamiclib -I /usr/local/include -I../iod plugin_$$.cpp globals.cpp -L/usr/local/lib -lboost_system -o "$out" lib/*.o -lzmq -lmosquitto -lboost_filesystem
+[ `uname -s` == "Linux" ] && LDFLAGS=-shared -Wl,-soname,$out
+[ `uname -s` == "Darwin" ] && LDFLAGS=-dynamiclib
+
+g++ $LDFLAGS -I /usr/local/include -I../iod plugin_$$.cpp globals.cpp -L/usr/local/lib -lboost_system -o "$out" lib/*.o -lzmq -lmosquitto -lboost_filesystem
 rm plugin_$$.cpp
