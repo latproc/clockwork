@@ -112,7 +112,7 @@ void insert(int group, int addr, const char *value, int len) {
 	std::string addr_str(buf);
 	if (len % 2 != 0) len++;// pad
 	uint16_t *dest = 0;
-	int str_len = strlen(value);
+//	int str_len = strlen(value);
 
 	if (group == 3)
 		dest = &modbus_mapping->tab_input_registers[addr];
@@ -124,9 +124,12 @@ void insert(int group, int addr, const char *value, int len) {
 	uint8_t *q = (uint8_t*)dest;
 	int i=0;
 	for (i=0; i<len/2; ++i) {
-		if (i+1<str_len) *q++ = *(p+1); else *q++ = 0;
-		if (i<str_len) *q++ = *p++; else *q++ = 0;
-		if (i+1<str_len) p++;
+		*q++ = *(p+1);
+		*q++ = *p++; p++;
+
+//		if (i+1<str_len) *q++ = *(p+1); else *q++ = 0;
+//		if (i<str_len) *q++ = *p++; else *q++ = 0;
+//		if (i+1<str_len) p++;
 	}
 }
 void insert(int group, int addr, int value, int len) {
