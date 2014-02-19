@@ -126,9 +126,19 @@ int load_preset_modbus_mappings() {
                 if (!(line >> length) )
                     generate_length = true;
 				group.erase(pos);
+				std::cout << "$$$$$$$$$$$$ " << group << " " << name << "\n";
 				addr = group_addr;
 				addr = group_addr.substr(pos+1);
-				if (ModbusAddress::preset_modbus_mapping.count(name) == 0) {
+				std::string lookup_name(name);
+				if (group == "0") {
+					size_t pos = lookup_name.rfind("cmd_");
+					if (pos != std::string::npos) {
+						lookup_name = lookup_name.replace(pos,4,"");
+						std::cout << "fixed name " << name << " to " << lookup_name << "\n";
+						name = lookup_name;
+					}
+				}
+				if (ModbusAddress::preset_modbus_mapping.count(lookup_name) == 0) {
 					int group_num, addr_num;
 					char *end = 0;
 					group_num = (int)strtol(group.c_str(), &end, 10);
