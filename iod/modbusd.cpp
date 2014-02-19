@@ -723,7 +723,8 @@ int main(int argc, const char * argv[]) {
 #if 1
 				active_addresses.clear();
 				initialised_address.clear();
-				sleep(2);
+//				sleep(2);
+				exit(0);
 				break;		
 #else
 				char *initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
