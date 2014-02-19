@@ -10,6 +10,7 @@
 #define PLUGIN_ERROR 2 /* the plugin exists but the plugin function could not be found */
 
 class PluginData {
+    public:
     virtual ~PluginData() { }
 };
 
@@ -19,6 +20,7 @@ public:
     virtual Value &getValue(std::string property);
     virtual void setValue(const std::string &property, Value new_value);
     bool changeState(const std::string new_state);
+    virtual std::string getState();
     PluginData *getInstanceData() { return data; }
     void setInstanceData(PluginData *block) { data = block; }
 

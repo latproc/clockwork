@@ -54,3 +54,11 @@ bool PluginScope::changeState(const std::string new_state) {
     return false;
 }
 
+std::string PluginScope::getState() {
+    MachineInstance *mi = dynamic_cast<MachineInstance*>(this);
+    if (!mi) return "";
+    
+    return mi->getCurrentStateString();
+}
+
+

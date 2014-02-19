@@ -317,7 +317,7 @@ int getSettings(const char *str, struct termios *settings) {
         
 		char *tmp = 0;
 		// most fields are numbers so we usually attempt to convert the field to a number
-		long val;
+		long val = 8;
 		if (state != cs_parity && state != cs_flow) val = strtol(fld, &tmp, 10);
 		if ( (tmp && *tmp == 0) || ( (state == cs_parity || state == cs_flow) && *fld != ':') ) { // config included the field
 			switch(state) {
