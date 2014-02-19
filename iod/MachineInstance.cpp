@@ -2935,6 +2935,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 							DBG_M_MODBUS << "unable to export " << property_name << "\n";
 						}
 					}
+						break;
                     case ModbusAddress::string: {
                         ma.update(new_value.asString());
                     }
