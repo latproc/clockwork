@@ -20,6 +20,19 @@ Calc MACHINE {
 }
 calc Calc;
 
+OddNumber MACHINE {
+	OPTION last 0, VALUE 0;
+
+	evaluating WHEN last != VALUE;
+	ENTER evaluating { LOG VALUE; last := VALUE; }
+	on WHEN VALUE % 2 == 1;
+	off DEFAULT;
+}
+val1 OddNumber(export:rw_reg);
+val2 OddNumber(export:rw_reg);
+	
+	
+
 Monitor MACHINE other {
 
 sample_flag FLAG (export:ro, tab:Tests);
