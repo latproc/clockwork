@@ -874,6 +874,7 @@ void initialise_machines() {
 							m->setValue(node.first, v);
 						else
 							m->setValue(node.first, node.second);
+						m->setNeedsCheck();
 					}
 				}
 			}
