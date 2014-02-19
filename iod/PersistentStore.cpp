@@ -13,7 +13,7 @@
 #include "PersistentStore.h"
 
 
-void PersistentStore::insert(std::string machine, std::string key, std::string value) {
+void PersistentStore::insert(std::string machine, std::string key, Value value) {
     
     std::map<std::string, std::map<std::string, Value> >::iterator found = init_values.find(machine);
     if (found == init_values.end()) {
@@ -56,7 +56,7 @@ void PersistentStore::load() {
         char *endp;
         i_value = strtol(value_str.c_str(), &endp, 10);
         if (*endp == 0)
-            insert(name, property, Value(i_value).asString());
+            insert(name, property, i_value);
         else
             insert(name, property, Value(value_str.c_str(), kind).asString());
         std::cout << name << "." << property << ":" << value_str << "\n";

@@ -19,7 +19,7 @@ public:
 	void save();
     void split(std::string &name, std::string& prop) const;
 	std::ostream &operator<<(std::ostream &out) const;
-	void insert(std::string machine, std::string property, std::string value);
+	void insert(std::string machine, std::string property, Value value);
     
 	
 	std::map<std::string, std::map<std::string, Value> >init_values;
