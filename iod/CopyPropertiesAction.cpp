@@ -51,7 +51,15 @@ Action::Status CopyPropertiesAction::run() {
     if (!dest_machine)
         dest_machine = owner->lookup(dest);
 	if (source_machine && dest_machine) {
-        dest_machine->properties.add(source_machine->properties);
+        //dest_machine->properties.add(source_machine->properties);
+        SymbolTableConstIterator iter = source_machine->properties.begin();
+        while (iter != source_machine->properties.end()) {
+            const std::string &prop = (*iter).first;
+            if (prop != "STATE" && prop != "NAME") {
+                dest_machine->setValue( prop, (*iter).second);
+            }
+            iter++;
+        }
         status = Complete;
 	}
     else
