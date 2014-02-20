@@ -41,7 +41,7 @@ BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
-CFLAGS = $(SIMULATED) -O -pedantic -Wall -Wno-unused-variable -Wno-variadic-macros \
+CFLAGS = $(SIMULATED) -O -pedantic -Wall -fPIC -rdynamic -Wno-unused-variable -Wno-variadic-macros \
 	-Wno-unused-but-set-variable \
 	$(EXTRAINCS) -DUSE_ETHERCAT
 CC = g++ $(CFLAGS)
@@ -105,7 +105,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
 			PersistentStore.o MessageLog.o filtering.o \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) $(BOOST_SYSTEM_LIB) \
-			$(TOOLLIB) -lethercat -lmosquitto
+			$(TOOLLIB) -lethercat -lmosquitto -ldl
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o Plugin.o \
@@ -122,7 +122,7 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
 			CallMethodAction.o regular_expressions.o MessageLog.o filtering.o \
 			MQTTInterface.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) \
-			-lethercat -lmosquitto
+			-lethercat -lmosquitto -ldl
 
 cw.o:	cw.cpp	MessagingInterface.h
 		$(CC) -c -o $@ cw.cpp
@@ -152,7 +152,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o PatternAction.o regular_expressions.o \
 			PersistentStore.o MessageLog.o filtering.o \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
-			clockwork.o ClientInterface.o MQTTInterface.o -lmosquitto
+			clockwork.o ClientInterface.o MQTTInterface.o -lmosquitto -ldl
 
 persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
 			MessagingInterface.o cJSON.o options.o PersistentStore.o Message.o

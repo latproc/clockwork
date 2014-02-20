@@ -4,7 +4,7 @@
 CounterSwitch MACHINE Count {
 	OPTION SetPoint 0;
 	OPTION Mark 0;
-	PLUGIN "counter_switch.so";
+	PLUGIN "counter_switch.so.1.0";
 	on STATE;				# seen counter pass the marked position
 	waiting STATE;	# active, watching counter
 	off INITIAL;		# not active, counter not seen
@@ -67,7 +67,7 @@ int check_states(void *scope)
 		printf("test: %s %ld\n", (current)? current : "null", data->count);
 		if (current && strcmp(current, "waiting") == 0 && data->count >= data->mark ) {
 			printf("changing to state on\n");
-			changeState(scope, "on");
+			int x = changeState(scope, "on");
 		}
 		free(current);
 		return PLUGIN_COMPLETED;

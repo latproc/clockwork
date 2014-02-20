@@ -38,6 +38,7 @@
 #include "ClearListAction.h"
 #include "SetOperationAction.h"
 #include "Plugin.h"
+#include "MessageLog.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -1215,6 +1216,13 @@ PLUGIN STRINGVAL ';' {
         Plugin *pi = new Plugin(state_check, poll_actions, filter);
         current_machineclass->plugin = pi;
     }
+	else {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": " << dlerror() << "\n";
+		MessageLog::instance()->add(ss.str().c_str());
+    	error_messages.push_back(ss.str());
+		std::cout << ss.str() << "\n";
+	}
 }
 ;
 

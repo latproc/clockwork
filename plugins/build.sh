@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 usage() {
 	echo "usage: $0 script"
@@ -21,8 +21,9 @@ cat "$script" | awk '
 	$1 ~ /^%BEGIN_PLUGIN/ { copy=1; }  
 	' >plugin_$$.c
 
-[ `uname -s` == "Linux" ] && LDFLAGS="-shared -Wl,-soname,$out"
-[ `uname -s` == "Darwin" ] && LDFLAGS="-dynamiclib -Wl,-undefined,dynamic_lookup"
+[ `uname -s` == "Linux" ] && LDFLAGS="-shared -fPIC -Wl,-soname,$out,-undefined,dynamic_lookup"
+[ `uname -s` == "Darwin" ] && LDFLAGS="-dynamiclib -fPIC -Wl,-undefined,dynamic_lookup"
 
-gcc $LDFLAGS -I /usr/local/include -I../iod plugin_$$.c -o "$out" 
+echo gcc -Wall -pedantic $LDFLAGS -I /usr/local/include -I../iod plugin_$$.c -o "$out" 
+gcc $LDFLAGS -I../iod plugin_$$.c -o "$out" 
 rm plugin_$$.c

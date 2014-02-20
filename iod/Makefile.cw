@@ -34,7 +34,7 @@ BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
-CFLAGS = $(SIMULATED) -g -pedantic -Wall -fPIC \
+CFLAGS = $(SIMULATED) -g -pedantic -Wall -fPIC -rdynamic \
 	-Wno-unknown-warning-option -Wno-unused-but-set-variable \
 	-Wno-c++11-extensions -Wno-unused-variable -Wno-variadic-macros -Wno-c++11-long-long $(EXTRAINCS)
 CC = g++ $(CFLAGS)
@@ -96,7 +96,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o \
 			PersistentStore.o MessageLog.o filtering.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
-			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lmosquitto
+			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lmosquitto -ldl
 
 beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o Plugin.o \
@@ -115,8 +115,8 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			regular_expressions.cpp PatternAction.o filtering.o \
 			-lzmq $(BOOST_THREAD_LIB)
 
-cw.o:	cw.cpp	MessagingInterface.h
-		$(CC) -c -o $@ cw.cpp
+#cw.o:	cw.cpp	MessagingInterface.h
+#		$(CC) -c -o $@ cw.cpp 
 
 cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
 			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
@@ -144,7 +144,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o MessageLog.o \
 			PersistentStore.o filtering.o \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
-			-lmosquitto
+			-lmosquitto -ldl
 
 persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
 		MessagingInterface.o symboltable.o cJSON.o DebugExtra.o Logger.o options.o \
