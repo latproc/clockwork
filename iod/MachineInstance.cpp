@@ -745,7 +745,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     current_value_holder(0),
     last_state_evaluation_time(0),
     stable_states_stats("StableState processing"),
-    message_handling_stats("Message handling")
+    message_handling_stats("Message handling"),
+    data(0)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -786,7 +787,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     current_value_holder(0),
     last_state_evaluation_time(0),
     stable_states_stats("StableState processing"),
-    message_handling_stats("Message handling")
+    message_handling_stats("Message handling"),
+    data(0)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -2176,14 +2178,14 @@ void MachineInstance::setStableState() {
     if (io_interface) {
 	 	setState(io_interface->getStateString());
     }
-    else if (_type == "LIST") {
+    else if ( ( !state_machine && _type=="LIST") || (state_machine && state_machine->token_id == ClockworkToken::LIST) ) {
         //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
         if (parameters.size())
             setState(State("nonempty"));
         else
             setState(State("empty"));
     }
-    else if (_type == "REFERENCE") {
+    else if (( !state_machine && _type=="REFERENCE") || (state_machine && state_machine->token_id == ClockworkToken::REFERENCE) ) {
         //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
         if (locals.size())
             setState(State("ASSIGNED"));

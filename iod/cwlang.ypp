@@ -1205,7 +1205,7 @@ SYMBOL SYMBOL parameters
 plugin_entry:
 PLUGIN STRINGVAL ';' {
     const char *library_name = $2;
-    void *mylib_handle = dlopen(library_name, RTLD_LAZY);
+    void *mylib_handle = dlopen(library_name, RTLD_NOW);
     if (mylib_handle) {
         PluginManager::instance()->registerPlugin(current_machineclass->name, mylib_handle);
         plugin_func state_check = (plugin_func)dlsym(mylib_handle, "check_states");

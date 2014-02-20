@@ -19,10 +19,10 @@ cat "$script" | awk '
 	/^%END_PLUGIN/ {copy=0} 
 	copy==1 
 	$1 ~ /^%BEGIN_PLUGIN/ { copy=1; }  
-	' >plugin_$$.cpp
+	' >plugin_$$.c
 
-[ `uname -s` == "Linux" ] && LDFLAGS=-shared -Wl,-soname,$out
-[ `uname -s` == "Darwin" ] && LDFLAGS=-dynamiclib
+[ `uname -s` == "Linux" ] && LDFLAGS="-shared -Wl,-soname,$out"
+[ `uname -s` == "Darwin" ] && LDFLAGS="-dynamiclib -Wl,-undefined,dynamic_lookup"
 
-g++ $LDFLAGS -I /usr/local/include -I../iod plugin_$$.cpp globals.cpp -L/usr/local/lib -lboost_system -o "$out" lib/*.o -lzmq -lmosquitto -lboost_filesystem
-rm plugin_$$.cpp
+gcc $LDFLAGS -I /usr/local/include -I../iod plugin_$$.c -o "$out" 
+rm plugin_$$.c

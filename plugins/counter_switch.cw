@@ -28,74 +28,56 @@ Driver MACHINE switch {
 	COMMAND run { SEND mark TO switch }
 }
 counter Counter;
-test_switch CounterSwitch(SetPoint:15) counter;
+test_switch CounterSwitch(SetPoint:3) counter;
 test Driver test_switch;
 
 
 %BEGIN_PLUGIN
-#include "MessageLog.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
-struct MyData : public PluginData {
-	Value &set_point;
-	Value &mark;
-	Value &count;
-	MyData(Value &sp, Value &mk, Value &ct) : set_point(sp), mark(mk), count(ct) { }
+struct MyData {
+	long set_point;
+	long mark;
+	long count;
 };
 
 PLUGIN_EXPORT
-int CheckStates(PluginScope *scope)
+int check_states(void *scope)
 {
-	MyData *data = dynamic_cast<MyData*>(scope->getInstanceData());
-	if (!data) { 
-		Value &set_point = scope->getValue("SetPoint");
-		Value &mark = scope->getValue("Mark");
-		Value &count = scope->getValue("Count.VALUE");
-
-		if (set_point.kind == Value::t_integer 
-				&& mark.kind == Value::t_integer
-				&& count.kind == Value::t_integer) {
-			data = new MyData(set_point, mark, count); 
-			scope->setInstanceData(data);
-			std::cout << "set data\n";
-		}
-		else {
-			if (set_point.kind != Value::t_integer) 
-				MessageLog::instance()->add("CounterSwitch SetPoint property is not an integer");
-			if (mark.kind != Value::t_integer) 
-				MessageLog::instance()->add("CounterSwitch Mark property is not an integer");
-			if (count.kind != Value::t_integer) 
-				MessageLog::instance()->add("CounterSwitch Count property is not an integer");
-			std::cout << "not all properties found\n";
-			return PLUGIN_ERROR;
-		}
+	struct MyData *data = (struct MyData*)getInstanceData(scope);
+	if (!data) {
+		data = (struct MyData*)malloc(sizeof(struct MyData));
+		setInstanceData(scope, data);
 	}
 	
-	std::string current(scope->getState());
-	if (current == "waiting" && data->count >= data->mark ) {
-		std::cout << "setting state, count: " << data->count << " mark: " << data->mark << "\n";
-		scope->changeState("on");
+	if (!getIntValue(scope, "SetPoint", &data->set_point)) {
+		log_message(scope, "CounterSwitch SetPoint property is not an integer");
 	}
-	return PLUGIN_COMPLETED;
+	else if (!getIntValue(scope, "Mark", &data->mark)) {
+		log_message(scope, "CounterSwitch Mark property is not an integer");
+	}
+	else if (!getIntValue(scope, "Count.VALUE", &data->count)) {
+		log_message(scope, "CounterSwitch Count property is not an integer");
+	}
+	else {
+
+		char *current = getState(scope);
+		printf("test: %s %ld\n", (current)? current : "null", data->count);
+		if (current && strcmp(current, "waiting") == 0 && data->count >= data->mark ) {
+			printf("changing to state on\n");
+			changeState(scope, "on");
+		}
+		free(current);
+		return PLUGIN_COMPLETED;
+	}
+	
+	return PLUGIN_ERROR;
 }
 
 PLUGIN_EXPORT
-int PollActions(PluginScope* scope) {
+int poll_actions(void *scope) {
 	return PLUGIN_COMPLETED;
 }
 
-%END_PLUGIN
-
-/*
-COUNTGREATER MACHINE Count {
-  OPTION SetPoint 0;
-  OPTION Mark 0;
-
-  eval STATE;
-  on WHEN SELF IS on || SELF IS waiting && Count.VALUE >= Mark;
-  waiting WHEN Mark > 0;
-  off DEFAULT;
-
-  COMMAND mark { Mark := SetPoint + Count.VALUE; }
-  COMMAND reset { Mark := 0 ; SET SELF TO eval; }
-}
-*/

@@ -209,7 +209,7 @@ class IOComponent;
 class MQTTModule;
 struct cJSON;
 
-class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner, public PluginScope {
+class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
     friend class MachineInstanceFactory;
 public:
     enum PollType { BUILTINS, NO_BUILTINS};
@@ -412,6 +412,7 @@ protected:
 public:
     Statistic stable_states_stats;
     Statistic message_handling_stats;
+    void * data; // plugin data
 	
 private:
 	static std::map<std::string, HardwareAddress> hw_names;

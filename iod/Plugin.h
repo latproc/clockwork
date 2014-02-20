@@ -1,32 +1,55 @@
 #ifndef __PLUGIN_H__
 #define __PLUGIN_H__
 
-#include "value.h"
-
 #define PLUGIN_EXPORT __attribute__((visibility("default")))
 
 #define PLUGIN_COMPLETED 0
 #define NO_PLUGIN_AVAILABLE 1 /* no plugin matches the command */
 #define PLUGIN_ERROR 2 /* the plugin exists but the plugin function could not be found */
 
-class PluginData {
-    public:
-    virtual ~PluginData() { }
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef void * cwpi_Scope;
+    
+typedef int (*plugin_func)(cwpi_Scope);
+typedef long (*plugin_filter)(cwpi_Scope, long);
+
+int getIntValue(cwpi_Scope, const char *property_name, long *val);
+char *getStringValue(cwpi_Scope, const char *property_name);
+void setIntValue(cwpi_Scope, const char *property_name, long new_value);
+void setStringValue(cwpi_Scope, const char *property_name, const char *new_value);
+int changeState(cwpi_Scope, const char *new_state);
+char *getState(cwpi_Scope);
+void log_message(cwpi_Scope, const char *);
+
+void *getInstanceData(cwpi_Scope);
+void setInstanceData(cwpi_Scope, void *block);
+    
+#ifdef __cplusplus
+}
+#endif
 
 
+#ifdef __cplusplus
+#include "value.h"
+
+/*
 class PluginScope {
 public:
     virtual Value &getValue(std::string property);
     virtual void setValue(const std::string &property, Value new_value);
-    bool changeState(const std::string new_state);
+    int changeState(const std::string new_state);
     virtual std::string getState();
-    PluginData *getInstanceData() { return data; }
-    void setInstanceData(PluginData *block) { data = block; }
+    void *getInstanceData() { return data; }
+    void setInstanceData(void *block) { data = block; }
+    void message(const char *msg);
 
-    PluginScope() : data(0) { }
+    PluginScope(MachineInstance *m) : mi(m), data(0) { }
 private:
-    PluginData * data;
+    MachineInstance *mi;
+    void * data;
 };
 
 struct PluginResult {
@@ -36,12 +59,9 @@ struct PluginResult {
     PluginResult(int rc) : result_code(rc), message("") {  }
     PluginResult(int rc, const char *msg) : result_code(0), message(msg) {  }
 };
+*/
 
-extern "C" {
-typedef int (*plugin_func)(PluginScope *);
-typedef long (*plugin_filter)(PluginScope *, long);
-}
-
+class MachineInstance;
 class Plugin {
 public:
     plugin_func state_check;
@@ -65,5 +85,6 @@ private:
     std::map<std::string, void *>plugins;
 };
 
+#endif
 
 #endif
