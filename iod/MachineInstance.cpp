@@ -814,6 +814,13 @@ MachineInstance::~MachineInstance() {
     Dispatcher::instance()->removeReceiver(this);
 }
 
+void simple_deltat(std::ostream &out, uint64_t dt) {
+    if (dt > 60000000) out << std::setprecision(3) << (float)dt/60000000.0f << "m";
+    if (dt > 1000000) out << std::setprecision(3) << (float)dt/1000000.0f << "s";
+    else if (dt>1000) out << std::setprecision(3) << (float)dt/1000.0f << "ms";
+    else out << dt << "us";
+}
+
 void MachineInstance::describe(std::ostream &out) {
     out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n"
 		<< "  Class: " << _type << " instantiated at: " << definition_file << " line:" << definition_line << "\n";
@@ -902,7 +909,10 @@ void MachineInstance::describe(std::ostream &out) {
         struct timeval now;
 		gettimeofday(&now, 0);
         long now_t = now.tv_sec * 1000000 + now.tv_usec;
-        out << "Last stable state evaluation ("<< last_state_evaluation_time << " now-" << (now_t - last_state_evaluation_time) << "):\n";
+        uint64_t delta = now_t - last_state_evaluation_time;
+        out << "Last stable state evaluation (";
+        simple_deltat(out, delta);
+        out << "):\n";
         for (unsigned int i=0; i<stable_states.size(); ++i) {
             out << "  " << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
             if (stable_states[i].condition.last_result == true) {

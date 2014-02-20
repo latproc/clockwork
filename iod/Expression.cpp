@@ -241,8 +241,15 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
         out << ")";
     }
     else {
-        if (cached_entry) out <<" (" << *cached_entry << ") ";
-        else if (last_calculation) out << entry <<  " (" << *last_calculation << ") ";
+        if (cached_entry) {
+            out << entry;
+            if (entry.kind == Value::t_symbol) out << " (" << *cached_entry << ")";
+        }
+        else if (last_calculation) {
+            out << entry;
+            if (entry.kind == Value::t_symbol || entry.kind == Value::t_dynamic)
+                out <<  " (" << *last_calculation << ") ";
+        }
         else out << " " << entry;
 	}
     return out;
@@ -625,11 +632,10 @@ void Stack::clear() {
 }
 
 Value Predicate::evaluate(MachineInstance *m) {
-    //stack.clear();
     if (stack.stack.size() == 0)
         if (!prep(stack, this, m, true, needs_reevaluation)) {
             std::stringstream ss;
-            ss << "Predicate failed to resolve: " << *this << "\n";
+            ss << m->getName() << " Predicate failed to resolve: " << *this << "\n";
             MessageLog::instance()->add(ss.str().c_str());
             return false;
         }
@@ -651,7 +657,7 @@ bool Condition::operator()(MachineInstance *m) {
 	    if (predicate->stack.stack.size() == 0 )
             if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {
                 std::stringstream ss;
-                ss << "Condition failed: predicate failed to resolve: " << *this->predicate << "\n";
+                ss << m->getName() << " condition failed: predicate failed to resolve: " << *this->predicate << "\n";
                 MessageLog::instance()->add(ss.str().c_str());
                 return false;
             }
