@@ -661,10 +661,18 @@ void semantic_analysis() {
 					mi->listenTo(node.second);
 				}
 				else {
+                    char buf[100];
+                    snprintf(buf, 100, "machine %s cannot find a global machine called: %s\n", mi->getName().c_str(), node.first.c_str());
+                    MessageLog::instance()->add(buf);
 					DBG_MSG << "Warning: " << node.first << " has no machine when settingup globals\n";
 				}
 			}
 		}
+        else {
+            char buf[100];
+            snprintf(buf, 100, "machine %s does not have a state machine\n", mi->getName().c_str());
+            MessageLog::instance()->add(buf);
+        }
 	}
 	
 	// add receives_function entries for each machine to ensure real_name messages are captured
