@@ -88,8 +88,8 @@ void Dispatcher::deliver(Package *p) {
 		iter = to_receive.begin();
 		while (iter != to_receive.end()) {
 			Receiver *r = *iter++;
-			//r->enqueue(*p);
-			r->mail_queue.push_back(p);
+			r->enqueue(*p);
+			//r->mail_queue.push_back(p);
 		}
 	}
 	delete p->message;
