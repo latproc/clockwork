@@ -50,7 +50,8 @@
 extern int num_errors;
 extern std::list<std::string>error_messages;
 
-static uint64_t process_time; // used for idle calculations for rate estimation
+static uint64_t process_time = 0; // used for idle calculations for rate estimation
+Value *MachineInstance::polling_delay = 0;
 
 MessagingInterface *persistentStore = 0;
 
@@ -404,13 +405,13 @@ bool machine_dependencies( MachineInstance *a, MachineInstance *b) {
 }
 
 void MachineInstance::sort() {
-	std::vector<MachineInstance*> tmp(all_machines.size());	
+#if 0
+	std::vector<MachineInstance*> tmp(all_machines.size());
 	std::copy(all_machines.begin(), all_machines.end(), tmp.begin());
 //  std::sort(tmp.begin(), tmp.end(), machine_dependencies);
 	all_machines.clear();
 	std::copy(tmp.begin(), tmp.end(), back_inserter(all_machines));
 	
-#if 0
 	std::cout << "Sorted machines (dependencies)\n";
 	BOOST_FOREACH(MachineInstance *m, all_machines) {
 		if (m->owner) std::cout << m->owner->getName() << ".";
@@ -746,7 +747,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     last_state_evaluation_time(0),
     stable_states_stats("StableState processing"),
     message_handling_stats("Message handling"),
-    data(0)
+    data(0),
+    idle_time(0)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -788,7 +790,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     last_state_evaluation_time(0),
     stable_states_stats("StableState processing"),
     message_handling_stats("Message handling"),
-    data(0)
+    data(0),
+    idle_time(0)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -1085,7 +1088,7 @@ void MachineInstance::processAll(PollType which) {
     if (which == BUILTINS)
 		builtins = true;
 	//MachineInstance::updateAllTimers(which);
-    int point_token = Tokeniser::instance()->getTokenId("POINT");
+    int point_token = ClockworkToken::POINT;
     std::list<MachineInstance *>::iterator iter = active_machines.begin();
     while (iter != active_machines.end()) {
         /* To compute a counterrate, the device needs a continual suppliy of input readings. 
@@ -1095,7 +1098,7 @@ void MachineInstance::processAll(PollType which) {
         MachineInstance *m = *iter++;
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
-			m->idle();
+			if (m->has_work || !m->active_actions.empty() ) m->idle();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
             }
@@ -1104,11 +1107,15 @@ void MachineInstance::processAll(PollType which) {
 }
 
 void MachineInstance::checkStableStates() {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+
     std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
     while (iter != MachineInstance::automatic_machines.end()) {
         MachineInstance *m = *iter++;
 		if ( m->enabled() && m->executingCommand() == NULL
-                && (m->needsCheck() || m->_type == "CONDITION" ) )
+            && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= now_t )
         {
 			m->setStableState();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
@@ -1907,7 +1914,9 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
-        name(class_name), allow_auto_states(true), token_id(0), plugin(0) {
+        name(class_name), allow_auto_states(true), token_id(0), plugin(0),
+        polling_delay(0)
+{
     token_id = Tokeniser::instance()->getTokenId(class_name);
     all_machine_classes.push_back(this);
 }
@@ -2168,6 +2177,13 @@ void MachineInstance::updateLastEvaluationTime() {
     struct timeval now;
     gettimeofday(&now, NULL);
     last_state_evaluation_time = now.tv_sec * 1000000 + now.tv_usec;
+    if (idle_time)
+        next_poll = last_state_evaluation_time + idle_time;
+    else {
+        long default_polling_delay = 1000;
+        if (polling_delay) default_polling_delay = polling_delay->iValue;
+        next_poll = last_state_evaluation_time + default_polling_delay;
+    }
 }
 
 void MachineInstance::setStableState() {
@@ -2688,6 +2704,8 @@ Value &MachineInstance::getValue(std::string property) {
 		}
 	}
 	else {
+        Value property_val(property); // use this to avoid string comparisions on property
+        
 	    // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 	
 		// variables may refer to an initialisation value passed in as a parameter. 
@@ -2727,7 +2745,7 @@ Value &MachineInstance::getValue(std::string property) {
 			}
 		}
 	    DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
-		if (property == "TIMER") {
+		if (property_val.token_id == ClockworkToken::TIMER) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
@@ -2837,11 +2855,13 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 		}
 	}
 	else {
+        Value property_val(property); // use this value in comparisons for performance
+        
         // often variables are named in the GLOBAL list, if we find the property in that list
         // we try to change ask that machine to set its VALUE.
 		if (state_machine->global_references.count(property)) {
 			MachineInstance *global_machine = state_machine->global_references[property];
-			if (global_machine && global_machine->_type != "CONSTANT")
+			if (global_machine && global_machine->state_machine->token_id != ClockworkToken::CONSTANT)
                 global_machine->setValue("VALUE", new_value);
 			return;
 		}
@@ -2849,7 +2869,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 	    DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
         Value &prev_value = properties.lookup(property.c_str());
 
-		if (prev_value == SymbolTable::Null && property != "VALUE" && property != _name) {
+		if (prev_value == SymbolTable::Null && property_val.token_id != ClockworkToken::tokVALUE && property != _name) {
 			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
 			MachineInstance *global_machine = lookup(property);
 			if (global_machine) {
@@ -2862,7 +2882,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 			}
 		}
         
-        if (state_machine->token_id == ClockworkToken::PUBLISHER && mq_interface && property == "message" )
+        if (state_machine->token_id == ClockworkToken::PUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
         {
             std::string old_val(properties.lookup(property.c_str()).asString());
             mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
@@ -2877,7 +2897,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
             properties.add(property, new_value, SymbolTable::ST_REPLACE);
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
 			resetTemporaryStringStream();
-			if ( property == "VALUE" && io_interface) {
+			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
 				char buf[100];
 				errno = 0;
 				long value =0; // TBD deal with sign
@@ -2916,14 +2936,14 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				property_name += ".";
 			}
 			property_name += _name;
-			if (property != "VALUE") {
+			if (property_val.token_id != ClockworkToken::tokVALUE) {
 				property_name += ".";
 				property_name += property;
 			}
             
 			if (modbus_exports.count(property_name)){
 				ModbusAddress ma = modbus_exports[property_name];
-				if (property == "VALUE") {
+				if (property_val.token_id == ClockworkToken::tokVALUE) {
 					DBG_M_MODBUS << property_name << " modbus address " << ma << "\n";
 				}
 				switch(ma.getGroup()) {

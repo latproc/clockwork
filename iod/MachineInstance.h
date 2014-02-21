@@ -180,6 +180,7 @@ public:
 	bool allow_auto_states;
     int token_id;
     Plugin *plugin;
+    long polling_delay;
 private:
     MachineClass();
     MachineClass(const MachineClass &other);
@@ -413,7 +414,10 @@ public:
     Statistic stable_states_stats;
     Statistic message_handling_stats;
     void * data; // plugin data
-	
+    uint64_t idle_time; // amount of time to be idle between state polls (microsec)
+    uint64_t next_poll;
+    
+    static Value *polling_delay;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
