@@ -60,6 +60,8 @@ public:
     static int PUBLISHER;
     static int POLLING_DELAY;
     static int CYCLE_DELAY;
+    static int tokVALUE;
+    static int tokMessage;
 };
 
 class SymbolTable {
