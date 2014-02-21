@@ -111,6 +111,7 @@ struct Subcondition {
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
+%token tokPOLLING_DELAY
 
 %union {
 	int iVal;
@@ -256,6 +257,7 @@ GLOBAL global_references ';'
 | transitory_state
 | transition_entry
 | plugin_entry
+| delay_entry
 ;
 
 export_clause:
@@ -1202,6 +1204,11 @@ SYMBOL SYMBOL parameters
     properties.clear();
 }
 ;
+
+delay_entry:
+tokPOLLING_DELAY INTEGER ';' {
+    current_machineclass->polling_delay = $2;
+}
 
 plugin_entry:
 PLUGIN STRINGVAL ';' {
