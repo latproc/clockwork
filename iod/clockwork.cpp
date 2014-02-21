@@ -59,6 +59,26 @@ SymbolTable globals;
 std::list<std::string>error_messages;
 int num_errors = 0;
 
+ClockworkInterpreter *ClockworkInterpreter::_instance = 0;
+MachineInstance *_settings = 0;
+
+ClockworkInterpreter::ClockworkInterpreter() : cycle_delay(0), default_poll_delay(0) {}
+
+ClockworkInterpreter* ClockworkInterpreter::instance() {
+    if (!_instance) _instance = new ClockworkInterpreter;
+    return _instance;
+}
+
+void ClockworkInterpreter::setup(MachineInstance *new_settings) {
+    _settings = new_settings;
+    cycle_delay = &ClockworkInterpreter::instance()->settings()->properties.lookup("CYCLE_DELAY");
+    default_poll_delay = &ClockworkInterpreter::instance()->settings()->properties.lookup("POLLING_DELAY");
+    
+    MachineInstance::polling_delay = default_poll_delay;
+}
+
+MachineInstance *ClockworkInterpreter::settings() { return _settings; }
+
 
 void usage(int argc, char const *argv[])
 {
@@ -192,8 +212,10 @@ void semantic_analysis() {
 	settings_class->initial_state = State("ready");
 	settings_class->disableAutomaticStateChanges();
 	settings_class->properties.add("INFO", "Clockwork host", SymbolTable::ST_REPLACE);
-	settings_class->properties.add("NAME", host_name, SymbolTable::ST_REPLACE);
-	settings_class->properties.add("VERSION", "0.0", SymbolTable::ST_REPLACE);
+	settings_class->properties.add("HOST", host_name, SymbolTable::ST_REPLACE);
+	settings_class->properties.add("VERSION", "0.8", SymbolTable::ST_REPLACE);
+	settings_class->properties.add("CYCLE_DELAY", 5000, SymbolTable::ST_REPLACE);
+	settings_class->properties.add("POLLING_DELAY", 10000, SymbolTable::ST_REPLACE);
     
     MachineClass *cw_class = new MachineClass("CLOCKWORK");
     cw_class->states.push_back("ready");
@@ -359,6 +381,11 @@ void semantic_analysis() {
     mc_external->options["PORT"] = 5600;
     mc_external->options["PROTOCOL"] = "raw";
     
+    MachineInstance*settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
+    machines["SYSTEM"] = settings;
+    settings->setProperties(settings_class->properties);
+    ClockworkInterpreter::instance()->setup(settings);
+
     std::map<std::string, MachineInstance*> machine_instances;
     
     std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
@@ -887,12 +914,6 @@ void initialise_machines() {
 				m->enable();
             }
         }
-    }
-    
-    // check if a host info structure has been made
-	bool sysinfo = machine_classes.count("SYSTEMSETTINGS") > 0;
-    if (!sysinfo) {
-        
     }
 
     

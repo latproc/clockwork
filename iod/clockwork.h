@@ -29,6 +29,24 @@ extern int num_errors;
 
 int loadConfig(int argc, char const *argv[]);
 
-void initialise_machines(); 
+void initialise_machines();
+
+class ClockworkInterpreter {
+public:
+    static ClockworkInterpreter* instance();
+    void setup(MachineInstance *new_settings);
+    MachineInstance *settings();
+    
+    Value *cycle_delay;
+    Value *default_poll_delay;
+private:
+    ClockworkInterpreter();
+    ClockworkInterpreter(const ClockworkInterpreter&);
+    ClockworkInterpreter &operator =(const ClockworkInterpreter&);
+    static ClockworkInterpreter *_instance;
+
+    MachineInstance *_settings;
+};
+
 
 #endif
