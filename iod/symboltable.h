@@ -58,6 +58,8 @@ public:
     static int TIMER;
     static int VARIABLE;
     static int PUBLISHER;
+    static int POLLING_DELAY;
+    static int CYCLE_DELAY;
 };
 
 class SymbolTable {

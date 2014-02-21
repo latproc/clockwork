@@ -50,6 +50,8 @@ int ClockworkToken::VARIABLE;
 int ClockworkToken::CONSTANT;
 int ClockworkToken::tokCONDITION;
 int ClockworkToken::PUBLISHER;
+int ClockworkToken::POLLING_DELAY;
+int ClockworkToken::CYCLE_DELAY;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -64,6 +66,8 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
         ClockworkToken::tokCONDITION = _instance->getTokenId("CONDITION");
         ClockworkToken::PUBLISHER = _instance->getTokenId("PUBLISHER");
+        ClockworkToken::PUBLISHER = _instance->getTokenId("POLLING_DELAY");
+        ClockworkToken::PUBLISHER = _instance->getTokenId("CYCLE_DELAY");
     }
     return _instance;
 }
