@@ -1114,7 +1114,8 @@ bool MachineInstance::processAll(PollType which) {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > 250) return false; // ran out of time to finish
+            if (now_t - start_processing > 500)
+                return false; // ran out of time to finish
             count = block_size;
         }
     }
@@ -1145,7 +1146,7 @@ bool MachineInstance::checkStableStates() {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > 250) return false; // ran out of time to finish
+            if (now_t - start_processing > 500) return false; // ran out of time to finish
             count = block_size;
         }
     }
