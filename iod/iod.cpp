@@ -160,14 +160,30 @@ bool setup_signals()
 
 struct ProcessingThread {
     void operator()();
-    ProcessingThread(ControlSystemMachine &m);
+    ProcessingThread(ControlSystemMachine &m, long delay);
     void stop() { program_done = true; }
+	void checkAndUpdateCycleDelay();
 
 	ControlSystemMachine &machine;
     int sequence;
+	long cycle_delay;
 };
 
-ProcessingThread::ProcessingThread(ControlSystemMachine &m): machine(m), sequence(0) {	}
+ProcessingThread::ProcessingThread(ControlSystemMachine &m, long delay)
+	: machine(m), sequence(0), cycle_delay(delay) {	
+}
+
+void ProcessingThread::checkAndUpdateCycleDelay() {
+	Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+	long delay = 100;
+	if (cycle_delay_v && cycle_delay_v->iValue >= 100) 
+		delay = cycle_delay_v->iValue;
+	if (delay != cycle_delay) {
+		ECInterface::FREQUENCY = 1000000 / delay;
+		ECInterface::instance()->start();
+		cycle_delay = delay;
+	}
+}
 
 void ProcessingThread::operator()()  {
 	
@@ -260,6 +276,7 @@ void ProcessingThread::operator()()  {
 			//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
 			//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
 			//}
+			checkAndUpdateCycleDelay();
 		}
 		std::cout << std::flush;
 //		model_mutex.lock();
@@ -546,8 +563,11 @@ int main(int argc, char const *argv[])
 
 		return load_result;
 	}
-	
-	ECInterface::FREQUENCY=500;
+
+    Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+	long delay = 2000;
+	if (cycle_delay_v) cycle_delay_v->iValue = delay;
+	ECInterface::FREQUENCY=1000000 / delay;
 
 #ifndef EC_SIMULATOR
 	collectSlaveConfig(true);
@@ -578,7 +598,7 @@ int main(int argc, char const *argv[])
 	load_debug_config();
 	ModbusAddress::message("STARTUP");
 
-    ProcessingThread processMonitor(machine);
+    ProcessingThread processMonitor(machine, delay);
 	//boost::thread process(boost::ref(processMonitor)); 
 	// do not start a thread, simply run this process directly
    	processMonitor();
