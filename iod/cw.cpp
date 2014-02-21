@@ -269,6 +269,7 @@ int main (int argc, char const *argv[])
 	IODCommandListJSON::no_display.insert("NAME");
 	IODCommandListJSON::no_display.insert("STATE");
 	IODCommandListJSON::no_display.insert("PERSISTENT");
+	IODCommandListJSON::no_display.insert("POLLING_DELAY");
 
 	statistics = new Statistics;
     int load_result = 0;
@@ -459,8 +460,13 @@ int main (int argc, char const *argv[])
         struct timeval now;
         gettimeofday(&now,0);
         int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
-        if (1000-delta > 100)
-            usleep(1000-delta-2);
+        
+        // use the clockwork interpreter's current cycle delay
+        Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+        long delay = 100;
+        if (cycle_delay_v && cycle_delay_v->iValue >= 100) delay = cycle_delay_v->iValue;
+        if (delay-delta > 50)
+            usleep(delay-delta-5);
         then = now;
     }
     MQTTInterface::instance()->stop();
