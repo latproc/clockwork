@@ -27,11 +27,13 @@
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 #include <algorithm>
+#include <set>
 #include "value.h"
 
 // Used to generate a unique id for each transmitter.
 long Transmitter::next_id;
 
+std::set<Receiver*> Receiver::working_machines; // machines that have non-empty work queues
 
 // in this form, the message takes ownership of the parameters
 Message::Message(CStringHolder msg, std::list<Value> *param_list) :text(msg.get()), params(0) {
@@ -77,7 +79,8 @@ std::list<Value> *Message::makeParams(Value p1, Value p2, Value p3, Value p4) {
 
 void Receiver::enqueue(const Package &package) { 
 	boost::mutex::scoped_lock(q_mutex);
-	mail_queue.push_back(package); 
+	mail_queue.push_back(package);
+    has_work = true;
 }
 
 std::ostream &Message::operator<<(std::ostream &out) const  {

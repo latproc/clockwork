@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <list>
+#include <set>
 #include <boost/thread/mutex.hpp>
 #include "value.h"
 #include "symboltable.h"
@@ -117,7 +118,7 @@ std::ostream &operator<<(std::ostream &out, const Package &package);
 
 class Receiver : public Transmitter {
 public:
-	Receiver(CStringHolder name_str) : Transmitter(name_str) {}
+	Receiver(CStringHolder name_str) : Transmitter(name_str), has_work(false) {}
     virtual bool receives(const Message&, Transmitter *t) = 0;
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false ) = 0;
 	virtual void enqueue(const Package &package);
@@ -126,7 +127,9 @@ protected:
 		
 std::list<Package> mail_queue;
 static boost::mutex q_mutex;
+bool has_work;
 
+static std::set<Receiver*> working_machines; // machines that have non-empty work queues
 };
 
 
