@@ -1079,17 +1079,23 @@ const Value *MachineInstance::getTimerVal() {
     return mtv->getLastResult();
 }
 
-void MachineInstance::processAll(PollType which) {
+bool MachineInstance::processAll(PollType which) {
+    static bool working = false;
+    static int point_token = ClockworkToken::POINT;
+    static std::list<MachineInstance *>::iterator iter = active_machines.begin();
     bool builtins = false;
+    if (iter == active_machines.begin()) {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        process_time = now.tv_sec * 1000000 + now.tv_usec;
+        if (which == BUILTINS)
+            builtins = true;
+    }
     struct timeval now;
     gettimeofday(&now, NULL);
-    process_time = now.tv_sec * 1000000 + now.tv_usec;
-    
-    if (which == BUILTINS)
-		builtins = true;
-	//MachineInstance::updateAllTimers(which);
-    int point_token = ClockworkToken::POINT;
-    std::list<MachineInstance *>::iterator iter = active_machines.begin();
+    uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
+    const int block_size = 10;
+    int count = block_size;
     while (iter != active_machines.end()) {
         /* To compute a counterrate, the device needs a continual suppliy of input readings. 
             The process of polling the hardware will normally do this but when running a simulation
@@ -1098,31 +1104,53 @@ void MachineInstance::processAll(PollType which) {
         MachineInstance *m = *iter++;
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
-			if (m->has_work || !m->active_actions.empty() ) m->idle();
+            if (m->has_work || !m->active_actions.empty() ) m->idle();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
             }
-		}
-	}
+        }
+        count--;
+        if (count<=0) {
+            struct timeval now;
+            gettimeofday(&now, NULL);
+            uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+            if (now_t - start_processing > 250) return false; // ran out of time to finish
+            count = block_size;
+        }
+    }
+    iter = active_machines.begin(); // prepare for the next cycle
+    return true; // complete the cycle
 }
 
-void MachineInstance::checkStableStates() {
+bool MachineInstance::checkStableStates() {
+    static std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
+
     struct timeval now;
     gettimeofday(&now, NULL);
-    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-
-    std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
+    uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
+    const int block_size = 10;
+    int count = block_size;
     while (iter != MachineInstance::automatic_machines.end()) {
         MachineInstance *m = *iter++;
-		if ( m->enabled() && m->executingCommand() == NULL
-            && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= now_t )
+        if ( m->enabled() && m->executingCommand() == NULL
+            && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= start_processing )
         {
-			m->setStableState();
+            m->setStableState();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
                 m->state_machine->plugin->state_check(m);
             }
         }
-	}
+        count--;
+        if (count<=0) {
+            struct timeval now;
+            gettimeofday(&now, NULL);
+            uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+            if (now_t - start_processing > 250) return false; // ran out of time to finish
+            count = block_size;
+        }
+    }
+    iter = MachineInstance::automatic_machines.begin();
+    return true;
 }
 
 void MachineInstance::displayAutomaticMachines() {

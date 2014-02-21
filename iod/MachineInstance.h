@@ -303,10 +303,10 @@ public:
 	bool needsCheck();
 	void resetTemporaryStringStream();
 
-    static void processAll(PollType which);
+    static bool processAll(PollType which);
 	//static void updateAllTimers(PollType which);
 	//void updateTimer(long dt);
-    static void checkStableStates();
+    static bool checkStableStates();
 	static size_t countAutomaticMachines() { return automatic_machines.size(); }
 	static void displayAutomaticMachines();
 	static void displayAll();

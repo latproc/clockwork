@@ -180,9 +180,9 @@ void ProcessingThread::operator()()  {
             boost::unique_lock<boost::mutex> lock(io_mutex);
             while (!data_ready)
                 io_updated.wait(io_mutex);
-        //}
-        //{
+
 			{
+                enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
 				gettimeofday(&start_t, 0);
 				if (machine_is_ready) {
 					delta = get_diff_in_microsecs(&start_t, &end_t);
@@ -201,33 +201,45 @@ void ProcessingThread::operator()()  {
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
 						statistics->points_processing.add(delta - delta2); delta2 = delta;
-                        
-					    if (!machine_is_ready) {
-							std::cout << "----------- Machine is Ready --------\n";
-							machine_is_ready = true;
-							BOOST_FOREACH(std::string &error, error_messages) {
-								std::cerr << error << "\n";
+                    
+                        if (!machine_is_ready) {
+                            std::cout << "----------- Machine is Ready --------\n";
+                            machine_is_ready = true;
+                            BOOST_FOREACH(std::string &error, error_messages) {
+                                std::cerr << error << "\n";
                                 MessageLog::instance()->add(error.c_str());
-							}
-					    }
+                            }
+                        }
                         {
                             boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
-                            //do {
-				            MachineInstance::processAll(MachineInstance::NO_BUILTINS);
-							gettimeofday(&end_t, 0);
-							delta = get_diff_in_microsecs(&end_t, &start_t);
-							statistics->machine_processing.add(delta - delta2); delta2 = delta;
-						    Dispatcher::instance()->idle();
-							gettimeofday(&end_t, 0);
-							delta = get_diff_in_microsecs(&end_t, &start_t);
-							statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
-                            //} while (delta <100);
-                            Scheduler::instance()->idle();
-                            MachineInstance::checkStableStates();
-                            gettimeofday(&end_t, 0);
-                            delta = get_diff_in_microsecs(&end_t, &start_t);
-                            statistics->auto_states.add(delta - delta2); delta2 = delta;
+                            if (processingState == eIdle)
+                                processingState = ePollingMachines;
+                            if (processingState == ePollingMachines) {
+                                if (MachineInstance::processAll(MachineInstance::NO_BUILTINS))
+                                    processingState = eIdle;
+                            }
                         }
+                        gettimeofday(&end_t, 0);
+                        delta = get_diff_in_microsecs(&end_t, &start_t);
+                        statistics->machine_processing.add(delta - delta2); delta2 = delta;
+                        if (processingState == eIdle){
+                            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
+                            Dispatcher::instance()->idle();
+                        }
+                        gettimeofday(&end_t, 0);
+                        delta = get_diff_in_microsecs(&end_t, &start_t);
+                        statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
+                        if (processingState == eIdle)
+                            processingState = eStableStates;
+                        if (processingState == eStableStates){
+                            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
+                            Scheduler::instance()->idle();
+                            if (MachineInstance::checkStableStates())
+                                processingState = eIdle;
+                        }
+                        gettimeofday(&end_t, 0);
+                        delta = get_diff_in_microsecs(&end_t, &start_t);
+                        statistics->auto_states.add(delta - delta2); delta2 = delta;
 					}
 				}
 				std::cout << std::flush;
@@ -238,10 +250,6 @@ void ProcessingThread::operator()()  {
         
         gettimeofday(&end_t, 0);
         delta = get_diff_in_microsecs(&end_t, &start_t);
-        /*
-         if (delta < 1000000/ECInterface::FREQUENCY)
-            usleep(1000000/ECInterface::FREQUENCY - delta);
-         */
     }
 }
 
