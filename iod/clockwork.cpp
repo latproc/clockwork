@@ -617,7 +617,7 @@ void semantic_analysis() {
         MachineInstance *mi = *am_iter++;
 		if (mi->getStateMachine()) {
 			BOOST_FOREACH(StableState &ss, mi->stable_states) {
-				ss.condition(mi); // evaluate the conditions to prep caches and dependancies
+				/*ss.condition(mi); // evaluate the conditions to prep caches and dependancies
 				for (unsigned int i=0; i<mi->locals.size(); ++i) {
 					MachineInstance *local = mi->locals[i].machine;
 					if (local){
@@ -629,7 +629,7 @@ void semantic_analysis() {
 							}
 						}
 					}
-				}
+				}*/
 				if (ss.condition.predicate->usesTimer(ss.timer_val) )
 					ss.uses_timer = true;
 				bool subcond_uses_timer = false;
