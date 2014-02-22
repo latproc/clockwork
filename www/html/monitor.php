@@ -328,8 +328,8 @@ foreach ($tabs as $tab => $data) {
   $tabdata='<div id="'. $tabname . '" name="' . $tab . '" ><table class="data">' . "\n";
   if ($tab != 'Modules' && $tab != 'Messages')
 		$tabdata .= '<thead><tr><th style="width:80px">Enabled</th>'
-			.	'<th>Name</th><th colspan=2>State</th>'
-			.	'<th>Commands</th><th>Messages</th></tr></thead>';
+			.	'<th style="width:20%">Name</th><th colspan=2 style="width:20%;">State</th>'
+			.	'<th style="width:30%">Commands</th><th>Messages</th></tr></thead>';
   else if ($tab == 'Messages')
 		$tabdata .= '<div>Messages</div>';
   else
@@ -548,6 +548,7 @@ print <<<'EOD'
 	tr.odd { background-color:#e8e8e8 }
 	tr.even { background-color:#ffffff }
 	table.data { border-spacing:0px; }
+	th { text-align:left; }
 	</style>
 	<script type="text/javascript">
 	function refresh() {
