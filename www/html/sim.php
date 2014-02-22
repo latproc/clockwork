@@ -127,6 +127,13 @@ print <<<EOD
 					if (typeof model.z_len != "undefined") zlen = model.z_len;
 					return makeCube(xlen, 50, zlen, 0x0080cc);
 				}
+				else if (model.model == "clamp") {
+					var xlen = 1200;
+					var zlen = 880;
+					if (typeof model.x_len != "undefined") xlen = model.x_len;
+					if (typeof model.z_len != "undefined") zlen = model.z_len;
+					return makeCube(xlen, 50, zlen, 0x0080cc);
+				}
 				else if (model.model == "x-gate") {
 					var ylen = 200;
 					var xlen = 300;
