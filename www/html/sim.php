@@ -98,18 +98,27 @@ print <<<EOD
 				if (model.model == "beam") {
 					return makeCube(10, 10, 1000, 0xff0000);
 				}
+				else if (model.model == "x-beam") {
+					return makeCube(10, 10, 1000, 0xff0000);
+				}
 				else if (model.model == "presence") {
 					var len = 1000;
 					if (typeof model.x_len != "undefined") len = model.x_len; 
 					return makeCube(len, 10, 10, 0xff0000);
 				}
 				else if (model.model == "bale") {
-					return makeCube(1200, 500, 500, 0x0000ff);
+					return makeCube(1200, 500, 500, 0xAAA080);
 				}
-				else if (model.model == "conveyor") {
+				else if (model.model == "x-conveyor") {
 					var len = 500;
 					if (typeof model.x_len != "undefined") len = model.x_len;
 					return makeCube(len, 50, 700, 0x8080cc);
+				}
+				else if (model.model == "z-conveyor") {
+					var xlen = 500;
+					if (typeof model.x_len != "undefined") xlen = model.x_len;
+					if (typeof model.z_len != "undefined") zlen = model.z_len;
+					return makeCube(xlen, 50, zlen, 0x8080cc);
 				}
 				else if (model.model == "carriage") {
 					var xlen = 1200;
@@ -118,13 +127,20 @@ print <<<EOD
 					if (typeof model.z_len != "undefined") zlen = model.z_len;
 					return makeCube(xlen, 50, zlen, 0x0080cc);
 				}
+				else if (model.model == "x-gate") {
+					var ylen = 200;
+					var xlen = 300;
+					if (typeof model.y_len != "undefined") ylen = model.y_len;
+					if (typeof model.x_len != "undefined") xlen = model.x_len;
+					return makeCube(xlen, ylen, 50, 0xcc20cc);
+				}
 				else if (model.model == "cylinder") {
 					var ylen = 100;
 					if (typeof model.y_len != "undefined") ylen = model.y_len;
 					return makeCube(50, ylen, 50, 0xcc00cc);
 				}
 				else {
-					alert("unknown model: " + model);
+					alert("unknown model: " + model.model);
 					return makeCube(50, 50, 50, 0xcccccc);
 				}
 			}
