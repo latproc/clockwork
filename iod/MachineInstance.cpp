@@ -2886,6 +2886,12 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 	else {
         Value property_val(property); // use this value in comparisons for performance
         
+        if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
+            long new_delay = 0;
+            if (property_val.asInteger(new_delay)) *polling_delay = new_delay;
+            return;
+        }
+        
         // often variables are named in the GLOBAL list, if we find the property in that list
         // we try to change ask that machine to set its VALUE.
 		if (state_machine->global_references.count(property)) {
