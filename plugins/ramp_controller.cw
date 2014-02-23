@@ -1,4 +1,68 @@
-RAMPSPEEDCONTROLLER_PLUGIN MACHINE M_Control, settings, fwd_settings, rev_settings, driver, freq_sampler {
+status STANDARDCONTROL;
+speed_settings RampSettings;
+forward_config DirectionSettings;
+reverse_config DirectionSettings;
+power DummyDriver;
+freq DummySampler;
+controller RampSpeedController status, speed_settings, forward_config, reverse_config, power, freq;
+
+DummyDriver MACHINE {
+	OPTION VALUE 0;
+	active FLAG;
+}
+
+DummySampler MACHINE {
+	OPTION position 0;
+	OPTION VALUE 0;
+}
+
+Status MACHINE {
+	ramping STATE;
+	failed_to_start STATE;
+	stopping STATE;
+	monitoring STATE;
+	seeking_position STATE;
+	off INITIAL;
+}
+
+RampSettings MACHINE {
+	OPTION StartTimeout 20000;
+	OPTION min_update_time 20; # minimum time between normal control updates
+	OPTION fwd_step_up 4000; # maximum change per second
+	OPTION fwd_step_down 6000; # maximum change per second
+	OPTION rev_step_up 4000; # maximum change per second
+	OPTION rev_step_down 6000; # maximum change per second
+}
+
+DirectionSettings MACHINE {
+	OPTION SlowSpeed 40;
+	OPTION FullSpeed 1000;
+	OPTION PowerFactor 750; 				 # converts from a speed value to a power value
+	OPTION StoppingDistance 3000;  # distance from the stopping point to begin slowing down
+	OPTION TravelAllowance 0; # amount to travel after the mark before slowing down
+	OPTION tolerance 100;        #stopping position tolerance
+}
+
+ControlState MACHINE {
+	ramping STATE;
+	failed_to_start STATE;
+	stopping STATE;
+	monitoring STATE;
+	seeking_position STATE;
+	off INITIAL;
+}
+
+RAMPSPEEDCONFIGCHECK MACHINE config {
+	error WHEN config.SlowSpeed > 0 && config.FullSpeed < 0;
+	error WHEN config.FullSpeed > 0 && config.SlowSpeed < 0;
+	error WHEN config.FullSpeed < 0 && config.SlowSpeed <= config.FullSpeed;
+	error WHEN config.FullSpeed > 0 && config.FullSpeed <= config.SlowSpeed;
+	error WHEN config.PowerFactor == 0;
+	error WHEN config.PowerFactor > 4000;
+	ok DEFAULT;
+}
+
+RampSpeedController MACHINE M_Control, settings, fwd_settings, rev_settings, driver, freq_sampler {
     PLUGIN "ramp_controller.so";
 
 %BEGIN_PLUGIN
@@ -32,19 +96,22 @@ struct RCData {
     long *stop_position; 
 	long *speed;
 	long *position;
+	long *target_power;
 
 	/* ramp settings */
 	long *min_update_time;
-	long *fwd_steup_up;
+	long *fwd_step_up;		/* ramp increase per second */
 	long *fwd_step_down;
-	long *rev_step_up;
+	long *rev_step_up;		/* downward ramp change per second */
 	long *rev_step_down;
 
 	long *output_value;
 
 	/* internal values for ramping */
-	long target_power;
 	long current_power;
+	uint64_t ramp_start_time;
+	long ramp_start_power;		/* the power level at the point ramping started */
+	long ramp_start_target; 	/* the target that was set when ramping started */
 	uint64_t last_poll;
 
 	/* stop/start control */
@@ -57,6 +124,8 @@ int getInt(void *scope, const char *name, long **addr) {
 	if (!getIntValue(scope, name, addr)) {
 		char buf[100];
 		snprintf(buf, 100, "RampSpeedController: %s is not an integer", name);
+		printf("%s\n", buf);
+		log_message(scope, buf);
 		return 0;
 	}
 	return 1;
@@ -76,13 +145,11 @@ int check_states(void *scope)
 
 		ok = ok && getInt(scope, "SetPoint", &data->set_point);
 		ok = ok && getInt(scope, "StopPosition", &data->stop_position);
+		ok = ok && getInt(scope, "TargetPower", &data->target_power);
 		ok = ok && getInt(scope, "freq_sampler.VALUE", &data->speed);
 		ok = ok && getInt(scope, "freq_sampler.position", &data->position);
 		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
-		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
-		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
-		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
-		ok = ok && getInt(scope, "settings.fwd_steup_up", &data->fwd_steup_up);
+		ok = ok && getInt(scope, "settings.fwd_step_up", &data->fwd_step_up);
 		ok = ok && getInt(scope, "settings.fwd_step_down", &data->fwd_step_down);
 		ok = ok && getInt(scope, "settings.rev_step_up", &data->rev_step_up);
 		ok = ok && getInt(scope, "settings.rev_step_down", &data->rev_step_down);
@@ -92,7 +159,6 @@ int check_states(void *scope)
 		if (!ok) goto plugin_init_error;
 
 		data->state = cs_init;
-		data->target_power = 0;
 		data->current_power = 0;
 		data->last_poll = 0;
 
@@ -100,23 +166,51 @@ int check_states(void *scope)
 		data->set_point = 0;
 		data->stop_position = 0; 
 
+		printf("plugin initialised ok: update time %d\n", *data->min_update_time);
         goto continue_plugin;
 plugin_init_error:
+		printf("plugin failed to initialise\n");
         setInstanceData(scope, 0);
         free(data);
         return PLUGIN_ERROR;
     }
-continue_plugin:
 
+continue_plugin:
 	{
 		struct timeval now;
 		gettimeofday(&now, 0);
 		uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
 
         char *current = getState(scope);
-        printf("test: %s %ld\n", (current)? current : "null", *data->position);
+/*        printf("test: %s %ld\n", (current)? current : "null", *data->target_power); */
 
-		data->last_poll = now_t;
+		if (strcmp(current, "off") == 0 || strcmp(current, "interlocked") == 0) 
+			goto done_checking_states;
+
+		if ( (*data->target_power > 0 && data->current_power >= 0) || (*data->target_power <= 0 && data->current_power > 0) ) {
+			/* enter state */
+			if (data->ramp_state != rs_forward) {
+				data->ramp_state = rs_forward;
+				data->ramp_start_time = now_t;
+				data->ramp_start_power = data->current_power;
+				data->ramp_start_target = *data->target_power;
+			}
+			/* handle changes to the ramp power */
+			if (*data->target_power != data->ramp_start_target) {
+				data->ramp_start_time = now_t;
+				data->ramp_start_power = data->current_power;
+				data->ramp_start_target = *data->target_power;
+			}
+		}
+		else if ( (*data->target_power < 0 && data->current_power <= 0) || (*data->target_power >= 0 && data->current_power < 0) ) {
+			data->ramp_state = rs_reverse;
+			data->ramp_start_time = now_t;
+			data->ramp_start_power = data->current_power;
+		}
+		else
+			data->ramp_state = rs_idle;
+
+		done_checking_states:;
 	}
     return PLUGIN_COMPLETED;
 }
@@ -124,19 +218,59 @@ continue_plugin:
 PLUGIN_EXPORT
 int poll_actions(void *scope) {
 	struct RCData *data = (struct RCData*)getInstanceData(scope);
+	struct timeval now;
+	uint64_t now_t = 0;
+	float new_power = 0.0f;
 	if (!data) return PLUGIN_COMPLETED; /* not initialised yet; nothing to do */
+
+	gettimeofday(&now, 0);
+	now_t = now.tv_sec * 1000000 + now.tv_usec;
+
+	if ( (now_t - data->last_poll)/1000 < *data->min_update_time) return PLUGIN_COMPLETED;
+
+//printf("poll actions %d\n", (now_t - data->last_poll)/1000);
 
 	switch (data->ramp_state) {
 		case rs_forward: {
 			/* calculate new output, set new output */
+			new_power = (float) data->ramp_start_power;
+			if (*data->target_power > data->current_power) {
+				new_power += (float)(now_t - data->ramp_start_time) * *data->fwd_step_up / 1000000.0f;
+				printf("new power: %f\n", new_power);
+				if (new_power > *data->target_power) new_power = *data->target_power;
+			}
+			else {
+				new_power -= (float)(now_t - data->ramp_start_time) * *data->fwd_step_down / 1000000.0f;
+				if (new_power < *data->target_power) new_power = *data->target_power;
+			}
 		}   
 		break;
 		case rs_reverse: {
 			/* calculate new output, set new output */
+			new_power = (float) data->ramp_start_power;
+			if (*data->target_power < data->current_power) {
+				new_power -= (float)(now_t - data->ramp_start_time) * *data->rev_step_up / 1000000.0f;
+				if (new_power < *data->target_power) new_power = *data->target_power;
+			}
+			else {
+				new_power += (float)(now_t - data->ramp_start_time) * *data->fwd_step_down / 1000000.0f;
+				if (new_power > *data->target_power) new_power = *data->target_power;
+			}
 		}   
 		break;
-		default: ;
+		default: 
+		    goto done_polling_actions;
 	}
+
+	if (new_power != data->current_power) {
+		printf("setting power to %d\n", (uint32_t)new_power);
+		setIntValue(scope, "driver.VALUE", (long)new_power);
+		data->current_power = new_power;
+	}
+
+done_polling_actions:
+	data->last_poll = now_t;
+	
     return PLUGIN_COMPLETED;
 }
 
@@ -144,10 +278,11 @@ int poll_actions(void *scope) {
 
 	OPTION SetPoint 0;
 	OPTION StopPosition 0;
+	OPTION TargetPower 0;
 	
 	active FLAG;
+	state ControlState;
 	timer TIMER;
-	state SPEEDCONTROL;
 	
 	# configuration checking
 	fwd_check RAMPSPEEDCONFIGCHECK fwd_settings;
@@ -170,7 +305,7 @@ int poll_actions(void *scope) {
 	    SET driver.active TO off; 
 	    SET state TO off;
 	    SEND reset TO timer;
-			SET M_Control TO Ready;
+		SET M_Control TO Ready;
 	}
 	LEAVE off { 
 	    SET driver.active TO on; 
