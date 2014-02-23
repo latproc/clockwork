@@ -742,8 +742,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 			std::cout << error_str <<  " " << params[1] << "\n";
 			return false;
 		}
-		long group, address, val;
-		char *end;
+		long group, address;
 		if (!params[1].asInteger(group) || !params[2].asInteger(address)) {
 			std::stringstream ss;
 			ss << "malformed modbus command: " << params[0] <<" " << params[1] <<" " << params[2] <<" " << params[3];
