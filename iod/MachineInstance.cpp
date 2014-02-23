@@ -1290,7 +1290,15 @@ void MachineInstance::removeLocal(int index) {
 void MachineInstance::setProperties(const SymbolTable &props) {
     properties.clear();
     SymbolTableConstIterator iter = props.begin();
-    while (iter != props.end()) properties.push_back(*iter++);
+    while (iter != props.end()) {
+        const std::pair<std::string, Value> &p = *iter;
+        properties.push_back(p);
+        if (p.first == "POLLING_DELAY") {
+            long pd;
+            if (p.second.asInteger(pd)) idle_time = pd;
+        }
+        iter++;
+    }
 }
 
 void MachineInstance::setDefinitionLocation(const char *file, int line_no) {
@@ -2408,8 +2416,14 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			else
 				properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
 		}
-		else
+		else {
 			properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
+        }
+        const char *cc = option.first.c_str();
+        if (option.first == "POLLING_DELAY") {
+            long pd;
+            if (option.second.asInteger(pd)) idle_time = pd;
+        }
 	}
 	properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
     if (locals.size() == 0) {
@@ -2889,7 +2903,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
         
         if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
             long new_delay = 0;
-            if (property_val.asInteger(new_delay)) *polling_delay = new_delay;
+            if (property_val.asInteger(new_delay)) idle_time = new_delay;
             if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
                 *MachineInstance::polling_delay = new_delay;
             }
