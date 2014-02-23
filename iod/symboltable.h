@@ -62,6 +62,7 @@ public:
     static int CYCLE_DELAY;
     static int tokVALUE;
     static int tokMessage;
+    static int SYSTEMSETTINGS;
 };
 
 class SymbolTable {

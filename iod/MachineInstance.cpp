@@ -2209,9 +2209,10 @@ void MachineInstance::updateLastEvaluationTime() {
     if (idle_time)
         next_poll = last_state_evaluation_time + idle_time;
     else {
-        long default_polling_delay = 1000;
-        if (polling_delay) default_polling_delay = polling_delay->iValue;
-        next_poll = last_state_evaluation_time + default_polling_delay;
+        if (polling_delay)
+            next_poll = last_state_evaluation_time + polling_delay->iValue;
+        else
+            next_poll = last_state_evaluation_time + MachineInstance::polling_delay->iValue;
     }
 }
 
@@ -2889,7 +2890,9 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
         if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
             long new_delay = 0;
             if (property_val.asInteger(new_delay)) *polling_delay = new_delay;
-            return;
+            if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
+                *MachineInstance::polling_delay = new_delay;
+            }
         }
         
         // often variables are named in the GLOBAL list, if we find the property in that list

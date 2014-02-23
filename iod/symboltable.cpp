@@ -54,6 +54,7 @@ int ClockworkToken::POLLING_DELAY;
 int ClockworkToken::CYCLE_DELAY;
 int ClockworkToken::tokVALUE;
 int ClockworkToken::tokMessage;
+int ClockworkToken::SYSTEMSETTINGS;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -72,6 +73,7 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::CYCLE_DELAY = _instance->getTokenId("CYCLE_DELAY");
         ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
         ClockworkToken::tokMessage = _instance->getTokenId("message");
+        ClockworkToken::SYSTEMSETTINGS = _instance->getTokenId("SYSTEMSETTINGS");
     }
     return _instance;
 }
