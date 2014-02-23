@@ -14,11 +14,16 @@ out=`cat $script | awk '
 	print 
 	}'`
 
-cat "$script" | awk '
-	BEGIN {print "#include \"plugin.inc\""} 
+cat "$script" | awk -v file="$script" '
+	BEGIN {
+		print "#include \"plugin.inc\""
+	} 
 	/^%END_PLUGIN/ {copy=0} 
 	copy==1 
-	$1 ~ /^%BEGIN_PLUGIN/ { copy=1; }  
+	$1 ~ /^%BEGIN_PLUGIN/ { 
+		printf "#line %d \"%s\"\n", NR+1, file
+		copy=1
+	}  
 	' >plugin_$$.c
 
 [ `uname -s` == "Linux" ] && LDFLAGS="-shared -fPIC -Wl,-soname,$out,-undefined,dynamic_lookup"
