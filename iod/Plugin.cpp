@@ -11,7 +11,7 @@ void log_message(cwpi_Scope, const char *m) {
     MessageLog::instance()->add(m);
 }
 
-int getIntValue(cwpi_Scope s, const char *property_name, long *res) {
+int getIntValue(cwpi_Scope s, const char *property_name, long **res) {
     MachineInstance *scope = static_cast<MachineInstance*>(s);
     if (!scope) {
         MessageLog::instance()->add("getIntValue was passed a null instance from a plugin");
@@ -20,7 +20,7 @@ int getIntValue(cwpi_Scope s, const char *property_name, long *res) {
     Value &val = scope->getValue(property_name);
     if (val.kind != Value::t_integer)
         return 0;
-    *res = val.iValue;
+    *res = &val.iValue;
     return 1;
 }
 
@@ -68,6 +68,16 @@ char *getState(cwpi_Scope s) {
 
     std::string state(scope->getCurrentStateString());
     return strdup(state.c_str());
+}
+
+void *getNamedScope(cwpi_Scope s, const char *name) {
+    MachineInstance *scope = static_cast<MachineInstance*>(s);
+    if (!scope) {
+        MessageLog::instance()->add("getInstanceData was passed a null instance from a plugin");
+        return 0;
+    }
+
+    return scope->lookup(name);
 }
 
 void *getInstanceData(cwpi_Scope s) {

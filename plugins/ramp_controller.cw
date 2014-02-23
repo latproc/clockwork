@@ -66,11 +66,13 @@ RampSpeedController MACHINE M_Control, settings, fwd_settings, rev_settings, dri
     PLUGIN "ramp_controller.so";
 
 %BEGIN_PLUGIN
+#include <Plugin.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <math.h>
 
 struct RCData {
 	enum { 
@@ -107,12 +109,28 @@ struct RCData {
 
 	long *output_value;
 
+	long *fwd_tolerance;
+	long *fwd_stopping_distance;
+	long *fwd_slow_speed;
+	long *fwd_full_speed;
+	long *fwd_power_factor;
+	long *fwd_travel_allowance;
+
+	long *rev_tolerance;
+	long *rev_stopping_distance;
+	long *rev_slow_speed;
+	long *rev_full_speed;
+	long *rev_power_factor;
+	long *rev_travel_allowance;
+
 	/* internal values for ramping */
 	long current_power;
 	uint64_t ramp_start_time;
 	long ramp_start_power;		/* the power level at the point ramping started */
 	long ramp_start_target; 	/* the target that was set when ramping started */
 	uint64_t last_poll;
+	long tolerance;
+	long last_set_point;
 
 	/* stop/start control */
     long stop_marker;
@@ -128,6 +146,7 @@ int getInt(void *scope, const char *name, long **addr) {
 		log_message(scope, buf);
 		return 0;
 	}
+	printf("%s: %d\n", name, **addr);
 	return 1;
 }
 
@@ -136,6 +155,9 @@ PLUGIN_EXPORT
 int check_states(void *scope)
 {
 	int ok = 1;
+	long calculated_target_power = 0;
+	long calculated_set_point = 0;
+	long calculated_stop_position = 0;
 	struct RCData *data = (struct RCData*)getInstanceData(scope);
 	if (!data) {
 		// one-time initialisation
@@ -156,6 +178,20 @@ int check_states(void *scope)
 
 		ok = ok && getInt(scope, "driver.VALUE", &data->output_value);
 
+		ok = ok && getInt(scope, "fwd_settings.SlowSpeed", &data->fwd_slow_speed);
+		ok = ok && getInt(scope, "fwd_settings.FullSpeed", &data->fwd_full_speed);
+		ok = ok && getInt(scope, "fwd_settings.PowerFactor", &data->fwd_power_factor);
+		ok = ok && getInt(scope, "fwd_settings.StoppingDistance", &data->fwd_stopping_distance);
+		ok = ok && getInt(scope, "fwd_settings.TravelAllowance", &data->fwd_travel_allowance);
+		ok = ok && getInt(scope, "fwd_settings.tolerance", &data->fwd_tolerance);
+
+		ok = ok && getInt(scope, "rev_settings.SlowSpeed", &data->rev_slow_speed);
+		ok = ok && getInt(scope, "rev_settings.FullSpeed", &data->rev_full_speed);
+		ok = ok && getInt(scope, "rev_settings.PowerFactor", &data->rev_power_factor);
+		ok = ok && getInt(scope, "rev_settings.StoppingDistance", &data->rev_stopping_distance);
+		ok = ok && getInt(scope, "rev_settings.TravelAllowance", &data->rev_travel_allowance);
+		ok = ok && getInt(scope, "rev_settings.tolerance", &data->rev_tolerance);
+
 		if (!ok) goto plugin_init_error;
 
 		data->state = cs_init;
@@ -163,11 +199,15 @@ int check_states(void *scope)
 		data->last_poll = 0;
 
 		data->stop_marker = 0;
-		data->set_point = 0;
-		data->stop_position = 0; 
+		setIntValue(scope, "SetPoint", 0);
+		setIntValue(scope, "StopPosition", 0);
+		data->last_set_point = *data->set_point;
+		calculated_set_point = data->last_set_point;
+		calculated_target_power = *data->target_power;
 
 		printf("plugin initialised ok: update time %d\n", *data->min_update_time);
         goto continue_plugin;
+
 plugin_init_error:
 		printf("plugin failed to initialise\n");
         setInstanceData(scope, 0);
@@ -182,12 +222,83 @@ continue_plugin:
 		uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
 
         char *current = getState(scope);
-/*        printf("test: %s %ld\n", (current)? current : "null", *data->target_power); */
+        printf("test: %s %ld\n", (current)? current : "null", *data->target_power); 
 
 		if (strcmp(current, "off") == 0 || strcmp(current, "interlocked") == 0) 
 			goto done_checking_states;
 
-		if ( (*data->target_power > 0 && data->current_power >= 0) || (*data->target_power <= 0 && data->current_power > 0) ) {
+		if ( (*data->stop_position != 0) 
+				&& ( (data->state == cs_off) || (data->state == cs_seeking && *data->set_point == 0) ) ) {
+			// also set control to Resetting
+			data->state = cs_seeking;
+			if (*data->stop_position > *data->position + *data->fwd_tolerance) {
+				data->stop_marker = *data->stop_position + *data->fwd_stopping_distance;
+				if (*data->stop_position - *data->position < *data->fwd_stopping_distance)
+					calculated_set_point = *data->fwd_slow_speed;
+				else
+					calculated_set_point = *data->fwd_full_speed;
+				calculated_target_power = *data->set_point * *data->fwd_power_factor / 100;
+				data->tolerance = *data->fwd_tolerance;
+			}
+			else if (*data->stop_position < *data->position - *data->rev_tolerance) {
+				data->stop_marker = *data->stop_position + *data->rev_stopping_distance;
+				if (calculated_stop_position - *data->position < *data->rev_stopping_distance)
+					calculated_set_point = *data->rev_slow_speed;
+				else
+					calculated_set_point = *data->rev_full_speed;
+				calculated_target_power = *data->set_point * *data->rev_power_factor / 100;
+				data->tolerance = *data->rev_tolerance;
+			}
+
+			setIntValue(scope, "StopPosition", calculated_stop_position);
+			setIntValue(scope, "SetPoint", calculated_set_point);
+			data->last_set_point = *data->set_point;
+		}
+
+		if (data->last_set_point != *data->set_point) { /* setpoint has changed */
+			data->last_set_point = *data->set_point;
+			calculated_target_power = *data->set_point * *data->rev_power_factor / 100;
+		}
+
+		if ( data->state == cs_seeking ) {
+			if ( ( data->current_power > 0 
+					&& *data->position <= data->stop_marker + *data->fwd_travel_allowance )
+			  || (data ->current_power < 0
+					&& *data->position >= data->stop_marker - *data->rev_travel_allowance ) ) {
+				/* coasting */
+			}
+			else if ( ( data->current_power > 0
+					&& *data->position >= *data->stop_position  + *data->fwd_tolerance  )
+				|| ( data->current_power < 0
+					&& *data->position >= *data->stop_position - *data->rev_tolerance ) )
+			{
+				/* force a stop */
+				calculated_set_point = 0;
+				calculated_target_power = 0;
+				data->current_power = 0;
+				data->stop_marker = 0;
+				if ( fabs(*data->speed) < 50 ) {
+					calculated_stop_position = 0;
+					/* set control to ready */
+					data->state = cs_off;
+					setIntValue(scope, "StopPosition", 0); 
+				}
+				setIntValue(scope, "TargetPower", calculated_target_power);
+				setIntValue(scope, "driver.VALUE", calculated_target_power);
+			}
+			else {
+				/* begin ramping down */
+				if (data->current_power > 0)
+					calculated_target_power = *data->fwd_slow_speed * *data->fwd_power_factor / 100;
+				else 
+					calculated_target_power = *data->rev_slow_speed * *data->rev_power_factor / 100;
+				setIntValue(scope, "TargetPower", calculated_target_power);
+			}
+		}
+
+		/* ramping calculation */
+		if ( (*data->target_power > 0 && data->current_power >= 0) 
+				|| (*data->target_power <= 0 && data->current_power > 0) ) {
 			/* enter state */
 			if (data->ramp_state != rs_forward) {
 				data->ramp_state = rs_forward;
@@ -202,7 +313,8 @@ continue_plugin:
 				data->ramp_start_target = *data->target_power;
 			}
 		}
-		else if ( (*data->target_power < 0 && data->current_power <= 0) || (*data->target_power >= 0 && data->current_power < 0) ) {
+		else if ( (*data->target_power < 0 && data->current_power <= 0) 
+				|| (*data->target_power >= 0 && data->current_power < 0) ) {
 			data->ramp_state = rs_reverse;
 			data->ramp_start_time = now_t;
 			data->ramp_start_power = data->current_power;
@@ -330,33 +442,12 @@ done_polling_actions:
 		SET active TO off;
 	}
     
-	# starting the conveyor to move to a preset point
-
-	starting_to_position WHEN SELF IS waiting 
-	            && (state IS off || state IS seeking_position && SetPoint == 0) AND StopPosition != 0;
-
 	# switching operating modes
 	startupError WHEN SELF IS starting && TIMER > settings.StartTimeout;
 	starting WHEN state IS ramping && freq_sampler.VALUE < 5 AND freq_sampler.VALUE > -5;
 
 	ENTER StartupError { SET state TO failed_to_start; SET M_Control TO Error }
 
-	changing WHEN SELF IS waiting AND state != seeking_position && VALUE != 0 && Target != VALUE;
-	stopping WHEN SELF IS waiting AND (state == ramping || state == monitoring || state == seeking_position) 
-	        AND LastSent != 0 AND Target == VALUE && VALUE == 0;
-	at_speed WHEN SELF IS updated AND state IS ramping AND SpeedPercent > 90 AND SpeedPercent < 110;
-		stopped WHEN SELF IS waiting AND state IS stopping AND freq_sampler.VALUE < 5 && freq_sampler.VALUE > -5;
-   
- 	# stopping at a position (state == seeking_position)
-	# (these rely on tolerance having been set before the state is set to seeking_position)
-
- 	driving_fwd WHEN state IS seeking_position AND VALUE > 0 AND freq_sampler.position <= StopMarker + fwd_settings.TravelAllowance;
- 	driving_rev WHEN state IS seeking_position AND VALUE < 0 AND freq_sampler.position >= StopMarker - rev_settings.TravelAllowance;
- 	at_position WHEN state IS seeking_position AND freq_sampler.position < StopPosition + tolerance AND freq_sampler.position > StopPosition - tolerance;
- 	ramping_down WHEN SELF IS waiting AND state IS seeking_position && SetPoint != 0;
- 	abort WHEN state IS seeking_position 
- 	        AND ( (VALUE > 0 AND freq_sampler.position > StopPosition) || (VALUE < 0 AND freq_sampler.position < StopPosition));
- 	
  	COMMAND halt {
 		SetPoint := 0; 
 		Current := 0; 
@@ -372,21 +463,7 @@ done_polling_actions:
 		}
  	}
 
-	# monitoring
-	updated WHEN SELF IS updating AND Target != 0;
-	updating WHEN (state == monitoring || state == ramping) && SELF IS waiting AND timer IS expired;
-	check WHEN SELF IS waiting AND TIMER > 1000;
 	waiting DEFAULT;
-    
-	ENTER updated { SpeedPercent := 100 * freq_sampler.VALUE / Target; }
-	ENTER updating {
-		timer.timeout := settings.min_update_time;
-		SEND start TO timer;
-	}
-       
-	ENTER waiting {
-		EstimatedSpeed := freq_sampler.VALUE;
-	}
 
 	COMMAND stop { 
 		StopPosition := 0; # disable stop position
