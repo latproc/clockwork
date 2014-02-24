@@ -194,6 +194,7 @@ void ProcessingThread::operator()()  {
 	unsigned long sync = 0;
 	while (!program_done) {
 		pause();
+		enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
 		struct timeval start_t, end_t;
 #if 0
         {
@@ -224,8 +225,7 @@ void ProcessingThread::operator()()  {
 			cycle_delay_stat->add(delta);
 		}
 		if (sync != ECInterface::sig_alarms) {
-		
-	    	ECInterface::instance()->collectState();
+	    ECInterface::instance()->collectState();
 			IOComponent::processAll();
 			gettimeofday(&end_t, 0);
 
@@ -234,42 +234,48 @@ void ProcessingThread::operator()()  {
 			delta2 = delta;
 		
 #ifdef EC_SIMULATOR
-	        checkInputs(); // simulated wiring between inputs and outputs
+			checkInputs(); // simulated wiring between inputs and outputs
 #endif
 			if (machine.connected()) {
-	            //MachineInstance::processAll(MachineInstance::BUILTINS);
-
 				gettimeofday(&end_t, 0);
 				delta = get_diff_in_microsecs(&end_t, &start_t);
 				statistics->points_processing.add(delta - delta2); delta2 = delta;
 
-			    if (!machine_is_ready) {
+				if (!machine_is_ready) {
 					std::cout << "----------- Machine is Ready --------\n";
 					machine_is_ready = true;
 					BOOST_FOREACH(std::string &error, error_messages) {
 						std::cerr << error << "\n";
 						MessageLog::instance()->add(error.c_str());
 					}
-			    }
+				}
 				{
-					//do {
-			            MachineInstance::processAll(MachineInstance::NO_BUILTINS);
+					if (processingState == eIdle)
+						processingState = ePollingMachines;
+					if (processingState == ePollingMachines) {
+						if (MachineInstance::processAll(MachineInstance::NO_BUILTINS))
+							processingState = eIdle;
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
 						statistics->machine_processing.add(delta - delta2); delta2 = delta;
-					    Dispatcher::instance()->idle();
+					}
+					if (processingState == eIdle) {
+						Dispatcher::instance()->idle();
+						Scheduler::instance()->idle();
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
 						statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
-					//} while (delta <100);
-					Scheduler::instance()->idle();
-					MachineInstance::checkStableStates();
-					gettimeofday(&end_t, 0);
-					delta = get_diff_in_microsecs(&end_t, &start_t);
-					statistics->auto_states.add(delta - delta2); delta2 = delta;
+						processingState = eStableStates;
+					}	
+					if (processingState == eStableStates) {
+						MachineInstance::checkStableStates();
+						gettimeofday(&end_t, 0);
+						delta = get_diff_in_microsecs(&end_t, &start_t);
+						statistics->auto_states.add(delta - delta2); delta2 = delta;
+					}
 				}
 			}
-   			ECInterface::instance()->sendUpdates();
+   		ECInterface::instance()->sendUpdates();
 			++sync;
 			if (sync != ECInterface::sig_alarms) sync = ECInterface::sig_alarms-1;
 			//else {
