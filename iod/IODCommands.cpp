@@ -530,6 +530,18 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         std::stringstream ss;
 		if (m) {
 			m->send( new Message(strdup(command.c_str())), m, false);
+            if (m->_type == "LIST") {
+                for (unsigned int i=0; i<m->parameters.size(); ++i) {
+                    MachineInstance *entry = m->parameters[i].machine;
+                    if (entry) m->send(new Message(strdup(command.c_str())), entry);
+                }
+            }
+            else if (m->_type == "REFERENCE" && m->locals.size()) {
+                for (unsigned int i=0; i<m->locals.size(); ++i) {
+                    MachineInstance *entry = m->locals[i].machine;
+                    if (entry) m->send(new Message(strdup(command.c_str())), entry);
+                }
+            }
 			ss << command << " sent to " << m->getName() << std::flush;
 			result_str = ss.str();
 			return true;
