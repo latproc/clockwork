@@ -16,7 +16,7 @@ out=`cat $script | awk '
 
 cat "$script" | awk -v file="$script" '
 	BEGIN {
-		print "#include \"plugin.inc\""
+#		print "#include \"plugin.inc\""
 	} 
 	/^%END_PLUGIN/ {copy=0} 
 	copy==1 
