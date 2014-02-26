@@ -586,8 +586,12 @@ public:
     LongBuffer times;
 	LongBuffer readings;
     FloatBuffer positions;
+    MachineInstance *counter_machine;
+    Value *noise_tolerance_val;
+    long zero_count;
     CounterRateFilterSettings(unsigned int sz) : position(0), velocity(0), property_changed(false),
-				noise_tolerance(20),last_sent(0), start_t(0), times(sz), readings(8), positions(sz) {
+				noise_tolerance(20),last_sent(0), start_t(0), times(sz), readings(8), positions(sz),
+                counter_machine(0), noise_tolerance_val(0), zero_count(0) {
         struct timeval now;
         gettimeofday(&now, 0);
         start_t = now.tv_sec * 1000000 + now.tv_usec;
@@ -613,6 +617,17 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value)
         if (!new_value.asInteger(val)) val = 0;
         if (settings->property_changed) {
             settings->property_changed = false;
+        }
+        
+        //reset once the buffers have been filled with zeros
+        if (!val) ++settings->zero_count;
+        else if (settings->zero_count > settings->times.length()) {
+            settings->zero_count = 0;
+            // reset buffers;
+            settings->start_t = settings->update_t;
+            settings->times.reset();
+            settings->readings.reset();
+            settings->positions.reset();
         }
         settings->readings.append(val);
         struct timeval now;
@@ -663,7 +678,7 @@ void RateEstimatorInstance::setNeedsCheck() {
 }
 
 void RateEstimatorInstance::idle() {
-    if (needsCheck() || (process_time - settings->update_t > 100000 && !io_interface) ) {
+    if (needsCheck() || (process_time - settings->update_t > idle_time && !io_interface) ) {
         MachineInstance *pos_m = lookup(parameters[0]);
         long pos;
         if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
@@ -675,10 +690,12 @@ void RateEstimatorInstance::idle() {
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
     settings = new CounterRateFilterSettings(4);
+    if (!idle_time) idle_time = 50000;
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 : MachineInstance(name, type, instance_type) {
     settings = new CounterRateFilterSettings(4);
+    if (!idle_time) idle_time = 50000;
 }
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
@@ -698,6 +715,18 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
         if (settings->property_changed) {
             settings->property_changed = false;
         }
+        
+        //reset once the buffers have been filled with zeros
+        if (!val) ++settings->zero_count;
+        else if (settings->zero_count > settings->times.length()) {
+            settings->zero_count = 0;
+            // reset buffers;
+            settings->start_t = settings->update_t;
+            settings->times.reset();
+            settings->readings.reset();
+            settings->positions.reset();
+        }
+
         uint64_t delta_t = settings->update_t - settings->start_t;
         settings->times.append(delta_t);
         settings->position = (int32_t)val;
@@ -1104,7 +1133,8 @@ bool MachineInstance::processAll(PollType which) {
         MachineInstance *m = *iter++;
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
-            if (m->has_work || !m->active_actions.empty() ) m->idle();
+            //if (m->has_work || !m->active_actions.empty() )
+                m->idle();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
             }
@@ -2903,7 +2933,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
         
         if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
             long new_delay = 0;
-            if (property_val.asInteger(new_delay)) idle_time = new_delay;
+            if (new_value.asInteger(new_delay)) idle_time = new_delay;
             if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
                 *MachineInstance::polling_delay = new_delay;
             }
