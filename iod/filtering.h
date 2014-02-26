@@ -13,6 +13,7 @@ public:
     float distance(int idx_a, int idx_b) const;
     float average(int n);
     int length();
+    void reset();
     Buffer(int buf_size);
 	virtual ~Buffer() { }
 private:
