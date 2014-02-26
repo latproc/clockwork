@@ -365,14 +365,15 @@ public:
 
 	// debug messaging
 	void setDebug(bool which);
+	bool isActive() { return is_active; }
 
-    IOComponent *io_interface;
-    MQTTModule *mq_interface;
+	IOComponent *io_interface;
+	MQTTModule *mq_interface;
 	MachineInstance *owner;
 
-    SymbolTable properties;
-    std::string definition_file;
-    int definition_line;
+	SymbolTable properties;
+	std::string definition_file;
+	int definition_line;
 	struct timeval start_time; // time the current state started
 	struct timeval disabled_time; // time the current state started
 
@@ -437,6 +438,8 @@ private:
     friend class PopListBackValue;
     friend class PopListFrontValue;
     friend class ItemAtPosValue;
+
+		friend int changeState(void *s, const char *new_state);
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
