@@ -77,7 +77,9 @@ void *getNamedScope(cwpi_Scope s, const char *name) {
         return 0;
     }
 
-    return scope->lookup(name);
+    MachineInstance *res = scope->lookup(name);
+    if (!res) MessageLog::instance()->add("getNamedScope failed lookup");
+    return res;
 }
 
 void *getInstanceData(cwpi_Scope s) {
