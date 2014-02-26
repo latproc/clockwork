@@ -12,6 +12,10 @@ int Buffer::length()
     return (front - back + BUFSIZE) % BUFSIZE + 1;
 }
 
+void Buffer::reset() {
+    front = back = -1;
+}
+
 float Buffer::difference(int idx_a, int idx_b) const
 {
   float a = getFloatAtOffset(idx_a);
