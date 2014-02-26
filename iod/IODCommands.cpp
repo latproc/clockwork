@@ -284,9 +284,10 @@ bool IODCommandResume::run(std::vector<Value> &params) {
         //if (params.size() == 4) {
 		    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		    if (m) {
-                if (params.size() == 3)
+                if (params.size() != 4)
 				{
-                    m->setValue("VALUE", params[2]);
+                    error_str = "Usage: PROPERTY machine property value";
+                    return false;
 				}
                 else if (params.size() == 4) {
                     if (m->debug()) {
