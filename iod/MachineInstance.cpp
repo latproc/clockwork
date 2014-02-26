@@ -718,7 +718,7 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
         
         //reset once the buffers have been filled with zeros
         if (!val) ++settings->zero_count;
-        else if (settings->zero_count > settings->times.length()) {
+        else if (false && settings->zero_count > settings->times.length()) {
             settings->zero_count = 0;
             // reset buffers;
             settings->start_t = settings->update_t;
