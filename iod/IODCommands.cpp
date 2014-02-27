@@ -280,6 +280,30 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 		}
 	}
 
+    bool IODCommandGetProperty::run(std::vector<Value> &params) {
+	    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
+	    if (m) {
+			if (params.size() != 3) {
+				error_str = "Error: usage is GET machine property";
+				return false;
+			}
+			Value &v = m->getValue(params[2].asString());
+			if (v == SymbolTable::Null) {
+				error_str = "Error: property not found";
+				return false;
+			}
+			else {
+				result_str = v.asString();
+				return true;
+			}
+		}
+		else {
+			error_str = "Error: Unknown device";
+			return false;
+		}
+		
+	}
+
     bool IODCommandProperty::run(std::vector<Value> &params) {
         //if (params.size() == 4) {
 		    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());

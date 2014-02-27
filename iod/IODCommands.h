@@ -41,6 +41,10 @@ struct IODCommandGetStatus : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandGetProperty : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 struct IODCommandSetStatus : public IODCommand {
 	bool run(std::vector<Value> &params);
 };

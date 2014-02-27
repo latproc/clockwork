@@ -80,6 +80,7 @@ void IODCommandThread::operator()() {
             char *data = (char *)malloc(size+1);
             memcpy(data, request.data(), size);
             data[size] = 0;
+std::cout << data << "\n";
             
             std::list<Value> parts;
             int count = 0;
@@ -123,8 +124,11 @@ void IODCommandThread::operator()() {
                 if (count == 1 && ds == "LIST") {
                     command = new IODCommandList;
                 }
-                else if (ds == "GET" && count>1) {
+                else if (ds == "GET" && count==2) {
                     command = new IODCommandGetStatus;
+                }
+                else if (ds == "GET" && count==3) {
+                    command = new IODCommandGetProperty;
                 }
                 else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
                     command = new IODCommandModbusExport;
