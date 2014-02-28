@@ -1108,7 +1108,7 @@ const Value *MachineInstance::getTimerVal() {
     return mtv->getLastResult();
 }
 
-bool MachineInstance::processAll(PollType which) {
+bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     static bool working = false;
     static int point_token = ClockworkToken::POINT;
     static std::list<MachineInstance *>::iterator iter = active_machines.begin();
@@ -1123,7 +1123,7 @@ bool MachineInstance::processAll(PollType which) {
     struct timeval now;
     gettimeofday(&now, NULL);
     uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-    const int block_size = 10;
+    const int block_size = 20;
     int count = block_size;
     while (iter != active_machines.end()) {
         /* To compute a counterrate, the device needs a continual suppliy of input readings. 
@@ -1133,7 +1133,7 @@ bool MachineInstance::processAll(PollType which) {
         MachineInstance *m = *iter++;
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
-            //if (m->has_work || !m->active_actions.empty() )
+            if (m->hasWork() || !m->active_actions.empty() )
                 m->idle();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
@@ -1144,7 +1144,7 @@ bool MachineInstance::processAll(PollType which) {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > 500)
+            if (now_t - start_processing > max_time)
                 return false; // ran out of time to finish
             count = block_size;
         }
@@ -1153,13 +1153,13 @@ bool MachineInstance::processAll(PollType which) {
     return true; // complete the cycle
 }
 
-bool MachineInstance::checkStableStates() {
+bool MachineInstance::checkStableStates(uint32_t max_time) {
     static std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
 
     struct timeval now;
     gettimeofday(&now, NULL);
     uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-    const int block_size = 10;
+    const int block_size = 5;
     int count = block_size;
     while (iter != MachineInstance::automatic_machines.end()) {
         MachineInstance *m = *iter++;
@@ -1176,7 +1176,7 @@ bool MachineInstance::checkStableStates() {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > 500) return false; // ran out of time to finish
+            if (now_t - start_processing > max_time) return false; // ran out of time to finish
             count = block_size;
         }
     }
