@@ -700,6 +700,24 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 
 
+    bool IODCommandTracing::run(std::vector<Value> &params) {
+		if (params.size() != 2) {
+			std::stringstream ss;
+			ss << "usage: TRACING ON|OFF" << std::flush;
+			std::string s = ss.str();
+			error_str = s;
+			return false;
+		}
+        if (params[1] == "ON") {
+            enable_tracing(true);
+        }
+        else {
+            enable_tracing(false);
+        }
+		result_str = "OK";
+		return true;
+    }
+
     bool IODCommandDebugShow::run(std::vector<Value> &params) {
 		std::stringstream ss;
 		ss << "Debug status: \n" << *LogState::instance() << "\n" << std::flush;

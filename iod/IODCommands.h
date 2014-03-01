@@ -104,6 +104,10 @@ struct IODCommandModbus : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandTracing : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 struct IODCommandModbusExport : public IODCommand {
 	bool run(std::vector<Value> &params);
 };

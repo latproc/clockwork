@@ -59,6 +59,10 @@ int keep_statistics();
 const char *device_name();
 void set_device_name(const char *new_name);
     
+void enable_tracing(bool which);
+bool tracing();
+
+    
 #ifdef __cplusplus
 }
 #endif
