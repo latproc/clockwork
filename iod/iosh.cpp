@@ -253,10 +253,12 @@ void initialise_commands() {
     commands.push_back("GET");
     commands.push_back("LIST");
     commands.push_back("MESSAGES");
+    commands.push_back("MODBUS");
     commands.push_back("PROPERTY");
     commands.push_back("RESUME");
     commands.push_back("SEND");
     commands.push_back("SET");
+    commands.push_back("TRACING");
     commands.push_back("TOGGLE");
 }
 
