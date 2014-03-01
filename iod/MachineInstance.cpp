@@ -2049,7 +2049,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
-	if (!needsCheck()) setNeedsCheck();
+	setNeedsCheck();
 //	if (active_actions.back() != a) {
 //		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 //		return;
