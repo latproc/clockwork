@@ -158,6 +158,10 @@ Action::Status IntersectSetOperation::doOperation() {
         return status;
     }
     if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+    MachineInstance *last_machine_a = 0;
+    MachineInstance *last_machine_b = 0;
+    Value last_a;
+    Value last_b;
     unsigned int i=0;
     while (i < source_a_machine->parameters.size()) {
         Value &a(source_a_machine->parameters.at(i).val);
@@ -165,12 +169,31 @@ Action::Status IntersectSetOperation::doOperation() {
         if (!mi) { ++i; continue; }
         assert(a.cached_machine);
         setListItem(source_a_machine, a);
+        if (last_machine_a && !remove_selected) {
+            if (MachineIncludesParameter(source_a_machine,last_a)) {
+                source_a_machine->addDependancy(last_machine_a);
+                last_machine_a->listenTo(source_a_machine);
+                last_machine_a->addDependancy(source_a_machine);
+            }
+        }
+        last_a = a;
+        last_machine_a = mi;
+        
         for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
             Value &b(source_b_machine->parameters.at(j).val);
             if (!b.cached_machine) owner->lookup(b);
             if (!b.cached_machine) { continue; }
             Value v1(a);
             setListItem(source_b_machine, b);
+            if (last_machine_b && !remove_selected) {
+                if (MachineIncludesParameter(source_b_machine,last_b)) {
+                    source_b_machine->addDependancy(last_machine_b);
+                    last_machine_b->listenTo(source_b_machine);
+                    last_machine_b->addDependancy(source_b_machine);
+                }
+            }
+            last_b = b;
+            last_machine_b = b.cached_machine;
             if (condition.predicate) {
                 bool matched = false;
                 condition.last_result = SymbolTable::Null;
@@ -222,6 +245,20 @@ Action::Status IntersectSetOperation::doOperation() {
 doneIntersectOperation:
     source_b_machine->removeLocal(0);
     source_b_machine->removeLocal(0);
+    if (last_machine_a && !remove_selected) {
+        if (MachineIncludesParameter(source_a_machine,last_a)) {
+            source_a_machine->addDependancy(last_machine_a);
+            last_machine_a->listenTo(source_a_machine);
+            last_machine_a->addDependancy(source_a_machine);
+        }
+    }
+    if (last_machine_b && !remove_selected) {
+        if (MachineIncludesParameter(source_b_machine,last_b)) {
+            source_b_machine->addDependancy(last_machine_b);
+            last_machine_b->listenTo(source_b_machine);
+            last_machine_b->addDependancy(source_b_machine);
+        }
+    }
     std::stringstream ss;
     const char *delim="";
     ss << "[";
@@ -353,6 +390,8 @@ Action::Status SelectSetOperation::doOperation() {
     if (source_a_machine) {
         if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
         unsigned int i=0;
+        Value last;
+        MachineInstance *last_machine = 0;
         while (i < source_a_machine->parameters.size()) {
             //if (i<sp) continue;
             //if (i>ep) break;
@@ -360,6 +399,15 @@ Action::Status SelectSetOperation::doOperation() {
             if (a.kind == Value::t_symbol) {
                 MachineInstance *mi = owner->lookup(a);
                 source_a_machine->removeLocal(0);
+                if (last_machine && !remove_selected) {
+                    if (MachineIncludesParameter(source_a_machine,last)) {
+                        source_a_machine->addDependancy(last_machine);
+                        last_machine->listenTo(source_a_machine);
+                        last_machine->addDependancy(source_a_machine);
+                    }
+                }
+                last = a;
+                last_machine = mi;
                 source_a_machine->addLocal(a, mi);
                 source_a_machine->locals[0].val = Value("ITEM");
                 source_a_machine->locals[0].real_name = a.sValue;
@@ -393,6 +441,13 @@ Action::Status SelectSetOperation::doOperation() {
             ++i;
         }
         source_a_machine->removeLocal(0);
+        if (last_machine && !remove_selected) {
+            if (MachineIncludesParameter(source_a_machine,last)) {
+                source_a_machine->addDependancy(last_machine);
+                last_machine->listenTo(source_a_machine);
+                last_machine->addDependancy(source_a_machine);
+            }
+        }
     }
     std::stringstream ss;
     const char *delim="";
