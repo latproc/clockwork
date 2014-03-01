@@ -292,14 +292,14 @@ void MachineInstance::setNeedsCheck() {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            dep->setNeedsCheck();
+            if (!dep->needsCheck()) dep->setNeedsCheck();
         }
     }
     else if (state_machine->token_id == ClockworkToken::REFERENCE) {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            dep->setNeedsCheck();
+            if (!dep->needsCheck()) dep->setNeedsCheck();
         }
     }
 }
@@ -1242,7 +1242,9 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
         mi->addDependancy(this);
         mi->listenTo(this);
     }
-    setNeedsCheck();
+    if (_type == "LIST") {
+        setNeedsCheck();
+    }
 }
 
 void MachineInstance::removeParameter(int which) {
@@ -1684,7 +1686,7 @@ void MachineInstance::notifyDependents(Message &msg){
         //TBD execute the message on the dependant machine
         dep->execute(msg, this);
         if (dep->_type == "LIST") {
-            dep->setNeedsCheck();
+            if (!dep->needsCheck()) dep->setNeedsCheck();
         }
     }
 }
@@ -2047,7 +2049,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
-	setNeedsCheck();
+	if (!needsCheck()) setNeedsCheck();
 //	if (active_actions.back() != a) {
 //		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 //		return;
