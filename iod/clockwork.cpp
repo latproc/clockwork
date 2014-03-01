@@ -538,6 +538,7 @@ void semantic_analysis() {
                         mi->parameters[i].machine = found;
                         found->addDependancy(mi);
                         mi->listenTo(found);
+                        mi->addDependancy(found);
 					}
                 }
                 else {

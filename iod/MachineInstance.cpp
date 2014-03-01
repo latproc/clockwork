@@ -777,7 +777,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     stable_states_stats("StableState processing"),
     message_handling_stats("Message handling"),
     data(0),
-    idle_time(0)
+    idle_time(0),
+    next_poll(0),
+    is_traceable(false)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -820,7 +822,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     stable_states_stats("StableState processing"),
     message_handling_stats("Message handling"),
     data(0),
-    idle_time(0)
+    idle_time(0),
+    is_traceable(false)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -1239,9 +1242,7 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
         mi->addDependancy(this);
         mi->listenTo(this);
     }
-    if (_type == "LIST") {
-        setNeedsCheck();
-    }
+    setNeedsCheck();
 }
 
 void MachineInstance::removeParameter(int which) {
@@ -1326,6 +1327,10 @@ void MachineInstance::setProperties(const SymbolTable &props) {
         if (p.first == "POLLING_DELAY") {
             long pd;
             if (p.second.asInteger(pd)) idle_time = pd;
+        }
+        else if (p.first == "TRACEABLE") {
+            if (p.second == "TRUE") is_traceable = true;
+            if (p.second == "FALSE") is_traceable = false;
         }
         iter++;
     }
@@ -2013,9 +2018,19 @@ void MachineInstance::start(Action *a) {
 		if (b && b->isBlocked() && b->blocker() != a) {
 			DBG_M_ACTIONS << "WARNING: "<<_name << " is executing command " <<*b <<" when starting " << *a << "\n";
 		}
-		if (b == a) { return; }
+		if (b == a) {
+            std::stringstream ss;
+            ss << owner->fullName() << " Failed to start action: " << *a << " already running\n";
+            MessageLog::instance()->add(ss.str().c_str());
+            return;
+        }
 	}
 	DBG_M_ACTIONS << _name << " pushing (state: " << a->getStatus() << ")" << *a << "\n";
+    if (tracing() && isTraceable()) {
+        resetTemporaryStringStream();
+        ss << "starting action: " << *a;
+        setValue("TRACE", ss.str());
+    }
 //    std::cout << "STARTING: " << *a << "\n";
 	active_actions.push_back(a->retain());
 }
@@ -2084,6 +2099,14 @@ void Action::recover() {
 	DBG_M_ACTIONS << "Action failed to remove itself after completing: " << *this << "\n";
 	assert(status == Complete || status == Failed);
 	owner->stop(this);
+}
+static std::stringstream *shared_ss = 0;
+void Action::toString(char *buf, int buffer_size) {
+    if (!shared_ss) shared_ss = new std::stringstream;
+    shared_ss->clear();
+    shared_ss->str("");
+    *shared_ss << *this;
+    snprintf(buf, buffer_size, "%s", shared_ss->str().c_str());
 }
 
 void MachineInstance::clearAllActions() {
@@ -2247,8 +2270,8 @@ void MachineInstance::updateLastEvaluationTime() {
     if (idle_time)
         next_poll = last_state_evaluation_time + idle_time;
     else {
-        if (polling_delay)
-            next_poll = last_state_evaluation_time + polling_delay->iValue;
+        if (state_machine && state_machine->polling_delay)
+            next_poll = last_state_evaluation_time + state_machine->polling_delay;
         else
             next_poll = last_state_evaluation_time + MachineInstance::polling_delay->iValue;
     }
@@ -2300,6 +2323,11 @@ void MachineInstance::setStableState() {
                 if (s.condition(this)) {
                     DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
                     if (current_state.getName() != s.state_name) {
+                        if (tracing() && isTraceable()) {
+                            resetTemporaryStringStream();
+                            ss << current_state.getName() <<"->" << s.state_name << " " << *s.condition.predicate;
+                            setValue("TRACE", ss.str());
+                        }
                         if (s.subcondition_handlers) {
                             std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
                             while (iter != s.subcondition_handlers->end()) {
@@ -2937,6 +2965,10 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
             if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
                 *MachineInstance::polling_delay = new_delay;
             }
+        }
+        else if (property_val.token_id == ClockworkToken::TRACEABLE) {
+            if (new_value == "TRUE") is_traceable = true;
+            if (new_value == "FALSE") is_traceable = false;
         }
         
         // often variables are named in the GLOBAL list, if we find the property in that list

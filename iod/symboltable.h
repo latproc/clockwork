@@ -60,9 +60,10 @@ public:
     static int PUBLISHER;
     static int POLLING_DELAY;
     static int CYCLE_DELAY;
+    static int SYSTEMSETTINGS;
     static int tokVALUE;
     static int tokMessage;
-    static int SYSTEMSETTINGS;
+    static int TRACEABLE;
 };
 
 class SymbolTable {

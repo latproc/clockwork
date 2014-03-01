@@ -144,7 +144,7 @@ void IODCommandThread::operator()() {
                 else if (count == 3 && ds == "DEBUG") {
                     command = new IODCommandDebug;
                 }
-                else if (count == 3 && ds == "TRACING") {
+                else if (count == 2 && ds == "TRACING") {
                     command = new IODCommandTracing;
                 }
                 else if (count == 2 && ds == "TOGGLE") {

@@ -278,6 +278,7 @@ int main (int argc, char const *argv[])
 	IODCommandListJSON::no_display.insert("STATE");
 	IODCommandListJSON::no_display.insert("PERSISTENT");
 	IODCommandListJSON::no_display.insert("POLLING_DELAY");
+	IODCommandListJSON::no_display.insert("TRACEABLE");
 
 	statistics = new Statistics;
     int load_result = 0;

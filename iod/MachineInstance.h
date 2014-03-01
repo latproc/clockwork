@@ -356,6 +356,8 @@ public:
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value);
 	void exportModbusMapping(std::ostream &out);
 	bool isModbusExported() { return modbus_exported != none; }
+    
+    bool isTraceable() { return is_traceable.bValue; }
 	
 	// error states are outside of the normal processing for a state machine;
 	// they cause other processing to halt and trigger receipt of a message: ERROR
@@ -420,6 +422,7 @@ public:
     uint64_t next_poll;
     
     static Value *polling_delay;
+    Value is_traceable;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);

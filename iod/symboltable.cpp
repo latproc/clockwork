@@ -52,9 +52,10 @@ int ClockworkToken::tokCONDITION;
 int ClockworkToken::PUBLISHER;
 int ClockworkToken::POLLING_DELAY;
 int ClockworkToken::CYCLE_DELAY;
+int ClockworkToken::SYSTEMSETTINGS;
 int ClockworkToken::tokVALUE;
 int ClockworkToken::tokMessage;
-int ClockworkToken::SYSTEMSETTINGS;
+int ClockworkToken::TRACEABLE;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -71,9 +72,10 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::PUBLISHER = _instance->getTokenId("PUBLISHER");
         ClockworkToken::POLLING_DELAY = _instance->getTokenId("POLLING_DELAY");
         ClockworkToken::CYCLE_DELAY = _instance->getTokenId("CYCLE_DELAY");
-        ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
         ClockworkToken::tokMessage = _instance->getTokenId("message");
         ClockworkToken::SYSTEMSETTINGS = _instance->getTokenId("SYSTEMSETTINGS");
+        ClockworkToken::TRACEABLE = _instance->getTokenId("TRACEABLE");
+        ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
     }
     return _instance;
 }
