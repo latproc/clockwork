@@ -39,7 +39,7 @@ struct HandleMessageActionTemplate : public ActionTemplate {
 };
 
 struct HandleMessageAction : public Action {
-    HandleMessageAction(MachineInstance *mi, HandleMessageActionTemplate &hmt)  : Action(mi), package(hmt.package), handler(0) {}
+    HandleMessageAction(MachineInstance *mi, HandleMessageActionTemplate &hmt)  : Action(mi), package(hmt.package), machine(0), handler(0) {}
     ~HandleMessageAction();
     Status run();
     Status checkComplete();
