@@ -292,14 +292,14 @@ void MachineInstance::setNeedsCheck() {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            if (!dep->needsCheck()) dep->setNeedsCheck();
+            dep->setNeedsCheck();
         }
     }
     else if (state_machine->token_id == ClockworkToken::REFERENCE) {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            if (!dep->needsCheck()) dep->setNeedsCheck();
+            dep->setNeedsCheck();
         }
     }
 }
@@ -1686,7 +1686,7 @@ void MachineInstance::notifyDependents(Message &msg){
         //TBD execute the message on the dependant machine
         dep->execute(msg, this);
         if (dep->_type == "LIST") {
-            if (!dep->needsCheck()) dep->setNeedsCheck();
+            dep->setNeedsCheck();
         }
     }
 }
