@@ -158,10 +158,12 @@ Action::Status IntersectSetOperation::doOperation() {
         return status;
     }
     if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+#ifdef DEPENDENCYFIX
     MachineInstance *last_machine_a = 0;
     MachineInstance *last_machine_b = 0;
     Value last_a;
     Value last_b;
+#endif
     unsigned int i=0;
     while (i < source_a_machine->parameters.size()) {
         Value &a(source_a_machine->parameters.at(i).val);
@@ -169,6 +171,7 @@ Action::Status IntersectSetOperation::doOperation() {
         if (!mi) { ++i; continue; }
         assert(a.cached_machine);
         setListItem(source_a_machine, a);
+#ifdef DEPENDENCYFIX
         if (last_machine_a && !remove_selected) {
             if (MachineIncludesParameter(source_a_machine,last_a)) {
                 source_a_machine->addDependancy(last_machine_a);
@@ -179,12 +182,14 @@ Action::Status IntersectSetOperation::doOperation() {
         last_a = a;
         last_machine_a = mi;
         
+#endif
         for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
             Value &b(source_b_machine->parameters.at(j).val);
             if (!b.cached_machine) owner->lookup(b);
             if (!b.cached_machine) { continue; }
             Value v1(a);
             setListItem(source_b_machine, b);
+#ifdef DEPENDENCYFIX
             if (last_machine_b && !remove_selected) {
                 if (MachineIncludesParameter(source_b_machine,last_b)) {
                     source_b_machine->addDependancy(last_machine_b);
@@ -194,6 +199,7 @@ Action::Status IntersectSetOperation::doOperation() {
             }
             last_b = b;
             last_machine_b = b.cached_machine;
+#endif
             if (condition.predicate) {
                 bool matched = false;
                 condition.last_result = SymbolTable::Null;
@@ -245,6 +251,7 @@ Action::Status IntersectSetOperation::doOperation() {
 doneIntersectOperation:
     source_b_machine->removeLocal(0);
     source_b_machine->removeLocal(0);
+#ifdef DEPENDENCYFIX
     if (last_machine_a && !remove_selected) {
         if (MachineIncludesParameter(source_a_machine,last_a)) {
             source_a_machine->addDependancy(last_machine_a);
@@ -259,6 +266,7 @@ doneIntersectOperation:
             last_machine_b->addDependancy(source_b_machine);
         }
     }
+#endif
     std::stringstream ss;
     const char *delim="";
     ss << "[";
@@ -390,8 +398,10 @@ Action::Status SelectSetOperation::doOperation() {
     if (source_a_machine) {
         if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
         unsigned int i=0;
+#ifdef DEPENDENCYFIX
         Value last;
         MachineInstance *last_machine = 0;
+#endif
         while (i < source_a_machine->parameters.size()) {
             //if (i<sp) continue;
             //if (i>ep) break;
@@ -399,6 +409,7 @@ Action::Status SelectSetOperation::doOperation() {
             if (a.kind == Value::t_symbol) {
                 MachineInstance *mi = owner->lookup(a);
                 source_a_machine->removeLocal(0);
+#ifdef DEPENDENCYFIX
                 if (last_machine && !remove_selected) {
                     if (MachineIncludesParameter(source_a_machine,last)) {
                         source_a_machine->addDependancy(last_machine);
@@ -408,6 +419,7 @@ Action::Status SelectSetOperation::doOperation() {
                 }
                 last = a;
                 last_machine = mi;
+#endif
                 source_a_machine->addLocal(a, mi);
                 source_a_machine->locals[0].val = Value("ITEM");
                 source_a_machine->locals[0].real_name = a.sValue;
@@ -441,6 +453,7 @@ Action::Status SelectSetOperation::doOperation() {
             ++i;
         }
         source_a_machine->removeLocal(0);
+#ifdef DEPENDENCYFIX
         if (last_machine && !remove_selected) {
             if (MachineIncludesParameter(source_a_machine,last)) {
                 source_a_machine->addDependancy(last_machine);
@@ -448,6 +461,7 @@ Action::Status SelectSetOperation::doOperation() {
                 last_machine->addDependancy(source_a_machine);
             }
         }
+#endif
     }
     std::stringstream ss;
     const char *delim="";
