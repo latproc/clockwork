@@ -160,7 +160,7 @@ Value &SymbolTable::getKeyValue(const char *name) {
         if (strcmp("NOW", name) == 0) {
             struct timeval now;
             gettimeofday(&now,0);
-            unsigned long msecs = (now.tv_sec % 1000) * 1000 + (now.tv_usec + 500) / 1000;
+            unsigned long msecs = (now.tv_sec * 1000000L + now.tv_usec + 500) / 1000;
             res = msecs;
             return res;
         }
