@@ -122,6 +122,7 @@ char *MessagingInterface::send(const char *txt) {
             zmq::message_t msg(len);
             strncpy ((char *) msg.data(), txt, len);
             socket->send(msg);
+            break;
         }
         catch (std::exception e) {
             if (zmq_errno())
