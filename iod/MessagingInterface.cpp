@@ -115,40 +115,57 @@ char *MessagingInterface::send(const char *txt) {
         DBG_MESSAGING << "sending message " << txt << "\n";
     }
     size_t len = strlen(txt);
-	try {
-	    zmq::message_t msg(len);
-	    strncpy ((char *) msg.data(), txt, len);
-	    socket->send(msg);
-        if (!is_publisher) {
-            bool expect_reply = true;
-            while (expect_reply) {
-                zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                zmq::poll( &items[0], 1, 5000000);
-                if (items[0].revents & ZMQ_POLLIN) {
-                    zmq::message_t reply;
-                    if (socket->recv(&reply)) {
-                        len = reply.size();
-                        char *data = (char *)malloc(len+1);
-                        memcpy(data, reply.data(), len);
-                        data[len] = 0;
-                        std::cout << url << ": " << data << "\n";
-                        return data;
-                    }
-                }
-                else
-                    expect_reply = false;
-                    std::cerr << "abandoning message " << txt << "\n";
-                    delete socket;
-                    connect();
-                }
+    
+    int retries=4;
+    while (--retries>0) {
+        try {
+            zmq::message_t msg(len);
+            strncpy ((char *) msg.data(), txt, len);
+            socket->send(msg);
         }
-	}
-	catch (std::exception e) {
-        if (zmq_errno())
-            std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-        else
-            std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
-	}
+        catch (std::exception e) {
+            if (zmq_errno())
+                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+        }
+    }
+    retries = 4;
+    while (--retries>0) {
+        try {
+            if (!is_publisher) {
+                bool expect_reply = true;
+                while (expect_reply) {
+                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
+                    zmq::poll( &items[0], 1, 500000);
+                    if (items[0].revents & ZMQ_POLLIN) {
+                        zmq::message_t reply;
+                        if (socket->recv(&reply)) {
+                            len = reply.size();
+                            char *data = (char *)malloc(len+1);
+                            memcpy(data, reply.data(), len);
+                            data[len] = 0;
+                            std::cout << url << ": " << data << "\n";
+                            return data;
+                        }
+                    }
+                    else
+                        expect_reply = false;
+                        std::cerr << "abandoning message " << txt << "\n";
+                        delete socket;
+                        connect();
+                        break;
+                    }
+            }
+            else break;
+        }
+        catch (std::exception e) {
+            if (zmq_errno())
+                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+        }
+    }
     return 0;
 }
 
