@@ -140,7 +140,7 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
     return *this;
 }
 
-static bool isKeyword(const Value &name) {
+bool SymbolTable::isKeyword(const Value &name) {
     if (name.kind == Value::t_symbol || name.kind == Value::t_string)
         return isKeyword(name.sValue.c_str());
     return false;
