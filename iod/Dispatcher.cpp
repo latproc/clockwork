@@ -138,6 +138,7 @@ void Dispatcher::idle() {
                             mif->send(m.getText().c_str());
                         else if (protocol == "CLOCKWORK")
                             mif->send(m);
+                        else mif->send(m.getText().c_str());
                     }
                 }
             }
