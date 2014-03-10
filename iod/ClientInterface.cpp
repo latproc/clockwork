@@ -205,7 +205,6 @@ void IODCommandThread::operator()() {
                     command = new IODCommandInfo;
                 }
                 else {
-										std::cout << "unknown command " << data << "\n";
                     command = new IODCommandUnknown;
                 }
                 if ((*command)(params)) {
