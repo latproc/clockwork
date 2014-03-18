@@ -118,9 +118,9 @@ std::string escapeNonprintables(const char *buf) {
 
 struct Options {
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
-        serial_port_name_(0), serial_settings_(0), watch_(0), queue_(0), collect_duplicates(false), disconnect_on_timeout(true),
+        serial_port_name_(0), serial_settings_(0), watch_(0), queue_(0), collect_duplicates(false), disconnect_on_timeout(true), cw_publisher(5556),
                 got_host(false), got_port(true), got_property(false), got_pattern(false), structured_messaging(true),
-                got_queue(false), cw_publisher(5556) {
+                got_queue(false) {
         setIODHost("localhost");
     }
     ~Options() {
