@@ -383,7 +383,7 @@ public:
 	static void sort();
     
     virtual void setNeedsCheck();
-    long lastStateEvaluationTime() { return last_state_evaluation_time; }
+    uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
     
     virtual long filter(long val) { return val; }
