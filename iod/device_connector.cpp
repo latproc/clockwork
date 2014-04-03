@@ -474,6 +474,7 @@ struct IODInterface{
                         // abandon
                         expect_reply = false;
                         std::cerr << "abandoning send of message '" << msg << "'\n";
+                        socket->close();
                         delete socket;
                         socket = 0;
                         status = s_disconnected;
