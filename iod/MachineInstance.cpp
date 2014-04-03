@@ -3219,7 +3219,7 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 				else if (info.length() == 2)
 					data_type = "Signed_int_32";
 				else
-					data_type = "Ascii_string";
+					data_type = "Ascii_String";
 				break;
 			default: data_type = "Unknown";
 		}

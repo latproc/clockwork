@@ -1,3 +1,11 @@
+x VARIABLE  7;
+
+Props MACHINE {
+	OPTION PERSISTENT true;
+	OPTION prop "1,2,3,4,5";
+}
+props Props;
+
 PFlag MACHINE {
 	OPTION VALUE 0;
 	on WHEN VALUE == 1;

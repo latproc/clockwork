@@ -1,11 +1,16 @@
 # simulation of an external camera device
 #  using clockwork
 #
-host EXTERNAL(HOST:"localhost", PORT:5556, protocol:CLOCKWORK);
+host EXTERNAL(HOST:"localhost", PORT:5555, protocol:CLOCKWORK);
 
 Camera MACHINE {
-	RECEIVE CapturePhoto { LOG "Captured photo"; SEND "DoneCapture" TO host; }
+	RECEIVE CapturePhoto { 
+		LOG "Captured photo"; 
+		SEND DoneCapture TO host; 
+	}
 }
 
 camera Camera;
+
+ROUTE "CapturePhoto" TO camera;
 

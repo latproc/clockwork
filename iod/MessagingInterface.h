@@ -35,6 +35,7 @@ public:
     ~MessagingInterface();
     char *send(const char *msg);
     char *send(const Message &msg);
+    static bool send_raw(const char *host, int port, const char *msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent();
     static MessagingInterface *create(std::string host, int port);

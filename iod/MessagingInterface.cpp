@@ -31,6 +31,8 @@
 #endif
 #include "symboltable.h"
 #include "options.h"
+#include "anet.h"
+#include "MessageLog.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
@@ -176,6 +178,26 @@ char *MessagingInterface::send(const Message&msg) {
     free(text);
     return res;
 }
+
+
+bool MessagingInterface::send_raw(const char *host, int port, const char *msg) {
+    char error[256];
+    int connection = anetTcpConnect(error, (char *)host, port);
+    if (connection == -1) {
+        std::cerr << error << "\n";
+        return false;
+    }
+    size_t len = strlen(msg);
+    size_t written = anetWrite(connection, (char *)msg, len);
+    if (written != len) {
+        snprintf(error, 256, "error sending message: %s", msg );
+        MessageLog::instance()->add(error);
+        return false;
+    }
+    close(connection);
+    return true;
+}
+
 
 static std::string valueType(const Value &v) {
     switch (v.kind) {

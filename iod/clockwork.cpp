@@ -379,7 +379,7 @@ void semantic_analysis() {
     MachineClass *mc_external = new MachineClass("EXTERNAL");
     mc_external->options["HOST"] = "localhost";
     mc_external->options["PORT"] = 5600;
-    mc_external->options["PROTOCOL"] = "raw";
+    mc_external->options["PROTOCOL"] = "ZMQ";
     
     MachineInstance*settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
     machines["SYSTEM"] = settings;

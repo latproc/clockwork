@@ -133,12 +133,15 @@ void Dispatcher::idle() {
                     Value protocol = mi->properties.lookup("PROTOCOL");
                     long port;
                     if (port_val.asInteger(port)) {
-                        MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port);
-                        if (protocol == "RAW")
-                            mif->send(m.getText().c_str());
-                        else if (protocol == "CLOCKWORK")
-                            mif->send(m);
-                        else mif->send(m.getText().c_str());
+                        if (protocol == "RAW") {
+                            MessagingInterface::send_raw(host.asString().c_str(), (int)port, m.getText().c_str());
+                        }
+                        else {
+                            MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port);
+                            if (protocol == "CLOCKWORK")
+                                mif->send(m);
+                            else mif->send(m.getText().c_str()); // zmq
+                        }
                     }
                 }
             }
