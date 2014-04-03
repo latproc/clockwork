@@ -71,8 +71,8 @@ ClockworkInterpreter* ClockworkInterpreter::instance() {
 
 void ClockworkInterpreter::setup(MachineInstance *new_settings) {
     _settings = new_settings;
-    cycle_delay = &ClockworkInterpreter::instance()->settings()->properties.lookup("CYCLE_DELAY");
-    default_poll_delay = &ClockworkInterpreter::instance()->settings()->properties.lookup("POLLING_DELAY");
+    cycle_delay = &ClockworkInterpreter::instance()->settings()->getValue("CYCLE_DELAY");
+    default_poll_delay = &ClockworkInterpreter::instance()->settings()->getValue("POLLING_DELAY");
     
     MachineInstance::polling_delay = default_poll_delay;
 }
@@ -379,11 +379,12 @@ void semantic_analysis() {
     MachineClass *mc_external = new MachineClass("EXTERNAL");
     mc_external->options["HOST"] = "localhost";
     mc_external->options["PORT"] = 5600;
-    mc_external->options["PROTOCOL"] = "raw";
+    mc_external->options["PROTOCOL"] = "ZMQ";
     
     MachineInstance*settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
     machines["SYSTEM"] = settings;
     settings->setProperties(settings_class->properties);
+    settings->setStateMachine(settings_class);
     ClockworkInterpreter::instance()->setup(settings);
 
     std::map<std::string, MachineInstance*> machine_instances;
@@ -893,7 +894,7 @@ void initialise_machines() {
 		m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
-			if (m && (m->_type == "CONSTANT" || m->properties.lookup("PERSISTENT") == "true") ) {
+			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
 				std::string name(m->fullName());
 				//if (m->owner) name += m->owner->getName() + ".";
 				//name += m->getName();
@@ -918,7 +919,7 @@ void initialise_machines() {
 		m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
-			if (m && (m->_type == "CONSTANT" || m->properties.lookup("PERSISTENT") == "true") ) {
+			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
 				m->enable();
             }
         }
@@ -959,7 +960,7 @@ void initialise_machines() {
 	m_iter = MachineInstance::begin();
 	while (m_iter != MachineInstance::end()) {
 		MachineInstance *m = *m_iter++;
-		Value enable = m->properties.lookup("startup_enabled");
+		Value enable = m->getValue("startup_enabled");
 		if (enable == SymbolTable::Null || enable == true) {
 			if (!only_startup || (only_startup && m->_type == "STARTUP") ) m->enable();
 		}

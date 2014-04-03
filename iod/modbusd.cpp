@@ -106,7 +106,7 @@ void activate_address(std::string& addr_str) {
 }
 
 void insert(int group, int addr, const char *value, int len) {
-	std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
+	if (DEBUG_BASIC) std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
 	std::string addr_str(buf);
@@ -133,18 +133,20 @@ void insert(int group, int addr, const char *value, int len) {
 	}
 }
 void insert(int group, int addr, int value, int len) {
-	std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
+	if (DEBUG_BASIC) std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
 	std::string addr_str(buf);
 	if (group == 1) {
 		modbus_mapping->tab_input_bits[addr] = value;
-std::cout << "Updated Modbus memory for input bit " << addr << " to " << value << "\n";
+
+		if (DEBUG_BASIC)
+		 std::cout << "Updated Modbus memory for input bit " << addr << " to " << value << "\n";
 		activate_address(addr_str);
 	}
 	else if (group == 0) {
 		modbus_mapping->tab_bits[addr] = value;
-std::cout << "Updated Modbus memory for bit " << addr << " to " << value << "\n";
+		if (DEBUG_BASIC) std::cout << "Updated Modbus memory for bit " << addr << " to " << value << "\n";
 		activate_address(addr_str);
 	}
 	else if (group == 3) {
@@ -159,7 +161,7 @@ std::cout << "Updated Modbus memory for bit " << addr << " to " << value << "\n"
 	} else if (group == 4) {
 		if (len == 1) {
 			modbus_mapping->tab_registers[addr] = value & 0xffff;
-std::cout << "Updated Modbus memory for reg " << addr << " to " << (value  & 0xffff) << "\n";
+			if (DEBUG_BASIC) std::cout << "Updated Modbus memory for reg " << addr << " to " << (value  & 0xffff) << "\n";
 			activate_address(addr_str);
 		} else if (len == 2) {
 			int *l = (int32_t*) &modbus_mapping->tab_registers[addr];
@@ -279,7 +281,7 @@ struct ModbusServerThread {
 						}
 						else if (fc == 5) {  // coil write function
 							ignore_coil_change = (query_backup[function_code_offset + 3] && modbus_mapping->tab_bits[addr]);
-							if (ignore_coil_change) std::cout << "ignoring coil change " << addr    
+							if (DEBUG_BASIC && ignore_coil_change) std::cout << "ignoring coil change " << addr    
 								<< ((query_backup[function_code_offset + 3]) ? "on" : "off") << "\n";
 						}
 						else if (fc == 15) {
@@ -373,14 +375,14 @@ struct ModbusServerThread {
 								src++;
 							}
 							if (strncmp(new_value, previous_value, num_bytes) != 0) {
-								std::cout << "connection " << conn << " num bytes: " << num_bytes << " rw register " << addr << "\n";								
+								if (DEBUG_BASIC) std::cout << "connection " << conn << " num bytes: " << num_bytes << " rw register " << addr << "\n";								
 							}
 							free(new_value); free(previous_value);
 						}
 						else if (fc == 4) {
 							int num_bytes = query_backup[function_code_offset+5];
 							if (DEBUG_VERBOSE_TOPLC)
-								std::cout << timestamp << " connection " << conn 
+								if (DEBUG_BASIC) std::cout << timestamp << " connection " << conn 
 										<< " num bytes: " << num_bytes << " got register " << addr << "\n";
 						}
 						else if (fc == 15 || fc == 16) {
@@ -663,7 +665,7 @@ int main(int argc, const char * argv[]) {
            	char *data = (char *)malloc(len+1);
            	memcpy(data, update.data(), len);
            	data[len] = 0;
-			std::cout << "recieved: "<<data<<" from clockwork\n";
+						if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
 
             std::list<Value> parts;
             int count = 0;

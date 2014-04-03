@@ -148,6 +148,9 @@ std::cout << data << "\n";
                 else if (count == 3 && ds == "DEBUG") {
                     command = new IODCommandDebug;
                 }
+                else if (count == 2 && ds == "TRACING") {
+                    command = new IODCommandTracing;
+                }
                 else if (count == 2 && ds == "TOGGLE") {
                     command = new IODCommandToggle;
                 }
@@ -206,7 +209,6 @@ std::cout << data << "\n";
                     command = new IODCommandInfo;
                 }
                 else {
-										std::cout << "unknown command " << data << "\n";
                     command = new IODCommandUnknown;
                 }
                 if ((*command)(params)) {

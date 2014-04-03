@@ -31,6 +31,8 @@
 #endif
 #include "symboltable.h"
 #include "options.h"
+#include "anet.h"
+#include "MessageLog.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
@@ -115,40 +117,58 @@ char *MessagingInterface::send(const char *txt) {
         DBG_MESSAGING << "sending message " << txt << "\n";
     }
     size_t len = strlen(txt);
-	try {
-	    zmq::message_t msg(len);
-	    strncpy ((char *) msg.data(), txt, len);
-	    socket->send(msg);
-        if (!is_publisher) {
-            bool expect_reply = true;
-            while (expect_reply) {
-                zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                zmq::poll( &items[0], 1, 5000000);
-                if (items[0].revents & ZMQ_POLLIN) {
-                    zmq::message_t reply;
-                    if (socket->recv(&reply)) {
-                        len = reply.size();
-                        char *data = (char *)malloc(len+1);
-                        memcpy(data, reply.data(), len);
-                        data[len] = 0;
-                        std::cout << url << ": " << data << "\n";
-                        return data;
-                    }
-                }
-                else
-                    expect_reply = false;
-                    std::cerr << "abandoning message " << txt << "\n";
-                    delete socket;
-                    connect();
-                }
+    
+    int retries=4;
+    while (--retries>0) {
+        try {
+            zmq::message_t msg(len);
+            strncpy ((char *) msg.data(), txt, len);
+            socket->send(msg);
+            break;
         }
-	}
-	catch (std::exception e) {
-        if (zmq_errno())
-            std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-        else
-            std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
-	}
+        catch (std::exception e) {
+            if (zmq_errno())
+                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+        }
+    }
+    retries = 4;
+    while (--retries>0) {
+        try {
+            if (!is_publisher) {
+                bool expect_reply = true;
+                while (expect_reply) {
+                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
+                    zmq::poll( &items[0], 1, 500000);
+                    if (items[0].revents & ZMQ_POLLIN) {
+                        zmq::message_t reply;
+                        if (socket->recv(&reply)) {
+                            len = reply.size();
+                            char *data = (char *)malloc(len+1);
+                            memcpy(data, reply.data(), len);
+                            data[len] = 0;
+                            std::cout << url << ": " << data << "\n";
+                            return data;
+                        }
+                    }
+                    else
+                        expect_reply = false;
+                        std::cerr << "abandoning message " << txt << "\n";
+                        delete socket;
+                        connect();
+                        break;
+                    }
+            }
+            else break;
+        }
+        catch (std::exception e) {
+            if (zmq_errno())
+                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+        }
+    }
     return 0;
 }
 
@@ -158,6 +178,26 @@ char *MessagingInterface::send(const Message&msg) {
     free(text);
     return res;
 }
+
+
+bool MessagingInterface::send_raw(const char *host, int port, const char *msg) {
+    char error[256];
+    int connection = anetTcpConnect(error, (char *)host, port);
+    if (connection == -1) {
+        std::cerr << error << "\n";
+        return false;
+    }
+    size_t len = strlen(msg);
+    size_t written = anetWrite(connection, (char *)msg, len);
+    if (written != len) {
+        snprintf(error, 256, "error sending message: %s", msg );
+        MessageLog::instance()->add(error);
+        return false;
+    }
+    close(connection);
+    return true;
+}
+
 
 static std::string valueType(const Value &v) {
     switch (v.kind) {

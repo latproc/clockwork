@@ -215,7 +215,7 @@ void ProcessingThread::operator()()  {
                             if (processingState == eIdle)
                                 processingState = ePollingMachines;
                             if (processingState == ePollingMachines) {
-                                if (MachineInstance::processAll(MachineInstance::NO_BUILTINS))
+                                if (MachineInstance::processAll(500, MachineInstance::NO_BUILTINS))
                                     processingState = eIdle;
                             }
                         }
@@ -234,7 +234,7 @@ void ProcessingThread::operator()()  {
                         if (processingState == eStableStates){
                             boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
                             Scheduler::instance()->idle();
-                            if (MachineInstance::checkStableStates())
+                            if (MachineInstance::checkStableStates(500))
                                 processingState = eIdle;
                         }
                         gettimeofday(&end_t, 0);
@@ -278,6 +278,7 @@ int main (int argc, char const *argv[])
 	IODCommandListJSON::no_display.insert("STATE");
 	IODCommandListJSON::no_display.insert("PERSISTENT");
 	IODCommandListJSON::no_display.insert("POLLING_DELAY");
+	IODCommandListJSON::no_display.insert("TRACEABLE");
 
 	statistics = new Statistics;
     int load_result = 0;

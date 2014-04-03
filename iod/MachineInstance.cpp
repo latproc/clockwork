@@ -718,7 +718,7 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
         
         //reset once the buffers have been filled with zeros
         if (!val) ++settings->zero_count;
-        else if (settings->zero_count > settings->times.length()) {
+        else if (false && settings->zero_count > settings->times.length()) {
             settings->zero_count = 0;
             // reset buffers;
             settings->start_t = settings->update_t;
@@ -777,7 +777,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     stable_states_stats("StableState processing"),
     message_handling_stats("Message handling"),
     data(0),
-    idle_time(0)
+    idle_time(0),
+    next_poll(0),
+    is_traceable(false)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -820,7 +822,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     stable_states_stats("StableState processing"),
     message_handling_stats("Message handling"),
     data(0),
-    idle_time(0)
+    idle_time(0),
+    is_traceable(false)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -1108,7 +1111,7 @@ const Value *MachineInstance::getTimerVal() {
     return mtv->getLastResult();
 }
 
-bool MachineInstance::processAll(PollType which) {
+bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     static bool working = false;
     static int point_token = ClockworkToken::POINT;
     static std::list<MachineInstance *>::iterator iter = active_machines.begin();
@@ -1123,7 +1126,7 @@ bool MachineInstance::processAll(PollType which) {
     struct timeval now;
     gettimeofday(&now, NULL);
     uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-    const int block_size = 10;
+    const int block_size = 20;
     int count = block_size;
     while (iter != active_machines.end()) {
         /* To compute a counterrate, the device needs a continual suppliy of input readings. 
@@ -1133,7 +1136,7 @@ bool MachineInstance::processAll(PollType which) {
         MachineInstance *m = *iter++;
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
-            //if (m->has_work || !m->active_actions.empty() )
+            if (m->hasWork() || !m->active_actions.empty() )
                 m->idle();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
@@ -1144,7 +1147,7 @@ bool MachineInstance::processAll(PollType which) {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > 500)
+            if (now_t - start_processing > max_time)
                 return false; // ran out of time to finish
             count = block_size;
         }
@@ -1153,13 +1156,13 @@ bool MachineInstance::processAll(PollType which) {
     return true; // complete the cycle
 }
 
-bool MachineInstance::checkStableStates() {
+bool MachineInstance::checkStableStates(uint32_t max_time) {
     static std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
 
     struct timeval now;
     gettimeofday(&now, NULL);
     uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-    const int block_size = 10;
+    const int block_size = 5;
     int count = block_size;
     while (iter != MachineInstance::automatic_machines.end()) {
         MachineInstance *m = *iter++;
@@ -1176,7 +1179,7 @@ bool MachineInstance::checkStableStates() {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > 500) return false; // ran out of time to finish
+            if (now_t - start_processing > max_time) return false; // ran out of time to finish
             count = block_size;
         }
     }
@@ -1326,6 +1329,10 @@ void MachineInstance::setProperties(const SymbolTable &props) {
         if (p.first == "POLLING_DELAY") {
             long pd;
             if (p.second.asInteger(pd)) idle_time = pd;
+        }
+        else if (p.first == "TRACEABLE") {
+            if (p.second == "TRUE") is_traceable = true;
+            if (p.second == "FALSE") is_traceable = false;
         }
         iter++;
     }
@@ -2013,9 +2020,19 @@ void MachineInstance::start(Action *a) {
 		if (b && b->isBlocked() && b->blocker() != a) {
 			DBG_M_ACTIONS << "WARNING: "<<_name << " is executing command " <<*b <<" when starting " << *a << "\n";
 		}
-		if (b == a) { return; }
+		if (b == a) {
+            std::stringstream ss;
+            ss << owner->fullName() << " Failed to start action: " << *a << " already running\n";
+            MessageLog::instance()->add(ss.str().c_str());
+            return;
+        }
 	}
 	DBG_M_ACTIONS << _name << " pushing (state: " << a->getStatus() << ")" << *a << "\n";
+    if (tracing() && isTraceable()) {
+        resetTemporaryStringStream();
+        ss << "starting action: " << *a;
+        setValue("TRACE", ss.str());
+    }
 //    std::cout << "STARTING: " << *a << "\n";
 	active_actions.push_back(a->retain());
 }
@@ -2084,6 +2101,14 @@ void Action::recover() {
 	DBG_M_ACTIONS << "Action failed to remove itself after completing: " << *this << "\n";
 	assert(status == Complete || status == Failed);
 	owner->stop(this);
+}
+static std::stringstream *shared_ss = 0;
+void Action::toString(char *buf, int buffer_size) {
+    if (!shared_ss) shared_ss = new std::stringstream;
+    shared_ss->clear();
+    shared_ss->str("");
+    *shared_ss << *this;
+    snprintf(buf, buffer_size, "%s", shared_ss->str().c_str());
 }
 
 void MachineInstance::clearAllActions() {
@@ -2247,8 +2272,8 @@ void MachineInstance::updateLastEvaluationTime() {
     if (idle_time)
         next_poll = last_state_evaluation_time + idle_time;
     else {
-        if (polling_delay)
-            next_poll = last_state_evaluation_time + polling_delay->iValue;
+        if (state_machine && state_machine->polling_delay)
+            next_poll = last_state_evaluation_time + state_machine->polling_delay;
         else
             next_poll = last_state_evaluation_time + MachineInstance::polling_delay->iValue;
     }
@@ -2300,6 +2325,11 @@ void MachineInstance::setStableState() {
                 if (s.condition(this)) {
                     DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
                     if (current_state.getName() != s.state_name) {
+                        if (tracing() && isTraceable()) {
+                            resetTemporaryStringStream();
+                            ss << current_state.getName() <<"->" << s.state_name << " " << *s.condition.predicate;
+                            setValue("TRACE", ss.str());
+                        }
                         if (s.subcondition_handlers) {
                             std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
                             while (iter != s.subcondition_handlers->end()) {
@@ -2938,6 +2968,10 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
                 *MachineInstance::polling_delay = new_delay;
             }
         }
+        else if (property_val.token_id == ClockworkToken::TRACEABLE) {
+            if (new_value == "TRUE") is_traceable = true;
+            if (new_value == "FALSE") is_traceable = false;
+        }
         
         // often variables are named in the GLOBAL list, if we find the property in that list
         // we try to change ask that machine to set its VALUE.
@@ -3185,7 +3219,7 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 				else if (info.length() == 2)
 					data_type = "Signed_int_32";
 				else
-					data_type = "Ascii_string";
+					data_type = "Ascii_String";
 				break;
 			default: data_type = "Unknown";
 		}

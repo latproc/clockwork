@@ -249,14 +249,23 @@ void ProcessingThread::operator()()  {
 						MessageLog::instance()->add(error.c_str());
 					}
 				}
+				bool reported_error = false;
 				{
+					Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+					long remain = 0;
+					if (!cycle_delay_v->asInteger(remain))  {
+						if (!reported_error) MessageLog::instance()->add("cycle delay error\n");
+						remain = 10000;
+					}
+					else remain /= 2;
 					if (processingState == eIdle)
 						processingState = ePollingMachines;
 					if (processingState == ePollingMachines) {
-						if (MachineInstance::processAll(MachineInstance::NO_BUILTINS))
+						if (MachineInstance::processAll(20000, MachineInstance::NO_BUILTINS))
 							processingState = eIdle;
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
+						remain -= delta;
 						statistics->machine_processing.add(delta - delta2); delta2 = delta;
 					}
 					if (processingState == eIdle) {
@@ -268,7 +277,8 @@ void ProcessingThread::operator()()  {
 						processingState = eStableStates;
 					}	
 					if (processingState == eStableStates) {
-						MachineInstance::checkStableStates();
+						if (MachineInstance::checkStableStates(20000))
+							processingState = eIdle;
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
 						statistics->auto_states.add(delta - delta2); delta2 = delta;
@@ -524,7 +534,9 @@ int main(int argc, char const *argv[])
 	IODCommandListJSON::no_display.insert("NAME");
 	IODCommandListJSON::no_display.insert("STATE");
 	IODCommandListJSON::no_display.insert("PERSISTENT");
-	
+    IODCommandListJSON::no_display.insert("POLLING_DELAY");
+    IODCommandListJSON::no_display.insert("TRACEABLE");
+
 	statistics = new Statistics;
 	int load_result = loadConfig(argc, argv);
 	if (load_result)
@@ -570,7 +582,7 @@ int main(int argc, char const *argv[])
 		return load_result;
 	}
 
-    Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+  Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
 	long delay = 2000;
 	if (cycle_delay_v) cycle_delay_v->iValue = delay;
 	ECInterface::FREQUENCY=1000000 / delay;

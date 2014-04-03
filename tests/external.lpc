@@ -1,18 +1,20 @@
-camera EXTERNAL(HOST:"192.168.4.24", PORT:5600, tab:Test);
+camera EXTERNAL(HOST:"localhost", PORT:7003, tab:Test);
 
 Test MACHINE camera {
 
     test WHEN TIMER > 5000;
     idle DEFAULT;
 
-    ENTER test { SEND CapturePhoto TO camera; }
-    RECEIVE TestMessage {
-        LOG "Got test message";
+    ENTER test { SEND CapturePhoto TO camera; SET SELF TO idle; }
+	RECEIVE TestMessage { LOG "Test Message"; }
+    RECEIVE CaptureDone {
+        LOG "Got capture done message";
     }
 }
 test Test(tab:Test) camera;
 
 ROUTE "TestMessage" TO test;
+ROUTE "CaptureDone" TO test;
 
 arduino EXTERNAL(DEVICE:"/dev/tty.usbserial-A900ced4", BAUD:9600, 
     BITS:8, PARITY:"NONE", STOPBITS:1);

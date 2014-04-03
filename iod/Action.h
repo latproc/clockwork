@@ -134,6 +134,7 @@ public:
 
 	MachineInstance *getOwner() { return owner; }
     
+    virtual void toString(char *buf, int buffer_size);
     virtual std::ostream & operator<<(std::ostream &out) const { return out << "(Action)"; }
     
 protected:

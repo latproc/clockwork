@@ -724,6 +724,24 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 
 
+    bool IODCommandTracing::run(std::vector<Value> &params) {
+		if (params.size() != 2) {
+			std::stringstream ss;
+			ss << "usage: TRACING ON|OFF" << std::flush;
+			std::string s = ss.str();
+			error_str = s;
+			return false;
+		}
+        if (params[1] == "ON") {
+            enable_tracing(true);
+        }
+        else {
+            enable_tracing(false);
+        }
+		result_str = "OK";
+		return true;
+    }
+
     bool IODCommandDebugShow::run(std::vector<Value> &params) {
 		std::stringstream ss;
 		ss << "Debug status: \n" << *LogState::instance() << "\n" << std::flush;
@@ -910,21 +928,29 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 
     bool IODCommandUnknown::run(std::vector<Value> &params) {
+        if (params.size() == 0) {
+            result_str = "OK";
+            return true;
+        }
         std::stringstream ss;
-        std::ostream_iterator<Value> oi(ss, " ");
-        std::copy(params.begin(), params.end(), oi);
+        for (unsigned int i=0; i<params.size()-1; ++i) {
+            ss<< params[i] << " ";
+        }
+        ss << params[params.size()-1];
+        char *msg = strdup(ss.str().c_str());
         
-        if (message_handlers.count(ss.str())) {
+        if (message_handlers.count(msg)) {
             const std::string &name = message_handlers[ss.str()];
             MachineInstance *m = MachineInstance::find(name.c_str());
             if (m) {
-                m->send(new Message(ss.str().c_str()),m);
+                m->send(new Message(msg),m);
                 result_str = "OK";
                 return true;
             }
         }
         ss << ": Unknown command: ";
-        error_str = ss.str();
+        error_str = msg;
+        free(msg);
         return false;
     }
 

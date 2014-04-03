@@ -34,6 +34,7 @@ static int modbus_port_num = 5558;
 static int command_port_num = 5555;
 static bool keep_stats = false;
 static char *dev_name = 0;
+static bool is_tracing = false;
 
 const char *device_name() { return dev_name; }
 void set_device_name(const char *new_name) { if (dev_name) free(dev_name); dev_name = strdup(new_name); }
@@ -129,5 +130,10 @@ void enable_statistics(bool which) {
 int keep_statistics() {
     return keep_stats;
 }
+
+void enable_tracing(bool which) { is_tracing = which; }
+
+bool tracing() { return is_tracing; }
+
 
 

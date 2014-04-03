@@ -33,13 +33,13 @@ void PersistentStore::load() {
     typedef std::pair<std::string, Value> PropertyPair;
     std::ifstream store(file_name.c_str());
     if (!store.is_open()) return;
-    char buf[200];
-    while (store.getline(buf, 200, '\n')) {
-        char value_buf[200];
+    char buf[400];
+    while (store.getline(buf, 400, '\n')) {
+        char value_buf[400];
         std::istringstream in(buf);
         std::string name, property, value_str;
         in >> name >> property;
-        in.get(value_buf, 200, '\n');
+        in.get(value_buf, 400, '\n');
         size_t n = strlen(value_buf);
         char *vp = value_buf+1; // skip space delimiter
         Value::Kind kind = Value::t_symbol;
@@ -55,11 +55,14 @@ void PersistentStore::load() {
         long i_value;
         char *endp;
         i_value = strtol(value_str.c_str(), &endp, 10);
-        if (*endp == 0)
+        if (*endp == 0) {
             insert(name, property, i_value);
-        else
+        	std::cout << name << "." << property << ":" << i_value << "\n";
+		}
+        else {
             insert(name, property, Value(value_str.c_str(), kind).asString());
-        std::cout << name << "." << property << ":" << value_str << "\n";
+        	std::cout << name << "." << property << ":" << value_str << "\n";
+		}
     }
     store.close();
 	is_dirty = false;
@@ -79,7 +82,10 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
         std::map<std::string, Value> &entries(prop.second);
         PersistentStore::PropertyPair entry;
         BOOST_FOREACH(entry, entries) {
-            out << prop.first << " " << entry.first << " " << entry.second << "\n";
+			if (entry.second.kind == Value::t_string)
+	            out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
+			else
+	            out << prop.first << " " << entry.first << " " << entry.second << "\n";
         }
 	}
 	return out;

@@ -246,6 +246,7 @@ public:
 	Action::Status execute(const Message&m, Transmitter *from);
     virtual void handle(const Message&, Transmitter *from, bool send_receipt = false);
     virtual void idle();
+		virtual bool hasWork() { return has_work; }
 	void collect(const Package &package);
 
 	std::map<std::string, MachineInstance *> localised_names;
@@ -303,10 +304,10 @@ public:
 	bool needsCheck();
 	void resetTemporaryStringStream();
 
-    static bool processAll(PollType which);
+    static bool processAll(uint32_t max_time, PollType which);
 	//static void updateAllTimers(PollType which);
 	//void updateTimer(long dt);
-    static bool checkStableStates();
+    static bool checkStableStates(uint32_t max_time);
 	static size_t countAutomaticMachines() { return automatic_machines.size(); }
 	static void displayAutomaticMachines();
 	static void displayAll();
@@ -355,6 +356,8 @@ public:
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value);
 	void exportModbusMapping(std::ostream &out);
 	bool isModbusExported() { return modbus_exported != none; }
+    
+    bool isTraceable() { return is_traceable.bValue; }
 	
 	// error states are outside of the normal processing for a state machine;
 	// they cause other processing to halt and trigger receipt of a message: ERROR
@@ -380,7 +383,7 @@ public:
 	static void sort();
     
     virtual void setNeedsCheck();
-    long lastStateEvaluationTime() { return last_state_evaluation_time; }
+    uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
     
     virtual long filter(long val) { return val; }
@@ -419,6 +422,7 @@ public:
     uint64_t next_poll;
     
     static Value *polling_delay;
+    Value is_traceable;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
@@ -454,6 +458,7 @@ public:
     void setValue(const std::string &property, Value new_value);
     long filter(long val);
     virtual void idle();
+		virtual bool hasWork() { return true; }
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
     CounterRateInstance &operator=(const CounterRateInstance &orig);
@@ -473,6 +478,7 @@ public:
     long filter(long val);
     virtual void setNeedsCheck();
     virtual void idle();
+		virtual bool hasWork() { return true; }
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
     RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);
