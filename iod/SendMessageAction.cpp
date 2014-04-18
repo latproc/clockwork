@@ -29,29 +29,39 @@ Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
-    return out << "SendMessageActionTemplate " << message.get() << " " << target.get() << "\n";
+    return out << "SendMessageActionTemplate " << message << " " << target << "\n";
 }
 
 Action::Status SendMessageAction::run() {
 	owner->start(this);
-	if (!target_machine) target_machine = owner->lookup(target.get());
+	if (!target_machine) target_machine = owner->lookup(target);
 	if (target_machine) {
-		owner->send(new Message(message.get()), target_machine);
+        std::string msg_str;
+        if (message.kind == Value::t_symbol) {
+            Value msg_val = owner->getValue(message);
+            if (msg_val != SymbolTable::Null)
+                msg_str = msg_val.asString();
+            else
+                msg_str = message.asString();
+        }
+        else
+            msg_str = message.asString();
+		owner->send(new Message(msg_str.c_str()), target_machine);
         if (target_machine->_type == "LIST") {
             for (unsigned int i=0; i<target_machine->parameters.size(); ++i) {
                 MachineInstance *entry = target_machine->parameters[i].machine;
-                if (entry) owner->send(new Message(message.get()), entry);
+                if (entry) owner->send(new Message(msg_str.c_str()), entry);
             }
         }
         else if (target_machine->_type == "REFERENCE" && target_machine->locals.size()) {
             for (unsigned int i=0; i<target_machine->locals.size(); ++i) {
                 MachineInstance *entry = target_machine->locals[i].machine;
-                if (entry) owner->send(new Message(message.get()), entry);
+                if (entry) owner->send(new Message(msg_str.c_str()), entry);
             }
         }
 	}
 	else {
-		NB_MSG << *this << " Error: cannot find target machine " << target.get() << "\n"; 
+		NB_MSG << *this << " Error: cannot find target machine " << target << "\n";
 	}
 	status = Action::Complete;
 	owner->stop(this);
@@ -63,6 +73,6 @@ Action::Status SendMessageAction::checkComplete() {
 }
 
 std::ostream &SendMessageAction::operator<<(std::ostream &out) const {
-    return out << "SendMessageAction " << message.get() << " " << target.get() << "\n";
+    return out << "SendMessageAction " << message << " " << target << "\n";
 }
 		

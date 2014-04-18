@@ -912,6 +912,10 @@ SET SYMBOL TO value  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SendMessageActionTemplate($2, $4);    
 }
+| SEND STRINGVAL TO SYMBOL /* send a generic message/command */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SendMessageActionTemplate($2, $4);
+}
 | SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new CopyPatternActionTemplate($1, $4, $6);    
