@@ -151,6 +151,8 @@ bool setup_signals()
     if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) {
         return false;
     }
+    sa.sa_handler = SIG_IGN;
+    if (sigaction(SIGPIPE, &sa, 0)) return false;
     return true;
 }
 
