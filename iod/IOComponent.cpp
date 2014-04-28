@@ -31,6 +31,21 @@ static uint64_t current_time;
 
 IOComponent::DeviceList IOComponent::devices;
 
+IOComponent::IOComponent(IOAddress addr) 
+		: last_event(e_none), address(addr) { 
+	processing_queue.push_back(this); 
+}
+
+IOComponent::IOComponent() : last_event(e_none) { 
+	processing_queue.push_back(this); 
+}
+
+// most io devices set their initial state to reflect the 
+// current hardware state
+// output devices reset to an 'off' state
+void IOComponent::setInitialState() {
+}
+
 IOComponent* IOComponent::lookup_device(const std::string name) {
     IOComponent::DeviceList::iterator device_iter = IOComponent::devices.find(name);
     if (device_iter != IOComponent::devices.end())
@@ -399,6 +414,13 @@ void IOComponent::idle() {
 }
 
 void IOComponent::turnOn() { 
+	std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
+}
+void IOComponent::turnOff() { 
+	std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
+}
+
+void Output::turnOn() { 
 //	std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;
@@ -410,7 +432,7 @@ void IOComponent::turnOn() {
 	last_event = e_on;
 }
 
-void IOComponent::turnOff() { 
+void Output::turnOff() { 
 //	std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;

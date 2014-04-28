@@ -323,7 +323,7 @@ public:
     void markPassive();
     
 	MachineClass *getStateMachine() const { return state_machine; }
-	void setInitialState() { if (state_machine) setState(state_machine->initial_state); }
+	void setInitialState();
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
 	Value *getCurrentStateVal() { return &current_state_val; }

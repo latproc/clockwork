@@ -637,7 +637,7 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value)
         settings->times.append(delta_t);
 
         int32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
-        if ( abs(mean - settings->last_sent) > settings->noise_tolerance) {
+        if ( abs(mean - settings->last_sent) > abs(settings->noise_tolerance) ) {
             settings->last_sent = mean;
         }
         settings->position = (int32_t)settings->last_sent;
@@ -2164,6 +2164,32 @@ void MachineInstance::resume() {
 	} 
 }
 
+void MachineInstance::setInitialState() { 
+	if (io_interface) {
+		io_interface->setInitialState();
+	}
+	if (state_machine) {
+		if (io_interface)
+			setState(io_interface->getStateString());
+		else {
+			if (state_machine->token_id == ClockworkToken::LIST ) {
+				if (parameters.empty())
+					setState("empty");
+				else
+					setState("nonempty");
+			}
+			else
+				setState(state_machine->initial_state); 
+			setNeedsCheck();
+		}
+	}
+	else {
+		char buf[100];
+		snprintf(buf, 100,"Warning: setting initial state on %s when it has no state machine\n", _name.c_str());
+    	MessageLog::instance()->add(buf);
+	}
+}
+
 void MachineInstance::enable() {
     if (is_enabled) return;
     is_enabled = true; 
@@ -2299,7 +2325,7 @@ void MachineInstance::setStableState() {
     }
     else if ( ( !state_machine && _type=="LIST") || (state_machine && state_machine->token_id == ClockworkToken::LIST) ) {
         //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
-        if (parameters.size())
+        if (!parameters.empty())
             setState(State("nonempty"));
         else
             setState(State("empty"));

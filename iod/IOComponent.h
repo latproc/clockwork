@@ -81,16 +81,14 @@ protected:
 	struct timeval last;
 public:
 
-    IOComponent(IOAddress addr) 
-		: last_event(e_none), address(addr) { processing_queue.push_back(this); }
-//    IOComponent(unsigned int offset, int bitpos, unsigned int len=1) 
-//		: last_event(e_none), address(offset,bitpos, len) { processing_queue.push_back(this); }
-    IOComponent() : last_event(e_none) { processing_queue.push_back(this); }
+    IOComponent(IOAddress addr); 
+    IOComponent();
 	virtual ~IOComponent() { processing_queue.remove(this); }
+	virtual void setInitialState();
 	const char *getStateString();
 	virtual void idle();
-	void turnOn();
-	void turnOff();
+	virtual void turnOn();
+	virtual void turnOff();
 	bool isOn();
 	bool isOff();
 	int32_t value() { if (address.bitlen == 1) { if (isOn()) return 1; else return 0; } else return address.value; }
@@ -128,6 +126,8 @@ public:
 	Output(IOAddress addr) : IOComponent(addr) { }
 //	Output(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "Output"; }
+	virtual void turnOn();
+	virtual void turnOff();
 };
 
 class Input : public IOComponent {
