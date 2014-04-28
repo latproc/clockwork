@@ -28,11 +28,11 @@
 class MachineInstance;
 
 struct SendMessageActionTemplate : public ActionTemplate {
-	SendMessageActionTemplate(CStringHolder msg, CStringHolder dest) : message(msg), target(dest) {}
+	SendMessageActionTemplate(Value msg, Value dest) : message(msg), target(dest) {}
     virtual Action *factory(MachineInstance *mi);
     virtual std::ostream &operator<<(std::ostream &out)const;
-	CStringHolder message;
-	CStringHolder target;
+	Value message;
+	Value target;
 };
 
 struct SendMessageAction : public Action {
@@ -41,8 +41,8 @@ struct SendMessageAction : public Action {
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
-	CStringHolder message;
-	CStringHolder target;
+	Value message;
+	Value target;
 	MachineInstance *target_machine;
 };
 
