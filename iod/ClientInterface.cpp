@@ -228,7 +228,7 @@ std::cout << data << "\n";
         catch (std::exception e) {
 			if (errno) std::cout << "error during client communication: " << strerror(errno) << "\n" << std::flush;
             if (zmq_errno())
-                std::cerr << zmq_strerror(zmq_errno()) << "\n" << std::flush;
+                std::cerr << "zmq message: " << zmq_strerror(zmq_errno()) << "\n" << std::flush;
             else
                 std::cerr << " Exception: " << e.what() << "\n" << std::flush;
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) abort();
