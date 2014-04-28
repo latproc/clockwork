@@ -45,12 +45,12 @@ MessagingInterface *MessagingInterface::getCurrent() {
     return MessagingInterface::current;
 }
 
-MessagingInterface *MessagingInterface::create(std::string host, int port) {
+MessagingInterface *MessagingInterface::create(std::string host, int port, Protocol proto) {
     std::stringstream ss;
     ss << host << ":" << port;
     std::string id = ss.str();
     if (interfaces.count(id) == 0) {
-        MessagingInterface *res = new MessagingInterface(host, port);
+        MessagingInterface *res = new MessagingInterface(host, port, proto);
         interfaces[id] = res;
         return res;
     }
@@ -58,44 +58,73 @@ MessagingInterface *MessagingInterface::create(std::string host, int port) {
         return interfaces[id];
 }
 
-MessagingInterface::MessagingInterface(int num_threads, int port) : Receiver("messaging_interface") {
-    context = new zmq::context_t(num_threads);
-    socket = new zmq::socket_t(*context, ZMQ_PUB);
-    is_publisher = true;
-    std::stringstream ss;
-    ss << "tcp://*:" << port;
-    url = ss.str();
-    socket->bind(url.c_str());
+MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto) 
+		: Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false), connection(-1) {
+	if (protocol == eCLOCKWORK || protocol == eZMQ) {
+	    context = new zmq::context_t(num_threads);
+	    socket = new zmq::socket_t(*context, ZMQ_PUB);
+	    is_publisher = true;
+	    std::stringstream ss;
+	    ss << "tcp://*:" << port;
+	    url = ss.str();
+	    socket->bind(url.c_str());
+	}
+	else {
+		connect();
+	}
 }
 
-MessagingInterface::MessagingInterface(std::string host, int port) :Receiver("messaging_interface") {
-    if (host == "*") {
-        context = new zmq::context_t(1);
-        socket = new zmq::socket_t(*context, ZMQ_PUB);
-        is_publisher = true;
-        std::stringstream ss;
-        ss << "tcp://*:" << port;
-        url = ss.str();
-        socket->bind(url.c_str());
-    }
-    else {
-        context = new zmq::context_t(1);
-        std::stringstream ss;
-        ss << "tcp://" << host << ":" << port;
-        url = ss.str();
-        connect();
-    }
+MessagingInterface::MessagingInterface(std::string host, int remote_port, Protocol proto) 
+		:Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false), connection(-1), hostname(host), port(remote_port) {
+	if (protocol == eCLOCKWORK || protocol == eZMQ) {
+	    if (host == "*") {
+	        context = new zmq::context_t(1);
+	        socket = new zmq::socket_t(*context, ZMQ_PUB);
+	        is_publisher = true;
+	        std::stringstream ss;
+	        ss << "tcp://*:" << port;
+	        url = ss.str();
+	        socket->bind(url.c_str());
+	    }
+	    else {
+	        context = new zmq::context_t(1);
+	        std::stringstream ss;
+	        ss << "tcp://" << host << ":" << port;
+	        url = ss.str();
+	        connect();
+	    }
+	}
+	else {
+		connect();
+	}
 }
 
 void MessagingInterface::connect() {
-    socket = new zmq::socket_t(*context, ZMQ_REQ);
-    is_publisher = false;
-    socket->connect(url.c_str());
-    int linger = 0;
-    socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
+	if (protocol == eCLOCKWORK || protocol == eZMQ) {
+	    socket = new zmq::socket_t(*context, ZMQ_REQ);
+	    is_publisher = false;
+	    socket->connect(url.c_str());
+	    int linger = 0;
+	    socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
+	}
+	else {
+		char error[ANET_ERR_LEN];
+    	connection = anetTcpConnect(error, hostname.c_str(), port);
+    	if (connection == -1) {
+        	MessageLog::instance()->add(error);
+
+    	    std::cerr << error << "\n";
+    	}
+	}
 }
 
 MessagingInterface::~MessagingInterface() {
+	int retries = 3;
+	while  (retries-- && connection != -1) { 
+		int err = close(connection);
+		if (err == -1 && errno == EINTR) continue;
+		connection = -1;
+	}
     if (MessagingInterface::current == this) MessagingInterface::current = 0;
     delete socket;
     delete context;
@@ -179,25 +208,23 @@ char *MessagingInterface::send(const Message&msg) {
     return res;
 }
 
-
-bool MessagingInterface::send_raw(const char *host, int port, const char *msg) {
-    char error[256];
-    int connection = anetTcpConnect(error, (char *)host, port);
-    if (connection == -1) {
-        std::cerr << error << "\n";
-        return false;
-    }
+bool MessagingInterface::send_raw(const char *msg) {
+    char error[ANET_ERR_LEN];
+	int retry=2;
     size_t len = strlen(msg);
-    size_t written = anetWrite(connection, (char *)msg, len);
-    if (written != len) {
-        snprintf(error, 256, "error sending message: %s", msg );
-        MessageLog::instance()->add(error);
-        return false;
-    }
-    close(connection);
+	while (retry--) {
+	    size_t written = anetWrite(connection, (char *)msg, len);
+	    if (written != len) {
+	        snprintf(error, ANET_ERR_LEN, "error sending message: %s", msg );
+	        MessageLog::instance()->add(error);
+			close(connection);
+			connect();
+	    }
+		else return true;
+	}
+	if (!retry) return false;
     return true;
 }
-
 
 static std::string valueType(const Value &v) {
     switch (v.kind) {

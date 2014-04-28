@@ -28,17 +28,19 @@
 #include "symboltable.h" 
 #include "cJSON.h"
 
+enum Protocol { eCLOCKWORK, eRAW, eZMQ };
+
 class MessagingInterface : public Receiver {
 public:
-    MessagingInterface(int num_threads, int port);
-    MessagingInterface(std::string host, int port);
+    MessagingInterface(int num_threads, int port, Protocol proto = eZMQ);
+    MessagingInterface(std::string host, int port, Protocol proto = eZMQ);
     ~MessagingInterface();
     char *send(const char *msg);
     char *send(const Message &msg);
-    static bool send_raw(const char *host, int port, const char *msg);
+    bool send_raw(const char *msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent();
-    static MessagingInterface *create(std::string host, int port);
+    static MessagingInterface *create(std::string host, int port, Protocol proto = eZMQ);
 	static Value valueFromJSONObject(cJSON *obj, cJSON *cjType);
     char *sendCommand(std::string cmd, std::list<Value> *params);
     char *sendCommand(std::string cmd, Value p1 = SymbolTable::Null,
@@ -59,11 +61,15 @@ public:
 private:
     void connect();
     static MessagingInterface *current;
+	Protocol protocol;
     zmq::context_t *context;
     zmq::socket_t *socket;
     static std::map<std::string, MessagingInterface *>interfaces;
     bool is_publisher;
     std::string url;
+	int connection;
+	std::string hostname;
+	int port;
 };
 
 #endif

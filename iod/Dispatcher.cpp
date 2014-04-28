@@ -134,13 +134,18 @@ void Dispatcher::idle() {
                     long port;
                     if (port_val.asInteger(port)) {
                         if (protocol == "RAW") {
-                            MessagingInterface::send_raw(host.asString().c_str(), (int)port, m.getText().c_str());
-                        }
+                        	MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eRAW);
+                            mif->send_raw(m.getText().c_str());
+						}
                         else {
-                            MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port);
-                            if (protocol == "CLOCKWORK")
+                            if (protocol == "CLOCKWORK") {
+                        		MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eCLOCKWORK);
                                 mif->send(m);
-                            else mif->send(m.getText().c_str()); // zmq
+							}
+                            else {
+                        		MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eZMQ);
+								mif->send(m.getText().c_str());
+							}
                         }
                     }
                 }

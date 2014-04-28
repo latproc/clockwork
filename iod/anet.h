@@ -39,7 +39,7 @@
 extern "C" {
 #endif
 
-int anetTcpConnect(char *err, char *addr, int port);
+int anetTcpConnect(char *err, const char *addr, int port);
 int anetTcpNonBlockConnect(char *err, char *addr, int port);
 size_t anetRead(int fd, char *buf, size_t count);
 int anetResolve(char *err, char *host, char *ipbuf);

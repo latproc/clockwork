@@ -42,8 +42,17 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <assert.h>
+#include <time.h>
 
 #include "anet.h"
+
+static void tiny_sleep(uint32_t amt) {
+	struct timespec req, rem;
+	req.tv_sec = amt / 1000000000L;
+	req.tv_nsec = amt % 1000000000L;
+	assert(nanosleep(&req, &rem) != EINVAL);
+}
 
 static void anetSetError(char *err, const char *fmt, ...)
 {
@@ -125,7 +134,7 @@ int anetResolve(char *err, char *host, char *ipbuf)
 
 #define ANET_CONNECT_NONE 0
 #define ANET_CONNECT_NONBLOCK 1
-static int anetTcpGenericConnect(char *err, char *addr, int port, int flags)
+static int anetTcpGenericConnect(char *err, const char *addr, int port, int flags)
 {
     int s, on = 1;
     struct sockaddr_in sa;
@@ -155,10 +164,12 @@ static int anetTcpGenericConnect(char *err, char *addr, int port, int flags)
         if (anetNonBlock(err,s) != ANET_OK)
             return ANET_ERR;
     }
-    if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
+	int retry = 1;
+    while (retry-- && connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
         if (errno == EINPROGRESS &&
             flags & ANET_CONNECT_NONBLOCK)
             return s;
+		if (errno == EINTR) { retry++; continue; }
 
         anetSetError(err, "connect: %s\n", strerror(errno));
         close(s);
@@ -167,7 +178,7 @@ static int anetTcpGenericConnect(char *err, char *addr, int port, int flags)
     return s;
 }
 
-int anetTcpConnect(char *err, char *addr, int port)
+int anetTcpConnect(char *err, const char *addr, int port)
 {
     return anetTcpGenericConnect(err,addr,port,ANET_CONNECT_NONE);
 }
@@ -181,10 +192,12 @@ int anetTcpNonBlockConnect(char *err, char *addr, int port)
  * (unless error or EOF condition is encountered) */
 size_t anetRead(int fd, char *buf, size_t count)
 {
-    int nread, totlen = 0;
+    int nread;
+	size_t totlen = 0;
     while(totlen != count) {
         nread = read(fd,buf,count-totlen);
         if (nread == 0) return totlen;
+		if (nread == -1 && errno == EINTR) { continue; }
         if (nread == -1) return -1;
         totlen += nread;
         buf += nread;
@@ -196,10 +209,12 @@ size_t anetRead(int fd, char *buf, size_t count)
  * (unless error is encountered) */
 size_t anetWrite(int fd, char *buf, size_t count)
 {
-    int nwritten, totlen = 0;
+    int nwritten;
+	size_t totlen = 0;
     while(totlen != count) {
         nwritten = write(fd,buf,count-totlen);
         if (nwritten == 0) return totlen;
+		if (nwritten == -1 && errno == EINTR) { continue; }
         if (nwritten == -1) return -1;
         totlen += nwritten;
         buf += nwritten;

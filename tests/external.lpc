@@ -1,11 +1,14 @@
-camera EXTERNAL(HOST:"localhost", PORT:7003, PROTOCOL:RAW, tab:Test);
+camera EXTERNAL(HOST:localhost, PORT:7003, PROTOCOL:RAW, tab:Test);
 
 Test MACHINE camera {
 
-    test WHEN TIMER > 5000;
+    test WHEN TIMER > 5;
     idle DEFAULT;
 
-    ENTER test { msg := "CapturePhoto"; SEND msg TO camera; SET SELF TO idle; }
+    ENTER test { 
+		msg := "123abc " + NOW + " CapturePhoto\n"; 
+		SEND msg TO camera; SET SELF TO idle; 
+	}
 	RECEIVE TestMessage { LOG "Test Message"; }
     RECEIVE CaptureDone {
         LOG "Got capture done message";
