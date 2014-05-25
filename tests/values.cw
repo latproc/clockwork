@@ -1,5 +1,10 @@
 # This script demonstrates various builtin special values
 #
+
+S1 CONSTANT "STR ";
+S2 CONSTANT "STR1 ";
+S3 CONSTANT "2STR ";
+
 Test MACHINE {
 
 	ENTER INIT { 
@@ -15,6 +20,11 @@ Test MACHINE {
 		d := 0 + a + b;
 		LOG c;
 		LOG d;
+
+		LOG "1X" + 2;
+		LOG S1 + NOW;
+		LOG S2 + NOW;
+		LOG S3 + NOW;
 	}
 }
 logger Test(tab:tests);

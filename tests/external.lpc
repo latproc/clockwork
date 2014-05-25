@@ -2,7 +2,7 @@ camera EXTERNAL(HOST:localhost, PORT:7003, PROTOCOL:RAW, tab:Test);
 
 Test MACHINE camera {
 
-    test WHEN TIMER > 5;
+    test WHEN TIMER > 500;
     idle DEFAULT;
 
     ENTER test { 
