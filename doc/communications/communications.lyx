@@ -1,0 +1,648 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Communications
+\end_layout
+
+\begin_layout Abstract
+This document describes the future communications framework for Clockwork.
+ A Clockwork driver program provides a runtime environment to execute several
+ machines in parallel.
+ Each driver may communicate with others via message passing and publisher/subsc
+riber models.
+ 
+\end_layout
+
+\begin_layout Standard
+This document explores new communication interfaces for clockwork
+\end_layout
+
+\begin_layout Standard
+EtherCAT
+\end_layout
+
+\begin_layout Standard
+Modbbus
+\end_layout
+
+\begin_layout Standard
+zeroMQ
+\end_layout
+
+\begin_layout Standard
+Internet of Things
+\end_layout
+
+\begin_layout Section
+Architecture
+\end_layout
+
+\begin_layout Standard
+The latproc system is to be split into a communications hub with scripting
+ engines and communications modules all interconnected by a shared memory
+ model and messaging system.
+ In the first instance, Redis and ØMQ provide the shared memory and messaging
+ infrastructure.
+ The shared repository provides access to shared static data, it may be
+ implemented in a variety of database/memory systems but the key observation
+ is that the repository is not expected to notify Clockwork instances of
+ data changes.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename ../../../../doc/communications_images/architecture1.png
+	lyxscale 75
+	scale 75
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+Clockwork messages and data sharing
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+On startup, a Clockwork driver
+\end_layout
+
+\begin_layout Itemize
+interrogates a repository for 
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+machine definitions 
+\end_layout
+
+\begin_layout Itemize
+interface definitions
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+establishes connections as described in the interface definitions
+\end_layout
+
+\begin_layout Itemize
+begins execution of the machines
+\end_layout
+
+\begin_layout Standard
+Note that failure to establish communications does not cause an instance
+ to fail its startup; it will continue to establish the connection until
+ aborted by an external source.
+ Communication interfaces can be interrogated within Clockwork and the channel
+ state can be used to affect the execution of the models.
+\end_layout
+
+\begin_layout Section
+Interprogram communication
+\end_layout
+
+\begin_layout Subsection
+Interface Definitions
+\end_layout
+
+\begin_layout Standard
+An interface between Clockwork drivers is introduced via the CHANNEL object
+\end_layout
+
+\begin_layout LyX-Code
+channel_name CHANNEL(host:hostname, port:portname) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+MONITORS '{' machine_name [ interface ], , \SpecialChar \ldots{}
+ '}'
+\end_layout
+
+\begin_layout LyX-Code
+UPDATES '{' machine_name [ interface ], \SpecialChar \ldots{}
+ '}'
+\end_layout
+
+\begin_layout LyX-Code
+SENDS message_name ';'
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+A channel definition is directional, the clauses apply to the machine that
+ .
+ A channel may also include templates that define the machines that are
+ monitored or updated via the channel.
+ The definition may describe the states to be exchanged, a state that is
+ the startup or default state and the properties that are to be exchanged
+ on the interface.
+\end_layout
+
+\begin_layout LyX-Code
+machine_class INTERFACE '{' 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+state1 STATE ';'
+\end_layout
+
+\begin_layout LyX-Code
+state2 STATE ';'
+\end_layout
+
+\begin_layout LyX-Code
+initial_state INITIAL ';'
+\end_layout
+
+\begin_layout LyX-Code
+STATES '{' state3, state4, \SpecialChar \ldots{}
+ '}'
+\end_layout
+
+\begin_layout LyX-Code
+property1 PROPERTY [ READONLY | READWRITE ] ';'
+\end_layout
+
+\begin_layout LyX-Code
+PROPERTIES '{' property2 [ READONLY | READWRITE ], \SpecialChar \ldots{}
+ '}'
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+'}'
+\end_layout
+
+\begin_layout Standard
+If an interface definition is provided and includes any state definitions,
+ only the states defined will be exchanged.
+ Similarly if properties are included in the definition, only changes to
+ the named properties will be exchanged.
+\end_layout
+
+\begin_layout Standard
+For example, in the following definition, only the states `on' and `off'
+ of the switch are communicated to the connecting machine.
+\end_layout
+
+\begin_layout LyX-Code
+switch INTERFACE { STATES { on, off } }
+\end_layout
+
+\begin_layout Standard
+If the switch enters another state (eg., disabled, no message is sent to
+ the listener and the switch is assumed to be still in the last state communicat
+ed.
+ (TBD)
+\end_layout
+
+\begin_layout Subsection
+Issues
+\end_layout
+
+\begin_layout Enumerate
+How do we manage the startup conditions? When a client connects? When the
+ server restarts?
+\end_layout
+
+\begin_layout Subsection
+Message Format
+\end_layout
+
+\begin_layout Standard
+Communication between all components is via a structured message using the
+ JSON format.
+\end_layout
+
+\begin_layout LyX-Code
+command string,
+\end_layout
+
+\begin_layout LyX-Code
+need_response bool /* is this used/needed? TBD */
+\end_layout
+
+\begin_layout LyX-Code
+parameters array [
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+item {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+type B | BOOL | I | INTEGER | U | UNSIGNED | S | STRING | F | FLOAT | N
+ | NAME
+\end_layout
+
+\begin_layout LyX-Code
+value <depends on type>
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+]
+\end_layout
+
+\begin_layout Standard
+Note that names conform to clockwork naming rules: ALPHA [ ALPHA NUMBER
+ _ ] ...
+\end_layout
+
+\begin_layout Subsection
+Monitor channel
+\end_layout
+
+\begin_layout Standard
+This is the main channel by which state changes are published, default port
+ 5557
+\end_layout
+
+\begin_layout Standard
+message structure:
+\end_layout
+
+\begin_layout Standard
+command := PROPERTY | STATE
+\end_layout
+
+\begin_layout Standard
+need_response := FALSE
+\end_layout
+
+\begin_layout Standard
+parameters := [ { N, <name> }, { <type>, <value> } ]
+\end_layout
+
+\begin_layout Subsection
+Modbus channel
+\end_layout
+
+\begin_layout Standard
+This channel is used to communicate with the modbus daemon, that daemon
+ communicates to devices with the modbus protocol
+\end_layout
+
+\begin_layout Standard
+message structure:
+\end_layout
+
+\begin_layout Standard
+The following commands may be sent to the modbus daemon
+\end_layout
+
+\begin_layout Description
+STARTUP tells modbus to load the configuration and obtain initial values
+ for all coils etc
+\end_layout
+
+\begin_layout Description
+DEBUG
+\begin_inset space ~
+\end_inset
+
+ON tells modbusd to emit debug information
+\end_layout
+
+\begin_layout Description
+DEBUG
+\begin_inset space ~
+\end_inset
+
+OFF tells modbusd to stop emitting debug information
+\end_layout
+
+\begin_layout Description
+UPDATE 
+\end_layout
+
+\begin_layout Subsection
+Persistence channel
+\end_layout
+
+\begin_layout Standard
+This is used to report changes of property values and state in persistent
+ machines
+\end_layout
+
+\begin_layout Standard
+Message structure
+\end_layout
+
+\begin_layout LyX-Code
+command string,
+\end_layout
+
+\begin_layout LyX-Code
+parameters array [
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+item {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+type B | BOOL | I | INTEGER | U | UNSIGNED | S | STRING | F | FLOAT | N
+ | NAME
+\end_layout
+
+\begin_layout LyX-Code
+value <depends on type>
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+]
+\end_layout
+
+\begin_layout Subsection
+Device connector
+\end_layout
+
+\begin_layout Standard
+There is two way communication with device connector sending property commands
+ and receiving property or state commands or messages.
+ 
+\end_layout
+
+\begin_layout Description
+Messages Device connector may simply read values and pass them to clockwork
+ with no guarantee of delivery, these messages may be lost if something
+ goes wrong at either end but for repetitively sampled data, this is not
+ necessarirly a problem.
+ 
+\end_layout
+
+\begin_layout Description
+Requests are sent from clockwork to device connector sometime to be handled
+ by device connector and sometimes to pass through to the device.
+ The requests are to be formated as the device requires them and a reply
+ is to be sent to clockwork, either from the device or from device connector.
+ Since device connector does not know anything about the device, the request
+ provides additional information.
+\end_layout
+
+\begin_layout Description
+Replies are sent from device connector to clockwork.
+ If the request included a boolean option 
+\begin_inset Quotes eld
+\end_inset
+
+ack_needed
+\begin_inset Quotes erd
+\end_inset
+
+ (true), device connector simply sends 
+\begin_inset Quotes eld
+\end_inset
+
+OK
+\begin_inset Quotes erd
+\end_inset
+
+ when the request has been forwarded to the device.
+ Otherwise, device connector forwards the request to the device and collects
+ its response, using a pattern supplied in the request.
+\end_layout
+
+\begin_layout Description
+Commands are sent from device connector to clockwork.
+ Commands require an acknowledgment and sometimes require data.
+ Device connector can be configured to supply data matching a pattern via
+ the PROPERTY command or STATE command.
+ Subexpressions in the pattern will become additional parameters.
+\end_layout
+
+\begin_layout Subsubsection
+Messages
+\end_layout
+
+\begin_layout Standard
+For data streaming, matched sub expressions are passed as parameters.
+ 
+\end_layout
+
+\begin_layout Standard
+Message structure:
+\end_layout
+
+\begin_layout LyX-Code
+DATA string
+\end_layout
+
+\begin_layout LyX-Code
+list_name name, 
+\end_layout
+
+\begin_layout LyX-Code
+params array [ value, ...]
+\end_layout
+
+\begin_layout Subsubsection
+Requests
+\end_layout
+
+\begin_layout LyX-Code
+REQUEST string
+\end_layout
+
+\begin_layout LyX-Code
+id integer
+\end_layout
+
+\begin_layout LyX-Code
+params array [ value, ...
+ ]
+\end_layout
+
+\begin_layout Subsubsection
+Replies
+\end_layout
+
+\begin_layout Subsubsection
+Commands
+\end_layout
+
+\begin_layout Section
+Messaging system
+\end_layout
+
+\begin_layout Standard
+The messaging system attempts to deal with various interprocess issues,
+ using zmq for the heavy lifting but also providing application features:
+\end_layout
+
+\begin_layout Itemize
+Clients negotiating a private communication channel
+\end_layout
+
+\begin_layout Itemize
+Dealing with replies
+\end_layout
+
+\begin_layout Standard
+All applications include the notion that some data is transitory and some
+ is not, transitory data is sent without regard to whether anyone is listening,
+ this is used for repeated messages such as sensor data streaming.
+ For non-transitory data, a request/response method is used.
+\end_layout
+
+\begin_layout Section
+Performance
+\end_layout
+
+\begin_layout Standard
+This may need to be optimised, we could use a temlpate system; a property
+ message looks as follows, where the user data is given in 
+\backslash
+$1, 
+\backslash
+$2 etc.
+ Note that the value (
+\backslash
+$3) item needs to be converted into a JSON string with the appropriate escape
+ charaters but apart from that the template can be filled fairly quickly.
+\end_layout
+
+\begin_layout LyX-Code
+{ "command": "PROPERTY", "params": 
+\end_layout
+
+\begin_layout LyX-Code
+[
+\end_layout
+
+\begin_layout LyX-Code
+{ "type": "NAME", "value": $1 },
+\end_layout
+
+\begin_layout LyX-Code
+{ "type": "NAME", "value": $2 },
+\end_layout
+
+\begin_layout LyX-Code
+{ "type": TYPEOF($3), "value": $3 }
+\end_layout
+
+\begin_layout LyX-Code
+] }
+\end_layout
+
+\end_body
+\end_document
