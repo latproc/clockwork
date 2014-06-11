@@ -355,6 +355,369 @@ Note that names conform to clockwork naming rules: ALPHA [ ALPHA NUMBER
 \end_layout
 
 \begin_layout Subsection
+Dynamic configuration
+\end_layout
+
+\begin_layout Standard
+A channel specification needs to be read by both ends of the channel.
+ To facilitate the use of runtime sampling systems, a channel specification
+ can be sent by the client when the connection is made.
+ The channel specification may include interface specifications (TBD).
+ 
+\end_layout
+
+\begin_layout Section
+Examples
+\end_layout
+
+\begin_layout Subsection
+Weight sampling
+\end_layout
+
+\begin_layout Standard
+Consider a weight sampling machine that is implemented with a remote (client)
+ computer that communicates with the device and a master (server) computer
+ that uses the sampled weight as part of its machine management.
+ 
+\end_layout
+
+\begin_layout Subsubsection
+Shared configuration
+\end_layout
+
+\begin_layout Standard
+We define a channel for communication between the computers and define an
+ interface that outlines the interesting states and properties of the device
+ interface.
+ Both the client and server:
+\end_layout
+
+\begin_layout Quotation
+ScalesChannel CHANNEL scales {
+\end_layout
+
+\begin_deeper
+\begin_layout Quotation
+MONITORS scales ScalesInterface;
+\end_layout
+
+\end_deeper
+\begin_layout Quotation
+}
+\end_layout
+
+\begin_layout Quotation
+ScalesInterface INTERFACE {
+\end_layout
+
+\begin_deeper
+\begin_layout Quotation
+PROPERTIES weight, status;
+\end_layout
+
+\begin_layout Quotation
+stable STATE;
+\end_layout
+
+\begin_layout Quotation
+unstable INITIAL;
+\end_layout
+
+\end_deeper
+\begin_layout Quotation
+}
+\end_layout
+
+\begin_layout Subsubsection
+Server configuration
+\end_layout
+
+\begin_layout Standard
+Using this information, the master computer can define a machine that represents
+ a remote scales machine conforming to the ScalesInterface and use this
+ to implement some logic.
+ The monitor uses the state of the remote system to determine whether the
+ weight is valid but also demonstrates the use of a timer to `debounce'
+ the remote state change:
+\end_layout
+
+\begin_layout LyX-Code
+ScalesMachine ScalesInterface;
+\end_layout
+
+\begin_layout LyX-Code
+WeightMonitor MACHINE scales {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+waiting WHEN scales IS unstable;
+\end_layout
+
+\begin_layout LyX-Code
+stablising WHEN scales IS stable AND TIMER < 100;
+\end_layout
+
+\begin_layout LyX-Code
+overweight WHEN scales IS stable AND scales.weight >= 100;
+\end_layout
+
+\begin_layout LyX-Code
+ready WHEN scales IS stable AND scales.weight >= 10;
+\end_layout
+
+\begin_layout LyX-Code
+underweight WHEN scales IS stable;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+remote_scales ScalesMachine;
+\end_layout
+
+\begin_layout LyX-Code
+monitor WeightMonitor remote_scales;
+\end_layout
+
+\begin_layout Standard
+The host machine executes the above without needing any additional implementatio
+n details for the remote device but it needs to link the remote scales to
+ the channel by instantiating the channel:
+\end_layout
+
+\begin_layout LyX-Code
+scales_channel ScalesChannel(port:9999) remote_scales;
+\end_layout
+
+\begin_layout Subsubsection
+Client configuration
+\end_layout
+
+\begin_layout Standard
+The Clockwork driver that implements the scales defines a machine to interpret
+ data from the hardware.
+ Device connector will be used in this case to prepare the properties of
+ this machine (not shown here).
+\end_layout
+
+\begin_layout LyX-Code
+SCALES MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION weight 0;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION status 
+\begin_inset Quotes eld
+\end_inset
+
+x
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+unstable WHEN status == 
+\begin_inset Quotes eld
+\end_inset
+
+U
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+stable WHEN status == 
+\begin_inset Quotes eld
+\end_inset
+
+S
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+unknown DEFAULT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+scales_machine SCALES;
+\end_layout
+
+\begin_layout LyX-Code
+scales_channel ScalesChannel(host:
+\begin_inset Quotes erd
+\end_inset
+
+master
+\begin_inset Quotes erd
+\end_inset
+
+, port:9999) scales_machine;
+\end_layout
+
+\begin_layout Standard
+When the client driver starts, it attempts to instantiate the scales channel
+ by making a connection to the host and port provided.
+ The scales channel enters a 'connected' state once communication is established.
+ In the situation where both sides of the channel implement the scales the
+ channel enters an 'error' state.
+\end_layout
+
+\begin_layout Subsection
+System Monitoring
+\end_layout
+
+\begin_layout Standard
+To setup a system monitor, a pattern can be used so that a range of machines
+ can be selected without the need to name each machine.
+ Consider an application that monitors a Clockwork instance to record state
+ changes of a set of machines.
+\end_layout
+
+\begin_layout LyX-Code
+MonitorChannel CHANNEL {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+MONITORS `*`;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Note that no parameters are passed to the channel and a wildcard is used
+ to specify the machines to be monitored.
+ The client instantiates the MonitorChannel and when the connection is establish
+ed, the server transmits the current state and properties of all matching
+ machines.
+\end_layout
+
+\begin_layout Standard
+A wildcard can be associated with an interface, giving greater control of
+ what is monitored:
+\end_layout
+
+\begin_layout LyX-Code
+MonitorChannel CHANNEL {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION Initialisation FALSE;
+\end_layout
+
+\begin_layout LyX-Code
+MONITORS `*` MonitorInterface;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+MonitorInterface INTERFACE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+PROPERTIES `^[A-Z].*`;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+In the above example, the monitor interface specifies that only properties
+ with names that begin wtih a capital letter will be sent.
+ A similar specification can be used for transmitted states.
+\end_layout
+
+\begin_layout Section
+Implementation
+\end_layout
+
+\begin_layout Standard
+At the client end, clockwork uses the channel object to establish and maintain
+ a server connection.
+ When the connection is setup, the current state of the machines in the
+ 'UPDATES' list are sent and the server is expected to also send the state
+ of all the machines in the 'MONITORS' list.
+ When a connection breaks, the client sets the state of all 'MONITORS' machines
+ to their initial/default state.
+\end_layout
+
+\begin_layout Standard
+At the server end, clockwork instantiates a machine for each entry in the
+ 'UPDATES' list and updates the state of this machine each time a message
+ is received.
+ This local instantiation shadows the state of the remote machine and can
+ be used by other local machines as normal.
+\end_layout
+
+\begin_layout Subsection
+Implementation notes
+\end_layout
+
+\begin_layout Itemize
+A MachineInterface object now subclasses MachineInstance
+\end_layout
+
+\begin_layout Itemize
+A MachineInterface is a representative or `proxy' for a MachineInstance
+\end_layout
+
+\begin_layout Itemize
+MachineInterface objects are distinguished when setting up a channel so
+ that they are not normally used to source a channel
+\end_layout
+
+\begin_layout Itemize
+MachineInterface objects can be used to propagate state to other instances
+ of clockwork; this is done by registering a distance (hops) to the actual
+ MachineInstance that they represent
+\end_layout
+
+\begin_layout Itemize
+There are issues with setup and teardown of connections and how this effects
+ messaging.
+ TBD
+\end_layout
+
+\begin_layout Section
+Legacy Channels
+\end_layout
+
+\begin_layout Standard
+This section is partial documentation of previous channel implementations
+\end_layout
+
+\begin_layout Subsection
 Monitor channel
 \end_layout
 
@@ -535,7 +898,7 @@ Messages
 
 \begin_layout Standard
 For data streaming, matched sub expressions are passed as parameters.
- 
+ ?? incomplete
 \end_layout
 
 \begin_layout Standard
