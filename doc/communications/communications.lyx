@@ -126,8 +126,6 @@ status open
 \align center
 \begin_inset Graphics
 	filename ../../../../doc/communications_images/architecture1.png
-	lyxscale 75
-	scale 75
 
 \end_inset
 
@@ -189,6 +187,79 @@ Note that failure to establish communications does not cause an instance
  state can be used to affect the execution of the models.
 \end_layout
 
+\begin_layout Subsection
+Shared Memory and sampling
+\end_layout
+
+\begin_layout Standard
+Clockwork if fundamentally a program that looks at changes in a memory map
+ and uses those changes to affect changes in a state model of various simulated
+ machines.
+ It should be possible to share any memory block with clockwork, no matter
+ the source.
+ A block may represent a device or it may be divided into regions that relate
+ to the device in some way, for example in with Beckhoff EtherCAT(tm) the
+ `Module' refers to a physical device, in MODBUS, 
+\emph on
+coils
+\emph default
+ and 
+\emph on
+registers
+\emph default
+ refer to distinct memory regions.
+\end_layout
+
+\begin_layout Standard
+Each block may have properties that descibe attributes common to all regions
+ in the block 
+\end_layout
+
+\begin_layout LyX-Code
+ModbusPanel BLOCK {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+X BIT[256] IN;
+\end_layout
+
+\begin_layout LyX-Code
+Y BIT[256] OUT;
+\end_layout
+
+\begin_layout LyX-Code
+V WORD[256] IN OUT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+panel ModusPanel 
+\end_layout
+
+\begin_layout Standard
+Given the above definition, Clockwork may bind fields of the block to a
+ machine, for example:
+\end_layout
+
+\begin_layout LyX-Code
+start_button panel X1;
+\end_layout
+
+\begin_layout Standard
+defines 
+\emph on
+start_button
+\emph default
+ as a single bit object in clockwork, linked to coil X01 in the modbus memory
+ block.
+ 
+\end_layout
+
 \begin_layout Section
 Interprogram communication
 \end_layout
@@ -207,17 +278,23 @@ channel_name CHANNEL(host:hostname, port:portname) {
 
 \begin_deeper
 \begin_layout LyX-Code
-MONITORS '{' machine_name [ interface ], , \SpecialChar \ldots{}
- '}'
+MONITORS machine_name [ interface ], \SpecialChar \ldots{}
+ ';'
 \end_layout
 
 \begin_layout LyX-Code
-UPDATES '{' machine_name [ interface ], \SpecialChar \ldots{}
- '}'
+UPDATES machine_name [ interface ], \SpecialChar \ldots{}
+ ;
 \end_layout
 
 \begin_layout LyX-Code
-SENDS message_name ';'
+SENDS message_name, \SpecialChar \ldots{}
+ ';'
+\end_layout
+
+\begin_layout LyX-Code
+COMMANDS command_name, \SpecialChar \ldots{}
+ ';'
 \end_layout
 
 \end_deeper
@@ -226,8 +303,30 @@ SENDS message_name ';'
 \end_layout
 
 \begin_layout Standard
-A channel definition is directional, the clauses apply to the machine that
- .
+For example a BIT has the interface:
+\end_layout
+
+\begin_layout LyX-Code
+BIT MACHINE { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on STATE; off INITIAL; 
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND toggle,turnOn,turnOff;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+A channel definition is directional, how the clauses apply to the machine
+ depends on where the machines are instantiated.
  A channel may also include templates that define the machines that are
  monitored or updated via the channel.
  The definition may describe the states to be exchanged, a state that is
@@ -303,6 +402,15 @@ How do we manage the startup conditions? When a client connects? When the
  server restarts?
 \end_layout
 
+\begin_layout Enumerate
+How large is a beckhoff master memory block?
+\end_layout
+
+\begin_layout Enumerate
+How quickly can we send master block updates to a clockwork program.
+ What latency can we expect?
+\end_layout
+
 \begin_layout Subsection
 Message Format
 \end_layout
@@ -363,6 +471,31 @@ A channel specification needs to be read by both ends of the channel.
  To facilitate the use of runtime sampling systems, a channel specification
  can be sent by the client when the connection is made.
  The channel specification may include interface specifications (TBD).
+ 
+\end_layout
+
+\begin_layout Subsection
+Protocol
+\end_layout
+
+\begin_layout Standard
+When a client connects to a server it is required to initiate a negotiation
+ of the channel configuration for the connection.
+ This can be done by a command message with the command: CHANNEL and the
+ name of the channel.
+ In this case, the server is expected to refer to its repository for a matching
+ channel (and version\SpecialChar \ldots{}
+).
+ 
+\end_layout
+
+\begin_layout Standard
+If the server does not have a matching configuration, the client may send
+ the configuration.
+\end_layout
+
+\begin_layout Standard
+If a channel cannot be agreed, the connection will be terminated.
  
 \end_layout
 
@@ -693,8 +826,8 @@ A MachineInterface is a representative or `proxy' for a MachineInstance
 \end_layout
 
 \begin_layout Itemize
-MachineInterface objects are distinguished when setting up a channel so
- that they are not normally used to source a channel
+MachineInterface objects are distinguished when setting up a channel and
+ are not normally used as a source.
 \end_layout
 
 \begin_layout Itemize
@@ -707,6 +840,80 @@ MachineInterface objects can be used to propagate state to other instances
 There are issues with setup and teardown of connections and how this effects
  messaging.
  TBD
+\end_layout
+
+\begin_layout Section
+Predefined Channels
+\end_layout
+
+\begin_layout Subsection
+EtherCAT
+\end_layout
+
+\begin_layout Standard
+When the EtherCAT driver connects to Clockwork, it announces the modules
+ that it has control over either by providing the names from the shared
+ repository or by providing the definitions directly on the channel.
+\end_layout
+
+\begin_layout LyX-Code
+Module BLOCK {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION position 0;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION alias 0;
+\end_layout
+
+\begin_layout LyX-Code
+pdo1 REGION {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION SM 3;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION index 0x1a00;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION name 
+\begin_inset Quotes eld
+\end_inset
+
+Inputs
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[8];
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsection
+Modbus
+\end_layout
+
+\begin_layout Subsection
+Persistence
 \end_layout
 
 \begin_layout Section
