@@ -75,29 +75,43 @@ Communications
 This document describes the future communications framework for Clockwork.
  A Clockwork driver program provides a runtime environment to execute several
  machines in parallel.
- Each driver may communicate with others via message passing and publisher/subsc
-riber models.
+ Each driver may communicate with other programs via message passing and
+ publisher/subscriber models.
  
 \end_layout
 
-\begin_layout Standard
-This document explores new communication interfaces for clockwork
+\begin_layout Section
+Background
 \end_layout
 
 \begin_layout Standard
+The Clockwork interpreters have several communication interfaces to support
+ various control protocols, web server display, system monitoring and to
+ provide a commandline interface.
+ These interfaces have been introduced on the basis of project requirements
+ and are inconsistent in design and implementation.
+ This document addresses the various communications interfaces and describes
+ legacy and future implementations for
+\end_layout
+
+\begin_layout Itemize
 EtherCAT
 \end_layout
 
-\begin_layout Standard
-Modbbus
+\begin_layout Itemize
+Modbus
 \end_layout
 
-\begin_layout Standard
-zeroMQ
+\begin_layout Itemize
+commanline
 \end_layout
 
-\begin_layout Standard
+\begin_layout Itemize
 Internet of Things
+\end_layout
+
+\begin_layout Itemize
+web clients
 \end_layout
 
 \begin_layout Section
@@ -862,7 +876,7 @@ Module BLOCK {
 
 \begin_deeper
 \begin_layout LyX-Code
-OPTION position 0;
+OPTION position 1;
 \end_layout
 
 \begin_layout LyX-Code
@@ -908,8 +922,28 @@ BIT[8];
 }
 \end_layout
 
+\begin_layout Standard
+A Clockwork script can bind objects to fields:
+\end_layout
+
+\begin_layout LyX-Code
+EL1814 MODULE 1, 0; # bit 0 of module with position 1
+\end_layout
+
+\begin_layout Standard
+The above legacy syntax is not general enough (TBD)
+\end_layout
+
 \begin_layout Subsection
 Modbus
+\end_layout
+
+\begin_layout Standard
+Clockwork provides a facility to export properties, states and commands
+ of machines to modbus.
+ The current syntax provides for automatically generated addresses but is
+ too tightly coupled to modbus.
+ A more general approach is needed (TBD)
 \end_layout
 
 \begin_layout Subsection
