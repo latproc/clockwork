@@ -26,19 +26,6 @@
 #include "MachineInstance.h"
 #include "Expression.h"
 
-/*
-typedef union {
-	int iVal;
-	const char *sVal;
-	const char *symbol;
-	Predicate *expr;
-	PredicateOperator opr;
-	Value *val;
-} mytype;
-*/
-//#undef YYSTYPE
-//#define YYSTYPE mytype
-
 void yyerror(const char *str);
 
 #ifndef __MAIN__
@@ -46,10 +33,5 @@ extern int line_num;
 extern SymbolTable globals;
 extern const char *yyfilename;
 #endif
-
-//#ifndef COMPILER_MAIN
-//extern std::list<MachineInstance> machines;
-//#endif
-
 
 #endif
