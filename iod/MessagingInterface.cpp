@@ -134,7 +134,9 @@ bool MessagingInterface::receives(const Message&, Transmitter *t) {
     return true;
 }
 void MessagingInterface::handle(const Message&msg, Transmitter *from, bool needs_receipt ) {
-    send(msg);
+    char *response = send(msg);
+    if (response)
+        free(response);
 }
 
 
@@ -147,6 +149,9 @@ char *MessagingInterface::send(const char *txt) {
     }
     size_t len = strlen(txt);
     
+    // We try to send a few times and if an exception occurs we try a reconnect
+    // but is this useful without a sleep in between?
+    // It seems unlikely the conditions will have changed between attempts.
     int retries=4;
     while (--retries>0) {
         try {
@@ -160,42 +165,34 @@ char *MessagingInterface::send(const char *txt) {
                 std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
                 std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+            delete socket;
+            connect();
         }
     }
-    retries = 4;
-    while (--retries>0) {
+    if (!is_publisher) {
         try {
-            if (!is_publisher) {
-                bool expect_reply = true;
-                while (expect_reply) {
-                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                    zmq::poll( &items[0], 1, 500000);
-                    if (items[0].revents & ZMQ_POLLIN) {
-                        zmq::message_t reply;
-                        if (socket->recv(&reply)) {
-                            len = reply.size();
-                            char *data = (char *)malloc(len+1);
-                            memcpy(data, reply.data(), len);
-                            data[len] = 0;
-                            std::cout << url << ": " << data << "\n";
-                            return data;
-                        }
-                    }
-                    else
-                        expect_reply = false;
-                        std::cerr << "abandoning message " << txt << "\n";
-                        delete socket;
-                        connect();
-                        break;
-                    }
+            zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
+            zmq::poll( &items[0], 1, 500000);
+            if (items[0].revents & ZMQ_POLLIN) {
+                zmq::message_t reply;
+                if (socket->recv(&reply)) {
+                    len = reply.size();
+                    char *data = (char *)malloc(len+1);
+                    memcpy(data, reply.data(), len);
+                    data[len] = 0;
+                    std::cout << url << ": " << data << "\n";
+                    return data;
+                }
             }
-            else break;
+            std::cerr << "timeout: abandoning message " << txt << "\n";
+            delete socket;
+            connect();
         }
         catch (std::exception e) {
             if (zmq_errno())
-                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+                std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
-                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+                std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
         }
     }
     return 0;
