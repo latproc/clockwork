@@ -99,7 +99,6 @@ struct Subcondition {
 %token NOT SET AND OR SQUOTE LOG FLAG
 %token PROPERTY DEFINE COLLECT FROM TEST EXECUTE SPAWN RUN
 %token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
-%token VERSION 
 %token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO RECEIVE
 %token DURING WAIT WAITFOR TRANSITION TAG INC DEC BY CONCAT
 %token SEND CONDITION INITSTATE IF ELSE ENABLE DISABLE BECOMES
@@ -111,6 +110,7 @@ struct Subcondition {
 %token ENABLED DISABLED SIZE ITEM FIRST LAST
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
+%token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 
 %union {
 	int iVal;
@@ -159,10 +159,11 @@ program_section
 
 program_section:
 | module_block
-|module_def 
-|machine_definition 
-|machine_instantiation 
-|route_declaration
+| module_def
+| machine_definition
+| machine_instantiation
+| route_declaration
+| channel_definition
 | error ';'
 | error '}'
 ;
@@ -221,6 +222,42 @@ definition_header '{' definition_body '}' {
     }
 }
 ;
+
+channel_definition:
+chn_definition_header '{' chn_definition_body '}' {
+}
+;
+
+chn_definition_header:
+SYMBOL CHANNEL {
+    DBG_PARSER << " channel definition "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+}
+| SYMBOL CHANNEL property_block {
+    DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    current_machineclass->properties = properties;
+    properties.clear();
+}
+
+chn_definition_body:
+chn_definition_section
+| chn_definition_body chn_definition_section
+;
+
+chn_definition_section:
+IDENTIFIER STRINGVAL ';'
+| VERSION STRINGVAL ';'
+| SHARES name_list ';'
+| MONITORS name_list ';'
+| UPDATES name_list ';'
+| SENDS name_list ';'
+| RECEIVES name_list ';'
+| OPTION option_settings ';'
+;
+
 
 definition_header:
 SYMBOL STATEMACHINE parameters { 
@@ -391,7 +428,6 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
 
 state_definition:
 SYMBOL STATE {
-    const char *x = $1;
     current_machineclass->states.push_back($1); // add to states to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
