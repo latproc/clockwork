@@ -379,6 +379,7 @@ public:
 	int definition_line;
 	struct timeval start_time; // time the current state started
 	struct timeval disabled_time; // time the current state started
+    int published;
 
 	static void sort();
     
@@ -387,6 +388,9 @@ public:
     void updateLastEvaluationTime();
     
     virtual long filter(long val) { return val; }
+    
+    void publish() { ++published; }
+    void unpublish() { --published; }
 
 protected:
 	int needs_check;
@@ -443,7 +447,7 @@ private:
     friend class PopListFrontValue;
     friend class ItemAtPosValue;
 
-		friend int changeState(void *s, const char *new_state);
+	friend int changeState(void *s, const char *new_state);
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);

@@ -779,7 +779,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     data(0),
     idle_time(0),
     next_poll(0),
-    is_traceable(false)
+    is_traceable(false),
+    published(0)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -823,7 +824,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
     message_handling_stats("Message handling"),
     data(0),
     idle_time(0),
-    is_traceable(false)
+    is_traceable(false),
+    published(0)
 {
     state_timer.setDynamicValue(new MachineTimerValue(this));
     if (_type != "LIST" && _type != "REFERENCE")
@@ -1112,7 +1114,6 @@ const Value *MachineInstance::getTimerVal() {
 }
 
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
-    static bool working = false;
     static int point_token = ClockworkToken::POINT;
     static std::list<MachineInstance *>::iterator iter = active_machines.begin();
     bool builtins = false;
@@ -1653,12 +1654,11 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
 		}
         
 		
-		{
+		if (published) {
 	        MessagingInterface *mif = MessagingInterface::getCurrent();
 			resetTemporaryStringStream();
 			if (owner) ss << owner->getName() << ".";
 	        ss << fullName() << " " << " STATE " << new_state << std::flush;
-	        //mif->send(ss.str().c_str());
             mif->sendState("STATE", fullName(), new_state.getName());
 		}
         
@@ -2505,7 +2505,6 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 		else {
 			properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
         }
-        const char *cc = option.first.c_str();
         if (option.first == "POLLING_DELAY") {
             long pd;
             if (option.second.asInteger(pd)) idle_time = pd;
@@ -3037,8 +3036,6 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 		if (changed ){
             setNeedsCheck();
             properties.add(property, new_value, SymbolTable::ST_REPLACE);
-	        MessagingInterface *mif = MessagingInterface::getCurrent();
-			resetTemporaryStringStream();
 			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
 				char buf[100];
 				errno = 0;
@@ -3054,16 +3051,13 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
                     MessageLog::instance()->add(buf);
 				}
 			}
-	        mif->send(ss.str().c_str());
-            mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
-        
-             if (false){
-                Message::Parameters *p = Message::makeParams(fullName().c_str(), property.c_str(), new_value);
-                Message *property_change = new Message("PROPERTY", p);
-                this->send(property_change, mif);
-                //mif->send(property_change);
+            if (published) {
+                MessagingInterface *mif = MessagingInterface::getCurrent();
+                resetTemporaryStringStream();
+                mif->send(ss.str().c_str());
+                mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
             }
-            
+        
 			if (getValue("PERSISTENT") == "true") {
 				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
 				//persistentStore->send(ss.str().c_str());
