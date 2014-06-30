@@ -1,4 +1,4 @@
-# Core sample times example
+# Sample times example
 TIMINGINFO MACHINE {
 	OPTION OnTime 0;
 }

@@ -35,8 +35,8 @@ public:
 	static LogState* instance() { if (!state_instance) state_instance = new LogState; return state_instance; }
 	int define(std::string new_name) {
 		flag_names.push_back(new_name);
-		name_map[new_name] = flag_names.size()-1;
-		return flag_names.size()-1;
+		name_map[new_name] = (int)flag_names.size()-1;
+		return (int)flag_names.size()-1;
 	}
 	int lookup(const std::string &name) { if (name_map.count(name)) return name_map[name]; else return 0; }
 	int insert(int flag_num) { state_flags.insert(flag_num); return flag_num; }
