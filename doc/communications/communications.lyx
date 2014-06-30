@@ -103,7 +103,7 @@ Modbus
 \end_layout
 
 \begin_layout Itemize
-commanline
+commandline (iosh)
 \end_layout
 
 \begin_layout Itemize
@@ -201,79 +201,6 @@ Note that failure to establish communications does not cause an instance
  state can be used to affect the execution of the models.
 \end_layout
 
-\begin_layout Subsection
-Shared Memory and sampling
-\end_layout
-
-\begin_layout Standard
-Clockwork if fundamentally a program that looks at changes in a memory map
- and uses those changes to affect changes in a state model of various simulated
- machines.
- It should be possible to share any memory block with clockwork, no matter
- the source.
- A block may represent a device or it may be divided into regions that relate
- to the device in some way, for example in with Beckhoff EtherCAT(tm) the
- `Module' refers to a physical device, in MODBUS, 
-\emph on
-coils
-\emph default
- and 
-\emph on
-registers
-\emph default
- refer to distinct memory regions.
-\end_layout
-
-\begin_layout Standard
-Each block may have properties that descibe attributes common to all regions
- in the block 
-\end_layout
-
-\begin_layout LyX-Code
-ModbusPanel BLOCK {
-\end_layout
-
-\begin_deeper
-\begin_layout LyX-Code
-X BIT[256] IN;
-\end_layout
-
-\begin_layout LyX-Code
-Y BIT[256] OUT;
-\end_layout
-
-\begin_layout LyX-Code
-V WORD[256] IN OUT;
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-}
-\end_layout
-
-\begin_layout LyX-Code
-panel ModusPanel 
-\end_layout
-
-\begin_layout Standard
-Given the above definition, Clockwork may bind fields of the block to a
- machine, for example:
-\end_layout
-
-\begin_layout LyX-Code
-start_button panel X1;
-\end_layout
-
-\begin_layout Standard
-defines 
-\emph on
-start_button
-\emph default
- as a single bit object in clockwork, linked to coil X01 in the modbus memory
- block.
- 
-\end_layout
-
 \begin_layout Section
 Interprogram communication
 \end_layout
@@ -283,7 +210,7 @@ Interface Definitions
 \end_layout
 
 \begin_layout Standard
-An interface between Clockwork drivers is introduced via the CHANNEL object
+An interface between Clockwork drivers is introduced via the CHANNEL object:
 \end_layout
 
 \begin_layout LyX-Code
@@ -291,6 +218,19 @@ channel_name CHANNEL(host:hostname, port:portname) {
 \end_layout
 
 \begin_deeper
+\begin_layout LyX-Code
+IDENTIFIER id_string ';'
+\end_layout
+
+\begin_layout LyX-Code
+VERSION version_sequence ';'
+\end_layout
+
+\begin_layout LyX-Code
+SHARES block_name, \SpecialChar \ldots{}
+ ';'
+\end_layout
+
 \begin_layout LyX-Code
 MONITORS machine_name [ interface ], \SpecialChar \ldots{}
  ';'
@@ -307,7 +247,7 @@ SENDS message_name, \SpecialChar \ldots{}
 \end_layout
 
 \begin_layout LyX-Code
-COMMANDS command_name, \SpecialChar \ldots{}
+RECEIVES command_name, \SpecialChar \ldots{}
  ';'
 \end_layout
 
@@ -317,7 +257,59 @@ COMMANDS command_name, \SpecialChar \ldots{}
 \end_layout
 
 \begin_layout Standard
-For example a BIT has the interface:
+A channel may specify a set of messages sent and commands received on the
+ interface but there is no way to define the parameters of those messages
+ or commands (TBD).
+ The clauses are described as follows:
+\end_layout
+
+\begin_layout Description
+IDENTIFIER a pre-shared key.
+ If the channel definition includes an IDENTIFIER option, both sides must
+ be able to demonstrate that they know the identifier.
+ The identifier itself should never be transmitted on the channel.
+\end_layout
+
+\begin_layout Description
+VERSION a numeric value that provides the version of the interface
+\end_layout
+
+\begin_layout Description
+SHARES lists the memory blocks that are shared between the client and the
+ server.
+ Each memory block must be known to both the server and client
+\end_layout
+
+\begin_layout Description
+MONITORS lists the machines that the server will send updates for.
+ Each listed machine may also include an interface definition that further
+ describes the states and properties of the machine.
+ Wildcards may be used to define the machines that can be monitored at the
+ receiver.
+ The client may request a reduced set of machines.
+\end_layout
+
+\begin_layout Description
+UPDATES lists the machines that the client will send updates for.
+ Each listed machine may also include an interface definition that further
+ describes the states and properties of the machine.
+\end_layout
+
+\begin_layout Description
+SENDS lists the messages that will be accepted by the server.
+ 
+\end_layout
+
+\begin_layout Description
+RECEIVES lists the messages that will be accepted by the client.
+\end_layout
+
+\begin_layout Standard
+Clauses in a channel definition are all optional.
+\end_layout
+
+\begin_layout Standard
+By way of an example, a BIT has the interface:
 \end_layout
 
 \begin_layout LyX-Code
@@ -408,6 +400,79 @@ ed.
 \end_layout
 
 \begin_layout Subsection
+Shared Memory and sampling
+\end_layout
+
+\begin_layout Standard
+Clockwork if fundamentally a program that looks at changes in a memory map
+ and uses those changes to affect changes in a state model of various simulated
+ machines.
+ It should be possible to share any memory block with clockwork, no matter
+ the source.
+ A block may represent a device or it may be divided into regions that relate
+ to the device in some way, for example in with Beckhoff EtherCAT(tm) the
+ `Module' refers to a physical device, in MODBUS, 
+\emph on
+coils
+\emph default
+ and 
+\emph on
+registers
+\emph default
+ refer to distinct memory regions.
+\end_layout
+
+\begin_layout Standard
+Each block may have properties that descibe attributes common to all regions
+ in the block 
+\end_layout
+
+\begin_layout LyX-Code
+ModbusPanel BLOCK {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+X BIT[256] IN;
+\end_layout
+
+\begin_layout LyX-Code
+Y BIT[256] OUT;
+\end_layout
+
+\begin_layout LyX-Code
+V WORD[256] IN OUT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+panel ModusPanel 
+\end_layout
+
+\begin_layout Standard
+Given the above definition, Clockwork may bind fields of the block to a
+ machine, for example:
+\end_layout
+
+\begin_layout LyX-Code
+start_button panel X1;
+\end_layout
+
+\begin_layout Standard
+defines 
+\emph on
+start_button
+\emph default
+ as a single bit object in clockwork, linked to coil X01 in the modbus memory
+ block.
+ 
+\end_layout
+
+\begin_layout Subsection
 Issues
 \end_layout
 
@@ -423,6 +488,25 @@ How large is a beckhoff master memory block?
 \begin_layout Enumerate
 How quickly can we send master block updates to a clockwork program.
  What latency can we expect?
+\end_layout
+
+\begin_layout Enumerate
+Properties that are updated by external machines via the PROPERTY command
+ should not activate the property update until the 
+\end_layout
+
+\begin_layout Enumerate
+Clockwork drivers need a parameter to set them into insecure mode to allow
+ clients to define the connection properties.
+\end_layout
+
+\begin_layout Enumerate
+If a message send fails there is no way for the clockwork program to know
+\end_layout
+
+\begin_layout Enumerate
+When a message arrives it should not be delivered unless the target machine
+ has no active actions
 \end_layout
 
 \begin_layout Subsection
@@ -504,13 +588,55 @@ When a client connects to a server it is required to initiate a negotiation
 \end_layout
 
 \begin_layout Standard
-If the server does not have a matching configuration, the client may send
- the configuration.
+The communications protocol is not secure; it has a simple authentication
+ process that will be upgraded in the future.
+\end_layout
+
+\begin_layout Itemize
+The connecting party identifies the channel to be used:
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+CHANNEL channel_name ';'
 \end_layout
 
 \begin_layout Standard
+this message is encoded using JSON:
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"CHANNEL","params":["name","myChannel"]}
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+If the server does not have a matching configuration, the client may send
+ the configuration (TBD do we want to allow this? Probably require that
+ cw be run in an insecure mode).
+\end_layout
+
+\begin_layout Itemize
 If a channel cannot be agreed, the connection will be terminated.
  
+\end_layout
+
+\begin_layout Itemize
+If an identifier is provided, it will be used as a pre-shared key to authenticat
+e the connection.
+ The server will send a keyword challenge to the client and the client will
+ be expected to combine this with the secret identifier for the channel
+ and send back an encrypted value.
+ The client will also authenticate the server in the same way.
+\end_layout
+
+\begin_layout Itemize
+If a version number is provided, both ends may emit a warning or disconnect,
+ depending on other options that may be in force.
+\end_layout
+
+\begin_layout Itemize
+The connecting party 
 \end_layout
 
 \begin_layout Section
