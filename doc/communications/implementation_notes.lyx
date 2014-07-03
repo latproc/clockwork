@@ -76,7 +76,7 @@ current
 \end_layout
 
 \begin_layout Itemize
-add thread to manage sending of messages
+add thread to manage sending of messages / upgrade dispatcher
 \end_layout
 
 \begin_layout Itemize
@@ -85,7 +85,23 @@ add a thread for dealing with new connections
 
 \begin_deeper
 \begin_layout Itemize
+proxy for new channels
+\end_layout
+
+\begin_layout Itemize
 update publish flags on machineinstances
+\end_layout
+
+\begin_layout Itemize
+start a publisher to send state/property changes
+\end_layout
+
+\begin_layout Itemize
+start a command interface to receive state/property changes
+\end_layout
+
+\begin_layout Itemize
+remove publisher/command threads when the connection closes
 \end_layout
 
 \end_deeper

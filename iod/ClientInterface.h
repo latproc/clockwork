@@ -21,7 +21,7 @@
 #ifndef __ClientInterface_h__
 #define __ClientInterface_h__
 
-struct ClientInterfaceInternals { };
+struct ClientInterfaceInternals { virtual ~ClientInterfaceInternals() {} };
 
 struct IODCommandListenerThread {
     void operator()();

@@ -180,7 +180,7 @@ void ProcessingThread::operator()()  {
         struct timeval start_t, end_t;
         {
             boost::unique_lock<boost::mutex> lock(io_mutex);
-            while (!data_ready)
+            while (!data_ready && !program_done)
                 io_updated.wait(io_mutex);
 
 			{
@@ -486,6 +486,11 @@ int main (int argc, char const *argv[])
     }
     MQTTInterface::instance()->stop();
     processMonitor.stop();
+    {
+        boost::unique_lock<boost::mutex> lock(io_mutex);
+        //processMonitor.data_ready = true;
+        io_updated.notify_one();
+    }
     process.join();
     stateMonitor.stop();
     monitor.join();

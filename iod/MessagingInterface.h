@@ -70,6 +70,7 @@ private:
 	int connection;
 	std::string hostname;
 	int port;
+    pthread_t owner_thread;
 };
 
 #endif

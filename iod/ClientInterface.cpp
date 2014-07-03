@@ -47,33 +47,38 @@ void IODCommandListenerThread::stop() { done = true; }
 
 
 struct CommandThreadInternals : public ClientInterfaceInternals {
+public:
+    zmq::context_t context;
+    zmq::socket_t socket;
     
+    CommandThreadInternals() : context(3), socket(context, ZMQ_REP) { }
 };
 
 
 void IODCommandThread::operator()() {
+    CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
+    
     std::cout << "------------------ Command Thread Started -----------------\n";
-    zmq::context_t context (3);
-    zmq::socket_t socket (context, ZMQ_REP);
     int linger = 0; // do not wait at socket close time
-    socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
     std::stringstream sn;
     sn << "tcp://0.0.0.0:" << command_port();
     const char *port = sn.str().c_str();
-    socket.bind (port);
+    cti->socket.bind (port);
     IODCommand *command = 0;
     
     while (!done) {
         try {
             
-             zmq::pollitem_t items[] = { { socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-             zmq::poll( &items[0], 1, 500*1000);
+             zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+             zmq::poll( &items[0], 1, 50*1000);
+             if (done) break;
              if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
 
         	zmq::message_t request;
-            if (!socket.recv (&request)) continue; // interrupted system call
+            if (!cti->socket.recv (&request)) continue; // interrupted system call
             if (!machine_is_ready) {
-                sendMessage(socket, "Ignored during startup");
+                sendMessage(cti->socket, "Ignored during startup");
                 continue;
             }
             size_t size = request.size();
@@ -83,7 +88,7 @@ void IODCommandThread::operator()() {
 std::cout << data << "\n";
             
             std::list<Value> parts;
-            int count = 0;
+            size_t count = 0;
             std::string ds;
             std::vector<Value> params(0);
             {
@@ -114,7 +119,7 @@ std::cout << data << "\n";
             }
             
             if (params.empty()) {
-                sendMessage(socket, "Empty message received\n");
+                sendMessage(cti->socket, "Empty message received\n");
                 goto cleanup;
             }
             ds = params[0].asString();
@@ -212,11 +217,11 @@ std::cout << data << "\n";
                     command = new IODCommandUnknown;
                 }
                 if ((*command)(params)) {
-                    sendMessage(socket, command->result());
+                    sendMessage(cti->socket, command->result());
                 }
                 else {
                     NB_MSG << command->error() << "\n";
-                    sendMessage(socket, command->error());
+                    sendMessage(cti->socket, command->error());
                 }
             }
             delete command;
@@ -226,20 +231,28 @@ std::cout << data << "\n";
             free(data);
         }
         catch (std::exception e) {
-			if (errno) std::cout << "error during client communication: " << strerror(errno) << "\n" << std::flush;
-            if (zmq_errno())
-                std::cerr << "zmq message: " << zmq_strerror(zmq_errno()) << "\n" << std::flush;
-            else
-                std::cerr << " Exception: " << e.what() << "\n" << std::flush;
-			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) abort();
+            // when processing is stopped, we expect to get an exception on this interface
+            // otherwise, we fail since something strange has happened
+            if (!done) {
+                if (errno) std::cout << "error during client communication: " << strerror(errno) << "\n" << std::flush;
+                if (zmq_errno())
+                    std::cerr << "zmq message: " << zmq_strerror(zmq_errno()) << "\n" << std::flush;
+                else
+                    std::cerr << " Exception: " << e.what() << "\n" << std::flush;
+                if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) abort();
+            }
         }
     }
-    socket.close();
+    cti->socket.close();
 }
 
 IODCommandThread::IODCommandThread() : done(false) {
-        
+    internals = new CommandThreadInternals;
 }
 
-void IODCommandThread::stop() { done = true; }
+void IODCommandThread::stop() {
+    CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
+    done = true;
+    if (cti->socket) cti->socket.close();
+}
 
