@@ -33,6 +33,10 @@ void sendMessage(zmq::socket_t &socket, const char *message);
 
 extern std::map<std::string, std::string> message_handlers;
 
+struct IODCommandChannel : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 struct IODCommandInfo : public IODCommand {
 	bool run(std::vector<Value> &params);
 };

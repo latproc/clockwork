@@ -806,23 +806,23 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 			return false;
 		}
 		DBG_MODBUS << "modbus group: " << group << " addresss " << address << " value " << params[3] << "\n";
-		ModbusAddress found = ModbusAddress::lookup(group, address);
+		ModbusAddress found = ModbusAddress::lookup((int)group, (int)address);
 		if (found.getGroup() != ModbusAddress::none) {
 			if (found.getOwner()) {
 				// the address found will refer to the base address, so we provide the actual offset
 				assert(address == found.getAddress());
     		if (params[3].kind == Value::t_integer) {
-       		found.getOwner()->modbusUpdated(found, address - found.getAddress(), (int)params[3].iValue);
+       		found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (int)params[3].iValue);
         }
         else if (params[3].kind == Value::t_bool) {
-        	found.getOwner()->modbusUpdated(found, address - found.getAddress(), (params[3].bValue) ? 1 : 0);
+        	found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (params[3].bValue) ? 1 : 0);
 				}
         else if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
-					long val;
-					if (params[3].asInteger(val))
-	       		found.getOwner()->modbusUpdated(found, address - found.getAddress(), val);
+                long val;
+                if (params[3].asInteger(val))
+	       		found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (int)val);
 					else
-	       		found.getOwner()->modbusUpdated(found, address - found.getAddress(), params[3].sValue.c_str());
+	       		found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), params[3].sValue.c_str());
  				}
 				else {
 					std::stringstream ss;
@@ -926,6 +926,23 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             return false;
         }
     }
+
+bool IODCommandChannel::run(std::vector<Value> &params) {
+    if (params.size() == 0) {
+        result_str = "OK";
+        return true;
+    }
+    std::stringstream ss;
+    ss << "unsupported command: ";
+    for (unsigned int i=0; i<params.size()-1; ++i) {
+        ss<< params[i] << " ";
+    }
+    ss << params[params.size()-1];
+    char *msg = strdup(ss.str().c_str());
+    error_str = msg;
+    free(msg);
+    return false;
+}
 
     bool IODCommandUnknown::run(std::vector<Value> &params) {
         if (params.size() == 0) {
