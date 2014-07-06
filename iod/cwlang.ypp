@@ -111,6 +111,7 @@ struct Subcondition {
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
+%token INTERFACE EXTENDS
 
 %union {
 	int iVal;
@@ -164,6 +165,7 @@ program_section:
 | machine_instantiation
 | route_declaration
 | channel_definition
+| interface_definition
 | error ';'
 | error '}'
 ;
@@ -223,6 +225,30 @@ definition_header '{' definition_body '}' {
 }
 ;
 
+interface_definition:
+interface_defn_header '{' interface_defn_body '}' {
+    
+}
+;
+
+interface_defn_header:
+SYMBOL INTERFACE {
+    DBG_PARSER << " interface definition "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+}
+;
+
+interface_defn_body:
+interface_defn_section
+| interface_defn_body interface_defn_section
+;
+
+interface_defn_section:
+| OPTION name_list ';'
+| COMMAND name_list ';'
+| state_definition ';'
+;
+
 channel_definition:
 chn_definition_header '{' chn_definition_body '}' {
 }
@@ -233,7 +259,19 @@ SYMBOL CHANNEL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
     current_machineclass = new MachineClass($1);
 }
-| SYMBOL CHANNEL property_block {
+/*| SYMBOL CHANNEL property_block {
+    DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    current_machineclass->properties = properties;
+    properties.clear();
+}*/
+| SYMBOL CHANNEL EXTENDS SYMBOL {
+    DBG_PARSER << " channel definition "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+}
+/*| SYMBOL CHANNEL property_block EXTENDS SYMBOL {
     DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
     current_machineclass = new MachineClass($1);
     properties = property_stack.back();
@@ -241,6 +279,8 @@ SYMBOL CHANNEL {
     current_machineclass->properties = properties;
     properties.clear();
 }
+*/
+;
 
 chn_definition_body:
 chn_definition_section
@@ -252,6 +292,7 @@ IDENTIFIER STRINGVAL ';'
 | VERSION STRINGVAL ';'
 | SHARES name_list ';'
 | MONITORS name_list ';'
+| MONITORS PATTERN ';'
 | UPDATES name_list ';'
 | SENDS name_list ';'
 | RECEIVES name_list ';'
@@ -388,7 +429,9 @@ local_instantiation ';'
 ;
 
 stable_state:
-state_definition ';' 
+state_definition ';'
+| stable_state_definition ';'
+;
 
 transitory_state:
 SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
@@ -425,6 +468,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
 }
+;
 
 state_definition:
 SYMBOL STATE {
@@ -446,7 +490,6 @@ SYMBOL STATE {
     current_machineclass->states.push_back($1);// add to states list to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
-| stable_state_definition
 ;
 
 stable_state_definition:
