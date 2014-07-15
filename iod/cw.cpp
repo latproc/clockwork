@@ -255,9 +255,10 @@ void ProcessingThread::operator()()  {
     }
 }
 
-
 int main (int argc, char const *argv[])
 {
+    zmq::context_t context;
+    Dispatcher::create(&context);
 	Logger::instance();
     MessageLog::setMaxMemory(10000);
 

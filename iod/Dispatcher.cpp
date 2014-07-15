@@ -31,13 +31,26 @@
 
 Dispatcher *Dispatcher::instance_ = NULL;
 
-Dispatcher::Dispatcher() {
-    
+Dispatcher::Dispatcher(zmq::context_t *ctx) : zmq_context(ctx), socket(0) {
+    socket = new zmq::socket_t(*zmq_context, ZMQ_PULL);
+    socket->bind("inproc://dispatcher");
+}
+
+Dispatcher::~Dispatcher() {
+    if (socket) delete socket;
+}
+
+Dispatcher *Dispatcher::create(zmq::context_t *ctx) {
+    if (!instance_) instance_ = new Dispatcher(ctx);
+    return instance_;
 }
 
 Dispatcher *Dispatcher::instance() {
-    if (!instance_) instance_ = new Dispatcher();
     return instance_;
+}
+
+zmq::context_t *Dispatcher::getContext() {
+    return zmq_context;
 }
 
 std::ostream &Dispatcher::operator<<(std::ostream &out) const  {
@@ -57,55 +70,26 @@ void Dispatcher::removeReceiver(Receiver*r) {
     all_receivers.remove(r);
 }
 void Dispatcher::deliver(Package *p) {
-#if 1
+    zmq::socket_t sender(*zmq_context, ZMQ_PUSH);
+    sender.connect("inproc://dispatcher");
+    sender.send(&p, sizeof(Package*));
+}
+void Dispatcher::deliverZ(Package *p) {
 	DBG_DISPATCHER << "Dispatcher accepted package " << *p << "\n";
     to_deliver.push_back(p);
-#else
-//    std::cout << "Dispatcher accepted package with message " << (*p->message) << "\n";
-
-	Message m(p->message->getText().c_str());
-	Receiver *to = p->receiver;
-	Transmitter *from = p->transmitter;
-//        std::cout << "Dispatcher is attempting to deliver " 
-//        << m << " from " << ( (from)?from->getName():"unknown") 
-//        << " to " << ( (to) ? to->getName():"all") << "\n";
-	if (to) {
-		if (to->receives(m, from)) to->enqueue(*p);
-		else
-			DBG_DISPATCHER << to->getName() << " will not accept package " << *p << "\n";
-	}
-	else {
-		// since acting on a message may cause new machines to 
-		// be generated, and thus alter the reciever list,
-		// we first make a list of machines to receive the 
-		// message then actually send it.
-		ReceiverList to_receive;
-		ReceiverList::iterator iter = all_receivers.begin();
-		while (iter != all_receivers.end()) {
-			Receiver *r = *iter++;
-			if (r->receives(m, from)) to_receive.push_back(r);
-		}
-		iter = to_receive.begin();
-		while (iter != to_receive.end()) {
-			Receiver *r = *iter++;
-			r->enqueue(*p);
-			//r->mail_queue.push_back(p);
-		}
-	}
-	delete p->message;
-	delete p;
-#endif
 }
 
 void Dispatcher::idle() {
-	// copy the queue to a local list before delivery
+    // TBD this is being converted to use zmq the local delivery queue is no longer necessary
+    
 	std::list<Package*>local_to_deliver;
+	// copy the queue to a local list before delivery
+    while (1) {
+        Package *p = 0;
+        size_t len = socket->recv(&p, sizeof(Package*), ZMQ_NOBLOCK);
+        if (len)local_to_deliver.push_back(p); else break;
+    }
     std::list<Package*>::iterator iter = to_deliver.begin();
-    while (iter != to_deliver.end()) {
-        Package *p = *iter;
-		iter = to_deliver.erase(iter);
-		local_to_deliver.push_back(p);
-	}
 	// handle the current group of messages
 	iter = local_to_deliver.begin();
     while (iter != local_to_deliver.end()) {

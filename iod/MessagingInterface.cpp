@@ -33,6 +33,7 @@
 #include "options.h"
 #include "anet.h"
 #include "MessageLog.h"
+#include "Dispatcher.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
@@ -59,10 +60,9 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
 }
 
 MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto) 
-		: Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false), connection(-1) {
+		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false), connection(-1) {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
-	    context = new zmq::context_t(num_threads);
-	    socket = new zmq::socket_t(*context, ZMQ_PUB);
+	    socket = new zmq::socket_t(*Dispatcher::instance()->getContext(), ZMQ_PUB);
 	    is_publisher = true;
 	    std::stringstream ss;
 	    ss << "tcp://*:" << port;
@@ -76,12 +76,11 @@ MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto
 }
 
 MessagingInterface::MessagingInterface(std::string host, int remote_port, Protocol proto) 
-		:Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false),
+		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
             connection(-1), hostname(host), port(remote_port), owner_thread(0) {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
 	    if (host == "*") {
-	        context = new zmq::context_t(1);
-	        socket = new zmq::socket_t(*context, ZMQ_PUB);
+	        socket = new zmq::socket_t(*Dispatcher::instance()->getContext(), ZMQ_PUB);
 	        is_publisher = true;
 	        std::stringstream ss;
 	        ss << "tcp://*:" << port;
@@ -89,7 +88,6 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 	        socket->bind(url.c_str());
 	    }
 	    else {
-	        context = new zmq::context_t(1);
 	        std::stringstream ss;
 	        ss << "tcp://" << host << ":" << port;
 	        url = ss.str();
@@ -105,7 +103,7 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
         assert( pthread_equal(owner_thread, pthread_self()) );
-	    socket = new zmq::socket_t(*context, ZMQ_REQ);
+	    socket = new zmq::socket_t(*Dispatcher::instance()->getContext(), ZMQ_REQ);
 	    is_publisher = false;
 	    socket->connect(url.c_str());
 	    int linger = 0;
@@ -131,7 +129,6 @@ MessagingInterface::~MessagingInterface() {
 	}
     if (MessagingInterface::current == this) MessagingInterface::current = 0;
     delete socket;
-    delete context;
 }
 
 bool MessagingInterface::receives(const Message&, Transmitter *t) {

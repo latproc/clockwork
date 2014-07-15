@@ -27,6 +27,7 @@
 #include <map>
 #include <utility>
 #include <boost/thread.hpp>
+#include "zmq.hpp"
 
 class Message;
 class Receiver;
@@ -34,21 +35,27 @@ struct Package;
 
 class Dispatcher {
 public:
+    ~Dispatcher();
     std::ostream &operator<<(std::ostream &out) const;
     void deliver(Package *p);
+    void deliverZ(Package *p);
     void addReceiver(Receiver*r);
     void removeReceiver(Receiver*r);
     static Dispatcher *instance();
+    static Dispatcher *create(zmq::context_t *context);
+    zmq::context_t *getContext();
     void idle();
     
 private:
-    Dispatcher();
+    Dispatcher(zmq::context_t *zmq_context);
     Dispatcher(const Dispatcher &orig);
     Dispatcher &operator=(const Dispatcher &other);
     typedef std::list<Receiver*> ReceiverList;
     ReceiverList all_receivers;
     static Dispatcher *instance_;
     std::list<Package*>to_deliver;
+    zmq::context_t *zmq_context;
+    zmq::socket_t *socket;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);

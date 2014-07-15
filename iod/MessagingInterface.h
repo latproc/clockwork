@@ -62,7 +62,6 @@ private:
     void connect();
     static MessagingInterface *current;
 	Protocol protocol;
-    zmq::context_t *context;
     zmq::socket_t *socket;
     static std::map<std::string, MessagingInterface *>interfaces;
     bool is_publisher;

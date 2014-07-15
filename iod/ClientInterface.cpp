@@ -33,6 +33,7 @@
 #include "value.h"
 #include "MessagingInterface.h"
 #include "options.h"
+#include "Dispatcher.h"
 
 extern bool machine_is_ready;
 extern boost::mutex thread_protection_mutex;
@@ -48,10 +49,9 @@ void IODCommandListenerThread::stop() { done = true; }
 
 struct CommandThreadInternals : public ClientInterfaceInternals {
 public:
-    zmq::context_t context;
     zmq::socket_t socket;
     
-    CommandThreadInternals() : context(3), socket(context, ZMQ_REP) { }
+    CommandThreadInternals() : socket(*Dispatcher::instance()->getContext(), ZMQ_REP) {}
 };
 
 
@@ -82,7 +82,7 @@ void IODCommandThread::operator()() {
                 continue;
             }
             size_t size = request.size();
-            char *data = (char *)malloc(size+1);
+            char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
             memcpy(data, request.data(), size);
             data[size] = 0;
 std::cout << data << "\n";
