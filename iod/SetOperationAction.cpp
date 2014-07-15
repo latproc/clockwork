@@ -53,7 +53,7 @@ SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationAct
         property_name(dat->property_name), condition(dat->condition), remove_selected(dat->remove_selected) {
 }
 
-SetOperationAction::SetOperationAction() : dest_machine(0) {
+SetOperationAction::SetOperationAction() : Action(), dest_machine(0) {
 }
 
 std::ostream &SetOperationAction::operator<<(std::ostream &out) const {
