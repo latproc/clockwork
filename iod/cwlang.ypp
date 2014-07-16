@@ -301,27 +301,27 @@ chn_definition_section:
 | IDENTIFIER STRINGVAL ';' { current_channelclass->setIdent($2); }
 | VERSION STRINGVAL ';' { current_channelclass->setVersion($2); }
 | SHARES name_list ';'  {
-    for (std::string &name : current_name_list)
+    BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addShare(name.c_str());
 }
 | MONITORS name_list ';'    {
-    for (std::string &name : current_name_list)
+    BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addMonitor(name.c_str());
 }
 | MONITORS PATTERN ';'  {
-    for (std::string &name : current_name_list)
+    BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addMonitorPattern(name.c_str());
 }
 | UPDATES name_list ';' {
-    for (std::string &name : current_name_list)
+    BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addUpdates(name.c_str());
 }
 | SENDS name_list ';'   {
-    for (std::string &name : current_name_list)
+    BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addSendName(name.c_str());
 }
 | RECEIVES name_list ';'    {
-    for (std::string &name : current_name_list)
+    BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addReceiveName(name.c_str());
 }
 | OPTION chn_option_settings ';'
