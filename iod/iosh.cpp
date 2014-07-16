@@ -35,10 +35,12 @@
 #include <readline/history.h>
 #endif
 #define _MAIN_
-#include "value.h"
-#include "MessagingInterface.h"
+    #include "value.h"
 #include <list>
 #include "cmdline.h"
+#include "MessageEncoding.h"
+
+zmq::context_t *context;
 
 void sendMessage(zmq::socket_t &socket, const char *message) {
     const char *msg = (message) ? message : "";
@@ -95,7 +97,7 @@ char *send_command(std::list<Value> &params) {
 	Value cmd_val = params.front();
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
-	char *msg = MessagingInterface::encodeCommand(cmd, &params);
+	char *msg = MessageEncoding::encodeCommand(cmd, &params);
 	sendMessage(*psocket, msg);
 	size_t size = strlen(msg);
     free(msg);
@@ -159,8 +161,7 @@ char **my_rl_completion (const char *text, int start, int end)
 char *command_generator (const char *text, int state)
 {
     static std::list<const char *>::iterator iter;
-    static int len;
-    char *name;
+    static size_t len;
     
     /* If this is a new word to complete, initialize now.  This includes
      saving the length of TEXT for efficiency, and initializing the iterator
@@ -189,8 +190,7 @@ char *command_generator (const char *text, int state)
 char *machine_name_generator (const char *text, int state)
 {
     static std::list<char *>::iterator iter;
-    static int len;
-    char *name;
+    static size_t len;
     
     /* If this is a new word to complete, initialize now.  This includes
      saving the length of TEXT for efficiency, and initializing the iterator
@@ -264,13 +264,15 @@ void initialise_commands() {
 
 int main(int argc, const char * argv[])
 {
+    context = new zmq::context_t;
+    
     try {
 		int port = 5555;
 		bool quiet = false;
 		std::string host = "127.0.0.1";
 		for (int i=1; i<argc; ++i) {
 			if (i<argc-1 && strcmp(argv[i],"-p") == 0) {
-				port = strtol(argv[++i], 0, 0);
+				port = (int)strtol(argv[++i], 0, 0);
 			} 
 			else if (i<argc-1 && strcmp(argv[i],"-h") == 0) {
 				host = argv[++i];
@@ -289,8 +291,7 @@ int main(int argc, const char * argv[])
 			<< "\nEnter HELP; for help. Note that ';' is required at the end of each command\n"
 			<< "  use exit; or ctrl-D to exit this program\n\n";
 		}
-		zmq::context_t context (1);
-		zmq::socket_t socket (context, ZMQ_REQ);
+		zmq::socket_t socket (*context, ZMQ_REQ);
 		int linger = 0; // do not wait at socket close time
 		socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 		psocket = &socket;

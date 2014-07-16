@@ -379,7 +379,6 @@ public:
 	int definition_line;
 	struct timeval start_time; // time the current state started
 	struct timeval disabled_time; // time the current state started
-    int published;
 
 	static void sort();
     
@@ -427,6 +426,7 @@ public:
     
     static Value *polling_delay;
     Value is_traceable;
+    int published;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);

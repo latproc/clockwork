@@ -28,11 +28,12 @@
 #include "Logger.h"
 #include "MessagingInterface.h"
 #include "symboltable.h"
+#include <assert.h>
 
 Dispatcher *Dispatcher::instance_ = NULL;
 
-Dispatcher::Dispatcher(zmq::context_t *ctx) : zmq_context(ctx), socket(0) {
-    socket = new zmq::socket_t(*zmq_context, ZMQ_PULL);
+Dispatcher::Dispatcher() : socket(0) {
+    socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PULL);
     socket->bind("inproc://dispatcher");
 }
 
@@ -40,17 +41,10 @@ Dispatcher::~Dispatcher() {
     if (socket) delete socket;
 }
 
-Dispatcher *Dispatcher::create(zmq::context_t *ctx) {
-    if (!instance_) instance_ = new Dispatcher(ctx);
-    return instance_;
-}
-
 Dispatcher *Dispatcher::instance() {
+    if (!instance_) instance_ = new Dispatcher();
+    assert(instance_);
     return instance_;
-}
-
-zmq::context_t *Dispatcher::getContext() {
-    return zmq_context;
 }
 
 std::ostream &Dispatcher::operator<<(std::ostream &out) const  {
@@ -70,7 +64,7 @@ void Dispatcher::removeReceiver(Receiver*r) {
     all_receivers.remove(r);
 }
 void Dispatcher::deliver(Package *p) {
-    zmq::socket_t sender(*zmq_context, ZMQ_PUSH);
+    zmq::socket_t sender(*MessagingInterface::getContext(), ZMQ_PUSH);
     sender.connect("inproc://dispatcher");
     sender.send(&p, sizeof(Package*));
 }

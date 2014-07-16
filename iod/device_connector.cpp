@@ -46,11 +46,13 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
-#include "MessagingInterface.h"
 #include "value.h"
 #include "cJSON.h"
 #include "options.h"
+#include "Dispatcher.h"
+#include "MessageEncoding.h"
 
+zmq::context_t *context = 0;
 
 struct DeviceStatus {
     enum State {e_unknown, e_disconnected, e_connected, e_up, e_failed, e_timeout };
@@ -501,7 +503,7 @@ struct IODInterface{
         //std::stringstream ss;
         //std::cout << "val: '" << val << "'\n";
         //ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
-        char *msg = MessagingInterface::encodeCommand("PROPERTY", machine.c_str(), property.c_str(), val.c_str());
+        char *msg = MessageEncoding::encodeCommand("PROPERTY", machine.c_str(), property.c_str(), val.c_str());
         bool res = sendMessage(msg);
         free(msg);
         return res;
@@ -530,7 +532,7 @@ struct IODInterface{
     
     void stop() { done = true; }
     
-    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(100), context(0),
+    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(100), 
             socket(0), options(opts), done(false), status(s_disconnected) {
         context = new zmq::context_t(1);
         connect();
@@ -538,10 +540,8 @@ struct IODInterface{
     
     ~IODInterface() {
         if (socket) delete socket;
-        delete context;
     }
     
-    zmq::context_t *context;
     zmq::socket_t *socket;
     //boost::mutex interface_mutex;
     const Options &options;
@@ -580,7 +580,7 @@ struct MatchFunction {
                 }
                 instance()->params.push_back(Value(match, Value::t_string));
                 if (index == num_sub) {
-                    char *msg = MessagingInterface::encodeCommand("DATA", &instance()->params);
+                    char *msg = MessageEncoding::encodeCommand("DATA", &instance()->params);
                     if ( (instance()->options.skippingRepeats() == false
                                             || last_message != msg || last_send.tv_sec +5 <  now.tv_sec)) {
                         if (instance()->iod_interface.sendMessage(msg)) {
@@ -916,7 +916,7 @@ struct PropertyMonitorThread {
                     
                     std::string command;
                     std::list<Value> *params = 0;
-                    if (MessagingInterface::getCommand(data, command, &params)) {
+                    if (MessageEncoding::getCommand(data, command, &params)) {
                         if (command == "PROPERTY" && params->size() == 3){
                             Value machine_name = params->front(); params->pop_front();
                             Value prop_name = params->front(); params->pop_front();
@@ -947,11 +947,10 @@ struct PropertyMonitorThread {
         }
     }
     PropertyMonitorThread(Options &opts, ConnectionThread &connection_)
-            : done(false), context(0), socket(0), options(opts), connection(connection_) {
+            : done(false), socket(0), options(opts), connection(connection_) {
         if (options.watchProperty()) {
             match_str = options.watchProperty();
             match_str += " VALUE ";
-            context = new zmq::context_t(1);
             connect();
         }
     }
@@ -990,7 +989,6 @@ struct PropertyMonitorThread {
     void stop() { done = true; }
     enum WatcherStates { ws_disconnected, ws_connected };
     bool done;
-    zmq::context_t *context;
     zmq::socket_t *socket;
     const Options &options;
     WatcherStates status;
@@ -1028,7 +1026,7 @@ int main(int argc, const char * argv[])
 {
     last_send.tv_sec = 0;
     last_send.tv_usec = 0;
-    
+    context = new zmq::context_t;
     Options options;
     try {
     

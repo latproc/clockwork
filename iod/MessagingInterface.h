@@ -35,30 +35,26 @@ public:
     MessagingInterface(int num_threads, int port, Protocol proto = eZMQ);
     MessagingInterface(std::string host, int port, Protocol proto = eZMQ);
     ~MessagingInterface();
+    static zmq::context_t *getContext();
+    static void setContext(zmq::context_t *);
     char *send(const char *msg);
     char *send(const Message &msg);
     bool send_raw(const char *msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent();
     static MessagingInterface *create(std::string host, int port, Protocol proto = eZMQ);
-	static Value valueFromJSONObject(cJSON *obj, cJSON *cjType);
     char *sendCommand(std::string cmd, std::list<Value> *params);
     char *sendCommand(std::string cmd, Value p1 = SymbolTable::Null,
                      Value p2 = SymbolTable::Null,
                      Value p3 = SymbolTable::Null);
     char *sendState(std::string cmd, std::string name, std::string state_name);
-    static char *encodeCommand(std::string cmd, std::list<Value> *params);
-    static char *encodeCommand(std::string cmd, Value p1 = SymbolTable::Null,
-                     Value p2 = SymbolTable::Null,
-                     Value p3 = SymbolTable::Null);
-    static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
-    static bool getState(const char *msg, std::string &cmd, std::list<Value> **params);
     
     //Receiver interface
     virtual bool receives(const Message&, Transmitter *t);
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false );
     
 private:
+    static zmq::context_t *zmq_context;
     void connect();
     static MessagingInterface *current;
 	Protocol protocol;

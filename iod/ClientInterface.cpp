@@ -34,6 +34,7 @@
 #include "MessagingInterface.h"
 #include "options.h"
 #include "Dispatcher.h"
+#include "MessageEncoding.h"
 
 extern bool machine_is_ready;
 extern boost::mutex thread_protection_mutex;
@@ -51,7 +52,7 @@ struct CommandThreadInternals : public ClientInterfaceInternals {
 public:
     zmq::socket_t socket;
     
-    CommandThreadInternals() : socket(*Dispatcher::instance()->getContext(), ZMQ_REP) {}
+    CommandThreadInternals() : socket(*MessagingInterface::getContext(), ZMQ_REP) {}
 };
 
 
@@ -93,7 +94,7 @@ std::cout << data << "\n";
             std::vector<Value> params(0);
             {
                 std::list<Value> *param_list = 0;
-                if (MessagingInterface::getCommand(data, ds, &param_list)) {
+                if (MessageEncoding::getCommand(data, ds, &param_list)) {
                     params.push_back(ds);
                     if (param_list) {
                         std::list<Value>::const_iterator iter = param_list->begin();
