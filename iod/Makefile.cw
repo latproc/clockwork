@@ -34,7 +34,8 @@ BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
-CFLAGS = $(SIMULATED) -g -pedantic -Wall -fPIC -rdynamic \
+DLLFLAGS = -fPIC #-rdynamic
+CFLAGS = $(SIMULATED) -g -pedantic -Wall $(DLLFLAGS) \
 	-Wno-unknown-warning-option -Wno-unused-but-set-variable \
 	-Wno-c++11-extensions -Wno-unused-variable -Wno-variadic-macros -Wno-c++11-long-long $(EXTRAINCS)
 CC = g++ $(CFLAGS)
@@ -58,7 +59,7 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	SortListAction.cpp		SetListEntriesAction.cpp CopyPropertiesAction.cpp IncludeAction.cpp \
 	SetOperationAction.cpp	ClearListAction.cpp		LockAction.cpp			UnlockAction.cpp	clockwork.cpp \
 	ClientInterface.cpp		MQTTInterface.cpp	dynamic_value.cpp value.cpp PersistentStore.cpp \
-	MessageLog.cpp	filtering.cpp Plugin.cpp
+	MessageLog.cpp	filtering.cpp Plugin.cpp Channel.cpp
 
 all:	$(APPS)
 
@@ -129,7 +130,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o \
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
-			MessageLog.o PersistentStore.o filtering.o anet.o
+			MessageLog.o PersistentStore.o filtering.o anet.o Channel.o MessageEncoding.o
 	$(CC) -o $@ cw.o $(LDFLAGS) \
 			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
 			MachineInstance.o Plugin.o \
@@ -142,30 +143,32 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o MessageLog.o \
-			PersistentStore.o filtering.o anet.o \
+			PersistentStore.o filtering.o anet.o Channel.o MessageEncoding.o \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			-lmosquitto -ldl
 
 persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
-		MessagingInterface.o symboltable.o cJSON.o DebugExtra.o Logger.o options.o anet.o \
+		MessageEncoding.o symboltable.o cJSON.o DebugExtra.o Logger.o options.o anet.o \
 		PersistentStore.o Message.o MessageLog.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
 		value.o symboltable.o Logger.o DebugExtra.o  options.o \
-		MessagingInterface.o cJSON.o PersistentStore.o Message.o anet.o MessageLog.o
+		MessageEncoding.o cJSON.o PersistentStore.o Message.o anet.o MessageLog.o
 
 modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
-			MessagingInterface.o Message.o anet.o MessageLog.o
+			MessagingInterface.o Message.o anet.o MessageLog.o MessageEncoding.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_SYSTEM_LIB) $(BOOST_THREAD_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) \
 			value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o cJSON.o options.o anet.o \
-			Message.o MessageLog.o
+			Message.o MessageLog.o MessageEncoding.o
 
 iosh: iosh.cpp value.o cmdline.tab.cpp cmdline.yy.cpp \
-		cmdline.h Logger.o DebugExtra.o MessagingInterface.o anet.o \
-		symboltable.o cJSON.o options.o MachineInstance.o MessageLog.o
+		cmdline.h Logger.o DebugExtra.o anet.o \
+		symboltable.o cJSON.o options.o MachineInstance.o MessageLog.o \
+		MessageEncoding.o
 	g++ $(CFLAGS) $(LDFLAGS) -DUSE_READLINE -o iosh iosh.cpp \
 			value.o cmdline.tab.cpp cmdline.yy.cpp \
-			Logger.o DebugExtra.o MessagingInterface.o anet.o \
+			Logger.o DebugExtra.o anet.o \
+			MessageEncoding.o \
 			symboltable.o cJSON.o options.o Message.o MessageLog.o \
 			-lzmq -lreadline $(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB)
 
@@ -176,11 +179,11 @@ cmdline.yy.cpp:	cmdline.lpp
 	lex -o $@ cmdline.lpp
 
 device_connector:	device_connector.o regular_expressions.o anet.o \
-		MessagingInterface.o symboltable.o value.o cJSON.o DebugExtra.o Logger.o \
-		options.o Message.o MessageLog.o
+		symboltable.o value.o cJSON.o DebugExtra.o Logger.o \
+		options.o Message.o MessageLog.o MessageEncoding.o
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ device_connector.o regular_expressions.o anet.o \
-		MessagingInterface.o symboltable.o value.o cJSON.o DebugExtra.o Logger.o options.o \
-		MessageLog.o \
+		symboltable.o value.o cJSON.o DebugExtra.o Logger.o options.o \
+		MessageLog.o MessageEncoding.o \
 		 Message.o $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h
