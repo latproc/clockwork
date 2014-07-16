@@ -76,9 +76,28 @@ current
 \end_layout
 
 \begin_layout Itemize
-add thread to manage sending of messages / upgrade dispatcher
+upgrade dispatcher or add thread to manage sending of messages
 \end_layout
 
+\begin_deeper
+\begin_layout Itemize
+pull message from queue
+\end_layout
+
+\begin_layout Itemize
+if the message is a command, execute it and return the result - use inproc:
+ messages?
+\end_layout
+
+\begin_layout Itemize
+identify channels message is destined for
+\end_layout
+
+\begin_layout Itemize
+send message
+\end_layout
+
+\end_deeper
 \begin_layout Itemize
 add a thread for dealing with new connections
 \end_layout
@@ -86,6 +105,10 @@ add a thread for dealing with new connections
 \begin_deeper
 \begin_layout Itemize
 proxy for new channels
+\end_layout
+
+\begin_layout Itemize
+add CHANNEL command
 \end_layout
 
 \begin_layout Itemize
@@ -162,7 +185,73 @@ notes
 \end_layout
 
 \begin_layout Itemize
+does adding dynamic machine instantiation break anything?
+\end_layout
+
+\begin_layout Itemize
 each channel has a set of machines for incoming messages and outgoing messages
+\end_layout
+
+\begin_layout Itemize
+need to dermine a method for allocating ports for new channels
+\end_layout
+
+\begin_layout Itemize
+machine lists are implemented via the MachineRef class and include a name,
+ reference to a matching machine and an interface specification if one is
+ known
+\end_layout
+
+\begin_layout Itemize
+example of creating a channel
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+Channel *my_channel = Channel::create(10400, Channel::find(
+\begin_inset Quotes eld
+\end_inset
+
+ScalesChannel
+\begin_inset Quotes erd
+\end_inset
+
+));
+\end_layout
+
+\begin_layout Itemize
+channels can be created with port == 0 to allocate a new port automatically
+\end_layout
+
+\begin_layout Itemize
+channels must be created on the dispatcher thread
+\end_layout
+
+\begin_layout Itemize
+on program start, clockwork makes a channel for iosh only (once the other
+ channels are converted)
+\end_layout
+
+\begin_layout Itemize
+example of the iosh channel specification
+\end_layout
+
+\begin_layout LyX-Code
+SHELL CHANNEL { RECEIVES /*/ }
+\end_layout
+
+\begin_layout Itemize
+creating a channel shall automatically add it to the list of channels
+\end_layout
+
+\begin_layout Itemize
+the shell channel should be a machine; dynamic actions would enable scripting
+\end_layout
+
+\begin_layout Itemize
+should channels be started when they are found as the program loads or at
+ the 'startup' point?
 \end_layout
 
 \begin_layout Section

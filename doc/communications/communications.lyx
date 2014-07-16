@@ -223,6 +223,14 @@ IDENTIFIER id_string ';'
 \end_layout
 
 \begin_layout LyX-Code
+IDENT short_id_string ';' # short form of above id
+\end_layout
+
+\begin_layout LyX-Code
+KEY key_string ';' # a preshared key used in authentication
+\end_layout
+
+\begin_layout LyX-Code
 VERSION version_sequence ';'
 \end_layout
 
@@ -264,7 +272,21 @@ A channel may specify a set of messages sent and commands received on the
 \end_layout
 
 \begin_layout Description
-IDENTIFIER a pre-shared key.
+IDENTIFIER an internal name for the channel, primarily used to validate
+ that connections are talking to the channel they expect to, if this is
+ not provided, the channel name is used.
+\end_layout
+
+\begin_layout Description
+IDENT is provided is the shortform identifier, if not given, the first six
+ characters of the IDENTIFIER are used and if that is not available, the
+ first six characters of the channel name (right-padded with spaces).
+ The IDENT is primarily used for filtering as all ØMQ messages begin with
+ the IDENT string.
+\end_layout
+
+\begin_layout Description
+KEY a pre-shared key.
  If the channel definition includes an IDENTIFIER option, both sides must
  be able to demonstrate that they know the identifier.
  The identifier itself should never be transmitted on the channel.
@@ -287,6 +309,8 @@ MONITORS lists the machines that the server will send updates for.
  Wildcards may be used to define the machines that can be monitored at the
  receiver.
  The client may request a reduced set of machines.
+ If no MONITORS clause is given property and state changes will not be forwarded
+ to the channel.
 \end_layout
 
 \begin_layout Description
@@ -313,7 +337,7 @@ By way of an example, a BIT has the interface:
 \end_layout
 
 \begin_layout LyX-Code
-BIT MACHINE { 
+BIT INTERFACE { 
 \end_layout
 
 \begin_deeper
@@ -404,7 +428,7 @@ Shared Memory and sampling
 \end_layout
 
 \begin_layout Standard
-Clockwork if fundamentally a program that looks at changes in a memory map
+Clockwork is fundamentally a program that looks at changes in a memory map
  and uses those changes to affect changes in a state model of various simulated
  machines.
  It should be possible to share any memory block with clockwork, no matter
