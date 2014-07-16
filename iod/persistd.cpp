@@ -37,7 +37,7 @@
 #include "cJSON.h"
 #include "value.h"
 #include "symboltable.h"
-#include "MessagingInterface.h"
+#include "MessageEncoding.h"
 #include "PersistentStore.h"
 
 
@@ -128,7 +128,7 @@ int main(int argc, const char * argv[]) {
 			try {
 	            std::string cmd;
 	            std::list<Value> *param_list = 0;
-	            if (MessagingInterface::getCommand(data, cmd, &param_list)) {
+	            if (MessageEncoding::getCommand(data, cmd, &param_list)) {
 					if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
 						std::string property;
 						int i=0;
