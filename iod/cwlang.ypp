@@ -39,6 +39,7 @@
 #include "SetOperationAction.h"
 #include "Plugin.h"
 #include "MessageLog.h"
+#include "Channel.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -66,10 +67,14 @@ PredicateOperator current_op;
     std::list<Parameter> current_locals;
     std::list<std::string> current_name_list;
     std::list<SymbolTable> property_stack;
+    std::list<ChannelDefinition*> channel_definitions;
 
-MachineInstance *current_machine;
-MachineClass *current_machineclass;
+MachineInstance *current_machine = 0;
+MachineClass *current_machineclass = 0;
+ChannelDefinition *current_channelclass = 0;
+Channel *current_channel = 0;
 std::list<MachineClass *> all_classes;
+std::list<ChannelDefinition> all_channeldefs;
     
 static MachineInstance *addMachine(const char *name, const char *type, 
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
@@ -111,7 +116,7 @@ struct Subcondition {
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
-%token INTERFACE EXTENDS
+%token INTERFACE EXTENDS KEY
 
 %union {
 	int iVal;
@@ -257,7 +262,9 @@ chn_definition_header '{' chn_definition_body '}' {
 chn_definition_header:
 SYMBOL CHANNEL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
-    current_machineclass = new MachineClass($1);
+    current_channelclass = new ChannelDefinition($1);
+    channel_definitions.push_back( current_channelclass );
+    current_name_list.clear();
 }
 /*| SYMBOL CHANNEL property_block {
     DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
@@ -269,7 +276,9 @@ SYMBOL CHANNEL {
 }*/
 | SYMBOL CHANNEL EXTENDS SYMBOL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
-    current_machineclass = new MachineClass($1);
+    current_channelclass = new ChannelDefinition($1);
+    channel_definitions.push_back( current_channelclass );
+    current_name_list.clear();
 }
 /*| SYMBOL CHANNEL property_block EXTENDS SYMBOL {
     DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
@@ -288,16 +297,48 @@ chn_definition_section
 ;
 
 chn_definition_section:
-IDENTIFIER STRINGVAL ';'
-| VERSION STRINGVAL ';'
-| SHARES name_list ';'
-| MONITORS name_list ';'
-| MONITORS PATTERN ';'
-| UPDATES name_list ';'
-| SENDS name_list ';'
-| RECEIVES name_list ';'
-| OPTION option_settings ';'
+  KEY STRINGVAL ';' { current_channelclass->setKey($2); }
+| IDENTIFIER STRINGVAL ';' { current_channelclass->setIdent($2); }
+| VERSION STRINGVAL ';' { current_channelclass->setVersion($2); }
+| SHARES name_list ';'  {
+    for (std::string &name : current_name_list)
+        current_channelclass->addShare(name.c_str());
+}
+| MONITORS name_list ';'    {
+    for (std::string &name : current_name_list)
+        current_channelclass->addMonitor(name.c_str());
+}
+| MONITORS PATTERN ';'  {
+    for (std::string &name : current_name_list)
+        current_channelclass->addMonitorPattern(name.c_str());
+}
+| UPDATES name_list ';' {
+    for (std::string &name : current_name_list)
+        current_channelclass->addUpdates(name.c_str());
+}
+| SENDS name_list ';'   {
+    for (std::string &name : current_name_list)
+        current_channelclass->addSendName(name.c_str());
+}
+| RECEIVES name_list ';'    {
+    for (std::string &name : current_name_list)
+        current_channelclass->addReceiveName(name.c_str());
+}
+| OPTION chn_option_settings ';'
 ;
+
+chn_option_settings:
+chn_option_setting
+| chn_option_setting COMMA chn_option_setting
+;
+
+chn_option_setting:
+SYMBOL value {
+    current_channelclass->addOptionName($1,*$2);
+    DBG_PARSER << current_channelclass->name << " option: " << $1 << ": " << *$2 << "\n";
+    delete $2;
+}
+
 
 
 definition_header:
