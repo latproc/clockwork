@@ -19,13 +19,13 @@
  */
 
 #include <string>
+#include <string.h>
 #include "cJSON.h"
 #include "MessageEncoding.h"
 #include "value.h"
 #include "symboltable.h"
 #include <assert.h>
 #include <math.h>
-
 
 static std::string valueType(const Value &v) {
     switch (v.kind) {
