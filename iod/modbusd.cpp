@@ -41,6 +41,7 @@
 #include <modbus/modbus.h>
 #include <bitset>
 #include "MessagingInterface.h"
+#include "MessageEncoding.h"
 #include "cJSON.h"
 
 #include <sys/socket.h>
@@ -461,7 +462,7 @@ struct ModbusServerThread {
 };
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
-	char *msg = MessagingInterface::encodeCommand("MODBUS", group, addr, new_value);
+	char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
 	sendIODMessage(msg);
 	//std::stringstream ss;
 	//ss << "MODBUS " << group << " " << addr << " " << new_value;
@@ -514,11 +515,11 @@ void loadData(const char *initial_settings) {
 			for (int i=0; i<num_params; ++i) {
 				cJSON *item = cJSON_GetArrayItem(obj, i);
 				if (item->type == cJSON_Array) {
-					Value group = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 0), 0);
-					Value addr = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 1), 0);
-					Value name = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 2), 0);
-					Value len = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 3), 0);
-					Value value = MessagingInterface::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
+					Value group = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 0), 0);
+					Value addr = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 1), 0);
+					Value name = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 2), 0);
+					Value len = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 3), 0);
+					Value value = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
 					if (DEBUG_BASIC) 
 					std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
 					if (value.kind == Value::t_string) 
@@ -673,7 +674,7 @@ int main(int argc, const char * argv[]) {
             std::vector<Value> params(0);
             {
                 std::list<Value> *param_list = 0;
-                if (MessagingInterface::getCommand(data, ds, &param_list)) {
+                if (MessageEncoding::getCommand(data, ds, &param_list)) {
                     params.push_back(ds);
                     if (param_list) {
                         std::list<Value>::const_iterator iter = param_list->begin();
