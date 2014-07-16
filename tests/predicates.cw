@@ -50,6 +50,7 @@ gTwo FLAG;
 GlobalList LIST gOne, gTwo;
 
 GTest MACHINE list {
+    test WHEN 2 == (3 - COUNT on FROM list);
     ok WHEN COUNT on FROM list == 2;
     waiting DEFAULT;
 }
