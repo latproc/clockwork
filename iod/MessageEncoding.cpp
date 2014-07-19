@@ -109,6 +109,13 @@ char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value 
     return encodeCommand(cmd, &params);
 }
 
+char *MessageEncoding::encodeError(const char *error) {
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "error", error);
+    char *res = cJSON_PrintUnformatted(msg);
+    cJSON_Delete(msg);
+    return res;
+}
 
 Value MessageEncoding::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
     if (!obj) return SymbolTable::Null;
