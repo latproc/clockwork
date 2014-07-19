@@ -364,35 +364,6 @@ void generateIOComponentModules() {
 						continue;
 					}
 				
-/*
-					unsigned int sm_idx = 0;
-					unsigned int entry_pos = 0;
-					unsigned int pdo_idx = 0;
-					unsigned int bit_pos = 0;
-					unsigned int entry_idx = 0;
-
-					while (sm_idx < module->sync_count) {
-						for (pdo_idx = 0; pdo_idx<module->syncs[sm_idx].n_pdos; ++pdo_idx) {
-							if (entry_pos + module->syncs[sm_idx].pdos[pdo_idx].n_entries > entry_position) {
-								entry_idx = entry_position - entry_pos;
-								goto found_entry;
-							}
-							entry_pos += module->syncs[sm_idx].pdos[pdo_idx].n_entries;
-						}
-						++sm_idx;
-					}
-					if (sm_idx == module->sync_count) {
-						std::cerr << "No entry " << entry_position << " on module " << module_position << "\n";
-						continue; // could not find this device
-					}
-					found_entry:
-					unsigned int direction = module->syncs[sm_idx].dir;
-					bit_pos = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].subindex;
-					unsigned int bitlen = module->syncs[sm_idx].pdos[pdo_idx].entries[entry_idx].bit_length;
-					if (m->parameters.size() == 2)
-						bit_pos = entry_position;
-*/
-
 					if (entry_position >= module->num_entries) {
 						std::cerr << "No entry " << entry_position << " on module " << module_position << "\n";
 						continue; // could not find this device
