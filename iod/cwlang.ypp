@@ -309,8 +309,7 @@ chn_definition_section:
         current_channelclass->addMonitor(name.c_str());
 }
 | MONITORS PATTERN ';'  {
-    BOOST_FOREACH(std::string &name, current_name_list)
-        current_channelclass->addMonitorPattern(name.c_str());
+    current_channelclass->addMonitorPattern($2);
 }
 | UPDATES name_list ';' {
     BOOST_FOREACH(std::string &name, current_name_list)
