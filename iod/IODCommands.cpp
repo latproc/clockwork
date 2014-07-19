@@ -31,6 +31,9 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "MessageLog.h"
+#include "MessageEncoding.h"
+#include "Channel.h"
+#include "MessagingInterface.h"
 #ifdef USE_ETHERCAT
 #include <tool/MasterDevice.h>
 #endif
@@ -928,8 +931,37 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 
 bool IODCommandChannel::run(std::vector<Value> &params) {
-    if (params.size() == 0) {
-        result_str = "OK";
+    if (params.size() == 2) {
+        Value ch_name = params[1];
+        ChannelDefinition *defn = ChannelDefinition::find(ch_name.asString().c_str());
+        if (!defn) {
+            
+            error_str = MessageEncoding::encodeError("No such channel");
+            return false;
+        }
+        int port = Channel::uniquePort();
+        Channel *channel = 0;
+        while (true) {
+            try {
+                channel = defn->instantiate(port);
+                break;
+            }
+            catch (zmq::error_t err) {
+                if (zmq_errno() == EADDRINUSE) {
+                    continue;
+                }
+                error_str = zmq_strerror(zmq_errno());
+                std::cerr << error_str << "\n";
+                return false;
+            }
+        }
+        cJSON *res_json = cJSON_CreateObject();
+        cJSON_AddNumberToObject(res_json, "port", port);
+        cJSON_AddStringToObject(res_json, "name", channel->getName().c_str());
+        char *res = cJSON_Print(res_json);
+        result_str = res;
+        free(res);
+        free(res_json);
         return true;
     }
     std::stringstream ss;
