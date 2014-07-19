@@ -71,14 +71,14 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
 
 MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto) 
 		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false), connection(-1) {
+    owner_thread = pthread_self();
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
 	    socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
 	    is_publisher = true;
 	    std::stringstream ss;
 	    ss << "tcp://*:" << port;
 	    url = ss.str();
-	    socket->bind(url.c_str());
-        owner_thread = pthread_self();
+        socket->bind(url.c_str());
 	}
 	else {
 		connect();
@@ -89,6 +89,7 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
             connection(-1), hostname(host), port(remote_port), owner_thread(0) {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
+        owner_thread = pthread_self();
 	    if (host == "*") {
 	        socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
 	        is_publisher = true;
@@ -103,7 +104,6 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 	        url = ss.str();
 	        connect();
 	    }
-        owner_thread = pthread_self();
 	}
 	else {
 		connect();
@@ -152,7 +152,7 @@ void MessagingInterface::handle(const Message&msg, Transmitter *from, bool needs
 
 
 char *MessagingInterface::send(const char *txt) {
-    if (owner_thread) assert( pthread_equal(owner_thread, pthread_self()) );
+    //if (owner_thread) assert( pthread_equal(owner_thread, pthread_self()) );
 
     if (!is_publisher){
         DBG_MESSAGING << "sending message " << txt << " on " << url << "\n";
