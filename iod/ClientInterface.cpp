@@ -187,7 +187,7 @@ std::cout << data << "\n";
                 else if ( ds == "STATS" ) {
                     command = new IODCommandPerformance;
                 }
-                else if (count == 2 && ds == "CHANNEL") {
+                else if (count >= 2 && ds == "CHANNEL") {
                     command = new IODCommandChannel;
                 }
                 else if (count > 2 && ds == "DATA") {

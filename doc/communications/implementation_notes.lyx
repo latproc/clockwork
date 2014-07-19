@@ -108,11 +108,11 @@ proxy for new channels
 \end_layout
 
 \begin_layout Itemize
-add CHANNEL command
+add CHANNEL command (done)
 \end_layout
 
 \begin_layout Itemize
-update publish flags on machineinstances
+when channel is instantiated, update publish flags on machineinstances
 \end_layout
 
 \begin_layout Itemize
@@ -128,6 +128,14 @@ remove publisher/command threads when the connection closes
 \end_layout
 
 \end_deeper
+\begin_layout Itemize
+create a channel dynamically
+\end_layout
+
+\begin_layout Itemize
+send to MachineInstance should queue messages until next state process
+\end_layout
+
 \begin_layout Subsection*
 monitoring - publishing from sever
 \end_layout
@@ -278,6 +286,14 @@ revisit send() in MessagingInterface
 \end_deeper
 \begin_layout Itemize
 add flags to MachineInstance items to indicate they are being published
+\end_layout
+
+\begin_layout Itemize
+generate unused port id
+\end_layout
+
+\begin_layout Itemize
+test if port is in use
 \end_layout
 
 \end_body

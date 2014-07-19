@@ -9,16 +9,14 @@ std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
 MachineRef::MachineRef() : refs(1) {
 }
 
+ChannelImplementation::~ChannelImplementation() { }
 
-Channel::Channel(const std::string ch_name) : name(ch_name) {
+
+Channel::Channel(const std::string ch_name) : ChannelImplementation(), name(ch_name) {
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
     }
     (*all)[name] = this;
-}
-
-Channel::Channel(const Channel &orig){
-    assert(false);
 }
 
 Channel::~Channel() {
@@ -28,6 +26,7 @@ Channel::~Channel() {
         machine->unpublish();
         iter = machines.erase(iter);
     }
+    remove(name);
     if (mif) delete mif;
 }
 
@@ -98,6 +97,20 @@ Channel *Channel::create(int port, const ChannelDefinition *defn) {
     return chn;
 }
 
+Channel *Channel::find(const std::string name) {
+    if (!all) return 0;
+    std::map<std::string, Channel *>::iterator found = all->find(name);
+    if (found == all->end()) return 0;
+    return (*found).second;
+}
+
+void Channel::remove(const std::string name) {
+    if (!all) return;
+    std::map<std::string, Channel *>::iterator found = all->find(name);
+    if (found == all->end()) return;
+    all->erase(found);
+}
+
 void Channel::setDefinition(const ChannelDefinition *def) {
     definition_ = def;
 }
@@ -108,9 +121,37 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
+        bool matches = false;
         if (chn->definition()->monitors_names.count(name))
-            chn->mif->sendCommand("PROPERTY", name, key, val); // send command
+            matches = true;
         else if (chn->machines.count(machine))
+            matches = true;
+        else
+            continue; // only test the channel instance if the channel definition matches
+        
+        if (!chn->monitors_names.empty() && !chn->monitors_names.count(name))
+            matches = false;
+        
+        if (!matches && !chn->monitors_patterns.empty()) {
+            // no match on name but we still may match on pattern
+            std::set<std::string>::iterator iter = chn->monitors_patterns.begin();
+            while (iter != chn->monitors_patterns.end()) {
+                const std::string &pattern = *iter++;
+                rexp_info *rexp = create_pattern(pattern.c_str());
+                if (!rexp->compilation_error) {
+                    if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                        matches = true;
+                    }
+                }
+                else {
+                    MessageLog::instance()->add(rexp->compilation_error);
+                    std::cerr << "Channel error: " << chn->name << " " << rexp->compilation_error << "\n";
+                    return;
+                }
+            }
+        }
+        
+        if (matches)
             chn->mif->sendCommand("PROPERTY", name, key, val); // send command
     }
 }
@@ -121,10 +162,40 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
+        bool matches = false;
         if (chn->definition()->monitors_names.count(name))
-            chn->mif->sendState("STATE", name, new_state); // send command
+            matches = true;
         else if (chn->machines.count(machine))
-            chn->mif->sendState("STATE", name, new_state); // send command
+            matches = true;
+        else
+            continue; // only test the channel instance if the channel definition matches
+        
+        size_t n = chn->monitors_names.count(name);
+        if (!chn->monitors_names.empty() && !n)
+            matches = false;
+        
+        if (!matches && !chn->monitors_patterns.empty()) {
+            // no match on name but we still may match on pattern
+            std::set<std::string>::iterator iter = chn->monitors_patterns.begin();
+            while (iter != chn->monitors_patterns.end()) {
+                const std::string &pattern = *iter++;
+                rexp_info *rexp = create_pattern(pattern.c_str());
+                if (!rexp->compilation_error) {
+                    if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                        matches = true;
+                    }
+                }
+                else {
+                    MessageLog::instance()->add(rexp->compilation_error);
+                    std::cerr << "Channel error: " << chn->name << " " << rexp->compilation_error << "\n";
+                    return;
+                }
+            }
+        }
+        
+        if (matches)
+            chn->mif->sendState("STATE", name, new_state); // send state
+    
     }
 }
 
@@ -141,11 +212,19 @@ void ChannelDefinition::setVersion(const char *s) {
 void ChannelDefinition::addShare(const char *s) {
     shares.insert(s);
 }
-void ChannelDefinition::addMonitor(const char *s) {
+void ChannelImplementation::addMonitor(const char *s) {
+    std::cerr << "add monitor for " << s << "\n";
     monitors_names.insert(s);
 }
-void ChannelDefinition::addMonitorPattern(const char *s) {
+void ChannelImplementation::removeMonitor(const char *s) {
+    std::cerr << "remove monitor for " << s << "\n";
+    monitors_names.erase(s);
+}
+void ChannelImplementation::addMonitorPattern(const char *s) {
     monitors_patterns.insert(s);
+}
+void ChannelImplementation::removeMonitorPattern(const char *s) {
+    monitors_patterns.erase(s);
 }
 void ChannelDefinition::addUpdates(const char *s) {
     updates_names.insert(s);
@@ -161,12 +240,12 @@ void ChannelDefinition::addOptionName(const char *n, Value &v) {
 }
 
 void Channel::setupFilters() {
-    std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
     std::set<std::string>::iterator iter = definition()->monitors_patterns.begin();
     while (iter != definition()->monitors_patterns.end()) {
         const std::string &pattern = *iter++;
         rexp_info *rexp = create_pattern(pattern.c_str());
         if (!rexp->compilation_error) {
+            std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
             while (machines != MachineInstance::end()) {
                 MachineInstance *machine = *machines++;
                 if (execute_pattern(rexp, machine->getName().c_str()) == 0) {

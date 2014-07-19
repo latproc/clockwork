@@ -34,7 +34,24 @@ private:
 
 std::ostream &operator<<(std::ostream &out, const MachineRef &m);
 
-class ChannelDefinition : public MachineClass {
+class ChannelImplementation {
+public:
+    ChannelImplementation() {}
+    virtual ~ChannelImplementation();
+    void addMonitor(const char *);
+    void addMonitorPattern(const char *);
+    void removeMonitor(const char *);
+    void removeMonitorPattern(const char *);
+protected:
+    std::set<std::string> monitors_patterns;
+    std::set<std::string> monitors_names;
+    friend class Channel;
+private:
+    ChannelImplementation(const ChannelImplementation &);
+    ChannelImplementation & operator=(const ChannelImplementation &);
+};
+
+class ChannelDefinition : public ChannelImplementation, public MachineClass {
 public:
     ChannelDefinition(const char *name);
     Channel *instantiate(int port) const;
@@ -44,8 +61,6 @@ public:
     void setIdent(const char *);
     void setVersion(const char *);
     void addShare(const char *);
-    void addMonitor(const char *);
-    void addMonitorPattern(const char *);
     void addUpdates(const char *);
     void addSendName(const char *);
     void addReceiveName(const char *);
@@ -57,8 +72,6 @@ private:
     std::string identifier;
     std::string version;
     std::set<std::string> shares;
-    std::set<std::string> monitors_patterns;
-    std::set<std::string> monitors_names;
     std::set<std::string> updates_names;
     std::set<std::string> send_messages;
     std::set<std::string> recv_messages;
@@ -67,7 +80,7 @@ private:
     friend class Channel;
 };
 
-class Channel {
+class Channel : public ChannelImplementation {
 public:
     typedef std::set< MachineRef* > MachineList;
     Channel(const std::string name);
@@ -76,6 +89,7 @@ public:
     Channel &operator=(const Channel &other);
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const Channel &other);
+
     bool doesMonitor(); // is this channel monitoring any machines?
     bool doesUpdate(); // does this channel update any machines?
     const ChannelDefinition *definition() const { return definition_; }
@@ -85,7 +99,8 @@ public:
     
     static std::map< std::string, Channel* > *channels() { return all; }
     static Channel *create(int port, const ChannelDefinition *defn);
-    static MachineRef *find(const std::string name);
+    static Channel *find(const std::string name);
+    static void remove(const std::string name);
     static int uniquePort();
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
     static void sendStateChange(MachineInstance *machine, std::string new_state);

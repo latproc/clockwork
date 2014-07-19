@@ -22,7 +22,7 @@
 #define __ClientInterface_h__
 
 struct ClientInterfaceInternals { virtual ~ClientInterfaceInternals() {} };
-
+    
 struct IODCommandListenerThread {
     void operator()();
     IODCommandListenerThread();

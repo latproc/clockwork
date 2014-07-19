@@ -930,51 +930,83 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         }
     }
 
-bool IODCommandChannel::run(std::vector<Value> &params) {
-    if (params.size() == 2) {
-        Value ch_name = params[1];
-        ChannelDefinition *defn = ChannelDefinition::find(ch_name.asString().c_str());
-        if (!defn) {
-            
-            error_str = MessageEncoding::encodeError("No such channel");
-            return false;
-        }
-        int port = Channel::uniquePort();
-        Channel *channel = 0;
-        while (true) {
-            try {
-                channel = defn->instantiate(port);
-                break;
-            }
-            catch (zmq::error_t err) {
-                if (zmq_errno() == EADDRINUSE) {
-                    continue;
+    bool IODCommandChannel::run(std::vector<Value> &params) {
+        if (params.size() >= 2) {
+            Value ch_name = params[1];
+            Channel *chn = Channel::find(ch_name.asString());
+            if (chn) {
+                if (params.size() == 3) {
+                    if (params[2] == "REMOVE") {
+                        delete chn;
+                        result_str = "OK";
+                        return true;
+                    }
                 }
-                error_str = zmq_strerror(zmq_errno());
-                std::cerr << error_str << "\n";
-                return false;
+                if (params.size() == 5 && params[2] == "ADD" && params[3] == "MONITOR") {
+                    chn->addMonitor(params[4].asString().c_str());
+                    result_str = "OK";
+                    return true;
+                }
+                if (params.size() == 6 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PATTERN") {
+                    chn->addMonitorPattern(params[5].asString().c_str());
+                    result_str = "OK";
+                    return true;
+                }
+                if (params.size() == 5 && params[2] == "REMOVE" && params[3] == "MONITOR") {
+                    chn->removeMonitor(params[4].asString().c_str());
+                    result_str = "OK";
+                    return true;
+                }
+                if (params.size() == 6 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[4] == "PATTERN") {
+                    chn->removeMonitorPattern(params[5].asString().c_str());
+                    result_str = "OK";
+                    return true;
+                }
+                
+            }
+            else {
+                ChannelDefinition *defn = ChannelDefinition::find(ch_name.asString().c_str());
+                if (!defn) {
+                    error_str = MessageEncoding::encodeError("No such channel");
+                    return false;
+                }
+                int port = Channel::uniquePort();
+                Channel *channel = 0;
+                while (true) {
+                    try {
+                        channel = defn->instantiate(port);
+                        break;
+                    }
+                    catch (zmq::error_t err) {
+                        if (zmq_errno() == EADDRINUSE) {
+                            continue;
+                        }
+                        error_str = zmq_strerror(zmq_errno());
+                        std::cerr << error_str << "\n";
+                        return false;
+                    }
+                }
+                cJSON *res_json = cJSON_CreateObject();
+                cJSON_AddNumberToObject(res_json, "port", port);
+                cJSON_AddStringToObject(res_json, "name", channel->getName().c_str());
+                char *res = cJSON_Print(res_json);
+                result_str = res;
+                free(res);
+                free(res_json);
+                return true;
             }
         }
-        cJSON *res_json = cJSON_CreateObject();
-        cJSON_AddNumberToObject(res_json, "port", port);
-        cJSON_AddStringToObject(res_json, "name", channel->getName().c_str());
-        char *res = cJSON_Print(res_json);
-        result_str = res;
-        free(res);
-        free(res_json);
-        return true;
+        std::stringstream ss;
+        ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [PATTERN] string ]";
+        for (unsigned int i=0; i<params.size()-1; ++i) {
+            ss<< params[i] << " ";
+        }
+        ss << params[params.size()-1];
+        char *msg = strdup(ss.str().c_str());
+        error_str = msg;
+        free(msg);
+        return false;
     }
-    std::stringstream ss;
-    ss << "unsupported command: ";
-    for (unsigned int i=0; i<params.size()-1; ++i) {
-        ss<< params[i] << " ";
-    }
-    ss << params[params.size()-1];
-    char *msg = strdup(ss.str().c_str());
-    error_str = msg;
-    free(msg);
-    return false;
-}
 
     bool IODCommandUnknown::run(std::vector<Value> &params) {
         if (params.size() == 0) {
