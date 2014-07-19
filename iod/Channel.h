@@ -8,6 +8,7 @@
 #include "regular_expressions.h"
 #include "value.h"
 #include "MachineInstance.h"
+#include "MessagingInterface.h"
 class Channel;
 class MachineInterface;
 
@@ -36,7 +37,8 @@ std::ostream &operator<<(std::ostream &out, const MachineRef &m);
 class ChannelDefinition : public MachineClass {
 public:
     ChannelDefinition(const char *name);
-    Channel *instantiate();
+    Channel *instantiate(int port) const;
+    static ChannelDefinition *find(const char *name);
     
     void setKey(const char *);
     void setIdent(const char *);
@@ -50,6 +52,7 @@ public:
     void addOptionName(const char *n, Value &v);
 
 private:
+    static std::map< std::string, ChannelDefinition* > *all;
     std::string psk; // preshared key
     std::string identifier;
     std::string version;
@@ -60,32 +63,44 @@ private:
     std::set<std::string> send_messages;
     std::set<std::string> recv_messages;
     std::map<std::string, Value> options;
+    
+    friend class Channel;
 };
 
 class Channel {
 public:
     typedef std::set< MachineRef* > MachineList;
-    rexp_info *monitors_pattern;
-
-    Channel();
+    Channel(const std::string name);
+    ~Channel();
     Channel(const Channel &orig);
     Channel &operator=(const Channel &other);
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const Channel &other);
     bool doesMonitor(); // is this channel monitoring any machines?
     bool doesUpdate(); // does this channel update any machines?
-    ChannelDefinition *definition() { return definition_; }
+    const ChannelDefinition *definition() const { return definition_; }
+    void setDefinition(const ChannelDefinition *);
+    
+    const std::string &getName() const { return name; }
     
     static std::map< std::string, Channel* > *channels() { return all; }
-    static Channel *create(int port, MachineRef *defn);
+    static Channel *create(int port, const ChannelDefinition *defn);
     static MachineRef *find(const std::string name);
+    static int uniquePort();
+    static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
+    static void sendStateChange(MachineInstance *machine, std::string new_state);
+    
+    void setupFilters();
     
 private:
-    ChannelDefinition *definition_;
+    std::string name;
+    const ChannelDefinition *definition_;
     std::string identifier;
     std::string version;
     MachineList shares;
+    MessagingInterface *mif;
     static std::map< std::string, Channel* > *all;
+    std::set<MachineInstance*> machines;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

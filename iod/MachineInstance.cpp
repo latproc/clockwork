@@ -46,6 +46,7 @@
 #include "options.h"
 #include "MessageLog.h"
 #include "cJSON.h"
+#include "Channel.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -1655,11 +1656,7 @@ Action::Status MachineInstance::setState(State new_state, bool reexecute) {
         
 		
 		if (published) {
-	        MessagingInterface *mif = MessagingInterface::getCurrent();
-			resetTemporaryStringStream();
-			if (owner) ss << owner->getName() << ".";
-	        ss << fullName() << " " << " STATE " << new_state << std::flush;
-            mif->sendState("STATE", fullName(), new_state.getName());
+            Channel::sendStateChange(this, new_state.getName());
 		}
         
         /* notify everyone we are entering a state */
@@ -3052,10 +3049,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				}
 			}
             if (published) {
-                MessagingInterface *mif = MessagingInterface::getCurrent();
-                resetTemporaryStringStream();
-                mif->send(ss.str().c_str());
-                mif->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
+                Channel::sendPropertyChange(this, property.c_str(), new_value);
             }
         
 			if (getValue("PERSISTENT") == "true") {

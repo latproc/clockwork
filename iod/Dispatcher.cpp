@@ -63,11 +63,13 @@ void Dispatcher::addReceiver(Receiver*r) {
 void Dispatcher::removeReceiver(Receiver*r) {
     all_receivers.remove(r);
 }
+
 void Dispatcher::deliver(Package *p) {
     zmq::socket_t sender(*MessagingInterface::getContext(), ZMQ_PUSH);
     sender.connect("inproc://dispatcher");
     sender.send(&p, sizeof(Package*));
 }
+
 void Dispatcher::deliverZ(Package *p) {
 	DBG_DISPATCHER << "Dispatcher accepted package " << *p << "\n";
     to_deliver.push_back(p);
