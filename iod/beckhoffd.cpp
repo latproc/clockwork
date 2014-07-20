@@ -42,7 +42,7 @@
 #include "IODCommands.h"
 #include "Statistics.h"
 #include "value.h"
-#include "MessagingInterface.h"
+#include "MessageEncoding.h"
 
 //#include "MachineInstance.h"
 
@@ -263,7 +263,7 @@ struct CommandThread {
 	            std::vector<Value> params(0);
 	            {
 	                std::list<Value> *param_list = 0;
-	                if (MessagingInterface::getCommand(data, ds, &param_list)) {
+	                if (MessageEncoding::getCommand(data, ds, &param_list)) {
 	                    params.push_back(ds);
 	                    if (param_list) {
 	                        std::list<Value>::const_iterator iter = param_list->begin();

@@ -90,7 +90,7 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			State.o cJSON.o options.o MachineInstance.o Plugin.o MessageEncoding.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
-			PersistentStore.o MessageLog.o filtering.o
+			PersistentStore.o MessageLog.o filtering.o Channel.o
 	$(CC) -o $@ iod.o $(LDFLAGS) \
 			ECInterface.o IOComponent.o Message.o MessagingInterface.o anet.o \
 			Dispatcher.o dynamic_value.o value.o symboltable.o \
@@ -104,24 +104,30 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			CallMethodAction.o ExecuteMessageAction.o MachineCommandAction.o IODCommands.o \
 			MachineInstance.o Plugin.o cwlang.tab.o cwlang.yy.o Scheduler.o \
 			PatternAction.o regular_expressions.o clockwork.o ClientInterface.o MQTTInterface.o \
-			PersistentStore.o MessageLog.o filtering.o \
+			PersistentStore.o MessageLog.o filtering.o Channel.o \
 			-lzmq $(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) $(BOOST_SYSTEM_LIB) \
 			$(TOOLLIB) -lethercat -lmosquitto -ldl
 
-beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o  \
+beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o MessageEncoding.o  \
 			Logger.o State.o DebugExtra.o cJSON.o options.o MachineInstance.o Plugin.o \
-			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
+			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o \
+			IfCommandAction.o Expression.o \
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
 			MachineCommandAction.o HandleMessageAction.o anet.o \
-			value.o filtering.o \
+			value.o filtering.o MessagingInterface.o \
 			CallMethodAction.o IODCommands.o regular_expressions.o MessageLog.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
-			ECInterface.o DebugExtra.o IOComponent.o Message.o MessagingInterface.o anet.o \
-			Logger.o State.o cJSON.o options.o MachineInstance.o Plugin.o Dispatcher.o dynamic_value.o \
+			ECInterface.o DebugExtra.o IOComponent.o Message.o \
+			MessageEncoding.o anet.o \
+			Logger.o State.o cJSON.o options.o MachineInstance.o \
+			Plugin.o Dispatcher.o dynamic_value.o \
 			value.o symboltable.o Scheduler.o \
-			Expression.o FireTriggerAction.o IfCommandAction.o ModbusInterface.o IODCommands.o \
-			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o HandleMessageAction.o \
-			CallMethodAction.o regular_expressions.o MessageLog.o filtering.o \
+			Expression.o FireTriggerAction.o IfCommandAction.o \
+			ModbusInterface.o IODCommands.o \
+			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o \
+			HandleMessageAction.o Channel.o \
+			CallMethodAction.o regular_expressions.o MessageLog.o 	\
+			filtering.o MessagingInterface.o \
 			MQTTInterface.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) \
 			-lethercat -lmosquitto -ldl
 
@@ -156,22 +162,23 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			clockwork.o ClientInterface.o MQTTInterface.o -lmosquitto -ldl
 
 persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
-			MessagingInterface.o cJSON.o options.o PersistentStore.o Message.o anet.o MessageLog.o
+			MessagingInterface.o cJSON.o options.o PersistentStore.o Message.o anet.o MessageLog.o \
+			MessageEncoding.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
 		value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o cJSON.o \
-		options.o PersistentStore.o Message.o anet.o MessageLog.o -lzmq
+		options.o PersistentStore.o Message.o anet.o MessageLog.o MessageEncoding.o -lzmq
 
 modbusd:	modbusd.cpp value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o \
-					options.o cJSON.o Message.o anet.o MessageLog.o
+					options.o cJSON.o Message.o anet.o MessageLog.o MessageEncoding.o
 	$(CC) $(LDFLAGS) -o modbusd modbusd.cpp -lzmq $(BOOST_THREAD_LIB) $(BOOST_THREAD_LIB) \
 			$(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_SYSTEM_LIB) \
 			value.o symboltable.o Logger.o DebugExtra.o -lmodbus MessagingInterface.o \
-				cJSON.o options.o Message.o anet.o MessageLog.o 
+				cJSON.o options.o Message.o anet.o MessageLog.o MessageEncoding.o
 
 iosh: iosh.cpp value.o cmdline.tab.cpp cmdline.yy.cpp \
 		cmdline.h Logger.o DebugExtra.o MessageEncoding.o \
-		symboltable.o cJSON.o options.o Message.o anet.o MessageLog.o 
+		symboltable.o cJSON.o options.o Message.o anet.o MessageLog.o
 	g++ $(CFLAGS) $(LDFLAGS) -DUSE_READLINE -o iosh iosh.cpp \
 			value.o cmdline.tab.cpp cmdline.yy.cpp \
 			Logger.o DebugExtra.o MessageEncoding.o \

@@ -286,7 +286,7 @@ ECInterface *ECInterface::instance() {
 
 void ECInterface::collectState() {
 	if (!master || !initialised || !active) {
-		//std::cerr << "x" << std::flush;
+		std::cerr << "master not ready to collect state" << std::flush;
 		return;
 	}
 #ifndef EC_SIMULATOR
@@ -311,7 +311,7 @@ void ECInterface::collectState() {
 }
 void ECInterface::sendUpdates() {
 	if (!master || !initialised || !active) {
-		//std::cerr << "x" << std::flush;
+		std::cerr << "master not ready to send updates" << std::flush;
 		return;
 	}
 #ifndef EC_SIMULATOR
@@ -388,6 +388,7 @@ void ECInterface::check_slave_config_states(void)
 }
 
 bool ECInterface::start() {
+/*
     struct sigaction sa;
     struct itimerval tv;
     sa.sa_handler = signal_handler;
@@ -397,7 +398,6 @@ bool ECInterface::start() {
 		std::cerr<< "Failed to install signal handler!\n";
         return false;
     }
-
     if (FREQUENCY > 1) {
         tv.it_interval.tv_sec = 0;
         tv.it_interval.tv_usec = 1000000 / FREQUENCY;
@@ -412,10 +412,12 @@ bool ECInterface::start() {
 		std::cerr << "Failed to start timer: " << strerror(errno) << "\n";
         return false;
     }
+*/
 	return true;
 }
 
 bool ECInterface::stop() {
+/*
     struct itimerval tv;
     tv.it_interval.tv_sec = 0;
     tv.it_interval.tv_usec = 0;
@@ -425,5 +427,6 @@ bool ECInterface::stop() {
 		std::cerr << "Failed to stop timer: " << strerror(errno) << "\n";
         return false;
     }
+*/
 	return true;
 }

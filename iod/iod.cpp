@@ -61,6 +61,7 @@
 #include "clockwork.h"
 #include "ClientInterface.h"
 #include "MessageLog.h"
+#include "MessagingInterface.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -159,6 +160,78 @@ bool setup_signals()
 	return true;
 }
 
+struct EtherCATThread {
+public:
+	enum State { e_collect, e_update };
+	EtherCATThread() : status(e_collect){ }
+    void operator()();
+    void stop() { program_done = true; }
+private:
+	State status;
+};
+
+void EtherCATThread::operator()() {
+	struct timeval then;
+	gettimeofday(&then, 0);
+	
+	zmq::socket_t sync(*MessagingInterface::getContext(), ZMQ_REP);
+	sync.bind("inproc://ethercat_sync");
+	
+	while (!program_done) {
+		//std::cout << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
+		if (status == e_collect) {
+			try {
+				char buf[10];
+				size_t len = sync.recv(buf, 10);
+				if (!len) continue; // interrupted
+			}
+			catch (std::exception &ex) {
+				continue;
+			}
+        	struct timeval now;
+			// attempt to keep regular time
+	        // use the clockwork interpreter's current cycle delay
+	        Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+	        int64_t cyc_delay = 1000;
+	        if (cycle_delay_v) cyc_delay = cycle_delay_v->iValue;
+        	gettimeofday(&now,0);
+        	int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
+						+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
+	        int64_t delay = cyc_delay-delta-5;
+			if (delay>0) {
+	            struct timespec sleep_time;
+	            sleep_time.tv_sec = delay / 1000000;
+	            sleep_time.tv_nsec = (delay * 1000) % 1000000000L;
+	            int rc;
+	            struct timespec remaining;
+	            while ( (rc = nanosleep(&sleep_time, &remaining) == -1) ) {
+	                sleep_time = remaining;
+				}
+            }
+
+        	//gettimeofday(&then,0);
+	        then.tv_usec += cyc_delay;
+			while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
+			std::cout << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
+	    	ECInterface::instance()->collectState();
+			sync.send("ok",2);
+			status = e_update;
+		}
+		if (status == e_update) {
+			try {
+				char buf[40];
+				size_t len = sync.recv(buf, 40);
+				if (!len) continue; // interrupted
+			}
+			catch (std::exception &ex) {
+				continue;
+			}
+			ECInterface::instance()->sendUpdates();
+			sync.send("ok",2);
+			status = e_collect;
+		}
+	}
+}
 
 struct ProcessingThread {
     void operator()();
@@ -193,14 +266,17 @@ void ProcessingThread::operator()()  {
 	Statistic::add(cycle_delay_stat);
 	long delta, delta2;
 
+	zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+	ecat_sync.connect("inproc://ethercat_sync");
+
 	unsigned long sync = 0;
 	while (!program_done) {
-		pause();
 		enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
 		struct timeval start_t, end_t;
 #if 0
         {
-			boost::system_time const timeout=boost::get_system_time() + boost::posix_time::microseconds(1000000/ECInterface::FREQUENCY);
+			boost::system_time const timeout=boost::get_system_time() 
+				+ boost::posix_time::microseconds(1000000/ECInterface::FREQUENCY);
 			bool timed_out = false;
 			try {
 				boost::mutex::scoped_lock lock(io_mutex);
@@ -220,14 +296,24 @@ void ProcessingThread::operator()()  {
         }
 #endif
 		{
-		boost::mutex::scoped_lock lock(thread_protection_mutex);
-		gettimeofday(&start_t, 0);
-		if (machine_is_ready) {
-			delta = get_diff_in_microsecs(&start_t, &end_t);
-			cycle_delay_stat->add(delta);
-		}
-		if (sync != ECInterface::sig_alarms) {
-	    ECInterface::instance()->collectState();
+			boost::mutex::scoped_lock lock(thread_protection_mutex);
+			gettimeofday(&start_t, 0);
+			if (machine_is_ready) {
+				delta = get_diff_in_microsecs(&start_t, &end_t);
+				cycle_delay_stat->add(delta);
+			}
+			ecat_sync.send("go",2); // collect state
+			while (!program_done) {
+				try {
+					char buf[10];
+					size_t len = ecat_sync.recv(buf, 10);
+					if (len) break;
+				}
+				catch (std::exception ex) {
+					continue; // TBD watch for infinite loop here
+				}
+			}
+			if (program_done) break;
 			IOComponent::processAll();
 			gettimeofday(&end_t, 0);
 
@@ -287,20 +373,28 @@ void ProcessingThread::operator()()  {
 					}
 				}
 			}
-   		ECInterface::instance()->sendUpdates();
-			++sync;
-			if (sync != ECInterface::sig_alarms) sync = ECInterface::sig_alarms-1;
 			//else {
 			//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
 			//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
 			//}
 			checkAndUpdateCycleDelay();
+			ecat_sync.send("go",2); // update io
+			while (!program_done) {
+				try {
+					char buf[10];
+					size_t len = ecat_sync.recv(buf, 10);
+					if (len) break;
+				}
+				catch (std::exception ex) {
+					continue; // TBD watch for infinite loop here
+				}
+			}
+			if (program_done) break;
 		}
 		std::cout << std::flush;
 //		model_mutex.lock();
 //		model_updated.notify_one();
 //		model_mutex.unlock();
-		}
 	}
 	std::cout << "processing done\n";
 }
@@ -472,6 +566,8 @@ void generateIOComponentModules() {
 
 int main(int argc, char const *argv[])
 {
+	zmq::context_t context;
+	MessagingInterface::setContext(&context);
 	Logger::instance();
 	MessageLog::setMaxMemory(10000);
 	ControlSystemMachine machine;
@@ -577,6 +673,10 @@ int main(int argc, char const *argv[])
 	initialise_machines();
 	setup_signals();
 
+	std::cout << "-------- Starting EtherCAT Interface ---------\n";	
+	EtherCATThread ethercat;
+	boost::thread ecat_thread(boost::ref(ethercat));
+	
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
 	boost::thread monitor(boost::ref(stateMonitor));
@@ -594,6 +694,7 @@ int main(int argc, char const *argv[])
 	// do not start a thread, simply run this process directly
    	processMonitor();
     stateMonitor.stop();
+	ethercat.stop();
     monitor.join();
 	return 0;
 }
