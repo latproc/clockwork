@@ -255,7 +255,7 @@ void ProcessingThread::checkAndUpdateCycleDelay() {
 		delay = cycle_delay_v->iValue;
 	if (delay != cycle_delay) {
 		ECInterface::FREQUENCY = 1000000 / delay;
-		ECInterface::instance()->start();
+		//ECInterface::instance()->start();
 		cycle_delay = delay;
 	}
 }
@@ -662,7 +662,7 @@ int main(int argc, char const *argv[])
 #endif
 	generateIOComponentModules();
 	MachineInstance::displayAll();
-	ECInterface::instance()->start();
+	//ECInterface::instance()->start();
 
 #ifdef EC_SIMULATOR
 		wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
