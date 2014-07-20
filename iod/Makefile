@@ -44,7 +44,7 @@ BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 DLLFLAGS = -fPIC -rdynamic
 CFLAGS = $(SIMULATED) $(DLLFLAGS) -g -std=gnu++11 -pedantic -Wall -Wno-unused-variable -Wno-variadic-macros \
 	-Wno-unused-but-set-variable \
-	$(EXTRAINCS) -DUSE_ETHERCAT
+	$(EXTRAINCS) -DUSE_ETHERCAT -DETHERCATD
 CC = g++ $(CFLAGS)
 LDFLAGS = $(EXTRALIBS) -g
 
