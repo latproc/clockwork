@@ -79,10 +79,14 @@ all:	$(APPS)
 
 iod.o:	iod.cpp	MessagingInterface.h
 
-iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o anet.o \
-			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o \
-			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
-			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
+iod:	iod.o IODCommand.h ECInterface.o IOComponent.o \
+			Message.o MessagingInterface.o anet.o \
+			Dispatcher.o dynamic_value.o value.o \
+			symboltable.o DebugExtra.o Logger.o \
+			cwlang.tab.o cwlang.yy.o Scheduler.o \
+			FireTriggerAction.o IfCommandAction.o Expression.o \
+			DisableAction.o EnableAction.o ExpressionAction.o \
+			LogAction.o PredicateAction.o ecat_thread.o \
 			SortListAction.o SetListEntriesAction.o CopyPropertiesAction.o \
 			ClearListAction.o SetOperationAction.o \
 			IncludeAction.o LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
@@ -96,7 +100,8 @@ iod:	iod.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface
 			Dispatcher.o dynamic_value.o value.o symboltable.o \
 			DebugExtra.o Logger.o State.o cJSON.o options.o \
 			Expression.o FireTriggerAction.o IfCommandAction.o \
-			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
+			DisableAction.o EnableAction.o ExpressionAction.o \
+			LogAction.o PredicateAction.o ecat_thread.o \
 			SortListAction.o SetListEntriesAction.o CopyPropertiesAction.o \
 			ClearListAction.o SetOperationAction.o MessageEncoding.o \
 			IncludeAction.o LockAction.o UnlockAction.o ModbusInterface.o ResumeAction.o ShutdownAction.o \
@@ -114,7 +119,7 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			IfCommandAction.o Expression.o \
 			ModbusInterface.o SetStateAction.o ExecuteMessageAction.o \
 			MachineCommandAction.o HandleMessageAction.o anet.o \
-			value.o filtering.o MessagingInterface.o \
+			value.o filtering.o MessagingInterface.o ecat_thread.o \
 			CallMethodAction.o IODCommands.o regular_expressions.o MessageLog.o
 	$(CC) -o $@ beckhoffd.cpp $(LDFLAGS) \
 			ECInterface.o DebugExtra.o IOComponent.o Message.o \
@@ -127,7 +132,7 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 			SetStateAction.o ExecuteMessageAction.o MachineCommandAction.o \
 			HandleMessageAction.o Channel.o \
 			CallMethodAction.o regular_expressions.o MessageLog.o 	\
-			filtering.o MessagingInterface.o \
+			filtering.o MessagingInterface.o ecat_thread.o \
 			MQTTInterface.o $(TOOLLIB) -lzmq $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) \
 			-lethercat -lmosquitto -ldl
 
