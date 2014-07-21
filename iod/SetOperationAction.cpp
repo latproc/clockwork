@@ -46,11 +46,12 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
 }
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
-    : scope(m), count(dat->count), Action(m),
-        source_a(dat->src_a_name), source_b(dat->src_b_name),
-        source_a_machine(0), source_b_machine(0),
-        dest(dat->dest_name), dest_machine(0),  operation(dat->operation),
-        property_name(dat->property_name), condition(dat->condition), remove_selected(dat->remove_selected) {
+    : Action(m), scope(m), count(dat->count), 
+
+        source_a(dat->src_a_name), source_b(dat->src_b_name), dest(dat->dest_name),
+        condition(dat->condition), property_name(dat->property_name), source_a_machine(0), source_b_machine(0),
+        dest_machine(0),  operation(dat->operation),
+         remove_selected(dat->remove_selected) {
 }
 
 SetOperationAction::SetOperationAction() : Action(), dest_machine(0) {
