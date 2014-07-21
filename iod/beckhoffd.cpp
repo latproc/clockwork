@@ -43,6 +43,8 @@
 #include "Statistics.h"
 #include "value.h"
 #include "MessageEncoding.h"
+#include "MessagingInterface.h"
+#include "ecat_thread.h"
 
 //#include "MachineInstance.h"
 
@@ -506,6 +508,8 @@ bool program_done = false;
 
 int main (int argc, char const *argv[])
 {
+	zmq::context_t context;
+	MessagingInterface::setContext(&context);
 	unsigned int user_alarms = 0;
 	statistics = new Statistics;
 	ControlSystemMachine machine;
@@ -517,29 +521,56 @@ int main (int argc, char const *argv[])
 	ECInterface::instance()->activate();
 #endif
 	generateIOComponentMappings();
-	ECInterface::instance()->start();
+//	ECInterface::instance()->start();
 
+	std::cout << "-------- Starting EtherCAT Interface ---------\n";	
+	EtherCATThread ethercat;
+	ethercat.setCycleDelay(1000000/ECInterface::FREQUENCY);
+	boost::thread ecat_thread(boost::ref(ethercat));
+	usleep(100);
+	
+	std::cout << "-------- Starting Command Interface ---------\n";	
     CommandThread stateMonitor;
     boost::thread monitor(boost::ref(stateMonitor));
 
+	std::cout << "-------- Preparing to start EtherCAT cycle ---------\n";	
+	zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+	ecat_sync.connect("inproc://ethercat_sync");
+
+	std::cout << "-------- running ---------\n";	
 	while (! program_done) {
-		// Note: the use of pause here introduces a random variation of up to 500ns
 		struct timeval start_t, end_t;
 		gettimeofday(&start_t, 0);
-//		pause();
 		gettimeofday(&end_t, 0);
-		long delta = get_diff_in_microsecs(&end_t, &start_t);
-		if (delta < 100) usleep(100-delta);
-		while (ECInterface::sig_alarms != user_alarms) {
-			ECInterface::instance()->collectState();
-#ifdef EC_SIMULATOR
-	        checkInputs(); // simulated wiring between inputs and outputs
-#endif
-		    IOComponent::processAll();
-			user_alarms++;
-			ECInterface::instance()->sendUpdates();
+	//	long delta = get_diff_in_microsecs(&end_t, &start_t);
+	//	if (delta < 100) usleep(100-delta);
+		ecat_sync.send("go",2); // collect state
+		while (!program_done) {
+			try {
+				char buf[10];
+				size_t len = ecat_sync.recv(buf, 10);
+				if (len) break;
+			}
+			catch (std::exception ex) {
+				continue; // TBD watch for infinite loop here
+			}
 		}
-		std::cout << std::flush;
+#ifdef EC_SIMULATOR
+		checkInputs(); // simulated wiring between inputs and outputs
+#endif
+		IOComponent::processAll();
+		ecat_sync.send("go",2); // collect state
+		while (!program_done) {
+			try {
+				char buf[10];
+				size_t len = ecat_sync.recv(buf, 10);
+				if (len) break;
+			}
+			catch (std::exception ex) {
+				continue; // TBD watch for infinite loop here
+			}
+		}
+		//std::cout << std::flush;
 	}
     stateMonitor.stop();
     monitor.join();

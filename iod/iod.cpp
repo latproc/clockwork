@@ -62,6 +62,7 @@
 #include "ClientInterface.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
+#include "ecat_thread.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -160,79 +161,6 @@ bool setup_signals()
 	return true;
 }
 
-struct EtherCATThread {
-public:
-	enum State { e_collect, e_update };
-	EtherCATThread() : status(e_collect){ }
-    void operator()();
-    void stop() { program_done = true; }
-private:
-	State status;
-};
-
-void EtherCATThread::operator()() {
-	struct timeval then;
-	gettimeofday(&then, 0);
-	
-	zmq::socket_t sync(*MessagingInterface::getContext(), ZMQ_REP);
-	sync.bind("inproc://ethercat_sync");
-	
-	while (!program_done) {
-		//std::cout << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
-		if (status == e_collect) {
-			try {
-				char buf[10];
-				size_t len = sync.recv(buf, 10);
-				if (!len) continue; // interrupted
-			}
-			catch (std::exception &ex) {
-				continue;
-			}
-        	struct timeval now;
-			// attempt to keep regular time
-	        // use the clockwork interpreter's current cycle delay
-	        Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-	        int64_t cyc_delay = 1000;
-	        if (cycle_delay_v) cyc_delay = cycle_delay_v->iValue;
-        	gettimeofday(&now,0);
-        	int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
-						+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
-	        int64_t delay = cyc_delay-delta-5;
-			if (delay>0) {
-	            struct timespec sleep_time;
-	            sleep_time.tv_sec = delay / 1000000;
-	            sleep_time.tv_nsec = (delay * 1000) % 1000000000L;
-	            int rc;
-	            struct timespec remaining;
-	            while ( (rc = nanosleep(&sleep_time, &remaining) == -1) ) {
-	                sleep_time = remaining;
-				}
-            }
-
-        	//gettimeofday(&then,0);
-	        then.tv_usec += cyc_delay;
-			while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
-			std::cout << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
-	    	ECInterface::instance()->collectState();
-			sync.send("ok",2);
-			status = e_update;
-		}
-		if (status == e_update) {
-			try {
-				char buf[40];
-				size_t len = sync.recv(buf, 40);
-				if (!len) continue; // interrupted
-			}
-			catch (std::exception &ex) {
-				continue;
-			}
-			ECInterface::instance()->sendUpdates();
-			sync.send("ok",2);
-			status = e_collect;
-		}
-	}
-}
-
 struct ProcessingThread {
     void operator()();
     ProcessingThread(ControlSystemMachine &m, long delay);
@@ -273,28 +201,6 @@ void ProcessingThread::operator()()  {
 	while (!program_done) {
 		enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
 		struct timeval start_t, end_t;
-#if 0
-        {
-			boost::system_time const timeout=boost::get_system_time() 
-				+ boost::posix_time::microseconds(1000000/ECInterface::FREQUENCY);
-			bool timed_out = false;
-			try {
-				boost::mutex::scoped_lock lock(io_mutex);
-	            if (!io_updated.timed_wait(io_mutex, timeout)) goto end_process_loop;
-			} catch (boost::thread_resource_error err) {
-				timed_out = true;
-			} catch (std::exception e) {
-				std::cerr << "EtherCAT link timed out: " << e.what() << "\n";
-				timed_out = true;
-            	if (zmq_errno())
-            	    std::cerr << zmq_strerror(zmq_errno()) << "\n";
-            	else
-            	    std::cerr << e.what() << "\n";
-				abort();
-			}
-			if (timed_out) goto end_process_loop;
-        }
-#endif
 		{
 			boost::mutex::scoped_lock lock(thread_protection_mutex);
 			gettimeofday(&start_t, 0);
@@ -302,6 +208,10 @@ void ProcessingThread::operator()()  {
 				delta = get_diff_in_microsecs(&start_t, &end_t);
 				cycle_delay_stat->add(delta);
 			}
+	        //Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+	        //long cyc_delay = 1000;
+	        //if (cycle_delay_v) cyc_delay = cycle_delay_v->iValue;
+			
 			ecat_sync.send("go",2); // collect state
 			while (!program_done) {
 				try {
