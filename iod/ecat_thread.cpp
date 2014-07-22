@@ -49,6 +49,18 @@ EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 
+bool EtherCATThread::waitForSync() {
+	try {
+		char buf[10];
+		size_t len = sync_sock->recv(buf, 10);
+		if (!len) return false; // interrupted
+		return true;
+	}
+	catch (std::exception &ex) {
+		return false;
+	}
+}
+
 void EtherCATThread::operator()() {
 	struct timeval then;
 	gettimeofday(&then, 0);
@@ -56,21 +68,15 @@ void EtherCATThread::operator()() {
 	sync_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REP);
 	sync_sock->bind("inproc://ethercat_sync");
 	
+	while (!program_done && !waitForSync()) ;
 	while (!program_done) {
 		if (status == e_collect) {
-			try {
-				char buf[10];
-				size_t len = sync_sock->recv(buf, 10);
-				if (!len) continue; // interrupted
-			}
-			catch (std::exception &ex) {
-				continue;
-			}
+			//if (!waitForSync()) continue;
         	struct timeval now;
         	gettimeofday(&now,0);
         	int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
 						+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
-	        int64_t delay = cycle_delay-delta-5;
+	        int64_t delay = cycle_delay-delta-100;
 			if (delay>0) {
 	            struct timespec sleep_time;
 	            sleep_time.tv_sec = delay / 1000000;
@@ -80,27 +86,25 @@ void EtherCATThread::operator()() {
 	            while ( (rc = nanosleep(&sleep_time, &remaining) == -1) ) {
 	                sleep_time = remaining;
 				}
+        		//gettimeofday(&now,0);
+        		//delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
+			//			+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
+	        	//delay = cycle_delay-delta-20;
             }
 
-        	//gettimeofday(&then,0);
-	        then.tv_usec += cycle_delay;
-			while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
-			//std::cout << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
+        	gettimeofday(&then,0);
+	        //then.tv_usec += cycle_delay;
+			//while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
+			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
+			//then = now;
 	    	ECInterface::instance()->collectState();
 			sync_sock->send("ok",2);
 			status = e_update;
 		}
 		if (status == e_update) {
-			try {
-				char buf[40];
-				size_t len = sync_sock->recv(buf, 40);
-				if (!len) continue; // interrupted
-			}
-			catch (std::exception &ex) {
-				continue;
-			}
+			if (!waitForSync()) continue;
 			ECInterface::instance()->sendUpdates();
-			sync_sock->send("ok",2);
+			//sync_sock->send("ok",2);
 			status = e_collect;
 		}
 	}
