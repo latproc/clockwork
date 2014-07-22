@@ -22,10 +22,10 @@ Channel::Channel(const std::string ch_name) : ChannelImplementation(), name(ch_n
 Channel::~Channel() {
     std::set<MachineInstance*>::iterator iter = this->machines.begin();
     while (iter != machines.end()) {
-        MachineInstance *machine = *iter;
+        MachineInstance *machine = *iter++;
         machine->unpublish();
-        iter = machines.erase(iter);
     }
+	  this->machines.erase(machines.begin(), machines.end());
     remove(name);
     if (mif) delete mif;
 }

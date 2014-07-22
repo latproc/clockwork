@@ -258,7 +258,7 @@ Value SizeValue::operator()(MachineInstance *mi) {
         MessageLog::instance()->add(ss.str().c_str());
         last_result = false; return last_result;
     }
-    last_result = machine_list->parameters.size();
+    last_result = (long)machine_list->parameters.size();
     return last_result;
 }
 
