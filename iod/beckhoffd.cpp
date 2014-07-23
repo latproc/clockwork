@@ -514,7 +514,7 @@ int main (int argc, char const *argv[])
 	statistics = new Statistics;
 	ControlSystemMachine machine;
     Logger::instance()->setLevel(Logger::Debug);
-	ECInterface::FREQUENCY=1000;
+	ECInterface::FREQUENCY=500;
 
 #ifndef EC_SIMULATOR
 	collectSlaveConfig(true); // load slave information from the EtherCAT master and configure the domain
@@ -538,13 +538,13 @@ int main (int argc, char const *argv[])
 	ecat_sync.connect("inproc://ethercat_sync");
 
 	std::cout << "-------- running ---------\n";	
+	ecat_sync.send("go",2); // collect state
 	while (! program_done) {
 		struct timeval start_t, end_t;
 		gettimeofday(&start_t, 0);
 		gettimeofday(&end_t, 0);
 	//	long delta = get_diff_in_microsecs(&end_t, &start_t);
 	//	if (delta < 100) usleep(100-delta);
-		ecat_sync.send("go",2); // collect state
 		while (!program_done) {
 			try {
 				char buf[10];
@@ -560,17 +560,6 @@ int main (int argc, char const *argv[])
 #endif
 		IOComponent::processAll();
 		ecat_sync.send("go",2); // collect state
-		while (!program_done) {
-			try {
-				char buf[10];
-				size_t len = ecat_sync.recv(buf, 10);
-				if (len) break;
-			}
-			catch (std::exception ex) {
-				continue; // TBD watch for infinite loop here
-			}
-		}
-		//std::cout << std::flush;
 	}
     stateMonitor.stop();
     monitor.join();

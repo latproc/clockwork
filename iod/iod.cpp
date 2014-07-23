@@ -198,6 +198,7 @@ void ProcessingThread::operator()()  {
 	ecat_sync.connect("inproc://ethercat_sync");
 
 	unsigned long sync = 0;
+	ecat_sync.send("go",2); // collect state
 	while (!program_done) {
 		enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
 		struct timeval start_t, end_t;
@@ -212,7 +213,6 @@ void ProcessingThread::operator()()  {
 	        //long cyc_delay = 1000;
 	        //if (cycle_delay_v) cyc_delay = cycle_delay_v->iValue;
 			
-			ecat_sync.send("go",2); // collect state
 			while (!program_done) {
 				try {
 					char buf[10];
@@ -289,19 +289,9 @@ void ProcessingThread::operator()()  {
 			//}
 			checkAndUpdateCycleDelay();
 			ecat_sync.send("go",2); // update io
-			while (!program_done) {
-				try {
-					char buf[10];
-					size_t len = ecat_sync.recv(buf, 10);
-					if (len) break;
-				}
-				catch (std::exception ex) {
-					continue; // TBD watch for infinite loop here
-				}
-			}
 			if (program_done) break;
 		}
-		std::cout << std::flush;
+//		std::cout << std::flush;
 //		model_mutex.lock();
 //		model_updated.notify_one();
 //		model_mutex.unlock();

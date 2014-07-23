@@ -17,6 +17,8 @@ private:
 	long cycle_delay;
 	zmq::socket_t *cmd_sock;
 	zmq::socket_t *sync_sock;
+
+	bool waitForSync();
 };
 
 #endif
