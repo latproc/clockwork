@@ -19,7 +19,7 @@
 */
 
 #include <unistd.h>
-#include "ECInterface.h"
+//#include "ECInterface.h"
 #include "ControlSystemMachine.h"
 #include "IOComponent.h"
 #include <sstream>
@@ -335,7 +335,7 @@ int main (int argc, char const *argv[])
     MQTTInterface::instance()->init();
     MQTTInterface::instance()->start();
     
-	ECInterface::FREQUENCY=100000;
+	//ECInterface::FREQUENCY=100000;
 
 	//ECInterface::instance()->start();
     
@@ -455,14 +455,14 @@ int main (int argc, char const *argv[])
     MQTTInterface::instance()->activate();
     while (!program_done) {
         MQTTInterface::instance()->collectState();
-        ECInterface::instance()->collectState();
+        //ECInterface::instance()->collectState();
         {
             boost::unique_lock<boost::mutex> lock(io_mutex);
             processMonitor.data_ready = true;
             io_updated.notify_one();
         }
         if (processing_sequence != processMonitor.sequence) { // did the model update?
-            ECInterface::instance()->sendUpdates();
+            //ECInterface::instance()->sendUpdates();
             ++processing_sequence;
         }
         struct timeval now;
@@ -495,6 +495,7 @@ int main (int argc, char const *argv[])
     }
     process.join();
     stateMonitor.stop();
+    zmq_ctx_destroy(&context);
     monitor.join();
 	return 0;
 }
