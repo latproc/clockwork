@@ -35,6 +35,7 @@
 #include "options.h"
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
+#include <pthread.h>
 
 extern bool machine_is_ready;
 extern boost::mutex thread_protection_mutex;
@@ -51,28 +52,70 @@ void IODCommandListenerThread::stop() { done = true; }
 struct CommandThreadInternals : public ClientInterfaceInternals {
 public:
     zmq::socket_t socket;
+    pthread_t monitor_thread;
     
     CommandThreadInternals() : socket(*MessagingInterface::getContext(), ZMQ_REP) {}
 };
 
+class MyMonitor : public zmq::monitor_t {
+public:
+    MyMonitor(zmq::socket_t *s) : sock(s) {
+    }
+    void operator()() {
+        monitor(*sock, "inproc://monitor.rep");
+    }
+    virtual void on_monitor_started() {
+        std::cerr << "monitor started\n";
+    }
+    virtual void on_event_connected(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_connected " << addr_ << "\n"; }
+    virtual void on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_connect_delayed " << addr_ << "\n"; }
+    virtual void on_event_connect_retried(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_connect_retried " << addr_ << "\n";}
+    virtual void on_event_listening(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_listening " << addr_ << "\n"; }
+    virtual void on_event_bind_failed(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_bind_failed " << addr_ << "\n"; }
+    virtual void on_event_accepted(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_accepted " << event_.value << " " << addr_ << "\n"; }
+    virtual void on_event_accept_failed(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_accept_failed " << addr_ << "\n"; }
+    virtual void on_event_closed(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_closed " << addr_ << "\n";}
+    virtual void on_event_close_failed(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_close_failed " << addr_ << "\n";}
+    virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_disconnected "<< event_.value << " "  << addr_ << "\n"; }
+    virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_) {
+        std::cerr << "on_event_unknown " << addr_ << "\n"; }
+
+private:
+    zmq::socket_t *sock;
+};
 
 void IODCommandThread::operator()() {
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
     
     std::cout << "------------------ Command Thread Started -----------------\n";
+    
+    MyMonitor monit(&cti->socket);
+    boost::thread cmd_monitor(boost::ref(monit));
+    
     int linger = 0; // do not wait at socket close time
     cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
     std::stringstream sn;
     sn << "tcp://0.0.0.0:" << command_port();
     const char *port = sn.str().c_str();
     cti->socket.bind (port);
+    
     IODCommand *command = 0;
     
     while (!done) {
         try {
             
              zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-             zmq::poll( &items[0], 1, 50*1000);
+             zmq::poll( &items[0], 1, 50);
              if (done) break;
              if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
 
@@ -247,6 +290,7 @@ std::cout << data << "\n";
             }
         }
     }
+    monit.abort();
     cti->socket.close();
 }
 
