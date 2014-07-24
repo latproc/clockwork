@@ -151,6 +151,7 @@ struct Subcondition {
 %type <expr> expression 
 %type <expr> predicate
 %type <val> value
+%type <val> basic_value
 %type <param> parameter
 %type <iVal> access_type
 %type <iVal> size_type
@@ -311,6 +312,10 @@ chn_definition_section:
 | MONITORS PATTERN ';'  {
     current_channelclass->addMonitorPattern($2);
 }
+| MONITORS SYMBOL EQ basic_value ';'  {
+    current_channelclass->addMonitorProperty($2, *$4);
+    delete $4;
+}
 | UPDATES name_list ';' {
     BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addUpdates(name.c_str());
@@ -324,6 +329,18 @@ chn_definition_section:
         current_channelclass->addReceiveName(name.c_str());
 }
 | OPTION chn_option_settings ';'
+;
+
+basic_value:
+INTEGER   {
+    $$ = new Value($1);
+}
+| STRINGVAL {
+    $$ = new Value($1, Value::t_string);
+}
+| SYMBOL {
+    $$ = new Value($1);
+}
 ;
 
 chn_option_settings:

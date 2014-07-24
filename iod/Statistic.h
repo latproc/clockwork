@@ -24,6 +24,7 @@
 #include <ostream>
 #include <string>
 #include <limits.h>
+#include <list>
 #include <sys/time.h>
 #include "options.h"
 #include "cJSON.h"

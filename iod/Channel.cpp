@@ -2,6 +2,7 @@
 #include "Channel.h"
 #include "MessagingInterface.h"
 #include "MessageLog.h"
+#include "MessageEncoding.h"
 
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
@@ -95,6 +96,106 @@ Channel *Channel::create(int port, const ChannelDefinition *defn) {
     chn->setupFilters();
     chn->mif = MessagingInterface::create("*", port);
     return chn;
+}
+
+static void copyJSONArrayToSet(cJSON *obj, const char *key, std::set<std::string> &res) {
+    cJSON *items = cJSON_GetObjectItem(obj, key);
+    if (items && items->type == cJSON_Array) {
+        cJSON *item = items->child;
+        while (item) {
+            if (item->type == cJSON_String) res.insert(item->valuestring);
+            item = item->next;
+        }
+    }
+}
+
+static void copyJSONArrayToMap(cJSON *obj, const char *key, std::map<std::string, Value> &res) {
+    cJSON *items = cJSON_GetObjectItem(obj, key);
+    if (items && items->type == cJSON_Array) {
+        cJSON *item = items->child;
+        while (item) {
+            // we only collect items from the array that match our expected format of
+            // property,value pairs
+            if (item->type == cJSON_Object) {
+                cJSON *js_prop = cJSON_GetObjectItem(item, "property");
+                cJSON *js_type = cJSON_GetObjectItem(item, "type");
+                cJSON *js_val = cJSON_GetObjectItem(item, "value");
+                if (js_prop->type == cJSON_String) {
+                    res[js_prop->valuestring] = MessageEncoding::valueFromJSONObject(js_val, js_type);
+                }
+            }
+            item = item->next;
+        }
+    }
+}
+
+ChannelDefinition *ChannelDefinition::fromJSON(const char *json) {
+    cJSON *obj = cJSON_Parse(json);
+    if (!obj) return 0;
+/*    std::map<std::string, Value> options;
+*/
+    cJSON *item = cJSON_GetObjectItem(obj, "identifier");
+    std::string name;
+    if (item && item->type == cJSON_String) {
+        name = item->valuestring;
+    }
+    ChannelDefinition *defn = new ChannelDefinition(name.c_str());
+    defn->identifier = name;
+    item = cJSON_GetObjectItem(obj, "key");
+    if (item && item->type == cJSON_String)
+        defn->setKey(item->valuestring);
+    item = cJSON_GetObjectItem(obj, "version");
+    if (item && item->type == cJSON_String)
+        defn->setVersion(item->valuestring);
+    copyJSONArrayToSet(obj, "monitors", defn->monitors_names);
+    copyJSONArrayToSet(obj, "monitors_patterns", defn->monitors_patterns);
+    copyJSONArrayToMap(obj, "monitors_properties", defn->monitors_properties);
+    copyJSONArrayToSet(obj, "shares", defn->shares);
+    copyJSONArrayToSet(obj, "updates", defn->updates_names);
+    copyJSONArrayToSet(obj, "sends", defn->send_messages);
+    copyJSONArrayToSet(obj, "receives", defn->recv_messages);
+    return defn;
+}
+
+static cJSON *StringSetToJSONArray(std::set<std::string> &items) {
+    cJSON *res = cJSON_CreateArray();
+    std::set<std::string>::iterator iter = items.begin();
+    while (iter != items.end()) {
+        const std::string &str = *iter++;
+        cJSON_AddItemToArray(res, cJSON_CreateString(str.c_str()));
+    }
+    return res;
+}
+
+static cJSON *MapToJSONArray(std::map<std::string, Value> &items) {
+    cJSON *res = cJSON_CreateArray();
+    std::map<std::string, Value>::iterator iter = items.begin();
+    while (iter != items.end()) {
+        const std::pair<std::string, Value> item = *iter++;
+        cJSON *js_item = cJSON_CreateObject();
+        cJSON_AddItemToObject(js_item, "property", cJSON_CreateString(item.first.c_str()));
+        cJSON_AddStringToObject(js_item, "type", MessageEncoding::valueType(item.second).c_str());
+        MessageEncoding::addValueToJSONObject(js_item, "value", item.second);
+        cJSON_AddItemToArray(res, js_item);
+    }
+    return res;
+}
+
+char *ChannelDefinition::toJSON() {
+    cJSON *obj = cJSON_CreateObject();
+    cJSON_AddStringToObject(obj, "identifier", this->name.c_str());
+    cJSON_AddStringToObject(obj, "key", this->psk.c_str());
+    cJSON_AddStringToObject(obj, "version", this->version.c_str());
+    cJSON_AddItemToObject(obj, "monitors", StringSetToJSONArray(this->monitors_names));
+    cJSON_AddItemToObject(obj, "monitors_patterns", StringSetToJSONArray(this->monitors_patterns));
+    cJSON_AddItemToObject(obj, "monitors_properties", MapToJSONArray(this->monitors_properties));
+    cJSON_AddItemToObject(obj, "shares", StringSetToJSONArray(this->shares));
+    cJSON_AddItemToObject(obj, "updates", StringSetToJSONArray(this->updates_names));
+    cJSON_AddItemToObject(obj, "sends", StringSetToJSONArray(this->send_messages));
+    cJSON_AddItemToObject(obj, "receives", StringSetToJSONArray(this->recv_messages));
+    char *str = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    return str;
 }
 
 Channel *Channel::find(const std::string name) {
@@ -223,6 +324,14 @@ void ChannelImplementation::removeMonitor(const char *s) {
 void ChannelImplementation::addMonitorPattern(const char *s) {
     monitors_patterns.insert(s);
 }
+void ChannelImplementation::addMonitorProperty(const char *key,Value &val) {
+    monitors_properties[key] = val;
+}
+void ChannelImplementation::removeMonitorProperty(const char *key,Value &val) {
+    monitors_properties.erase(key);
+    //TBD Bug here, we should be using a set< pair<string, Value> >, not a map
+}
+
 void ChannelImplementation::removeMonitorPattern(const char *s) {
     monitors_patterns.erase(s);
 }

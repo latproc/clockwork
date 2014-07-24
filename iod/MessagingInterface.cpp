@@ -43,9 +43,87 @@ std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
+// monitoring thread
+static void *req_socket_monitor (void *ctx)
+{
+    zmq_event_t event;
+    int rc;
+    
+    void *s = zmq_socket (ctx, ZMQ_PAIR);
+    assert (s);
+    
+    rc = zmq_connect (s, "inproc://monitor.req");
+    assert (rc == 0);
+    while (true) {
+        zmq_msg_t msg;
+        zmq_msg_init (&msg);
+        rc = zmq_recvmsg (s, &msg, 0);
+        if (rc == -1 && zmq_errno() == ETERM) break;
+        assert (rc != -1);
+        memcpy (&event, zmq_msg_data (&msg), sizeof (event));
+        switch (event.event) {
+            case ZMQ_EVENT_CONNECTED:
+                // handle socket connected event
+                break;
+            case ZMQ_EVENT_CLOSED:
+                // handle socket closed event
+                break;
+        }
+    }
+    zmq_close (s);
+    return NULL;
+}
+
+// REP socket monitor thread
+static void *rep_socket_monitor (void *ctx)
+{
+    zmq_event_t event;
+    int rc;
+    
+    void *s = zmq_socket (ctx, ZMQ_PAIR);
+    assert (s);
+    
+    rc = zmq_connect (s, "inproc://monitor.rep");
+    assert (rc == 0);
+    while (true) {
+        zmq_msg_t msg;
+        zmq_msg_init (&msg);
+        rc = zmq_recvmsg (s, &msg, 0);
+        if (rc == -1 && zmq_errno() == ETERM) break;
+        assert (rc != -1);
+        memcpy (&event, zmq_msg_data (&msg), sizeof (event));
+        switch (event.event) {
+            case ZMQ_EVENT_LISTENING:
+                break;
+            case ZMQ_EVENT_ACCEPTED:
+                break;
+            case ZMQ_EVENT_CLOSE_FAILED:
+                break;
+            case ZMQ_EVENT_CLOSED:
+                break;
+            case ZMQ_EVENT_DISCONNECTED:
+                break;
+        }
+        zmq_msg_close (&msg);
+    }
+    zmq_close (s);
+    return NULL;
+}
+
+
 void MessagingInterface::setContext(zmq::context_t *ctx) {
     zmq_context = ctx;
     assert(zmq_context);
+    
+  /*
+    // register a monitor endpoint for all socket events
+    int rc = zmq_socket_monitor (req, "inproc://monitor.req", ZMQ_EVENT_ALL);
+    assert (rc == 0);
+    
+    // spawn a monitoring thread
+    rc = pthread_create (&threads [0], NULL, req_socket_monitor, ctx);
+    assert (rc == 0);
+   */
 }
 
 MessagingInterface *MessagingInterface::getCurrent() {
@@ -185,7 +263,7 @@ char *MessagingInterface::send(const char *txt) {
     if (!is_publisher) {
         try {
             zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-            zmq::poll( &items[0], 1, 500000);
+            zmq::poll( &items[0], 1, 500);
             if (items[0].revents & ZMQ_POLLIN) {
                 zmq::message_t reply;
                 if (socket->recv(&reply)) {

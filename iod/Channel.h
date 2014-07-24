@@ -40,11 +40,15 @@ public:
     virtual ~ChannelImplementation();
     void addMonitor(const char *);
     void addMonitorPattern(const char *);
+    void addMonitorProperty(const char *,Value &);
     void removeMonitor(const char *);
     void removeMonitorPattern(const char *);
+    void removeMonitorProperty(const char *, Value &);
+    
 protected:
     std::set<std::string> monitors_patterns;
     std::set<std::string> monitors_names;
+    std::map<std::string, Value> monitors_properties;
     friend class Channel;
 private:
     ChannelImplementation(const ChannelImplementation &);
@@ -56,6 +60,8 @@ public:
     ChannelDefinition(const char *name);
     Channel *instantiate(int port) const;
     static ChannelDefinition *find(const char *name);
+    static ChannelDefinition *fromJSON(const char *json);
+    char *toJSON();
     
     void setKey(const char *);
     void setIdent(const char *);
@@ -65,6 +71,10 @@ public:
     void addSendName(const char *);
     void addReceiveName(const char *);
     void addOptionName(const char *n, Value &v);
+    
+    const std::string &getIdent() { return identifier; }
+    const std::string &getKey() { return psk; }
+    const std::string &getVersion() { return version; }
 
 private:
     static std::map< std::string, ChannelDefinition* > *all;

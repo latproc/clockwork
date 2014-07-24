@@ -37,6 +37,8 @@ struct MessageEncoding {
     static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
     static bool getState(const char *msg, std::string &cmd, std::list<Value> **params);
 
+    static std::string valueType(const Value &v);
+    static void addValueToJSONObject(cJSON *obj, const char *name, const Value &val);
 	static Value valueFromJSONObject(cJSON *obj, cJSON *cjType);
 };
 

@@ -27,7 +27,7 @@
 #include <assert.h>
 #include <math.h>
 
-static std::string valueType(const Value &v) {
+std::string MessageEncoding::valueType(const Value &v) {
     switch (v.kind) {
         case Value::t_symbol:
             return "NAME";
@@ -49,7 +49,7 @@ static std::string valueType(const Value &v) {
     return "";
 }
 
-static void addValueToJSONObject(cJSON *obj, const char *name, const Value &val) {
+void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const Value &val) {
     switch (val.kind) {
         case Value::t_symbol:
         case Value::t_string:
