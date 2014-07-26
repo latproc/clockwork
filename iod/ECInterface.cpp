@@ -47,9 +47,6 @@ typedef enum {
 #include "domain.h"
 #endif
 
-//extern boost::mutex model_mutex;
-//extern boost::condition_variable_any model_updated;
-
 extern boost::mutex ecat_mutex;
 extern boost::condition_variable_any ecat_polltime;
 

@@ -935,30 +935,41 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             Value ch_name = params[1];
             Channel *chn = Channel::find(ch_name.asString());
             if (chn) {
-                if (params.size() == 3) {
+                size_t n = params.size();
+                if (n == 3) {
                     if (params[2] == "REMOVE") {
                         delete chn;
                         result_str = "OK";
                         return true;
                     }
                 }
-                if (params.size() == 5 && params[2] == "ADD" && params[3] == "MONITOR") {
+                if (n == 5 && params[2] == "ADD" && params[3] == "MONITOR") {
                     chn->addMonitor(params[4].asString().c_str());
                     result_str = "OK";
                     return true;
                 }
-                if (params.size() == 6 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PATTERN") {
+                if (n == 6 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PATTERN") {
                     chn->addMonitorPattern(params[5].asString().c_str());
                     result_str = "OK";
                     return true;
                 }
-                if (params.size() == 5 && params[2] == "REMOVE" && params[3] == "MONITOR") {
+                if (n == 7 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PROPERTY") {
+                    chn->addMonitorProperty(params[5].asString().c_str(),params[6]);
+                    result_str = "OK";
+                    return true;
+                }
+                if (n == 5 && params[2] == "REMOVE" && params[3] == "MONITOR") {
                     chn->removeMonitor(params[4].asString().c_str());
                     result_str = "OK";
                     return true;
                 }
-                if (params.size() == 6 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[4] == "PATTERN") {
+                if (n == 6 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[4] == "PATTERN") {
                     chn->removeMonitorPattern(params[5].asString().c_str());
+                    result_str = "OK";
+                    return true;
+                }
+                if (n == 7 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[5] == "PROPERTY") {
+                    chn->removeMonitorProperty(params[5].asString().c_str(),params[6]);
                     result_str = "OK";
                     return true;
                 }
@@ -997,7 +1008,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             }
         }
         std::stringstream ss;
-        ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [PATTERN] string ]";
+        ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [ ( PATTERN string | PROPERTY string string ) ]  ]";
         for (unsigned int i=0; i<params.size()-1; ++i) {
             ss<< params[i] << " ";
         }

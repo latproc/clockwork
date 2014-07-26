@@ -214,8 +214,8 @@ void semantic_analysis() {
 	settings_class->properties.add("INFO", "Clockwork host", SymbolTable::ST_REPLACE);
 	settings_class->properties.add("HOST", host_name, SymbolTable::ST_REPLACE);
 	settings_class->properties.add("VERSION", "0.8", SymbolTable::ST_REPLACE);
-	settings_class->properties.add("CYCLE_DELAY", 2000, SymbolTable::ST_REPLACE);
-	settings_class->properties.add("POLLING_DELAY", 1000, SymbolTable::ST_REPLACE);
+	settings_class->properties.add("CYCLE_DELAY", 250, SymbolTable::ST_REPLACE);
+	settings_class->properties.add("POLLING_DELAY", 250, SymbolTable::ST_REPLACE);
     
     MachineClass *cw_class = new MachineClass("CLOCKWORK");
     cw_class->states.push_back("ready");

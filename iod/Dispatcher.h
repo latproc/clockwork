@@ -33,6 +33,11 @@ class Message;
 class Receiver;
 struct Package;
 
+class DispatchThread {
+public:
+    void operator()();
+};
+
 class Dispatcher {
 public:
     ~Dispatcher();
@@ -42,6 +47,7 @@ public:
     void addReceiver(Receiver*r);
     void removeReceiver(Receiver*r);
     static Dispatcher *instance();
+    static void start();
     void idle();
     
 private:
@@ -53,6 +59,9 @@ private:
     static Dispatcher *instance_;
     std::list<Package*>to_deliver;
     zmq::socket_t *socket;
+    bool started;
+    DispatchThread dispatch_thread;
+    boost::thread thread_ref;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);

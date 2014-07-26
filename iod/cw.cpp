@@ -45,7 +45,6 @@
 
 #define __MAIN__
 #include "cwlang.h"
-#include "options.h"
 #include <stdio.h>
 #include "Logger.h"
 #include "IODCommand.h"
@@ -75,11 +74,7 @@ Statistics *statistics = NULL;
 std::list<Statistic *> Statistic::stats;
 
 
-boost::mutex thread_protection_mutex;
-static boost::mutex io_mutex;
-static boost::mutex model_mutex;
-boost::condition_variable_any io_updated;
-boost::condition_variable_any model_updated;
+//static boost::mutex io_mutex;
 boost::condition_variable_any ecat_polltime;
 
 
@@ -174,85 +169,119 @@ void ProcessingThread::operator()()  {
 	
 	Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
 	Statistic::add(cycle_delay_stat);
+	Statistic *cycle_processing = new Statistic("Cycle Processing");
+	Statistic::add(cycle_processing);
 	long delta, delta2;
     
+    zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+    dispatch_sync.connect("inproc://dispatcher_sync");
+
+    zmq::socket_t process_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+    process_sync.connect("inproc://process_sync");
+    process_sync.send("ready", 5);
+    
+    enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
  	while (!program_done)
     {
+        //NB_MSG << processingState << "\n";
         struct timeval start_t, end_t;
+        size_t len = 0;
+        char pbuf[10];
+        while (!program_done && len == 0) len = process_sync.recv(pbuf, 10);
         {
-            boost::unique_lock<boost::mutex> lock(io_mutex);
-            while (!data_ready && !program_done)
-                io_updated.wait(io_mutex);
-
-			{
-                enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
-				gettimeofday(&start_t, 0);
-				if (machine_is_ready) {
-					delta = get_diff_in_microsecs(&start_t, &end_t);
-					cycle_delay_stat->add(delta);
-				}
-                {
-					gettimeofday(&end_t, 0);
-					delta = get_diff_in_microsecs(&end_t, &start_t);
-					statistics->io_scan_time.add(delta);
-					delta2 = delta;
-                    
-			        //checkInputs(); // simulated wiring between inputs and outputs
-                    machine.idle();
-					if (machine.connected()) {
+            //boost::unique_lock<boost::mutex> lock(io_mutex);
+            gettimeofday(&start_t, 0);
+            if (machine_is_ready) {
+                delta = get_diff_in_microsecs(&start_t, &end_t);
+                cycle_delay_stat->add(delta);
+            }
+            Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+            long cycle_delay = cycle_delay_v->iValue * 1000;
+            //do {
+                gettimeofday(&end_t, 0);
+                delta = get_diff_in_microsecs(&end_t, &start_t);
+                statistics->io_scan_time.add(delta);
+                delta2 = delta;
+                
+                //checkInputs(); // simulated wiring between inputs and outputs
+                machine.idle();
+                if (machine.connected()) {
+                    gettimeofday(&end_t, 0);
+                    delta = get_diff_in_microsecs(&end_t, &start_t);
+                    statistics->points_processing.add(delta - delta2); delta2 = delta;
+                
+                    if (!machine_is_ready) {
+                        std::cout << "----------- Machine is Ready --------\n";
+                        machine_is_ready = true;
+                        BOOST_FOREACH(std::string &error, error_messages) {
+                            std::cerr << error << "\n";
+                            MessageLog::instance()->add(error.c_str());
+                        }
+                    }
+                    {
+                        if (processingState == eIdle)
+                            processingState = ePollingMachines;
+                        if (processingState == ePollingMachines) {
+                            if (MachineInstance::processAll((uint32_t)cycle_delay/3, MachineInstance::NO_BUILTINS))
+                                processingState = eIdle;
+                            /*gettimeofday(&end_t, 0);
+                            delta = get_diff_in_microsecs(&end_t, &start_t);
+                            if (delta < cycle_delay/10) {
+                                if (!MachineInstance::processAll((uint32_t)cycle_delay/3, MachineInstance::NO_BUILTINS))
+                                    processingState = ePollingMachines;
+                            }
+                            gettimeofday(&end_t, 0);
+                            delta = get_diff_in_microsecs(&end_t, &start_t);
+                            if (delta < cycle_delay/5) {
+                                if (!MachineInstance::processAll((uint32_t)cycle_delay/3, MachineInstance::NO_BUILTINS))
+                                    processingState = ePollingMachines;
+                            }
+                             */
+                        }
                         
-						gettimeofday(&end_t, 0);
-						delta = get_diff_in_microsecs(&end_t, &start_t);
-						statistics->points_processing.add(delta - delta2); delta2 = delta;
-                    
-                        if (!machine_is_ready) {
-                            std::cout << "----------- Machine is Ready --------\n";
-                            machine_is_ready = true;
-                            BOOST_FOREACH(std::string &error, error_messages) {
-                                std::cerr << error << "\n";
-                                MessageLog::instance()->add(error.c_str());
+                    }
+                    gettimeofday(&end_t, 0);
+                    delta = get_diff_in_microsecs(&end_t, &start_t);
+                    statistics->machine_processing.add(delta - delta2); delta2 = delta;
+                    if (processingState == eIdle){
+                        dispatch_sync.send("go", 2);
+                        // wait for message sending to complete
+                        zmq::pollitem_t items[] = { { dispatch_sync, 0, ZMQ_POLLIN, 0 } };
+                        size_t len = 0;
+                        while (len == 0) {
+                            zmq::poll(&items[0], 1, 100);
+                            if (items[0].revents & ZMQ_POLLIN) {
+                                char buf[10];
+                                len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
                             }
-                        }
-                        {
-                            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
-                            if (processingState == eIdle)
-                                processingState = ePollingMachines;
-                            if (processingState == ePollingMachines) {
-                                if (MachineInstance::processAll(500, MachineInstance::NO_BUILTINS))
-                                    processingState = eIdle;
-                            }
-                        }
-                        gettimeofday(&end_t, 0);
-                        delta = get_diff_in_microsecs(&end_t, &start_t);
-                        statistics->machine_processing.add(delta - delta2); delta2 = delta;
-                        if (processingState == eIdle){
-                            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
-                            Dispatcher::instance()->idle();
                         }
                         gettimeofday(&end_t, 0);
                         delta = get_diff_in_microsecs(&end_t, &start_t);
                         statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
-                        if (processingState == eIdle)
-                            processingState = eStableStates;
-                        if (processingState == eStableStates){
-                            boost::mutex::scoped_lock lock(thread_protection_mutex); // obtain exclusive access during main loop processing
-                            Scheduler::instance()->idle();
-                            if (MachineInstance::checkStableStates(500))
-                                processingState = eIdle;
-                        }
-                        gettimeofday(&end_t, 0);
-                        delta = get_diff_in_microsecs(&end_t, &start_t);
-                        statistics->auto_states.add(delta - delta2); delta2 = delta;
-					}
-				}
-				std::cout << std::flush;
-			}
+                    }
+                    
+                    if (processingState == eIdle)
+                        processingState = eStableStates;
+                    if (processingState == eStableStates){
+                        Scheduler::instance()->idle();
+                        if (MachineInstance::checkStableStates( (uint32_t)cycle_delay/3 ))
+                            processingState = eIdle;
+                    }
+                    gettimeofday(&end_t, 0);
+                    delta = get_diff_in_microsecs(&end_t, &start_t);
+                    statistics->auto_states.add(delta - delta2); delta2 = delta;
+                }
+            //} while (0); //while (delta < cycle_delay/20);
+            //std::cout << std::flush;
             ++sequence;
             data_ready = false;
+            process_sync.send("done", 4);
         }
         
         gettimeofday(&end_t, 0);
         delta = get_diff_in_microsecs(&end_t, &start_t);
+        cycle_processing->add(delta);
+        
     }
 }
 
@@ -287,7 +316,6 @@ int main (int argc, char const *argv[])
 	statistics = new Statistics;
     int load_result = 0;
     {
-        boost::mutex::scoped_lock lock(thread_protection_mutex);
         load_result = loadConfig(argc, argv);
         if (load_result)
             return load_result;
@@ -343,7 +371,6 @@ int main (int argc, char const *argv[])
 	std::list<Output *> output_list;
 	{
         {
-            boost::mutex::scoped_lock lock(thread_protection_mutex);
             size_t remaining = machines.size();
             std::cout << remaining << " Machines\n";
             std::cout << "Linking POINTs to hardware\n";
@@ -436,7 +463,11 @@ int main (int argc, char const *argv[])
 	std::cout << "-------- Initialising ---------\n";
 	initialise_machines();
     
-    setup_signals();
+    bool sigok = setup_signals();
+    assert(sigok);
+    
+    zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
+    resource_mgr.bind("inproc://resource_mgr");
     
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
@@ -445,36 +476,72 @@ int main (int argc, char const *argv[])
 	// Inform the modbus interface we have started
 	load_debug_config();
 	ModbusAddress::message("STARTUP");
-    
+
+    Dispatcher::start();
+
+    zmq::socket_t process_sync(*MessagingInterface::getContext(), ZMQ_REP);
+    process_sync.bind("inproc://process_sync");
+
     ProcessingThread processMonitor;
 	boost::thread process(boost::ref(processMonitor));
     
     int processing_sequence = processMonitor.sequence;
+    MQTTInterface::instance()->activate();
+    
+    {
+        size_t ps_len = 0;
+        char buf[10];
+        while (ps_len == 0) {
+            try {
+                ps_len = process_sync.recv(buf,10);
+            } catch (zmq::error_t) {
+                std::cerr << zmq_strerror(errno) << "\n";
+            }
+        }
+    }
+    std::cerr << "processing has started\n";
     struct timeval then;
     gettimeofday(&then,0);
-    MQTTInterface::instance()->activate();
     while (!program_done) {
         MQTTInterface::instance()->collectState();
-        //ECInterface::instance()->collectState();
         {
-            boost::unique_lock<boost::mutex> lock(io_mutex);
-            processMonitor.data_ready = true;
-            io_updated.notify_one();
+            process_sync.send("go", 2);
+            size_t ps_len = 0;
+            char buf[10];
+            while (ps_len == 0) {
+                try {
+                    ps_len = process_sync.recv(buf,10);
+                } catch (zmq::error_t) {
+                    std::cerr << zmq_strerror(errno) << "\n";
+                }
+            }
         }
         if (processing_sequence != processMonitor.sequence) { // did the model update?
-            //ECInterface::instance()->sendUpdates();
             ++processing_sequence;
+        }
+        
+        {   // handshake to give the command handler access to shared resources for a while
+            // if it has requested it.
+            char buf[10];
+            while (resource_mgr.recv(buf, 10, ZMQ_NOBLOCK)) {
+                resource_mgr.send("go", 2);
+                size_t msglen = 0;
+                while ( (msglen = resource_mgr.recv(buf, 10) ) == 0 ) ;
+                resource_mgr.send("ok",2);
+            }
         }
         struct timeval now;
         gettimeofday(&now,0);
-        int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
         
+        int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
         // use the clockwork interpreter's current cycle delay
         Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-        int64_t delay = 100;
-        if (cycle_delay_v && cycle_delay_v->iValue >= 100) delay = cycle_delay_v->iValue;
+        assert(cycle_delay_v);
+        int64_t delay = cycle_delay_v->iValue;
+        if (delay <= 1000) delay = 1000;
         if (delay-delta > 50){
-            delay = delay-delta-5;
+            delay = delay-delta-50                                                           ;
+            //std::cout << "waiting: " << delay << "\n";
             struct timespec sleep_time;
             sleep_time.tv_sec = delay / 1000000;
             sleep_time.tv_nsec = (delay * 1000) % 1000000000L;
@@ -484,15 +551,11 @@ int main (int argc, char const *argv[])
                 sleep_time = remaining;
             }
         }
+         
         then = now;
     }
     MQTTInterface::instance()->stop();
     processMonitor.stop();
-    {
-        boost::unique_lock<boost::mutex> lock(io_mutex);
-        //processMonitor.data_ready = true;
-        io_updated.notify_one();
-    }
     process.join();
     stateMonitor.stop();
     zmq_ctx_destroy(&context);

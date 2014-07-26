@@ -45,11 +45,16 @@ public:
     void removeMonitorPattern(const char *);
     void removeMonitorProperty(const char *, Value &);
     
+    void modified();
+    void checked();
+    
 protected:
     std::set<std::string> monitors_patterns;
     std::set<std::string> monitors_names;
     std::map<std::string, Value> monitors_properties;
-    friend class Channel;
+    uint64_t last_modified; // if the modified time > check time, a full check will be used
+    uint64_t last_checked;
+
 private:
     ChannelImplementation(const ChannelImplementation &);
     ChannelImplementation & operator=(const ChannelImplementation &);
@@ -117,6 +122,9 @@ public:
     
     void setupFilters();
     
+    bool matches(MachineInstance *machine, const std::string &name);
+    bool patternMatches(const std::string &machine_name);
+    bool filtersAllow(MachineInstance *machine);
 private:
     std::string name;
     const ChannelDefinition *definition_;

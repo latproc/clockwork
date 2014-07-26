@@ -23,7 +23,6 @@
 #include <string>
 #include <sstream>
 #include <list>
-#include <boost/thread/mutex.hpp>
 #include <zmq.hpp>
 
 #include "IODCommand.h"
@@ -38,7 +37,6 @@
 #include <pthread.h>
 
 extern bool machine_is_ready;
-extern boost::mutex thread_protection_mutex;
 
 struct ListenerThreadInternals : public ClientInterfaceInternals {
     
@@ -109,33 +107,64 @@ void IODCommandThread::operator()() {
     const char *port = sn.str().c_str();
     cti->socket.bind (port);
     
-    IODCommand *command = 0;
+    zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_REQ);
+    access_req.connect("inproc://resource_mgr");
     
+    IODCommand *command = 0;
+    std::vector<Value> params(0);
+    
+    enum {e_running, e_waiting_access, e_holding_access} status = e_running; //are we holding shared resources?
     while (!done) {
         try {
-            
-             zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-             zmq::poll( &items[0], 1, 50);
-             if (done) break;
-             if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
-
-        	zmq::message_t request;
-            if (!cti->socket.recv (&request)) continue; // interrupted system call
-            if (!machine_is_ready) {
-                sendMessage(cti->socket, "Ignored during startup");
-                continue;
+            if (status == e_waiting_access) {
+                access_req.send("access", 6);
+                {
+                    size_t acc_len = 0;
+                    char acc_buf[10];
+                    while ( (acc_len=access_req.recv(acc_buf, 10)) == 0) ;
+                }
+                status = e_holding_access;
             }
-            size_t size = request.size();
-            char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
-            memcpy(data, request.data(), size);
-            data[size] = 0;
+            if (status == e_holding_access) {
+                if ((*command)(params)) {
+                    sendMessage(cti->socket, command->result());
+                }
+                else {
+                    NB_MSG << command->error() << "\n";
+                    sendMessage(cti->socket, command->error());
+                }
+                delete command;
+                params.clear();
+                access_req.send("done", 4);
+                {   // wait for an acknowledgement so the access request is back in the correct state
+                    size_t acc_len = 0;
+                    char acc_buf[10];
+                    while ( (acc_len=access_req.recv(acc_buf, 10)) == 0) ;
+                }
+                status = e_running;
+            }
+            else if (status == e_running) {
+                zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+                int rc = zmq::poll( &items[0], 1, 500);
+                if (!rc) continue;
+                if (done) break;
+                if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
+
+                zmq::message_t request;
+                if (!cti->socket.recv (&request)) continue; // interrupted system call
+                if (!machine_is_ready) {
+                    sendMessage(cti->socket, "Ignored during startup");
+                    continue;
+                }
+                size_t size = request.size();
+                char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
+                memcpy(data, request.data(), size);
+                data[size] = 0;
 std::cout << data << "\n";
             
-            std::list<Value> parts;
-            size_t count = 0;
-            std::string ds;
-            std::vector<Value> params(0);
-            {
+                std::list<Value> parts;
+                size_t count = 0;
+                std::string ds;
                 std::list<Value> *param_list = 0;
                 if (MessageEncoding::getCommand(data, ds, &param_list)) {
                     params.push_back(ds);
@@ -160,16 +189,12 @@ std::cout << data << "\n";
                     }
                     std::copy(parts.begin(), parts.end(), std::back_inserter(params));
                 }
-            }
             
-            if (params.empty()) {
-                sendMessage(cti->socket, "Empty message received\n");
-                goto cleanup;
-            }
-            ds = params[0].asString();
-            {
-                boost::mutex::scoped_lock lock(thread_protection_mutex);
-                
+                if (params.empty()) {
+                    sendMessage(cti->socket, "Empty message received\n");
+                    goto cleanup;
+                }
+                ds = params[0].asString();
                 if (count == 1 && ds == "LIST") {
                     command = new IODCommandList;
                 }
@@ -263,19 +288,10 @@ std::cout << data << "\n";
                 else {
                     command = new IODCommandUnknown;
                 }
-                if ((*command)(params)) {
-                    sendMessage(cti->socket, command->result());
-                }
-                else {
-                    NB_MSG << command->error() << "\n";
-                    sendMessage(cti->socket, command->error());
-                }
+                status = e_waiting_access;
+            cleanup:
+                free(data);
             }
-            delete command;
-            
-        cleanup:
-            
-            free(data);
         }
         catch (std::exception e) {
             // when processing is stopped, we expect to get an exception on this interface
