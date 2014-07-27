@@ -982,10 +982,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                     return false;
                 }
                 int port = Channel::uniquePort();
-                Channel *channel = 0;
                 while (true) {
                     try {
-                        channel = defn->instantiate(port);
+                        chn = defn->instantiate(port);
                         break;
                     }
                     catch (zmq::error_t err) {
@@ -997,15 +996,15 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                         return false;
                     }
                 }
-                cJSON *res_json = cJSON_CreateObject();
-                cJSON_AddNumberToObject(res_json, "port", port);
-                cJSON_AddStringToObject(res_json, "name", channel->getName().c_str());
-                char *res = cJSON_Print(res_json);
-                result_str = res;
-                free(res);
-                free(res_json);
-                return true;
             }
+            cJSON *res_json = cJSON_CreateObject();
+            cJSON_AddNumberToObject(res_json, "port", chn->getPort());
+            cJSON_AddStringToObject(res_json, "name", chn->getName().c_str());
+            char *res = cJSON_Print(res_json);
+            result_str = res;
+            free(res);
+            free(res_json);
+            return true;
         }
         std::stringstream ss;
         ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [ ( PATTERN string | PROPERTY string string ) ]  ]";
