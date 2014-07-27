@@ -46,13 +46,14 @@
 #include <time.h>
 
 #include "anet.h"
-
+/*
 static void tiny_sleep(uint32_t amt) {
 	struct timespec req, rem;
 	req.tv_sec = amt / 1000000000L;
 	req.tv_nsec = amt % 1000000000L;
 	assert(nanosleep(&req, &rem) != EINVAL);
 }
+*/
 
 static void anetSetError(char *err, const char *fmt, ...)
 {
