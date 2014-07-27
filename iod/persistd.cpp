@@ -39,6 +39,7 @@
 #include "symboltable.h"
 #include "MessageEncoding.h"
 #include "PersistentStore.h"
+#include "MessagingInterface.h"
 
 
 namespace po = boost::program_options;
@@ -72,96 +73,129 @@ bool setup_signals()
 
 
 int main(int argc, const char * argv[]) {
+	zmq::context_t context;
+	MessagingInterface::setContext(&context);
 
-    try {
-        
-        po::options_description desc("Allowed options");
-        desc.add_options()
-        ("help", "produce help message")
-		("port", po::value<int>(), "set port number")
-		("verbose", "display changes on stdout")
-        ;
-        po::variables_map vm;        
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        po::notify(vm);    
-        if (vm.count("help")) {
-            std::cout << desc << "\n";
-            return 1;
-        }
-
-		int port = 5557;
-		bool verbose = false;
-
-		if (vm.count("port")) port = vm["port"].as<int>();
-		if (argc > 2 && strcmp(argv[1],"-p") == 0) {
-			port = strtol(argv[2], 0, 0);
-		}
-
-		if (vm.count("verbose")) verbose = true;
-		
-		setup_signals();
-
-		PersistentStore store("persist.dat");
-		store.load();
-		std::cout << "Listening on port " << port << "\n";
-        // client
-        int res;
-		std::stringstream ss;
-		ss << "tcp://localhost:" << port;
-        zmq::context_t context (1);
-        zmq::socket_t subscriber (context, ZMQ_SUB);
-        res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
-        assert (res == 0);
-        subscriber.connect(ss.str().c_str());
-        //subscriber.connect("ipc://ecat.ipc");
-		if (verbose) std::cout << "persistd ready\n";
-        while (!done) {
-            zmq::message_t update;
-            subscriber.recv(&update);
-			long len = update.size();
-           	char *data = (char *)malloc(len+1);
-           	memcpy(data, update.data(), len);
-           	data[len] = 0;
-
-			if (verbose) std::cout << data << "\n";		
-
-			try {
-	            std::string cmd;
-	            std::list<Value> *param_list = 0;
-	            if (MessageEncoding::getCommand(data, cmd, &param_list)) {
-					if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
-						std::string property;
-						int i=0;
-						std::list<Value>::const_iterator iter = param_list->begin();
-						Value machine_name = *iter++;
-						Value property_name = *iter++;
-						Value value = *iter++;
-						store.insert(machine_name.asString(), property_name.asString(), value.asString().c_str());
-						store.save();
-					}
-				}
-				else {
-		            std::istringstream iss(data);
-	            	std::string property, op, value;
-	            	iss >> property >> op >> value;
-					std::string machine_name;
-					store.split(machine_name, property);
-					store.insert(machine_name, property, value.c_str());
-					store.save();
-				}
-				free(data);
-			}
-			catch(std::exception e) {
-				std::cerr << "exception " <<e.what() << "processing: " << data << "\n";
-			}
-        }
-    }
-    catch(std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n";
+    po::options_description desc("Allowed options");
+    desc.add_options()
+    ("help", "produce help message")
+    ("port", po::value<int>(), "set port number")
+    ("verbose", "display changes on stdout")
+    ;
+    po::variables_map vm;        
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);    
+    if (vm.count("help")) {
+        std::cout << desc << "\n";
         return 1;
     }
-    catch(...) {
-        std::cerr << "Exception of unknown type!\n";
+
+    int port = 5557;
+    bool verbose = false;
+
+    if (vm.count("port")) port = vm["port"].as<int>();
+    if (argc > 2 && strcmp(argv[1],"-p") == 0) {
+        port = (int)strtol(argv[2], 0, 0);
+    }
+
+    if (vm.count("verbose")) verbose = true;
+    
+    setup_signals();
+
+    PersistentStore store("persist.dat");
+    store.load();
+    std::cout << "Listening on port " << port << "\n";
+    // client
+    std::stringstream ss;
+    ss << "tcp://localhost:" << port;
+    std::string channel_url = ss.str();
+    //zmq::socket_t subscriber (context, ZMQ_SUB);
+    //res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
+    //assert (res == 0);
+    
+    SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL");
+    
+/*
+    SingleConnectionMonitor monit(subscriber, "inproc://monitor.persistd");
+    monit.setEndPoint(channel_url.c_str());
+connect_subscriber:
+    subscriber.connect(channel_url.c_str());
+    if (verbose) std::cout << "persistd ready\n";
+    while (!done) {
+        zmq::message_t update;
+        try {
+            while (!subscriber.recv(&update)) ;
+        }
+        catch (zmq::error_t e) {
+            if (errno == EINTR) {
+                std::cerr << zmq_strerror(errno) << ".. retrying\n";
+                continue;
+            }
+            std::cerr << zmq_strerror(errno) << ".. reconnecting\n";
+            subscriber.disconnect(channel_url.c_str());
+            goto connect_subscriber;
+        }
+ */
+    while (!done) {
+        zmq::pollitem_t items[] = {
+            { subscription_manager.setup, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+            { subscription_manager.subscriber, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+        };
+        if (!subscription_manager.checkConnections()) continue;
+        try {
+            int rc = zmq::poll( &items[0], 2, 500);
+            if (rc == 0) continue;
+        }
+        catch(zmq::error_t e) {
+            if (errno == EINTR || errno == EAGAIN) continue;
+        }
+        if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+        //zmq::message_t update;
+        char data[1000];
+        size_t len = 0;
+        try {
+            len = subscription_manager.subscriber.recv(data, 1000);
+            if (!len) continue;
+        }
+        catch (zmq::error_t e) {
+            if (errno == EINTR) continue;
+            
+        }
+        //long len = update.size();
+        
+        //char *data = (char *)malloc(len+1);
+        //memcpy(data, update.data(), len);
+        data[len] = 0;
+
+        if (verbose) std::cout << data << "\n";
+
+        try {
+            std::string cmd;
+            std::list<Value> *param_list = 0;
+            if (MessageEncoding::getCommand(data, cmd, &param_list)) {
+                if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
+                    std::string property;
+                    std::list<Value>::const_iterator iter = param_list->begin();
+                    Value machine_name = *iter++;
+                    Value property_name = *iter++;
+                    Value value = *iter++;
+                    store.insert(machine_name.asString(), property_name.asString(), value.asString().c_str());
+                    store.save();
+                }
+            }
+            else {
+                std::istringstream iss(data);
+                std::string property, op, value;
+                iss >> property >> op >> value;
+                std::string machine_name;
+                store.split(machine_name, property);
+                store.insert(machine_name, property, value.c_str());
+                store.save();
+            }
+        }
+        catch(std::exception e) {
+            std::cerr << "exception " <<e.what() << "processing: " << data << "\n";
+        }
     }
 
     return 0;
