@@ -16,7 +16,7 @@ MachineRef::MachineRef() : refs(1) {
 ChannelImplementation::~ChannelImplementation() { }
 
 
-Channel::Channel(const std::string ch_name) : ChannelImplementation(), name(ch_name) {
+Channel::Channel(const std::string ch_name) : ChannelImplementation(), name(ch_name), port(0) {
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
     }
@@ -52,6 +52,14 @@ bool Channel::operator==(const Channel &other) {
     return false;
 }
 
+
+void Channel::setPort(unsigned int new_port) {
+    assert(port == 0);
+    port = new_port;
+}
+unsigned int Channel::getPort() const { return port; }
+
+
 int Channel::uniquePort() {
     int res = 0;
     char address_buf[40];
@@ -86,15 +94,16 @@ ChannelDefinition *ChannelDefinition::find(const char *name) {
     return (*found).second;
 }
 
-Channel *ChannelDefinition::instantiate(int port) const {
+Channel *ChannelDefinition::instantiate(unsigned int port) const {
     Channel *chn = Channel::create(port, this);
     return chn;
 }
 
-Channel *Channel::create(int port, const ChannelDefinition *defn) {
+Channel *Channel::create(unsigned int port, const ChannelDefinition *defn) {
     char channel_name[100];
     snprintf(channel_name, 100, "%s:%d", defn->name.c_str(), port);
     Channel *chn = new Channel(channel_name);
+    chn->setPort(port);
     chn->setDefinition(defn);
     chn->modified();
     chn->setupFilters();
@@ -406,11 +415,17 @@ void Channel::setupFilters() {
     while (prop_iter != definition()->monitors_properties.end()) {
         const std::pair<std::string, Value> &item = *prop_iter++;
         std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
+        std::cout << "settingup channel: searching for machines where " <<item.first << " == " << item.second << "\n";
         while (machines != MachineInstance::end()) {
             MachineInstance *machine = *machines++;
-            if (machine && !this->machines.count(machine)
-                    && machine->getValue(item.first) == item.second)
-                machine->publish();
+            if (machine && !this->machines.count(machine)) {
+                std::cout << machine->getName() << "\n";
+                if ( machine->getValue(item.first) == item.second) {
+                    std::cout << "found match " << machine->getName() <<"\n";
+                    this->machines.insert(machine);
+                    machine->publish();
+                }
+            }
         }
     }
     

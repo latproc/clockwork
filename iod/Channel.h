@@ -63,7 +63,7 @@ private:
 class ChannelDefinition : public ChannelImplementation, public MachineClass {
 public:
     ChannelDefinition(const char *name);
-    Channel *instantiate(int port) const;
+    Channel *instantiate(unsigned int port) const;
     static ChannelDefinition *find(const char *name);
     static ChannelDefinition *fromJSON(const char *json);
     char *toJSON();
@@ -113,7 +113,7 @@ public:
     const std::string &getName() const { return name; }
     
     static std::map< std::string, Channel* > *channels() { return all; }
-    static Channel *create(int port, const ChannelDefinition *defn);
+    static Channel *create(unsigned int port, const ChannelDefinition *defn);
     static Channel *find(const std::string name);
     static void remove(const std::string name);
     static int uniquePort();
@@ -125,8 +125,12 @@ public:
     bool matches(MachineInstance *machine, const std::string &name);
     bool patternMatches(const std::string &machine_name);
     bool filtersAllow(MachineInstance *machine);
+    
+    void setPort(unsigned int new_port);
+    unsigned int getPort() const;
 private:
     std::string name;
+    unsigned int port;
     const ChannelDefinition *definition_;
     std::string identifier;
     std::string version;
