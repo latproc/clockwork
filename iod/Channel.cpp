@@ -82,7 +82,7 @@ int Channel::uniquePort() {
     return res;
 }
 
-ChannelDefinition::ChannelDefinition(const char *n) : MachineClass(n) {
+ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt) : MachineClass(n), parent(prnt) {
     if (!all) all = new std::map< std::string, ChannelDefinition* >;
     (*all)[n] = this;
 }

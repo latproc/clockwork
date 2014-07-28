@@ -35,7 +35,8 @@ BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
 DLLFLAGS = -fPIC #-rdynamic
-CFLAGS = $(SIMULATED) -g -pedantic -Wall $(DLLFLAGS) \
+CSTD = -std=c++11
+CFLAGS = $(SIMULATED) -g -pedantic -Wall $(DLLFLAGS) $(CSTD) \
 	-Wno-unknown-warning-option -Wno-unused-but-set-variable \
 	-Wno-c++11-extensions -Wno-unused-variable -Wno-variadic-macros -Wno-c++11-long-long $(EXTRAINCS)
 CC = g++ $(CFLAGS)
@@ -153,7 +154,8 @@ persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
 		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
 		value.o symboltable.o Logger.o DebugExtra.o  options.o \
-		MessageEncoding.o cJSON.o PersistentStore.o Message.o anet.o MessageLog.o
+		MessageEncoding.o cJSON.o PersistentStore.o Message.o anet.o MessageLog.o \
+		MessagingInterface.o
 
 modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
 			MessagingInterface.o Message.o anet.o MessageLog.o MessageEncoding.o
@@ -180,10 +182,11 @@ cmdline.yy.cpp:	cmdline.lpp
 
 device_connector:	device_connector.o regular_expressions.o anet.o \
 		symboltable.o value.o cJSON.o DebugExtra.o Logger.o \
-		options.o Message.o MessageLog.o MessageEncoding.o
+		options.o Message.o MessageLog.o MessageEncoding.o \
+		MessagingInterface.o
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ device_connector.o regular_expressions.o anet.o \
 		symboltable.o value.o cJSON.o DebugExtra.o Logger.o options.o \
-		MessageLog.o MessageEncoding.o \
+		MessageLog.o MessageEncoding.o MessagingInterface.o \
 		 Message.o $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h

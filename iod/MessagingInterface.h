@@ -108,8 +108,15 @@ private:
     SingleConnectionMonitor &operator=(const SingleConnectionMonitor&);
 };
 
+class ConnectionManager {
+public:
+    virtual ~ConnectionManager() {}
+    virtual bool setupConnections() =0;
+    virtual bool checkConnections() =0;
+    virtual bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) =0;
+};
 
-class SubscriptionManager {
+class SubscriptionManager : public ConnectionManager {
 public:
     enum Status{e_waiting_cmd, e_waiting_response, e_startup, e_disconnected, e_waiting_connect,
         e_settingup_subscriber, e_waiting_subscriber, e_done };
@@ -120,11 +127,11 @@ public:
     
     bool requestChannel();
     
-    bool setupSubscriptions();
+    bool setupConnections();
     
     bool checkConnections();
     
-    bool checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd);
+    bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd);
 
     zmq::socket_t subscriber;
     zmq::socket_t setup;
@@ -136,6 +143,22 @@ public:
     std::string current_channel;
     std::string subscriber_host;
     std::string channel_name;
+};
+
+class CommandManager : public ConnectionManager {
+public:
+    enum Status{e_waiting_cmd, e_waiting_response, e_startup, e_disconnected, e_waiting_connect, e_done };
+    CommandManager(const char *host);
+    void init();
+    bool setupConnections();
+    bool checkConnections();
+    bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd);
+    
+    std::string host_name;
+    zmq::socket_t setup;
+    SingleConnectionMonitor monit_setup;
+    Status setup_status;
+    Status run_status;
 };
 
 #endif

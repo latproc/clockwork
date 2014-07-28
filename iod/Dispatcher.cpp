@@ -216,7 +216,8 @@ void Dispatcher::idle() {
                 delete p;
 //                len = socket->recv(&p, sizeof(Package*), ZMQ_NOBLOCK);
             }
-            items[0] = { *socket, 0, ZMQ_POLLIN, 0 };
+            zmq::pollitem_t skt_poll = { *socket, 0, ZMQ_POLLIN, 0 };
+            items[0] = skt_poll;
             zmq::poll( &items[0], 1, 0);
         }
         if (items[1].revents & ZMQ_POLLIN) {

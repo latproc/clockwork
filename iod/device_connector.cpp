@@ -51,15 +51,25 @@
 #include "options.h"
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
+#include "MessagingInterface.h"
 
-zmq::context_t *context = 0;
-
-struct DeviceStatus {
+class DeviceStatus {
+public:
     enum State {e_unknown, e_disconnected, e_connected, e_up, e_failed, e_timeout };
+    State current() { return status; }
+    State previous() { return status; }
+    static DeviceStatus *instance() { if (!instance_) instance_ = new DeviceStatus; return instance_; }
+    void setStatus(State s){ prev_status = status; status = s; }
+private:
+    static DeviceStatus *instance_;
     State status;
-    
-    DeviceStatus() : status(e_unknown) { }
+    State prev_status;
+    DeviceStatus() : status(e_unknown), prev_status(e_unknown) { }
+    DeviceStatus(const DeviceStatus &);
+    DeviceStatus& operator=(const DeviceStatus&);
 };
+
+DeviceStatus *DeviceStatus::instance_;
 
 static const char *stringFromDeviceStatus(DeviceStatus::State status) {
     switch(status) {
@@ -118,18 +128,23 @@ std::string escapeNonprintables(const char *buf) {
 
  */
 
-struct Options {
+class Options {
+
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
         serial_port_name_(0), serial_settings_(0), watch_(0), queue_(0), collect_duplicates(false), disconnect_on_timeout(true), cw_publisher(5556),
                 got_host(false), got_port(true), got_property(false), got_pattern(false), structured_messaging(true),
                 got_queue(false) {
         setIODHost("localhost");
     }
+    static Options *instance_;
+public:
+    static Options *instance() { if (!instance_) instance_ = new Options; return instance_; }
     ~Options() {
         if (host_) free(host_);
         if (name_) free(name_);
         if (machine_) free(machine_);
         if (property_) free(property_);
+        instance_ = 0;
     }
     bool valid() const {
         // serial implies client
@@ -427,127 +442,44 @@ closePort:
     return -1;
 }
 
-/** IODInterface maintains a connection to iod/clockwork in order to 
-    pass status information and collected data to iod.
- */
-
-struct IODInterface{
-    
-    const int REQUEST_RETRIES;
-    const int REQUEST_TIMEOUT;
-    
-    enum Status { s_connected, s_disconnected };
-    
-    bool sendMessage(const char *message) {
-        //boost::mutex::scoped_lock lock(interface_mutex);
-        if (status == s_disconnected) {
-            connect();
-            status = s_connected;
-        }
-
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
+    while (1) {
         try {
-            const char *msg = (message) ? message : "";
-
-            int retries = REQUEST_RETRIES;
-            while (!done && retries) {
-                size_t len = strlen(msg);
-                zmq::message_t request (len);
-                memcpy ((void *) request.data (), msg, len);
-                if (socket) socket->send (request);
-                bool expect_reply = true;
-                
-                while (!done && expect_reply) {
-                    if (!socket) { connect(); usleep(100); continue; }
-                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                    zmq::poll( &items[0], 1, REQUEST_TIMEOUT);
-                    if (items[0].revents & ZMQ_POLLIN) {
-                        zmq::message_t reply;
-                        if (!socket->recv(&reply)) continue;
-                    	len = reply.size();
-                    	char *data = (char *)malloc(len+1);
-                    	memcpy(data, reply.data(), len);
-                    	data[len] = 0;
-                    	std::cout << data << "\n";
-                    	free(data);
-                        status = s_connected;
-						return true;
-                    }
-                    else if (--retries == 0) {
-                        // abandon
-                        expect_reply = false;
-                        std::cerr << "abandoning send of message '" << msg << "'\n";
-                        socket->close();
-                        delete socket;
-                        socket = 0;
-                        status = s_disconnected;
-                        return false;
-                    }
-                    else {
-                        // retry
-                        std::cerr << "retrying send of message '" << msg << "'\n";
-                        delete socket;
-                        socket = 0;
-                        connect();
-                        socket->send (request);
-                    }
-                }
-            }
+            std::cerr << "sent " << msg << "\n";
+            size_t len = sock.send(msg, strlen(msg));
+            if (!len) continue;
+            break;
         }
-        catch(std::exception e) {
-            std::cerr <<e.what() << "\n";
+        catch (zmq::error_t e) {
+            if (errno == EINTR) continue;
+            std::cerr << "sendMessage: " << zmq_strerror(errno) << "\n";
+            return false;
         }
-        return false;
     }
-    
-    bool setProperty(const std::string &machine, const std::string &property, const std::string &val) {
-        //std::stringstream ss;
-        //std::cout << "val: '" << val << "'\n";
-        //ss << "PROPERTY " << machine << " " << property << " " << val << "\n";
-        char *msg = MessageEncoding::encodeCommand("PROPERTY", machine.c_str(), property.c_str(), val.c_str());
-        bool res = sendMessage(msg);
-        free(msg);
-        return res;
-    }
-    
-    void connect() {
+    char buf[200];
+    size_t len = 0;
+    while (len == 0) {
         try {
-            std::stringstream ss;
-            ss << "tcp://" << options.iodHost() << ":" << command_port();
-            if (socket) {
-                delete socket;
-                socket = 0;
-            }
-            socket = new zmq::socket_t (*context, ZMQ_REQ);
-            socket->connect(ss.str().c_str());
-            int linger = 0; // do not wait at socket close time
-            socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            len = sock.recv(buf, 200);
+            if (!len) continue;
+            if (len==200) len--; //unlikely event that the response is large
+            buf[len] = 0;
+            std::cerr << "received: " << buf << "\n";
+            response = buf;
+            break;
         }
-        catch (std::exception e) {
-            if (zmq_errno())
-                std::cerr << zmq_strerror(zmq_errno()) << "\n";
-            else
-                std::cerr << e.what() << "\n";
+        catch(zmq::error_t e)  {
+            if (errno == EINTR) continue;
+            char err[300];
+            snprintf(err, 200, "error: %s\n", zmq_strerror(errno));
+            std::cerr << err;
+            abort();
+            break;
         }
     }
-    
-    void stop() { done = true; }
-    
-    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(100), 
-            socket(0), options(opts), done(false), status(s_disconnected) {
-        context = new zmq::context_t(1);
-        connect();
-    }
-    
-    ~IODInterface() {
-        if (socket) delete socket;
-    }
-    
-    zmq::socket_t *socket;
-    //boost::mutex interface_mutex;
-    const Options &options;
-    bool done;
-    Status status;
-};
+    return true;
+}
+
 
 /** The MatchFunction provides a regular expression interface so that data incoming on the
     device connection can be filtered. Only matched data is passed back to iod/clockwork
@@ -556,11 +488,10 @@ struct IODInterface{
 static struct timeval last_send;
 static std::string last_message;
 
+static const char *iod_connection = "inproc://iod_interface";
+
 struct MatchFunction {
-    MatchFunction(const Options &opts, IODInterface &iod) :options(opts), iod_interface(iod) {
-        instance_ = this;
-    }
-    static MatchFunction *instance() { return instance_; }
+    static MatchFunction *instance() { if (!instance_) instance_ = new MatchFunction; return instance_; }
     static int match_func(const char *match, int index, void *data)
     {
         //std::cout << "match: " << index << " " << match << "\n";
@@ -568,57 +499,69 @@ struct MatchFunction {
             size_t *n = (size_t*)data;
             *n += strlen(match);
         }
-		int num_sub = (int)numSubexpressions(instance()->options.regexpInfo());
+		int num_sub = (int)numSubexpressions(Options::instance()->regexpInfo());
         if (num_sub == 0 || index>0) {
             struct timeval now;
             gettimeofday(&now, 0);
-            if (instance()->options.sendJSON() && instance()->options.queue()) {
+            if (Options::instance()->sendJSON() && Options::instance()->queue()) {
                 // structured messaging, pushing each match to a queue
                 if (index == 0 || index == 1) {
                     instance()->params.clear();
-                    instance()->params.push_back(instance()->options.queue());
+                    instance()->params.push_back(Options::instance()->queue());
                 }
                 instance()->params.push_back(Value(match, Value::t_string));
                 if (index == num_sub) {
                     char *msg = MessageEncoding::encodeCommand("DATA", &instance()->params);
-                    if ( (instance()->options.skippingRepeats() == false
+                    if ( (Options::instance()->skippingRepeats() == false
                                             || last_message != msg || last_send.tv_sec +5 <  now.tv_sec)) {
-                        if (instance()->iod_interface.sendMessage(msg)) {
-                            last_message = msg;
-                            last_send.tv_sec = now.tv_sec;
-                            last_send.tv_usec = now.tv_usec;
+                        if (msg) {
+                            if (!instance_) { MatchFunction::instance(); usleep(50); }
+                            std::string response;
+                            if (sendMessage(msg, MatchFunction::instance()->iod_interface, response)) {
+                                last_message = msg;
+                                last_send.tv_sec = now.tv_sec;
+                                last_send.tv_usec = now.tv_usec;
+                            }
+                            free(msg);
                         }
-                        free(msg);
                     }
                     else if (msg) free(msg);
                 }
             }
-            if (instance()->options.property()) {
+            if (Options::instance()->property()) {
                 if (index == 0 || index == 1)
                     MatchFunction::instance()->result = match;
                 else
                     MatchFunction::instance()->result = MatchFunction::instance()->result + " " +match;
                 
                 std::string res = MatchFunction::instance()->result;
-                if (index == num_sub && (instance()->options.skippingRepeats() == false
+                if (index == num_sub && (Options::instance()->skippingRepeats() == false
                                             || last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
-                    if (instance()->iod_interface.setProperty(instance()->options.machine(), instance()->options.property(), res.c_str())) {
-                        last_message = res;
-                        last_send.tv_sec = now.tv_sec;
-                        last_send.tv_usec = now.tv_usec;
+                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->property(), res.c_str());
+                    if (cmd) {
+                        std::string response;
+                        if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
+                            last_message = res;
+                            last_send.tv_sec = now.tv_sec;
+                            last_send.tv_usec = now.tv_usec;
+                        }
+                        free(cmd);
                     }
                 }
             }
         }
         return 0;
     }
+    
 protected:
     static MatchFunction *instance_;
-    const Options &options;
-    IODInterface &iod_interface;
     std::list<Value> params;
     std::string result;
 private:
+    MatchFunction() : iod_interface(*MessagingInterface::getContext(), ZMQ_REQ){
+        iod_interface.connect(iod_connection);
+    }
+    zmq::socket_t iod_interface;
     MatchFunction(const MatchFunction&);
     MatchFunction &operator=(const MatchFunction&);
 };
@@ -635,16 +578,14 @@ struct ConnectionThread {
     void operator()() {
         try {
             gettimeofday(&last_active, 0);
-            MatchFunction *match = new MatchFunction(options, iod_interface);
             
-            if (options.server()) {
-                listener = anetTcpServer(msg_buffer, options.port(), options.host());
+            if (Options::instance()->server()) {
+                listener = anetTcpServer(msg_buffer, Options::instance()->port(), Options::instance()->host());
                 if (listener == -1) {
-                    std::cerr << msg_buffer << " attempting to listen on port " << options.port() << "...aborting\n";
-                    device_status.status = DeviceStatus::e_failed;
+                    std::cerr << msg_buffer << " attempting to listen on port " << Options::instance()->port() << "...aborting\n";
+                    DeviceStatus::instance()->setStatus(DeviceStatus::e_failed);
                     updateProperty();
                     done = true;
-                    delete match;
                     return;
                 }
             }
@@ -655,14 +596,14 @@ struct ConnectionThread {
             useconds_t retry_delay = 50000; // usec delay before trying to setup
                                                // the connection initialy 50ms with a back-off algorithim
             
-            device_status.status = DeviceStatus::e_disconnected;
+            DeviceStatus::instance()->setStatus(DeviceStatus::e_disconnected);
             updateProperty();
             while (!done) {
                 
                 // connect or accept connection
-                if (device_status.status == DeviceStatus::e_disconnected && options.client()) {
-                    if (options.serialPort()) {
-                        connection = setupSerialPort(options.serialPort(), options.serialSettings());
+                if (DeviceStatus::instance()->current() == DeviceStatus::e_disconnected && Options::instance()->client()) {
+                    if (Options::instance()->serialPort()) {
+                        connection = setupSerialPort(Options::instance()->serialPort(), Options::instance()->serialSettings());
                         if (connection == -1) {
                             usleep(retry_delay); // pause before trying again
                             if (retry_delay < 2000000) retry_delay *= 1.2;
@@ -670,30 +611,28 @@ struct ConnectionThread {
                         }
                     }
                     else {
-                        connection = anetTcpConnect(msg_buffer, options.host(), options.port());
+                        connection = anetTcpConnect(msg_buffer, Options::instance()->host(), Options::instance()->port());
                         if (connection == -1) {
-                            std::cerr << msg_buffer << "\n";
+                            std::cerr << msg_buffer << " retrying in " << (retry_delay/1000) << "ms\n";
                             usleep(retry_delay); // pause before trying again
                             if (retry_delay < 2000000) retry_delay *= 1.2;
                             continue;
                         }
                     }
                     retry_delay = 50000;
-                    device_status.status = DeviceStatus::e_connected;
+                    DeviceStatus::instance()->setStatus(DeviceStatus::e_connected);
                     updateProperty();
                 }
                 
                 fd_set read_ready;
                 FD_ZERO(&read_ready);
                 int nfds = 0;
-                if (device_status.status == DeviceStatus::e_connected
-                    || device_status.status == DeviceStatus::e_up
-                    || device_status.status == DeviceStatus::e_timeout
-                    ) {
+                DeviceStatus::State dev_state = DeviceStatus::instance()->current();
+                if (dev_state == DeviceStatus::e_connected  || dev_state == DeviceStatus::e_up || dev_state == DeviceStatus::e_timeout ) {
                     FD_SET(connection, &read_ready);
                     nfds = connection+1;
                 }
-                else if (options.server()) {
+                else if (Options::instance()->server()) {
                     FD_SET(listener, &read_ready);
                     nfds = listener+1;
                 }
@@ -707,24 +646,25 @@ struct ConnectionThread {
                         std::cerr << "socket: " << strerror(errno) << "\n";
                 }
                 else if (err == 0) {
-                    if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up) {
-                        device_status.status = DeviceStatus::e_timeout;
+                    DeviceStatus::State dev_state = DeviceStatus::instance()->current();
+                    if (dev_state == DeviceStatus::e_connected || dev_state == DeviceStatus::e_up) {
+                        DeviceStatus::instance()->setStatus( DeviceStatus::e_timeout );
                         updateProperty();
                         std::cerr << "select timeout " << select_timeout.tv_sec << "."
                         << std::setfill('0') << std::setw(3) << (select_timeout.tv_usec / 1000) << "\n";
                         
                         // we disconnect from a TCP connection on a timeout but do nothing in the case of a serial port
-                        if (!options.serialPort() && options.disconnectOnTimeout()) {
+                        if (!Options::instance()->serialPort() && Options::instance()->disconnectOnTimeout()) {
                             std::cerr << "Closing device connection due to timeout\n";
                             close(connection);
-                            device_status.status = DeviceStatus::e_disconnected;
+                            DeviceStatus::instance()->setStatus( DeviceStatus::e_disconnected );
                             updateProperty();
                         }
                         continue;
                     }
                 }
                 
-                if (options.server() && device_status.status == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
+                if (Options::instance()->server() && DeviceStatus::instance()->current() == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
                     // Accept and setup a connection
                     int port;
                     char hostip[16]; // dot notation
@@ -747,7 +687,7 @@ struct ConnectionThread {
                         close(connection);
                         continue;
                     }
-                    device_status.status = DeviceStatus::e_connected;
+                    DeviceStatus::instance()->setStatus( DeviceStatus::e_connected );
                     updateProperty();
                 }
                 else if (connection != -1 && FD_ISSET(connection, &read_ready)) {
@@ -757,12 +697,12 @@ struct ConnectionThread {
                             if (!done && errno != EINTR && errno != EAGAIN) { // stop() may cause a read error that we ignore
                                 std::cerr << "error: " << strerror(errno) << " reading from connection\n";
                                 close(connection);
-                                device_status.status = DeviceStatus::e_disconnected;
+                                DeviceStatus::instance()->setStatus( DeviceStatus::e_disconnected );
                                 updateProperty();
                             }
                         }
                         else if (n) {
-                            device_status.status = DeviceStatus::e_up;
+                            DeviceStatus::instance()->setStatus( DeviceStatus::e_up );
                             updateProperty();
                             
                             buf[offset+n] = 0;
@@ -774,7 +714,7 @@ struct ConnectionThread {
                         }
                         else {
                             close(connection);
-                            device_status.status = DeviceStatus::e_disconnected;
+                            DeviceStatus::instance()->setStatus( DeviceStatus::e_disconnected );
                             updateProperty();
                             std::cerr << "connection lost\n";
                             connection = -1;
@@ -782,7 +722,7 @@ struct ConnectionThread {
                         
                         // recalculate offset as we step through matches
                         offset = 0;
-                        each_match(options.regexpInfo(), buf, &MatchFunction::match_func, &offset);
+                        each_match(Options::instance()->regexpInfo(), buf, &MatchFunction::match_func, &offset);
                         size_t len = strlen(buf);
 #if 0
                         std::cout << "buf: ";
@@ -805,12 +745,11 @@ struct ConnectionThread {
                     else {
                         std::cerr << "buffer full: " << buf << "\n";
                         close(connection);
-                        device_status.status = DeviceStatus::e_disconnected;
+                        DeviceStatus::instance()->setStatus(DeviceStatus::e_disconnected);
                         updateProperty();
                     }
                 }
             }
-            delete match;
         }catch (std::exception e) {
             if (zmq_errno())
                 std::cerr << zmq_strerror(zmq_errno()) << "\n";
@@ -835,21 +774,21 @@ struct ConnectionThread {
         }
     }
     
-    ConnectionThread(Options &opts, DeviceStatus &status, IODInterface &iod)
-    : done(false), connection(-1), options(opts), device_status(status), iod_interface(iod)
+    ConnectionThread() : done(false), connection(-1), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ), msg_buffer(0)
     {
-        assert(options.valid());
+        assert(Options::instance()->valid());
         msg_buffer =new char[ANET_ERR_LEN];
         gettimeofday(&last_active, 0);
         last_property_update.tv_sec = 0;
         last_property_update.tv_usec = 0;
-        last_status.status = DeviceStatus::e_unknown;
+        last_status = DeviceStatus::e_unknown;
+        cmd_interface.connect(iod_connection);
     }
     
     void stop() {
         done = true;
-        if (device_status.status == DeviceStatus::e_connected || device_status.status == DeviceStatus::e_up
-                || device_status.status == DeviceStatus::e_disconnected) {
+        DeviceStatus::State dev_state = DeviceStatus::instance()->current();
+        if (dev_state == DeviceStatus::e_connected || dev_state == DeviceStatus::e_up || dev_state == DeviceStatus::e_disconnected) {
             done = true;
             close(connection);
         }
@@ -865,138 +804,47 @@ struct ConnectionThread {
     void updateProperty() {
         struct timeval now;
         gettimeofday(&now, 0);
-        if (last_status.status != device_status.status || now.tv_sec >= last_property_update.tv_sec + 5) {
+        if (last_status != DeviceStatus::instance()->current() || now.tv_sec >= last_property_update.tv_sec + 5) {
             {
             boost::mutex::scoped_lock lock(connection_mutex);
             last_property_update.tv_sec = now.tv_sec;
             last_property_update.tv_usec = now.tv_usec;
-            last_status.status = device_status.status;
+            last_status = DeviceStatus::instance()->current();
             }
             bool sent = false;
-            sent = iod_interface.setProperty(options.name(), "status", stringFromDeviceStatus(device_status.status));
+            char *cmd_str = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->name(),
+                                                           "status", stringFromDeviceStatus(DeviceStatus::instance()->current()));
+            std::string response;
+            if (cmd_str) {
+                sent = sendMessage(cmd_str, cmd_interface, response);
+                free(cmd_str);
+            }
+//            sent = iod_interface.setProperty(Options::instance()->name(),
+//                                            "status", stringFromDeviceStatus(DeviceStatus::instance()->current()));
             if (!sent) {
-                std::cerr << "Failed to set status property " << options.name() << ".status\n";
+                std::cerr << "Failed to set status property " << Options::instance()->name() << ".status\n";
+            }
+            if (response == "Unknown device") {
+                std::cout << "invalid clockwork device name " << Options::instance()->name() << "\n";
             }
         }
     }
     bool done;
     int listener;
     int connection;
+    zmq::socket_t cmd_interface;
     std::string last_msg;
-    Options &options;
-    DeviceStatus &device_status;
-    IODInterface &iod_interface;
     char *msg_buffer;
     struct timeval last_active;
-    DeviceStatus last_status;
+    DeviceStatus::State last_status;
     struct timeval last_property_update;
     boost::mutex connection_mutex;
     struct termios terminal_settings;
     std::string to_send;
 };
 
-
-struct PropertyMonitorThread {
-    void operator()() {
-        if (!options.watchProperty()) done = true; // shouldn't have started this thread without a property to watch
-            
-        while (!done) {
-            if (status == ws_disconnected) {
-                connect();
-                continue;
-            }
-            if (status == ws_connected) {
-                try {
-                    zmq::message_t update;
-                    socket->recv(&update);
-                    long len = update.size();
-                    char *data = (char *)malloc(len+1);
-                    memcpy(data, update.data(), len);
-                    data[len] = 0;
-                    
-                    std::string command;
-                    std::list<Value> *params = 0;
-                    if (MessageEncoding::getCommand(data, command, &params)) {
-                        if (command == "PROPERTY" && params->size() == 3){
-                            Value machine_name = params->front(); params->pop_front();
-                            Value prop_name = params->front(); params->pop_front();
-                            Value val = params->front();
-                            std::string full_name = machine_name.asString() +  "." + prop_name.asString();
-                            if (full_name == options.watchProperty()) {
-                                std::cerr << "Sending: " << escapeNonprintables(val.asString().c_str()) << "\n";
-                                connection.send(val.asString().c_str());
-                            }
-                        }
-                    }
-                    else {
-                        if (len > (long)match_str.length() && strncmp(match_str.c_str(), data, match_str.length()) == 0) {
-                            std::cout << "Found: " << escapeNonprintables(data) << "\n";
-                            connection.send(data + match_str.length());
-                        }
-                    }
-                    free(data);
-                }
-                catch (std::exception e) {
-                    if (zmq_errno())
-                        std::cerr << zmq_strerror(zmq_errno()) << "\n";
-                    else
-                        std::cerr << e.what() << "\n";
-                    status = ws_disconnected;
-                }
-            }
-        }
-    }
-    PropertyMonitorThread(Options &opts, ConnectionThread &connection_)
-            : done(false), socket(0), options(opts), connection(connection_) {
-        if (options.watchProperty()) {
-            match_str = options.watchProperty();
-            match_str += " VALUE ";
-            connect();
-        }
-    }
-    
-    class WatchException : public std::exception {
-        public:
-        WatchException(const char *msg) : message(msg) {};
-        virtual ~WatchException() throw () {}
-        virtual const char *what() const throw() { return message.c_str(); }
-        private:
-            std::string message;
-    };
-
-    void connect() {
-        try {
-            int res;
-            std::stringstream ss;
-            ss << "tcp://" << options.iodHost() << ":" << options.publisher_port();
-            socket = new zmq::socket_t (*context, ZMQ_SUB);
-            res = zmq_setsockopt (*socket, ZMQ_SUBSCRIBE, "", 0);
-            if (res) throw WatchException("error setting zmq socket option");
-            socket->connect(ss.str().c_str());
-            int linger = 0; // do not wait at socket close time
-            socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-            status = ws_connected;
-        }
-        catch (std::exception e) {
-            if (zmq_errno())
-                std::cerr << zmq_strerror(zmq_errno()) << "\n";
-            else
-                std::cerr << e.what() << "\n";
-            status = ws_disconnected;
-        }
-    }
-    
-    void stop() { done = true; }
-    enum WatcherStates { ws_disconnected, ws_connected };
-    bool done;
-    zmq::socket_t *socket;
-    const Options &options;
-    WatcherStates status;
-    std::string match_str;
-    ConnectionThread &connection;
-};
-
 bool done = false;
+Options *Options::instance_;
 
 static void finish(int sig)
 {
@@ -1021,135 +869,177 @@ bool setup_signals()
     return true;
 }
 
+class PropertyStatus {
+public:
+    struct timeval last_property_update;
+
+};
+
 
 int main(int argc, const char * argv[])
 {
+    zmq::context_t context;
+    MessagingInterface::setContext(&context);
+    
     last_send.tv_sec = 0;
     last_send.tv_usec = 0;
-    context = new zmq::context_t;
-    Options options;
     try {
-    
-    for (int i=1; i<argc; i++) {
-        if (strcmp(argv[i], "--port") == 0 && i < argc-1) {
-            long port;
-            char *next;
-            port = strtol(argv[++i], &next, 10);
-            if (!*next) options.setPort(port & 0xffff);
-        }
-        else if (strcmp(argv[i], "--host") == 0 && i < argc-1) {
-            options.setHost(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--name") == 0 && i < argc-1) {
-            options.setName(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--property") == 0 && i < argc-1) {
-            options.setProperty(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--pattern") == 0 && i < argc-1) {
-            options.setPattern(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--queue") == 0 && i < argc-1) {
-            options.setQueue(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--client") == 0) {
-            options.clientMode();
-        }
-        else if (strcmp(argv[i], "--serial_port") == 0) {
-            options.setSerialPort(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--serial_settings") == 0) {
-            options.setSerialSettings(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--watch_property") == 0) {
-            options.setWatch(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--collect_repeats") == 0) {
-            options.doNotSkipRepeats();
-        }
-        else if (strcmp(argv[i], "--disconnect_on_timeout") == 0) {
-            options.setDisconnectOnTimeout(true);
-        }
-        else if (strcmp(argv[i], "--no_timeout_disconnect") == 0) {
-            options.setDisconnectOnTimeout(false);
-        }
-        else if (strcmp(argv[i], "--no_json") == 0) {
-            options.setSendJSON(false);
-        }
-        else if (strcmp(argv[i], "--cw_port") == 0 && i < argc-1) {
-            int pport = strtol(argv[++i], 0, 10);
-            options.set_publisher_port(pport);
-            set_publisher_port(pport);
-        }
-        else {
-            std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
-        }
-    }
-    if (!options.valid()) {
-        usage(argc, argv);
-        exit(EXIT_FAILURE);
-    }
-    
-    DeviceStatus device_status;
-    IODInterface iod_interface(options);
-    
-	ConnectionThread connection_thread(options, device_status, iod_interface);
-	boost::thread monitor(boost::ref(connection_thread));
-
-    PropertyMonitorThread watch_thread(options, connection_thread);
-    boost::thread *watcher = 0;
-        
-    if (options.watchProperty()) {
-        watcher = new boost::thread(boost::ref(watch_thread));
-    }
-
-    struct timeval last_time;
-    gettimeofday(&last_time, 0);
-    if (!setup_signals()) {
-        std::cerr << "Error setting up signals " << strerror(errno) << "\n";
-    }
-    
-    while (!done && !connection_thread.done)
-    {
-        struct timeval now;
-        gettimeofday(&now, 0);
-        // TBD once the connection is open, check that data has been received within the last second
-        if (device_status.status == DeviceStatus::e_up || device_status.status == DeviceStatus::e_connected
-                || device_status.status == DeviceStatus::e_timeout) {
-            std::string msg;
-            struct timeval last;
-            connection_thread.get_last_message(msg, last);
-            if (last_time.tv_sec != last.tv_sec && now.tv_sec > last.tv_sec + 1) {
-                if (device_status.status == DeviceStatus::e_timeout)
-                    std::cerr << "Warning: Device timeout\n";
-                else
-                    std::cout << "Warning: connection idle\n";
-                last_time = last;
+        Options &options = *Options::instance();
+        for (int i=1; i<argc; i++) {
+            if (strcmp(argv[i], "--port") == 0 && i < argc-1) {
+                long port;
+                char *next;
+                port = strtol(argv[++i], &next, 10);
+                if (!*next) options.setPort(port & 0xffff);
+            }
+            else if (strcmp(argv[i], "--host") == 0 && i < argc-1) {
+                options.setHost(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--name") == 0 && i < argc-1) {
+                options.setName(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--property") == 0 && i < argc-1) {
+                options.setProperty(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--pattern") == 0 && i < argc-1) {
+                options.setPattern(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--queue") == 0 && i < argc-1) {
+                options.setQueue(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--client") == 0) {
+                options.clientMode();
+            }
+            else if (strcmp(argv[i], "--serial_port") == 0) {
+                options.setSerialPort(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--serial_settings") == 0) {
+                options.setSerialSettings(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--watch_property") == 0) {
+                options.setWatch(argv[++i]);
+            }
+            else if (strcmp(argv[i], "--collect_repeats") == 0) {
+                options.doNotSkipRepeats();
+            }
+            else if (strcmp(argv[i], "--disconnect_on_timeout") == 0) {
+                options.setDisconnectOnTimeout(true);
+            }
+            else if (strcmp(argv[i], "--no_timeout_disconnect") == 0) {
+                options.setDisconnectOnTimeout(false);
+            }
+            else if (strcmp(argv[i], "--no_json") == 0) {
+                options.setSendJSON(false);
+            }
+            else if (strcmp(argv[i], "--cw_port") == 0 && i < argc-1) {
+                int pport = (int)strtol(argv[++i], 0, 10);
+                options.set_publisher_port(pport);
+                set_publisher_port(pport);
+            }
+            else {
+                std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
             }
         }
-        // send a message to iod
-        if (iod_interface.status == IODInterface::s_disconnected) {
-            std::cerr << "Warning: Disconnected from clockwork\n";
-            iod_interface.sendMessage("");
+        if (!options.valid()) {
+            usage(argc, argv);
+            exit(EXIT_FAILURE);
         }
         
-        struct timespec sleep_time;
-        struct timespec remain_time;
-        sleep_time.tv_sec = 0;
-        sleep_time.tv_nsec = 300000000;
-        while (nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
-            sleep_time.tv_nsec = remain_time.tv_nsec;
-        }
-    }
+        zmq::socket_t cmd(*MessagingInterface::getContext(), ZMQ_REP);
+        cmd.bind(iod_connection);
+        usleep(5000);
+        
+        ConnectionThread connection_thread;
+        boost::thread monitor(boost::ref(connection_thread));
 
-    iod_interface.stop();
-    connection_thread.stop();
-    if (watcher) watch_thread.stop();
-    monitor.join();
+        //PropertyMonitorThread watch_thread(options, connection_thread);
+        //boost::thread *watcher = 0;
+            
+        //if (options.watchProperty()) {
+        //    watcher = new boost::thread(boost::ref(watch_thread));
+        //}
+        
+        ConnectionManager *connection_manager = 0;
+        if (options.watchProperty()) {
+            connection_manager = new SubscriptionManager("DeviceConnector");
+        }
+        else {
+            connection_manager = new CommandManager(Options::instance()->host());
+        }
+        
+        struct timeval last_time;
+        gettimeofday(&last_time, 0);
+        if (!setup_signals()) {
+            std::cerr << "Error setting up signals " << strerror(errno) << "\n";
+        }
+        
+        zmq::pollitem_t *items = new zmq::pollitem_t[3];
+        memset(items, 0, sizeof(zmq::pollitem_t)*3);
+        int idx = 0;
+        
+        int cmd_index = -1;
+        int subs_index = -1;
+        int num_items = 0;
+        if (options.watchProperty()) {
+            SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
+            items[idx].socket = sm->setup; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+            subs_index = idx;
+            items[idx].socket = sm->subscriber; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+        }
+        else {
+            CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
+            items[idx].socket = cm->setup; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+        }
+        cmd_index = idx; items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+        num_items = idx;
+
+        
+        while (!done)
+        {
+            struct timeval now;
+            gettimeofday(&now, 0);
+
+			if (!connection_manager->checkConnections(items, num_items, cmd)) continue;
+            if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+            
+            // TBD once the connection is open, check that data has been received within the last second
+            DeviceStatus::State dev_stat = DeviceStatus::instance()->current();
+            if (dev_stat == DeviceStatus::e_up || dev_stat == DeviceStatus::e_connected || dev_stat == DeviceStatus::e_timeout) {
+                std::string msg;
+                struct timeval last;
+                connection_thread.get_last_message(msg, last);
+                if (last_time.tv_sec != last.tv_sec && now.tv_sec > last.tv_sec + 1) {
+                    if (dev_stat == DeviceStatus::e_timeout)
+                        std::cerr << "Warning: Device timeout\n";
+                    else
+                        std::cout << "Warning: connection idle\n";
+                    last_time = last;
+                }
+            }
+            /*
+            // send a message to iod
+            if (iod_interface.status == IODInterface::s_disconnected) {
+                std::cerr << "Warning: Disconnected from clockwork\n";
+                iod_interface.sendMessage("");
+            }
+            */
+            
+            struct timespec sleep_time;
+            struct timespec remain_time;
+            sleep_time.tv_sec = 0;
+            sleep_time.tv_nsec = 300000000;
+            while (nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
+                sleep_time.tv_nsec = remain_time.tv_nsec;
+            }
+        }
+
+        connection_thread.stop();
+        //if (watcher) watch_thread.stop();
+        monitor.join();
     }
     catch (std::exception e) {
         if (zmq_errno())
-            std::cerr << zmq_strerror(zmq_errno()) << "\n";
+            std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
         else
             std::cerr << e.what() << "\n";
     }

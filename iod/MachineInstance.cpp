@@ -54,8 +54,6 @@ extern std::list<std::string>error_messages;
 static uint64_t process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
 
-MessagingInterface *persistentStore = 0;
-
 Parameter::Parameter(Value v) : val(v), machine(0) {
     ;
 }
@@ -681,7 +679,7 @@ void RateEstimatorInstance::setNeedsCheck() {
 void RateEstimatorInstance::idle() {
     if (needsCheck() || (process_time - settings->update_t > idle_time && !io_interface) ) {
         MachineInstance *pos_m = lookup(parameters[0]);
-        long pos;
+        long pos = 0;
         if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
         setValue("VALUE", pos);
         needs_check = 0;
@@ -789,15 +787,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
-//		timer.tv_sec = 0;
-//		timer.tv_usec = 0;
 		gettimeofday(&start_time, 0);
 	}
-    if (!persistentStore) {
-        DBG_PROPERTIES << "Initialising persistence feed\n";
-        persistentStore = new MessagingInterface(1, persistent_store_port());
-        usleep(200000); // give subscribers a chance to connect before publishing
-    }
 }
 
 MachineInstance::MachineInstance(CStringHolder name, const char * type, InstanceType instance_type)
@@ -834,15 +825,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	if (instance_type == MACHINE_INSTANCE) {
 	    all_machines.push_back(this);
 	    Dispatcher::instance()->addReceiver(this);
-//		timer.tv_sec = 0;
-//		timer.tv_usec = 0;
 		gettimeofday(&start_time, 0);
 	}
-    if (!persistentStore) {
-        DBG_PROPERTIES << "Initialising persistence feed\n";
-        persistentStore = new MessagingInterface(1, persistent_store_port());
-        usleep(200000); // give subscribers a chance to connect before publishing
-    }
 }
 
 MachineInstance::~MachineInstance() {
@@ -3051,13 +3035,6 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
             if (published) {
                 Channel::sendPropertyChange(this, property.c_str(), new_value);
             }
-        
-			if (getValue("PERSISTENT") == "true") {
-				DBG_M_PROPERTIES << _name << " publishing change to persistent variable " << _name << "\n";
-				//persistentStore->send(ss.str().c_str());
-                persistentStore->sendCommand("PROPERTY", fullName(), property.c_str(), new_value);
-                
-			}
 			// update modbus with the new value
 			DBG_M_MODBUS << " building modbus name for property " << property << " on " << _name << "\n";
 			std::string property_name;

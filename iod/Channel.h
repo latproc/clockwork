@@ -62,7 +62,7 @@ private:
 
 class ChannelDefinition : public ChannelImplementation, public MachineClass {
 public:
-    ChannelDefinition(const char *name);
+    ChannelDefinition(const char *name, ChannelDefinition *parent = 0);
     Channel *instantiate(unsigned int port) const;
     static ChannelDefinition *find(const char *name);
     static ChannelDefinition *fromJSON(const char *json);
@@ -83,6 +83,7 @@ public:
 
 private:
     static std::map< std::string, ChannelDefinition* > *all;
+    ChannelDefinition *parent;
     std::string psk; // preshared key
     std::string identifier;
     std::string version;
