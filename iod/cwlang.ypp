@@ -66,6 +66,7 @@ PredicateOperator current_op;
     std::list<Parameter> current_parameters;
     std::list<Parameter> current_locals;
     std::list<std::string> current_name_list;
+    std::list< std::pair<std::string, char *> > current_machine_list;
     std::list<SymbolTable> property_stack;
     std::list<ChannelDefinition*> channel_definitions;
 
@@ -116,7 +117,7 @@ struct Subcondition {
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
-%token INTERFACE EXTENDS KEY
+%token INTERFACE EXTENDS KEY MACHINES MATCHING NAME
 
 %union {
 	int iVal;
@@ -240,7 +241,7 @@ interface_defn_header '{' interface_defn_body '}' {
 interface_defn_header:
 SYMBOL INTERFACE {
     DBG_PARSER << " interface definition "  << $1 << "\n";
-    current_machineclass = new MachineClass($1);
+    current_machineclass = new MachineInterface($1);
 }
 ;
 
@@ -312,13 +313,28 @@ chn_definition_section:
 | MONITORS PATTERN ';'  {
     current_channelclass->addMonitorPattern($2);
 }
+| MONITORS MACHINES WITH NAME MATCHING PATTERN ';'  {
+    current_channelclass->addMonitorPattern($6);
+}
+| MONITORS MACHINES WHERE SYMBOL EQ basic_value ';'  {
+    current_channelclass->addMonitorProperty($4, *$6);
+    delete $6;
+}
+| MONITORS MACHINES WITH PROPERTY SYMBOL ';'  {
+    current_channelclass->addMonitorProperty($5, SymbolTable::Null);
+}
 | MONITORS SYMBOL EQ basic_value ';'  {
     current_channelclass->addMonitorProperty($2, *$4);
     delete $4;
 }
-| UPDATES name_list ';' {
-    BOOST_FOREACH(std::string &name, current_name_list)
-        current_channelclass->addUpdates(name.c_str());
+| UPDATES machine_list ';' {
+    std::list< std::pair<std::string, char *> >::iterator iter = current_machine_list.begin();
+    while (iter != current_machine_list.end() ) {
+        const std::pair< std::string, char*> &item = *iter++;
+        current_channelclass->addUpdates(item.first.c_str(), item.second);
+        free(item.second);
+    }
+    current_machine_list.clear();
 }
 | SENDS name_list ';'   {
     BOOST_FOREACH(std::string &name, current_name_list)
@@ -330,6 +346,29 @@ chn_definition_section:
 }
 | OPTION chn_option_settings ';'
 ;
+
+machine_list:
+SYMBOL {
+    DBG_PARSER << " machine list: " << $1 << "\n";
+    current_machine_list.push_back( std::make_pair($1, (char*)0) );
+}
+| SYMBOL SYMBOL {
+    DBG_PARSER << " machine list: " << $1 << "\n";
+    current_machine_list.push_back( std::make_pair($1, strdup($2)) );
+}
+| machine_list COMMA SYMBOL
+{
+    DBG_PARSER << ", " << $3;
+    current_machine_list.push_back( std::make_pair($3, (char*)0));
+}
+| machine_list COMMA SYMBOL SYMBOL
+{
+    DBG_PARSER << ", " << $3 << '[' << $4 << ']';
+    current_machine_list.push_back( std::make_pair($3, strdup($4)) );
+}
+;
+
+
 
 basic_value:
 INTEGER   {
