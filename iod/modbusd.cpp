@@ -18,6 +18,12 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+/* 
+ modbusd starts a thread that accepts connections from modbus master 
+  programs and starts a subscriber on clockwork to listen for 
+  changes to items that are exported to modbus.
+ */
+
 #include <iostream>
 #include <iterator>
 #include <stdio.h>
@@ -56,13 +62,17 @@ namespace po = boost::program_options;
 static boost::mutex q_mutex;
 static boost::condition_variable_any cond;
 
-const int MemSize = 65536;
+const char *local_commands = "inproc://local_cmds";
+
 int debug = 0;
+
+const int MemSize = 65536;
 const int COILS 	= 1;
 const int REGS 		= 1 << 1;
 const int TOPLC 	= 1 << 2;
 const int TOPANEL = 1 << 3;
 const int IOD			= 1 << 4;
+
 const int STRTYPE	= 1 << 5;
 
 const int VERBOSE_TOPLC 	= 1 << 8;
@@ -82,21 +92,11 @@ time_t last = 0;
 time_t now;
 #define OUT (time(&now) == last) ? dummy : std::cout
 
-//class IODInterfaceThread;
-//struct IODCommandInterface;
-
-//IODInterfaceThread *g_iod_interface;
-//IODCommandInterface *g_iodcmd;
-MessagingInterface *g_iodcmd;
 static modbus_mapping_t *modbus_mapping = 0;
 static modbus_t *modbus_context = 0;
 
 static std::set<std::string> active_addresses;
 static std::map<std::string, bool> initialised_address;
-
-std::string getIODSyncCommand(int group, int addr, int new_value);
-char *sendIOD(int group, int addr, int new_value);
-char *sendIODMessage(const std::string &s);
 
 
 void activate_address(std::string& addr_str) {
@@ -106,7 +106,7 @@ void activate_address(std::string& addr_str) {
     }
 }
 
-void insert(int group, int addr, const char *value, int len) {
+void insert(int group, int addr, const char *value, size_t len) {
 	if (DEBUG_BASIC) std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
@@ -133,7 +133,7 @@ void insert(int group, int addr, const char *value, int len) {
 //		if (i+1<str_len) p++;
 	}
 }
-void insert(int group, int addr, int value, int len) {
+void insert(int group, int addr, int value, size_t len) {
 	if (DEBUG_BASIC) std::cout << "g:"<<group<<addr<<" "<<value<<" " << len << "\n";
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
@@ -172,6 +172,7 @@ void insert(int group, int addr, int value, int len) {
 	}
 }
 
+/*
 // ------------ Command interface -----------
 
 struct IODCommandUnknown : public IODCommand {
@@ -184,6 +185,7 @@ struct IODCommandUnknown : public IODCommand {
         return false;
     }
 }; 
+*/
 
 int getInt(uint8_t *p) {
 	int x = *p++;
@@ -204,6 +206,9 @@ std::ostream &timestamp(std::ostream &out) {
     unsigned long t = now.tv_sec*1000000 + now.tv_usec - start_t;
 		return out << (t / 1000) ;
 }
+
+std::string getIODSyncCommand(int group, int addr, int new_value);
+
 
 struct ModbusServerThread {
 	
@@ -403,15 +408,20 @@ struct ModbusServerThread {
 							std::list<std::string>::iterator iter = iod_sync_commands.begin();
 							while (iter != iod_sync_commands.end()) {
 								std::string cmd = *iter++;
-								char *res = sendIODMessage(cmd);
-								if (res) free(res);
+                                std::string response;
+                                sendMessage(cmd.c_str(), cmd_interface, response);
+								//char *res = sendIODMessage(cmd);
+								//if (res) free(res);
 							}
 							iod_sync_commands.clear();
 						}
 						else if (fc == 5) {
 							if (!ignore_coil_change) {
-								char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
-								if (res) free(res);
+                                std::string cmd( getIODSyncCommand(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0) );
+                                std::string response;
+                                sendMessage(cmd.c_str(), cmd_interface, response);
+								//char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
+								//if (res) free(res);
 								if (DEBUG_BASIC) 
 									std::cout << timestamp << " Updating coil " << addr << " from connection " << conn 
 										<< ((query_backup[function_code_offset + 3]) ? " on" : " off") << "\n";
@@ -419,8 +429,9 @@ struct ModbusServerThread {
 						}
 						else if (fc == 6) {
 							int val = getInt( &query[function_code_offset+5]);
-							char *res = sendIOD(4, addr+1, modbus_mapping->tab_registers[addr]);
-							if (res) free(res);
+                            std::string res(getIODSyncCommand(4, addr+1, modbus_mapping->tab_registers[addr]) );
+                            //                sendIOD(4, addr+1, modbus_mapping->tab_registers[addr]) );
+							//if (res) free(res);
 							if (DEBUG_BASIC) 
 							std::cout << timestamp << " Updating register " << addr << " to " << val << " from connection " << conn << "\n";
 						}
@@ -447,8 +458,9 @@ struct ModbusServerThread {
 		modbus_context = 0;
 		
     }
-    ModbusServerThread() : done(false) {
+    ModbusServerThread() : done(false), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ) {
 		FD_ZERO(&connections);
+        cmd_interface.connect(local_commands);
     }
 	~ModbusServerThread() {
 		if (modbus_mapping) modbus_mapping_free(modbus_mapping);
@@ -459,14 +471,18 @@ struct ModbusServerThread {
     bool done;
 	fd_set connections;
 	int max_fd;
+    zmq::socket_t cmd_interface;
 };
+
+MessagingInterface *g_iodcmd;
+
+char *sendIOD(int group, int addr, int new_value);
+char *sendIODMessage(const std::string &s);
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
 	char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
 	sendIODMessage(msg);
-	//std::stringstream ss;
-	//ss << "MODBUS " << group << " " << addr << " " << new_value;
-	//std::string s(ss.str());
+
 	if (DEBUG_BASIC) std::cout << "IOD command: " << msg << "\n";
 	std::string s(msg);
 	free(msg);
@@ -564,6 +580,9 @@ bool setup_signals()
 }
 
 int main(int argc, const char * argv[]) {
+    zmq::context_t context;
+    MessagingInterface::setContext(&context);
+    
     struct timeval now;
     gettimeofday(&now, 0);
     start_t = now.tv_sec*1000000 + now.tv_usec;
@@ -588,7 +607,7 @@ int main(int argc, const char * argv[]) {
 	std::string host("localhost");
 	// backward compatibility
 	if (argc > 2 && strcmp(argv[1],"-p") == 0) {
-		cw_in = strtol(argv[2], 0, 0);
+		cw_in = (int)strtol(argv[2], 0, 0);
 		std::cerr << "NOTICE: the -p option is deprecated, please use --port\n";
 	}
 	if (vm.count("cwout")) cw_out = vm["cwout"].as<int>();
@@ -614,11 +633,11 @@ int main(int argc, const char * argv[]) {
 	// initialise memory
 	{
 		std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
-		char *initial_settings;
+		char *initial_settings = 0;
 		do {	
 			active_addresses.clear();
 			initialised_address.clear();
-			initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
+            initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
 			if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0) {
 				loadData(initial_settings);
 				free(initial_settings);
@@ -643,11 +662,18 @@ int main(int argc, const char * argv[]) {
 
 	ModbusServerThread modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
+    
+    // the local command channel accepts commands from the modbus thread and relays them to iod.
+    zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
+    iosh_cmd.bind(local_commands);
+    
+    SubscriptionManager subscription_manager("MODBUS_CHANNEL");
+    subscription_manager.setupConnections();
 
 	setup_signals();
 	
     try {
-        
+ /*
 		std::cout << "Listening on port " << cw_in << "\n";
         // client
         int res;
@@ -659,17 +685,27 @@ int main(int argc, const char * argv[]) {
         assert (res == 0);
         subscriber.connect(ss.str().c_str());
         //subscriber.connect("ipc://ecat.ipc");
+  */
         while (!done) {
+            
+            zmq::pollitem_t items[] = {
+                { subscription_manager.setup, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+                { subscription_manager.subscriber, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+                { iosh_cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
+            };
+			if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) continue;
+            if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+            
             zmq::message_t update;
-			if (!subscriber.recv(&update)) continue;
+			if (!subscription_manager.subscriber.recv(&update)) continue;
 			long len = update.size();
            	char *data = (char *)malloc(len+1);
            	memcpy(data, update.data(), len);
            	data[len] = 0;
-						if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
+            if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
 
             std::list<Value> parts;
-            int count = 0;
+            size_t count = 0;
             std::string ds;
             std::vector<Value> params(0);
             {
@@ -696,11 +732,9 @@ int main(int argc, const char * argv[]) {
             }
             std::string cmd(params[0].asString());
 
-            //std::istringstream iss(data);
-			//std::string cmd;
 			//iss >> cmd;
 			if (cmd == "UPDATE") {
-            	int group, addr, len, value;
+            	int group, addr, len;
 				std::string name;
 				
 				assert(params.size() >= 6);
@@ -709,10 +743,10 @@ int main(int argc, const char * argv[]) {
 				assert(params[3].kind == Value::t_string);
 				assert(params[4].kind == Value::t_integer);
 				
-				group = params[1].iValue;
-				addr = params[2].iValue;
+				group = (int)params[1].iValue;
+				addr = (int)params[2].iValue;
 				name = params[3].sValue;
-				len = params[4].iValue;
+				len = (int)params[4].iValue;
             	//iss >> group >> addr >> name >> len >> value;
 	
 				if (debug) std::cout << "IOD: " << group << " " << addr << " " << name << " " << len << " " << params[5] <<  "\n";
@@ -720,7 +754,7 @@ int main(int argc, const char * argv[]) {
 					insert(group, addr-1, params[5].asString().c_str(), strlen(params[5].asString().c_str()));
 				}
 				else
-					insert(group, addr-1, params[5].iValue, len);
+					insert(group, addr-1, (int)params[5].iValue, len);
 			}
 			else if (cmd == "STARTUP") {
 #if 1
