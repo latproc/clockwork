@@ -29,7 +29,7 @@ private:
     int refs;
     MachineRef();
     MachineRef(const MachineRef &orig);
-    Channel &operator=(const MachineRef &other);
+    MachineRef &operator=(const MachineRef &other);
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineRef &m);
@@ -64,6 +64,7 @@ class ChannelDefinition : public ChannelImplementation, public MachineClass {
 public:
     ChannelDefinition(const char *name, ChannelDefinition *parent = 0);
     Channel *instantiate(unsigned int port) const;
+    static void instantiateInterfaces();
     static ChannelDefinition *find(const char *name);
     static ChannelDefinition *fromJSON(const char *json);
     char *toJSON();
@@ -72,7 +73,7 @@ public:
     void setIdent(const char *);
     void setVersion(const char *);
     void addShare(const char *);
-    void addUpdates(const char *);
+    void addUpdates(const char *name, const char *interface_name);
     void addSendName(const char *);
     void addReceiveName(const char *);
     void addOptionName(const char *n, Value &v);
@@ -83,12 +84,13 @@ public:
 
 private:
     static std::map< std::string, ChannelDefinition* > *all;
+    std::map<std::string, MachineRef *> interfaces;
     ChannelDefinition *parent;
     std::string psk; // preshared key
     std::string identifier;
     std::string version;
     std::set<std::string> shares;
-    std::set<std::string> updates_names;
+    std::map<std::string, Value> updates_names;
     std::set<std::string> send_messages;
     std::set<std::string> recv_messages;
     std::map<std::string, Value> options;
@@ -96,10 +98,10 @@ private:
     friend class Channel;
 };
 
-class Channel : public ChannelImplementation {
+class Channel : public ChannelImplementation, public MachineInstance {
 public:
     typedef std::set< MachineRef* > MachineList;
-    Channel(const std::string name);
+    Channel(const std::string name, const std::string type);
     ~Channel();
     Channel(const Channel &orig);
     Channel &operator=(const Channel &other);
@@ -120,8 +122,12 @@ public:
     static int uniquePort();
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
     static void sendStateChange(MachineInstance *machine, std::string new_state);
+    static void setupAllShadows();
     
     void setupFilters();
+    void setupShadows();
+    void enableShadows();
+    void disableShadows();
     
     bool matches(MachineInstance *machine, const std::string &name);
     bool patternMatches(const std::string &machine_name);
