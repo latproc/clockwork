@@ -173,6 +173,7 @@ public:
     virtual ~MachineClass() { all_machine_classes.remove(this); }
 	void disableAutomaticStateChanges() { allow_auto_states = false; }
 	void enableAutomaticStateChanges() { allow_auto_states = true; }
+    static MachineClass *find(const char *name);
     State default_state;
 	State initial_state;
     std::string name;
@@ -184,6 +185,13 @@ public:
 private:
     MachineClass();
     MachineClass(const MachineClass &other);
+};
+
+class MachineInterface : public MachineClass {
+public:
+    MachineInterface(const char *class_name);
+    virtual ~MachineInterface();
+    static std::map<std::string, MachineInterface *> all_interfaces;
 };
 
 /*
@@ -214,7 +222,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     friend class MachineInstanceFactory;
 public:
     enum PollType { BUILTINS, NO_BUILTINS};
-	enum InstanceType { MACHINE_INSTANCE, MACHINE_TEMPLATE };
+	enum InstanceType { MACHINE_INSTANCE, MACHINE_TEMPLATE, MACHINE_SHADOW };
 protected:
     MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
     MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
@@ -431,9 +439,11 @@ private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
     MachineInstance(const MachineInstance &other);
+protected:
     static std::list<MachineInstance*> all_machines;
     static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
     static std::list<MachineInstance*> active_machines; // machines that require idle() processing
+    static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
 
 	friend struct SetStateAction;
 	friend struct MoveStateAction;
@@ -451,6 +461,25 @@ private:
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
+
+class MachineShadowInstance : public MachineInstance {
+protected:
+    MachineShadowInstance(InstanceType instance_type = MACHINE_INSTANCE);
+    MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+
+private:
+    MachineShadowInstance &operator=(const MachineShadowInstance &orig);
+    MachineShadowInstance(const MachineShadowInstance &other);
+    MachineShadowInstance *settings;
+
+public:
+    MachineShadowInstance();
+    ~MachineShadowInstance();
+    virtual void idle();
+    virtual bool hasWork() { return false; }
+
+    friend class MachineInstanceFactory;
+};
 
 class CounterRateFilterSettings;
 class CounterRateInstance : public MachineInstance {

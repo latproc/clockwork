@@ -248,6 +248,8 @@ std::map<std::string, MachineClass*> machine_classes;
 std::list<MachineInstance*> MachineInstance::all_machines;
 std::list<MachineInstance*> MachineInstance::automatic_machines;
 std::list<MachineInstance*> MachineInstance::active_machines;
+std::list<MachineInstance*> MachineInstance::shadow_machines;
+std::map<std::string, MachineInterface *> MachineInterface::all_interfaces;
 std::map<std::string, HardwareAddress> MachineInstance::hw_names;
 
 
@@ -257,32 +259,23 @@ std::map<std::string, MachineClass> MachineClass::machine_classes;
 
 /* Factory methods */
 
-/*
-MachineInstance *MachineInstanceFactory::create(MachineInstance::InstanceType instance_type) {
-    return new MachineInstance(instance_type);
-}
-*/
-
 MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type) {
-    if (strcmp(type, "COUNTERRATE") == 0) {
+    if (instance_type == MachineInstance::MACHINE_SHADOW)
+        return new MachineShadowInstance(name, type, MachineInstance::MACHINE_INSTANCE);
+    if (strcmp(type, "COUNTERRATE") == 0)
         return new CounterRateInstance(name, type, instance_type);
-    }
-    else if (strcmp(type, "RATEESTIMATOR") == 0) {
+    else if (strcmp(type, "RATEESTIMATOR") == 0)
         return new RateEstimatorInstance(name, type, instance_type);
-    }
-    else
+    else {
+        MachineClass *cls = MachineClass::find(type);
+        ChannelDefinition *defn = dynamic_cast<ChannelDefinition*>(cls);
+        if (defn) {
+            return new Channel(name.get(), type);
+        }
         return new MachineInstance(name, type, instance_type);
+    }
 }
 
-
-/*
-std::string fullName(const MachineInstance &m) {
-	std::string name;
-	if (m.owner) name = m.owner->getName() + ".";
-	name += m.getName();
-	return name;
-}
-*/
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
     updateLastEvaluationTime();
@@ -570,6 +563,24 @@ DynamicValue *MachineTimerValue::clone() const {
     MachineTimerValue *mtv = new MachineTimerValue(*this);
     return mtv;
 }
+
+MachineShadowInstance::MachineShadowInstance(InstanceType instance_type) : MachineInstance(instance_type) {
+    shadow_machines.push_back(this);
+}
+
+MachineShadowInstance::MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type)
+    : MachineInstance(name, type, instance_type) {
+    
+}
+
+void MachineShadowInstance::idle() {
+    return;
+}
+
+MachineShadowInstance::~MachineShadowInstance() {
+    return;
+}
+
 
 class CounterRateFilterSettings {
 public:
@@ -1987,6 +1998,26 @@ bool MachineClass::isStableState(State &state) {
 		if (s.state_name == state.getName()) return true;
 	}
 	return false;
+}
+
+MachineClass *MachineClass::find(const char *name) {
+    int token = Tokeniser::instance()->getTokenId(name);
+    std::list<MachineClass *>::iterator iter = all_machine_classes.begin();
+    while (iter != all_machine_classes.end()) {
+        MachineClass *mc = *iter++;
+        if (mc->token_id == token) return mc;
+    }
+    return 0;
+}
+
+
+MachineInterface::MachineInterface(const char *class_name) : MachineClass(class_name) {
+    assert(all_interfaces.count(class_name) == 0);
+    all_interfaces[class_name] = this;
+}
+
+MachineInterface::~MachineInterface() {
+    all_interfaces.erase(this->name);
 }
 
 
