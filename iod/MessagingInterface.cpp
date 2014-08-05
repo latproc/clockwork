@@ -43,7 +43,7 @@ std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
-static bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len) {
+bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len) {
     while (true) {
         try {
             if (block) {
@@ -61,6 +61,43 @@ static bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, siz
             return false;
         }
     }
+}
+
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
+    while (1) {
+        try {
+            std::cerr << "sent " << msg << "\n";
+            size_t len = sock.send(msg, strlen(msg));
+            if (!len) continue;
+            break;
+        }
+        catch (zmq::error_t e) {
+            if (errno == EINTR) continue;
+            std::cerr << "sendMessage: " << zmq_strerror(errno) << "\n";
+            return false;
+        }
+    }
+    char buf[200];
+    size_t len = 0;
+    while (len == 0) {
+        try {
+            len = sock.recv(buf, 200);
+            if (!len) continue;
+            if (len==200) len--; //unlikely event that the response is large
+            buf[len] = 0;
+            std::cerr << "received: " << buf << "\n";
+            response = buf;
+            break;
+        }
+        catch(zmq::error_t e)  {
+            if (errno == EINTR) continue;
+            char err[300];
+            snprintf(err, 300, "error: %s\n", zmq_strerror(errno));
+            std::cerr << err;
+            return false;
+        }
+    }
+    return true;
 }
 
 void MessagingInterface::setContext(zmq::context_t *ctx) {
@@ -186,8 +223,7 @@ char *MessagingInterface::send(const char *txt) {
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
-    int retries=4;
-    while (--retries>0) {
+    while (true) {
         try {
             zmq::message_t msg(len);
             strncpy ((char *) msg.data(), txt, len);
@@ -206,33 +242,39 @@ char *MessagingInterface::send(const char *txt) {
         }
     }
     if (!is_publisher) {
-        try {
-            zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-            zmq::poll( &items[0], 1, 500);
-            if (items[0].revents & ZMQ_POLLIN) {
-                zmq::message_t reply;
-                if (socket->recv(&reply)) {
-                    len = reply.size();
-                    char *data = (char *)malloc(len+1);
-                    memcpy(data, reply.data(), len);
-                    data[len] = 0;
-                    std::cout << url << ": " << data << "\n";
-                    return data;
+        while (true) {
+            try {
+                zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+                zmq::poll( &items[0], 1, 500);
+                if (items[0].revents & ZMQ_POLLIN) {
+                    zmq::message_t reply;
+                    if (socket->recv(&reply)) {
+                        len = reply.size();
+                        char *data = (char *)malloc(len+1);
+                        memcpy(data, reply.data(), len);
+                        data[len] = 0;
+                        std::cout << url << ": " << data << "\n";
+                        return data;
+                    }
                 }
+                else if (items[0].revents & ZMQ_POLLERR) {
+                    std::cerr << "MessagingInterface::send: error during recv\n";
+                    continue;
+                }
+                std::cerr << "timeout: abandoning message " << txt << "\n";
+                socket->disconnect(url.c_str());
+                delete socket;
+                socket = new zmq::socket_t(*getContext(), ZMQ_REQ);
+                usleep(50000);
+                connect();
+                break;
             }
-            else if (items[0].revents & ZMQ_POLLERR) {
-                std::cerr << "MessagingInterface::send: error during recv\n";
+            catch (std::exception e) {
+                if (zmq_errno())
+                    std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+                else
+                    std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
             }
-            std::cerr << "timeout: abandoning message " << txt << "\n";
-            socket->disconnect(url.c_str());
-            usleep(50000);
-            connect();
-        }
-        catch (std::exception e) {
-            if (zmq_errno())
-                std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-            else
-                std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
         }
     }
     return 0;
@@ -361,6 +403,37 @@ void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, c
     }
 void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
 
+void MachineShadow::setProperty(const std::string prop, Value &val) {
+    properties.add(prop, val, SymbolTable::ST_REPLACE);
+}
+
+Value &MachineShadow::getValue(const char *prop) {
+    return properties.lookup(prop);
+}
+
+void MachineShadow::setState(const std::string new_state) {
+    state = new_state;
+}
+
+void ConnectionManager::setProperty(std::string machine_name, std::string prop, Value val) {
+    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
+    MachineShadow *machine = 0;
+    if (found == machines.end())
+        machine = new MachineShadow;
+    else
+        machine = (*found).second;
+    machine->setProperty(prop, val);
+}
+
+void ConnectionManager::setState(std::string machine_name, std::string new_state) {
+    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
+    MachineShadow *machine = 0;
+    if (found == machines.end())
+        machine = new MachineShadow;
+    else
+        machine = (*found).second;
+    machine->setState(new_state);
+}
 
 SubscriptionManager::SubscriptionManager(const char *chname) :
         subscriber(*MessagingInterface::getContext(), ZMQ_SUB),
