@@ -52,6 +52,8 @@ public:
     std::string asString() const;
     std::string quoted() const;
 	bool asInteger(long &val) const;
+    explicit operator long() { return iValue; }
+    explicit operator int() { return (int)iValue; }
 //	Value operator[](int index);
 //	Value operator[](std::string index);
 
