@@ -1,6 +1,8 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <stdlib.h>
+#include <string.h>
 #include "Channel.h"
 #include "MessagingInterface.h"
 #include "MessageLog.h"
@@ -17,7 +19,9 @@ ChannelImplementation::~ChannelImplementation() { }
 
 
 Channel::Channel(const std::string ch_name, const std::string type)
-        : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),  name(ch_name), port(0) {
+        : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),
+            name(ch_name), port(0), communications_manager(0)
+{
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
     }
@@ -33,7 +37,6 @@ Channel::~Channel() {
     }
     this->machines.erase(machines.begin(), machines.end());
     remove(name);
-    if (mif) delete mif;
 }
 
 Channel &Channel::operator=(const Channel &other) {
@@ -146,7 +149,7 @@ Channel *Channel::create(unsigned int port, const ChannelDefinition *defn) {
     chn->modified();
     chn->setupShadows();
     chn->setupFilters();
-    chn->mif = MessagingInterface::create("*", port);
+    //chn->mif = MessagingInterface::create("*", port);
     chn->enableShadows();
     return chn;
 }
@@ -263,6 +266,39 @@ char *ChannelDefinition::toJSON() {
     return str;
 }
 
+
+
+MessageHandler::MessageHandler() : data(0), data_size(0) {
+}
+
+MessageHandler::~MessageHandler() {
+    if (data) free(data);
+}
+
+void MessageHandler::handleMessage(const char *buf, size_t len) {
+    if (data) { free(data); data = 0; data_size = 0; }
+    data = (char*)malloc(len);
+    memcpy(data, buf, len);
+}
+
+bool MessageHandler::receiveMessage(zmq::socket_t &sock) {
+    if (data) { free(data); data = 0; data_size = 0; }
+    zmq::message_t update;
+    if (sock.recv(&update, ZMQ_NOBLOCK)) {
+        long len = update.size();
+        char *data = (char *)malloc(len+1);
+        memcpy(data, update.data(), len);
+        data[len] = 0;
+        return true;
+    }
+    return false;
+}
+
+
+
+
+
+
 Channel *Channel::find(const std::string name) {
     if (!all) return 0;
     std::map<std::string, Channel *>::iterator found = all->find(name);
@@ -292,7 +328,15 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
             continue;
         if (chn->filtersAllow(machine)) {
             if (!chn->machines.count(machine)) chn->machines.insert(machine);
-            chn->mif->sendCommand("PROPERTY", name, key, val); // send command
+            if (chn->communications_manager) {
+                std::string response;
+                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+                sendMessage(cmd, chn->communications_manager->setup,response);
+                std::cout << "channel " << name << " got response: " << response << "\n";
+            }
+            else {
+                std::cout << "channel " << name << " wants to send property change\n";
+            }
         }
     }
 }
@@ -364,8 +408,13 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
             continue;
         if (chn->filtersAllow(machine)) {
             if (!chn->machines.count(machine)) chn->machines.insert(machine);
-            if (chn->mif)
-                chn->mif->sendState("STATE", name, new_state); // send state
+            if (chn->communications_manager
+                && chn->communications_manager->setup_status == SubscriptionManager::e_done ) {
+                std::string response;
+                char *cmd = MessageEncoding::encodeCommand("STATE", name, new_state); // send command
+                sendMessage(cmd, chn->communications_manager->setup,response);
+                std::cout << "channel " << name << " got response: " << response << "\n";
+            }
             else {
                 char buf[150];
                 snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
@@ -478,15 +527,95 @@ void Channel::setupShadows() {
             if (!machines.count(m)) {
                 m->publish();
                 machines.insert(m);
-                const char *host = "localhost";
-                int port = 14765;
-                SubscriptionManager sm(definition()->name.c_str());
-                MessagingInterface *setup = new MessagingInterface(host, port);
-                
-                
             }
         }
+        else if (m) {
+            // this machine is a shadow
+        }
     }
+    
+    Value host = getValue("host");
+    Value port_val = getValue("port");
+    if (host == SymbolTable::Null)
+        host = "localhost";
+    long port = 0;
+    if (!port_val.asInteger(port)) port = 5555;
+    //char buf[150];
+    //snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
+    
+    communications_manager
+        = new SubscriptionManager(definition()->name.c_str(),
+                                  host.asString().c_str(), (int)port);
+    //- TBD should this only subscribe if channel monitors a machine?
+}
+
+// poll channels and return number of descriptors with activity
+// if n is 0 the block of data will be reallocated,
+// otherwise up to n items will be initialised
+int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
+    if (!all) return 0;
+    if (!n) {
+        std::map<std::string, Channel*>::iterator iter = all->begin();
+        while (iter != all->end()) {
+            const std::pair<std::string, Channel *> &item = *iter++;
+            Channel *chn = item.second;
+            if (chn->communications_manager) n += chn->communications_manager->numSocks();
+        }
+        if (poll_items) delete poll_items;
+        poll_items = new zmq::pollitem_t[n];
+    }
+    int count = 0;
+    zmq::pollitem_t *curr = poll_items;
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        const std::pair<std::string, Channel *> &item = *iter++;
+        Channel *chn = item.second;
+        if (chn->communications_manager && n >= count + chn->communications_manager->numSocks()) {
+            count += chn->communications_manager->configurePoll(curr);
+            chn->setPollItemBase(curr);
+        }
+    }
+    int rc = 0;
+    while (true) {
+        try {
+            
+            int rc = zmq::poll(poll_items, count, timeout);
+            if (rc == -1 && errno == EAGAIN) continue;
+            break;
+        }
+        catch(zmq::error_t e) {
+            if (errno == EINTR) continue;
+            char buf[150];
+            snprintf(buf, 150, "Channel error: %s", zmq_strerror(errno));
+            MessageLog::instance()->add(buf);
+            std::cerr << buf << "\n";
+        }
+    }
+    if (rc>0) std::cout << rc << " channels with activity\n";
+    return rc;
+}
+
+void Channel::handleChannels() {
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        const std::pair<std::string, Channel *> &item = *iter++;
+        Channel *chn = item.second;
+        chn->checkCommunications();
+    }
+}
+
+
+void Channel::setPollItemBase(zmq::pollitem_t *base) {
+    poll_items = base;
+}
+
+void Channel::checkCommunications() {
+    if (!communications_manager->checkConnections()) return;
+    if ( !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
+        if (message_handler->receiveMessage(communications_manager->subscriber))
+            std::cout << "Channel got message: " << message_handler->data << "\n";
+    }
+
 }
 
 void Channel::setupAllShadows() {

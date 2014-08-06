@@ -98,6 +98,18 @@ private:
     friend class Channel;
 };
 
+
+class MessageHandler {
+public:
+    MessageHandler();
+    virtual ~MessageHandler();
+    virtual void handleMessage(const char *buf, size_t len);
+    virtual bool receiveMessage(zmq::socket_t &sock) = 0;
+    char *data;
+    size_t data_size;
+};
+
+
 class Channel : public ChannelImplementation, public MachineInstance {
 public:
     typedef std::set< MachineRef* > MachineList;
@@ -135,19 +147,30 @@ public:
     
     void setPort(unsigned int new_port);
     unsigned int getPort() const;
+    
+    // poll channels and return number of descriptors with activity
+    static int pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n = 0);
+    static void handleChannels();
+    void setMessageHandler(MessageHandler *handler)  { message_handler = handler; }
+    zmq::pollitem_t *getPollItems();
+    
 private:
+    void checkCommunications();
+    void setPollItemBase(zmq::pollitem_t *);
+
     std::string name;
     unsigned int port;
     const ChannelDefinition *definition_;
     std::string identifier;
     std::string version;
     MachineList shares;
-    MessagingInterface *mif;
     static std::map< std::string, Channel* > *all;
     std::set<MachineInstance*> machines;
+    SubscriptionManager *communications_manager;
+    zmq::pollitem_t *poll_items;
+    MessageHandler *message_handler;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);
-
 
 #endif
