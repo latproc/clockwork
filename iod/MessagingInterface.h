@@ -101,6 +101,20 @@ protected:
     const char *socket_name;
 };
 
+class CommunicationPoll {
+public:
+    CommunicationPoll *instance() {
+        if (!instance_) instance_ = new CommunicationPoll; return instance_;
+    }
+    
+    
+private:
+    CommunicationPoll *instance_;
+    CommunicationPoll();
+    CommunicationPoll(const CommunicationPoll &);
+    CommunicationPoll &operator=(const CommunicationPoll &);
+};
+
 class SingleConnectionMonitor : public SocketMonitor {
 public:
     SingleConnectionMonitor(zmq::socket_t &s, const char *snam);
@@ -131,16 +145,18 @@ public:
     
     void setProperty(std::string machine, std::string prop, Value val);
     void setState(std::string machine, std::string new_state);
+    virtual int numSocks() =0;
 protected:
     std::map<std::string, MachineShadow *> machines;
 };
 
 class SubscriptionManager : public ConnectionManager {
 public:
-    enum Status{e_waiting_cmd, e_waiting_response, e_startup, e_disconnected, e_waiting_connect,
+    enum RunStatus { e_waiting_cmd, e_waiting_response };
+    enum Status{e_startup, e_disconnected, e_waiting_connect,
         e_settingup_subscriber, e_waiting_subscriber, e_done };
     
-    SubscriptionManager(const char *chname);
+    SubscriptionManager(const char *chname, const char *remote_host = "localhost", int remote_port = 5555);
     
     void init();
     
@@ -150,18 +166,25 @@ public:
     
     bool checkConnections();
     
+    void usePublisher();
+    
     bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd);
+    virtual int numSocks() { return 2; }
+    int configurePoll(zmq::pollitem_t *);
 
+    zmq::socket_t *publisher;
     zmq::socket_t subscriber;
     zmq::socket_t setup;
-    SingleConnectionMonitor monit_subs;
-    SingleConnectionMonitor monit_setup;
     Status setup_status;
-    Status run_status;
+    RunStatus run_status;
     int subscriber_port;
     std::string current_channel;
     std::string subscriber_host;
     std::string channel_name;
+private:
+    SingleConnectionMonitor monit_subs;
+    SingleConnectionMonitor *monit_pubs;
+    SingleConnectionMonitor monit_setup;
 };
 
 class CommandManager : public ConnectionManager {
@@ -172,6 +195,7 @@ public:
     bool setupConnections();
     bool checkConnections();
     bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd);
+    virtual int numSocks() { return 1; }
     
     std::string host_name;
     zmq::socket_t setup;

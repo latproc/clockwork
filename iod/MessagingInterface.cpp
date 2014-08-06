@@ -36,6 +36,7 @@
 #include "MessageLog.h"
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
+#include "Channel.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
@@ -104,7 +105,7 @@ void MessagingInterface::setContext(zmq::context_t *ctx) {
     zmq_context = ctx;
     assert(zmq_context);
 }
-
+/*
 MessagingInterface *MessagingInterface::getCurrent() {
     if (MessagingInterface::current == 0) {
         MessagingInterface::current = new MessagingInterface(1, publisher_port());
@@ -112,6 +113,7 @@ MessagingInterface *MessagingInterface::getCurrent() {
     }
     return MessagingInterface::current;
 }
+ */
 
 MessagingInterface *MessagingInterface::create(std::string host, int port, Protocol proto) {
     std::stringstream ss;
@@ -435,12 +437,15 @@ void ConnectionManager::setState(std::string machine_name, std::string new_state
     machine->setState(new_state);
 }
 
-SubscriptionManager::SubscriptionManager(const char *chname) :
+SubscriptionManager::SubscriptionManager(const char *chname, const char *remote_host, int remote_port) :
+        publisher(0),
         subscriber(*MessagingInterface::getContext(), ZMQ_SUB),
         setup(*MessagingInterface::getContext(), ZMQ_REQ),
+        subscriber_host(remote_host), channel_name(chname),
+        subscriber_port(remote_port),
         monit_subs(subscriber, "inproc://monitor.subs"),
-        monit_setup(setup, "inproc://monitor.setup"),
-        subscriber_host("localhost"), channel_name(chname) {
+        monit_pubs(0),
+        monit_setup(setup, "inproc://monitor.setup") {
     init();
 }
 
@@ -458,7 +463,23 @@ void SubscriptionManager::init() {
     run_status = e_waiting_cmd;
     setup_status = e_startup;
 }
-    
+/*
+void SubscriptionManager::usePublisher() {
+    publisher = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
+    monit_pubs = new SingleConnectionMonitor(*publisher, "inproc://monitor.pubs");
+    int port = Channel::uniquePort();
+    char url[100];
+    snprintf(url, 100, "tcp:// *:%d/", port);
+    publisher->bind(url);
+}
+ */
+
+int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
+    items[0] = { setup, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 };
+    items[1] = { subscriber, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 };
+    return 2;
+}
+
 bool SubscriptionManager::requestChannel() {
     size_t len = 0;
     if (setup_status == SubscriptionManager::e_disconnected) {
@@ -506,7 +527,7 @@ bool SubscriptionManager::requestChannel() {
 bool SubscriptionManager::setupConnections() {
     std::stringstream ss;
     if (setup_status == SubscriptionManager::e_startup) {
-        ss << "tcp://" << subscriber_host << ":5555"; // TBD no fixed port
+        ss << "tcp://" << subscriber_host << ":" << subscriber_port; 
         setup.connect(ss.str().c_str());
         monit_setup.setEndPoint(ss.str().c_str());
         setup_status = SubscriptionManager::e_disconnected;
@@ -545,23 +566,13 @@ bool SubscriptionManager::checkConnections() {
 }
     
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
+    if (!checkConnections()) return false;
     int rc = 0;
-    if (monit_setup.disconnected() && monit_subs.disconnected()) {
-        setup_status = e_startup;
-        setupConnections();
-        usleep(50000);
-        return false;
-    }
-    if (setup_status == e_disconnected || ( monit_setup.disconnected() && monit_subs.disconnected() ) ) {
-        // clockwork has disconnected
-        setupConnections();
-        usleep(50000);
-        return false;
-    }
     if (monit_subs.disconnected() || monit_setup.disconnected())
         rc = zmq::poll( &items[num_items-3], num_items-2, 500);
     else
         rc = zmq::poll(&items[0], num_items, 500);
+    if (!rc) return true;
     
     char buf[1000];
     size_t msglen = 0;
