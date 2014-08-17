@@ -12,6 +12,11 @@
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
 
+State ChannelImplementation::DISCONNECTED("DISCONNECTED");
+State ChannelImplementation::CONNECTING("CONNECTING");
+State ChannelImplementation::CONNECTED("CONNECTED");
+
+
 MachineRef::MachineRef() : refs(1) {
 }
 
@@ -20,7 +25,7 @@ ChannelImplementation::~ChannelImplementation() { }
 
 Channel::Channel(const std::string ch_name, const std::string type)
         : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),
-            name(ch_name), port(0), communications_manager(0)
+            name(ch_name), port(0), mif(0), communications_manager(0)
 {
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
@@ -76,6 +81,7 @@ int Channel::uniquePort() {
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            std::cout << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
@@ -99,9 +105,31 @@ ChannelDefinition *ChannelDefinition::find(const char *name) {
     return (*found).second;
 }
 
-Channel *ChannelDefinition::instantiate(unsigned int port) const {
+Channel *ChannelDefinition::instantiate(unsigned int port) {
     Channel *chn = Channel::create(port, this);
     return chn;
+}
+
+void Channel::startPublisher() {
+    assert(!mif);
+    mif = MessagingInterface::create("*", port);
+}
+
+void Channel::startSubscriber() {
+    assert(!communications_manager);
+    
+    Value host = getValue("host");
+    Value port_val = getValue("port");
+    if (host == SymbolTable::Null)
+        host = "localhost";
+    long port = 0;
+    if (!port_val.asInteger(port)) port = 5555;
+    //char buf[150];
+    ////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
+    std::cout << " channel " << _name << " " << port << "\n";
+    communications_manager = new SubscriptionManager(definition()->name.c_str(),
+                              host.asString().c_str(), (int)port);
+
 }
 
 void ChannelDefinition::instantiateInterfaces() {
@@ -140,12 +168,15 @@ void ChannelDefinition::instantiateInterfaces() {
     Channel::setupAllShadows();
 }
 
-Channel *Channel::create(unsigned int port, const ChannelDefinition *defn) {
+Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
+    assert(defn);
     char channel_name[100];
     snprintf(channel_name, 100, "%s:%d", defn->name.c_str(), port);
     Channel *chn = new Channel(channel_name, defn->name);
+
     chn->setPort(port);
     chn->setDefinition(defn);
+    chn->setStateMachine(defn);
     chn->modified();
     chn->setupShadows();
     chn->setupFilters();
@@ -373,6 +404,11 @@ bool Channel::doesUpdate() {
     return definition()->updates_names.empty();
 }
 
+bool Channel::doesMonitor() {
+    return ! (definition()->monitors_names.empty() && definition()->monitors_patterns.empty() && definition()->monitors_properties.empty()
+              && monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty()) ;
+}
+
 bool Channel::filtersAllow(MachineInstance *machine) {
     if (!matches(machine, name)) return false;
     
@@ -534,18 +570,7 @@ void Channel::setupShadows() {
         }
     }
     
-    Value host = getValue("host");
-    Value port_val = getValue("port");
-    if (host == SymbolTable::Null)
-        host = "localhost";
-    long port = 0;
-    if (!port_val.asInteger(port)) port = 5555;
-    //char buf[150];
-    //snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
     
-    communications_manager
-        = new SubscriptionManager(definition()->name.c_str(),
-                                  host.asString().c_str(), (int)port);
     //- TBD should this only subscribe if channel monitors a machine?
 }
 
@@ -570,9 +595,13 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
     while (iter != all->end()) {
         const std::pair<std::string, Channel *> &item = *iter++;
         Channel *chn = item.second;
-        if (chn->communications_manager && n >= count + chn->communications_manager->numSocks()) {
-            count += chn->communications_manager->configurePoll(curr);
-            chn->setPollItemBase(curr);
+        if (chn->communications_manager) {
+            chn->communications_manager->checkConnections();
+            if (chn->communications_manager && n >= count + chn->communications_manager->numSocks()) {
+                count += chn->communications_manager->configurePoll(curr);
+                chn->setPollItemBase(curr);
+                curr += count;
+            }
         }
     }
     int rc = 0;
@@ -589,6 +618,7 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
             snprintf(buf, 150, "Channel error: %s", zmq_strerror(errno));
             MessageLog::instance()->add(buf);
             std::cerr << buf << "\n";
+            break;
         }
     }
     if (rc>0) std::cout << rc << " channels with activity\n";
@@ -610,7 +640,21 @@ void Channel::setPollItemBase(zmq::pollitem_t *base) {
 }
 
 void Channel::checkCommunications() {
-    if (!communications_manager->checkConnections()) return;
+    Value *state = current_state.getNameValue();
+    bool ok = communications_manager->checkConnections();
+    if (!ok) {
+        if (communications_manager->monit_setup.disconnected() && state->token_id != ChannelImplementation::DISCONNECTED.getId())
+            setState(ChannelImplementation::DISCONNECTED);
+        else if (!communications_manager->monit_setup.disconnected()) {
+            if (communications_manager->setup_status == SubscriptionManager::e_waiting_connect && state->token_id != ChannelImplementation::CONNECTING.getId()) {
+                setState(ChannelImplementation::CONNECTING);
+            }
+        }
+        return;
+    }
+    if ( state->token_id != ChannelImplementation::CONNECTED.getId())
+        setState(ChannelImplementation::CONNECTED);
+    
     if ( !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
         if (message_handler->receiveMessage(communications_manager->subscriber))
             std::cout << "Channel got message: " << message_handler->data << "\n";

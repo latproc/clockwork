@@ -34,7 +34,7 @@
 
 enum Protocol { eCLOCKWORK, eRAW, eZMQ };
 
-bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len);
+bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout = 0);
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response);
 
 
@@ -181,7 +181,6 @@ public:
     std::string current_channel;
     std::string subscriber_host;
     std::string channel_name;
-private:
     SingleConnectionMonitor monit_subs;
     SingleConnectionMonitor *monit_pubs;
     SingleConnectionMonitor monit_setup;

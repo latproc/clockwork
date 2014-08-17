@@ -442,44 +442,6 @@ closePort:
     return -1;
 }
 
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
-    while (1) {
-        try {
-            std::cerr << "sent " << msg << "\n";
-            size_t len = sock.send(msg, strlen(msg));
-            if (!len) continue;
-            break;
-        }
-        catch (zmq::error_t e) {
-            if (errno == EINTR) continue;
-            std::cerr << "sendMessage: " << zmq_strerror(errno) << "\n";
-            return false;
-        }
-    }
-    char buf[200];
-    size_t len = 0;
-    while (len == 0) {
-        try {
-            len = sock.recv(buf, 200);
-            if (!len) continue;
-            if (len==200) len--; //unlikely event that the response is large
-            buf[len] = 0;
-            std::cerr << "received: " << buf << "\n";
-            response = buf;
-            break;
-        }
-        catch(zmq::error_t e)  {
-            if (errno == EINTR) continue;
-            char err[300];
-            snprintf(err, 200, "error: %s\n", zmq_strerror(errno));
-            std::cerr << err;
-            abort();
-            break;
-        }
-    }
-    return true;
-}
-
 
 /** The MatchFunction provides a regular expression interface so that data incoming on the
     device connection can be filtered. Only matched data is passed back to iod/clockwork

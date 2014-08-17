@@ -7,6 +7,7 @@
 #include <set>
 #include "regular_expressions.h"
 #include "value.h"
+#include "symboltable.h"
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
 class Channel;
@@ -36,7 +37,7 @@ std::ostream &operator<<(std::ostream &out, const MachineRef &m);
 
 class ChannelImplementation {
 public:
-    ChannelImplementation() {}
+    ChannelImplementation() : state(DISCONNECTED) {}
     virtual ~ChannelImplementation();
     void addMonitor(const char *);
     void addMonitorPattern(const char *);
@@ -48,7 +49,12 @@ public:
     void modified();
     void checked();
     
+    static State DISCONNECTED;
+    static State CONNECTING;
+    static State CONNECTED;
+    
 protected:
+    State state;
     std::set<std::string> monitors_patterns;
     std::set<std::string> monitors_names;
     std::map<std::string, Value> monitors_properties;
@@ -63,7 +69,7 @@ private:
 class ChannelDefinition : public ChannelImplementation, public MachineClass {
 public:
     ChannelDefinition(const char *name, ChannelDefinition *parent = 0);
-    Channel *instantiate(unsigned int port) const;
+    Channel *instantiate(unsigned int port);
     static void instantiateInterfaces();
     static ChannelDefinition *find(const char *name);
     static ChannelDefinition *fromJSON(const char *json);
@@ -128,7 +134,7 @@ public:
     const std::string &getName() const { return name; }
     
     static std::map< std::string, Channel* > *channels() { return all; }
-    static Channel *create(unsigned int port, const ChannelDefinition *defn);
+    static Channel *create(unsigned int port, ChannelDefinition *defn);
     static Channel *find(const std::string name);
     static void remove(const std::string name);
     static int uniquePort();
@@ -140,6 +146,8 @@ public:
     void setupShadows();
     void enableShadows();
     void disableShadows();
+    void startPublisher();
+    void startSubscriber();
     
     bool matches(MachineInstance *machine, const std::string &name);
     bool patternMatches(const std::string &machine_name);
@@ -164,6 +172,7 @@ private:
     std::string identifier;
     std::string version;
     MachineList shares;
+    MessagingInterface *mif;
     static std::map< std::string, Channel* > *all;
     std::set<MachineInstance*> machines;
     SubscriptionManager *communications_manager;

@@ -37,7 +37,7 @@ BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 DLLFLAGS = -fPIC #-rdynamic
 CSTD = -std=c++11
 CFLAGS = $(SIMULATED) -g -pedantic -Wall $(DLLFLAGS) $(CSTD) \
-	-Wno-unknown-warning-option -Wno-unused-but-set-variable \
+	-Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-deprecated-register \
 	-Wno-c++11-extensions -Wno-unused-variable -Wno-variadic-macros -Wno-c++11-long-long $(EXTRAINCS)
 CC = g++ $(CFLAGS)
 LDFLAGS = $(EXTRALIBS)

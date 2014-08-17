@@ -265,8 +265,17 @@ chn_definition_header:
 SYMBOL CHANNEL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
     current_channelclass = new ChannelDefinition($1);
+    
+	current_channelclass->states.push_back("DISCONNECTED");
+	current_channelclass->states.push_back("CONNECTED");
+	current_channelclass->states.push_back("CONNECTING");
+	current_channelclass->default_state = State("DISCONNECTED");
+	current_channelclass->initial_state = State("DISCONNECTED");
+	current_channelclass->disableAutomaticStateChanges();
+
     channel_definitions.push_back( current_channelclass );
     current_name_list.clear();
+    current_machine_list.clear();
 }
 /*| SYMBOL CHANNEL property_block {
     DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
@@ -281,6 +290,7 @@ SYMBOL CHANNEL {
     current_channelclass = new ChannelDefinition($1);
     channel_definitions.push_back( current_channelclass );
     current_name_list.clear();
+    current_machine_list.clear();
 }
 /*| SYMBOL CHANNEL property_block EXTENDS SYMBOL {
     DBG_PARSER << " channel definition with parameters "  << $1 << "\n";

@@ -150,6 +150,29 @@ if (isset($_REQUEST["messages"])) {
 	echo $reply;
 	return;
 }
+else if (isset($_REQUEST['update'])) {
+	$machine = $_REQUEST['machine'];
+	$property = $_REQUEST['property'];
+	$new_value = $_REQUEST['val'];
+	try {
+		$new_value = intval($new_value);
+	}
+	catch (Exception $ex) {
+		$new_value = '"' . $_REQUEST['val'] . '"';
+	}
+	try {
+	$reply = zmqrequest($requester, 'PROPERTY '. $machine .' '. $property . ' ' . $new_value);
+	if (!$reply)
+		echo '<p>No response received</p>';
+	else
+		echo '<pre>' . $reply . '</pre>';
+	return;
+	}
+	catch(Exception $ex) {
+		echo '<pre>' . $ex.getMessage() . '</pre>';
+		return;
+	}
+}
 if (isset($_REQUEST["quit"])) {
 	$reply = zmqrequest($requester,'QUIT');
 	$debug_messages = $reply;
