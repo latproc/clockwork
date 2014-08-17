@@ -170,6 +170,7 @@ public:
     static std::map<std::string, MachineClass> machine_classes;
     void defaultState(State state);
 	bool isStableState(State &state);
+    State *findState(const char *name);
     virtual ~MachineClass() { all_machine_classes.remove(this); }
 	void disableAutomaticStateChanges() { allow_auto_states = false; }
 	void enableAutomaticStateChanges() { allow_auto_states = true; }
@@ -273,6 +274,7 @@ public:
     bool stateExists(State &s);
     bool hasState(const std::string &state_name) const;
     Value *lookupState(const std::string &state_name);
+    Value *lookupState(const Value &) const;
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
     void setStableState();
@@ -342,7 +344,8 @@ public:
 	
 	void enable();
 	void resume();
-	void resume(const std::string &state_name);
+	void resume(State &state);
+    void resumeAll(); // resume all disable sub-machines
 	void disable();
 	inline bool enabled() const { return is_enabled; }
 	void clearAllActions();
@@ -409,7 +412,8 @@ protected:
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
-	Action::Status setState(State new_state, bool reexecute = false);
+	Action::Status setState(State &new_state, bool reexecute = false);
+    Action::Status setState(const char *new_state);
 	bool is_enabled;
 	Value state_timer;
 	MachineInstance *locked;
@@ -456,6 +460,7 @@ protected:
     friend class PopListBackValue;
     friend class PopListFrontValue;
     friend class ItemAtPosValue;
+    friend void fixListState(MachineInstance &list);
 
 	friend int changeState(void *s, const char *new_state);
 };
