@@ -197,6 +197,23 @@ does adding dynamic machine instantiation break anything?
 \end_layout
 
 \begin_layout Itemize
+channels that are created by instantiating a configured machine setup a
+ subscription for the remote machine(s)
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+channels that are instantiated to satisfy a request do not setup a subscription
+ unless the channel has an UPDATES statement
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+a channel that is instantiated in a clockwork program only subscribes to
+ changes if the channel includes a monitors statement.
+\end_layout
+
+\begin_layout Itemize
 each channel has a set of machines for incoming messages and outgoing messages
 \end_layout
 
@@ -260,6 +277,11 @@ the shell channel should be a machine; dynamic actions would enable scripting
 \begin_layout Itemize
 should channels be started when they are found as the program loads or at
  the 'startup' point?
+\end_layout
+
+\begin_layout Itemize
+interfaces must be known to the server at the time of instantiation of the
+ channel
 \end_layout
 
 \begin_layout Section
