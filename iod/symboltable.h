@@ -34,6 +34,10 @@ typedef std::pair<std::string, Value> SymbolTableNode;
 typedef std::map<std::string, Value>::iterator SymbolTableIterator;
 typedef std::map<std::string, Value>::const_iterator SymbolTableConstIterator;
 
+typedef std::pair<int, Value> TokenTableNode;
+typedef std::map<int, Value>::iterator TokenTableIterator;
+typedef std::map<int, Value>::const_iterator TokenTableConstIterator;
+
 class Tokeniser {
 public:
     static Tokeniser* instance();
@@ -64,6 +68,8 @@ public:
     static int tokVALUE;
     static int tokMessage;
     static int TRACEABLE;
+    static int on;
+    static int off;
 };
 
 class SymbolTable {
@@ -74,9 +80,11 @@ public:
     bool add(const char *name, Value val, ReplaceMode replace_mode = ST_REPLACE);
     bool add(const std::string name, Value val, ReplaceMode replace_mode = ST_REPLACE);
     void add(const SymbolTable &orig, ReplaceMode replace_mode = ST_REPLACE); // load symbols optionally with replacement
+    Value &lookup(Value &name);
     Value &lookup(const char *name);
 	size_t count(const char *name) { return st.count(name); }
     bool exists(const char *name);
+    bool exists(int token_id);
     void clear();
     
     SymbolTableConstIterator begin() const {return st.begin(); }
@@ -100,6 +108,7 @@ public:
 	static Value Zero;
 private:
     std::map<std::string, Value>st;
+    std::map<int, Value>stok;
     static SymbolTable *keywords;
     static std::set<std::string> *reserved;
     static bool initialised;
