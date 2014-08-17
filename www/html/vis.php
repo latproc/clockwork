@@ -13,7 +13,7 @@ function zmqrequest($client, $request) {
 		$result = $client->recv();
 		return $result;
 	}
-	return '[{name:"error"}]';
+	return 'Error talking to clockwork';
 }
 
 

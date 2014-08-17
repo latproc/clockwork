@@ -82,12 +82,14 @@ function editOff() {
 						if (typeof canvas == 'undefined') initfabric()
 						if (typeof items == 'undefined') items = []
 						for (var i = 0; i < res.length; i++) {
+							var label = res[i].name
+							if ('label' in res[i]) label = res[i].label
 							// save or update the item
-							if (res[i].name in items) {
-								items[res[i].name].info = items[i]
+							if (label in items) {
+								items[label].info = items[i]
 							}
 							else {
-								var wid = (res[i].name.length)*20;
+								var wid = (label.length)*20;
 								var obj = null
 								var shape = 'rectangle'
 								if ('shape' in res[i]) shape = res[i].shape;
@@ -103,14 +105,14 @@ function editOff() {
 									  radius: wid/2, fill: 'blue', originX: 'center', originY: 'center'
 									});
 								
-								var text = new fabric.Text(res[i].name, { originX: 'center', originY: 'center', fontSize: 24 });
+								var text = new fabric.Text(label, { originX: 'center', originY: 'center', fontSize: 24 });
 								var grp = new fabric.Group([obj, text],{ left: 100, top: 100 })
 								grp.selectable = canvas.selection
 								canvas.add(grp);
-								items[res[i].name] = {info:res[i],gr:grp}
+								items[label] = {info:res[i],gr:grp}
 							}
 							if ('colour' in res[i]) {
-								items[res[i].name].gr.item(0).set('fill', res[i].colour)
+								items[label].gr.item(0).set('fill', res[i].colour)
 							}
 						}
 						canvas.renderAll()
@@ -134,6 +136,21 @@ function editOff() {
 				canvas.clear().renderAll()
 				canvas.loadFromJSON(res)
 				editOff();
+				if (typeof items == 'undefined') items = []
+				var objs = canvas.getObjects()
+				for (i=0; i<objs.length; i++) {
+					if (objs[i].type == 'group') {
+						var grp = objs[i]
+						if (grp.item(1).type == 'text') {
+							var lbl = grp.item(1).text
+							if (lbl in items)
+								items[lbl].gr = grp
+							else
+								items[lbl] = {item:null, gr:grp}
+						}
+					}
+				}
+				canvas.renderAll()
 			}
 		)				
 	}
