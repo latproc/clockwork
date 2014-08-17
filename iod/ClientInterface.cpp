@@ -127,7 +127,9 @@ void IODCommandThread::operator()() {
             }
             if (status == e_holding_access) {
                 if ((*command)(params)) {
-                    sendMessage(cti->socket, command->result());
+                    const char * cmdres = command->result();
+                    //std::cout << " command generated response: " << cmdres << "\n";
+                    sendMessage(cti->socket, cmdres);
                 }
                 else {
                     NB_MSG << command->error() << "\n";
@@ -160,7 +162,7 @@ void IODCommandThread::operator()() {
                 char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
                 memcpy(data, request.data(), size);
                 data[size] = 0;
-std::cout << data << "\n";
+//std::cout << data << "\n";
             
                 std::list<Value> parts;
                 size_t count = 0;
