@@ -26,8 +26,8 @@ function objMouseUp(options) {
 function initfabric() {
 	canvas = new fabric.Canvas('canvas');
 	canvas.selection = false;
-	canvas.setHeight($(".visualisation").height());
-	canvas.setWidth($(".visualisation").width());
+	canvas.setHeight(window.innerHeight * 0.9);
+	canvas.setWidth(window.innerWidth);
 	canvas.on('mouse:down', function(options) {
 		if (options.target) {
 			objMouseDown(options)

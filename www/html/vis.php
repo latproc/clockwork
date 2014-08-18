@@ -5,13 +5,18 @@ define("DSN", "tcp://localhost:5555");
 
 function zmqrequest($client, $request) {
 	$read = $write = array();
-	$client->send($request);
-	$poll = new ZMQPoll();
-	$poll->add($client, ZMQ::POLL_IN);
-	$events = $poll->poll($read, $write, REQUEST_TIMEOUT);
-	if ($events > 0) {
-		$result = $client->recv();
-		return $result;
+	try {
+		$client->send($request);
+		$poll = new ZMQPoll();
+		$poll->add($client, ZMQ::POLL_IN);
+		$events = $poll->poll($read, $write, REQUEST_TIMEOUT);
+		if ($events > 0) {
+			$result = $client->recv(ZMQ::MODE_NOBLOCK);
+			return $result;
+		}
+	}
+	catch(Exception $e) {
+		return 'Error talking to clockwork: ' . e.getMessage();
 	}
 	return 'Error talking to clockwork';
 }

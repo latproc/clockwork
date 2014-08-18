@@ -7,9 +7,9 @@
 		<script type="text/javascript" src="js/fabric.js"></script>
 		<link type="text/css" href="js/jquery-ui-1.10.3.custom/css/smoothness/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" />
 		<style>
-		body { font-family: Helvetica, Arial, sans-serif; background-color:#ccc }
-		.visualisation { height:400; width:800; background-color:#88a040}
-		#canvas {  background-color: blue }
+		body { font-family: Helvetica, Arial, sans-serif; background-color:#e8e8e8 }
+		.visualisation { height:80%; width:100%; background-color:#d0d0d0}
+		#canvas {   }
 		table { width:100% }
 		.error_message { font-size:24px; color:#f44; }
 		.center { text-align:center; }
