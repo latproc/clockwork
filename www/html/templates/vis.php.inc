@@ -26,6 +26,7 @@
 <button id="update_btn">Regenerate</button>
 <button id="save_btn">Save</button>
 <button id="load_btn">Load</button>
+<button id="delete_btn">Delete</button>
 <span id="editmode_btn">Edit</button>
 </form>
 </div>

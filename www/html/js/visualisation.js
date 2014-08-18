@@ -203,6 +203,12 @@ $(function() {
 		if (canvas.selection) $(this).addClass('selected'); else $(this).removeClass('selected');
 		return false
 	})
+	$("#delete_btn").click(function(e) {
+		e.preventDefault();
+		if (canvas.getActiveObject() && canvas.getActiveObject().get('type') == 'group')
+			canvas.remove(canvas.getActiveObject())
+		return false
+	})
 	initfabric();
 	load();
 	refresh();			
