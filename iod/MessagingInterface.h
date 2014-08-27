@@ -60,6 +60,7 @@ public:
     //Receiver interface
     virtual bool receives(const Message&, Transmitter *t);
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false );
+    zmq::socket_t *getSocket() { return socket; }
     
 private:
     static zmq::context_t *zmq_context;

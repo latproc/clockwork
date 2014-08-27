@@ -365,6 +365,10 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
                 sendMessage(cmd, chn->communications_manager->setup,response);
                 std::cout << "channel " << name << " got response: " << response << "\n";
             }
+            else if (chn->mif) {
+                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+                chn->mif->send(cmd);
+            }
             else {
                 std::cout << "channel " << name << " wants to send property change\n";
             }
@@ -447,9 +451,13 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
             if (chn->communications_manager
                 && chn->communications_manager->setup_status == SubscriptionManager::e_done ) {
                 std::string response;
-                char *cmd = MessageEncoding::encodeCommand("STATE", name, new_state); // send command
+                char *cmd = MessageEncoding::encodeState(name, new_state); // send command
                 sendMessage(cmd, chn->communications_manager->setup,response);
                 std::cout << "channel " << name << " got response: " << response << "\n";
+            }
+            else if (chn->mif) {
+                char *cmd = MessageEncoding::encodeState(name, new_state); // send command
+                chn->mif->send(cmd);
             }
             else {
                 char buf[150];
@@ -682,6 +690,7 @@ void Channel::setupFilters() {
             while (machines != MachineInstance::end()) {
                 MachineInstance *machine = *machines++;
                 if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                    const char *n = machine->getName().c_str();
                     machine->publish();
                     this->machines.insert(machine);
                 }

@@ -109,6 +109,18 @@ char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value 
     return encodeCommand(cmd, &params);
 }
 
+char *MessageEncoding::encodeState(const std::string &machine, const std::string &state) {
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "command", "STATE");
+    cJSON *cjParams = cJSON_CreateArray();
+    cJSON_AddItemToArray(cjParams, cJSON_CreateString(machine.c_str()));
+    cJSON_AddItemToArray(cjParams, cJSON_CreateString(state.c_str()));
+    cJSON_AddItemToObject(msg, "params", cjParams);
+    char *res = cJSON_PrintUnformatted(msg);
+    cJSON_Delete(msg);
+    return res;
+}
+
 char *MessageEncoding::encodeError(const char *error) {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "error", error);
