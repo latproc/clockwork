@@ -186,6 +186,10 @@ interface definitions
 
 \end_deeper
 \begin_layout Itemize
+creates shadow machines for machines that are updated externally
+\end_layout
+
+\begin_layout Itemize
 establishes connections as described in the interface definitions
 \end_layout
 
