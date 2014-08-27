@@ -27,6 +27,8 @@
 #include <string.h>
 #include "Logger.h"
 #include <inttypes.h>
+#include <time.h>
+#include <sys/time.h>
 
 namespace po = boost::program_options;
 
@@ -97,7 +99,10 @@ int main(int argc, const char * argv[])
 	            }
 	            else std::cout << data << "\n";
 #endif
-				std::cout << data << "\n";
+				time_t now = time(0);
+				struct tm now_tm;
+				localtime_r(&now, &now_tm);
+				std::cout << asctime(&now_tm) << " "  << data << "\n";
 				free(data);
 	        }
 	    }

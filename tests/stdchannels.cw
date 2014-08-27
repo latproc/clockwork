@@ -14,3 +14,9 @@ PERSISTENCE_CHANNEL CHANNEL {
 	MONITORS PERSISTENT == "true";
 }
 
+# The standard modbus channel
+MODBUS_CHANNEL CHANNEL {
+    OPTION HOST "localhost";
+    MONITORS MACHINES WITH PROPERTY export;
+}
+

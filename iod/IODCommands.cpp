@@ -97,7 +97,23 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 				   mi->active_actions.push_front(ssat.factory(mi)); // execute this state change once all other actions are complete
                 }
                 else {
-                    mi->setState(params[3].asString().c_str());
+                    ;
+                    if (!mi->getStateMachine()) {
+                        char buf[150];
+                        snprintf(buf, 150, "Error: machine %s has no state machine", mi->getName().c_str());
+                        MessageLog::instance()->add(buf);
+                        error_str = buf;
+                        return false;
+                    }
+                    State *s = mi->getStateMachine()->findState(params[3].asString().c_str());
+                    if (!s) {
+                        char buf[150];
+                        snprintf(buf, 150, "Error: machine %s has no state called '%s'", mi->getName().c_str(), params[3].asString().c_str());
+                        MessageLog::instance()->add(buf);
+                        error_str = buf;
+                        return false;
+                    }
+                    mi->setState(*s);
                 }
                 return true;
             }
@@ -222,21 +238,25 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 				}
 		  	 	if (m->_type != "POINT") {
 				     Message *msg;
-                    if (m->getCurrent().getName() == "on") {
+                    if (m->getCurrent().is(ClockworkToken::on)) {
                         if (m->receives(Message("turnOff"), 0)) {
                             msg = new Message("turnOff");
                             m->send(msg, m);
                         }
-                        else
-                            m->setState("off");
+                        else {
+                            State *s = m->getStateMachine()->findState("off");
+                            if (s) m->setState(*s);
+                        }
                     }
-                    else if (m->getCurrent().getName() == "off") {
+                    else if (m->getCurrent().is(ClockworkToken::off) ) {
                         if (m->receives(Message("turnOn"), 0)) {
                             msg = new Message("turnOn");
                             m->send(msg, m);
                         }
-                        else
-                            m->setState("on");
+                        else{
+                            State *s = m->getStateMachine()->findState("on");
+                            if (s) m->setState(*s);
+                        }
                     }
                     result_str = "OK";
                     return true;
@@ -985,6 +1005,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                 while (true) {
                     try {
                         chn = defn->instantiate(port);
+                        chn->startPublisher();
                         break;
                     }
                     catch (zmq::error_t err) {
@@ -1398,6 +1419,15 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
     size_t len = strlen(msg);
     zmq::message_t reply (len);
     memcpy ((void *) reply.data (), msg, len);
-    socket.send (reply);
+    while (true) {
+        try {
+            socket.send (reply);
+            //std::cout << "sent: " << message << "\n";
+            break;
+        } catch (zmq::error_t e) {
+            if (errno == EAGAIN) continue;
+            std::cerr << "Error: " << errno << " " << zmq_strerror(errno) << "\n";
+        }
+    }
 }
 

@@ -56,6 +56,8 @@ int ClockworkToken::SYSTEMSETTINGS;
 int ClockworkToken::tokVALUE;
 int ClockworkToken::tokMessage;
 int ClockworkToken::TRACEABLE;
+int ClockworkToken::on;
+int ClockworkToken::off;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -76,6 +78,8 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::SYSTEMSETTINGS = _instance->getTokenId("SYSTEMSETTINGS");
         ClockworkToken::TRACEABLE = _instance->getTokenId("TRACEABLE");
         ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
+        ClockworkToken::on = _instance->getTokenId("on");
+        ClockworkToken::off = _instance->getTokenId("off");
     }
     return _instance;
 }
@@ -126,6 +130,8 @@ SymbolTable::SymbolTable(const SymbolTable &orig) {
     SymbolTableConstIterator iter = orig.st.begin();
     while (iter != orig.st.end()) {
         st[(*iter).first] = (*iter).second;
+        int tok = Tokeniser::instance()->getTokenId((*iter).first.c_str());
+        stok[tok] = (*iter).second;
         iter++;
     }
 }
@@ -135,6 +141,8 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
     SymbolTableConstIterator iter = orig.st.begin();
     while (iter != orig.st.end()) {
         st[(*iter).first] = (*iter).second;
+        int tok = Tokeniser::instance()->getTokenId((*iter).first.c_str());
+        stok[tok] = (*iter).second;
         iter++;
     }
     return *this;
@@ -142,7 +150,7 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
 
 bool SymbolTable::isKeyword(const Value &name) {
     if (name.kind == Value::t_symbol || name.kind == Value::t_string)
-        return isKeyword(name.sValue.c_str());
+        return isKeyword(name.token_id);
     return false;
 }
 
@@ -213,12 +221,11 @@ Value &SymbolTable::getKeyValue(const char *name) {
     return Null;
 }
 
-
-
 bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         std::string s(name);
         st[s] = val;
+        stok[Tokeniser::instance()->getTokenId(name)] = val;
 		return true;
     }
     else {
@@ -230,6 +237,7 @@ bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
 bool SymbolTable::add(const std::string name, Value val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
     	st[name] = val;
+        stok[Tokeniser::instance()->getTokenId(name)] = val;
 		return true;
 	}
 	else {
@@ -247,6 +255,8 @@ void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
         const std::string &name = (*iter).first;
         if(name != "NAME" && name != "STATE") { // these reserved words cannot be replaces en mass
             st[(*iter).first] = (*iter).second;
+            int tok = Tokeniser::instance()->getTokenId(name.c_str());
+            stok[tok] = (*iter).second;
         }
         iter++;
     }
@@ -256,6 +266,10 @@ bool SymbolTable::exists(const char *name) {
     return st.find(name) != st.end();
 }
 
+bool SymbolTable::exists(int tok) {
+    return stok.find(tok) != stok.end();
+}
+
 Value &SymbolTable::lookup(const char *name) {
     if (this != keywords) {
         Value &res = keywords->lookup(name);
@@ -263,6 +277,16 @@ Value &SymbolTable::lookup(const char *name) {
     }
     SymbolTableIterator iter = st.find(name);
     if (iter != st.end()) return (*iter).second;
+    return SymbolTable::Null;
+}
+
+Value &SymbolTable::lookup(Value &name) {
+    if (this != keywords) {
+        Value &res = keywords->lookup(name);
+        if (res != SymbolTable::Null) return res;
+    }
+    TokenTableIterator iter = stok.find(name.token_id);
+    if (iter != stok.end()) return (*iter).second;
     return SymbolTable::Null;
 }
 
@@ -298,6 +322,7 @@ void Value::addItem(std::string key, Value val) {
 
 void SymbolTable::clear() {
     st.clear();
+    stok.clear();
 }
 
 std::ostream &SymbolTable::operator <<(std::ostream & out) const {

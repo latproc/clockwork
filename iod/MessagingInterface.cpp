@@ -36,6 +36,7 @@
 #include "MessageLog.h"
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
+#include "Channel.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
@@ -43,7 +44,11 @@ std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
-static bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len) {
+bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
+//    struct timeval now;
+//    gettimeofday(&now, 0);
+//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
+    
     while (true) {
         try {
             if (block) {
@@ -63,11 +68,48 @@ static bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, siz
     }
 }
 
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
+    while (1) {
+        try {
+            std::cout << "sent " << msg << "\n";
+            size_t len = sock.send(msg, strlen(msg));
+            if (!len) continue;
+            break;
+        }
+        catch (zmq::error_t e) {
+            if (errno == EINTR) continue;
+            std::cout << "sendMessage: " << zmq_strerror(errno) << "\n";
+            return false;
+        }
+    }
+    char buf[200];
+    size_t len = 0;
+    while (len == 0) {
+        try {
+            len = sock.recv(buf, 200);
+            if (!len) continue;
+            if (len==200) len--; //unlikely event that the response is large
+            buf[len] = 0;
+            std::cerr << "received: " << buf << "\n";
+            response = buf;
+            break;
+        }
+        catch(zmq::error_t e)  {
+            if (errno == EINTR) continue;
+            char err[300];
+            snprintf(err, 300, "error: %s\n", zmq_strerror(errno));
+            std::cerr << err;
+            return false;
+        }
+    }
+    return true;
+}
+
 void MessagingInterface::setContext(zmq::context_t *ctx) {
     zmq_context = ctx;
     assert(zmq_context);
 }
-
+/*
 MessagingInterface *MessagingInterface::getCurrent() {
     if (MessagingInterface::current == 0) {
         MessagingInterface::current = new MessagingInterface(1, publisher_port());
@@ -75,6 +117,7 @@ MessagingInterface *MessagingInterface::getCurrent() {
     }
     return MessagingInterface::current;
 }
+ */
 
 MessagingInterface *MessagingInterface::create(std::string host, int port, Protocol proto) {
     std::stringstream ss;
@@ -186,8 +229,7 @@ char *MessagingInterface::send(const char *txt) {
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
-    int retries=4;
-    while (--retries>0) {
+    while (true) {
         try {
             zmq::message_t msg(len);
             strncpy ((char *) msg.data(), txt, len);
@@ -206,33 +248,39 @@ char *MessagingInterface::send(const char *txt) {
         }
     }
     if (!is_publisher) {
-        try {
-            zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-            zmq::poll( &items[0], 1, 500);
-            if (items[0].revents & ZMQ_POLLIN) {
-                zmq::message_t reply;
-                if (socket->recv(&reply)) {
-                    len = reply.size();
-                    char *data = (char *)malloc(len+1);
-                    memcpy(data, reply.data(), len);
-                    data[len] = 0;
-                    std::cout << url << ": " << data << "\n";
-                    return data;
+        while (true) {
+            try {
+                zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+                zmq::poll( &items[0], 1, 500);
+                if (items[0].revents & ZMQ_POLLIN) {
+                    zmq::message_t reply;
+                    if (socket->recv(&reply)) {
+                        len = reply.size();
+                        char *data = (char *)malloc(len+1);
+                        memcpy(data, reply.data(), len);
+                        data[len] = 0;
+                        std::cout << url << ": " << data << "\n";
+                        return data;
+                    }
                 }
+                else if (items[0].revents & ZMQ_POLLERR) {
+                    std::cerr << "MessagingInterface::send: error during recv\n";
+                    continue;
+                }
+                std::cerr << "timeout: abandoning message " << txt << "\n";
+                socket->disconnect(url.c_str());
+                delete socket;
+                socket = new zmq::socket_t(*getContext(), ZMQ_REQ);
+                usleep(50000);
+                connect();
+                break;
             }
-            else if (items[0].revents & ZMQ_POLLERR) {
-                std::cerr << "MessagingInterface::send: error during recv\n";
+            catch (std::exception e) {
+                if (zmq_errno())
+                    std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+                else
+                    std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
             }
-            std::cerr << "timeout: abandoning message " << txt << "\n";
-            socket->disconnect(url.c_str());
-            usleep(50000);
-            connect();
-        }
-        catch (std::exception e) {
-            if (zmq_errno())
-                std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-            else
-                std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
         }
     }
     return 0;
@@ -361,13 +409,48 @@ void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, c
     }
 void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
 
+void MachineShadow::setProperty(const std::string prop, Value &val) {
+    properties.add(prop, val, SymbolTable::ST_REPLACE);
+}
 
-SubscriptionManager::SubscriptionManager(const char *chname) :
+Value &MachineShadow::getValue(const char *prop) {
+    return properties.lookup(prop);
+}
+
+void MachineShadow::setState(const std::string new_state) {
+    state = new_state;
+}
+
+void ConnectionManager::setProperty(std::string machine_name, std::string prop, Value val) {
+    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
+    MachineShadow *machine = 0;
+    if (found == machines.end())
+        machine = new MachineShadow;
+    else
+        machine = (*found).second;
+    machine->setProperty(prop, val);
+}
+
+void ConnectionManager::setState(std::string machine_name, std::string new_state) {
+    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
+    MachineShadow *machine = 0;
+    if (found == machines.end())
+        machine = new MachineShadow;
+    else
+        machine = (*found).second;
+    machine->setState(new_state);
+}
+
+SubscriptionManager::SubscriptionManager(const char *chname, const char *remote_host, int remote_port) :
+        publisher(0),
         subscriber(*MessagingInterface::getContext(), ZMQ_SUB),
         setup(*MessagingInterface::getContext(), ZMQ_REQ),
+        subscriber_port(remote_port),
+        subscriber_host(remote_host),
+        channel_name(chname),
         monit_subs(subscriber, "inproc://monitor.subs"),
-        monit_setup(setup, "inproc://monitor.setup"),
-        subscriber_host("localhost"), channel_name(chname) {
+        monit_pubs(0),
+        monit_setup(setup, "inproc://monitor.setup") {
     init();
 }
 
@@ -383,23 +466,44 @@ void SubscriptionManager::init() {
     boost::thread setup_monitor(boost::ref(monit_setup));
     
     run_status = e_waiting_cmd;
-    setup_status = e_startup;
+    setSetupStatus(e_startup);
 }
-    
+
+/*
+void SubscriptionManager::usePublisher() {
+    publisher = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
+    monit_pubs = new SingleConnectionMonitor(*publisher, "inproc://monitor.pubs");
+    int port = Channel::uniquePort();
+    char url[100];
+    snprintf(url, 100, "tcp:// *:%d/", port);
+    publisher->bind(url);
+}
+ */
+
+int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
+    items[0].socket = setup; items[0].events = ZMQ_POLLERR | ZMQ_POLLIN; items[0].fd = 0; items[0].revents = 0;
+    items[1].socket = subscriber; items[0].events = ZMQ_POLLERR | ZMQ_POLLIN; items[0].fd = 0; items[0].revents = 0;
+    return 2;
+}
+
 bool SubscriptionManager::requestChannel() {
     size_t len = 0;
-    if (setup_status == SubscriptionManager::e_disconnected) {
+    if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup.disconnected()) {
+        std::cout << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup.send(channel_setup, strlen(channel_setup));
         assert(len);
-        setup_status = SubscriptionManager::e_waiting_connect;
+        setSetupStatus(SubscriptionManager::e_waiting_setup);
+        return false;
     }
-    if (setup_status == SubscriptionManager::e_waiting_connect){
+    if (setupStatus() == SubscriptionManager::e_waiting_setup){
         char buf[1000];
-        if (!safeRecv(setup, buf, 1000, true, len)) return false;
+        if (!safeRecv(setup, buf, 1000, false, len)) return false;
+        if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
-        setup_status = SubscriptionManager::e_settingup_subscriber;
+        std::cout << "Got channel " << buf << "\n";
+        setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
             cJSON *chan = cJSON_Parse(buf);
@@ -419,7 +523,7 @@ bool SubscriptionManager::requestChannel() {
                 }
             }
             else {
-                setup_status = SubscriptionManager::e_disconnected;
+                setSetupStatus(SubscriptionManager::e_disconnected);
                 std::cout << " failed to parse: " << buf << "\n";
                 current_channel = "";
             }
@@ -432,11 +536,11 @@ bool SubscriptionManager::requestChannel() {
     
 bool SubscriptionManager::setupConnections() {
     std::stringstream ss;
-    if (setup_status == SubscriptionManager::e_startup) {
-        ss << "tcp://" << subscriber_host << ":5555"; // TBD no fixed port
+    if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
+        ss << "tcp://" << subscriber_host << ":" << subscriber_port;
         setup.connect(ss.str().c_str());
         monit_setup.setEndPoint(ss.str().c_str());
-        setup_status = SubscriptionManager::e_disconnected;
+        setSetupStatus(SubscriptionManager::e_waiting_connect);
         usleep(5000);
     }
     if (requestChannel()) {
@@ -447,20 +551,33 @@ bool SubscriptionManager::setupConnections() {
         DBG_MSG << "connecting to " << channel_url << "\n";
         monit_subs.setEndPoint(channel_url.c_str());
         subscriber.connect(channel_url.c_str());
-        setup_status = SubscriptionManager::e_done;
+        setSetupStatus(SubscriptionManager::e_done);
         return true;
     }
     return false;
 }
+
+void SubscriptionManager::setSetupStatus( Status new_status ) {
+    _setup_status = new_status;
+    state_start = microsecs();
+}
     
 bool SubscriptionManager::checkConnections() {
     if (monit_setup.disconnected() && monit_subs.disconnected()) {
-        setup_status = e_startup;
-        setupConnections();
+        //uint64_t now = microsecs();
+        /*if (setupStatus() == e_waiting_connect && !setup.connected()) {
+            //setup.disconnect(monit_setup.endPoint().c_str());
+            setSetupStatus(e_startup);
+        }
+        else 
+         */if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
+             setSetupStatus(e_startup);
+             setupConnections();
+         }
         usleep(50000);
         return false;
     }
-    if (setup_status == e_disconnected || ( !monit_setup.disconnected() && monit_subs.disconnected() ) ) {
+    if (setupStatus() == e_disconnected || ( !monit_setup.disconnected() && monit_subs.disconnected() ) ) {
         // clockwork has disconnected
         setupConnections();
         usleep(50000);
@@ -472,23 +589,13 @@ bool SubscriptionManager::checkConnections() {
 }
     
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
+    if (!checkConnections()) return false;
     int rc = 0;
-    if (monit_setup.disconnected() && monit_subs.disconnected()) {
-        setup_status = e_startup;
-        setupConnections();
-        usleep(50000);
-        return false;
-    }
-    if (setup_status == e_disconnected || ( monit_setup.disconnected() && monit_subs.disconnected() ) ) {
-        // clockwork has disconnected
-        setupConnections();
-        usleep(50000);
-        return false;
-    }
     if (monit_subs.disconnected() || monit_setup.disconnected())
         rc = zmq::poll( &items[num_items-3], num_items-2, 500);
     else
         rc = zmq::poll(&items[0], num_items, 500);
+    if (!rc) return true;
     
     char buf[1000];
     size_t msglen = 0;
@@ -526,7 +633,7 @@ bool CommandManager::setupConnections() {
         snprintf(url, 100, "tcp://%s:5555", host_name.c_str()); // TBD no fixed port
         setup.connect(url);
         monit_setup.setEndPoint(url);
-        setup_status = e_disconnected;
+        setup_status = e_waiting_connect;
         usleep(5000);
     }
     return false;

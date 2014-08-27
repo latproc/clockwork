@@ -170,9 +170,11 @@ public:
     static std::map<std::string, MachineClass> machine_classes;
     void defaultState(State state);
 	bool isStableState(State &state);
+    State *findState(const char *name);
     virtual ~MachineClass() { all_machine_classes.remove(this); }
 	void disableAutomaticStateChanges() { allow_auto_states = false; }
 	void enableAutomaticStateChanges() { allow_auto_states = true; }
+    static MachineClass *find(const char *name);
     State default_state;
 	State initial_state;
     std::string name;
@@ -184,6 +186,13 @@ public:
 private:
     MachineClass();
     MachineClass(const MachineClass &other);
+};
+
+class MachineInterface : public MachineClass {
+public:
+    MachineInterface(const char *class_name);
+    virtual ~MachineInterface();
+    static std::map<std::string, MachineInterface *> all_interfaces;
 };
 
 /*
@@ -214,7 +223,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     friend class MachineInstanceFactory;
 public:
     enum PollType { BUILTINS, NO_BUILTINS};
-	enum InstanceType { MACHINE_INSTANCE, MACHINE_TEMPLATE };
+	enum InstanceType { MACHINE_INSTANCE, MACHINE_TEMPLATE, MACHINE_SHADOW };
 protected:
     MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
     MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
@@ -265,6 +274,7 @@ public:
     bool stateExists(State &s);
     bool hasState(const std::string &state_name) const;
     Value *lookupState(const std::string &state_name);
+    Value *lookupState(const Value &) const;
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
     void setStableState();
@@ -334,7 +344,8 @@ public:
 	
 	void enable();
 	void resume();
-	void resume(const std::string &state_name);
+	void resume(State &state);
+    void resumeAll(); // resume all disable sub-machines
 	void disable();
 	inline bool enabled() const { return is_enabled; }
 	void clearAllActions();
@@ -401,7 +412,8 @@ protected:
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
-	Action::Status setState(State new_state, bool reexecute = false);
+	Action::Status setState(State &new_state, bool reexecute = false);
+    Action::Status setState(const char *new_state);
 	bool is_enabled;
 	Value state_timer;
 	MachineInstance *locked;
@@ -431,9 +443,11 @@ private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
     MachineInstance(const MachineInstance &other);
+protected:
     static std::list<MachineInstance*> all_machines;
     static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
     static std::list<MachineInstance*> active_machines; // machines that require idle() processing
+    static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
 
 	friend struct SetStateAction;
 	friend struct MoveStateAction;
@@ -446,11 +460,31 @@ private:
     friend class PopListBackValue;
     friend class PopListFrontValue;
     friend class ItemAtPosValue;
+    friend void fixListState(MachineInstance &list);
 
 	friend int changeState(void *s, const char *new_state);
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
+
+class MachineShadowInstance : public MachineInstance {
+protected:
+    MachineShadowInstance(InstanceType instance_type = MACHINE_INSTANCE);
+    MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+
+private:
+    MachineShadowInstance &operator=(const MachineShadowInstance &orig);
+    MachineShadowInstance(const MachineShadowInstance &other);
+    MachineShadowInstance *settings;
+
+public:
+    MachineShadowInstance();
+    ~MachineShadowInstance();
+    virtual void idle();
+    virtual bool hasWork() { return false; }
+
+    friend class MachineInstanceFactory;
+};
 
 class CounterRateFilterSettings;
 class CounterRateInstance : public MachineInstance {

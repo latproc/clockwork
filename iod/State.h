@@ -41,6 +41,8 @@ public:
     virtual bool operator==(const State &other) const;
     virtual bool operator!=(const State &other) const;
     const std::string getName() const { return text; }
+    int getId() const { return token_id; }
+    bool is(int tok) { return token_id == tok; }
     Value *getNameValue() { return &name; }
 	int getIntValue() { return val; }
 	StateFunc enter;
@@ -50,6 +52,7 @@ private:
     std::string text;
     int val;
     Value name;
+    int token_id;
 };
 
 std::ostream &operator<<(std::ostream &out, const State &m);

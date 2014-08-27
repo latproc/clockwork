@@ -21,25 +21,28 @@
 #include <string.h>
 #include <iostream>
 #include "State.h"
+#include "symboltable.h"
 
 State::State(const char *msg) :text(msg), val(0), name(msg, Value::t_string) {
-    
+    token_id = Tokeniser::instance()->getTokenId(text.c_str());
 }
 
-State::State(int v) :text("INTEGER"), val(v), name("INTEGER", Value::t_string) {
-    
-}
+//State::State(int v) :text("INTEGER"), val(v), name("INTEGER", Value::t_string) {
+//
+//}
 
 State::State(const State &orig){
     text = orig.text;
     val = orig.val;
     name = Value(orig.name);
+    token_id = Tokeniser::instance()->getTokenId(text.c_str());
 }
 
 State &State::operator=(const State &other) {
     text = other.text;
     val = other.val;
     name = other.name;
+    token_id = Tokeniser::instance()->getTokenId(text.c_str());
     return *this;
 }
 
@@ -53,9 +56,9 @@ std::ostream &operator<<(std::ostream &out, const State &m) {
 }
 
 bool State::operator==(const State &other) const {
-    return text.compare(other.text) == 0 && val == other.val;
+    return token_id == other.token_id && val == other.val;
 }
 
 bool State::operator!=(const State &other) const {
-    return text.compare(other.text) != 0 || val != other.val;
+    return token_id != other.token_id || val != other.val;
 }

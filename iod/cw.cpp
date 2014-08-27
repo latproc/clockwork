@@ -62,6 +62,7 @@
 #include "MQTTInterface.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
+#include "Channel.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -530,6 +531,13 @@ int main (int argc, char const *argv[])
                 resource_mgr.send("ok",2);
             }
         }
+        
+        zmq::pollitem_t *poll_items = 0;
+        int active_channels = Channel::pollChannels(poll_items, 20, 0);
+        if (active_channels) {
+            Channel::handleChannels();
+        }
+        
         struct timeval now;
         gettimeofday(&now,0);
         

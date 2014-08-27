@@ -46,6 +46,7 @@
 #include "PersistentStore.h"
 #include "MessageLog.h"
 #include "symboltable.h"
+#include "Channel.h"
 
 extern int yylineno;
 extern int yycharno;
@@ -915,7 +916,7 @@ void initialise_machines() {
 			}
 		}
 	}
-    else {
+    else { // enable 'contant' machines and marked as persistent
 		m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
@@ -924,7 +925,9 @@ void initialise_machines() {
             }
         }
     }
-
+    
+    // construct machines that shadow those defined in channels
+    ChannelDefinition::instantiateInterfaces();
     
     // prepare the list of machines that will be processed at idle time
     m_iter = MachineInstance::begin();

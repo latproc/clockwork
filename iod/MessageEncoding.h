@@ -33,6 +33,7 @@ struct MessageEncoding {
     static char *encodeCommand(std::string cmd, Value p1 = SymbolTable::Null,
                                Value p2 = SymbolTable::Null,
                                Value p3 = SymbolTable::Null);
+    static char *encodeState(const std::string &machine, const std::string &new_state);
     static char *encodeError(const char *error);
     static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
     static bool getState(const char *msg, std::string &cmd, std::list<Value> **params);

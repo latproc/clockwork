@@ -137,11 +137,16 @@ bool ConditionHandler::check(MachineInstance *machine) {
         MachineInstance *flag = machine->lookup(flag_name);
         if (!flag)
             std::cerr << machine->getName() << " error: flag " << flag_name << " not found\n";
-        else
-            if (condition(machine))
-                flag->setState("on");
-            else
-                flag->setState("off");
+        else {
+            if (condition(machine)) {
+                State *on = flag->state_machine->findState("on");
+                flag->setState(*on);
+            }
+            else {
+                State *off = flag->state_machine->findState("off");
+                flag->setState(*off);
+            }
+        }
     }
     else if (!triggered && ( (trigger && trigger->fired()) || !trigger) && condition(machine)) {
         triggered = true;
@@ -248,6 +253,8 @@ std::map<std::string, MachineClass*> machine_classes;
 std::list<MachineInstance*> MachineInstance::all_machines;
 std::list<MachineInstance*> MachineInstance::automatic_machines;
 std::list<MachineInstance*> MachineInstance::active_machines;
+std::list<MachineInstance*> MachineInstance::shadow_machines;
+std::map<std::string, MachineInterface *> MachineInterface::all_interfaces;
 std::map<std::string, HardwareAddress> MachineInstance::hw_names;
 
 
@@ -257,32 +264,23 @@ std::map<std::string, MachineClass> MachineClass::machine_classes;
 
 /* Factory methods */
 
-/*
-MachineInstance *MachineInstanceFactory::create(MachineInstance::InstanceType instance_type) {
-    return new MachineInstance(instance_type);
-}
-*/
-
 MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type) {
-    if (strcmp(type, "COUNTERRATE") == 0) {
+    if (instance_type == MachineInstance::MACHINE_SHADOW)
+        return new MachineShadowInstance(name, type, MachineInstance::MACHINE_INSTANCE);
+    if (strcmp(type, "COUNTERRATE") == 0)
         return new CounterRateInstance(name, type, instance_type);
-    }
-    else if (strcmp(type, "RATEESTIMATOR") == 0) {
+    else if (strcmp(type, "RATEESTIMATOR") == 0)
         return new RateEstimatorInstance(name, type, instance_type);
-    }
-    else
+    else {
+        MachineClass *cls = MachineClass::find(type);
+        ChannelDefinition *defn = dynamic_cast<ChannelDefinition*>(cls);
+        if (defn) {
+            return new Channel(name.get(), type);
+        }
         return new MachineInstance(name, type, instance_type);
+    }
 }
 
-
-/*
-std::string fullName(const MachineInstance &m) {
-	std::string name;
-	if (m.owner) name = m.owner->getName() + ".";
-	name += m.getName();
-	return name;
-}
-*/
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
     updateLastEvaluationTime();
@@ -570,6 +568,24 @@ DynamicValue *MachineTimerValue::clone() const {
     MachineTimerValue *mtv = new MachineTimerValue(*this);
     return mtv;
 }
+
+MachineShadowInstance::MachineShadowInstance(InstanceType instance_type) : MachineInstance(instance_type) {
+    shadow_machines.push_back(this);
+}
+
+MachineShadowInstance::MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type)
+    : MachineInstance(name, type, instance_type) {
+    
+}
+
+void MachineShadowInstance::idle() {
+    return;
+}
+
+MachineShadowInstance::~MachineShadowInstance() {
+    return;
+}
+
 
 class CounterRateFilterSettings {
 public:
@@ -1422,7 +1438,25 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
     return false;
 }
 
-Action::Status MachineInstance::setState(State new_state, bool reexecute) {
+Action::Status MachineInstance::setState(const char *sn) {
+    char buf[150];
+    if (!state_machine) {
+        snprintf(buf, 150, "Error: setting state to %s on a machine (%s) with no statemachine", sn, _name.c_str());
+        MessageLog::instance()->add(buf);
+        DBG_MSG << buf << "\n";
+        return Action::Failed;
+    }
+    State *s = state_machine->findState(sn);
+    if (!s) {
+        snprintf(buf, 150, "Error: setting state to unknown value: '%s' on %s", sn, _name.c_str());
+        MessageLog::instance()->add(buf);
+        DBG_MSG << buf << "\n";
+        return Action::Failed;
+    }
+    return setState(*s);
+}
+
+Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 	Action::Status stat = Action::Complete; 
 	// update the Modbus interface for self 
 	if (modbus_exported == discrete || modbus_exported == coil) {
@@ -1892,14 +1926,23 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		event_name = from->getName() + "." + m.getText();
     
         if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
+            if (!state_machine) return Action::Failed;
             //std::string state_name = m.getText();
             //if (state_name.find('_') != std::string::npos)
             //    state_name = state_name.substr(state_name.find('_'));
             if(m.getText() == "on_enter" && current_state.getName() != "on") {
-                setState("on");
+                State *on = state_machine->findState("on");
+                if (on) setState(*on);
+                else {
+                    return Action::Failed;
+                }
             }
             else if (m.getText() == "off_enter" && current_state.getName() != "off") {
-                setState("off");
+                State *off = state_machine->findState("off");
+                if (off) setState(*off);
+                else {
+                    return Action::Failed;
+                }
             }
             else if (m.getText() == "property_change" ) {
                 setValue("VALUE", io_interface->address.value);
@@ -1987,6 +2030,35 @@ bool MachineClass::isStableState(State &state) {
 		if (s.state_name == state.getName()) return true;
 	}
 	return false;
+}
+
+State *MachineClass::findState(const char *seek) {
+    std::list<State>::iterator iter = states.begin();
+    while (iter != states.end()) {
+        State &s = *iter++;
+        if (s.getName() == seek) return &s;
+    }
+    return 0;
+}
+
+MachineClass *MachineClass::find(const char *name) {
+    int token = Tokeniser::instance()->getTokenId(name);
+    std::list<MachineClass *>::iterator iter = all_machine_classes.begin();
+    while (iter != all_machine_classes.end()) {
+        MachineClass *mc = *iter++;
+        if (mc->token_id == token) return mc;
+    }
+    return 0;
+}
+
+
+MachineInterface::MachineInterface(const char *class_name) : MachineClass(class_name) {
+    assert(all_interfaces.count(class_name) == 0);
+    all_interfaces[class_name] = this;
+}
+
+MachineInterface::~MachineInterface() {
+    all_interfaces.erase(this->name);
 }
 
 
@@ -2145,20 +2217,33 @@ void MachineInstance::resume() {
 	} 
 }
 
-void MachineInstance::setInitialState() { 
+void fixListState(MachineInstance &list) {
+    State *s = 0;
+    if (list.parameters.empty())
+        s = list.getStateMachine()->findState("empty");
+    else
+        s = list.getStateMachine()->findState("nonempty");
+    assert(s);
+    list.setState(*s);
+}
+
+void MachineInstance::setInitialState() {
 	if (io_interface) {
 		io_interface->setInitialState();
 	}
 	if (state_machine) {
-		if (io_interface)
-			setState(io_interface->getStateString());
+		if (io_interface) {
+            State *s = state_machine->findState(io_interface->getStateString());
+			if (s) setState(*s);
+            else {
+                char buf[100];
+                snprintf(buf, 100,"Warning: setting initial state on %s to unknown state: %s\n", _name.c_str(), io_interface->getStateString());
+                MessageLog::instance()->add(buf);
+            }
+        }
 		else {
-			if (state_machine->token_id == ClockworkToken::LIST ) {
-				if (parameters.empty())
-					setState("empty");
-				else
-					setState("nonempty");
-			}
+			if (state_machine->token_id == ClockworkToken::LIST )
+                fixListState(*this);
 			else
 				setState(state_machine->initial_state); 
 			setNeedsCheck();
@@ -2238,26 +2323,27 @@ void MachineInstance::disable() {
 	}
 }
 
-void MachineInstance::resume(const std::string &state_name) { 
+void MachineInstance::resume(State &s) {
 	if (!is_enabled) {		
 		// fix status
 		clearAllActions();
 		is_enabled = true; 
 		error_state = 0;
-    // resume all local machines first so that setState() can
-    // execute any necessary methods on local machines
-    for (unsigned int i = 0; i<locals.size(); ++i) {
-      locals[i].machine->resume();
-    }
-		setState(state_name.c_str(), true);
-	  setNeedsCheck();
+        // resume all local machines first so that setState() can
+        // execute any necessary methods on local machines
+        for (unsigned int i = 0; i<locals.size(); ++i) {
+          locals[i].machine->resume();
+        }
+        setState(s, true);
+        setNeedsCheck();
 	}
-  else if (state_name == "ALL") {
+}
+
+void MachineInstance::resumeAll() {
     // resume all local machines that have not already been enabled
     for (unsigned int i = 0; i<locals.size(); ++i) {
-      if (!locals[i].machine->enabled())
-        locals[i].machine->resume();
-      }
+        if (!locals[i].machine->enabled())
+            locals[i].machine->resume();
     }
 }
 
@@ -2302,21 +2388,26 @@ void MachineInstance::setStableState() {
     updateLastEvaluationTime();
 
     if (io_interface) {
-	 	setState(io_interface->getStateString());
+        State *s = state_machine->findState(io_interface->getStateString());
+        assert(s);
+	 	setState(*s);
     }
     else if ( ( !state_machine && _type=="LIST") || (state_machine && state_machine->token_id == ClockworkToken::LIST) ) {
         //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
-        if (!parameters.empty())
-            setState(State("nonempty"));
-        else
-            setState(State("empty"));
+        fixListState(*this);
     }
     else if (( !state_machine && _type=="REFERENCE") || (state_machine && state_machine->token_id == ClockworkToken::REFERENCE) ) {
         //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
-        if (locals.size())
-            setState(State("ASSIGNED"));
-        else
-            setState(State("EMPTY"));
+        if (locals.size()) {
+            State *s = state_machine->findState("ASSIGNED");
+            assert(s);
+            setState(*s);
+        }
+        else{
+            State *s = state_machine->findState("EMPTY");
+            assert(s);
+            setState(*s);
+        }
     }
     else {
 		bool found_match = false;
@@ -2420,8 +2511,10 @@ void MachineInstance::setStableState() {
                         ConditionHandler&ch = *iter++;
 						if (ch.command_name == "FLAG" ) {
 							MachineInstance *flag = lookup(ch.flag_name);
-							if (flag) 
-								flag->setState("off");
+							if (flag) {
+                                State *s = flag->state_machine->findState("off");
+								flag->setState(*s);
+                            }
 							else
 								std::cerr << _name << " error: flag " << ch.flag_name << " not found\n"; 
 						}
@@ -2567,10 +2660,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
             }
             parameters[i].machine = m;
             setNeedsCheck();
-            if (parameters.size())
-                setState(State("nonempty"));
-            else
-                setState(State("empty"));
+            fixListState(*this);
         }
     }
 	// TBD check the parameter types
@@ -2678,12 +2768,13 @@ Value *MachineInstance::resolve(std::string property) {
 	else {
 	    // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
         Value *res = 0;
+        Value property_val(property); // tokenise the property
 		// variables may refer to an initialisation value passed in as a parameter.
 		if (state_machine->token_id == ClockworkToken::VARIABLE
             || state_machine->token_id == ClockworkToken::CONSTANT) {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
 				if (state_machine->parameters[i].val.kind == Value::t_symbol
-                    && property == state_machine->parameters[i].val.sValue
+                        && property == state_machine->parameters[i].val.sValue
                     ) {
 					DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
 					return &parameters[i].val;
@@ -2716,7 +2807,7 @@ Value *MachineInstance::resolve(std::string property) {
 			}
 		}
 	    DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
-		if (property == "TIMER") {
+		if (property_val.token_id == ClockworkToken::TIMER) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
@@ -2724,10 +2815,10 @@ Value *MachineInstance::resolve(std::string property) {
             DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
 			return &state_timer;
 		}
-        else if ( (res = lookupState(property)) != &SymbolTable::Null ) {
+        else if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
             return res;
         }
-		else if (SymbolTable::isKeyword(property.c_str())) {
+		else if (SymbolTable::isKeyword(property_val)) {
 			return &SymbolTable::getKeyValue(property.c_str());
 		}
 	    else {
@@ -2908,6 +2999,20 @@ Value *MachineInstance::lookupState(const std::string &state_name) {
         while (iter != state_machine->states.end()) {
             State &s = *iter++;
             if (s.getName() == state_name) {
+                return s.getNameValue();
+            }
+        }
+    }
+    return &SymbolTable::Null;
+}
+
+Value *MachineInstance::lookupState(const Value &state_name) const {
+	//is state_name a valid state?
+    if (state_machine) {
+        std::list<State>::iterator iter = state_machine->states.begin();
+        while (iter != state_machine->states.end()) {
+            State &s = *iter++;
+            if (s.getId() == state_name.token_id) {
                 return s.getNameValue();
             }
         }
@@ -3638,8 +3743,10 @@ void MachineInstance::setError(int val) {
 	if (error_state) return;
 	error_state = val; 
 	if (val) { 
-		saved_state = current_state; 
-		setState("ERROR");
+		saved_state = current_state;
+        State *err = state_machine->findState("ERROR");
+        assert(err);
+		setState(*err);
 	} 
 }
 void MachineInstance::resetError() {

@@ -1,6 +1,8 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <stdlib.h>
+#include <string.h>
 #include "Channel.h"
 #include "MessagingInterface.h"
 #include "MessageLog.h"
@@ -10,13 +12,21 @@
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
 
+State ChannelImplementation::DISCONNECTED("DISCONNECTED");
+State ChannelImplementation::CONNECTING("CONNECTING");
+State ChannelImplementation::CONNECTED("CONNECTED");
+
+
 MachineRef::MachineRef() : refs(1) {
 }
 
 ChannelImplementation::~ChannelImplementation() { }
 
 
-Channel::Channel(const std::string ch_name) : ChannelImplementation(), name(ch_name), port(0) {
+Channel::Channel(const std::string ch_name, const std::string type)
+        : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),
+            name(ch_name), port(0), mif(0), communications_manager(0)
+{
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
     }
@@ -24,14 +34,14 @@ Channel::Channel(const std::string ch_name) : ChannelImplementation(), name(ch_n
 }
 
 Channel::~Channel() {
+    disableShadows();
     std::set<MachineInstance*>::iterator iter = this->machines.begin();
     while (iter != machines.end()) {
         MachineInstance *machine = *iter++;
         machine->unpublish();
     }
-	  this->machines.erase(machines.begin(), machines.end());
+    this->machines.erase(machines.begin(), machines.end());
     remove(name);
-    if (mif) delete mif;
 }
 
 Channel &Channel::operator=(const Channel &other) {
@@ -71,6 +81,7 @@ int Channel::uniquePort() {
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            std::cout << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
@@ -94,20 +105,83 @@ ChannelDefinition *ChannelDefinition::find(const char *name) {
     return (*found).second;
 }
 
-Channel *ChannelDefinition::instantiate(unsigned int port) const {
+Channel *ChannelDefinition::instantiate(unsigned int port) {
     Channel *chn = Channel::create(port, this);
     return chn;
 }
 
-Channel *Channel::create(unsigned int port, const ChannelDefinition *defn) {
+void Channel::startPublisher() {
+    assert(!mif);
+    mif = MessagingInterface::create("*", port);
+}
+
+void Channel::startSubscriber() {
+    assert(!communications_manager);
+    
+    Value host = getValue("host");
+    Value port_val = getValue("port");
+    if (host == SymbolTable::Null)
+        host = "localhost";
+    long port = 0;
+    if (!port_val.asInteger(port)) port = 5555;
+    //char buf[150];
+    ////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
+    std::cout << " channel " << _name << " " << port << "\n";
+    communications_manager = new SubscriptionManager(definition()->name.c_str(),
+                              host.asString().c_str(), (int)port);
+
+}
+
+void ChannelDefinition::instantiateInterfaces() {
+    // find all machines listed in the updates clauses of channel definitions
+    if (!all) return; // no channel definitions to look through
+    std::map< std::string, ChannelDefinition* >::iterator iter = all->begin();
+    while (iter != all->end()) {
+        const std::pair<std::string, ChannelDefinition*> item = *iter++;
+        std::map<std::string, Value>::iterator updated_machines = item.second->updates_names.begin();
+        while (updated_machines != item.second->updates_names.end()) {
+            const std::pair<std::string, Value> &instance_name = *updated_machines++;
+            MachineInstance *found = MachineInstance::find(instance_name.first.c_str());
+            if (!found) { // instantiate a shadow to represent this machine
+                if (item.second) {
+                    MachineInstance *m = MachineInstanceFactory::create(instance_name.first.c_str(),
+                                                                        instance_name.second.asString().c_str(),
+                                                                        MachineInstance::MACHINE_SHADOW);
+                    m->setDefinitionLocation("dynamic", 0);
+                    m->setProperties(item.second->properties);
+                    m->setStateMachine(item.second);
+                    m->setValue("startup_enabled", false);
+                    machines[instance_name.first] = m;
+                }
+                else {
+                    char buf[150];
+                    snprintf(buf, 150, "Error: no interface named %s", item.first.c_str());
+                    MessageLog::instance()->add(buf);
+                }
+            }
+        }
+    }
+    // channels automatically setup monitoring on machines they update
+    // when the channel is instantiated. At startup, however, some machines
+    // may not have been defined when the channel is created so we need
+    // to do an extra pass here.
+    Channel::setupAllShadows();
+}
+
+Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
+    assert(defn);
     char channel_name[100];
     snprintf(channel_name, 100, "%s:%d", defn->name.c_str(), port);
-    Channel *chn = new Channel(channel_name);
+    Channel *chn = new Channel(channel_name, defn->name);
+
     chn->setPort(port);
     chn->setDefinition(defn);
+    chn->setStateMachine(defn);
     chn->modified();
+    chn->setupShadows();
     chn->setupFilters();
-    chn->mif = MessagingInterface::create("*", port);
+    //chn->mif = MessagingInterface::create("*", port);
+    chn->enableShadows();
     return chn;
 }
 
@@ -134,7 +208,7 @@ static void copyJSONArrayToSet(cJSON *obj, const char *key, std::set<std::string
     }
 }
 
-static void copyJSONArrayToMap(cJSON *obj, const char *key, std::map<std::string, Value> &res) {
+static void copyJSONArrayToMap(cJSON *obj, const char *key, std::map<std::string, Value> &res, const char *key_name = "property", const char *value_name = "type") {
     cJSON *items = cJSON_GetObjectItem(obj, key);
     if (items && items->type == cJSON_Array) {
         cJSON *item = items->child;
@@ -142,8 +216,8 @@ static void copyJSONArrayToMap(cJSON *obj, const char *key, std::map<std::string
             // we only collect items from the array that match our expected format of
             // property,value pairs
             if (item->type == cJSON_Object) {
-                cJSON *js_prop = cJSON_GetObjectItem(item, "property");
-                cJSON *js_type = cJSON_GetObjectItem(item, "type");
+                cJSON *js_prop = cJSON_GetObjectItem(item, key_name);
+                cJSON *js_type = cJSON_GetObjectItem(item, value_name);
                 cJSON *js_val = cJSON_GetObjectItem(item, "value");
                 if (js_prop->type == cJSON_String) {
                     res[js_prop->valuestring] = MessageEncoding::valueFromJSONObject(js_val, js_type);
@@ -176,7 +250,7 @@ ChannelDefinition *ChannelDefinition::fromJSON(const char *json) {
     copyJSONArrayToSet(obj, "monitors_patterns", defn->monitors_patterns);
     copyJSONArrayToMap(obj, "monitors_properties", defn->monitors_properties);
     copyJSONArrayToSet(obj, "shares", defn->shares);
-    copyJSONArrayToSet(obj, "updates", defn->updates_names);
+    copyJSONArrayToMap(obj, "updates", defn->updates_names);
     copyJSONArrayToSet(obj, "sends", defn->send_messages);
     copyJSONArrayToSet(obj, "receives", defn->recv_messages);
     return defn;
@@ -192,14 +266,14 @@ static cJSON *StringSetToJSONArray(std::set<std::string> &items) {
     return res;
 }
 
-static cJSON *MapToJSONArray(std::map<std::string, Value> &items) {
+static cJSON *MapToJSONArray(std::map<std::string, Value> &items, const char *key_name = "property", const char *value_name = "type") {
     cJSON *res = cJSON_CreateArray();
     std::map<std::string, Value>::iterator iter = items.begin();
     while (iter != items.end()) {
         const std::pair<std::string, Value> item = *iter++;
         cJSON *js_item = cJSON_CreateObject();
-        cJSON_AddItemToObject(js_item, "property", cJSON_CreateString(item.first.c_str()));
-        cJSON_AddStringToObject(js_item, "type", MessageEncoding::valueType(item.second).c_str());
+        cJSON_AddItemToObject(js_item, key_name, cJSON_CreateString(item.first.c_str()));
+        cJSON_AddStringToObject(js_item, value_name, MessageEncoding::valueType(item.second).c_str());
         MessageEncoding::addValueToJSONObject(js_item, "value", item.second);
         cJSON_AddItemToArray(res, js_item);
     }
@@ -215,13 +289,46 @@ char *ChannelDefinition::toJSON() {
     cJSON_AddItemToObject(obj, "monitors_patterns", StringSetToJSONArray(this->monitors_patterns));
     cJSON_AddItemToObject(obj, "monitors_properties", MapToJSONArray(this->monitors_properties));
     cJSON_AddItemToObject(obj, "shares", StringSetToJSONArray(this->shares));
-    cJSON_AddItemToObject(obj, "updates", StringSetToJSONArray(this->updates_names));
+    cJSON_AddItemToObject(obj, "updates", MapToJSONArray(this->updates_names, "name","type"));
     cJSON_AddItemToObject(obj, "sends", StringSetToJSONArray(this->send_messages));
     cJSON_AddItemToObject(obj, "receives", StringSetToJSONArray(this->recv_messages));
     char *str = cJSON_PrintUnformatted(obj);
     cJSON_Delete(obj);
     return str;
 }
+
+
+
+MessageHandler::MessageHandler() : data(0), data_size(0) {
+}
+
+MessageHandler::~MessageHandler() {
+    if (data) free(data);
+}
+
+void MessageHandler::handleMessage(const char *buf, size_t len) {
+    if (data) { free(data); data = 0; data_size = 0; }
+    data = (char*)malloc(len);
+    memcpy(data, buf, len);
+}
+
+bool MessageHandler::receiveMessage(zmq::socket_t &sock) {
+    if (data) { free(data); data = 0; data_size = 0; }
+    zmq::message_t update;
+    if (sock.recv(&update, ZMQ_NOBLOCK)) {
+        long len = update.size();
+        char *data = (char *)malloc(len+1);
+        memcpy(data, update.data(), len);
+        data[len] = 0;
+        return true;
+    }
+    return false;
+}
+
+
+
+
+
 
 Channel *Channel::find(const std::string name) {
     if (!all) return 0;
@@ -252,7 +359,19 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
             continue;
         if (chn->filtersAllow(machine)) {
             if (!chn->machines.count(machine)) chn->machines.insert(machine);
-            chn->mif->sendCommand("PROPERTY", name, key, val); // send command
+            if (chn->communications_manager) {
+                std::string response;
+                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+                sendMessage(cmd, chn->communications_manager->setup,response);
+                std::cout << "channel " << name << " got response: " << response << "\n";
+            }
+            else if (chn->mif) {
+                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+                chn->mif->send(cmd);
+            }
+            else {
+                std::cout << "channel " << name << " wants to send property change\n";
+            }
         }
     }
 }
@@ -283,6 +402,15 @@ bool Channel::patternMatches(const std::string &machine_name) {
         }
     }
     return false;
+}
+
+bool Channel::doesUpdate() {
+    return definition()->updates_names.empty();
+}
+
+bool Channel::doesMonitor() {
+    return ! (definition()->monitors_names.empty() && definition()->monitors_patterns.empty() && definition()->monitors_properties.empty()
+              && monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty()) ;
 }
 
 bool Channel::filtersAllow(MachineInstance *machine) {
@@ -320,7 +448,23 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
             continue;
         if (chn->filtersAllow(machine)) {
             if (!chn->machines.count(machine)) chn->machines.insert(machine);
-            chn->mif->sendState("STATE", name, new_state); // send state
+            if (chn->communications_manager
+                && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
+                std::string response;
+                char *cmd = MessageEncoding::encodeState(name, new_state); // send command
+                sendMessage(cmd, chn->communications_manager->setup,response);
+                std::cout << "channel " << name << " got response: " << response << "\n";
+            }
+            else if (chn->mif) {
+                char *cmd = MessageEncoding::encodeState(name, new_state); // send command
+                chn->mif->send(cmd);
+            }
+            else {
+                char buf[150];
+                snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
+                         machine->getName().c_str());
+                MessageLog::instance()->add(buf);
+            }
         }
     }
 }
@@ -366,8 +510,8 @@ void ChannelImplementation::removeMonitorPattern(const char *s) {
     monitors_patterns.erase(s);
     modified();
 }
-void ChannelDefinition::addUpdates(const char *s) {
-    updates_names.insert(s);
+void ChannelDefinition::addUpdates(const char *nm, const char *if_nm) {
+    updates_names[nm] = if_nm;
     modified();
 }
 void ChannelDefinition::addSendName(const char *s) {
@@ -383,6 +527,158 @@ void ChannelDefinition::addOptionName(const char *n, Value &v) {
     modified();
 }
 
+/* When a channel is created and connected, instances of updated machines on that channel are enabled.
+ */
+void Channel::enableShadows() {
+    // enable all machines that are updated by this channel
+    std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
+    while (iter != definition()->updates_names.end()) {
+        const std::pair< std::string, Value> item = *iter++;
+        MachineInstance *m = MachineInstance::find(item.first.c_str());
+        MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
+        if (ms) ms->enable();
+    }
+}
+
+void Channel::disableShadows() {
+    // disable all machines that are updated by this channel
+    std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
+    while (iter != definition()->updates_names.end()) {
+        const std::pair< std::string, Value> item = *iter++;
+        MachineInstance *m = MachineInstance::find(item.first.c_str());
+        MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
+        if (ms) ms->disable();
+    }
+}
+
+void Channel::setupShadows() {
+    // decide if the machines updated on this channel are instantiated as
+    // normal machines and if so, publish their changes to this channel.
+    if (!definition_) definition_ = ChannelDefinition::find(this->_type.c_str());
+    if (!definition_) {
+        char buf[150];
+        snprintf(buf, 150, "Error: channel definition %s for %s could not be found", name.c_str(), _type.c_str());
+        MessageLog::instance()->add(buf);
+        return;
+    }
+    
+    std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
+    while (iter != definition()->updates_names.end()) {
+        const std::pair< std::string, Value> item = *iter++;
+        MachineInstance *m = MachineInstance::find(item.first.c_str());
+        MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
+        if (m && !ms) { // this machine is not a shadow.
+            if (!machines.count(m)) {
+                m->publish();
+                machines.insert(m);
+            }
+        }
+        else if (m) {
+            // this machine is a shadow
+        }
+    }
+    
+    
+    //- TBD should this only subscribe if channel monitors a machine?
+}
+
+// poll channels and return number of descriptors with activity
+// if n is 0 the block of data will be reallocated,
+// otherwise up to n items will be initialised
+int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
+    if (!all) return 0;
+    if (!n) {
+        std::map<std::string, Channel*>::iterator iter = all->begin();
+        while (iter != all->end()) {
+            const std::pair<std::string, Channel *> &item = *iter++;
+            Channel *chn = item.second;
+            if (chn->communications_manager) n += chn->communications_manager->numSocks();
+        }
+        if (poll_items) delete poll_items;
+        poll_items = new zmq::pollitem_t[n];
+    }
+    int count = 0;
+    zmq::pollitem_t *curr = poll_items;
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        const std::pair<std::string, Channel *> &item = *iter++;
+        Channel *chn = item.second;
+        if (chn->communications_manager) {
+            chn->communications_manager->checkConnections();
+            if (chn->communications_manager && n >= count + chn->communications_manager->numSocks()) {
+                count += chn->communications_manager->configurePoll(curr);
+                chn->setPollItemBase(curr);
+                curr += count;
+            }
+        }
+    }
+    int rc = 0;
+    while (true) {
+        try {
+            
+            int rc = zmq::poll(poll_items, count, timeout);
+            if (rc == -1 && errno == EAGAIN) continue;
+            break;
+        }
+        catch(zmq::error_t e) {
+            if (errno == EINTR) continue;
+            char buf[150];
+            snprintf(buf, 150, "Channel error: %s", zmq_strerror(errno));
+            MessageLog::instance()->add(buf);
+            std::cerr << buf << "\n";
+            break;
+        }
+    }
+    if (rc>0) std::cout << rc << " channels with activity\n";
+    return rc;
+}
+
+void Channel::handleChannels() {
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        const std::pair<std::string, Channel *> &item = *iter++;
+        Channel *chn = item.second;
+        chn->checkCommunications();
+    }
+}
+
+
+void Channel::setPollItemBase(zmq::pollitem_t *base) {
+    poll_items = base;
+}
+
+void Channel::checkCommunications() {
+    Value *state = current_state.getNameValue();
+    bool ok = communications_manager->checkConnections();
+    if (!ok) {
+        if (communications_manager->monit_setup.disconnected() && state->token_id != ChannelImplementation::DISCONNECTED.getId())
+            setState(ChannelImplementation::DISCONNECTED);
+        else if (!communications_manager->monit_setup.disconnected()) {
+            if (communications_manager->setupStatus() == SubscriptionManager::e_waiting_connect && state->token_id != ChannelImplementation::CONNECTING.getId()) {
+                setState(ChannelImplementation::CONNECTING);
+            }
+        }
+        return;
+    }
+    if ( state->token_id != ChannelImplementation::CONNECTED.getId())
+        setState(ChannelImplementation::CONNECTED);
+    
+    if ( !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
+        if (message_handler->receiveMessage(communications_manager->subscriber))
+            std::cout << "Channel got message: " << message_handler->data << "\n";
+    }
+
+}
+
+void Channel::setupAllShadows() {
+    if (!all) return;
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        Channel *chn = (*iter).second; iter++;
+        if (chn) chn->setupShadows();
+    }
+}
+
 void Channel::setupFilters() {
     checked();
     std::set<std::string>::iterator iter = definition()->monitors_patterns.begin();
@@ -394,6 +690,7 @@ void Channel::setupFilters() {
             while (machines != MachineInstance::end()) {
                 MachineInstance *machine = *machines++;
                 if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                    const char *n = machine->getName().c_str();
                     machine->publish();
                     this->machines.insert(machine);
                 }
@@ -419,8 +716,11 @@ void Channel::setupFilters() {
         while (machines != MachineInstance::end()) {
             MachineInstance *machine = *machines++;
             if (machine && !this->machines.count(machine)) {
-                std::cout << machine->getName() << "\n";
-                if ( machine->getValue(item.first) == item.second) {
+                Value &val = machine->getValue(item.first);
+                // match if the machine has the property and Null was given as the match value
+                //  or if the machine has the property and it matches the provided value
+                if ( val != SymbolTable::Null &&
+                        (item.second == SymbolTable::Null || val == item.second) ) {
                     std::cout << "found match " << machine->getName() <<"\n";
                     this->machines.insert(machine);
                     machine->publish();

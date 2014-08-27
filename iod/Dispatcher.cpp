@@ -117,8 +117,10 @@ void Dispatcher::idle() {
             else continue;
         }
         catch (zmq::error_t e) {
+            if (errno == EINTR) continue;
             std::cerr << "Dispatch: " << zmq_strerror(errno) << "\n";
-            continue;
+            usleep(100000);
+            break;
         }
         status = e_running;
         

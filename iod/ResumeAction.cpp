@@ -21,6 +21,7 @@
 #include "ResumeAction.h"
 #include "MachineInstance.h"
 #include "Logger.h"
+#include "MessageLog.h"
 
 ResumeActionTemplate::ResumeActionTemplate(const std::string &name, const std::string &state, const char *property, const Value *val)
 : machine_name(name), resume_state(state), property_name(0), property_value(0) {
@@ -58,15 +59,34 @@ Action::Status ResumeAction::run() {
 	owner->start(this);
     if (machine_name == "ALL") {
         // this is actually a command to resume all local machines
-        owner->resume(machine_name);
+        owner->resumeAll();
     }
     else {
         machine = owner->lookup(machine_name);
         if (machine) {
+            if (!machine->getStateMachine()) {
+                char buf[150];
+                snprintf(buf, 150, "resuming a machine %s that has no state machine", machine->getName().c_str());
+                MessageLog::instance()->add(buf);
+                error_str = strdup(buf);
+                status = Failed;
+                return status;
+            }
             if (resume_state.length() == 0)
                 machine->resume();
-            else
-                machine->resume(resume_state);
+            else {
+                State *s = machine->getStateMachine()->findState(resume_state.c_str());
+                if (!s) {
+                    char buf[150];
+                    snprintf(buf, 150, "resuming a machine %s that has no state machine", machine->getName().c_str());
+                    MessageLog::instance()->add(buf);
+                    error_str = strdup(buf);
+                    status = Failed;
+                    return status;
+                }
+                else
+                    machine->resume(*s);
+            }
         }
         else {
             std::string err("Error: cannot find machine: ");
