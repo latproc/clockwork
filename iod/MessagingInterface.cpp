@@ -466,8 +466,9 @@ void SubscriptionManager::init() {
     boost::thread setup_monitor(boost::ref(monit_setup));
     
     run_status = e_waiting_cmd;
-    setup_status = e_startup;
+    setSetupStatus(e_startup);
 }
+
 /*
 void SubscriptionManager::usePublisher() {
     publisher = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
@@ -487,22 +488,22 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
 
 bool SubscriptionManager::requestChannel() {
     size_t len = 0;
-    if (setup_status == SubscriptionManager::e_disconnected) {
+    if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup.disconnected()) {
         std::cout << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup.send(channel_setup, strlen(channel_setup));
         assert(len);
-        setup_status = SubscriptionManager::e_waiting_connect;
+        setSetupStatus(SubscriptionManager::e_waiting_setup);
         return false;
     }
-    if (setup_status == SubscriptionManager::e_waiting_connect){
+    if (setupStatus() == SubscriptionManager::e_waiting_setup){
         char buf[1000];
         if (!safeRecv(setup, buf, 1000, false, len)) return false;
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
         std::cout << "Got channel " << buf << "\n";
-        setup_status = SubscriptionManager::e_settingup_subscriber;
+        setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
             cJSON *chan = cJSON_Parse(buf);
@@ -522,7 +523,7 @@ bool SubscriptionManager::requestChannel() {
                 }
             }
             else {
-                setup_status = SubscriptionManager::e_disconnected;
+                setSetupStatus(SubscriptionManager::e_disconnected);
                 std::cout << " failed to parse: " << buf << "\n";
                 current_channel = "";
             }
@@ -535,11 +536,11 @@ bool SubscriptionManager::requestChannel() {
     
 bool SubscriptionManager::setupConnections() {
     std::stringstream ss;
-    if (setup_status == SubscriptionManager::e_startup) {
-        ss << "tcp://" << subscriber_host << ":" << subscriber_port; 
+    if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
+        ss << "tcp://" << subscriber_host << ":" << subscriber_port;
         setup.connect(ss.str().c_str());
         monit_setup.setEndPoint(ss.str().c_str());
-        setup_status = SubscriptionManager::e_disconnected;
+        setSetupStatus(SubscriptionManager::e_waiting_connect);
         usleep(5000);
     }
     if (requestChannel()) {
@@ -550,20 +551,33 @@ bool SubscriptionManager::setupConnections() {
         DBG_MSG << "connecting to " << channel_url << "\n";
         monit_subs.setEndPoint(channel_url.c_str());
         subscriber.connect(channel_url.c_str());
-        setup_status = SubscriptionManager::e_done;
+        setSetupStatus(SubscriptionManager::e_done);
         return true;
     }
     return false;
 }
+
+void SubscriptionManager::setSetupStatus( Status new_status ) {
+    _setup_status = new_status;
+    state_start = microsecs();
+}
     
 bool SubscriptionManager::checkConnections() {
     if (monit_setup.disconnected() && monit_subs.disconnected()) {
-        if (setup_status != e_waiting_connect) setup_status = e_startup;
-        setupConnections();
+        //uint64_t now = microsecs();
+        /*if (setupStatus() == e_waiting_connect && !setup.connected()) {
+            //setup.disconnect(monit_setup.endPoint().c_str());
+            setSetupStatus(e_startup);
+        }
+        else 
+         */if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
+             setSetupStatus(e_startup);
+             setupConnections();
+         }
         usleep(50000);
         return false;
     }
-    if (setup_status == e_disconnected || ( !monit_setup.disconnected() && monit_subs.disconnected() ) ) {
+    if (setupStatus() == e_disconnected || ( !monit_setup.disconnected() && monit_subs.disconnected() ) ) {
         // clockwork has disconnected
         setupConnections();
         usleep(50000);
@@ -619,7 +633,7 @@ bool CommandManager::setupConnections() {
         snprintf(url, 100, "tcp://%s:5555", host_name.c_str()); // TBD no fixed port
         setup.connect(url);
         monit_setup.setEndPoint(url);
-        setup_status = e_disconnected;
+        setup_status = e_waiting_connect;
         usleep(5000);
     }
     return false;

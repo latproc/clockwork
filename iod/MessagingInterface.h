@@ -121,6 +121,7 @@ public:
     SingleConnectionMonitor(zmq::socket_t &s, const char *snam);
     virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_);
     void setEndPoint(const char *endpt);
+    std::string &endPoint() { return sock_addr; }
 private:
     std::string sock_addr;
     SingleConnectionMonitor(const SingleConnectionMonitor&);
@@ -155,7 +156,7 @@ class SubscriptionManager : public ConnectionManager {
 public:
     enum RunStatus { e_waiting_cmd, e_waiting_response };
     enum Status{e_startup, e_disconnected, e_waiting_connect,
-        e_settingup_subscriber, e_waiting_subscriber, e_done };
+        e_settingup_subscriber, e_waiting_subscriber, e_waiting_setup, e_done };
     
     SubscriptionManager(const char *chname, const char *remote_host = "localhost", int remote_port = 5555);
     
@@ -176,7 +177,9 @@ public:
     zmq::socket_t *publisher;
     zmq::socket_t subscriber;
     zmq::socket_t setup;
-    Status setup_status;
+    Status setupStatus() const { return _setup_status; }
+    void setSetupStatus( Status new_status );
+    uint64_t state_start;
     RunStatus run_status;
     int subscriber_port;
     std::string current_channel;
@@ -185,6 +188,8 @@ public:
     SingleConnectionMonitor monit_subs;
     SingleConnectionMonitor *monit_pubs;
     SingleConnectionMonitor monit_setup;
+protected:
+    Status _setup_status;
 };
 
 class CommandManager : public ConnectionManager {

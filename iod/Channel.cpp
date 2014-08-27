@@ -449,7 +449,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
         if (chn->filtersAllow(machine)) {
             if (!chn->machines.count(machine)) chn->machines.insert(machine);
             if (chn->communications_manager
-                && chn->communications_manager->setup_status == SubscriptionManager::e_done ) {
+                && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
                 std::string response;
                 char *cmd = MessageEncoding::encodeState(name, new_state); // send command
                 sendMessage(cmd, chn->communications_manager->setup,response);
@@ -654,7 +654,7 @@ void Channel::checkCommunications() {
         if (communications_manager->monit_setup.disconnected() && state->token_id != ChannelImplementation::DISCONNECTED.getId())
             setState(ChannelImplementation::DISCONNECTED);
         else if (!communications_manager->monit_setup.disconnected()) {
-            if (communications_manager->setup_status == SubscriptionManager::e_waiting_connect && state->token_id != ChannelImplementation::CONNECTING.getId()) {
+            if (communications_manager->setupStatus() == SubscriptionManager::e_waiting_connect && state->token_id != ChannelImplementation::CONNECTING.getId()) {
                 setState(ChannelImplementation::CONNECTING);
             }
         }
