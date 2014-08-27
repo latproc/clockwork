@@ -29,6 +29,8 @@
 class MachineInstance;
 class DynamicValue;
 
+uint64_t microsecs();
+
 class Value {
 public:
     enum Kind { t_empty, t_integer, t_string, t_bool, t_symbol, t_dynamic /*, t_list, t_map */};

@@ -31,6 +31,12 @@
 #include "DebugExtra.h"
 #include "dynamic_value.h"
 
+uint64_t microsecs() {
+    struct timeval now;
+    gettimeofday(&now, 0);
+    return now.tv_sec * 1000000L + now.tv_usec;
+}
+
 Value::Value() : kind(t_empty), cached_machine(0),
         dyn_value(0),cached_value(0), token_id(0) { }
 
