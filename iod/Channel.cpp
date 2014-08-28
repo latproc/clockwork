@@ -106,7 +106,9 @@ ChannelDefinition *ChannelDefinition::find(const char *name) {
 }
 
 Channel *ChannelDefinition::instantiate(unsigned int port) {
-    Channel *chn = Channel::create(port, this);
+    
+    Channel *chn = Channel::findByType(name);
+    if (!chn) chn = Channel::create(port, this);
     return chn;
 }
 

@@ -1001,20 +1001,23 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                     error_str = MessageEncoding::encodeError("No such channel");
                     return false;
                 }
-                int port = Channel::uniquePort();
-                while (true) {
-                    try {
-                        chn = defn->instantiate(port);
-                        chn->startPublisher();
-                        break;
-                    }
-                    catch (zmq::error_t err) {
-                        if (zmq_errno() == EADDRINUSE) {
-                            continue;
+                chn = Channel::findByType(ch_name.asString());
+                if (!chn) {
+                    int port = Channel::uniquePort();
+                    while (true) {
+                        try {
+                            chn = defn->instantiate(port);
+                            chn->startPublisher();
+                            break;
                         }
-                        error_str = zmq_strerror(zmq_errno());
-                        std::cerr << error_str << "\n";
-                        return false;
+                        catch (zmq::error_t err) {
+                            if (zmq_errno() == EADDRINUSE) {
+                                continue;
+                            }
+                            error_str = zmq_strerror(zmq_errno());
+                            std::cerr << error_str << "\n";
+                            return false;
+                        }
                     }
                 }
             }
