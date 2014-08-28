@@ -437,9 +437,22 @@ bool Channel::filtersAllow(MachineInstance *machine) {
     return false;
 }
 
+Channel *Channel::findByType(const std::string kind) {
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        Channel *chn = (*iter).second; iter++;
+        if (chn->_type == kind) return chn;
+    }
+    return 0;
+}
+
+
 void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
     if (!all) return;
     std::string name = machine->fullName();
+    if (name == "trigger")
+        int x=1;
+    std::cout << name << " changed state to " << new_state << "\n";
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
@@ -705,8 +718,10 @@ void Channel::setupFilters() {
     while (iter != definition()->monitors_names.end()) {
         const std::string &name = *iter++;
         MachineInstance *machine = MachineInstance::find(name.c_str());
-        if (machine && !this->machines.count(machine))
+        if (machine && !this->machines.count(machine)) {
             machine->publish();
+            this->machines.insert(machine);
+        }
     }
     std::map<std::string, Value>::const_iterator prop_iter = definition()->monitors_properties.begin();
     while (prop_iter != definition()->monitors_properties.end()) {

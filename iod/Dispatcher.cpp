@@ -30,6 +30,7 @@
 #include "symboltable.h"
 #include <assert.h>
 #include <zmq.hpp>
+#include "Channel.h"
 
 Dispatcher *Dispatcher::instance_ = NULL;
 
@@ -141,7 +142,8 @@ void Dispatcher::idle() {
                 Message m(p->message); //TBD is this copy necessary
                 if (to) {
                     MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
-                    if (mi && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL) {
+                    Channel *chn = dynamic_cast<Channel*>(to);
+                    if (!chn && mi && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL) {
                         DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to " << to->getName() <<  "\n";
                         {
                             // The machine has no parameters take the properties from the machine
@@ -171,6 +173,24 @@ void Dispatcher::idle() {
                                         MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eZMQ);
                                         mif->send(m.getText().c_str());
                                     }
+                                }
+                            }
+                        }
+                    }
+                    else if ( chn ) {
+                        // when sending to a channel, if the channel has a publisher, get it to send the message
+                        MessagingInterface *mif = chn->getPublisher();
+                        if (mif) {
+                            Value protocol = mi->properties.lookup("PROTOCOL");
+                            if (protocol == "RAW") {
+                                mif->send_raw(m.getText().c_str());
+                            }
+                            else {
+                                if (protocol == "CLOCKWORK") {
+                                    mif->send(m);
+                                }
+                                else {
+                                    mif->send(m.getText().c_str());
                                 }
                             }
                         }
