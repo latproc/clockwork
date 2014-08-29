@@ -556,7 +556,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             if (message_handlers.count(command)) {
                 const std::string &name = message_handlers[command];
                 m = MachineInstance::find(name.c_str());
-                machine_name = m->fullName();
+                if (m) machine_name = m->fullName();
             }
         }
 		
