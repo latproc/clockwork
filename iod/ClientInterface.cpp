@@ -230,7 +230,7 @@ void IODCommandThread::operator()() {
                 else if (count == 2 && ds == "TOGGLE") {
                     command = new IODCommandToggle;
                 }
-                else if (count == 2 && ds == "SEND") {
+                else if ( ds == "SEND") {
                     command = new IODCommandSend;
                 }
                 else if (count == 1 && ds == "QUIT") {

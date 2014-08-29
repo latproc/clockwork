@@ -545,36 +545,64 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		object.command
 */
     bool IODCommandSend::run(std::vector<Value> &params) {
-		if (params.size() != 2) {
-			error_str = "Usage: SEND command";
-			return false;
-		}
+
 		MachineInstance *m = 0;
-		std::string machine_name(params[1].asString());
-		std::string command(params[1].asString());
-		if (machine_name.find('-') != std::string::npos) {
-			machine_name.erase(machine_name.find('-'));
-			command = params[1].asString().substr(params[1].asString().find('-')+1);
- 			if (command.find('.')) {
-				// another level of indirection
-				std::string target = command;
-				target.erase(target.find('.'));
-				command = params[1].asString().substr(params[1].asString().find('.')+1);
-				MachineInstance *owner = MachineInstance::find(machine_name.c_str());
-				if (!owner) {
-					error_str = "could not find machine";
-					return false;
-				}
-				m = owner->lookup(target); // find the actual device
- 			}
-			else
-				m = MachineInstance::find(machine_name.c_str());
-		}
-		else if (machine_name.find('.') != std::string::npos) {
-			machine_name.erase(machine_name.find('.'));
-			command = params[1].asString().substr(params[1].asString().find('.')+1);
-			m = MachineInstance::find(machine_name.c_str());
-		}
+        std::string machine_name;
+        std::string command;
+
+        // the ROUTE command may have been used to reroute this message:
+        if (params.size() == 2) {
+            command = params[1].asString();
+            if (message_handlers.count(command)) {
+                const std::string &name = message_handlers[command];
+                m = MachineInstance::find(name.c_str());
+                machine_name = m->fullName();
+            }
+        }
+		
+        // we may have found the target machine already in the
+        // message routing table. if not, continue searching
+        if (!m) {
+            if ( (params.size() != 2 && params.size() != 4)
+                    || (params.size() == 4 && params[2] != "TO" && params[2] != "to")
+                ) {
+                error_str = "Usage: SEND machine.command | SEND command TO machine ";
+                return false;
+            }
+            
+            // if the SEND machine.command syntax was used, we keep everything after the last '.'
+            // if SEND command TO machine was used, we don't touch the command string
+            if (params.size() == 2) {
+                machine_name =  params[1].asString();
+                command = params[1].asString();
+
+                size_t sep = command.rfind('.');
+                if (sep != std::string::npos) {
+                    command.erase(0,sep+1);
+                    machine_name.erase(sep);
+                }
+            }
+            else if (params.size() == 4) {
+                command = params[1].asString();
+                machine_name = params[3].asString();
+            }
+            size_t pos = machine_name.find('-');
+            if (pos != std::string::npos) {
+                std::string submachine = machine_name.substr(pos+1);
+                machine_name.erase(pos);
+                pos = submachine.find('.');
+                if (pos != std::string::npos)
+                    submachine.erase(pos);
+                MachineInstance *owner = MachineInstance::find(machine_name.c_str());
+                if (!owner) {
+                    error_str = "could not find machine";
+                    return false;
+                }
+                m = owner->lookup(submachine); // find the actual device
+            }
+            else
+                m = MachineInstance::find(machine_name.c_str());
+        }
         std::stringstream ss;
 		if (m) {
 			m->send( new Message(strdup(command.c_str())), m, false);

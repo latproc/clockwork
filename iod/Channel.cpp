@@ -440,6 +440,7 @@ bool Channel::filtersAllow(MachineInstance *machine) {
 }
 
 Channel *Channel::findByType(const std::string kind) {
+    if (!all) return 0;
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
