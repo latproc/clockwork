@@ -41,7 +41,7 @@ BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
-CFLAGS = $(SIMULATED) -g -std=gnu++11 -pedantic -Wall -fPIC -rdynamic -Wno-unused-variable -Wno-variadic-macros \
+CFLAGS = $(SIMULATED) -g -pedantic -Wall -fPIC -rdynamic -Wno-unused-variable -Wno-variadic-macros \
 	-Wno-unused-but-set-variable \
 	$(EXTRAINCS) -DUSE_ETHERCAT
 CC = g++ $(CFLAGS)
