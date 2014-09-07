@@ -263,7 +263,7 @@ void ProcessingThread::operator()()  {
 					if (processingState == eIdle)
 						processingState = ePollingMachines;
 					if (processingState == ePollingMachines) {
-						if (MachineInstance::processAll(20000, MachineInstance::NO_BUILTINS))
+						if (MachineInstance::processAll(50000, MachineInstance::NO_BUILTINS))
 							processingState = eIdle;
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
@@ -279,7 +279,7 @@ void ProcessingThread::operator()()  {
 						processingState = eStableStates;
 					}	
 					if (processingState == eStableStates) {
-						if (MachineInstance::checkStableStates(20000))
+						if (MachineInstance::checkStableStates(50000))
 							processingState = eIdle;
 						gettimeofday(&end_t, 0);
 						delta = get_diff_in_microsecs(&end_t, &start_t);
