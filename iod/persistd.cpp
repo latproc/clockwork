@@ -126,9 +126,9 @@ int main(int argc, const char * argv[]) {
 			if (verbose) std::cout << data << "\n";		
 
 			try {
-	            std::string cmd;
-	            std::list<Value> *param_list = 0;
-	            if (MessagingInterface::getCommand(data, cmd, &param_list)) {
+        std::string cmd;
+        std::list<Value> *param_list = 0;
+        if (MessagingInterface::getCommand(data, cmd, &param_list)) {
 					if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
 						std::string property;
 						int i=0;
@@ -149,6 +149,7 @@ int main(int argc, const char * argv[]) {
 					store.insert(machine_name, property, value.c_str());
 					store.save();
 				}
+				if (param_list) delete param_list;
 				free(data);
 			}
 			catch(std::exception e) {
