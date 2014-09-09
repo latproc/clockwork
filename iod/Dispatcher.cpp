@@ -38,7 +38,11 @@ void DispatchThread::operator()() {
     Dispatcher::instance()->idle();
 }
 
-Dispatcher::Dispatcher() : socket(0), started(false), thread_ref(boost::ref(dispatch_thread)) {
+Dispatcher::Dispatcher() : socket(0), started(false), dispatch_thread(0), thread_ref(0),
+    sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting)
+{
+    dispatch_thread = new DispatchThread;
+    thread_ref = new boost::thread(boost::ref(*dispatch_thread));
 }
 
 Dispatcher::~Dispatcher() {
@@ -46,12 +50,19 @@ Dispatcher::~Dispatcher() {
 }
 
 Dispatcher *Dispatcher::instance() {
-    if (!instance_) instance_ = new Dispatcher();
+    if (!instance_)
+        instance_ = new Dispatcher();
     assert(instance_);
     return instance_;
 }
 void Dispatcher::start() {
     while (!Dispatcher::instance()->started) usleep(20);
+}
+
+void Dispatcher::stop() {
+    if (status == e_running) sync.send("done", 4);
+
+    instance()->status = e_aborted;
 }
 
 std::ostream &Dispatcher::operator<<(std::ostream &out) const  {
@@ -86,7 +97,6 @@ void Dispatcher::idle() {
     socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PULL);
     socket->bind("inproc://dispatcher");
     
-    zmq::socket_t sync(*MessagingInterface::getContext(), ZMQ_REP);
     sync.bind("inproc://dispatcher_sync");
     started = true;
 
@@ -103,8 +113,8 @@ void Dispatcher::idle() {
     }
      */
 
-    enum {e_waiting, e_running} status = e_waiting;
-    while (1) {
+    status = e_waiting;
+    while (status != e_aborted) {
         if (status == e_waiting) try {   // wait for sync signal from clockwork
             char sync_buf[10];
             size_t sync_len = 0;
