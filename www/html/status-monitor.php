@@ -281,8 +281,14 @@ $siteurl="status-monitor.php";
 				$image_name = $image_prefix.".png";
 			if ($type != "AnalogueInput")
 				$display_value = htmlspecialchars($status);
-			else
-				$display_value = $curr->value;
+			else {
+				if (isset($curr->value))
+					$display_value = $curr->value;
+				else if (isset($curr->VALUE))
+					$display_value = $curr->VALUE;
+				else
+					$display_value = "UNKNOWN";
+			}
 			if (file_exists($BASE_APPDIR . "/html/img/$image_name"))
 				$tabdata .= image_html($point, $image_name, "im_".$point);
 			$tabdata .= "</div>"
