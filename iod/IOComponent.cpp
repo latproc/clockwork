@@ -185,7 +185,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
     }
     config->positions.append(raw);
     uint32_t mean = (config->positions.average(8) + 0.5f);
-    if ( abs(mean - config->last_sent) > config->noise_tolerance) {
+    if ( (uint32_t)abs(mean - config->last_sent) > config->noise_tolerance) {
         config->last_sent = mean;
     }
     return config->last_sent;

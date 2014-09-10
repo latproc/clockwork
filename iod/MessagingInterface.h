@@ -25,6 +25,7 @@
 #include <boost/thread.hpp>
 #include <sstream>
 #include <zmq.hpp>
+#include <set>
 #include "Message.h"
 #include "value.h"
 #include "symboltable.h" 
@@ -130,7 +131,7 @@ private:
 
 class MachineShadow {
     SymbolTable properties;
-    std::set<const std::string> states;
+    std::set<std::string> states;
     std::string state;
 public:
     void setProperty(const std::string, Value &val);

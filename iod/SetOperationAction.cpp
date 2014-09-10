@@ -78,7 +78,7 @@ bool CompareSymbolAndValue(MachineInstance*scope, Value &sym, std::string &prop,
 }
 
 bool MachineIncludesParameter(MachineInstance *m, Value &param) {
-    for (int i=0; i<m->parameters.size(); ++i) {
+    for (unsigned int i=0; i<m->parameters.size(); ++i) {
         if (m->parameters[i].val == param) return true;
     }
     return false;
