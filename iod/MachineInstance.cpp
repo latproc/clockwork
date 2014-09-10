@@ -1082,6 +1082,7 @@ void MachineInstance::idle() {
         else
             last->release();
 	}
+    // TBD this could be an infinite loop if there is a way for handle() to cause a push
 	while (!mail_queue.empty()){
 		if (!mail_queue.empty()) {
             boost::mutex::scoped_lock(q_mutex);
@@ -1092,6 +1093,7 @@ void MachineInstance::idle() {
 			handle(p.message, p.transmitter, p.needs_receipt);
 		}
 	}
+    if (mail_queue.empty()) has_work = false;
 	return;
 }
 
@@ -1117,6 +1119,8 @@ const Value *MachineInstance::getTimerVal() {
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     static int point_token = ClockworkToken::POINT;
     static std::list<MachineInstance *>::iterator iter = active_machines.begin();
+    //if (iter == active_machines.begin()) std::cout << ":"; else std::cout << ".";
+    //std::cout << std::flush;
     bool builtins = false;
     if (iter == active_machines.begin()) {
         struct timeval now;
@@ -1137,9 +1141,11 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
          */
         MachineInstance *m = *iter++;
         bool point = m->state_machine->token_id == point_token;
-        if ( (builtins && point) || (!builtins && (!point || m->mq_interface)) ) {
-            if (m->hasWork() || !m->active_actions.empty() )
+        if ( (builtins && point) || (!builtins && (!point || m->mq_interface) && m->enabled() ) ) {
+            if (m->hasWork() || !m->active_actions.empty() ) {
+                //std::cout << m->getName() << " " << m->current_state.getName() << "\n";
                 m->idle();
+            }
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
             }
@@ -1485,6 +1491,7 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 
 #ifndef DISABLE_LEAVE_FUNCTIONS
         /* notify everyone we are leaving a state */
+        // TBD use notifyDependents()
         {
             std::string txt = _name + "." + current_state.getName() + "_leave";
             Message msg(txt.c_str());
@@ -1494,6 +1501,11 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
             while (dep_iter != depends.end()) {
                 MachineInstance *dep = *dep_iter++;
                 if (this == dep) continue;
+                
+                // note that the following test prevents us from resuming a
+                // blocked action in dep and that may be bad but the test is
+                // not used in the case of the ENTER handler, below and there
+                // is no need to resume twice
                 if (!dep->receives(msg, this)) continue;
                 Action *act = dep->executingCommand();
                 if (act) {
@@ -1520,19 +1532,21 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
                 mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(), this);
             }
         }
-		// update the Modbus interface for the state
-		if (modbus_exports.count(_name + "." + last)){
-			ModbusAddress ma = modbus_exports[_name + "." + last];
-			DBG_MODBUS << _name << " leaving state " << last << " triggering a modbus message " << ma << "\n";
-			assert(ma.getSource() == ModbusAddress::state);
-			ma.update(0);
-		}
-		if (modbus_exports.count(_name + "." + current_state.getName())){
-			ModbusAddress ma = modbus_exports[_name + "." + current_state.getName()];
-			DBG_MODBUS << _name << " active state " << current_state.getName() << " triggering a modbus message " << ma << "\n";
-			assert(ma.getSource() == ModbusAddress::state);
-			ma.update(1);
-		}
+        if (!modbus_exports.empty()) {
+            // update the Modbus interface for the state
+            if (modbus_exports.count(_name + "." + last)){
+                ModbusAddress ma = modbus_exports[_name + "." + last];
+                DBG_MODBUS << _name << " leaving state " << last << " triggering a modbus message " << ma << "\n";
+                assert(ma.getSource() == ModbusAddress::state);
+                ma.update(0);
+            }
+            if (modbus_exports.count(_name + "." + current_state.getName())){
+                ModbusAddress ma = modbus_exports[_name + "." + current_state.getName()];
+                DBG_MODBUS << _name << " active state " << current_state.getName() << " triggering a modbus message " << ma << "\n";
+                assert(ma.getSource() == ModbusAddress::state);
+                ma.update(1);
+            }
+        }
         /* TBD optimise the timer triggers to only schedule the earliest trigger
         StableState *earliestTimerState = NULL;
         unsigned long ealiestTimer = (unsigned long) -1L;
@@ -1699,7 +1713,7 @@ void MachineInstance::notifyDependents(Message &msg){
             DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
         }
         //TBD execute the message on the dependant machine
-        dep->execute(msg, this);
+        if (dep->receives(msg, this)) dep->execute(msg, this);
         if (dep->_type == "LIST") {
             dep->setNeedsCheck();
         }
@@ -2179,6 +2193,7 @@ void MachineInstance::clearAllActions() {
 
 	boost::mutex::scoped_lock(q_mutex);
 	mail_queue.clear();
+    has_work = false;
 }
 
 void MachineInstance::markActive() {
