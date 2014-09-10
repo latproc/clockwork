@@ -21,6 +21,7 @@
 #ifndef cwlang_value_h
 #define cwlang_value_h
 
+#include <stdint.h>
 #include <map>
 #include <string>
 #include <iostream>
