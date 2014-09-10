@@ -23,6 +23,7 @@
 #include "Logger.h"
 #include "IOComponent.h"
 #include "MachineInstance.h"
+#include "Channel.h"
 
 Action *SendMessageActionTemplate::factory(MachineInstance *mi) { 
   return new SendMessageAction(mi, *this); 
@@ -35,6 +36,12 @@ std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
 Action::Status SendMessageAction::run() {
 	owner->start(this);
 	if (!target_machine) target_machine = owner->lookup(target);
+    if (!target_machine) {
+        // no target with the given name, however in the case of channels,
+        // the target may be active channels of the given type
+        Channel *chn = Channel::findByType(target.asString());
+        target_machine = chn;
+    }
 	if (target_machine) {
         std::string msg_str;
         if (message.kind == Value::t_symbol) {

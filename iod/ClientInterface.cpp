@@ -66,27 +66,38 @@ public:
         std::cerr << "monitor started\n";
     }
     virtual void on_event_connected(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_connected " << addr_ << "\n"; }
+        //std::cerr << "on_event_connected " << addr_ << "\n";
+    }
     virtual void on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_connect_delayed " << addr_ << "\n"; }
+        std::cerr << "on_event_connect_delayed " << addr_ << "\n";
+    }
     virtual void on_event_connect_retried(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_connect_retried " << addr_ << "\n";}
+        std::cerr << "on_event_connect_retried " << addr_ << "\n";
+    }
     virtual void on_event_listening(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_listening " << addr_ << "\n"; }
+        std::cerr << "on_event_listening " << addr_ << "\n";
+    }
     virtual void on_event_bind_failed(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_bind_failed " << addr_ << "\n"; }
+        std::cerr << "on_event_bind_failed " << addr_ << "\n";
+    }
     virtual void on_event_accepted(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_accepted " << event_.value << " " << addr_ << "\n"; }
+        //std::cerr << "on_event_accepted " << event_.value << " " << addr_ << "\n";
+    }
     virtual void on_event_accept_failed(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_accept_failed " << addr_ << "\n"; }
+        std::cerr << "on_event_accept_failed " << addr_ << "\n";
+    }
     virtual void on_event_closed(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_closed " << addr_ << "\n";}
+        std::cerr << "on_event_closed " << addr_ << "\n";
+    }
     virtual void on_event_close_failed(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_close_failed " << addr_ << "\n";}
+        std::cerr << "on_event_close_failed " << addr_ << "\n";
+    }
     virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_disconnected "<< event_.value << " "  << addr_ << "\n"; }
+        //std::cerr << "on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
+    }
     virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "on_event_unknown " << addr_ << "\n"; }
+        std::cerr << "on_event_unknown " << addr_ << "\n";
+    }
 
 private:
     zmq::socket_t *sock;
@@ -230,7 +241,7 @@ void IODCommandThread::operator()() {
                 else if (count == 2 && ds == "TOGGLE") {
                     command = new IODCommandToggle;
                 }
-                else if (count == 2 && ds == "SEND") {
+                else if ( ds == "SEND") {
                     command = new IODCommandSend;
                 }
                 else if (count == 1 && ds == "QUIT") {

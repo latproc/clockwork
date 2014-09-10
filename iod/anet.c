@@ -172,7 +172,7 @@ static int anetTcpGenericConnect(char *err, const char *addr, int port, int flag
             return s;
 		if (errno == EINTR) { retry++; continue; }
 
-        anetSetError(err, "connect: %s\n", strerror(errno));
+        anetSetError(err, "connect: %s connecting to %s:%d\n", strerror(errno), addr, port);
         close(s);
         return ANET_ERR;
     }

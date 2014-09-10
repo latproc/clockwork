@@ -49,6 +49,7 @@ public:
     static Dispatcher *instance();
     static void start();
     void idle();
+    void stop();
     
 private:
     Dispatcher();
@@ -60,8 +61,10 @@ private:
     std::list<Package*>to_deliver;
     zmq::socket_t *socket;
     bool started;
-    DispatchThread dispatch_thread;
-    boost::thread thread_ref;
+    DispatchThread *dispatch_thread;
+    boost::thread *thread_ref;
+    zmq::socket_t sync;
+    enum {e_waiting, e_running, e_aborted} status;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);
