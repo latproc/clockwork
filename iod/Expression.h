@@ -115,7 +115,7 @@ struct Predicate {
 	std::string error_str;
     bool needs_reevaluation;
     Stack stack;
-    long last_evaluation_time;
+    uint64_t last_evaluation_time;
 };
 
 std::ostream &operator <<(std::ostream &out, const Predicate &p);

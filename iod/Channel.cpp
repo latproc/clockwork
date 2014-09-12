@@ -453,7 +453,6 @@ Channel *Channel::findByType(const std::string kind) {
 void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
     if (!all) return;
     std::string name = machine->fullName();
-    std::cout << name << " changed state to " << new_state << "\n";
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;

@@ -42,11 +42,11 @@ BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
 DLLFLAGS = -fPIC -rdynamic
-CFLAGS = $(SIMULATED) $(DLLFLAGS) -g -std=gnu++11 -pedantic -Wall -Wno-unused-variable -Wno-variadic-macros \
+CFLAGS = $(SIMULATED) $(DLLFLAGS) -O -std=gnu++0x -pedantic -Wall -Wno-unused-variable -Wno-variadic-macros \
 	-Wno-unused-but-set-variable \
 	$(EXTRAINCS) -DUSE_ETHERCAT -DETHERCATD
 CC = g++ $(CFLAGS)
-LDFLAGS = $(EXTRALIBS) -g
+LDFLAGS = $(EXTRALIBS) -O
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
@@ -170,9 +170,9 @@ persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra
 			MessagingInterface.o cJSON.o options.o PersistentStore.o Message.o anet.o MessageLog.o \
 			MessageEncoding.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp \
-		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
 		value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o cJSON.o \
-		options.o PersistentStore.o Message.o anet.o MessageLog.o MessageEncoding.o -lzmq
+		options.o PersistentStore.o Message.o anet.o MessageLog.o MessageEncoding.o -lzmq \
+		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB)
 
 modbusd:	modbusd.cpp value.o symboltable.o Logger.o DebugExtra.o MessagingInterface.o \
 					options.o cJSON.o Message.o anet.o MessageLog.o MessageEncoding.o
@@ -201,10 +201,10 @@ zmq_ecat_monitor: zmq_ecat_monitor.o
 
 device_connector:	device_connector.o regular_expressions.o anet.o \
 		value.o MessageEncoding.o Logger.o DebugExtra.o cJSON.o symboltable.o options.o \
-		Message.o MessageLog.o
+		Message.o MessageLog.o MessagingInterface.o
 	g++ $(CFLAGS) $(LDFLAGS) -o $@ device_connector.o regular_expressions.o anet.o \
 		value.o MessageEncoding.o Logger.o DebugExtra.o cJSON.o symboltable.o options.o \
-		Message.o MessageLog.o \
+		Message.o MessageLog.o MessagingInterface.o \
 		 $(BOOST_THREAD_LIB) $(BOOST_SYSTEM_LIB) -lzmq 
 
 device_connector.o:	device_connector.cpp regular_expressions.h anet.h

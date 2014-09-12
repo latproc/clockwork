@@ -49,20 +49,21 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 //    gettimeofday(&now, 0);
 //    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
     
+    response_len = 0;
     while (true) {
         try {
-            if (block) {
-                response_len = sock.recv(buf, buflen);
-                if (!response_len) continue;
+                zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+                int n = zmq::poll( &items[0], 1, timeout);
+								if (!n && block) continue;
+                if (items[0].revents & ZMQ_POLLIN) {
+     	            response_len = sock.recv(buf, buflen);
+                if (!response_len && block) continue;
             }
-            else
-                response_len = sock.recv(buf, buflen, ZMQ_NOBLOCK);
-            return true;
+            return (response_len == 0) ? false : true;
         }
         catch (zmq::error_t e) {
             if (errno == EINTR) continue;
             std::cerr << zmq_strerror(errno) << "\n";
-            response_len = 0;
             return false;
         }
     }

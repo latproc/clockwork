@@ -50,15 +50,9 @@ EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 
 bool EtherCATThread::waitForSync() {
-	try {
-		char buf[10];
-		size_t len = sync_sock->recv(buf, 10);
-		if (!len) return false; // interrupted
-		return true;
-	}
-	catch (std::exception &ex) {
-		return false;
-	}
+	char buf[10];
+	size_t response_len;
+	return safeRecv(*sync_sock, buf, 10, true, response_len);
 }
 
 void EtherCATThread::operator()() {
@@ -71,7 +65,6 @@ void EtherCATThread::operator()() {
 	while (!program_done && !waitForSync()) ;
 	while (!program_done) {
 		if (status == e_collect) {
-			//if (!waitForSync()) continue;
         	struct timeval now;
         	gettimeofday(&now,0);
         	int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
@@ -95,7 +88,7 @@ void EtherCATThread::operator()() {
         	gettimeofday(&then,0);
 	        //then.tv_usec += cycle_delay;
 			//while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
-			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
+//			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
 			//then = now;
 	    	ECInterface::instance()->collectState();
 			sync_sock->send("ok",2);

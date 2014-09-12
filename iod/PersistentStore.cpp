@@ -30,7 +30,7 @@ void PersistentStore::insert(std::string machine, std::string key, Value value) 
 
 void PersistentStore::load() {
     // load the store into a map
-    typedef std::pair<std::string, Value> PropertyPair;
+    //typedef std::pair<std::string, Value> PropertyPair;
     std::ifstream store(file_name.c_str());
     if (!store.is_open()) return;
     char buf[400];

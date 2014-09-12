@@ -123,7 +123,7 @@ void insert(int group, int addr, const char *value, size_t len) {
 	uint8_t *p = (uint8_t *)value;
 	if (DEBUG_STRINGS) std::cout << "string length: " << (int)(*p) << "\n";
 	uint8_t *q = (uint8_t*)dest;
-	int i=0;
+	unsigned int i=0;
 	for (i=0; i<len/2; ++i) {
 		*q++ = *(p+1);
 		*q++ = *p++; p++;
