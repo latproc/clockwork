@@ -180,7 +180,9 @@ void ProcessingThread::operator()()  {
     zmq::socket_t process_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     process_sync.connect("inproc://process_sync");
     process_sync.send("ready", 5);
+    dispatch_sync.send("go", 5);
     
+	bool dispatch_waiting = false;
     enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
  	while (!program_done)
     {
@@ -190,14 +192,32 @@ void ProcessingThread::operator()()  {
         char pbuf[10];
         //while (!program_done && len == 0) len = process_sync.recv(pbuf, 10);
 
-        zmq::pollitem_t items[] = { { process_sync, 0, ZMQ_POLLIN, 0 } };
+        zmq::pollitem_t items[] = { 
+			{ process_sync, 0, ZMQ_POLLIN, 0 },
+			{ dispatch_sync, 0, ZMQ_POLLIN, 0 } 
+		};
         len = 0;
-        while (len == 0) {
-            zmq::poll(&items[0], 1, 10);
-            if (items[0].revents & ZMQ_POLLIN) {
-                len = process_sync.recv(pbuf, 10, ZMQ_NOBLOCK);
-            }
-        }
+		try {
+			// len is used to break out of this loop. Note the += on the second recv()
+	        while (len == 0) {
+	            zmq::poll(&items[0], 2, -1);
+	            if (items[0].revents & ZMQ_POLLIN) {
+	                len = process_sync.recv(pbuf, 10, ZMQ_DONTWAIT);
+	            }
+				if (items[1].revents & ZMQ_POLLIN) {
+					len += dispatch_sync.recv(pbuf, 10, ZMQ_DONTWAIT);
+					dispatch_waiting = true;
+				}
+	        }
+		}
+		catch(std::exception ex) {
+			if (errno == EINTR) continue;
+			char buf[100];
+			snprintf(buf, 100, "ZMQ error: %s", zmq_strerror(errno));
+			MessageLog::instance()->add(buf);
+			usleep(100000);
+			continue;
+		}
 
         {
             gettimeofday(&start_t, 0);
@@ -240,7 +260,8 @@ void ProcessingThread::operator()()  {
                 gettimeofday(&end_t, 0);
                 delta = get_diff_in_microsecs(&end_t, &start_t);
                 statistics->machine_processing.add(delta - delta2); delta2 = delta;
-                if (processingState == eIdle){
+                if (processingState == eIdle && dispatch_waiting){
+					dispatch_waiting = false;
                     dispatch_sync.send("go", 2);
                     // wait for message sending to complete
                     zmq::pollitem_t items[] = { { dispatch_sync, 0, ZMQ_POLLIN, 0 } };
@@ -252,6 +273,7 @@ void ProcessingThread::operator()()  {
                             len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
                         }
                     }
+					dispatch_sync.send("bye",3); // acknowledge the completion of dispatch processing
                     gettimeofday(&end_t, 0);
                     delta = get_diff_in_microsecs(&end_t, &start_t);
                     statistics->dispatch_processing.add(delta - delta2); delta2 = delta;

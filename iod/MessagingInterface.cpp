@@ -357,6 +357,10 @@ char *MessagingInterface::sendState(std::string cmd, std::string name, std::stri
     SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disconnected_(true), socket_name(snam) {
     }
 void SocketMonitor::operator()() {
+		char thread_name[100];
+		snprintf(thread_name, 100, "iod skt monitor %s", socket_name);
+	    pthread_setname_np(pthread_self(), thread_name);
+
         monitor(sock, socket_name);
     }
 void SocketMonitor::on_monitor_started() {

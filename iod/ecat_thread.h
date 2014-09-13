@@ -18,7 +18,7 @@ private:
 	zmq::socket_t *cmd_sock;
 	zmq::socket_t *sync_sock;
 
-	bool waitForSync();
+	bool waitForSync(zmq::socket_t &sync);
 };
 
 #endif

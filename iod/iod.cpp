@@ -188,10 +188,11 @@ struct ProcessingThread
 
     static const int ECAT_ITEM = 0;
     static const int CMD_ITEM = 1;
+    static const int DISPATCHER_ITEM = 2;
 
-    enum Status { e_waiting, e_handling_ecat, e_handling_cmd, e_waiting_cmd } ;
+    enum Status { e_waiting, e_handling_ecat, e_handling_cmd, e_waiting_cmd, e_handling_dispatch } ;
     Status status;
-    int pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr);
+    int pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatch);
     void waitForCommandProcessing(zmq::socket_t &resource_mgr);
 };
 
@@ -221,9 +222,12 @@ void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
     // first stage is to give access second stage is to assert we are taking access back
 
     resource_mgr.send("go", 2);
-		status = e_waiting;
+	status = e_waiting;
     char buf[10];
-    int len = 0;
+    size_t len = 0;
+	safeRecv(resource_mgr, buf, 10, true, len);
+	resource_mgr.send("bye", 3);
+#if 0
     while (len == 0)
     {
         try
@@ -239,19 +243,20 @@ void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
 						return;
         }
     }
+#endif
 }
 
 
-int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr)
+int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatcher)
 {
-		int res = 0;
+	int res = 0;
     while (status == e_waiting)
     {
         try
         {
             int len = 0;
             char buf[10];
-            res = zmq::poll(&items[0], 2, 100);
+            res = zmq::poll(&items[0], 3, 100);
             if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
             {
                 len = ecat_sync.recv(buf, 10, ZMQ_NOBLOCK);
@@ -261,8 +266,15 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
             {
                 len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
                 if (len) {
-									status = e_handling_cmd;
-								}
+					status = e_handling_cmd;
+				}
+            }
+            else if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
+            {
+                len = dispatcher.recv(buf, 10, ZMQ_NOBLOCK);
+                if (len) {
+					status = e_handling_dispatch;
+				}
             }
             break;
         }
@@ -280,6 +292,24 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
 void ProcessingThread::operator()()
 {
 
+#if 0
+	boost::thread::attributes attrs;
+	// set portable attributes
+	// ...
+	//attr.set_stack_size(4096*10);
+	#if defined(BOOST_THREAD_PLATFORM_WIN32)
+	    // ... window version
+	#elif defined(BOOST_THREAD_PLATFORM_PTHREAD)
+	    // ... pthread version
+	    //pthread_attr_setschedpolicy(attr.get_native_handle(), SCHED_RR);
+		pthread_setname_np(attrs.get_native_handler(), "iod processing");
+	#else
+	#error "Boost threads unavailable on this platform"
+	#endif
+#endif
+	pthread_setname_np(pthread_self(), "iod processing");
+
+
     Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
     Statistic::add(cycle_delay_stat);
     long delta, delta2;
@@ -295,7 +325,10 @@ void ProcessingThread::operator()()
     ecat_sync.connect("inproc://ethercat_sync");
 
     unsigned long sync = 0;
+    dispatch_sync.send("go",2); // collect state
     ecat_sync.send("go",2); // collect state
+
+	uint64_t last_checked_cycle_time = 0;
     while (!program_done)
     {
         enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
@@ -306,21 +339,44 @@ void ProcessingThread::operator()()
         zmq::pollitem_t items[] =
         {
             { ecat_sync, 0, ZMQ_POLLIN, 0 },
-            { resource_mgr, 0, ZMQ_POLLIN, 0 }
+            { resource_mgr, 0, ZMQ_POLLIN, 0 },
+            { dispatch_sync, 0, ZMQ_POLLIN, 0 }
         };
         size_t len = 0;
         char buf[10];
         while (!program_done && len == 0)
         {
-            if (pollZMQItems(items, ecat_sync, resource_mgr)) break;
+            if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync)) break;
         }
+//		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+//			std::cout << "ecat waiting\n";
+//		if (items[CMD_ITEM].revents & ZMQ_POLLIN)
+//			std::cout << "command waiting\n";
+//		if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
+//			std::cout << "dispatcher waiting\n";
         if (program_done) break;
-        if (status == e_handling_cmd) waitForCommandProcessing(resource_mgr);
+        if (status == e_handling_cmd) {
+			waitForCommandProcessing(resource_mgr);
+		}
         if (program_done) break;
 
-				if (status == e_handling_ecat)
+		if (status == e_handling_dispatch) {
+			if (processingState != eIdle) {
+				// cannot process dispatch events at present
+				status = e_waiting;
+			}
+			else {
+				dispatch_sync.send("continue",3);
+				// wait for the dispatcher
+				safeRecv(dispatch_sync, buf, 10, true, len);
+//				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
+				dispatch_sync.send("bye",3);
+				status = e_waiting;
+			}
+		}
+		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
-						machine.idle();
+			machine.idle();
             if (machine.connected())
             {
                 if (!machine_is_ready)
@@ -356,14 +412,7 @@ void ProcessingThread::operator()()
 
                     bool reported_error = false;
 
-                    Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-                    long remain = 0;
-                    if (!cycle_delay_v->asInteger(remain))
-                    {
-                        if (!reported_error) MessageLog::instance()->add("cycle delay error\n");
-                        remain = 10000;
-                    }
-                    else remain /= 2;
+                    long remain = cycle_delay / 2;
                     if (processingState == eIdle)
                         processingState = ePollingMachines;
                     if (processingState == ePollingMachines)
@@ -379,7 +428,16 @@ void ProcessingThread::operator()()
                     if (processingState == eIdle)
                     {
 
-                        dispatch_sync.send("go", 2);
+#if 0
+						if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
+							dispatch_sync.send("continue",3);
+							// wait for the dispatcher
+							safeRecv(dispatch_sync, buf, 10, true, len);
+							dispatch_sync.send("bye",3);
+							status = e_waiting;
+						}
+#endif
+#if 0
                         // wait for message sending to complete
                         zmq::pollitem_t items[] = { { dispatch_sync, 0, ZMQ_POLLIN, 0 } };
                         size_t len = 0;
@@ -392,6 +450,7 @@ void ProcessingThread::operator()()
                                 len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
                             }
                         }
+#endif
 
                         Scheduler::instance()->idle();
                         gettimeofday(&end_t, 0);
@@ -410,11 +469,14 @@ void ProcessingThread::operator()()
                         delta2 = delta;
                     }
 
-                    //else {
-                    //	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
-                    //		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
-                    //}
-                    checkAndUpdateCycleDelay();
+					// periodically check to see if the cycle time has been changed
+					// more work is needed here since the signaller needs to be told about this
+					uint64_t now_usecs = end_t.tv_sec *1000000 + end_t.tv_usec;
+					if (now_usecs - last_checked_cycle_time > 100000) {
+						last_checked_cycle_time = end_t.tv_sec *1000000 + end_t.tv_usec;
+                    	checkAndUpdateCycleDelay();
+					}
+			
                 }
             }
             ecat_sync.send("go",2); // update io
@@ -737,6 +799,7 @@ int main(int argc, char const *argv[])
     std::cout << "-------- Starting EtherCAT Interface ---------\n";
     EtherCATThread ethercat;
     boost::thread ecat_thread(boost::ref(ethercat));
+
 
     std::cout << "-------- Starting Command Interface ---------\n";
     IODCommandThread stateMonitor;

@@ -49,22 +49,35 @@ EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 
-bool EtherCATThread::waitForSync() {
+bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
 	char buf[10];
 	size_t response_len;
-	return safeRecv(*sync_sock, buf, 10, true, response_len);
+	return safeRecv(sync_sock, buf, 10, true, response_len);
 }
 
+#define USE_SIGNALLER 1
+
 void EtherCATThread::operator()() {
+    pthread_setname_np(pthread_self(), "iod ethercat");
+
 	struct timeval then;
 	gettimeofday(&then, 0);
 	
 	sync_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REP);
 	sync_sock->bind("inproc://ethercat_sync");
+
+	zmq::socket_t clock_sync(*MessagingInterface::getContext(), ZMQ_SUB);
+	clock_sync.connect("tcp://localhost:10241");
+	int res = zmq_setsockopt (clock_sync, ZMQ_SUBSCRIBE, "", 0);
+    assert (res == 0);
+            
 	
-	while (!program_done && !waitForSync()) ;
+	while (!program_done && !waitForSync(*sync_sock)) ;
 	while (!program_done) {
 		if (status == e_collect) {
+#ifdef USE_SIGNALLER
+			waitForSync(clock_sync);
+#else
         	struct timeval now;
         	gettimeofday(&now,0);
         	int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
@@ -90,12 +103,13 @@ void EtherCATThread::operator()() {
 			//while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
 //			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
 			//then = now;
+#endif
 	    	ECInterface::instance()->collectState();
 			sync_sock->send("ok",2);
 			status = e_update;
 		}
 		if (status == e_update) {
-			if (!waitForSync()) continue;
+			if (!waitForSync(*sync_sock)) continue;
 			ECInterface::instance()->sendUpdates();
 			//sync_sock->send("ok",2);
 			status = e_collect;

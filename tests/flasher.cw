@@ -4,8 +4,8 @@
 # a two state machine. This machine needs to be kick started by being set to on or off
 
 Flasher MACHINE {
-	on WHEN SELF IS on, EXECUTE flip WHEN SELF IS on && TIMER>=1000;
-	off WHEN SELF IS off, EXECUTE flip WHEN SELF IS off && TIMER>=1000;
+	on WHEN SELF IS on, EXECUTE flip WHEN SELF IS on && TIMER>=20;
+	off WHEN SELF IS off, EXECUTE flip WHEN SELF IS off && TIMER>=20;
 	COMMAND flip { SEND next TO SELF }
 	COMMAND flipOn { SET SELF TO on;}
 	COMMAND flipOff { SET SELF TO off; }
