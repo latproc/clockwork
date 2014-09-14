@@ -190,22 +190,22 @@ void Dispatcher::idle() {
                         	MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eRAW);
                           mif->send_raw(m.getText().c_str());
 												}
-                        else {
-                            if (protocol == "CLOCKWORK") {
+                        else if (protocol == "CLOCKWORK") {
                         		MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eCLOCKWORK);
                             mif->send(m);
 												}
-                        else {
-                        	//	MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eZMQ);
-												//		mif->send(m.getText().c_str());
+                       	else if (protocol == "ACKED") {
 													char url[100];
 													snprintf(url, 100, "tcp://%s:%d", host.asString().c_str(), (int)port);
 													MessageSender *sender = new MessageSender(url, m.getText());
 													boost::thread *m_sender = new boost::thread(boost::ref(*sender));
 													senders[m_sender] = sender;
 													threads.push_back(m_sender);
-													}
-                        }
+												}
+                        else {
+                        	MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eZMQ);
+													mif->send(m.getText().c_str());
+												}
                     }
                 }
             }
