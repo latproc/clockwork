@@ -1465,7 +1465,7 @@ Action::Status MachineInstance::setState(const char *sn) {
 Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 	Action::Status stat = Action::Complete; 
 	// update the Modbus interface for self 
-	if (modbus_exported == discrete || modbus_exported == coil) {
+	if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
 		if (!modbus_exports.count(_name))
 			DBG_M_MSG << _name << " Error: modbus export info not found\n";
 		else {
@@ -1473,11 +1473,11 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 			if (ma.getSource() == ModbusAddress::machine && ( ma.getGroup() != ModbusAddress::none) ) {
 				if (new_state.getName() == "on") { // just turned on
 					DBG_MODBUS << _name << " machine came on; triggering a modbus message\n";
-					ma.update(1);
+					ma.update(this, 1);
 				}
 				else if (current_state.getName() == "on") {
 					DBG_MODBUS << _name << " machine went off; triggering a modbus message\n";
-					ma.update(0);
+					ma.update(this, 0);
 				}		
 			}
 			else {
@@ -1532,19 +1532,19 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
                 mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(), this);
             }
         }
-        if (!modbus_exports.empty()) {
+        if (published && !modbus_exports.empty()) {
             // update the Modbus interface for the state
             if (modbus_exports.count(_name + "." + last)){
                 ModbusAddress ma = modbus_exports[_name + "." + last];
                 DBG_MODBUS << _name << " leaving state " << last << " triggering a modbus message " << ma << "\n";
                 assert(ma.getSource() == ModbusAddress::state);
-                ma.update(0);
+                ma.update(this, 0);
             }
             if (modbus_exports.count(_name + "." + current_state.getName())){
                 ModbusAddress ma = modbus_exports[_name + "." + current_state.getName()];
                 DBG_MODBUS << _name << " active state " << current_state.getName() << " triggering a modbus message " << ma << "\n";
                 assert(ma.getSource() == ModbusAddress::state);
-                ma.update(1);
+                ma.update(this, 1);
             }
         }
         /* TBD optimise the timer triggers to only schedule the earliest trigger
@@ -1805,11 +1805,11 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					}
 					if (commands.count(t.trigger.getText()) ) {
 						// if a modbus command, make sure it is turned off again in modbus
-						if (modbus_exports.count(_name + "." + t.trigger.getText())) {
+						if (published && modbus_exports.count(_name + "." + t.trigger.getText())) {
 							ModbusAddress addr = modbus_exports[_name + "." + t.trigger.getText()];
 							if (addr.getSource() == ModbusAddress::command) {
 								DBG_MODBUS << _name << " turning off command coil " << addr << "\n";
-								addr.update(0);
+								addr.update(this, 0);
 							}
 							else {
 								NB_MSG << _name << " command " << t.trigger.getText() << " is linked to an improper address\n";
@@ -3168,7 +3168,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				property_name += property;
 			}
             
-			if (modbus_exports.count(property_name)){
+			if (published && modbus_exports.count(property_name)){
 				ModbusAddress ma = modbus_exports[property_name];
 				if (property_val.token_id == ClockworkToken::tokVALUE) {
 					DBG_M_MODBUS << property_name << " modbus address " << ma << "\n";
@@ -3185,7 +3185,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
                             long intVal;
                             if (ma.length() == 1 || ma.length() == 2) {
                                 if (new_value.asInteger(intVal)) {
-                                    ma.update((int)intVal);
+                                    ma.update(this, (int)intVal);
                                 }
                                 else {
                                     DBG_M_MODBUS << property_name << " does not have an integer value\n";
@@ -3193,7 +3193,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
                             }
                         }
 						else if (new_value.kind == Value::t_string || new_value.kind == Value::t_symbol){
-							ma.update(new_value.sValue);
+							ma.update(this, new_value.sValue);
 						}
 						else {
 							DBG_M_MODBUS << "unable to export " << property_name << "\n";
@@ -3201,7 +3201,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 					}
 						break;
                     case ModbusAddress::string: {
-                        ma.update(new_value.asString());
+                        ma.update(this, new_value.asString());
                     }
 				}
 			}

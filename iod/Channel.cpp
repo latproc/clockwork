@@ -366,10 +366,12 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
                 char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
                 sendMessage(cmd, chn->communications_manager->setup,response);
                 std::cout << "channel " << name << " got response: " << response << "\n";
+								free(cmd);
             }
             else if (chn->mif) {
                 char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
                 chn->mif->send(cmd);
+								free(cmd);
             }
             else {
                 std::cout << "channel " << name << " wants to send property change\n";
@@ -476,6 +478,40 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
                 char buf[150];
                 snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
                          machine->getName().c_str());
+                MessageLog::instance()->add(buf);
+            }
+        }
+    }
+}
+
+void Channel::sendCommand(MachineInstance *machine, std::string command, std::list<Value>*params) {
+    if (!all) return;
+    std::string name = machine->fullName();
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        Channel *chn = (*iter).second; iter++;
+
+        if (!chn->machines.count(machine))
+            continue;
+        if (chn->filtersAllow(machine)) {
+            if (!chn->machines.count(machine)) chn->machines.insert(machine);
+            if (chn->communications_manager
+                && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
+                std::string response;
+                char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+                sendMessage(cmd, chn->communications_manager->setup,response);
+                std::cout << "channel " << name << " got response: " << response << "\n";
+								free(cmd);
+            }
+            else if (chn->mif) {
+                char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+                chn->mif->send(cmd);
+								free(cmd);
+            }
+            else {
+                char buf[150];
+                snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
+                machine->getName().c_str());
                 MessageLog::instance()->add(buf);
             }
         }

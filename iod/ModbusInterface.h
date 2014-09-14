@@ -38,6 +38,7 @@ public:
 };
 
 class ModbusAddressable;
+class MachineInstance;
 class ModbusAddress {
 public:
 	enum Group {coil, discrete, none, input_register, holding_register, string };
@@ -66,11 +67,11 @@ public:
 	static int next(Group g);
 	static ModbusAddress alloc(Group g, unsigned int n, ModbusAddressable *owner, Source src, const std::string &full_name);
 	
-	void update(Group g, int addr, const char *value, int len);
-	void update(Group g, int addr, int new_value, int len);
-	void update(int offset, int new_value, int len);
-	void update(int new_value);
-	void update(const std::string &value);
+	void update(MachineInstance *owner,Group g, int addr, const char *value, int len);
+	void update(MachineInstance *owner, Group g, int addr, int new_value, int len);
+	void update(MachineInstance *owner, int offset, int new_value, int len);
+	void update(MachineInstance *owner, int new_value);
+	void update(MachineInstance *owner, const std::string &value);
 	
 	bool operator<(const ModbusAddress &other) const {
 		if (group < other.group) return true;
