@@ -43,7 +43,7 @@
 
 #include "ecat_thread.h"
 
-//#define USE_RTC 1
+#define USE_RTC 1
 
 #ifdef USE_RTC
 #include <sys/ioctl.h>
