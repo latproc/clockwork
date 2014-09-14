@@ -54,7 +54,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
         try {
                 zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int n = zmq::poll( &items[0], 1, timeout);
-								if (!n && block) continue;
+				if (!n && block) continue;
                 if (items[0].revents & ZMQ_POLLIN) {
      	            response_len = sock.recv(buf, buflen);
                 if (!response_len && block) continue;
@@ -357,6 +357,10 @@ char *MessagingInterface::sendState(std::string cmd, std::string name, std::stri
     SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disconnected_(true), socket_name(snam) {
     }
 void SocketMonitor::operator()() {
+		char thread_name[100];
+		snprintf(thread_name, 100, "iod skt monitor %s", socket_name);
+	    pthread_setname_np(pthread_self(), thread_name);
+
         monitor(sock, socket_name);
     }
 void SocketMonitor::on_monitor_started() {

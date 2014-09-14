@@ -42,7 +42,9 @@ struct ListenerThreadInternals : public ClientInterfaceInternals {
     
 };
 
-void IODCommandListenerThread::operator()() {}
+void IODCommandListenerThread::operator()() {
+    pthread_setname_np(pthread_self(), "iod command listener");
+}
 IODCommandListenerThread::IODCommandListenerThread() : done(false), internals(0) { }
 void IODCommandListenerThread::stop() { done = true; }
 
@@ -60,6 +62,7 @@ public:
     MyMonitor(zmq::socket_t *s) : sock(s) {
     }
     void operator()() {
+	    pthread_setname_np(pthread_self(), "iod connection monitor");
         monitor(*sock, "inproc://monitor.rep");
     }
     virtual void on_monitor_started() {
@@ -104,6 +107,8 @@ private:
 };
 
 void IODCommandThread::operator()() {
+    pthread_setname_np(pthread_self(), "iod command interface");
+
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
     
     std::cout << "------------------ Command Thread Started -----------------\n";
@@ -149,10 +154,11 @@ void IODCommandThread::operator()() {
                 delete command;
                 params.clear();
                 access_req.send("done", 4);
-                {   // wait for an acknowledgement so the access request is back in the correct state
+                // wait for an acknowledgement so the access request is back in the correct state
+				{
                     size_t acc_len = 0;
                     char acc_buf[10];
-                    while ( (acc_len=access_req.recv(acc_buf, 10)) == 0) ;
+                    safeRecv(access_req, acc_buf, 10, true, acc_len);
                 }
                 status = e_running;
             }

@@ -36,7 +36,7 @@ EXTRALIBS = -L/opt/local/lib -L/usr/local/lib -L/opt/latproc/lib \
 # would like to use.
 
 BOOST_LIB_EXTN = #-mt
-BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN)
+BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN) -lpthread
 BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST_LIB_EXTN)
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
@@ -46,7 +46,7 @@ CFLAGS = $(SIMULATED) $(DLLFLAGS) -O -std=gnu++0x -pedantic -Wall -Wno-unused-va
 	-Wno-unused-but-set-variable \
 	$(EXTRAINCS) -DUSE_ETHERCAT -DETHERCATD
 CC = g++ $(CFLAGS)
-LDFLAGS = $(EXTRALIBS) -O
+LDFLAGS = $(EXTRALIBS) -O 
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
