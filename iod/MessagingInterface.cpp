@@ -606,7 +606,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     
     char buf[1000];
     size_t msglen = 0;
-    if (run_status == e_waiting_cmd && items[num_items-3].revents & ZMQ_POLLIN) {
+    if (run_status == e_waiting_cmd && items[num_items-1].revents & ZMQ_POLLIN) {
         if (safeRecv(cmd, buf, 1000, false, msglen)) {
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
