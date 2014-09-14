@@ -588,8 +588,10 @@ bool SubscriptionManager::checkConnections() {
         usleep(50000);
         return false;
     }
-    if (monit_subs.disconnected() || monit_setup.disconnected())
+    if (monit_subs.disconnected() || monit_setup.disconnected()) {
+        usleep(50000);
         return false;
+		}
     return true;
 }
     

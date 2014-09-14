@@ -799,10 +799,10 @@ int main(int argc, const char * argv[])
                 { subscription_manager.subscriber, 0, ZMQ_POLLIN, 0 },
                 { iosh_cmd, 0, ZMQ_POLLIN, 0 }
             };
-            if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) continue;
-						if (items[0].revents & ZMQ_POLLIN) std::cout << "incoming command response from iod\n";
-						if (items[1].revents & ZMQ_POLLIN) std::cout << "incoming data from subscriber\n";
-						if (items[2].revents & ZMQ_POLLIN) std::cout << "incoming data from modbus\n";
+            if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) { usleep(1000); continue; }
+//						if (items[0].revents & ZMQ_POLLIN) std::cout << "incoming command response from iod\n";
+//						if (items[1].revents & ZMQ_POLLIN) std::cout << "incoming data from subscriber\n";
+//						if (items[2].revents & ZMQ_POLLIN) std::cout << "incoming data from modbus\n";
             if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
 
             zmq::message_t update;
