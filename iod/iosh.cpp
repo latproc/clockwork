@@ -264,6 +264,8 @@ void initialise_commands() {
 
 int main(int argc, const char * argv[])
 {
+		zmq::context_t context;
+		MessagingInterface::setContext(&context);
     try {
 		int port = 5555;
 		bool quiet = false;
