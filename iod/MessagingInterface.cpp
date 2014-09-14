@@ -156,7 +156,7 @@ char *MessagingInterface::send(const char *txt) {
             if (zmq_errno())
                 std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
-                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+                std::cerr << "Exception when sending " << url << ": " << e.what() << " " << (4-retries)<< "\n";
         }
     }
     retries = 4;
