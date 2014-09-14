@@ -169,7 +169,7 @@ char *MessagingInterface::send(const char *txt) {
                 bool expect_reply = true;
                 while (expect_reply) {
                     zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                    zmq::poll( &items[0], 1, 500000);
+                    zmq::poll( &items[0], 1, 500);
                     if (items[0].revents & ZMQ_POLLIN) {
                         zmq::message_t reply;
                         if (socket->recv(&reply)) {

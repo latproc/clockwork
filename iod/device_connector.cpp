@@ -457,7 +457,7 @@ struct IODInterface{
                 while (!done && expect_reply) {
                     if (!socket) { connect(); usleep(100000); continue; }
                     zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                    zmq::poll( &items[0], 1, REQUEST_TIMEOUT*1000);
+                    zmq::poll( &items[0], 1, REQUEST_TIMEOUT);
                     if (items[0].revents & ZMQ_POLLIN) {
                         zmq::message_t reply;
                         if (!socket->recv(&reply)) continue;
