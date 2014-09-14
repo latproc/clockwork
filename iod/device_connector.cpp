@@ -396,7 +396,7 @@ done_getSettings:
 }
 
 int setupSerialPort(const char *portname, const char *setting_str) {
-	int serial = open(portname, O_RDWR | O_NOCTTY | O_NDELAY);
+	int serial = ::open(portname, O_RDONLY | O_NDELAY); //O_RDWR | O_NOCTTY | O_NDELAY);
 	if (serial == -1) {
 		perror("Error opening port ");
         return -1;
@@ -499,7 +499,7 @@ struct MatchFunction {
                 std::string res = MatchFunction::instance()->result;
                 if (index == num_sub && (Options::instance()->skippingRepeats() == false
                                             || last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
-                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->property(), res.c_str());
+                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->machine(), Options::instance()->property(), res.c_str());
                     if (cmd) {
                         std::string response;
                         if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
@@ -826,6 +826,7 @@ bool setup_signals()
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) {
+				done = true;
         return false;
     }
     return true;
@@ -906,10 +907,34 @@ int main(int argc, const char * argv[])
             usage(argc, argv);
             exit(EXIT_FAILURE);
         }
+
+        struct timeval last_time;
+        gettimeofday(&last_time, 0);
+        if (!setup_signals()) {
+            std::cerr << "Error setting up signals " << strerror(errno) << "\n";
+        }
+        
         
         zmq::socket_t cmd(*MessagingInterface::getContext(), ZMQ_REP);
         cmd.bind(iod_connection);
         usleep(5000);
+        
+	      ConnectionManager *connection_manager = 0;
+				try {
+	        if (options.watchProperty()) {
+	            connection_manager = new SubscriptionManager("DeviceConnector");
+	        }
+	        else {
+	            connection_manager = new CommandManager(Options::instance()->host());
+	        }
+				}
+				catch(zmq::error_t io) {
+					std::cout << "zmq error: " << zmq_strerror(errno) << "\n";
+				}
+				catch(std::exception ex) {
+					std::cout << " unknown exception: " << zmq_strerror(errno) << "\n";
+				}
+				assert(connection_manager);
         
         ConnectionThread connection_thread;
         boost::thread monitor(boost::ref(connection_thread));
@@ -920,21 +945,7 @@ int main(int argc, const char * argv[])
         //if (options.watchProperty()) {
         //    watcher = new boost::thread(boost::ref(watch_thread));
         //}
-        
-        ConnectionManager *connection_manager = 0;
-        if (options.watchProperty()) {
-            connection_manager = new SubscriptionManager("DeviceConnector");
-        }
-        else {
-            connection_manager = new CommandManager(Options::instance()->host());
-        }
-        
-        struct timeval last_time;
-        gettimeofday(&last_time, 0);
-        if (!setup_signals()) {
-            std::cerr << "Error setting up signals " << strerror(errno) << "\n";
-        }
-        
+
         zmq::pollitem_t *items = new zmq::pollitem_t[3];
         memset(items, 0, sizeof(zmq::pollitem_t)*3);
         int idx = 0;
@@ -944,13 +955,15 @@ int main(int argc, const char * argv[])
         int num_items = 0;
         if (options.watchProperty()) {
             SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
+						assert(sm);
             items[idx].socket = sm->setup; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
             subs_index = idx;
             items[idx].socket = sm->subscriber; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
         }
         else {
             CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
-            items[idx].socket = cm->setup; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+						assert(cm);
+            items[idx].socket = *cm->setup; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
         }
         cmd_index = idx; items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
         num_items = idx;
@@ -961,7 +974,7 @@ int main(int argc, const char * argv[])
             struct timeval now;
             gettimeofday(&now, 0);
 
-			if (!connection_manager->checkConnections(items, num_items, cmd)) continue;
+						if (!connection_manager->checkConnections(items, num_items, cmd)) continue;
             if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
             
             // TBD once the connection is open, check that data has been received within the last second
@@ -990,7 +1003,7 @@ int main(int argc, const char * argv[])
             struct timespec remain_time;
             sleep_time.tv_sec = 0;
             sleep_time.tv_nsec = 300000000;
-            while (nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
+            while (!done && nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
                 sleep_time.tv_nsec = remain_time.tv_nsec;
             }
         }
