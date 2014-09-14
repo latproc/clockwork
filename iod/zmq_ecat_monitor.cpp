@@ -32,6 +32,7 @@ namespace po = boost::program_options;
 
 int main(int argc, const char * argv[])
 {
+    zmq::context_t context (1);
     try {
         
 #if 0
@@ -52,7 +53,6 @@ int main(int argc, const char * argv[])
 		if (argc > 1 && strcmp(argv[1],"--server") == 0) {
 	        //server
 	        int count = 0;
-	        zmq::context_t context (1);
 	        zmq::socket_t publisher (context, ZMQ_PUB);
 	        publisher.bind("tcp://*:5556");
 	        for (;;) {
@@ -72,7 +72,6 @@ int main(int argc, const char * argv[])
 	        int res;
 			std::stringstream ss;
 			ss << "tcp://localhost:" << port;
-	        zmq::context_t context (1);
 	        zmq::socket_t subscriber (context, ZMQ_SUB);
 	        res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
 	        assert (res == 0);

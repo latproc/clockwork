@@ -53,8 +53,7 @@ struct CommandThreadInternals : public ClientInterfaceInternals {
 
 void IODCommandThread::operator()() {
     std::cout << "------------------ Command Thread Started -----------------\n";
-    zmq::context_t context (3);
-    zmq::socket_t socket (context, ZMQ_REP);
+    zmq::socket_t socket (*MessagingInterface::getContext(), ZMQ_REP);
     int linger = 0; // do not wait at socket close time
     socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
     std::stringstream sn;

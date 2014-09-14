@@ -515,7 +515,7 @@ struct IODInterface{
                 delete socket;
                 socket = 0;
             }
-            socket = new zmq::socket_t (*context, ZMQ_REQ);
+            socket = new zmq::socket_t (*MessagingInterface::getContext(), ZMQ_REQ);
             socket->connect(ss.str().c_str());
             int linger = 0; // do not wait at socket close time
             socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
@@ -530,18 +530,15 @@ struct IODInterface{
     
     void stop() { done = true; }
     
-    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(100), context(0),
+    IODInterface(const Options &opts) : REQUEST_RETRIES(3), REQUEST_TIMEOUT(100), 
             socket(0), options(opts), done(false), status(s_disconnected) {
-        context = new zmq::context_t(1);
         connect();
     }
     
     ~IODInterface() {
         if (socket) delete socket;
-        delete context;
     }
     
-    zmq::context_t *context;
     zmq::socket_t *socket;
     //boost::mutex interface_mutex;
     const Options &options;
@@ -947,11 +944,10 @@ struct PropertyMonitorThread {
         }
     }
     PropertyMonitorThread(Options &opts, ConnectionThread &connection_)
-            : done(false), context(0), socket(0), options(opts), connection(connection_) {
+            : done(false), socket(0), options(opts), connection(connection_) {
         if (options.watchProperty()) {
             match_str = options.watchProperty();
             match_str += " VALUE ";
-            context = new zmq::context_t(1);
             connect();
         }
     }
@@ -970,7 +966,7 @@ struct PropertyMonitorThread {
             int res;
             std::stringstream ss;
             ss << "tcp://" << options.iodHost() << ":" << options.publisher_port();
-            socket = new zmq::socket_t (*context, ZMQ_SUB);
+            socket = new zmq::socket_t (*MessagingInterface::getContext(), ZMQ_SUB);
             res = zmq_setsockopt (*socket, ZMQ_SUBSCRIBE, "", 0);
             if (res) throw WatchException("error setting zmq socket option");
             socket->connect(ss.str().c_str());
@@ -990,7 +986,6 @@ struct PropertyMonitorThread {
     void stop() { done = true; }
     enum WatcherStates { ws_disconnected, ws_connected };
     bool done;
-    zmq::context_t *context;
     zmq::socket_t *socket;
     const Options &options;
     WatcherStates status;
@@ -1026,6 +1021,8 @@ bool setup_signals()
 
 int main(int argc, const char * argv[])
 {
+		zmq::context_t context;
+		MessagingInterface::setContext(&context);
     last_send.tv_sec = 0;
     last_send.tv_usec = 0;
     

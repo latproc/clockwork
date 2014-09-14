@@ -61,6 +61,7 @@
 #include "clockwork.h"
 #include "ClientInterface.h"
 #include "MessageLog.h"
+#include "MessagingInterface.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -501,6 +502,8 @@ void generateIOComponentModules() {
 
 int main(int argc, char const *argv[])
 {
+	zmq::context_t context;
+	MessagingInterface::setContext(&context);
 	Logger::instance();
 	MessageLog::setMaxMemory(10000);
 	ControlSystemMachine machine;
