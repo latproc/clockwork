@@ -43,9 +43,22 @@
 
 #include "ecat_thread.h"
 
+//#define USE_RTC 1
+
+#ifdef USE_RTC
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <linux/rtc.h>
+#include <errno.h>
+
+#endif
+
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 
-EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000) { }
+EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000) { 
+}
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 
@@ -55,11 +68,29 @@ bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
 	return safeRecv(sync_sock, buf, 10, true, response_len);
 }
 
-#define USE_SIGNALLER 1
+#ifndef USE_RTC
+//#define USE_SIGNALLER 1
+#endif
+
 
 void EtherCATThread::operator()() {
     pthread_setname_np(pthread_self(), "iod ethercat");
 
+#ifdef USE_RTC
+	rtc = open("/dev/rtc", 0);
+	if (rtc == -1) { perror("open rtc"); exit(1); }
+	unsigned long period = 1000;
+
+	int rc = ioctl(rtc, RTC_IRQP_SET, period);
+	if (rc == -1) { perror("set rtc period"); exit(1); }
+
+	rc = ioctl(rtc, RTC_IRQP_READ, &period);
+	if (rc == -1) { perror("ioctl"); exit(1); }
+	std::cout << "Real time clock: period set to : " << period << "\n";
+
+	rc = ioctl(rtc, RTC_PIE_ON, 0);
+	if (rc == -1) { perror("enable rtc pie"); exit(1); }
+#endif
 	struct timeval then;
 	gettimeofday(&then, 0);
 	
@@ -77,6 +108,17 @@ void EtherCATThread::operator()() {
 		if (status == e_collect) {
 #ifdef USE_SIGNALLER
 			waitForSync(clock_sync);
+#else
+#ifdef USE_RTC
+	long rtc_val;
+	int rc = read(rtc, &rtc_val, sizeof(rtc_val));
+	if (rc == -1) { 
+		if (errno == EBADF) {
+			rtc = open("/dev/rtc", 0);
+			if (rtc == -1) { perror("open rtc"); exit(1); }
+		}
+		perror("read rtc"); exit(1); }
+	if (rc == 0) std::cout << "zero bytes read from rtc\n";
 #else
         	struct timeval now;
         	gettimeofday(&now,0);
@@ -103,6 +145,7 @@ void EtherCATThread::operator()() {
 			//while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
 //			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
 			//then = now;
+#endif
 #endif
 	    	ECInterface::instance()->collectState();
 			sync_sock->send("ok",2);

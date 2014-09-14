@@ -17,6 +17,7 @@ private:
 	long cycle_delay;
 	zmq::socket_t *cmd_sock;
 	zmq::socket_t *sync_sock;
+	int rtc; // file descriptor of the RTC if it is being used
 
 	bool waitForSync(zmq::socket_t &sync);
 };
