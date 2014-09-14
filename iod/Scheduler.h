@@ -31,6 +31,7 @@
 #include "Action.h"
 #include "Message.h"
 #include <boost/thread.hpp>
+#include <zmq.hpp>
 
 struct ScheduledItem {
 	Package *package;
@@ -80,6 +81,9 @@ public:
     void idle();
 	bool empty() { return items.empty(); }
     int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
+
+	void operator()();
+	void stop();
     
 protected:
     Scheduler();
@@ -88,6 +92,14 @@ protected:
     std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
     //PriorityQueue items;
 	struct timeval next_time;
+	enum State { 
+		e_waiting,  // waiting for something to do
+		e_waiting_cw,  // waiting to begin processing
+		e_running, 	// processing triggered events
+		e_aborted 	// time to shutdown
+	} state;
+	zmq::socket_t update_sync;
+	long next_delay_time;
 };
 
 //std::ostream &operator<<(std::ostream &out, const Scheduler &m);

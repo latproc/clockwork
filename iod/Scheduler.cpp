@@ -24,6 +24,8 @@
 #include "Scheduler.h"
 #include "MachineInstance.h"
 #include "DebugExtra.h"
+#include "MessagingInterface.h"
+#include <zmq.hpp>
 
 Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000;
@@ -83,7 +85,8 @@ std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
     return item.operator<<(out);
 }
 
-Scheduler::Scheduler() { 
+Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PULL), next_delay_time(0) { 
+	update_sync.bind("inproc://sch_items");
 	next_time.tv_sec = 0;
 	next_time.tv_usec = 0;
 }
@@ -99,6 +102,9 @@ void Scheduler::add(ScheduledItem*item) {
 	items.push(item);
 	next_time = next()->delivery_time;
 	//DBG_SCHEDULER << "After schedule::add() " << *this << "\n";
+	zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
+	update_notify.connect("inproc://sch_items");
+	update_notify.send("poke",4);
 }
 
 /*
@@ -125,7 +131,7 @@ std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
  */
 
 bool Scheduler::ready() {
-	if (empty()) return false;
+	if (empty()) { next_delay_time = -1; return false; }
 	//DBG_SCHEDULER<< "scheduler checking " << *this << "\n";
 	if (next_time.tv_sec == 0) {
 		next_time = next()->delivery_time;
@@ -133,28 +139,82 @@ bool Scheduler::ready() {
 	struct timeval now;
 	gettimeofday(&now, 0);
     ScheduledItem *top = next();
-    long dt = get_diff_in_microsecs(&top->delivery_time, &now);
+    next_delay_time = get_diff_in_microsecs(&top->delivery_time, &now);
 	//if (now.tv_sec > next_time.tv_sec) return true;
 	//if (now.tv_sec == next_time.tv_sec) return now.tv_usec >= next_time.tv_usec;
-    if (dt<=0) return true;
+    if (next_delay_time<=0) return true;
 	return false;
 }
 
+void Scheduler::operator()() {
+	 pthread_setname_np(pthread_self(), "iod scheduler");
+	idle();
+}
+
+void Scheduler::stop() {
+	state = e_aborted;
+	zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
+	update_notify.connect("inproc://sch_items");
+	update_notify.send("poke",4);
+}
+	
+
 void Scheduler::idle() {
-	while ( ready()) {
-		ScheduledItem *item = next();
-		DBG_SCHEDULER << "Scheduled item " << (*item) << " is ready. \n"; //(" << items.size() << " items)\n"<< *this;
-		pop();
-		next_time.tv_sec = 0;
-		if (item->package) {
-			//item->package->receiver->enqueue(*(item->package));
-			item->package->receiver->handle(item->package->message, item->package->transmitter);
-			delete item->package;
-            delete item;
+	zmq::socket_t sync(*MessagingInterface::getContext(), ZMQ_REP);
+	sync.bind("inproc://scheduler_sync");
+	char buf[10];
+	size_t response_len = 0;
+	safeRecv(sync, buf, 10, true, response_len);
+	std::cout << "Scheduler started\n";
+
+	state = e_waiting;
+	bool is_ready;
+	while (state != e_aborted) {
+		if (!ready() && state == e_waiting) {
+			//std::cout << "scheduler waiting for work " << next_delay_time << "\n";
+			long delay = next_delay_time;
+			if (delay == -1)
+				safeRecv(update_sync, buf, 10, false, response_len, -1);
+			else if (delay < 1000)
+				usleep(delay);
+			else
+				safeRecv(update_sync, buf, 10, false, response_len, delay/1000);
+			//std::cout << "scheduler got some work\n";
 		}
-		else if (item->action) {
-			item->action->getOwner()->push(item->action);
-            delete item;
+		is_ready = ready();
+		if (state == e_waiting && is_ready) {
+			//std::cout << "scheduler wants time " <<items.size() << " total items\n";
+			sync.send("sched", 5); // tell clockwork we have something to do
+			state = e_waiting_cw;
+		}
+		if (state == e_waiting_cw && is_ready) {
+			safeRecv(sync, buf, 10, true, response_len);
+			//std::cout << "scheduler executing\n";
+			state = e_running;
+		}
+		
+		while ( state == e_running && is_ready) {
+			ScheduledItem *item = next();
+			DBG_SCHEDULER << "Scheduled item " << (*item) << " ready. \n"; //(" << items.size() << " items)\n"<< *this;
+			pop();
+			next_time.tv_sec = 0;
+			if (item->package) {
+				//item->package->receiver->enqueue(*(item->package));
+				item->package->receiver->handle(item->package->message, item->package->transmitter);
+				delete item->package;
+	            delete item;
+			}
+			else if (item->action) {
+				item->action->getOwner()->push(item->action);
+	            delete item;
+			}
+			is_ready = ready();
+		}
+		if (state == e_running) {
+			//std::cout << "scheduler done\n";
+			sync.send("done", 4);
+			safeRecv(sync, buf, 10, true, response_len); // wait for ack from clockwork
+			state = e_waiting;
 		}
 	}
 }

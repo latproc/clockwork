@@ -64,7 +64,13 @@ private:
     DispatchThread *dispatch_thread;
     boost::thread *thread_ref;
     zmq::socket_t sync;
-    enum {e_waiting, e_waiting_cw, w_waiting_cmd, e_running, e_aborted, e_handling_dispatch} status;
+    enum {e_waiting, 
+		e_waiting_cw, 
+		w_waiting_cmd, 
+		e_running, 
+		e_aborted, 
+		e_handling_dispatch
+	} status;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);

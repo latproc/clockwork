@@ -54,7 +54,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
         try {
                 zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int n = zmq::poll( &items[0], 1, timeout);
-								if (!n && block) continue;
+				if (!n && block) continue;
                 if (items[0].revents & ZMQ_POLLIN) {
      	            response_len = sock.recv(buf, buflen);
                 if (!response_len && block) continue;

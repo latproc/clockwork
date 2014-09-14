@@ -189,10 +189,12 @@ struct ProcessingThread
     static const int ECAT_ITEM = 0;
     static const int CMD_ITEM = 1;
     static const int DISPATCHER_ITEM = 2;
+    static const int SCHEDULER_ITEM = 3;
 
-    enum Status { e_waiting, e_handling_ecat, e_handling_cmd, e_waiting_cmd, e_handling_dispatch } ;
+    enum Status { e_waiting, e_handling_ecat, e_handling_cmd, e_waiting_cmd, e_handling_dispatch, 
+		e_handling_sched } ;
     Status status;
-    int pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatch);
+    int pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatch, zmq::socket_t &sched);
     void waitForCommandProcessing(zmq::socket_t &resource_mgr);
 };
 
@@ -247,7 +249,7 @@ void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
 }
 
 
-int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatcher)
+int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatcher, zmq::socket_t &scheduler)
 {
 	int res = 0;
     while (status == e_waiting)
@@ -256,7 +258,7 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
         {
             int len = 0;
             char buf[10];
-            res = zmq::poll(&items[0], 3, 100);
+            res = zmq::poll(&items[0], 4, 100);
             if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
             {
                 len = ecat_sync.recv(buf, 10, ZMQ_NOBLOCK);
@@ -274,6 +276,13 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
                 len = dispatcher.recv(buf, 10, ZMQ_NOBLOCK);
                 if (len) {
 					status = e_handling_dispatch;
+				}
+            }
+            else if (items[SCHEDULER_ITEM].revents & ZMQ_POLLIN)
+            {
+                len = scheduler.recv(buf, 10, ZMQ_NOBLOCK);
+                if (len) {
+					status = e_handling_sched;
 				}
             }
             break;
@@ -317,6 +326,9 @@ void ProcessingThread::operator()()
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
 
+    zmq::socket_t sched_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+    sched_sync.connect("inproc://scheduler_sync");
+
     // used to permit command processing
     zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
     resource_mgr.bind("inproc://resource_mgr");
@@ -325,8 +337,10 @@ void ProcessingThread::operator()()
     ecat_sync.connect("inproc://ethercat_sync");
 
     unsigned long sync = 0;
-    dispatch_sync.send("go",2); // collect state
+    sched_sync.send("go",2); // scheduled items
+    dispatch_sync.send("go",2); //  permit handling of events
     ecat_sync.send("go",2); // collect state
+	
 
 	uint64_t last_checked_cycle_time = 0;
     while (!program_done)
@@ -340,13 +354,14 @@ void ProcessingThread::operator()()
         {
             { ecat_sync, 0, ZMQ_POLLIN, 0 },
             { resource_mgr, 0, ZMQ_POLLIN, 0 },
-            { dispatch_sync, 0, ZMQ_POLLIN, 0 }
+            { dispatch_sync, 0, ZMQ_POLLIN, 0 },
+            { sched_sync, 0, ZMQ_POLLIN, 0 }
         };
         size_t len = 0;
         char buf[10];
         while (!program_done && len == 0)
         {
-            if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync)) break;
+            if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync, sched_sync)) break;
         }
 //		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
 //			std::cout << "ecat waiting\n";
@@ -371,6 +386,20 @@ void ProcessingThread::operator()()
 				safeRecv(dispatch_sync, buf, 10, true, len);
 //				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
 				dispatch_sync.send("bye",3);
+				status = e_waiting;
+			}
+		}
+		if (status == e_handling_sched) {
+			if (processingState != eIdle) {
+				// cannot process scheduled events at present
+				status = e_waiting;
+			}
+			else {
+				sched_sync.send("continue",3);
+				// wait for the dispatcher
+				safeRecv(sched_sync, buf, 10, true, len);
+//				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
+				sched_sync.send("bye",3);
 				status = e_waiting;
 			}
 		}
@@ -450,13 +479,13 @@ void ProcessingThread::operator()()
                                 len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
                             }
                         }
-#endif
 
                         Scheduler::instance()->idle();
                         gettimeofday(&end_t, 0);
                         delta = get_diff_in_microsecs(&end_t, &start_t);
                         statistics->dispatch_processing.add(delta - delta2);
                         delta2 = delta;
+#endif
                         processingState = eStableStates;
                     }
                     if (processingState == eStableStates)
@@ -679,11 +708,13 @@ void generateIOComponentModules()
 
 int main(int argc, char const *argv[])
 {
+	std::cout << "main starting\n";
     zmq::context_t context;
     MessagingInterface::setContext(&context);
     Logger::instance();
     Dispatcher::instance();
     MessageLog::setMaxMemory(10000);
+	Scheduler::instance();
     ControlSystemMachine machine;
 
     Logger::instance()->setLevel(Logger::Debug);
@@ -800,6 +831,9 @@ int main(int argc, char const *argv[])
     EtherCATThread ethercat;
     boost::thread ecat_thread(boost::ref(ethercat));
 
+    std::cout << "-------- Starting Scheduler ---------\n";
+    boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
+
 
     std::cout << "-------- Starting Command Interface ---------\n";
     IODCommandThread stateMonitor;
@@ -811,10 +845,12 @@ int main(int argc, char const *argv[])
     Dispatcher::start();
 
     ProcessingThread processMonitor(machine, delay);
-    //boost::thread process(boost::ref(processMonitor));
+    boost::thread process(boost::ref(processMonitor));
     // do not start a thread, simply run this process directly
-    processMonitor();
+    //processMonitor();
+	process.join();
     Dispatcher::instance()->stop();
+    Scheduler::instance()->stop();
     stateMonitor.stop();
     ethercat.stop();
     monitor.join();
