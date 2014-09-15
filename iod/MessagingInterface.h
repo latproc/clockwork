@@ -204,8 +204,8 @@ public:
     virtual int numSocks() { return 1; }
     
     std::string host_name;
-    zmq::socket_t setup;
-    SingleConnectionMonitor monit_setup;
+    zmq::socket_t *setup;
+    SingleConnectionMonitor *monit_setup;
     Status setup_status;
     Status run_status;
 };

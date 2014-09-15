@@ -42,11 +42,11 @@ BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
 
 DLLFLAGS = -fPIC -rdynamic
-CFLAGS = $(SIMULATED) $(DLLFLAGS) -O -std=gnu++0x -pedantic -Wall -Wno-unused-variable -Wno-variadic-macros \
+CFLAGS = $(SIMULATED) $(DLLFLAGS) -g -std=gnu++0x -pedantic -Wall -Wno-unused-variable -Wno-variadic-macros \
 	-Wno-unused-but-set-variable \
 	$(EXTRAINCS) -DUSE_ETHERCAT -DETHERCATD
 CC = g++ $(CFLAGS)
-LDFLAGS = $(EXTRALIBS) -O 
+LDFLAGS = $(EXTRALIBS) -g 
 
 SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \

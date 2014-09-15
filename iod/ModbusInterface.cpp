@@ -25,6 +25,8 @@
 #include <iomanip>
 #include <utility>
 #include "options.h"
+#include "MachineInstance.h"
+#include "Channel.h"
 
  int ModbusAddress::next_discrete = ModbusAddress::first_auto_address; // next free address in the group
  int ModbusAddress::next_coil = ModbusAddress::first_auto_address; // next free address in the group
@@ -113,64 +115,74 @@ bool ModbusAddress::operator==(const ModbusAddress &other) const {
 	return group == other.group && address == other.address;
 }
 
-static MessagingInterface *modbus_changes = 0;
+//static MessagingInterface *modbus_changes = 0;
 
 void ModbusAddress::message(const std::string &msg) {
+/*
 	if (modbus_changes == 0) {
         modbus_changes = new MessagingInterface(1, modbus_port());
         usleep(200000); // give subscribers time to notice... TBD fix this
     }
 	modbus_changes->send(msg.c_str());
+*/
 }
 
-void ModbusAddress::update(Group group, int addr, const char *str_value, int len) {
+void ModbusAddress::update(MachineInstance *owner, Group group, int addr, const char *str_value, int len) {
+/*
 	if (modbus_changes == 0) {
         modbus_changes = new MessagingInterface(1, 5558);
         usleep(200000); // give subscribers time to notice...
     }
+*/
     std::list<Value>params;
     params.push_back(group);
     params.push_back(addr);
     params.push_back(Value(name.c_str(),Value::t_string));
     params.push_back(len);
     params.push_back(Value(str_value,Value::t_string));
-    modbus_changes->sendCommand("UPDATE", &params);
+		Channel::sendCommand(owner, "UPDATE", &params);
+//    modbus_changes->sendCommand("UPDATE", &params);
+
 	//std::stringstream ss;
 	//ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " \"" << str_value << "\"" <<  "\n";
 	//std::string s = ss.str();
 	//modbus_changes->send(s.c_str());
 }
 
-void ModbusAddress::update(Group group, int addr, int new_value, int len) {
+void ModbusAddress::update(MachineInstance *owner, Group group, int addr, int new_value, int len) {
+/*
 	if (modbus_changes == 0) {
         modbus_changes = new MessagingInterface(1, 5558);
         usleep(200000); // give subscribers time to notice...
     }
+*/
     std::list<Value>params;
     params.push_back(group);
     params.push_back(addr);
     params.push_back(Value(name.c_str(),Value::t_string));
     params.push_back(len);
     params.push_back(new_value);
-    modbus_changes->sendCommand("UPDATE", &params);
+		Channel::sendCommand(owner, "UPDATE", &params);
+//    modbus_changes->sendCommand("UPDATE", &params);
+
     //std::stringstream ss;
 	//ss << "UPDATE " << group <<" " << std::setfill('0') << std::setw(5) << addr << " \"" << name << "\" " << len << " " << new_value <<  "\n";
 	//std::string s = ss.str();
 	//modbus_changes->send(s.c_str());
 }
 
-void ModbusAddress::update(int index, int new_value, int len) {
+void ModbusAddress::update(MachineInstance *owner, int index, int new_value, int len) {
 	int addr = index & 0xffff;
 	int group = index >> 16;
-	update((Group)group, addr, new_value, len);
+	update(owner, (Group)group, addr, new_value, len);
 }
 
-void ModbusAddress::update(int new_value) {
-	update(group, address, new_value, allocated);
+void ModbusAddress::update(MachineInstance *owner, int new_value) {
+	update(owner, group, address, new_value, allocated);
 }
 
-void ModbusAddress::update(const std::string &str) {
-	update(group, address, str.c_str(), allocated);
+void ModbusAddress::update(MachineInstance *owner, const std::string &str) {
+	update(owner, group, address, str.c_str(), allocated);
 }
 
 // find the Modbus address that has a mapped entry for the given group and address

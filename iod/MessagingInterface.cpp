@@ -365,7 +365,15 @@ void SocketMonitor::operator()() {
         pthread_setname_np(pthread_self(), thread_name);
 #endif
 
+			try {
         monitor(sock, socket_name);
+			}
+			catch (zmq::error_t io) {
+				std::cout << "ZMQ error: " << zmq_strerror(errno) << "\n";
+			}
+			catch (std::exception ex) {
+				std::cout << "unknown exception setting up a socket monitor\n";
+			}
     }
 void SocketMonitor::on_monitor_started() {
         //DBG_MSG << "monitor started\n";
@@ -592,8 +600,10 @@ bool SubscriptionManager::checkConnections() {
         usleep(50000);
         return false;
     }
-    if (monit_subs.disconnected() || monit_setup.disconnected())
+    if (monit_subs.disconnected() || monit_setup.disconnected()) {
+        usleep(50000);
         return false;
+		}
     return true;
 }
     
@@ -608,7 +618,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     
     char buf[1000];
     size_t msglen = 0;
-    if (run_status == e_waiting_cmd && items[num_items-3].revents & ZMQ_POLLIN) {
+    if (run_status == e_waiting_cmd && items[num_items-1].revents & ZMQ_POLLIN) {
         if (safeRecv(cmd, buf, 1000, false, msglen)) {
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
@@ -640,8 +650,8 @@ bool CommandManager::setupConnections() {
     if (setup_status == e_startup) {
         char url[100];
         snprintf(url, 100, "tcp://%s:5555", host_name.c_str()); // TBD no fixed port
-        setup.connect(url);
-        monit_setup.setEndPoint(url);
+        setup->connect(url);
+        monit_setup->setEndPoint(url);
         setup_status = e_waiting_connect;
         usleep(5000);
     }
@@ -649,26 +659,26 @@ bool CommandManager::setupConnections() {
 }
 
 bool CommandManager::checkConnections() {
-    if (monit_setup.disconnected() ) {
+    if (monit_setup->disconnected() ) {
         setup_status = e_startup;
         setupConnections();
         usleep(50000);
         return false;
     }
-    if (monit_setup.disconnected())
+    if (monit_setup->disconnected())
         return false;
     return true;
 }
 
 bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) {
     int rc = 0;
-    if (monit_setup.disconnected() ) {
+    if (monit_setup->disconnected() ) {
         setup_status = e_startup;
         setupConnections();
         usleep(50000);
         return false;
     }
-    if ( monit_setup.disconnected() )
+    if ( monit_setup->disconnected() )
         rc = zmq::poll( &items[1], num_items-1, 500);
     else
         rc = zmq::poll(&items[0], num_items, 500);
@@ -680,17 +690,17 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
         if ( msglen ) {
             buf[msglen] = 0;
             DBG_MSG << "got cmd: " << buf << "\n";
-            if (!monit_setup.disconnected()) setup.send(buf,msglen);
+            if (!monit_setup->disconnected()) setup->send(buf,msglen);
             run_status = e_waiting_response;
         }
     }
-    if (run_status == e_waiting_response && monit_setup.disconnected()) {
+    if (run_status == e_waiting_response && monit_setup->disconnected()) {
         const char *msg = "disconnected, attempting reconnect";
         cmd.send(msg, strlen(msg));
         run_status = e_waiting_cmd;
     }
     else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-        if (safeRecv(setup, buf, 1000, false, msglen)) {
+        if (safeRecv(*setup, buf, 1000, false, msglen)) {
             if (msglen && msglen<1000) {
                 cmd.send(buf, msglen);
             }
@@ -703,16 +713,15 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
     return true;
 }
 
-CommandManager::CommandManager(const char *host) :
-    host_name(host),
-    setup(*MessagingInterface::getContext(), ZMQ_REQ),
-    monit_setup(setup, "inproc://monitor.setup") {
-    init();
+CommandManager::CommandManager(const char *host) : host_name(host), setup(0), monit_setup(0) { 
+	    setup = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+	    monit_setup = new SingleConnectionMonitor(*setup, "inproc://monitor.setup");
+	    init();
 }
 
 void CommandManager::init() {
     // client
-    boost::thread setup_monitor(boost::ref(monit_setup));
+    boost::thread setup_monitor(boost::ref(*monit_setup));
     
     run_status = e_waiting_cmd;
     setup_status = e_startup;

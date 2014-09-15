@@ -140,6 +140,7 @@ public:
     static int uniquePort();
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
     static void sendStateChange(MachineInstance *machine, std::string new_state);
+		static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value>*params);
     static void setupAllShadows();
     static Channel *findByType(const std::string kind);
     MessagingInterface *getPublisher() { return mif; }

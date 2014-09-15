@@ -43,7 +43,7 @@
 
 #include "ecat_thread.h"
 
-//#define USE_RTC 1
+#define USE_RTC 1
 
 #ifdef USE_RTC
 #include <sys/ioctl.h>
@@ -79,7 +79,7 @@ void EtherCATThread::operator()() {
 #ifdef USE_RTC
 	rtc = open("/dev/rtc", 0);
 	if (rtc == -1) { perror("open rtc"); exit(1); }
-	unsigned long period = 1000;
+	unsigned long period = 512;
 
 	int rc = ioctl(rtc, RTC_IRQP_SET, period);
 	if (rc == -1) { perror("set rtc period"); exit(1); }
