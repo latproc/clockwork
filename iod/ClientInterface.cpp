@@ -43,7 +43,11 @@ struct ListenerThreadInternals : public ClientInterfaceInternals {
 };
 
 void IODCommandListenerThread::operator()() {
+#ifdef __APPLE__
+    pthread_setname_np("iod command listener");
+#else
     pthread_setname_np(pthread_self(), "iod command listener");
+#endif
 }
 IODCommandListenerThread::IODCommandListenerThread() : done(false), internals(0) { }
 void IODCommandListenerThread::stop() { done = true; }
@@ -62,7 +66,11 @@ public:
     MyMonitor(zmq::socket_t *s) : sock(s) {
     }
     void operator()() {
-	    pthread_setname_np(pthread_self(), "iod connection monitor");
+#ifdef __APPLE__
+        pthread_setname_np("iod connection monitor");
+#else
+        pthread_setname_np(pthread_self(), "iod connection monitor");
+#endif
         monitor(*sock, "inproc://monitor.rep");
     }
     virtual void on_monitor_started() {
@@ -107,7 +115,11 @@ private:
 };
 
 void IODCommandThread::operator()() {
+#ifdef __APPLE__
+    pthread_setname_np("iod command interface");
+#else
     pthread_setname_np(pthread_self(), "iod command interface");
+#endif
 
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
     

@@ -147,7 +147,11 @@ bool Scheduler::ready() {
 }
 
 void Scheduler::operator()() {
-	 pthread_setname_np(pthread_self(), "iod scheduler");
+#ifdef __APPLE__
+    pthread_setname_np("iod scheduler");
+#else
+    pthread_setname_np(pthread_self(), "iod scheduler");
+#endif
 	idle();
 }
 

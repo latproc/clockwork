@@ -31,12 +31,17 @@
 #include <assert.h>
 #include <zmq.hpp>
 #include "Channel.h"
+#include <pthread.h>
 
 Dispatcher *Dispatcher::instance_ = NULL;
 
 void DispatchThread::operator()()
 {
+#ifdef __APPLE__
+    pthread_setname_np("iod dispatcher");
+#else
     pthread_setname_np(pthread_self(), "iod dispatcher");
+#endif
 
     Dispatcher::instance()->idle();
 }

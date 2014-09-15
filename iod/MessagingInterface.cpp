@@ -359,7 +359,11 @@ char *MessagingInterface::sendState(std::string cmd, std::string name, std::stri
 void SocketMonitor::operator()() {
 		char thread_name[100];
 		snprintf(thread_name, 100, "iod skt monitor %s", socket_name);
-	    pthread_setname_np(pthread_self(), thread_name);
+#ifdef __APPLE__
+        pthread_setname_np(thread_name);
+#else
+        pthread_setname_np(pthread_self(), thread_name);
+#endif
 
         monitor(sock, socket_name);
     }
