@@ -174,6 +174,193 @@ bool setup_signals()
 }
 
 
+void generateIOComponentModules()
+{
+    std::list<Output *> output_list;
+    {
+        boost::mutex::scoped_lock lock(thread_protection_mutex);
+
+        int remaining = machines.size();
+        std::cout << remaining << " Machines\n";
+        std::cout << "Linking clockwork machines to hardware\n";
+        std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
+        while (iter != machines.end())
+        {
+            MachineInstance *m = (*iter).second;
+            iter++;
+            --remaining;
+            if ( (m->_type == "POINT" || m->_type == "ANALOGINPUT"  || m->_type == "COUNTERRATE"
+                    || m->_type == "COUNTER" || m->_type == "RATEESTIMATOR"
+                    || m->_type == "STATUS_FLAG" || m->_type == "ANALOGOUTPUT" ) && m->parameters.size() > 1)
+            {
+                // points should have two parameters, the name of the io module and the bit offset
+                //Parameter module = m->parameters[0];
+                //Parameter offset = m->parameters[1];
+                //Value params = p.val;
+                //if (params.kind == Value::t_list && params.listValue.size() > 1) {
+                std::string name;
+                unsigned int entry_position = 0;
+                if (m->_type == "COUNTERRATE")
+                {
+                    name = m->parameters[1].real_name;
+                    entry_position = m->parameters[2].val.iValue;
+                }
+                else
+                {
+                    name = m->parameters[0].real_name;
+                    entry_position = m->parameters[1].val.iValue;
+                }
+
+                std::cerr << "Setting up point " << m->getName() << " " << entry_position << " on module " << name << "\n";
+                MachineInstance *module_mi = MachineInstance::find(name.c_str());
+                if (!module_mi)
+                {
+                    std::cerr << "No machine called " << name << "\n";
+                    continue;
+                }
+                if (!module_mi->properties.exists("position"))   // module position not given
+                {
+                    std::cerr << "Machine " << name << " does not specify a position\n";
+                    continue;
+                }
+                std::cerr << module_mi->properties.lookup("position").kind << "\n";
+                int module_position = module_mi->properties.lookup("position").iValue;
+                if (module_position == -1)    // module position unmapped
+                {
+                    std::cerr << "Machine " << name << " position not mapped\n";
+                    continue;
+                }
+
+#ifndef EC_SIMULATOR
+                // some modules have multiple io types (eg the EK1814) and therefore
+                // multiple syncmasters, we number
+                // the points from 1..n but the device numbers them 1.n,1.m,..., resetting
+                // the index for each sync master.
+                ECModule *module = ECInterface::findModule(module_position);
+                if (!module)
+                {
+                    std::cerr << "No module found at position " << module_position << "\n";
+                    continue;
+                }
+
+                if (entry_position >= module->num_entries)
+                {
+                    std::cerr << "No entry " << entry_position << " on module " << module_position << "\n";
+                    continue; // could not find this device
+                }
+                EntryDetails *ed = &module->entry_details[entry_position];
+                unsigned int direction = module->syncs[ed->sm_index].dir;
+                unsigned int offset_idx = entry_position;
+                unsigned int bitlen = module->pdo_entries[entry_position].bit_length;
+
+                if (direction == EC_DIR_OUTPUT)
+                {
+                    std::cerr << "Adding new output device " << m->getName()
+                              << " position: " << entry_position
+                              << " name: " << module->entry_details[offset_idx].name
+                              << " bit_pos: " << module->bit_positions[offset_idx]
+                              << " offset: " << module->offsets[offset_idx]
+                              << " bitlen: " << bitlen <<  "\n";
+                    IOAddress addr (
+                        IOComponent::add_io_entry(ed->name.c_str(),
+                                                  module_position,
+                                                  module->offsets[offset_idx],
+                                                  module->bit_positions[offset_idx], offset_idx, bitlen));
+
+                    if (bitlen == 1)
+                    {
+                        Output *o = new Output(addr);
+                        output_list.push_back(o);
+                        IOComponent::devices[m->getName().c_str()] = o;
+                        o->setName(m->getName().c_str());
+                        m->io_interface = o;
+                        o->addDependent(m);
+                    }
+                    else
+                    {
+                        AnalogueOutput *o = new AnalogueOutput(addr);
+                        output_list.push_back(o);
+                        IOComponent::devices[m->getName().c_str()] = o;
+                        o->setName(m->getName().c_str());
+                        m->io_interface = o;
+                        o->addDependent(m);
+                    }
+                }
+                else
+                {
+                    //sstr << m->getName() << "_IN_" << entry_position << std::flush;
+                    //const char *name_str = sstr.str().c_str();
+                    std::cerr << "Adding new input device " << m->getName()
+                              << " position: " << entry_position
+                              << " name: " << module->entry_details[offset_idx].name
+                              << " sm_idx: " << ed->sm_index
+                              << " bit_pos: " << module->bit_positions[offset_idx]
+                              << " offset: " << module->offsets[offset_idx]
+                              <<  " bitlen: " << bitlen << "\n";
+                    IOAddress addr( IOComponent::add_io_entry(ed->name.c_str(),
+                                    module_position,
+                                    module->offsets[offset_idx],
+                                    module->bit_positions[offset_idx], offset_idx, bitlen));
+
+                    if (bitlen == 1)
+                    {
+                        Input *in = new Input(addr);
+                        IOComponent::devices[m->getName().c_str()] = in;
+                        in->setName(m->getName().c_str());
+                        m->io_interface = in;
+                        in->addDependent(m);
+                    }
+                    else
+                    {
+                        if (m->_type == "COUNTERRATE")
+                        {
+                            CounterRate *in = new CounterRate(addr);
+                            char *nm = strdup(m->getName().c_str());
+                            IOComponent::devices[nm] = in;
+                            free(nm);
+                            in->setName(m->getName().c_str());
+                            m->io_interface = in;
+                            in->addDependent(m);
+                        }
+                        else if (m->_type == "COUNTER")
+                        {
+                            Counter *in = new Counter(addr);
+                            char *nm = strdup(m->getName().c_str());
+                            IOComponent::devices[nm] = in;
+                            free(nm);
+                            in->setName(m->getName().c_str());
+                            m->io_interface = in;
+                            in->addDependent(m);
+                        }
+                        else
+                        {
+                            AnalogueInput *in = new AnalogueInput(addr);
+                            char *nm = strdup(m->getName().c_str());
+                            IOComponent::devices[nm] = in;
+                            free(nm);
+                            in->setName(m->getName().c_str());
+                            m->io_interface = in;
+                            in->addDependent(m);
+                        }
+                    }
+                }
+#endif
+            }
+            else
+            {
+                if (m->_type != "POINT" && m->_type != "STATUS_FLAG" && m->_type != "COUNTERRATE"
+                        && m->_type != "COUNTER"
+                        && m->_type != "ANALOGINPUT" && m->_type != "ANALOGOUTPUT" )
+                    DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
+                else
+                    DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (no parameters)\n";
+            }
+        }
+        assert(remaining==0);
+    }
+}
+
+
 int main(int argc, char const *argv[])
 {
 	std::cout << "main starting\n";
@@ -312,7 +499,7 @@ int main(int argc, char const *argv[])
     ModbusAddress::message("STARTUP");
     Dispatcher::start();
 
-    ProcessingThread processMonitor(machine, delay);
+    ProcessingThread processMonitor(machine);
     boost::thread process(boost::ref(processMonitor));
     // do not start a thread, simply run this process directly
     //processMonitor();
