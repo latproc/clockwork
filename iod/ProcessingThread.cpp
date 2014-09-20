@@ -323,13 +323,14 @@ void ProcessingThread::operator()()
 				status = e_waiting;
 			}
 		}
+/*
         // poll channels
         zmq::pollitem_t *poll_items = 0;
         int active_channels = Channel::pollChannels(poll_items, 20, 0);
         if (active_channels) {
             Channel::handleChannels();
         }
-		
+*/		
 		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
 			machine.idle();
