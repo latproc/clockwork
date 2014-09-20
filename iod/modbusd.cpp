@@ -106,6 +106,9 @@ void activate_address(std::string& addr_str)
         active_addresses.insert(addr_str);
         initialised_address[addr_str] = false;
     }
+    else
+        if (DEBUG_BASIC)
+            std::cerr << "(fyi) address " << addr_str << " already active\n";
 }
 
 void insert(int group, int addr, const char *value, size_t len)
@@ -182,6 +185,7 @@ void insert(int group, int addr, int value, size_t len)
         }
         else if (len == 2)
         {
+            if (DEBUG_BASIC) std::cout << "Updated Modbus memory for 32 bit reg " << addr << " to " << (value  & 0xffffffff) << "\n";
             int *l = (int32_t*) &modbus_mapping->tab_registers[addr];
             *l = value & 0xffffffff;
             activate_address(addr_str);
