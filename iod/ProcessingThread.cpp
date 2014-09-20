@@ -128,6 +128,7 @@ void ProcessingThread::checkAndUpdateCycleDelay()
         ECInterface::FREQUENCY = 1000000 / delay;
         //ECInterface::instance()->start();
         cycle_delay = delay;
+				std::cout << "cycle delay is now " << cycle_delay << "\n";
     }
 }
 
@@ -261,7 +262,7 @@ void ProcessingThread::operator()()
 	
     checkAndUpdateCycleDelay();
 
-	uint64_t last_checked_cycle_time = 0;
+		uint64_t last_checked_cycle_time = 0;
     while (!program_done)
     {
         enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
