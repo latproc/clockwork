@@ -63,6 +63,7 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "Channel.h"
+#include "ProcessingThread.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -82,33 +83,6 @@ boost::condition_variable_any ecat_polltime;
 typedef std::list<std::string> StringList;
 std::map<std::string, StringList> wiring;
 
-
-
-#if 0
-void checkInputs() {
-    std::map<std::string, StringList>::iterator iter = wiring.begin();
-    while (iter != wiring.end()) {
-        const std::pair<std::string, StringList> &link = *iter++;
-        Output *device = dynamic_cast<Output*>(lookup_device(link.first));
-        if (device) {
-            StringList::const_iterator linked_devices = link.second.begin();
-            while (linked_devices != link.second.end()) {
-                Input *end_point = dynamic_cast<Input*>(lookup_device(*linked_devices++));
-                SimulatedRawInput *in = 0;
-                if (end_point)
-                   in  = dynamic_cast<SimulatedRawInput*>(end_point->access_raw_device());
-                if (in) {
-                    if (device->isOn() && !end_point->isOn()) {
-                        in->turnOn();
-                    }
-                    else if (device->isOff() && !end_point->isOff())
-                        in->turnOff();
-                }
-            }
-        }
-    }
-}
-#endif
 
 void load_debug_config() {
 	std::ifstream program_config(debug_config());
@@ -151,156 +125,6 @@ bool setup_signals()
     sa.sa_handler = SIG_IGN;
     if (sigaction(SIGPIPE, &sa, 0)) return false;
     return true;
-}
-
-
-struct ProcessingThread {
-    void operator()();
-    ProcessingThread();
-    void stop() { program_done = true; }
-
-	ControlSystemMachine machine;
-    int sequence;
-    bool data_ready;
-};
-
-ProcessingThread::ProcessingThread(): sequence(0), data_ready(false) {	}
-
-void ProcessingThread::operator()()  {
-	
-	Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
-	Statistic::add(cycle_delay_stat);
-	Statistic *cycle_processing = new Statistic("Cycle Processing");
-	Statistic::add(cycle_processing);
-	long delta, delta2;
-    
-    zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
-    dispatch_sync.connect("inproc://dispatcher_sync");
-
-    zmq::socket_t process_sync(*MessagingInterface::getContext(), ZMQ_REQ);
-    process_sync.connect("inproc://process_sync");
-    process_sync.send("ready", 5);
-    dispatch_sync.send("go", 5);
-    
-	bool dispatch_waiting = false;
-    enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
- 	while (!program_done)
-    {
-        //NB_MSG << processingState << "\n";
-        struct timeval start_t, end_t;
-        size_t len = 0;
-        char pbuf[10];
-        //while (!program_done && len == 0) len = process_sync.recv(pbuf, 10);
-
-        zmq::pollitem_t items[] = { 
-			{ process_sync, 0, ZMQ_POLLIN, 0 },
-			{ dispatch_sync, 0, ZMQ_POLLIN, 0 } 
-		};
-        len = 0;
-		try {
-			// len is used to break out of this loop. Note the += on the second recv()
-	        while (len == 0) {
-	            zmq::poll(&items[0], 2, -1);
-	            if (items[0].revents & ZMQ_POLLIN) {
-	                len = process_sync.recv(pbuf, 10, ZMQ_DONTWAIT);
-	            }
-				if (items[1].revents & ZMQ_POLLIN) {
-					len += dispatch_sync.recv(pbuf, 10, ZMQ_DONTWAIT);
-					dispatch_waiting = true;
-				}
-	        }
-		}
-		catch(std::exception ex) {
-			if (errno == EINTR) continue;
-			char buf[100];
-			snprintf(buf, 100, "ZMQ error: %s", zmq_strerror(errno));
-			MessageLog::instance()->add(buf);
-			usleep(100000);
-			continue;
-		}
-
-        {
-            gettimeofday(&start_t, 0);
-            if (machine_is_ready) {
-                delta = get_diff_in_microsecs(&start_t, &end_t);
-                cycle_delay_stat->add(delta);
-            }
-            Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-            long cycle_delay = cycle_delay_v->iValue * 1000;
-
-            gettimeofday(&end_t, 0);
-            delta = get_diff_in_microsecs(&end_t, &start_t);
-            statistics->io_scan_time.add(delta);
-            delta2 = delta;
-            
-            //checkInputs(); // simulated wiring between inputs and outputs
-            machine.idle();
-            if (machine.connected()) {
-                gettimeofday(&end_t, 0);
-                delta = get_diff_in_microsecs(&end_t, &start_t);
-                statistics->points_processing.add(delta - delta2); delta2 = delta;
-            
-                if (!machine_is_ready) {
-                    std::cout << "----------- Machine is Ready --------\n";
-                    machine_is_ready = true;
-                    BOOST_FOREACH(std::string &error, error_messages) {
-                        std::cerr << error << "\n";
-                        MessageLog::instance()->add(error.c_str());
-                    }
-                }
-                {
-                    if (processingState == eIdle)
-                        processingState = ePollingMachines;
-                    if (processingState == ePollingMachines) {
-                        if (MachineInstance::processAll((uint32_t)cycle_delay/3, MachineInstance::NO_BUILTINS))
-                            processingState = eIdle;
-                    }
-                    
-                }
-                gettimeofday(&end_t, 0);
-                delta = get_diff_in_microsecs(&end_t, &start_t);
-                statistics->machine_processing.add(delta - delta2); delta2 = delta;
-                if (processingState == eIdle && dispatch_waiting){
-					dispatch_waiting = false;
-                    dispatch_sync.send("go", 2);
-                    // wait for message sending to complete
-                    zmq::pollitem_t items[] = { { dispatch_sync, 0, ZMQ_POLLIN, 0 } };
-                    size_t len = 0;
-                    while (len == 0) {
-                        zmq::poll(&items[0], 1, 100);
-                        if (items[0].revents & ZMQ_POLLIN) {
-                            char buf[10];
-                            len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
-                        }
-                    }
-					dispatch_sync.send("bye",3); // acknowledge the completion of dispatch processing
-                    gettimeofday(&end_t, 0);
-                    delta = get_diff_in_microsecs(&end_t, &start_t);
-                    statistics->dispatch_processing.add(delta - delta2); delta2 = delta;
-                }
-                
-                if (processingState == eIdle)
-                    processingState = eStableStates;
-                if (processingState == eStableStates){
-                    Scheduler::instance()->idle();
-                    if (MachineInstance::checkStableStates( (uint32_t)cycle_delay/3 ))
-                        processingState = eIdle;
-                }
-                gettimeofday(&end_t, 0);
-                delta = get_diff_in_microsecs(&end_t, &start_t);
-                statistics->auto_states.add(delta - delta2); delta2 = delta;
-            }
-
-            ++sequence;
-            data_ready = false;
-            process_sync.send("done", 4);
-        }
-        
-        gettimeofday(&end_t, 0);
-        delta = get_diff_in_microsecs(&end_t, &start_t);
-        cycle_processing->add(delta);
-        
-    }
 }
 
 int main (int argc, char const *argv[])
@@ -383,11 +207,6 @@ int main (int argc, char const *argv[])
     MQTTInterface::instance()->init();
     MQTTInterface::instance()->start();
     
-	//ECInterface::FREQUENCY=100000;
-
-	//ECInterface::instance()->start();
-    
-
 	std::list<Output *> output_list;
 	{
         {
@@ -486,8 +305,14 @@ int main (int argc, char const *argv[])
     bool sigok = setup_signals();
     assert(sigok);
     
-    zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
-    resource_mgr.bind("inproc://resource_mgr");
+    //zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
+    //resource_mgr.bind("inproc://resource_mgr");
+    
+    zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
+    sim_io.bind("inproc://ethercat_sync");
+    
+    std::cout << "-------- Starting Scheduler ---------\n";
+    boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
     
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
@@ -499,15 +324,16 @@ int main (int argc, char const *argv[])
 
     Dispatcher::start();
 
-    zmq::socket_t process_sync(*MessagingInterface::getContext(), ZMQ_REP);
-    process_sync.bind("inproc://process_sync");
+    //zmq::socket_t process_sync(*MessagingInterface::getContext(), ZMQ_REP);
+    //process_sync.bind("inproc://process_sync");
 
-    ProcessingThread processMonitor;
+    ControlSystemMachine machine;
+    ProcessingThread processMonitor(machine);
 	boost::thread process(boost::ref(processMonitor));
     
-    int processing_sequence = processMonitor.sequence;
     MQTTInterface::instance()->activate();
-    
+/*
+    int processing_sequence = processMonitor.sequence;
     {
         size_t ps_len = 0;
         char buf[10];
@@ -519,12 +345,18 @@ int main (int argc, char const *argv[])
             }
         }
     }
+ */
+
+    char buf[10];
+    size_t response_len;
+    safeRecv(sim_io, buf, 10, true, response_len);
+    
     std::cerr << "processing has started\n";
     struct timeval then;
     gettimeofday(&then,0);
     while (!program_done) {
         MQTTInterface::instance()->collectState();
-        {
+/*        {
             process_sync.send("go", 2);
             size_t ps_len = 0;
             char buf[10];
@@ -539,7 +371,6 @@ int main (int argc, char const *argv[])
         if (processing_sequence != processMonitor.sequence) { // did the model update?
             ++processing_sequence;
         }
-        
         {   // handshake to give the command handler access to shared resources for a while
             // if it has requested it.
             char buf[10];
@@ -556,7 +387,9 @@ int main (int argc, char const *argv[])
         if (active_channels) {
             Channel::handleChannels();
         }
-        
+ */
+        sim_io.send("ecat", 4);
+        safeRecv(sim_io, buf, 10, true, response_len);
         struct timeval now;
         gettimeofday(&now,0);
         
@@ -586,7 +419,6 @@ int main (int argc, char const *argv[])
     processMonitor.stop();
     process.join();
     stateMonitor.stop();
-    //zmq_ctx_destroy(&context);
     monitor.join();
 	return 0;
 }
