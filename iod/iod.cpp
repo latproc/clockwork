@@ -61,6 +61,17 @@
 #include "clockwork.h"
 #include "ClientInterface.h"
 #include "MessageLog.h"
+#include "MessagingInterface.h"
+
+#define USE_RTC
+#ifdef USE_RTC
+#include <sys/ioctl.h>
+#include <linux/rtc.h>
+#include <sys/time.h>
+#include <inttypes.h>
+#include <fcntl.h>
+#endif
+
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -182,7 +193,7 @@ void ProcessingThread::checkAndUpdateCycleDelay() {
 		delay = cycle_delay_v->iValue;
 	if (delay != cycle_delay) {
 		ECInterface::FREQUENCY = 1000000 / delay;
-		ECInterface::instance()->start();
+		//ECInterface::instance()->start();
 		cycle_delay = delay;
 	}
 }
@@ -194,8 +205,41 @@ void ProcessingThread::operator()()  {
 	long delta, delta2;
 
 	unsigned long sync = 0;
+
+#ifdef USE_RTC
+    int rtc = open("/dev/rtc", 0);
+    if (rtc == -1) { perror("open rtc"); exit(1); }
+    unsigned long period = 1024;
+
+    int rc = ioctl(rtc, RTC_IRQP_SET, period);
+    if (rc == -1) { perror("set rtc period"); exit(1); }
+
+    rc = ioctl(rtc, RTC_IRQP_READ, &period);
+    if (rc == -1) { perror("ioctl"); exit(1); }
+    std::cout << "Real time clock: period set to : " << period << "\n";
+
+    rc = ioctl(rtc, RTC_PIE_ON, 0);
+    if (rc == -1) { perror("enable rtc pie"); exit(1); }
+#endif
+
+
 	while (!program_done) {
-		pause();
+#ifdef USE_RTC
+    long rtc_val;
+    int rc = read(rtc, &rtc_val, sizeof(rtc_val));
+    if (rc == -1) {
+				if (errno == EAGAIN ) continue;
+        if (errno == EBADF) {
+            rtc = open("/dev/rtc", 0);
+            if (rtc == -1) { perror("open rtc"); exit(1); }
+        }
+        perror("read rtc"); 
+		}
+    if (rc == 0) std::cout << "zero bytes read from rtc\n";
+#endif
+
+	
+//		pause();
 		enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
 		struct timeval start_t, end_t;
 #if 0
@@ -226,7 +270,8 @@ void ProcessingThread::operator()()  {
 			delta = get_diff_in_microsecs(&start_t, &end_t);
 			cycle_delay_stat->add(delta);
 		}
-		if (sync != ECInterface::sig_alarms) {
+
+		if (true || sync != ECInterface::sig_alarms) {
 	    ECInterface::instance()->collectState();
 			IOComponent::processAll();
 			gettimeofday(&end_t, 0);
@@ -288,8 +333,8 @@ void ProcessingThread::operator()()  {
 				}
 			}
    		ECInterface::instance()->sendUpdates();
-			++sync;
-			if (sync != ECInterface::sig_alarms) sync = ECInterface::sig_alarms-1;
+//			++sync;
+//			if (sync != ECInterface::sig_alarms) sync = ECInterface::sig_alarms-1;
 			//else {
 			//	std::cout << "wc state: " << ECInterface::domain1_state.wc_state << "\n"
 			//		<< "Master link up: " << ECInterface::master_state.link_up << "\n";
@@ -501,6 +546,8 @@ void generateIOComponentModules() {
 
 int main(int argc, char const *argv[])
 {
+	zmq::context_t context;
+	MessagingInterface::setContext(&context);
 	Logger::instance();
 	MessageLog::setMaxMemory(10000);
 	ControlSystemMachine machine;

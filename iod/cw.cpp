@@ -258,6 +258,8 @@ void ProcessingThread::operator()()  {
 
 int main (int argc, char const *argv[])
 {
+		zmq::context_t context;
+		MessagingInterface::setContext(&context);
 	Logger::instance();
     MessageLog::setMaxMemory(10000);
 

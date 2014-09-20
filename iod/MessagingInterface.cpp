@@ -35,6 +35,7 @@
 #include "MessageLog.h"
 
 MessagingInterface *MessagingInterface::current = 0;
+zmq::context_t *MessagingInterface::context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
 MessagingInterface *MessagingInterface::getCurrent() {
@@ -59,10 +60,9 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
 }
 
 MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto) 
-		: Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false), connection(-1) {
+		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false), connection(-1) {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
-	    context = new zmq::context_t(num_threads);
-	    socket = new zmq::socket_t(*context, ZMQ_PUB);
+	    socket = new zmq::socket_t(*getContext(), ZMQ_PUB);
 	    is_publisher = true;
 	    std::stringstream ss;
 	    ss << "tcp://*:" << port;
@@ -75,11 +75,10 @@ MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto
 }
 
 MessagingInterface::MessagingInterface(std::string host, int remote_port, Protocol proto) 
-		:Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false), connection(-1), hostname(host), port(remote_port) {
+		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false), connection(-1), hostname(host), port(remote_port) {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
 	    if (host == "*") {
-	        context = new zmq::context_t(1);
-	        socket = new zmq::socket_t(*context, ZMQ_PUB);
+	        socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
 	        is_publisher = true;
 	        std::stringstream ss;
 	        ss << "tcp://*:" << port;
@@ -87,7 +86,6 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 	        socket->bind(url.c_str());
 	    }
 	    else {
-	        context = new zmq::context_t(1);
 	        std::stringstream ss;
 	        ss << "tcp://" << host << ":" << port;
 	        url = ss.str();
@@ -101,7 +99,7 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
-	    socket = new zmq::socket_t(*context, ZMQ_REQ);
+	    socket = new zmq::socket_t(*getContext(), ZMQ_REQ);
 	    is_publisher = false;
 	    socket->connect(url.c_str());
 	    int linger = 0;
@@ -127,16 +125,13 @@ MessagingInterface::~MessagingInterface() {
 	}
     if (MessagingInterface::current == this) MessagingInterface::current = 0;
     delete socket;
-    delete context;
 }
 
 bool MessagingInterface::receives(const Message&, Transmitter *t) {
     return true;
 }
 void MessagingInterface::handle(const Message&msg, Transmitter *from, bool needs_receipt ) {
-    char *response = send(msg);
-    if (response)
-        free(response);
+    send(msg);
 }
 
 
@@ -149,9 +144,6 @@ char *MessagingInterface::send(const char *txt) {
     }
     size_t len = strlen(txt);
     
-    // We try to send a few times and if an exception occurs we try a reconnect
-    // but is this useful without a sleep in between?
-    // It seems unlikely the conditions will have changed between attempts.
     int retries=4;
     while (--retries>0) {
         try {
@@ -164,35 +156,43 @@ char *MessagingInterface::send(const char *txt) {
             if (zmq_errno())
                 std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
-                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
-            delete socket;
-            connect();
+                std::cerr << "Exception when sending " << url << ": " << e.what() << " " << (4-retries)<< "\n";
         }
     }
-    if (!is_publisher) {
+    retries = 4;
+    while (--retries>0) {
         try {
-            zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-            zmq::poll( &items[0], 1, 500000);
-            if (items[0].revents & ZMQ_POLLIN) {
-                zmq::message_t reply;
-                if (socket->recv(&reply)) {
-                    len = reply.size();
-                    char *data = (char *)malloc(len+1);
-                    memcpy(data, reply.data(), len);
-                    data[len] = 0;
-                    std::cout << url << ": " << data << "\n";
-                    return data;
-                }
+            if (!is_publisher) {
+                bool expect_reply = true;
+                while (expect_reply) {
+                    zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
+                    zmq::poll( &items[0], 1, 500);
+                    if (items[0].revents & ZMQ_POLLIN) {
+                        zmq::message_t reply;
+                        if (socket->recv(&reply)) {
+                            len = reply.size();
+                            char *data = (char *)malloc(len+1);
+                            memcpy(data, reply.data(), len);
+                            data[len] = 0;
+                            std::cout << url << ": " << data << "\n";
+                            return data;
+                        }
+                    }
+                    else
+                        expect_reply = false;
+                        std::cerr << "abandoning message " << txt << "\n";
+                        delete socket;
+                        connect();
+                        break;
+                    }
             }
-            std::cerr << "timeout: abandoning message " << txt << "\n";
-            delete socket;
-            connect();
+            else break;
         }
         catch (std::exception e) {
             if (zmq_errno())
-                std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
-                std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
+                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
         }
     }
     return 0;

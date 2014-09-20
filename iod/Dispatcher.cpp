@@ -97,6 +97,42 @@ void Dispatcher::deliver(Package *p) {
 #endif
 }
 
+struct MessageSender {
+	MessageSender(const char *remote, std::string message) : done(false), aborted(false), url(remote), msg(message) { }
+	void operator()() {
+		zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_REQ);
+		sock.connect(url.c_str());
+		while (1) {
+			try {
+				sock.send(msg.c_str(), msg.length());
+				break;
+			}
+			catch(zmq::error_t io) { std::cout << "zmq error sending message to " << url << ": " << zmq_strerror(errno) << "\n"; }
+			catch(std::exception ex) { std::cout << "error sending " << url << ": " << zmq_strerror(errno) << "\n"; }
+		}
+		while (1) {
+			try {
+				char buf[100];
+				int len = sock.recv(buf, 99);
+				if (len>=0) { buf[len] = 0; if (strncmp(buf, "OK", len) != 0) { std::cout << " got " << buf <<" when sending to " << url << "\n"; } }
+				break;
+			}
+			catch(zmq::error_t io) { std::cout << "zmq error sending message to " << url << ": " << zmq_strerror(errno) << "\n"; }
+			catch(std::exception ex) { std::cout << "error sending " << url << ": " << zmq_strerror(errno) << "\n"; }
+		}
+		done = true;
+		while (!aborted) usleep(50);
+	}
+	void stop() { aborted = true; }
+	bool done;
+	bool aborted;
+	std::string url;
+	std::string msg;
+};
+std::map<boost::thread*, MessageSender*> senders;
+std::list<boost::thread*> threads;
+
+
 void Dispatcher::idle() {
 	// copy the queue to a local list before delivery
 	std::list<Package*>local_to_deliver;
@@ -106,6 +142,23 @@ void Dispatcher::idle() {
 		iter = to_deliver.erase(iter);
 		local_to_deliver.push_back(p);
 	}
+
+
+	// cleanup old threads;
+	std::list<boost::thread*>::iterator thread_iter = threads.begin();
+	while (thread_iter != threads.end()) { 
+		boost::thread *t = *thread_iter;
+		MessageSender *m = (*senders.find(t)).second;
+		if (m->done) {
+			m->stop();
+			t->join();
+			thread_iter = threads.erase(thread_iter);
+			delete t;
+			delete m;
+		}
+		else thread_iter++;
+	}	
+
 	// handle the current group of messages
 	iter = local_to_deliver.begin();
     while (iter != local_to_deliver.end()) {
@@ -135,18 +188,24 @@ void Dispatcher::idle() {
                     if (port_val.asInteger(port)) {
                         if (protocol == "RAW") {
                         	MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eRAW);
-                            mif->send_raw(m.getText().c_str());
-						}
-                        else {
-                            if (protocol == "CLOCKWORK") {
+                          mif->send_raw(m.getText().c_str());
+												}
+                        else if (protocol == "CLOCKWORK") {
                         		MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eCLOCKWORK);
-                                mif->send(m);
-							}
-                            else {
-                        		MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eZMQ);
-								mif->send(m.getText().c_str());
-							}
-                        }
+                            mif->send(m);
+												}
+                       	else if (protocol == "ACKED") {
+													char url[100];
+													snprintf(url, 100, "tcp://%s:%d", host.asString().c_str(), (int)port);
+													MessageSender *sender = new MessageSender(url, m.getText());
+													boost::thread *m_sender = new boost::thread(boost::ref(*sender));
+													senders[m_sender] = sender;
+													threads.push_back(m_sender);
+												}
+                        else {
+                        	MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eZMQ);
+													mif->send(m.getText().c_str());
+												}
                     }
                 }
             }

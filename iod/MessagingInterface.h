@@ -57,12 +57,15 @@ public:
     //Receiver interface
     virtual bool receives(const Message&, Transmitter *t);
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false );
+
+		static void setContext(zmq::context_t *ctx) { context = ctx; }
+		static zmq::context_t *getContext() { return context; }
     
 private:
     void connect();
     static MessagingInterface *current;
 	Protocol protocol;
-    zmq::context_t *context;
+    static zmq::context_t *context;
     zmq::socket_t *socket;
     static std::map<std::string, MessagingInterface *>interfaces;
     bool is_publisher;

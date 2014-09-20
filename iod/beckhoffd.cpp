@@ -239,8 +239,7 @@ bool BeckhoffdProperty::run(std::vector<Value> &params) {
 
 struct CommandThread {
     void operator()() {
-        zmq::context_t context (1);
-        zmq::socket_t socket (context, ZMQ_REP);
+        zmq::socket_t socket (*MessagingInterface::getContext(), ZMQ_REP);
         socket.bind ("tcp://*:5555");
         IODCommand *command = 0;
         
@@ -506,6 +505,8 @@ bool program_done = false;
 
 int main (int argc, char const *argv[])
 {
+	zmq::context_t context;
+	MessagingInterface::setContext(&context);
 	unsigned int user_alarms = 0;
 	statistics = new Statistics;
 	ControlSystemMachine machine;

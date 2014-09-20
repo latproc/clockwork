@@ -72,6 +72,8 @@ bool setup_signals()
 
 
 int main(int argc, const char * argv[]) {
+		zmq::context_t context;
+		MessagingInterface::setContext(&context);
 
     try {
         
@@ -108,8 +110,7 @@ int main(int argc, const char * argv[]) {
         int res;
 		std::stringstream ss;
 		ss << "tcp://localhost:" << port;
-        zmq::context_t context (1);
-        zmq::socket_t subscriber (context, ZMQ_SUB);
+        zmq::socket_t subscriber (*MessagingInterface::getContext(), ZMQ_SUB);
         res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
         assert (res == 0);
         subscriber.connect(ss.str().c_str());
