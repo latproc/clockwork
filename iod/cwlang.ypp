@@ -117,7 +117,7 @@ struct Subcondition {
 %token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
-%token INTERFACE EXTENDS KEY MACHINES MATCHING NAME
+%token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
 
 %union {
 	int iVal;
@@ -332,6 +332,9 @@ chn_definition_section:
 }
 | MONITORS MACHINES WITH PROPERTY SYMBOL ';'  {
     current_channelclass->addMonitorProperty($5, SymbolTable::Null);
+}
+| MONITORS MACHINES WITH EXPORTS ';'  {
+    current_channelclass->addMonitorExports();
 }
 | MONITORS SYMBOL EQ basic_value ';'  {
     current_channelclass->addMonitorProperty($2, *$4);

@@ -37,14 +37,16 @@ std::ostream &operator<<(std::ostream &out, const MachineRef &m);
 
 class ChannelImplementation {
 public:
-    ChannelImplementation() : state(DISCONNECTED) {}
+    ChannelImplementation() : state(DISCONNECTED), monitors_exports(false) {}
     virtual ~ChannelImplementation();
     void addMonitor(const char *);
     void addMonitorPattern(const char *);
     void addMonitorProperty(const char *,Value &);
+    void addMonitorExports();
     void removeMonitor(const char *);
     void removeMonitorPattern(const char *);
     void removeMonitorProperty(const char *, Value &);
+    void removeMonitorExports();
     
     void modified();
     void checked();
@@ -58,6 +60,7 @@ protected:
     std::set<std::string> monitors_patterns;
     std::set<std::string> monitors_names;
     std::map<std::string, Value> monitors_properties;
+    bool monitors_exports;
     uint64_t last_modified; // if the modified time > check time, a full check will be used
     uint64_t last_checked;
 

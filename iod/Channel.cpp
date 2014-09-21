@@ -179,6 +179,7 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
     chn->setPort(port);
     chn->setDefinition(defn);
     chn->setStateMachine(defn);
+    if (defn->monitors_exports) chn->monitors_exports = true;
     chn->modified();
     chn->setupShadows();
     chn->setupFilters();
@@ -251,6 +252,12 @@ ChannelDefinition *ChannelDefinition::fromJSON(const char *json) {
     copyJSONArrayToSet(obj, "monitors", defn->monitors_names);
     copyJSONArrayToSet(obj, "monitors_patterns", defn->monitors_patterns);
     copyJSONArrayToMap(obj, "monitors_properties", defn->monitors_properties);
+    item = cJSON_GetObjectItem(obj, "monitors_exports");
+    if (item && item->type == cJSON_True)
+        defn->monitors_exports = true;
+    else if (item && item->type == cJSON_False)
+        defn->monitors_exports = false;
+
     copyJSONArrayToSet(obj, "shares", defn->shares);
     copyJSONArrayToMap(obj, "updates", defn->updates_names);
     copyJSONArrayToSet(obj, "sends", defn->send_messages);
@@ -290,6 +297,10 @@ char *ChannelDefinition::toJSON() {
     cJSON_AddItemToObject(obj, "monitors", StringSetToJSONArray(this->monitors_names));
     cJSON_AddItemToObject(obj, "monitors_patterns", StringSetToJSONArray(this->monitors_patterns));
     cJSON_AddItemToObject(obj, "monitors_properties", MapToJSONArray(this->monitors_properties));
+    if (this->monitors_exports)
+        cJSON_AddTrueToObject(obj, "monitors_exports");
+    else
+        cJSON_AddFalseToObject(obj, "monitors_exports");
     cJSON_AddItemToObject(obj, "shares", StringSetToJSONArray(this->shares));
     cJSON_AddItemToObject(obj, "updates", MapToJSONArray(this->updates_names, "name","type"));
     cJSON_AddItemToObject(obj, "sends", StringSetToJSONArray(this->send_messages));
@@ -360,7 +371,7 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
         if (!chn->machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-            if (!chn->machines.count(machine)) chn->machines.insert(machine);
+            //if (!chn->machines.count(machine)) chn->machines.insert(machine);
             if (chn->communications_manager) {
                 std::string response;
                 char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
@@ -413,11 +424,15 @@ bool Channel::doesUpdate() {
 }
 
 bool Channel::doesMonitor() {
-    return ! (definition()->monitors_names.empty() && definition()->monitors_patterns.empty() && definition()->monitors_properties.empty()
-              && monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty()) ;
+    return  monitors_exports || definition()->monitors_exports
+        || ! (definition()->monitors_names.empty() && definition()->monitors_patterns.empty() && definition()->monitors_properties.empty()
+              && monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty());
 }
 
 bool Channel::filtersAllow(MachineInstance *machine) {
+    if ((definition()->monitors_exports || monitors_exports) && !machine->modbus_exports.empty())
+        return true;
+    
     if (!matches(machine, name)) return false;
     
     if (monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty())
@@ -462,7 +477,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
         if (!chn->machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-            if (!chn->machines.count(machine)) chn->machines.insert(machine);
+            //if (!chn->machines.count(machine)) chn->machines.insert(machine);
             if (chn->communications_manager
                 && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
                 std::string response;
@@ -494,7 +509,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
         if (!chn->machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-            if (!chn->machines.count(machine)) chn->machines.insert(machine);
+            //if (!chn->machines.count(machine)) chn->machines.insert(machine);
             if (chn->communications_manager
                 && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
                 std::string response;
@@ -553,6 +568,14 @@ void ChannelImplementation::removeMonitorProperty(const char *key,Value &val) {
     monitors_properties.erase(key);
     modified();
     //TBD Bug here, we should be using a set< pair<string, Value> >, not a map
+}
+void ChannelImplementation::addMonitorExports() {
+    monitors_exports = true;
+    modified();
+}
+void ChannelImplementation::removeMonitorExports() {
+    monitors_exports = false;
+    modified();
 }
 
 void ChannelImplementation::removeMonitorPattern(const char *s) {
@@ -730,6 +753,18 @@ void Channel::setupAllShadows() {
 
 void Channel::setupFilters() {
     checked();
+    // check if this channl monitors exports and if so, add machines that have exports
+    if (definition()->monitors_exports || monitors_exports) {
+        std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
+        while (machines != MachineInstance::end()) {
+            MachineInstance *machine = *machines++;
+            if (! machine->modbus_exports.empty() ) {
+                this->machines.insert(machine);
+                machine->publish();
+            }
+        }
+    }
+        
     std::set<std::string>::iterator iter = definition()->monitors_patterns.begin();
     while (iter != definition()->monitors_patterns.end()) {
         const std::string &pattern = *iter++;
@@ -738,10 +773,11 @@ void Channel::setupFilters() {
             std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
             while (machines != MachineInstance::end()) {
                 MachineInstance *machine = *machines++;
-                if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
-                    const char *n = machine->getName().c_str();
-                    machine->publish();
-                    this->machines.insert(machine);
+                if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                    if (!this->machines.count(machine)) {
+                        machine->publish();
+                        this->machines.insert(machine);
+                    }
                 }
             }
         }

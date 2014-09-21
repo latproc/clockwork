@@ -60,6 +60,7 @@ ENTER               return ENTER;
 ENTRIES             return ENTRIES;
 EXECUTE				return EXECUTE;
 EXPORT              return EXPORT;
+EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;
 EXTRACT             return EXTRACT;
 FIRST               return FIRST;
