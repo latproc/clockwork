@@ -114,6 +114,7 @@ ProcessingThread::ProcessingThread(ControlSystemMachine &m)
 void ProcessingThread::stop()
 {
     program_done = true;
+    MessagingInterface::abort();
 }
 
 

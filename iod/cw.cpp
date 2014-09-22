@@ -417,6 +417,7 @@ int main (int argc, char const *argv[])
     MQTTInterface::instance()->stop();
     Dispatcher::instance()->stop();
     processMonitor.stop();
+    kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
     process.join();
     stateMonitor.stop();
     monitor.join();
