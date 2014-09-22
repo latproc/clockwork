@@ -19,7 +19,12 @@ RestrictedReceive MACHINE {
 
 	a INITIAL;
 	b STATE;
+	c STATE;
 
-	RECEIVE test WITHIN a { LOG "test received" }
+	COMMAND test WITHIN a { LOG "test received within a" }
+    # we would like to also be able to add:
+	#COMMAND test WITHIN b { LOG "test received within b" }
+	#COMMAND test { LOG " test received" }
+    # but this is not possible in the current implementation
 }
 restricted_receive RestrictedReceive;
