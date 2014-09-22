@@ -107,7 +107,7 @@ struct Subcondition {
 %token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
 %token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO RECEIVE
 %token DURING WAIT WAITFOR TRANSITION TAG INC DEC BY CONCAT
-%token SEND CONDITION INITSTATE IF ELSE ENABLE DISABLE BECOMES
+%token SEND CONDITION INITSTATE IF_ ELSE ENABLE DISABLE BECOMES
 %token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
@@ -1291,7 +1291,7 @@ SET SYMBOL TO value  {
     current_action = new LogActionTemplate($2);
     //delete $2; no delete, ownership is passed to the current_action;
 }
-| IF '(' predicate ')' '{' action_list '}'  %prec IFX {
+| IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
    DBG_PARSER << " IF action: " << *$3 << "\n";
     if (current_action) {
 		current_actions->push_back(current_action); 
@@ -1306,7 +1306,7 @@ SET SYMBOL TO value  {
 	DBG_PARSER << "** popped old action list\n";
     current_action = new IfCommandActionTemplate($3, mc) ;
 }
-| IF '(' predicate ')' '{' action_list '}' ELSE '{' action_list '}' %prec IFELSE {
+| IF_ '(' predicate ')' '{' action_list '}' ELSE '{' action_list '}' %prec IFELSE {
     DBG_PARSER << " IFELSE action: " << *$3 << "\n";
     if (current_action) {
 		current_actions->push_back(current_action); 
