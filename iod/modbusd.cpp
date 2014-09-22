@@ -249,15 +249,19 @@ struct ModbusServerThread
 
         int function_code_offset = modbus_get_header_length(modbus_context);
 
-        int socket = modbus_tcp_listen(modbus_context, 3);
-        if (debug) std::cout << "Modbus listen socket: " << socket << "\n" << std::flush;
-        FD_ZERO(&connections);
-        FD_SET(socket, &connections);
-        max_fd = socket;
-        fd_set activity;
-        modbus_state = ms_collecting;
-        while (modbus_state == ms_collecting || modbus_state == ms_running)
+        while (modbus_state != ms_finished)
         {
+            if (modbus_state == ms_paused) { usleep(100000); continue; }
+            if (modbus_state == ms_starting || modbus_state == ms_resuming) {
+                socket = modbus_tcp_listen(modbus_context, 3);
+                if (debug) std::cout << "Modbus listen socket: " << socket << "\n" << std::flush;
+                FD_ZERO(&connections);
+                FD_SET(socket, &connections);
+                max_fd = socket;
+                modbus_state = ms_collecting;
+                continue;
+            }
+            fd_set activity;
             activity = connections;
             int nfds;
             if ( (nfds = select(max_fd +1, &activity, 0, 0, 0)) == -1)
@@ -284,6 +288,7 @@ struct ModbusServerThread
                     }
                     else
                     {
+                        connection_list.push_back(panel_fd);
                         int option = 1;
                         int res = setsockopt(panel_fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(int));
                         if (res == -1)
@@ -521,6 +526,7 @@ struct ModbusServerThread
                         std::cout << timestamp << " Error: " << modbus_strerror(errno) << "\n";
                         std::cout << timestamp << " Modbus connection " << conn << " lost\n";
                         close(conn);
+                        connection_list.remove(conn);
                         if (conn == max_fd) --max_fd;
                         FD_CLR(conn, &connections);
                     }
@@ -531,7 +537,7 @@ struct ModbusServerThread
         modbus_context = 0;
 
     }
-    ModbusServerThread() : modbus_state(ms_starting), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ)
+    ModbusServerThread() : modbus_state(ms_paused), socket(0), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ)
     {
         FD_ZERO(&connections);
         cmd_interface.connect(local_commands);
@@ -543,14 +549,26 @@ struct ModbusServerThread
         if (modbus_context) modbus_free(modbus_context);
     }
 
-    void stop()
-    {
-        modbus_state = ms_finished;
+    void stop() { modbus_state = ms_finished; }
+    void pause() {
+        modbus_state = ms_paused;
+        close(socket);
+        std::list<int>::iterator iter = connection_list.begin();
+        while (iter != connection_list.end()) {
+            close(*iter);
+            iter = connection_list.erase(iter);
+        }
     }
-    enum ModbusState { ms_starting, ms_collecting, ms_running, ms_finished } modbus_state;
+    void resume() {
+        modbus_state = ms_resuming;
+    }
+    
+    enum ModbusState { ms_starting, ms_collecting, ms_running, ms_paused, ms_resuming, ms_finished } modbus_state;
     fd_set connections;
     int max_fd;
+    int socket;
     zmq::socket_t cmd_interface;
+    std::list<int> connection_list;
 
 };
 
@@ -688,6 +706,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
             }
         }
         count = params.size();
+        delete param_list;
     }
     else
     {
@@ -702,6 +721,42 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
     return count;
 }
 
+void CollectModbusStatus() {
+    std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
+    char *initial_settings = 0;
+    do
+    {
+        active_addresses.clear();
+        initialised_address.clear();
+        initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
+        if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0)
+        {
+            loadData(initial_settings);
+            free(initial_settings);
+        }
+        else
+            sleep(2);
+    }
+    while (!initial_settings);
+}
+
+ModbusServerThread *modbus_interface_thread = 0;
+
+class SetupDisconnectMonitor : public EventResponder {
+public:
+    void operator()(const zmq_event_t &event_, const char* addr_) {
+        if (modbus_interface_thread) modbus_interface_thread->pause();
+    }
+};
+
+static bool need_refresh = false;
+
+class SetupConnectMonitor : public EventResponder {
+public:
+    void operator()(const zmq_event_t &event_, const char* addr_) {
+        need_refresh = true;
+    }
+};
 
 int main(int argc, const char * argv[])
 {
@@ -755,26 +810,6 @@ int main(int argc, const char * argv[])
     }
     std::cout << "-------- Starting Command Interface ---------\n" << std::flush;
     g_iodcmd = MessagingInterface::create(host, cw_out);
-
-    // initialise memory
-    {
-        std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
-        char *initial_settings = 0;
-        do
-        {
-            active_addresses.clear();
-            initialised_address.clear();
-            initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
-            if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0)
-            {
-                loadData(initial_settings);
-                free(initial_settings);
-            }
-            else
-                sleep(2);
-        }
-        while (!initial_settings);
-    }
     
     program_state = s_running;
     setup_signals();
@@ -789,13 +824,18 @@ int main(int argc, const char * argv[])
         return 1;
     }
     ModbusServerThread modbus_interface;
+    modbus_interface_thread = &modbus_interface;
     boost::thread monitor_modbus(boost::ref(modbus_interface));
 
     // the local command channel accepts commands from the modbus thread and relays them to iod.
     zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
     iosh_cmd.bind(local_commands);
 
-    SubscriptionManager subscription_manager("MODBUS_CHANNEL");
+    SubscriptionManager subscription_manager("MODBUS_CHANNEL", "localhost", 5555);
+    SetupDisconnectMonitor disconnect_responder;
+    SetupConnectMonitor connect_responder;
+    subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
+    subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
     subscription_manager.setupConnections();
 
     try
@@ -810,7 +850,15 @@ int main(int argc, const char * argv[])
                 { iosh_cmd, 0, ZMQ_POLLIN, 0 }
             };
             try {
-                if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) { usleep(100000); continue; }
+                if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
+                    if (need_refresh) {
+                        CollectModbusStatus();
+                        need_refresh = false;
+                        modbus_interface.resume();
+                    }
+                    else usleep(100000);
+                    continue;
+                }
             }
             catch (std::exception ex) {
                 std::cout << "polling connections: " << ex.what() << "\n";
@@ -830,6 +878,8 @@ int main(int argc, const char * argv[])
             std::vector<Value> params(0);
             count = parseIncomingMessage(data, params);
             std::string cmd(params[0].asString());
+            free(data);
+            data = 0;
 
             if (cmd == "UPDATE")
             {
