@@ -24,6 +24,7 @@
 #include <exception>
 #include <math.h>
 #include <zmq.hpp>
+#include <map>
 #include "Logger.h"
 #include "DebugExtra.h"
 #include "cJSON.h"
@@ -387,8 +388,14 @@ void SocketMonitor::on_monitor_started() {
         //DBG_MSG << "monitor started\n";
 }
 void SocketMonitor::on_event_connected(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_connected " << addr_ << "\n";
-        disconnected_ = false;
+    //DBG_MSG << "on_event_connected " << addr_ << "\n";
+    disconnected_ = false;
+    std::multimap<int, EventResponder*>::iterator found = responders.find(event_.event);
+    while (found != responders.end()) {
+        std::pair<int, EventResponder *>curr = *found++;
+        if (curr.first != event_.event) break;
+        curr.second->operator()(event_, addr_);
+    }
 }
 void SocketMonitor::on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
         //DBG_MSG << "on_event_connect_delayed " << addr_ << "\n";
@@ -418,12 +425,30 @@ void SocketMonitor::on_event_close_failed(const zmq_event_t &event_, const char*
 void SocketMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
         //DBG_MSG << "on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
         disconnected_ = true;
+    std::multimap<int, EventResponder*>::iterator found = responders.find(event_.event);
+    while (found != responders.end()) {
+        std::pair<int, EventResponder *>curr = *found++;
+        if (curr.first != event_.event) break;
+        curr.second->operator()(event_, addr_);
     }
+}
 void SocketMonitor::on_event_unknown(const zmq_event_t &event_, const char* addr_) {
         //DBG_MSG << "on_event_unknown " << addr_ << "\n";
 }
     
 bool SocketMonitor::disconnected() { return disconnected_;}
+
+void SocketMonitor::addResponder(uint16_t event, EventResponder *responder) {
+    responders.insert(std::pair<int, EventResponder*>(event, responder));
+}
+void SocketMonitor::removeResponder(uint16_t event, EventResponder *responder) {
+    std::multimap<int, EventResponder*>::iterator found = responders.find(event);
+    while (found != responders.end()) {
+        std::pair<int, EventResponder *>curr = *found;
+        if (curr.first != event) break;
+        if (curr.second == responder) found = responders.erase(found); else found++;
+    }
+}
 
 
 SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &s, const char *snam)
@@ -433,6 +458,7 @@ void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, c
         sock.disconnect(sock_addr.c_str());
     }
 void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
+
 
 void MachineShadow::setProperty(const std::string prop, Value &val) {
     properties.add(prop, val, SymbolTable::ST_REPLACE);
@@ -479,8 +505,14 @@ SubscriptionManager::SubscriptionManager(const char *chname, const char *remote_
         channel_name(chname),
         monit_subs(subscriber, "inproc://monitor.subs"),
         monit_pubs(0),
-        monit_setup(setup, "inproc://monitor.setup") {
-    init();
+        monit_setup(0) {
+            monit_setup = new SingleConnectionMonitor(setup, "inproc://monitor.setup");
+            init();
+}
+
+void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
+    if (monit_setup) delete monit_setup;
+    monit_setup = monitor;
 }
 
 void SubscriptionManager::init() {
@@ -492,7 +524,7 @@ void SubscriptionManager::init() {
     boost::thread subscriber_monitor(boost::ref(monit_subs));
     
     // client
-    boost::thread setup_monitor(boost::ref(monit_setup));
+    boost::thread setup_monitor(boost::ref(*monit_setup));
     
     run_status = e_waiting_cmd;
     setSetupStatus(e_startup);
@@ -517,7 +549,7 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
 
 bool SubscriptionManager::requestChannel() {
     size_t len = 0;
-    if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup.disconnected()) {
+    if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
         std::cout << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup.send(channel_setup, strlen(channel_setup));
@@ -525,7 +557,7 @@ bool SubscriptionManager::requestChannel() {
         setSetupStatus(SubscriptionManager::e_waiting_setup);
         return false;
     }
-    if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup.disconnected()){
+    if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
         char buf[1000];
         if (!safeRecv(setup, buf, 1000, false, len)) return false;
         if (len == 0) return false; // no data yet
@@ -568,7 +600,7 @@ bool SubscriptionManager::setupConnections() {
     if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
         ss << "tcp://" << subscriber_host << ":" << 5555;
         setup.connect(ss.str().c_str());
-        monit_setup.setEndPoint(ss.str().c_str());
+        monit_setup->setEndPoint(ss.str().c_str());
         current_channel = "";
         setSetupStatus(SubscriptionManager::e_waiting_connect);
         usleep(5000);
@@ -593,10 +625,10 @@ void SubscriptionManager::setSetupStatus( Status new_status ) {
 }
     
 bool SubscriptionManager::checkConnections() {
-    if (monit_setup.disconnected() && monit_subs.disconnected()) {
+    if (monit_setup->disconnected() && monit_subs.disconnected()) {
         //uint64_t now = microsecs();
         /*if (setupStatus() == e_waiting_connect && !setup.connected()) {
-            //setup.disconnect(monit_setup.endPoint().c_str());
+            //setup.disconnect(monit_setup->endPoint().c_str());
             setSetupStatus(e_startup);
         }
         else 
@@ -608,13 +640,13 @@ bool SubscriptionManager::checkConnections() {
         usleep(500000);
         return false;
     }
-    if (setupStatus() == e_disconnected || ( !monit_setup.disconnected() && monit_subs.disconnected() ) ) {
+    if (setupStatus() == e_disconnected || ( !monit_setup->disconnected() && monit_subs.disconnected() ) ) {
         // clockwork has disconnected
         setupConnections();
         usleep(50000);
         return false;
     }
-    if (monit_subs.disconnected() || monit_setup.disconnected()) {
+    if (monit_subs.disconnected() || monit_setup->disconnected()) {
         usleep(50000);
         return false;
 		}
@@ -624,7 +656,7 @@ bool SubscriptionManager::checkConnections() {
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
     if (!checkConnections()) return false;
     int rc = 0;
-    if (monit_subs.disconnected() || monit_setup.disconnected())
+    if (monit_subs.disconnected() || monit_setup->disconnected())
         rc = zmq::poll( &items[num_items-3], num_items-2, 500);
     else
         rc = zmq::poll(&items[0], num_items, 500);
@@ -637,11 +669,11 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
             DBG_MSG << "got cmd: " << buf << "\n";
-            if (!monit_setup.disconnected()) setup.send(buf,msglen);
+            if (!monit_setup->disconnected()) setup.send(buf,msglen);
             run_status = e_waiting_response;
         }
     }
-    if (run_status == e_waiting_response && monit_setup.disconnected()) {
+    if (run_status == e_waiting_response && monit_setup->disconnected()) {
         const char *msg = "disconnected, attempting reconnect";
         cmd.send(msg, strlen(msg));
         run_status = e_waiting_cmd;

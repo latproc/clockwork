@@ -723,9 +723,9 @@ void Channel::checkCommunications() {
     Value *state = current_state.getNameValue();
     bool ok = communications_manager->checkConnections();
     if (!ok) {
-        if (communications_manager->monit_setup.disconnected() && state->token_id != ChannelImplementation::DISCONNECTED.getId())
+        if (communications_manager->monit_setup->disconnected() && state->token_id != ChannelImplementation::DISCONNECTED.getId())
             setState(ChannelImplementation::DISCONNECTED);
-        else if (!communications_manager->monit_setup.disconnected()) {
+        else if (!communications_manager->monit_setup->disconnected()) {
             if (communications_manager->setupStatus() == SubscriptionManager::e_waiting_connect && state->token_id != ChannelImplementation::CONNECTING.getId()) {
                 setState(ChannelImplementation::CONNECTING);
             }

@@ -24,6 +24,7 @@
 #include <string>
 #include <boost/thread.hpp>
 #include <sstream>
+#include <map>
 #include <zmq.hpp>
 #include <set>
 #include "Message.h"
@@ -82,6 +83,12 @@ private:
 };
 
 
+class EventResponder {
+public:
+    ~EventResponder(){}
+    virtual void operator()(const zmq_event_t &event_, const char* addr_) = 0;
+};
+
 class SocketMonitor : public zmq::monitor_t {
 public:
     SocketMonitor(zmq::socket_t &s, const char *snam);
@@ -100,8 +107,11 @@ public:
     virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_);
     bool disconnected();
     void abort();
+    void addResponder(uint16_t event, EventResponder *responder);
+    void removeResponder(uint16_t event, EventResponder *responder);
     
 protected:
+    std::multimap<int, EventResponder*> responders;
     zmq::socket_t &sock;
     bool disconnected_;
     const char *socket_name;
@@ -128,6 +138,7 @@ public:
     virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_);
     void setEndPoint(const char *endpt);
     std::string &endPoint() { return sock_addr; }
+    
 private:
     std::string sock_addr;
     SingleConnectionMonitor(const SingleConnectionMonitor&);
@@ -168,6 +179,7 @@ public:
         e_settingup_subscriber, e_waiting_subscriber, e_waiting_setup, e_done };
     
     SubscriptionManager(const char *chname, const char *remote_host = "localhost", int remote_port = 5555);
+    void setSetupMonitor(SingleConnectionMonitor *monitor);
     
     void init();
     
@@ -196,7 +208,7 @@ public:
     std::string channel_name;
     SingleConnectionMonitor monit_subs;
     SingleConnectionMonitor *monit_pubs;
-    SingleConnectionMonitor monit_setup;
+    SingleConnectionMonitor *monit_setup;
 protected:
     Status _setup_status;
 };
