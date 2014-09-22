@@ -62,6 +62,8 @@ public:
     virtual bool receives(const Message&, Transmitter *t);
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false );
     zmq::socket_t *getSocket() { return socket; }
+    static bool aborted() { return abort_all; }
+    static void abort() { abort_all = true; }
     
 private:
     static zmq::context_t *zmq_context;
@@ -76,6 +78,7 @@ private:
 	std::string hostname;
 	int port;
     pthread_t owner_thread;
+    static bool abort_all;
 };
 
 
@@ -96,11 +99,13 @@ public:
     virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_);
     virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_);
     bool disconnected();
+    void abort();
     
 protected:
     zmq::socket_t &sock;
     bool disconnected_;
     const char *socket_name;
+    bool aborted;
 };
 
 class CommunicationPoll {
@@ -141,6 +146,7 @@ public:
 
 class ConnectionManager {
 public:
+    ConnectionManager();
     virtual ~ConnectionManager() {}
     virtual bool setupConnections() =0;
     virtual bool checkConnections() =0;
@@ -149,7 +155,9 @@ public:
     void setProperty(std::string machine, std::string prop, Value val);
     void setState(std::string machine, std::string new_state);
     virtual int numSocks() =0;
+    void abort();
 protected:
+    bool aborted;
     std::map<std::string, MachineShadow *> machines;
 };
 

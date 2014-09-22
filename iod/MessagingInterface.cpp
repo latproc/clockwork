@@ -41,6 +41,8 @@
 MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
+bool MessagingInterface::abort_all = false;
+
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
@@ -50,7 +52,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 //    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
     
     response_len = 0;
-    while (true) {
+    while (!MessagingInterface::aborted()) {
         try {
                 zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int n = zmq::poll( &items[0], 1, timeout);
@@ -67,6 +69,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
             return false;
         }
     }
+    return false;
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
@@ -354,8 +357,8 @@ char *MessagingInterface::sendState(std::string cmd, std::string name, std::stri
     return response;
 }
 
-    SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disconnected_(true), socket_name(snam) {
-    }
+SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disconnected_(true), socket_name(snam), aborted(false) {
+}
 void SocketMonitor::operator()() {
 		char thread_name[100];
 		snprintf(thread_name, 100, "iod skt monitor %s", socket_name);
@@ -365,23 +368,28 @@ void SocketMonitor::operator()() {
         pthread_setname_np(pthread_self(), thread_name);
 #endif
 
-			try {
-        monitor(sock, socket_name);
-			}
-			catch (zmq::error_t io) {
-				std::cout << "ZMQ error: " << zmq_strerror(errno) << "\n";
-			}
-			catch (std::exception ex) {
-				std::cout << "unknown exception setting up a socket monitor\n";
-			}
+    while (!aborted) {
+        try {
+            monitor(sock, socket_name);
+        }
+        catch (zmq::error_t io) {
+            std::cout << "ZMQ error: " << zmq_strerror(errno) << " in socket monitor\n";
+        }
+        catch (std::exception ex) {
+            std::cout << "unknown exception setting up a socket monitor\n";
+        }
     }
+}
+
+void SocketMonitor::abort() { aborted = true; }
+
 void SocketMonitor::on_monitor_started() {
         //DBG_MSG << "monitor started\n";
-    }
+}
 void SocketMonitor::on_event_connected(const zmq_event_t &event_, const char* addr_) {
         //DBG_MSG << "on_event_connected " << addr_ << "\n";
         disconnected_ = false;
-    }
+}
 void SocketMonitor::on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
         //DBG_MSG << "on_event_connect_delayed " << addr_ << "\n";
 }
@@ -438,6 +446,8 @@ void MachineShadow::setState(const std::string new_state) {
     state = new_state;
 }
 
+ConnectionManager::ConnectionManager() : aborted(false) { }
+
 void ConnectionManager::setProperty(std::string machine_name, std::string prop, Value val) {
     std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
     MachineShadow *machine = 0;
@@ -457,6 +467,8 @@ void ConnectionManager::setState(std::string machine_name, std::string new_state
         machine = (*found).second;
     machine->setState(new_state);
 }
+
+void ConnectionManager::abort() { aborted = true; }
 
 SubscriptionManager::SubscriptionManager(const char *chname, const char *remote_host, int remote_port) :
         publisher(0),
@@ -513,7 +525,7 @@ bool SubscriptionManager::requestChannel() {
         setSetupStatus(SubscriptionManager::e_waiting_setup);
         return false;
     }
-    if (setupStatus() == SubscriptionManager::e_waiting_setup){
+    if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup.disconnected()){
         char buf[1000];
         if (!safeRecv(setup, buf, 1000, false, len)) return false;
         if (len == 0) return false; // no data yet
@@ -554,9 +566,10 @@ bool SubscriptionManager::requestChannel() {
 bool SubscriptionManager::setupConnections() {
     std::stringstream ss;
     if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
-        ss << "tcp://" << subscriber_host << ":" << subscriber_port;
+        ss << "tcp://" << subscriber_host << ":" << 5555;
         setup.connect(ss.str().c_str());
         monit_setup.setEndPoint(ss.str().c_str());
+        current_channel = "";
         setSetupStatus(SubscriptionManager::e_waiting_connect);
         usleep(5000);
     }
@@ -587,11 +600,12 @@ bool SubscriptionManager::checkConnections() {
             setSetupStatus(e_startup);
         }
         else 
-         */if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
+         */
+        if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
              setSetupStatus(e_startup);
              setupConnections();
          }
-        usleep(50000);
+        usleep(500000);
         return false;
     }
     if (setupStatus() == e_disconnected || ( !monit_setup.disconnected() && monit_subs.disconnected() ) ) {
