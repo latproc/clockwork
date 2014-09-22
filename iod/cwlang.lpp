@@ -75,7 +75,7 @@ ITEM                return ITEM;
 ITEMS               return ITEMS;
 IDENTIFIER          return IDENTIFIER;
 LEAVE               return LEAVE;
-IF					return IF;
+IF					return IF_;
 IN                  return IN;
 INITIAL             return INITSTATE;
 IS                  return EQ;
