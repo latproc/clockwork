@@ -129,8 +129,8 @@ bool setup_signals()
 
 int main (int argc, char const *argv[])
 {
-    zmq::context_t context;
-    MessagingInterface::setContext(&context);
+    zmq::context_t *context = new zmq::context_t;
+    MessagingInterface::setContext(context);
 	Logger::instance();
     MessageLog::setMaxMemory(10000);
 
@@ -414,6 +414,7 @@ int main (int argc, char const *argv[])
          
         then = now;
     }
+    try {
     MQTTInterface::instance()->stop();
     Dispatcher::instance()->stop();
     processMonitor.stop();
@@ -421,5 +422,10 @@ int main (int argc, char const *argv[])
     process.join();
     stateMonitor.stop();
     monitor.join();
+        delete context;
+    }
+    catch (zmq::error_t) {
+        
+    }
 	return 0;
 }
