@@ -47,10 +47,16 @@ monitor Monitor(tab:Outputs) flash1;
 count FLAG (export:rw, tab:Tests); # counter should count while this is on
 Counter MACHINE run_flag {
 	OPTION i 0;
+	OPTION direction 1;
+	stop WHEN direction > 0 AND i > 25000 OR direction < 0 AND i <= 0;
+	reversing WHEN run_flag IS on AND i>0 AND direction<0;
 	counting WHEN run_flag IS on;
 	check STATE;
 	idle DEFAULT;
-	ENTER counting { i := i+1; LOG i; SET SELF TO check;}
+	ENTER stop { direction := direction * - 1  }
+	ENTER reversing { i := i - 1; SET SELF TO check; }
+	ENTER counting { i := i+1;   SET SELF TO check; }
+	ENTER check { B := i }
 }
 counter Counter count;
 
@@ -79,7 +85,7 @@ Flash MACHINE (delay:500)output {
     OPTION b 30;
     EXPORT RW 16BIT a,b;
 
-    started_flag FLAG(tab:Outputs, export:ro);
+    started_flag FLAG(tab:Outputs, export:rw);
     error_flag FLAG(tab:Outputs, export:ro);
 
 #    timed_out WHEN started_flag IS on && TIMER >= 1000;
