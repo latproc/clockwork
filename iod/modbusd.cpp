@@ -64,6 +64,8 @@ static boost::condition_variable_any cond;
 
 const char *local_commands = "inproc://local_cmds";
 
+enum ProgramState { s_initialising, s_running, s_finished } program_state = s_initialising;
+
 int debug = 0;
 
 const int MemSize = 65536;
@@ -239,10 +241,6 @@ struct ModbusServerThread
 
     void operator()()
     {
-				//char buf[10];
-				//size_t response_len;
-				//safeRecv(modbus_sync, buf, 10, true, response_len); // wait for a start command.
-
         std::cout << "------------------ Modbus Server Thread Started -----------------\n" << std::flush;
 			
 
@@ -257,7 +255,8 @@ struct ModbusServerThread
         FD_SET(socket, &connections);
         max_fd = socket;
         fd_set activity;
-        while (!done)
+        modbus_state = ms_collecting;
+        while (modbus_state == ms_collecting || modbus_state == ms_running)
         {
             activity = connections;
             int nfds;
@@ -273,7 +272,7 @@ struct ModbusServerThread
 
                 if (conn == socket)   // new connection
                 {
-										std::cout << "new modbus connection on socket " << socket << "\n";
+					std::cout << "new modbus connection on socket " << socket << "\n";
                     struct sockaddr_in panel_in;
                     socklen_t addr_size = sizeof(panel_in);
 
@@ -300,7 +299,6 @@ struct ModbusServerThread
                         if (panel_fd > max_fd) max_fd = panel_fd;;
                         std::cout << timestamp << " new connection: " << panel_fd << "\n";
                     }
-
                 }
                 else
                 {
@@ -533,12 +531,11 @@ struct ModbusServerThread
         modbus_context = 0;
 
     }
-    ModbusServerThread() : done(false), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ) //,
-//				modbus_sync(*MessagingInterface::getContext(), ZMQ_REP)
+    ModbusServerThread() : modbus_state(ms_starting), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ)
     {
         FD_ZERO(&connections);
         cmd_interface.connect(local_commands);
-//				modbus_sync.bind("inproc://server_sync");
+
     }
     ~ModbusServerThread()
     {
@@ -548,13 +545,13 @@ struct ModbusServerThread
 
     void stop()
     {
-        done = true;
+        modbus_state = ms_finished;
     }
-    bool done;
+    enum ModbusState { ms_starting, ms_collecting, ms_running, ms_finished } modbus_state;
     fd_set connections;
     int max_fd;
     zmq::socket_t cmd_interface;
-//		zmq::socket_t modbus_sync;
+
 };
 
 MessagingInterface *g_iodcmd;
@@ -633,9 +630,9 @@ void loadData(const char *initial_settings)
                     if (DEBUG_BASIC)
                         std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
                     if (value.kind == Value::t_string)
-                        insert(group.iValue, addr.iValue-1, value.asString().c_str(), strlen(value.asString().c_str()));
+                        insert((int)group.iValue, (int)addr.iValue-1, value.asString().c_str(), strlen(value.asString().c_str()));
                     else
-                        insert(group.iValue, addr.iValue-1, value.iValue, len.iValue);
+                        insert((int)group.iValue, (int)addr.iValue-1, (int)value.iValue, len.iValue);
                 }
                 else
                 {
@@ -648,8 +645,6 @@ void loadData(const char *initial_settings)
     }
 }
 
-bool done = false;
-
 static void finish(int sig)
 {
     struct sigaction sa;
@@ -658,7 +653,7 @@ static void finish(int sig)
     sa.sa_flags = 0;
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGINT, &sa, 0);
-    done = true;
+    program_state = s_finished;
 }
 
 bool setup_signals()
@@ -673,6 +668,40 @@ bool setup_signals()
     }
     return true;
 }
+
+size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fillin params
+{
+    size_t count =0;
+    std::list<Value> parts;
+    std::string ds;
+    std::list<Value> *param_list = 0;
+    if (MessageEncoding::getCommand(data, ds, &param_list))
+    {
+        params.push_back(ds);
+        if (param_list)
+        {
+            std::list<Value>::const_iterator iter = param_list->begin();
+            while (iter != param_list->end())
+            {
+                const Value &v  = *iter++;
+                params.push_back(v);
+            }
+        }
+        count = params.size();
+    }
+    else
+    {
+        std::istringstream iss(data);
+        while (iss >> ds)
+        {
+            parts.push_back(ds.c_str());
+            ++count;
+        }
+        std::copy(parts.begin(), parts.end(), std::back_inserter(params));
+    }
+    return count;
+}
+
 
 int main(int argc, const char * argv[])
 {
@@ -689,7 +718,7 @@ int main(int argc, const char * argv[])
     ("debug",po::value<int>(&debug)->default_value(0), "set debug level")
     ("host", "remote host (localhost)")
     ("cwout", "clockwork outgoing port (5555)")
-    ("cwin", "clockwork incoming port (5558)")
+    ("cwin", "clockwork incoming port (deprecated)")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -700,16 +729,13 @@ int main(int argc, const char * argv[])
         return 1;
     }
     int cw_out = 5555;
-    int cw_in = 5558;
     std::string host("localhost");
     // backward compatibility
     if (argc > 2 && strcmp(argv[1],"-p") == 0)
     {
-        cw_in = (int)strtol(argv[2], 0, 0);
-        std::cerr << "NOTICE: the -p option is deprecated, please use --port\n";
+        std::cerr << "NOTICE: the -p option is deprecated\n";
     }
     if (vm.count("cwout")) cw_out = vm["cwout"].as<int>();
-    if (vm.count("cwin")) cw_in = vm["cwin"].as<int>();
     if (vm.count("host")) host = vm["host"].as<std::string>();
     if (vm.count("debug")) debug = vm["debug"].as<int>();
 
@@ -749,26 +775,21 @@ int main(int argc, const char * argv[])
         }
         while (!initial_settings);
     }
+    
+    program_state = s_running;
+    setup_signals();
 
+    std::cout << "-------- Starting Modbus Interface ---------\n" << std::flush;
+
+    
     modbus_context = modbus_new_tcp("localhost", 1502);
     if (!modbus_context)
     {
         std::cerr << "Error creating a libmodbus TCP interface\n";
         return 1;
     }
-
-    //std::cout << "-------- Starting to listen to IOD ---------\n" << std::flush;
-    //IODInterfaceThread iod_interface;
-    //g_iod_interface = &iod_interface;
-    //boost::thread monitor(boost::ref(iod_interface));
-
-    std::cout << "-------- Starting Modbus Interface ---------\n" << std::flush;
-
     ModbusServerThread modbus_interface;
     boost::thread monitor_modbus(boost::ref(modbus_interface));
-
-//		zmq::socket_t modbus_server_sync(*MessagingInterface::instance()->getContext(), ZMQ_REQ);
-//		modbus_server_sync.connect("inproc://server_sync");
 
     // the local command channel accepts commands from the modbus thread and relays them to iod.
     zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
@@ -777,24 +798,9 @@ int main(int argc, const char * argv[])
     SubscriptionManager subscription_manager("MODBUS_CHANNEL");
     subscription_manager.setupConnections();
 
-    setup_signals();
-
     try
     {
-        /*
-           	std::cout << "Listening on port " << cw_in << "\n";
-               // client
-               int res;
-           	std::stringstream ss;
-           	ss << "tcp://localhost:" << cw_in;
-               zmq::context_t context (1);
-               zmq::socket_t subscriber (context, ZMQ_SUB);
-               res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
-               assert (res == 0);
-               subscriber.connect(ss.str().c_str());
-               //subscriber.connect("ipc://ecat.ipc");
-         */
-        while (!done)
+        while (program_state != s_finished)
         {
 
             zmq::pollitem_t items[] =
@@ -803,10 +809,13 @@ int main(int argc, const char * argv[])
                 { subscription_manager.subscriber, 0, ZMQ_POLLIN, 0 },
                 { iosh_cmd, 0, ZMQ_POLLIN, 0 }
             };
-            if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) { usleep(1000); continue; }
-//						if (items[0].revents & ZMQ_POLLIN) std::cout << "incoming command response from iod\n";
-//						if (items[1].revents & ZMQ_POLLIN) std::cout << "incoming data from subscriber\n";
-//						if (items[2].revents & ZMQ_POLLIN) std::cout << "incoming data from modbus\n";
+            try {
+                if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) { usleep(100000); continue; }
+            }
+            catch (std::exception ex) {
+                std::cout << "polling connections: " << ex.what() << "\n";
+                if (program_state != s_finished) continue;
+            }
             if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
 
             zmq::message_t update;
@@ -817,40 +826,11 @@ int main(int argc, const char * argv[])
             data[len] = 0;
             if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
 
-            std::list<Value> parts;
             size_t count = 0;
-            std::string ds;
             std::vector<Value> params(0);
-            {
-                std::list<Value> *param_list = 0;
-                if (MessageEncoding::getCommand(data, ds, &param_list))
-                {
-                    params.push_back(ds);
-                    if (param_list)
-                    {
-                        std::list<Value>::const_iterator iter = param_list->begin();
-                        while (iter != param_list->end())
-                        {
-                            const Value &v  = *iter++;
-                            params.push_back(v);
-                        }
-                    }
-                    count = params.size();
-                }
-                else
-                {
-                    std::istringstream iss(data);
-                    while (iss >> ds)
-                    {
-                        parts.push_back(ds.c_str());
-                        ++count;
-                    }
-                    std::copy(parts.begin(), parts.end(), std::back_inserter(params));
-                }
-            }
+            count = parseIncomingMessage(data, params);
             std::string cmd(params[0].asString());
 
-            //iss >> cmd;
             if (cmd == "UPDATE")
             {
                 int group, addr, len;
@@ -866,13 +846,10 @@ int main(int argc, const char * argv[])
                 addr = (int)params[2].iValue;
                 name = params[3].sValue;
                 len = (int)params[4].iValue;
-                //iss >> group >> addr >> name >> len >> value;
 
                 if (debug) std::cout << "IOD: " << group << " " << addr << " " << name << " " << len << " " << params[5] <<  "\n";
                 if (params[5].kind == Value::t_string)
-                {
                     insert(group, addr-1, params[5].asString().c_str(), strlen(params[5].asString().c_str()));
-                }
                 else
                     insert(group, addr-1, (int)params[5].iValue, len);
             }
@@ -881,7 +858,6 @@ int main(int argc, const char * argv[])
 #if 1
                 active_addresses.clear();
                 initialised_address.clear();
-//				sleep(2);
                 exit(0);
                 break;
 #else
@@ -911,8 +887,6 @@ int main(int argc, const char * argv[])
         std::cerr << "Exception of unknown type!\n";
     }
 
-//    iod_interface.stop();
-//   monitor.join();
     modbus_interface.stop(); // may hang if clients are connected
     monitor_modbus.join();
     return 0;
