@@ -251,9 +251,26 @@ struct ModbusServerThread
 
         while (modbus_state != ms_finished)
         {
+						if (modbus_state == ms_pausing) {
+							std::cout << "pausing modbus: cleaning old..\n";
+			        if (modbus_mapping) modbus_mapping_free(modbus_mapping);
+    			    if (modbus_context) modbus_free(modbus_context);
+        			modbus_context = 0;
+
+							std::cout << "pausing modbus: makeing new..\n";
+    					modbus_context = modbus_new_tcp("0.0.0.0", 1502);
+    					modbus_mapping = modbus_mapping_new(10000, 10000, 10000, 10000);
+							modbus_state = ms_paused;
+						}
             if (modbus_state == ms_paused) { usleep(100000); continue; }
             if (modbus_state == ms_starting || modbus_state == ms_resuming) {
+								std::cout << "starting modbus_tcp_listen\n";
                 socket = modbus_tcp_listen(modbus_context, 3);
+								std::cout << "finished modbus_tcp_listen " << socket << "\n";
+								if (socket == -1) {
+									perror("modbus listen");
+									continue;
+								}
                 if (debug) std::cout << "Modbus listen socket: " << socket << "\n" << std::flush;
                 FD_ZERO(&connections);
                 FD_SET(socket, &connections);
@@ -264,7 +281,10 @@ struct ModbusServerThread
             fd_set activity;
             activity = connections;
             int nfds;
-            if ( (nfds = select(max_fd +1, &activity, 0, 0, 0)) == -1)
+						struct timeval timeout;
+						timeout.tv_sec = 0;
+						timeout.tv_usec = 100000;
+            if ( (nfds = select(max_fd +1, &activity, 0, 0, &timeout)) == -1)
             {
                 perror("select");
                 continue; // TBD
@@ -551,11 +571,17 @@ struct ModbusServerThread
 
     void stop() { modbus_state = ms_finished; }
     void pause() {
+				std::cout << "Pausing modbus interface\n";
         modbus_state = ms_paused;
+				shutdown(socket, SHUT_RDWR);
         close(socket);
+				std::cout << "closed listening socket\n";
+				
         std::list<int>::iterator iter = connection_list.begin();
         while (iter != connection_list.end()) {
+						shutdown(*iter, SHUT_RDWR);
             close(*iter);
+						std::cout << "closed connection socket " << *iter << "\n";
             iter = connection_list.erase(iter);
         }
     }
@@ -563,7 +589,7 @@ struct ModbusServerThread
         modbus_state = ms_resuming;
     }
     
-    enum ModbusState { ms_starting, ms_collecting, ms_running, ms_paused, ms_resuming, ms_finished } modbus_state;
+    enum ModbusState { ms_starting, ms_collecting, ms_running, ms_pausing, ms_paused, ms_resuming, ms_finished } modbus_state;
     fd_set connections;
     int max_fd;
     int socket;
@@ -729,7 +755,7 @@ void CollectModbusStatus() {
         active_addresses.clear();
         initialised_address.clear();
         initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
-        if (initial_settings && strncmp(initial_settings, "ignored", strlen("ignored")) != 0)
+        if (initial_settings && strncasecmp(initial_settings, "ignored", strlen("ignored")) != 0)
         {
             loadData(initial_settings);
             free(initial_settings);
@@ -745,7 +771,8 @@ ModbusServerThread *modbus_interface_thread = 0;
 class SetupDisconnectMonitor : public EventResponder {
 public:
     void operator()(const zmq_event_t &event_, const char* addr_) {
-        if (modbus_interface_thread) modbus_interface_thread->pause();
+        if (modbus_interface_thread) 
+					modbus_interface_thread->pause();
     }
 };
 
@@ -817,7 +844,7 @@ int main(int argc, const char * argv[])
     std::cout << "-------- Starting Modbus Interface ---------\n" << std::flush;
 
     
-    modbus_context = modbus_new_tcp("localhost", 1502);
+    modbus_context = modbus_new_tcp("0.0.0.0", 1502);
     if (!modbus_context)
     {
         std::cerr << "Error creating a libmodbus TCP interface\n";
@@ -851,18 +878,19 @@ int main(int argc, const char * argv[])
             };
             try {
                 if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
-                    if (need_refresh) {
-                        CollectModbusStatus();
-                        need_refresh = false;
-                        modbus_interface.resume();
-                    }
-                    else usleep(100000);
+                    usleep(100000);
                     continue;
                 }
             }
             catch (std::exception ex) {
                 std::cout << "polling connections: " << ex.what() << "\n";
                 if (program_state != s_finished) continue;
+            }
+            if (need_refresh) {
+                CollectModbusStatus();
+                need_refresh = false;
+								std::cout << "resuming modbus\n";
+                modbus_interface.resume();
             }
             if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
 
@@ -937,6 +965,7 @@ int main(int argc, const char * argv[])
         std::cerr << "Exception of unknown type!\n";
     }
 
+    //modbus_interface.pause(); // terminate modbus connections
     modbus_interface.stop(); // may hang if clients are connected
     monitor_modbus.join();
     return 0;
