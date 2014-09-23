@@ -79,7 +79,7 @@ void EtherCATThread::operator()() {
 #ifdef USE_RTC
 	rtc = open("/dev/rtc", 0);
 	if (rtc == -1) { perror("open rtc"); exit(1); }
-	unsigned long period = 512;
+	unsigned long period = 600;
 
 	int rc = ioctl(rtc, RTC_IRQP_SET, period);
 	if (rc == -1) { perror("set rtc period"); exit(1); }

@@ -140,7 +140,7 @@ public:
     static Channel *create(unsigned int port, ChannelDefinition *defn);
     static Channel *find(const std::string name);
     static void remove(const std::string name);
-    static int uniquePort();
+    static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
     static void sendStateChange(MachineInstance *machine, std::string new_state);
 		static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value>*params);

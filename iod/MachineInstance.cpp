@@ -1097,7 +1097,7 @@ void MachineInstance::idle() {
 	return;
 }
 
-long get_diff_in_microsecs(struct timeval *now, struct timeval *then) {
+uint64_t get_diff_in_microsecs(struct timeval *now, struct timeval *then) {
     uint64_t t = (now->tv_sec - then->tv_sec);
     t = t * 1000000 + (now->tv_usec - then->tv_usec);
     return t;

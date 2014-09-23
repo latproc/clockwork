@@ -75,8 +75,6 @@ protected:
 #include <list>
 #include <string>
 
-long get_diff_in_microsecs(struct timeval *now, struct timeval *then);
-
 class MQTTInterface {
 public:
 	static int FREQUENCY;

@@ -88,8 +88,6 @@ typedef struct ECPDOEntryReg{} ec_pdo_entry_reg_t;
 #include <vector>
 #include <string>
 
-long get_diff_in_microsecs(struct timeval *now, struct timeval *then);
-
 class ECInterface {
 public:
 	static int FREQUENCY;

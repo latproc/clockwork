@@ -70,13 +70,13 @@ void Channel::setPort(unsigned int new_port) {
 unsigned int Channel::getPort() const { return port; }
 
 
-int Channel::uniquePort() {
+int Channel::uniquePort(unsigned int start, unsigned int end) {
     int res = 0;
     char address_buf[40];
     while (true) {
         try{
             zmq::socket_t test_bind(*MessagingInterface::getContext(), ZMQ_PULL);
-            res = random() % 200 + 7600;
+            res = random() % (end-start+1) + start;
             snprintf(address_buf, 40, "tcp://0.0.0.0:%d", res);
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time

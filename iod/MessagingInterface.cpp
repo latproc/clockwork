@@ -180,6 +180,30 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 	}
 }
 
+int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
+    int res = 0;
+    char address_buf[40];
+    while (true) {
+        try{
+            zmq::socket_t test_bind(*MessagingInterface::getContext(), ZMQ_PULL);
+            res = random() % (end-start+1) + start;
+            snprintf(address_buf, 40, "tcp://0.0.0.0:%d", res);
+            test_bind.bind(address_buf);
+            int linger = 0; // do not wait at socket close time
+            test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            std::cout << "found available port " << res << "\n";
+            break;
+        }
+        catch (zmq::error_t err) {
+            if (zmq_errno() != EADDRINUSE) {
+                break;
+            }
+        }
+    }
+    return res;
+}
+
+
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
         assert( pthread_equal(owner_thread, pthread_self()) );
@@ -599,9 +623,15 @@ bool SubscriptionManager::setupConnections() {
     std::stringstream ss;
     if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
         ss << "tcp://" << subscriber_host << ":" << 5555;
-        setup.connect(ss.str().c_str());
-        monit_setup->setEndPoint(ss.str().c_str());
         current_channel = "";
+				try {
+        	setup.connect(ss.str().c_str());
+				}
+				catch(zmq::error_t err) {
+					std::cerr <<zmq_strerror(errno) << "\n";
+					return false;
+				}
+        monit_setup->setEndPoint(ss.str().c_str());
         setSetupStatus(SubscriptionManager::e_waiting_connect);
         usleep(5000);
     }

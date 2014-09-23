@@ -47,6 +47,7 @@ public:
     ~MessagingInterface();
     static zmq::context_t *getContext();
     static void setContext(zmq::context_t *);
+    static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
     char *send(const char *msg);
     char *send(const Message &msg);
     bool send_raw(const char *msg);
