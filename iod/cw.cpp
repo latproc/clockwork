@@ -62,6 +62,7 @@
 #include "ClientInterface.h"
 #include "MQTTInterface.h"
 #include "MessageLog.h"
+#include "MessagingInterface.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -258,8 +259,8 @@ void ProcessingThread::operator()()  {
 
 int main (int argc, char const *argv[])
 {
-		zmq::context_t context;
-		MessagingInterface::setContext(&context);
+	zmq::context_t *context = new zmq::context_t(1);
+	MessagingInterface::setContext(context);
 	Logger::instance();
     MessageLog::setMaxMemory(10000);
 
