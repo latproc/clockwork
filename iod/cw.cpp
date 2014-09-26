@@ -489,6 +489,15 @@ int main (int argc, char const *argv[])
     }
     MQTTInterface::instance()->stop();
     processMonitor.stop();
+    stateMonitor.stop();
+    kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
+    monitor.join();
+	try {
+        delete context;
+    }
+    catch (zmq::error_t) {
+
+    }
     process.join();
     stateMonitor.stop();
     monitor.join();
