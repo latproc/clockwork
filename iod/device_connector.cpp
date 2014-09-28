@@ -974,8 +974,16 @@ int main(int argc, const char * argv[])
             struct timeval now;
             gettimeofday(&now, 0);
 
-						if (!connection_manager->checkConnections(items, num_items, cmd)) continue;
-            if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+            try {
+                if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
+            }
+            catch (std::exception e) {
+                if (zmq_errno())
+                    std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
+                else
+                    std::cerr << e.what() << "\n";
+            }
+
             
             // TBD once the connection is open, check that data has been received within the last second
             DeviceStatus::State dev_stat = DeviceStatus::instance()->current();
@@ -991,14 +999,10 @@ int main(int argc, const char * argv[])
                     last_time = last;
                 }
             }
-            /*
-            // send a message to iod
-            if (iod_interface.status == IODInterface::s_disconnected) {
-                std::cerr << "Warning: Disconnected from clockwork\n";
-                iod_interface.sendMessage("");
-            }
-            */
-            
+
+            if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+
+/*
             struct timespec sleep_time;
             struct timespec remain_time;
             sleep_time.tv_sec = 0;
@@ -1006,6 +1010,7 @@ int main(int argc, const char * argv[])
             while (!done && nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
                 sleep_time.tv_nsec = remain_time.tv_nsec;
             }
+*/
         }
 
         connection_thread.stop();
