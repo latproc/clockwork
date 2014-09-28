@@ -152,11 +152,11 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 persistd:	persistd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
 		MessageEncoding.o symboltable.o cJSON.o DebugExtra.o Logger.o options.o anet.o \
 		PersistentStore.o Message.o MessageLog.o
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp -lzmq \
-		$(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB) \
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ persistd.cpp \
 		value.o symboltable.o Logger.o DebugExtra.o  options.o \
 		MessageEncoding.o cJSON.o PersistentStore.o Message.o anet.o MessageLog.o \
-		MessagingInterface.o
+		MessagingInterface.o \
+		-lzmq $(BOOST_SYSTEM_LIB) $(BOOST_PROGRAM_OPTIONS_LIB) $(BOOST_THREAD_LIB)
 
 modbusd:	modbusd.cpp dynamic_value.o value.o symboltable.o Logger.o DebugExtra.o \
 			MessagingInterface.o Message.o anet.o MessageLog.o MessageEncoding.o
