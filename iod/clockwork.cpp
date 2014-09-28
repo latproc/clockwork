@@ -705,6 +705,7 @@ void semantic_analysis() {
 			}
 		}
 	}
+    settings->setValue("NAME", device_name());
 	
 	// reorder the list of machines in reverse order of dependence
 	MachineInstance::sort();
