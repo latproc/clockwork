@@ -1000,17 +1000,25 @@ int main(int argc, const char * argv[])
                 }
             }
 
-            if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
-
-/*
-            struct timespec sleep_time;
-            struct timespec remain_time;
-            sleep_time.tv_sec = 0;
-            sleep_time.tv_nsec = 300000000;
-            while (!done && nanosleep(&sleep_time, &remain_time) == -1 && errno == EINTR && remain_time.tv_nsec > 10000) {
-                sleep_time.tv_nsec = remain_time.tv_nsec;
+            //if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+            
+            if (subs_index>=0 && items[subs_index].revents & ZMQ_POLLIN) {
+                char data[1000];
+                size_t len = 0;
+                try {
+                    SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
+                    if (sm) {
+                        len = sm->subscriber.recv(data, 1000);
+                        if (!len) continue;
+                        std::cout << "data: " << data << "\n";
+                    }
+                }
+                catch (zmq::error_t e) {
+                    if (errno == EINTR) continue;
+                    
+                }
+                data[len] = 0;
             }
-*/
         }
 
         connection_thread.stop();
