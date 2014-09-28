@@ -23,6 +23,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 #include "cJSON.h"
 #include "MessageEncoding.h"
 #include "value.h"
@@ -36,6 +37,7 @@ struct MessageEncoding {
     static char *encodeState(const std::string &machine, const std::string &new_state);
     static char *encodeError(const char *error);
     static bool getCommand(const char *msg, std::string &cmd, std::list<Value> **params);
+    static bool getCommand(const char *msg, std::string &cmd, std::vector<Value> **params);
     static bool getState(const char *msg, std::string &cmd, std::list<Value> **params);
 
     static std::string valueType(const Value &v);

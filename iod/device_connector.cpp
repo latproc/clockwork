@@ -1010,7 +1010,14 @@ int main(int argc, const char * argv[])
                     if (sm) {
                         len = sm->subscriber.recv(data, 1000);
                         if (!len) continue;
+                        data[len] = 0;
                         std::cout << "data: " << data << "\n";
+                        std::string cmd;
+                        std::vector<Value>*params = 0;
+                        MessageEncoding::getCommand(data, cmd, &params);
+                        if (cmd == "PROPERTY" && params->at(0).asString() == options.watchProperty())
+                            connection_thread.send(params->at(1).asString().c_str());
+                        if (params) delete params;
                     }
                 }
                 catch (zmq::error_t e) {

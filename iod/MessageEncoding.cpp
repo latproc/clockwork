@@ -166,6 +166,53 @@ Value MessageEncoding::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
 }
 
 
+bool MessageEncoding::getCommand(const char *msg, std::string &cmd, std::vector<Value> **params)
+{
+    cJSON *obj = cJSON_Parse(msg);
+    if (!obj) return false;
+    {
+        cJSON *command = cJSON_GetObjectItem(obj, "command");
+        if (!command) goto failed_getCommandVector;
+        if (command->type != cJSON_String) goto failed_getCommandVector;
+        cmd = command->valuestring;
+        if (cmd == "STATE") {
+            cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
+            int num_params = cJSON_GetArraySize(cjParams);
+            if (num_params) {
+                *params = new std::vector<Value>;
+                for (int i=0; i<num_params; ++i) {
+                    cJSON *item = cJSON_GetArrayItem(cjParams, i);
+                    Value item_val = valueFromJSONObject(item, 0);
+                    if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
+                }
+            }
+            else
+                *params = NULL;
+        }
+        else {
+            cJSON *cjParams = cJSON_GetObjectItem(obj, "params");
+            int num_params = cJSON_GetArraySize(cjParams);
+            if (num_params) {
+                *params = new std::vector<Value>;
+                for (int i=0; i<num_params; ++i) {
+                    cJSON *item = cJSON_GetArrayItem(cjParams, i);
+                    cJSON *type = cJSON_GetObjectItem(item, "type");
+                    cJSON *value = cJSON_GetObjectItem(item, "value");
+                    Value item_val = valueFromJSONObject(value, type);
+                    if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
+                }
+            }
+            else
+                *params = NULL;
+        }
+        cJSON_Delete(obj);
+        return true;
+    }
+failed_getCommandVector:
+    cJSON_Delete(obj);
+    return false;
+}
+
 bool MessageEncoding::getCommand(const char *msg, std::string &cmd, std::list<Value> **params)
 {
     cJSON *obj = cJSON_Parse(msg);
