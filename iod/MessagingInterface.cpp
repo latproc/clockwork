@@ -749,9 +749,11 @@ bool CommandManager::checkConnections() {
 bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) {
     int rc = 0;
     if (monit_setup->disconnected() ) {
-        setup_status = e_startup;
-        setupConnections();
-        usleep(50000);
+        if (setup_status != e_waiting_connect) {
+            setup_status = e_startup;
+            setupConnections();
+            usleep(50000);
+        }
         return false;
     }
     if ( monit_setup->disconnected() )
