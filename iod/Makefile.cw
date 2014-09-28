@@ -29,7 +29,7 @@ EXTRALIBS = -L/opt/latproc/lib -L/opt/local/lib -L/usr/local/lib
 # would like to use.
 
 BOOST_LIB_EXTN = #-mt
-BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN)
+BOOST_THREAD_LIB = -lboost_thread$(BOOST_LIB_EXTN) -lpthreads
 BOOST_FILESYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN) -lboost_filesystem$(BOOST_LIB_EXTN)
 BOOST_PROGRAM_OPTIONS_LIB = -lboost_program_options$(BOOST_LIB_EXTN)
 BOOST_SYSTEM_LIB = -lboost_system$(BOOST_LIB_EXTN)
