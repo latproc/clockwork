@@ -1015,8 +1015,12 @@ int main(int argc, const char * argv[])
                         std::string cmd;
                         std::vector<Value>*params = 0;
                         MessageEncoding::getCommand(data, cmd, &params);
-                        if (cmd == "PROPERTY" && params->at(0).asString() == options.watchProperty())
-                            connection_thread.send(params->at(1).asString().c_str());
+                        if (cmd == "PROPERTY") {
+                            std::string prop = params->at(0).asString();
+                            prop = prop + "." + params->at(1).asString();
+                            if (prop == options.watchProperty())
+                                connection_thread.send(params->at(1).asString().c_str());
+                        }
                         if (params) delete params;
                     }
                 }
