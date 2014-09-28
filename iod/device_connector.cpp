@@ -1011,15 +1011,17 @@ int main(int argc, const char * argv[])
                         len = sm->subscriber.recv(data, 1000);
                         if (!len) continue;
                         data[len] = 0;
-                        std::cout << "data: " << data << "\n";
                         std::string cmd;
                         std::vector<Value>*params = 0;
                         MessageEncoding::getCommand(data, cmd, &params);
                         if (cmd == "PROPERTY") {
                             std::string prop = params->at(0).asString();
                             prop = prop + "." + params->at(1).asString();
-                            if (prop == options.watchProperty())
-                                connection_thread.send(params->at(1).asString().c_str());
+                            if (prop == options.watchProperty()) {
+                                connection_thread.send(params->at(2).asString().c_str());
+                                std::cout << "sending: " << params->at(2).asString().c_str() << "\n";
+
+                            }
                         }
                         if (params) delete params;
                     }
