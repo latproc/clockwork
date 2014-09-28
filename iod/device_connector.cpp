@@ -396,7 +396,7 @@ done_getSettings:
 }
 
 int setupSerialPort(const char *portname, const char *setting_str) {
-	int serial = ::open(portname, O_RDONLY | O_NDELAY); //O_RDWR | O_NOCTTY | O_NDELAY);
+	int serial = ::open(portname, O_RDWR | O_NDELAY); //O_RDWR | O_NOCTTY | O_NDELAY);
 	if (serial == -1) {
 		perror("Error opening port ");
         return -1;
