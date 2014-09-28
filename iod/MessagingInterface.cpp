@@ -76,7 +76,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
     while (1) {
         try {
-            std::cout << "sent " << msg << "\n";
+            //std::cout << "sent " << msg << "\n";
             size_t len = sock.send(msg, strlen(msg));
             if (!len) continue;
             break;
@@ -95,7 +95,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
             if (!len) continue;
             if (len==200) len--; //unlikely event that the response is large
             buf[len] = 0;
-            std::cerr << "received: " << buf << "\n";
+            //std::cerr << "received: " << buf << "\n";
             response = buf;
             break;
         }
