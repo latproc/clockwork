@@ -33,11 +33,13 @@ static int persistent_port_num = 5557;
 static int modbus_port_num = 5558;
 static int command_port_num = 5555;
 static bool keep_stats = false;
-static char *dev_name = 0;
+static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
 
 const char *device_name() { return dev_name; }
-void set_device_name(const char *new_name) { if (dev_name) free(dev_name); dev_name = strdup(new_name); }
+void set_device_name(const char *new_name) {
+    if (dev_name) free(dev_name); dev_name = strdup(new_name);
+}
 
 
 void set_verbose(int trueOrFalse)
