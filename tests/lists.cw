@@ -74,6 +74,17 @@ queue LIST 1,2,3;
 }
 q Queue;
 
+/* here is an alternative example that uses a list for a FIFO */
+AltQueue MACHINE {
+queue LIST;
+	nonempty WHEN SIZE OF queue > 0;
+	empty DEFAULT;
+
+	ENTER nonempty { x := TAKE FIRST FROM queue; LOG "got: " + x }
+	ENTER empty { LOG "empty" }
+}
+qa AltQueue;
+
 /* Playing with a list of digits */
 digits LIST 0,1,2,3,4,5,6,7,8,9;
 DigitTest MACHINE list {
