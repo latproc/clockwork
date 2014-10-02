@@ -11,8 +11,7 @@ class PersistentStore {
 public:
 	typedef std::pair<std::string, Value> PropertyPair;
     
-	PersistentStore(const std::string &filename) : file_name(filename), is_dirty(false) {
-	}
+	PersistentStore(const std::string &filename) : file_name(filename), is_dirty(false) { }
     
 	bool dirty() { return is_dirty; }
 	void load();

@@ -82,7 +82,7 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
         std::map<std::string, Value> &entries(prop.second);
         PersistentStore::PropertyPair entry;
         BOOST_FOREACH(entry, entries) {
-			if (entry.second.kind == Value::t_string)
+			if (entry.second.kind == Value::t_string || entry.second.kind == Value::t_symbol)
 	            out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
 			else
 	            out << prop.first << " " << entry.first << " " << entry.second << "\n";
