@@ -283,8 +283,9 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
-    updateLastEvaluationTime();
+    //updateLastEvaluationTime();
     if (!state_machine) return;
+    next_poll = 0;
     if (state_machine->token_id == ClockworkToken::LIST) {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
@@ -2861,13 +2862,17 @@ Value *MachineInstance::resolve(std::string property) {
                 || m->state_machine->token_id == ClockworkToken::CONSTANT) ) {
 				return &m->properties.lookup("VALUE");
 			}
-			else if (m->_type == "VARIABLE" || m->_type == "CONSTANT") {
-				return &m->properties.lookup("VALUE");
+            else if (m->getStateMachine()) {
+                
+                if (m->getStateMachine()->token_id == ClockworkToken::VARIABLE || m->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
+                    return &m->properties.lookup("VALUE");
+                }
+                else if (m->getStateMachine()->token_id == ClockworkToken::LIST || m->getStateMachine()->token_id == ClockworkToken::REFERENCE) {
+                    return m->getCurrent().getNameValue();
+                }
 			}
-			else {
-				//return new Value(new MachineValue(m, property));
-                return &m->current_value_holder;
-            }
+            //return new Value(new MachineValue(m, property));
+            return &m->current_value_holder;
 		}
 	}
     char buf[200];
