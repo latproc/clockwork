@@ -128,6 +128,10 @@ struct IODCommandPerformance : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandPersistentState : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
 struct IODCommandUnknown : public IODCommand {
 	bool run(std::vector<Value> &params);
 };

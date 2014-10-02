@@ -663,6 +663,13 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 
     bool IODCommandShowMessages::run(std::vector<Value> &params) {
         MessageLog *log = MessageLog::instance();
+        // the CLEAR MESSAGES command is routed here by the client interface..
+        if (params[0].asString() == "CLEAR") {
+            MessageLog::instance()->purge();
+            result_str = "OK";
+            return true;
+        }
+        
         bool use_json = params.size() >= 2 && params[1].asString() == "JSON";
         long num = 0;
         unsigned int idx = 1;
@@ -922,6 +929,29 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		result_str = "OK";
 		return true;
 	}
+
+    bool IODCommandPersistentState::run(std::vector<Value> &params) {
+        cJSON *result = cJSON_CreateArray();
+        std::list<MachineInstance *>::iterator m_iter;
+        m_iter = MachineInstance::begin();
+        while (m_iter != MachineInstance::end()) {
+            MachineInstance *m = *m_iter++;
+            if (m && (m->getValue("PERSISTENT") == "true") ) {
+                std::string fnam = m->fullName();
+                SymbolTableConstIterator props_i = m->properties.begin();
+                while (props_i != m->properties.end()) {
+                    std::pair<std::string, Value> item = *props_i++;
+                    cJSON *obj = cJSON_CreateObject();
+                    //cJSON_AddStringToObject(obj, <#name#>, <#s#>)
+                }
+            }
+        }
+        char *cstr_result = cJSON_PrintUnformatted(result);
+        cJSON_Delete(result);
+        result_str = cstr_result;
+        free(cstr_result);
+        return true;
+    }
 
     bool IODCommandModbusRefresh::run(std::vector<Value> &params) {
 		std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();

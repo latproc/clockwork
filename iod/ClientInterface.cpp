@@ -307,7 +307,7 @@ void IODCommandThread::operator()() {
                 else if (ds == "HELP") {
                     command = new IODCommandHelp;
                 }
-                else if (ds == "MESSAGES") {
+                else if (ds == "MESSAGES" || (ds == "CLEAR" && count == 2 && params[1] == "MESSAGES") ) {
                     command = new IODCommandShowMessages;
                 }
                 else if (ds == "NOTICE") {
