@@ -2810,8 +2810,15 @@ Value *MachineInstance::resolve(std::string property) {
 		else if (state_machine->global_references.count(property)) {
 			MachineInstance *m = state_machine->global_references[property];
 			if (m) {
-				DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from " << m->fullName() << "\n";
-				return &m->properties.lookup("VALUE");
+                Value *global_property_val = &m->properties.lookup("VALUE");
+                if (*global_property_val == SymbolTable::Null) {
+                    DBG_M_PROPERTIES << _name << " using current state from global " << m->fullName() << "\n";
+                    return &m->current_state_val;
+                }
+                else {
+                    DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from global " << m->fullName() << "\n";
+                    return global_property_val;
+                }
 			}
 			else {
 				resetTemporaryStringStream();
