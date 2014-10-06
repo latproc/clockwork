@@ -11,10 +11,11 @@ SquareRoot MACHINE (area:10) {
     OPTION Area 0;
     OPTION Length 0;
     OPTION LSquared 0;
+	OPTION step 0;
 
-    ENTER INIT { Area := area * 1000; step := Area / 2; }
+    ENTER INIT { Area := area * 10000; step := Area / 2; }
     
-    stable WHEN LSquared - Area < 1 && LSquared - Area > -1;
+    stable WHEN LSquared - Area < Length && LSquared - Area > -1 * Length;
     low WHEN LSquared < Area;
     high WHEN LSquared > Area;
     
