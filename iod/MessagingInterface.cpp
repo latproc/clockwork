@@ -87,16 +87,20 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
             return false;
         }
     }
-    char buf[200];
+    char *buf = 0;
     size_t len = 0;
     while (len == 0) {
         try {
-            len = sock.recv(buf, 200);
-            if (!len) continue;
-            if (len==200) len--; //unlikely event that the response is large
-            buf[len] = 0;
-            //std::cerr << "received: " << buf << "\n";
-            response = buf;
+            zmq::message_t rcvd;
+            if (sock.recv(&rcvd)) {
+                len = rcvd.size();
+                if (!len) continue;
+                buf = new char[len+1];
+                memcpy(buf, rcvd.data(), len);
+                buf[len] = 0;
+                response = buf;
+                delete buf;
+            }
             break;
         }
         catch(zmq::error_t e)  {
