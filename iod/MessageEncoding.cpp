@@ -82,6 +82,39 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
     }
 }
 
+void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
+    switch (val.kind) {
+        case Value::t_symbol:
+        case Value::t_string:
+            cJSON_AddItemToArray(obj, cJSON_CreateString(val.sValue.c_str()));
+            break;
+        case Value::t_integer:
+            cJSON_AddItemToArray(obj, cJSON_CreateNumber(val.iValue));
+            break;
+        case Value::t_bool:
+            if (val.bValue)
+                cJSON_AddItemToArray(obj, cJSON_CreateTrue());
+            else
+                cJSON_AddItemToArray(obj, cJSON_CreateFalse());
+            break;
+#ifdef DYNAMIC_VALUES
+        case Value::t_dynamic: {
+            DynamicValue *dv = val.dynamicValue();
+            if (dv) {
+                Value v = dv->operator()();
+                addValueToJSONArray(obj, v);
+            }
+            else {
+                cJSON_AddNullToArray(obj);
+            }
+            break;
+        }
+#endif
+        default:
+            break;
+    }
+}
+
 char *MessageEncoding::encodeCommand(std::string cmd, std::list<Value> *params) {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "command", cmd.c_str());

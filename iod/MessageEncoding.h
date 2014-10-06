@@ -42,6 +42,7 @@ struct MessageEncoding {
 
     static std::string valueType(const Value &v);
     static void addValueToJSONObject(cJSON *obj, const char *name, const Value &val);
+    static void addValueToJSONArray(cJSON *arr, const Value &val);
 	static Value valueFromJSONObject(cJSON *obj, cJSON *cjType);
 };
 
