@@ -304,6 +304,9 @@ void IODCommandThread::operator()() {
                 else if (ds == "PROPERTY") {
                     command = new IODCommandProperty(data);
                 }
+                else if (ds == "PERSISTENT") {
+                    command = new IODCommandPersistentState;
+                }
                 else if (ds == "HELP") {
                     command = new IODCommandHelp;
                 }

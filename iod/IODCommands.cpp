@@ -941,8 +941,11 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                 SymbolTableConstIterator props_i = m->properties.begin();
                 while (props_i != m->properties.end()) {
                     std::pair<std::string, Value> item = *props_i++;
-                    cJSON *obj = cJSON_CreateObject();
-                    //cJSON_AddStringToObject(obj, <#name#>, <#s#>)
+                    cJSON *json_item = cJSON_CreateArray();
+                    cJSON_AddItemToArray(json_item, cJSON_CreateString(fnam.c_str()));
+                    cJSON_AddItemToArray(json_item, cJSON_CreateString(item.first.c_str()));
+                    MessageEncoding::addValueToJSONArray(json_item, item.second);
+                    cJSON_AddItemToArray(result, json_item);
                 }
             }
         }
