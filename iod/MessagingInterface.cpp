@@ -187,19 +187,28 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
     int res = 0;
     char address_buf[40];
+    std::set<unsigned int> checked_ports; // used to avoid duplicate checks and infinite loops
     while (true) {
         try{
             zmq::socket_t test_bind(*MessagingInterface::getContext(), ZMQ_PULL);
             res = random() % (end-start+1) + start;
+            if (checked_ports.count(res) && checked_ports.size() < end-start+1) continue;
+            checked_ports.insert(res);
             snprintf(address_buf, 40, "tcp://0.0.0.0:%d", res);
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            test_bind.disconnect(address_buf);
             std::cout << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
             if (zmq_errno() != EADDRINUSE) {
+                res = 0;
+                break;
+            }
+            if (checked_ports.size() == end-start+1) {
+                res = 0;
                 break;
             }
         }
