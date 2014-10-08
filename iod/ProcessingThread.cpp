@@ -302,9 +302,10 @@ void ProcessingThread::operator()()
         };
         size_t len = 0;
         char buf[10];
-        while (!program_done && len == 0 && !MachineInstance::workToDo())
+        while (!program_done && len == 0)
         {
             if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync, sched_sync)) break;
+            if (MachineInstance::workToDo()) break;
         }
         //		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         //			std::cout << "ecat waiting\n";
@@ -333,9 +334,9 @@ void ProcessingThread::operator()()
 				status = e_waiting;
 			}
             if (MachineInstance::workToDo()) {
-                std::cout << " work to do. scheduling another check\n"; ecat_sync.send("go",2);
+                std::cout << " work to do after dispatch\n";;
             }
-            else { std::cout << " no more work to do\n"; }
+            else { std::cout << " no more work to do after dispatch\n"; }
 		}
 		else if (status == e_handling_sched) {
 			if (processingState != eIdle) {
