@@ -423,10 +423,10 @@ void MachineInstance::sort() {
 	all_machines.clear();
 	std::copy(tmp.begin(), tmp.end(), back_inserter(all_machines));
 	
-	std::cout << "Sorted machines (dependencies)\n";
+	DBG_PARSER << "Sorted machines (dependencies)\n";
 	BOOST_FOREACH(MachineInstance *m, all_machines) {
-		if (m->owner) std::cout << m->owner->getName() << ".";
-		std::cout << m->getName() << "\n";
+		if (m->owner) DBG_PARSER << m->owner->getName() << ".";
+		DBG_PARSER << m->getName() << "\n";
 	}
 #endif
 }
@@ -1080,7 +1080,7 @@ void MachineInstance::idle() {
             }
 		}
 		else if (!curr->complete())  {
-			//DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
+			DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
 			curr->release();
 			return;
 		}
@@ -1164,15 +1164,18 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface) && m->enabled() ) ) {
             if (m->hasWork() || !m->active_actions.empty() ) {
-                //std::cout << m->getName() << " " << m->current_state.getName() << "\n";
+                DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << "\n";
                 m->idle();
             }
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
                 ++num_machines_with_work;
             }
+            if (m->hasWork() || !m->active_actions.empty()) {
+                DBG_ACTIONS << m->getName() << " has work\n";
+                ++num_machines_with_work;
+            }
         }
-        if (m->hasWork() || !m->active_actions.empty()) ++num_machines_with_work;
         count--;
         if (count<=0) {
             struct timeval now;
@@ -1238,9 +1241,9 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 }
 
 void MachineInstance::displayAutomaticMachines() {
-	BOOST_FOREACH(MachineInstance *m, MachineInstance::automatic_machines) {
-		std::cout << *m << "\n";
-	}
+    BOOST_FOREACH(MachineInstance *m, MachineInstance::automatic_machines) {
+        std::cout << *m << "\n";
+    }
 }
 
 void MachineInstance::displayAll() {

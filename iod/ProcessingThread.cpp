@@ -334,9 +334,9 @@ void ProcessingThread::operator()()
 				status = e_waiting;
 			}
             if (MachineInstance::workToDo()) {
-                std::cout << " work to do after dispatch\n";;
+                DBG_DISPATCHER << " work to do after dispatch\n";;
             }
-            else { std::cout << " no more work to do after dispatch\n"; }
+            else { DBG_DISPATCHER << " no more work to do after dispatch\n"; }
 		}
 		else if (status == e_handling_sched) {
 			if (processingState != eIdle) {
@@ -406,8 +406,11 @@ void ProcessingThread::operator()()
                 }
                 */
             }
-            if (MachineInstance::workToDo()) { std::cout << " work to do. scheduling another check\n"; ecat_sync.send("go",2); }
-            else { std::cout << " no more work to do\n"; }
+            if (MachineInstance::workToDo()) {
+                DBG_SCHEDULER << " work to do. scheduling another check\n";
+                ecat_sync.send("go",2);
+            }
+            else { DBG_SCHEDULER << " no more work to do\n"; }
         }
         if (machine_is_ready && MachineInstance::workToDo() )
         {
