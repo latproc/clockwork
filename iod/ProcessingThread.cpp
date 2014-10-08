@@ -129,7 +129,6 @@ void ProcessingThread::checkAndUpdateCycleDelay()
         ECInterface::FREQUENCY = 1000000 / delay;
         //ECInterface::instance()->start();
         cycle_delay = delay;
-				std::cout << "cycle delay is now " << cycle_delay << "\n";
     }
 }
 
@@ -258,12 +257,187 @@ void ProcessingThread::operator()()
     ecat_sync.connect("inproc://ethercat_sync");
 
     sched_sync.send("go",2); // scheduled items
+    usleep(10000);
     dispatch_sync.send("go",2); //  permit handling of events
+    usleep(10000);
     ecat_sync.send("go",2); // collect state
+    usleep(10000);
 	
     checkAndUpdateCycleDelay();
 
-		uint64_t last_checked_cycle_time = 0;
+    uint64_t last_checked_cycle_time = 0;
+
+#ifdef USE_EXPERIMENTAL_IDLE_LOOP
+
+    while (!program_done)
+    {
+        machine.idle();
+        if (machine.connected())
+        {
+            if (!machine_is_ready)
+            {
+                std::cout << "----------- Machine is Ready --------\n";
+                machine_is_ready = true;
+                BOOST_FOREACH(std::string &error, error_messages)
+                {
+                    std::cerr << error << "\n";
+                    MessageLog::instance()->add(error.c_str());
+                }
+            }
+        }
+        else
+            machine_is_ready = false;
+
+        enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
+        struct timeval start_t, end_t;
+        //boost::mutex::scoped_lock lock(thread_protection_mutex);
+        gettimeofday(&start_t, 0);
+        
+        zmq::pollitem_t items[] =
+        {
+            { ecat_sync, 0, ZMQ_POLLIN, 0 },
+            { resource_mgr, 0, ZMQ_POLLIN, 0 },
+            { dispatch_sync, 0, ZMQ_POLLIN, 0 },
+            { sched_sync, 0, ZMQ_POLLIN, 0 }
+        };
+        size_t len = 0;
+        char buf[10];
+        while (!program_done && len == 0 && !MachineInstance::workToDo())
+        {
+            if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync, sched_sync)) break;
+        }
+        //		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+        //			std::cout << "ecat waiting\n";
+        //		if (items[CMD_ITEM].revents & ZMQ_POLLIN)
+        //			std::cout << "command waiting\n";
+        //		if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
+        //			std::cout << "dispatcher waiting\n";
+        if (program_done) break;
+        if (status == e_handling_cmd) {
+			waitForCommandProcessing(resource_mgr);
+		}
+        if (program_done) break;
+        
+		if (status == e_handling_dispatch) {
+			if (processingState != eIdle) {
+				// cannot process dispatch events at present
+				status = e_waiting;
+                MachineInstance::forceIdleCheck();
+			}
+			else {
+				dispatch_sync.send("continue",3);
+				// wait for the dispatcher
+				safeRecv(dispatch_sync, buf, 10, true, len);
+				dispatch_sync.send("bye",3);
+                MachineInstance::forceIdleCheck();
+				status = e_waiting;
+			}
+            if (MachineInstance::workToDo()) {
+                std::cout << " work to do. scheduling another check\n"; ecat_sync.send("go",2);
+            }
+            else { std::cout << " no more work to do\n"; }
+		}
+		else if (status == e_handling_sched) {
+			if (processingState != eIdle) {
+				// cannot process scheduled events at present
+				status = e_waiting;
+			}
+			else {
+				sched_sync.send("continue",3);
+				// wait for the dispatcher
+				safeRecv(sched_sync, buf, 10, true, len);
+				sched_sync.send("bye",3);
+                MachineInstance::forceStableStateCheck();
+				status = e_waiting;
+			}
+		}
+/*
+        // poll channels
+        zmq::pollitem_t *poll_items = 0;
+        int active_channels = Channel::pollChannels(poll_items, 20, 0);
+        if (active_channels) {
+            Channel::handleChannels();
+        }
+*/		
+		else if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+        {
+            
+            if (machine_is_ready)
+            {
+                
+                delta = get_diff_in_microsecs(&start_t, &end_t);
+                cycle_delay_stat->add(delta);
+                IOComponent::processAll();
+                gettimeofday(&end_t, 0);
+                
+                delta = get_diff_in_microsecs(&end_t, &start_t);
+                statistics->io_scan_time.add(delta);
+                delta2 = delta;
+                gettimeofday(&end_t, 0);
+                delta = get_diff_in_microsecs(&end_t, &start_t);
+                statistics->points_processing.add(delta - delta2);
+                delta2 = delta;
+                
+                /*
+                long remain = cycle_delay / 2;
+                if (processingState == eIdle)
+                    processingState = ePollingMachines;
+                if (processingState == ePollingMachines)
+                {
+                    if (MachineInstance::processAll(50000, MachineInstance::NO_BUILTINS))
+                        processingState = eIdle;
+                    gettimeofday(&end_t, 0);
+                    delta = get_diff_in_microsecs(&end_t, &start_t);
+                    remain -= delta;
+                    statistics->machine_processing.add(delta - delta2);
+                    delta2 = delta;
+                }
+                if (processingState == eIdle) processingState = eStableStates;
+                
+                if (processingState == eStableStates)
+                {
+                    if (MachineInstance::checkStableStates(50000))
+                        processingState = eIdle;
+                    gettimeofday(&end_t, 0);
+                    delta = get_diff_in_microsecs(&end_t, &start_t);
+                    statistics->auto_states.add(delta - delta2);
+                    delta2 = delta;
+                }
+                */
+            }
+            if (MachineInstance::workToDo()) { std::cout << " work to do. scheduling another check\n"; ecat_sync.send("go",2); }
+            else { std::cout << " no more work to do\n"; }
+        }
+        if (machine_is_ready && MachineInstance::workToDo() )
+        {
+            if (processingState == eIdle)
+                processingState = ePollingMachines;
+            if (processingState == ePollingMachines)
+            {
+                if (MachineInstance::processAll(50000, MachineInstance::NO_BUILTINS))
+                    processingState = eStableStates;
+            }
+            if (processingState == eStableStates)
+            {
+                if (MachineInstance::checkStableStates(50000))
+                    processingState = eIdle;
+            }
+            
+        }
+        
+        
+        // periodically check to see if the cycle time has been changed
+        // more work is needed here since the signaller needs to be told about this
+        uint64_t now_usecs = end_t.tv_sec *1000000 + end_t.tv_usec;
+        if (now_usecs - last_checked_cycle_time > 100000) {
+            last_checked_cycle_time = end_t.tv_sec *1000000 + end_t.tv_usec;
+            checkAndUpdateCycleDelay();
+        }
+
+        status = e_waiting;
+        if (program_done) break;
+    }
+#else
     while (!program_done)
     {
         enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
@@ -292,49 +466,49 @@ void ProcessingThread::operator()()
         //			std::cout << "dispatcher waiting\n";
         if (program_done) break;
         if (status == e_handling_cmd) {
-			waitForCommandProcessing(resource_mgr);
-		}
+            waitForCommandProcessing(resource_mgr);
+        }
         if (program_done) break;
         
-		if (status == e_handling_dispatch) {
-			if (processingState != eIdle) {
-				// cannot process dispatch events at present
-				status = e_waiting;
-			}
-			else {
-				dispatch_sync.send("continue",3);
-				// wait for the dispatcher
-				safeRecv(dispatch_sync, buf, 10, true, len);
+        if (status == e_handling_dispatch) {
+            if (processingState != eIdle) {
+                // cannot process dispatch events at present
+                status = e_waiting;
+            }
+            else {
+                dispatch_sync.send("continue",3);
+                // wait for the dispatcher
+                safeRecv(dispatch_sync, buf, 10, true, len);
                 //				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
-				dispatch_sync.send("bye",3);
-				status = e_waiting;
-			}
-		}
-		if (status == e_handling_sched) {
-			if (processingState != eIdle) {
-				// cannot process scheduled events at present
-				status = e_waiting;
-			}
-			else {
-				sched_sync.send("continue",3);
-				// wait for the dispatcher
-				safeRecv(sched_sync, buf, 10, true, len);
-                //				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
-				sched_sync.send("bye",3);
-				status = e_waiting;
-			}
-		}
-/*
-        // poll channels
-        zmq::pollitem_t *poll_items = 0;
-        int active_channels = Channel::pollChannels(poll_items, 20, 0);
-        if (active_channels) {
-            Channel::handleChannels();
+                dispatch_sync.send("bye",3);
+                status = e_waiting;
+            }
         }
-*/		
-		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+        if (status == e_handling_sched) {
+            if (processingState != eIdle) {
+                // cannot process scheduled events at present
+                status = e_waiting;
+            }
+            else {
+                sched_sync.send("continue",3);
+                // wait for the dispatcher
+                safeRecv(sched_sync, buf, 10, true, len);
+                //				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
+                sched_sync.send("bye",3);
+                status = e_waiting;
+            }
+        }
+        /*
+         // poll channels
+         zmq::pollitem_t *poll_items = 0;
+         int active_channels = Channel::pollChannels(poll_items, 20, 0);
+         if (active_channels) {
+         Channel::handleChannels();
+         }
+         */
+        if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
-			machine.idle();
+            machine.idle();
             if (machine.connected())
             {
                 if (!machine_is_ready)
@@ -385,13 +559,13 @@ void ProcessingThread::operator()()
                     {
                         
 #if 0
-						if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
-							dispatch_sync.send("continue",3);
-							// wait for the dispatcher
-							safeRecv(dispatch_sync, buf, 10, true, len);
-							dispatch_sync.send("bye",3);
-							status = e_waiting;
-						}
+                        if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
+                            dispatch_sync.send("continue",3);
+                            // wait for the dispatcher
+                            safeRecv(dispatch_sync, buf, 10, true, len);
+                            dispatch_sync.send("bye",3);
+                            status = e_waiting;
+                        }
 #endif
 #if 0
                         // wait for message sending to complete
@@ -425,13 +599,13 @@ void ProcessingThread::operator()()
                         delta2 = delta;
                     }
                     
-					// periodically check to see if the cycle time has been changed
-					// more work is needed here since the signaller needs to be told about this
-					uint64_t now_usecs = end_t.tv_sec *1000000 + end_t.tv_usec;
-					if (now_usecs - last_checked_cycle_time > 100000) {
-						last_checked_cycle_time = end_t.tv_sec *1000000 + end_t.tv_usec;
-                    	checkAndUpdateCycleDelay();
-					}
+                    // periodically check to see if the cycle time has been changed
+                    // more work is needed here since the signaller needs to be told about this
+                    uint64_t now_usecs = end_t.tv_sec *1000000 + end_t.tv_usec;
+                    if (now_usecs - last_checked_cycle_time > 100000) {
+                        last_checked_cycle_time = end_t.tv_sec *1000000 + end_t.tv_usec;
+                        checkAndUpdateCycleDelay();
+                    }
                     
                 }
             }
@@ -440,6 +614,7 @@ void ProcessingThread::operator()()
         }
         if (program_done) break;
     }
+#endif
     //		std::cout << std::flush;
     //		model_mutex.lock();
     //		model_updated.notify_one();

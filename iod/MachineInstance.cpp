@@ -54,6 +54,9 @@ extern std::list<std::string>error_messages;
 static uint64_t process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
 
+unsigned int MachineInstance::num_machines_with_work = 1; // machine idle processing will occur if this value is non zero
+unsigned int MachineInstance::total_machines_needing_check = 1;
+
 Parameter::Parameter(Value v) : val(v), machine(0) {
     ;
 }
@@ -283,6 +286,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 
 void MachineInstance::setNeedsCheck() {
     ++needs_check;
+    ++total_machines_needing_check;
     //updateLastEvaluationTime();
     if (!state_machine) return;
     next_poll = 0;
@@ -311,6 +315,13 @@ std::string MachineInstance::fullName() const {
     }
     return res;
 }
+
+void MachineInstance::enqueueAction(Action *a){
+    if (a) active_actions.push_front(a);
+    num_machines_with_work++;
+    has_work = true;
+}
+
 
 
 #if 0
@@ -347,6 +358,8 @@ bool TriggeredAction::active() {
 
 void MachineInstance::triggerFired(Trigger *trig) {
     setNeedsCheck();
+    num_machines_with_work++;
+    has_work = true;
 }
 
 
@@ -1092,9 +1105,10 @@ void MachineInstance::idle() {
 			DBG_M_MESSAGING << _name << " found package " << p << "\n";
 			mail_queue.pop_front();
 			handle(p.message, p.transmitter, p.needs_receipt);
+            forceIdleCheck();
 		}
 	}
-    if (mail_queue.empty()) has_work = false;
+    if (mail_queue.empty() && active_actions.empty()) has_work = false;
 	return;
 }
 
@@ -1117,11 +1131,12 @@ const Value *MachineInstance::getTimerVal() {
     return mtv->getLastResult();
 }
 
+static int recheck_idle = 0;
+
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     static int point_token = ClockworkToken::POINT;
     static std::list<MachineInstance *>::iterator iter = active_machines.begin();
-    //if (iter == active_machines.begin()) std::cout << ":"; else std::cout << ".";
-    //std::cout << std::flush;
+    static unsigned int last_num_machines_with_work = 1;
     bool builtins = false;
     if (iter == active_machines.begin()) {
         struct timeval now;
@@ -1129,6 +1144,11 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
         process_time = now.tv_sec * 1000000 + now.tv_usec;
         if (which == BUILTINS)
             builtins = true;
+#ifdef USE_EXPERIMENTAL_IDLE_LOOP
+        if (last_num_machines_with_work == 0 && num_machines_with_work == 0) return true;
+#endif
+        last_num_machines_with_work = num_machines_with_work;
+        num_machines_with_work = 0; // counts how many machines have work remaining at the end of this process
     }
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -1149,8 +1169,10 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
             }
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
+                ++num_machines_with_work;
             }
         }
+        if (m->hasWork() || !m->active_actions.empty()) ++num_machines_with_work;
         count--;
         if (count<=0) {
             struct timeval now;
@@ -1161,11 +1183,23 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
             count = block_size;
         }
     }
+    if (num_machines_with_work == 0) {
+        DBG_ACTIONS << " no more actions outstanding\n";
+    }
+    else {
+        DBG_ACTIONS << " more actions to run\n";
+    }
     iter = active_machines.begin(); // prepare for the next cycle
     return true; // complete the cycle
 }
 
+static int last_machines_needing_check = 1;
 bool MachineInstance::checkStableStates(uint32_t max_time) {
+#ifdef USE_EXPERIMENTAL_IDLE_LOOP
+    if (last_machines_needing_check == 0 && total_machines_needing_check == 0) return true;
+#endif
+    last_machines_needing_check = total_machines_needing_check;
+    total_machines_needing_check = 0;
     static std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
 
     struct timeval now;
@@ -1181,7 +1215,11 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
             m->setStableState();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
                 m->state_machine->plugin->state_check(m);
+                ++total_machines_needing_check;
             }
+            else if (m->enabled() && m->executingCommand() == NULL
+                     && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ))
+                ++total_machines_needing_check;
         }
         count--;
         if (count<=0) {
@@ -1193,6 +1231,9 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
         }
     }
     iter = MachineInstance::automatic_machines.begin();
+    if (total_machines_needing_check == 0) {
+        DBG_AUTOSTATES << " all states are stable\n";
+    }
     return true;
 }
 
@@ -1464,7 +1505,10 @@ Action::Status MachineInstance::setState(const char *sn) {
 }
 
 Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
-	Action::Status stat = Action::Complete; 
+    forceStableStateCheck();
+    forceIdleCheck();
+
+    Action::Status stat = Action::Complete;
 	// update the Modbus interface for self 
 	if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
 		if (!modbus_exports.count(_name))
@@ -2023,7 +2067,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	}
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
-	active_actions.push_front(hma);
+	enqueueAction(hma);
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
@@ -2371,6 +2415,8 @@ void MachineInstance::push(Action *new_action) {
 	}
 	DBG_M_ACTIONS << _name << " pushing " << *new_action << "\n";
 	active_actions.push_back(new_action);
+    num_machines_with_work++;
+    has_work = true;
 	return;
 }
 
@@ -3076,6 +3122,8 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 }
 
 void MachineInstance::setValue(const std::string &property, Value new_value) {
+    forceStableStateCheck();
+    forceIdleCheck();
 	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine
@@ -3687,11 +3735,11 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 			DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
 			if (new_value) {
 				SetStateActionTemplate ssat(CStringHolder("SELF"), "on" );
-				active_actions.push_front(ssat.factory(this)); // execute this state change once all other actions are complete
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			else {
 				SetStateActionTemplate ssat(CStringHolder("SELF"), "off" );
-				active_actions.push_front(ssat.factory(this)); // execute this state change once all other actions are complete
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			return;
 		}

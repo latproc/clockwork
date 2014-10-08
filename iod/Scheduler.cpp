@@ -175,12 +175,14 @@ void Scheduler::idle() {
 	bool is_ready;
 	while (state != e_aborted) {
 		if (!ready() && state == e_waiting) {
-			//std::cout << "scheduler waiting for work " << next_delay_time << "\n";
+            DBG_SCHEDULER << "scheduler waiting for work " << next_delay_time << "\n";
 			long delay = next_delay_time;
-			if (delay == -1)
+            if (delay == -1) {
+                assert(empty());
 				safeRecv(update_sync, buf, 10, false, response_len, -1);
+            }
 			else if (delay < 1000)
-				usleep(delay);
+				usleep((unsigned int)delay);
 			else
 				safeRecv(update_sync, buf, 10, false, response_len, delay/1000);
 			//std::cout << "scheduler got some work\n";
@@ -188,11 +190,13 @@ void Scheduler::idle() {
 		is_ready = ready();
 		if (state == e_waiting && is_ready) {
 			//std::cout << "scheduler wants time " <<items.size() << " total items\n";
+            DBG_SCHEDULER << "scheduler signaling driver for time\n";
 			sync.send("sched", 5); // tell clockwork we have something to do
 			state = e_waiting_cw;
 		}
 		if (state == e_waiting_cw && is_ready) {
 			safeRecv(sync, buf, 10, true, response_len);
+            DBG_SCHEDULER << "scheduler received ok from driver\n";
 			//std::cout << "scheduler executing\n";
 			state = e_running;
 		}
@@ -203,7 +207,7 @@ void Scheduler::idle() {
 			pop();
 			next_time.tv_sec = 0;
 			if (item->package) {
-				//item->package->receiver->enqueue(*(item->package));
+                DBG_SCHEDULER << " handling package on " << item->package->receiver->getName() << "\n";
 				item->package->receiver->handle(item->package->message, item->package->transmitter);
 				delete item->package;
 	            delete item;
@@ -212,6 +216,7 @@ void Scheduler::idle() {
 				item->action->getOwner()->push(item->action);
 	            delete item;
 			}
+            MachineInstance::forceIdleCheck();
 			is_ready = ready();
 		}
 		if (state == e_running) {

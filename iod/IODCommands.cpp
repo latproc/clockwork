@@ -94,7 +94,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                 */
                 if (mi->transitions.size()) {
 				   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), params[3] );
-				   mi->active_actions.push_front(ssat.factory(mi)); // execute this state change once all other actions are complete
+				   mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
                 }
                 else {
                     ;

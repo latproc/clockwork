@@ -67,7 +67,7 @@ void MachineCommand::setActions(std::list<Action*> &new_actions) {
 
 
 std::ostream &MachineCommand::operator<<(std::ostream &out)const {
-	out << "Command " << owner->getName() << "." << command_name << "\n";
+	out << "Command " << owner->getName() << "." << command_name;
 #if 0
 	BOOST_FOREACH(Action *a, actions) {
 		out << "   " << *a << "\n";

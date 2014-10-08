@@ -299,6 +299,7 @@ public:
 	void stop(Action *a);
 	void push(Action *new_action);
 	Action *findHandler(Message&msg, Transmitter *t, bool response_required = false);
+    void enqueueAction(Action *a);
 
 	State &getCurrent() { return current_state; }
 	const char *getCurrentStateString() { return current_state.getName().c_str(); }
@@ -401,6 +402,10 @@ public:
     
     void publish() { ++published; }
     void unpublish() { --published; }
+    
+    static void forceStableStateCheck() { total_machines_needing_check++; }
+    static void forceIdleCheck() { num_machines_with_work++; }
+    static bool workToDo() { return num_machines_with_work + total_machines_needing_check > 0; }
 
 protected:
 	int needs_check;
@@ -448,6 +453,8 @@ protected:
     static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
     static std::list<MachineInstance*> active_machines; // machines that require idle() processing
     static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
+    static unsigned int num_machines_with_work;
+    static unsigned int total_machines_needing_check;
 
 	friend struct SetStateAction;
 	friend struct MoveStateAction;

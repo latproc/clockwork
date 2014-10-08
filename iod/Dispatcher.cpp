@@ -212,6 +212,9 @@ void Dispatcher::idle()
                 size_t len = socket->recv(&p, sizeof(Package*), ZMQ_DONTWAIT);
                 if (len)
                 {
+                    MachineInstance::forceStableStateCheck();
+                    MachineInstance::forceIdleCheck();
+                    
                     DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
                     Receiver *to = p->receiver;
                     Transmitter *from = p->transmitter;
@@ -289,6 +292,7 @@ void Dispatcher::idle()
                         {
                             DBG_DISPATCHER << "Dispatcher queued " << *p << " to " << to->getName() <<  "\n";
                             to->enqueue(*p);
+                            MachineInstance::forceIdleCheck();
                             MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
                             if (mi)
                             {
@@ -306,8 +310,10 @@ void Dispatcher::idle()
                         while (iter != all_receivers.end())
                         {
                             Receiver *r = *iter++;
-                            if (r->receives(m, from))
+                            if (r->receives(m, from)) {
                                 r->enqueue(*p);
+                                MachineInstance::forceIdleCheck();
+                            }
                         }
                     }
                     delete p;

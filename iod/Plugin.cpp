@@ -57,7 +57,7 @@ int changeState(cwpi_Scope s, const char *new_state) {
     }
     SetStateActionTemplate ssat("SELF", new_state );
 		if (scope->isActive())
-	    scope->active_actions.push_front(ssat.factory(scope)); // execute this state change once all other actions are complete
+	    scope->enqueueAction(ssat.factory(scope)); // execute this state change once all other actions are complete
 		else
 			scope->setState(new_state);
     return 1;
