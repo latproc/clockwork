@@ -39,7 +39,8 @@ DLLFLAGS = -fPIC #-rdynamic
 CSTD = -std=gnu++0x 
 CFLAGS = $(SIMULATED) -g -pedantic -Wall $(DLLFLAGS) $(CSTD) \
 	-Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-deprecated-register \
-	-Wno-c++11-extensions -Wno-unused-variable -Wno-variadic-macros -Wno-c++11-long-long $(EXTRAINCS)
+	-Wno-c++11-extensions -Wno-unused-variable -Wno-variadic-macros -Wno-c++11-long-long $(EXTRAINCS)\
+	-DUSE_EXPERIMENTAL_IDLE_LOOP=1
 CC = g++ $(CFLAGS)
 LDFLAGS = $(EXTRALIBS)
 TOOLLIB = ../../tool/build/*.o
