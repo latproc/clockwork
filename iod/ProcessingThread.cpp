@@ -362,10 +362,8 @@ void ProcessingThread::operator()()
 */		
 		else if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
-            
             if (machine_is_ready)
             {
-                
                 delta = get_diff_in_microsecs(&start_t, &end_t);
                 cycle_delay_stat->add(delta);
                 IOComponent::processAll();
@@ -379,38 +377,12 @@ void ProcessingThread::operator()()
                 statistics->points_processing.add(delta - delta2);
                 delta2 = delta;
                 
-                /*
-                long remain = cycle_delay / 2;
-                if (processingState == eIdle)
-                    processingState = ePollingMachines;
-                if (processingState == ePollingMachines)
-                {
-                    if (MachineInstance::processAll(50000, MachineInstance::NO_BUILTINS))
-                        processingState = eIdle;
-                    gettimeofday(&end_t, 0);
-                    delta = get_diff_in_microsecs(&end_t, &start_t);
-                    remain -= delta;
-                    statistics->machine_processing.add(delta - delta2);
-                    delta2 = delta;
-                }
-                if (processingState == eIdle) processingState = eStableStates;
-                
-                if (processingState == eStableStates)
-                {
-                    if (MachineInstance::checkStableStates(50000))
-                        processingState = eIdle;
-                    gettimeofday(&end_t, 0);
-                    delta = get_diff_in_microsecs(&end_t, &start_t);
-                    statistics->auto_states.add(delta - delta2);
-                    delta2 = delta;
-                }
-                */
             }
-            if (MachineInstance::workToDo()) {
-                DBG_SCHEDULER << " work to do. scheduling another check\n";
+            //if (MachineInstance::workToDo()) {
+            //    DBG_SCHEDULER << " work to do. scheduling another check\n";
                 ecat_sync.send("go",2);
-            }
-            else { DBG_SCHEDULER << " no more work to do\n"; }
+            //}
+            //else { DBG_SCHEDULER << " no more work to do\n"; }
         }
         if (machine_is_ready && MachineInstance::workToDo() )
         {

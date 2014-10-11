@@ -523,7 +523,7 @@ public:
     long filter(long val);
     virtual void setNeedsCheck();
     virtual void idle();
-		virtual bool hasWork() { return true; }
+		virtual bool hasWork();
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
     RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);

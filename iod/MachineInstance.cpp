@@ -701,13 +701,22 @@ void CounterRateInstance::idle() {
     }
 }
 
+bool RateEstimatorInstance::hasWork() {
+	MachineInstance *pos = lookup(parameters[0]);
+	if (pos && pos->io_interface)
+  	return pos->io_interface->read_time - settings->update_t > idle_time;
+	else
+		return process_time - settings->update_t > idle_time;
+}
+
 void RateEstimatorInstance::setNeedsCheck() {
-    if (!needs_check)
-        MachineInstance::setNeedsCheck();
+	if (!needs_check) {
+			MachineInstance::setNeedsCheck();
+	}
 }
 
 void RateEstimatorInstance::idle() {
-    if (needsCheck() || (process_time - settings->update_t > idle_time && !io_interface) ) {
+    if (hasWork()) {
         MachineInstance *pos_m = lookup(parameters[0]);
         long pos = 0;
         if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
@@ -1051,6 +1060,8 @@ void MachineInstance::idle() {
 	if (!is_enabled) {
 		return;
 	}
+	if (getName() == "M_GrabHead1")
+		int x=1;
     if (!state_machine) {
         std::stringstream ss;
         ss << " machine " << _name << " has no state machine";
@@ -1215,6 +1226,7 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
         if ( m->enabled() && m->executingCommand() == NULL
             && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= start_processing )
         {
+						std::cout << m->getName() << " check stable states\n";
             m->setStableState();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
                 m->state_machine->plugin->state_check(m);
@@ -2321,6 +2333,8 @@ void MachineInstance::setInitialState() {
 
 void MachineInstance::enable() {
     if (is_enabled) return;
+		if (getName() == "M_GrabHead1")
+			int x = 1;
     is_enabled = true; 
     error_state = 0; 
     clearAllActions(); 

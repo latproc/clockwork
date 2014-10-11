@@ -364,8 +364,8 @@ void generateIOComponentModules()
 int main(int argc, char const *argv[])
 {
 	std::cout << "main starting\n";
-    zmq::context_t context;
-    MessagingInterface::setContext(&context);
+    zmq::context_t *context = new zmq::context_t;
+    MessagingInterface::setContext(context);
     Logger::instance();
     Dispatcher::instance();
     MessageLog::setMaxMemory(10000);
@@ -470,7 +470,8 @@ int main(int argc, char const *argv[])
     ECInterface::instance()->activate();
 #endif
     generateIOComponentModules();
-    MachineInstance::displayAll();
+		IOComponent::setupIOMap();
+    //MachineInstance::displayAll();
     //ECInterface::instance()->start();
 
 #ifdef EC_SIMULATOR
@@ -503,11 +504,17 @@ int main(int argc, char const *argv[])
     boost::thread process(boost::ref(processMonitor));
     // do not start a thread, simply run this process directly
     //processMonitor();
-	process.join();
-    Dispatcher::instance()->stop();
-    Scheduler::instance()->stop();
-    stateMonitor.stop();
-    ethercat.stop();
+		try {
+			process.join();
+			return 0;
+	    Dispatcher::instance()->stop();
+	    Scheduler::instance()->stop();
+	    stateMonitor.stop();
+	    ethercat.stop();
+			delete context;
+		}
+		catch (zmq::error_t) { // expected error when we remove the zmq context
+		}
     monitor.join();
     return 0;
 }

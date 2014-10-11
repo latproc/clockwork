@@ -52,19 +52,31 @@ IOComponent* IOComponent::lookup_device(const std::string name) {
         return (*device_iter).second;
     return 0;
 }
-// in a simulated environment, we provide a way to wire components together
+
+// these components need to synchronise with clockwork
+std::set<IOComponent*> updatedComponents;
 
 void IOComponent::processAll() {
     struct timeval now;
     gettimeofday(&now, NULL);
     current_time = now.tv_sec * 1000000 + now.tv_usec;
     
+#ifdef USE_EXPERIMENTAL_IDLE_LOOP
+	std::set<IOComponent*>::iterator iter = updatedComponents.begin();
+	while (iter != updatedComponents.end()) {
+		IOComponent *ioc = *iter++;
+		ioc->read_time = current_time;
+		updatedComponents.erase(ioc);
+		ioc->idle();
+	}
+#else
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
 		ioc->read_time = current_time;
 		ioc->idle();
 	}
+#endif
 }
 
 IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos, 
@@ -324,11 +336,41 @@ std::vector< std::list<IOComponent*> *>io_map;
 
 static unsigned int max_offset = 0;
 static unsigned int min_offset = 1000000L;
+
+int IOComponent::getMinIOOffset() {
+	return min_offset;
+}
+
+int IOComponent::getMaxIOOffset() {
+	return max_offset;
+}
+
+int IOComponent::notifyComponentsAt(unsigned int offset) {
+	assert(offset <= max_offset && offset >= min_offset);
+	int count = 0;
+	std::list<IOComponent *> *cl = io_map[offset];
+	if (cl) {
+		std::list<IOComponent*>::iterator items = cl->begin();
+		while (items != cl->end()) {
+			IOComponent *c = *items++;
+			updatedComponents.insert(c);
+			++count;
+		}
+	}
+	return count;
+}
+
+bool IOComponent::hasUpdates() {
+	return !updatedComponents.empty();
+}
+
 void IOComponent::setupIOMap() {
 
+	std::cout << "\n\n\n";
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
+		std::cout << ioc->getName() << " " << ioc->address << "\n";
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
@@ -336,19 +378,25 @@ void IOComponent::setupIOMap() {
 		if (offset > max_offset) max_offset = offset;
 		if (offset < min_offset) min_offset = offset;
 	}
+	std::cout << "min io offset: " << min_offset << "\n";
 	std::cout << "max io offset: " << max_offset << "\n";
-	io_map.resize(max_offset);
+	io_map.resize(max_offset+1);
 	iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
-		std::list<IOComponent *> *cl = io_map[offset];
-		if (!cl) cl = new std::list<IOComponent *>;
-		cl->push_back(ioc);
-		io_map[offset] = cl;
+		int bytes = 1;
+		for (int i=0; i<bytes; ++i) {
+			std::list<IOComponent *> *cl = io_map[offset+i];
+			if (!cl) cl = new std::list<IOComponent *>;
+			cl->push_back(ioc);
+			io_map[offset+i] = cl;
+			std::cout << "offset: " << (offset+i) << " io name: " << ioc->io_name << "\n";
+		}
 	}
+	std::cout << "\n\n\n";
 }
 
 void IOComponent::idle() {
@@ -369,32 +417,34 @@ void IOComponent::idle() {
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
 			EC_WRITE_BIT(offset, bitpos, 1);			
+			updatedComponents.insert(this);
 		}
 		else if (value &&last_event == e_off) {
 			EC_WRITE_BIT(offset, bitpos, 0);
+			updatedComponents.insert(this);
 		}
 		else {
 			last_event = e_none;
 			const char *evt;
 			if (address.value != value) 
 			{
-                std::list<MachineInstance*>::iterator iter;
+				std::list<MachineInstance*>::iterator iter;
 #ifndef DISABLE_LEAVE_FUNCTIONS
 				if (address.value) evt ="on_leave";
 				else evt = "off_leave";
-                iter = depends.begin();
-	            while (iter != depends.end()) {
-	                MachineInstance *m = *iter++;
+				iter = depends.begin();
+				while (iter != depends.end()) {
+					MachineInstance *m = *iter++;
 					Message msg(evt);
-                    if (m->receives(msg, this)) m->execute(msg, this);
+					if (m->receives(msg, this)) m->execute(msg, this);
 				}
 #endif
                 
 				if (value) evt = "on_enter";
 				else evt = "off_enter";
-	            iter = depends.begin();
-	            while (iter != depends.end()) {
-	                MachineInstance *m = *iter++;
+				iter = depends.begin();
+				while (iter != depends.end()) {
+					MachineInstance *m = *iter++;
 					Message msg(evt);
 					m->execute(msg, this);
 				}
@@ -402,21 +452,23 @@ void IOComponent::idle() {
 			address.value = value;
 		}
 	}
-    else {
-        if (last_event == e_change) {
-            //set_bits(offset, bitpos, address.bitlen, address.value);
+	else {
+		if (last_event == e_change) {
 			if (address.bitlen == 8) 
 				EC_WRITE_U8(offset, (uint8_t)(pending_value % 256));
 			else if (address.bitlen == 16) {
 				uint16_t x = pending_value % 65536;
 				EC_WRITE_U16(offset, x);
+				updatedComponents.insert(this);
 			}
-			else if (address.bitlen == 32) 
+			else if (address.bitlen == 32) {
 				EC_WRITE_U32(offset, pending_value);
+				updatedComponents.insert(this);
+			}
 			last_event = e_none;
 			address.value = pending_value;
-        }
-        else {
+		}
+		else {
 			int32_t val = 0;
 			if (address.bitlen == 8) 
 				val = EC_READ_S8(offset);
@@ -424,27 +476,27 @@ void IOComponent::idle() {
 				val = EC_READ_S16(offset);
 			else if (address.bitlen == 32) 
 				val = EC_READ_S32(offset);
-            else {
-                val = 0;
-            }
+			else {
+				val = 0;
+			}
 
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
 			if (address.value != val || strcmp(type(), "CounterRate") == 0) {
-                //address.value = get_bits(offset, bitpos, address.bitlen);
-						    address.value = filter(val);
-                last_event = e_none;
-                const char *evt = "property_change";
-                std::list<MachineInstance*>::iterator iter = depends.begin();
-                while (iter != depends.end()) {
-                  MachineInstance *m = *iter++;
-                  Message msg(evt);
-                  m->execute(msg, this);
-                }
-		    }
-        }
-    }
+				//address.value = get_bits(offset, bitpos, address.bitlen);
+				address.value = filter(val);
+				last_event = e_none;
+				const char *evt = "property_change";
+				std::list<MachineInstance*>::iterator iter = depends.begin();
+				while (iter != depends.end()) {
+					MachineInstance *m = *iter++;
+					Message msg(evt);
+					m->execute(msg, this);
+				}
+			}
+		}
+	}
 }
 
 void IOComponent::turnOn() { 
@@ -464,6 +516,7 @@ void Output::turnOn() {
 	}
 	gettimeofday(&last, 0);
 	last_event = e_on;
+	updatedComponents.insert(this);
 }
 
 void Output::turnOff() { 
@@ -476,12 +529,14 @@ void Output::turnOff() {
 	}
 	gettimeofday(&last, 0);
 	last_event = e_off;
+	updatedComponents.insert(this);
 }
 
 void IOComponent::setValue(uint32_t new_value) {
-    pending_value = new_value;
+	pending_value = new_value;
 	gettimeofday(&last, 0);
-    last_event = e_change;
+	last_event = e_change;
+	updatedComponents.insert(this);
 }
 
 

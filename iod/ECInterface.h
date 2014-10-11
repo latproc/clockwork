@@ -116,7 +116,7 @@ public:
 	void check_domain1_state(void);
 	void check_master_state(void);
 	void check_slave_config_states(void);
-	void collectState();
+	int collectState(); // returns non-zero if there are machines that are affected by the new state
 	void sendUpdates();
 	
 	bool start();

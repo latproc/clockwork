@@ -67,6 +67,10 @@ public:
     static void add_subscriber(const char *name, const char *topic);
 	static void processAll();
 	static void setupIOMap();
+	static int getMinIOOffset();
+	static int getMaxIOOffset();
+	static int notifyComponentsAt(unsigned int offset);
+	static bool hasUpdates();
 #ifndef EC_SIMULATOR
 	ECModule *owner() { return ECInterface::findModule(address.module_position); }
 #endif

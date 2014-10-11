@@ -281,10 +281,12 @@ ECInterface *ECInterface::instance() {
 	return instance_;
 }
 
-void ECInterface::collectState() {
+static uint8_t *last_domain_data = 0;
+
+int ECInterface::collectState() {
 	if (!master || !initialised || !active) {
 		std::cerr << "master not ready to collect state" << std::flush;
-		return;
+		return 0;
 	}
 #ifndef EC_SIMULATOR
     // receive process data
@@ -296,15 +298,31 @@ void ECInterface::collectState() {
 //		std::cout << std::hex << std::setfill('0') << std::setw(2) << (int)*domain1_pd;
 //	std::cout << "\n";
 
-#endif
-    //IOComponent::processAll();
-    //std::cout << "/" << std::flush;
-    check_domain1_state();
-    // check for master state (optional)
-    check_master_state();
+	// workout what io components need to process updates
+  uint8_t *domain1_pd = ecrt_domain_data(domain1) ;
+	int affected_machines = 0;
+	int max = IOComponent::getMaxIOOffset();
+	int min = IOComponent::getMinIOOffset();
+	for (int i=min; i<=max; ++i) {
+		if (!last_domain_data || last_domain_data[i] != domain1_pd[i])
+			affected_machines += IOComponent::notifyComponentsAt(i);
+	}
+	// save the domain data for the next check
+	if (last_domain_data) delete last_domain_data;
+	last_domain_data = new uint8_t[max+1];
+	memcpy(last_domain_data, domain1_pd, max-min+1);
 
-    // check for islave configuration state(s) (optional)
-    check_slave_config_states();
+#endif
+	//IOComponent::processAll();
+	//std::cout << "/" << std::flush;
+	check_domain1_state();
+	// check for master state (optional)
+	check_master_state();
+
+	// check for islave configuration state(s) (optional)
+	check_slave_config_states();
+
+	return IOComponent::hasUpdates() ? 1 : 0;
 }
 void ECInterface::sendUpdates() {
 	if (!master || !initialised || !active) {

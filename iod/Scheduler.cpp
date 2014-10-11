@@ -102,9 +102,12 @@ void Scheduler::add(ScheduledItem*item) {
 	items.push(item);
 	next_time = next()->delivery_time;
 	//DBG_SCHEDULER << "After schedule::add() " << *this << "\n";
-	zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
-	update_notify.connect("inproc://sch_items");
-	update_notify.send("poke",4);
+	if (!notification_sent) {
+		notification_sent = true;
+		zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
+		update_notify.connect("inproc://sch_items");
+		update_notify.send("poke",4);
+	}
 }
 
 /*
@@ -175,17 +178,18 @@ void Scheduler::idle() {
 	bool is_ready;
 	while (state != e_aborted) {
 		if (!ready() && state == e_waiting) {
-            DBG_SCHEDULER << "scheduler waiting for work " << next_delay_time << "\n";
+			DBG_SCHEDULER << "scheduler waiting for work " << next_delay_time << "\n";
 			long delay = next_delay_time;
-            if (delay == -1) {
-                assert(empty());
+			if (delay == -1) {
+				assert(empty());
 				safeRecv(update_sync, buf, 10, false, response_len, -1);
-            }
+			}
 			else if (delay < 1000)
 				usleep((unsigned int)delay);
 			else
 				safeRecv(update_sync, buf, 10, false, response_len, delay/1000);
 			//std::cout << "scheduler got some work\n";
+			notification_sent = false; // if more items are pushed we will want to know
 		}
 		is_ready = ready();
 		if (state == e_waiting && is_ready) {

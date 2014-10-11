@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include "Logger.h"
 #include "MessagingInterface.h"
+#include "IOComponent.h"
 
 #include "ecat_thread.h"
 
@@ -118,43 +119,46 @@ void EtherCATThread::operator()() {
 			if (rtc == -1) { perror("open rtc"); exit(1); }
 		}
 		perror("read rtc"); exit(1); }
-	if (rc == 0) std::cout << "zero bytes read from rtc\n";
+		if (rc == 0) std::cout << "zero bytes read from rtc\n";
 #else
-        	struct timeval now;
-        	gettimeofday(&now,0);
-        	int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
+			struct timeval now;
+			gettimeofday(&now,0);
+			int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
 						+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
-	        int64_t delay = cycle_delay-delta-100;
+			int64_t delay = cycle_delay-delta-100;
 			if (delay>0) {
-	            struct timespec sleep_time;
-	            sleep_time.tv_sec = delay / 1000000;
-	            sleep_time.tv_nsec = (delay * 1000) % 1000000000L;
-	            int rc;
-	            struct timespec remaining;
-	            while ( (rc = nanosleep(&sleep_time, &remaining) == -1) ) {
-	                sleep_time = remaining;
+				struct timespec sleep_time;
+				sleep_time.tv_sec = delay / 1000000;
+				sleep_time.tv_nsec = (delay * 1000) % 1000000000L;
+				int rc;
+				struct timespec remaining;
+				while ( (rc = nanosleep(&sleep_time, &remaining) == -1) ) {
+					sleep_time = remaining;
 				}
-        		//gettimeofday(&now,0);
-        		//delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
-			//			+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
-	        	//delay = cycle_delay-delta-20;
-            }
+ 	  		//gettimeofday(&now,0);
+ 	  		//delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
+				//			+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
+       	//delay = cycle_delay-delta-20;
+			}
 
-        	gettimeofday(&then,0);
-	        //then.tv_usec += cycle_delay;
+			gettimeofday(&then,0);
+			//then.tv_usec += cycle_delay;
 			//while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
-//			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
+			//			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
 			//then = now;
 #endif
 #endif
-	    	ECInterface::instance()->collectState();
-			sync_sock->send("ok",2);
-			status = e_update;
+	    int n = ECInterface::instance()->collectState();
+			if (n || IOComponent::hasUpdates()) {
+				sync_sock->send("ok",2);
+				status = e_update;
+			}
+			else // no clockwork changes, just poll the io
+				ECInterface::instance()->sendUpdates();
 		}
 		if (status == e_update) {
 			if (!waitForSync(*sync_sock)) continue;
 			ECInterface::instance()->sendUpdates();
-			//sync_sock->send("ok",2);
 			status = e_collect;
 		}
 	}
