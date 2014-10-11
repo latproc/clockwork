@@ -66,6 +66,7 @@ public:
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
 	static void processAll();
+	static void setupIOMap();
 #ifndef EC_SIMULATOR
 	ECModule *owner() { return ECInterface::findModule(address.module_position); }
 #endif

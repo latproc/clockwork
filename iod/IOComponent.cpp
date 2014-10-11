@@ -320,6 +320,37 @@ const char *IOComponent::getStateString() {
 	else if (address.value == 0) return "off"; else return "on";
 }
 
+std::vector< std::list<IOComponent*> *>io_map;
+
+static unsigned int max_offset = 0;
+static unsigned int min_offset = 1000000L;
+void IOComponent::setupIOMap() {
+
+	std::list<IOComponent *>::iterator iter = processing_queue.begin();
+	while (iter != processing_queue.end()) {
+		IOComponent *ioc = *iter++;
+		unsigned int offset = ioc->address.io_offset;
+		unsigned int bitpos = ioc->address.io_bitpos;
+		offset += bitpos/8;
+		bitpos = bitpos / 8;
+		if (offset > max_offset) max_offset = offset;
+		if (offset < min_offset) min_offset = offset;
+	}
+	std::cout << "max io offset: " << max_offset << "\n";
+	io_map.resize(max_offset);
+	iter = processing_queue.begin();
+	while (iter != processing_queue.end()) {
+		IOComponent *ioc = *iter++;
+		unsigned int offset = ioc->address.io_offset;
+		unsigned int bitpos = ioc->address.io_bitpos;
+		offset += bitpos/8;
+		std::list<IOComponent *> *cl = io_map[offset];
+		if (!cl) cl = new std::list<IOComponent *>;
+		cl->push_back(ioc);
+		io_map[offset] = cl;
+	}
+}
+
 void IOComponent::idle() {
 	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
 	int bitpos = address.io_bitpos;
@@ -333,6 +364,9 @@ void IOComponent::idle() {
 */
 	if (address.bitlen == 1) {
 		int32_t value = EC_READ_BIT(offset, bitpos);
+
+		// only outputs will have an e_on or e_off event queued, 
+		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
 			EC_WRITE_BIT(offset, bitpos, 1);			
 		}
