@@ -160,13 +160,18 @@ void Dispatcher::idle()
     while (status != e_aborted)
     {
 		if (status == e_waiting) {
-            // check for messages to be sent or commands to be processed (TBD)
-            int rc = zmq::poll( &items[0], 2, -1);
-            if (rc== -1) {
+			try {
+            	// check for messages to be sent or commands to be processed (TBD)
+	            int rc = zmq::poll( &items[0], 2, -1);
+				if (rc == 0) { usleep(50); continue; }
+			}
+			catch (zmq::error_t err) {
 				if ( errno == EAGAIN) continue;
+				if ( errno == EINTR) continue;
 				char msgbuf[200];
 				snprintf(msgbuf,200, "Dispatcher poll error: %s", strerror(errno));
 				MessageLog::instance()->add(msgbuf);
+				continue;
 			}
 			status = e_waiting_cw;
 		}
