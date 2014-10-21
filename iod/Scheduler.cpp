@@ -25,6 +25,7 @@
 #include "MachineInstance.h"
 #include "DebugExtra.h"
 #include "MessagingInterface.h"
+#include "MessageLog.h"
 #include <zmq.hpp>
 
 Scheduler *Scheduler::instance_;
@@ -101,12 +102,35 @@ void Scheduler::add(ScheduledItem*item) {
 	//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
 	items.push(item);
 	next_time = next()->delivery_time;
+	// should update next_delay_time
+	struct timeval now;
+	gettimeofday(&now, 0);
+    ScheduledItem *top = next();
+    next_delay_time = get_diff_in_microsecs(&top->delivery_time, &now);
 	//DBG_SCHEDULER << "After schedule::add() " << *this << "\n";
 	if (!notification_sent) {
 		notification_sent = true;
 		zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
-		update_notify.connect("inproc://sch_items");
-		update_notify.send("poke",4);
+		int send_state = 0; // disconnected
+		while (true) {
+			try {
+				if (send_state == 0) {
+					update_notify.connect("inproc://sch_items");
+					send_state = 1; // connected
+				}
+				update_notify.send("poke",4);
+				break;
+			}		
+			catch(zmq::error_t err) {
+				if (zmq_errno() == EINTR) continue;
+				
+				char errmsg[100];
+				snprintf(errmsg, 100, "Scheduler::add error: %s", zmq_strerror( zmq_errno()));
+				std::cerr << errmsg << "\n";
+				MessageLog::instance()->add(errmsg);
+				throw;
+			} 
+		}
 	}
 }
 
