@@ -65,12 +65,25 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
             return (response_len == 0) ? false : true;
         }
         catch (zmq::error_t e) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) { std::cout << "interrupted system call, retrying\n"; continue; }
             std::cerr << zmq_strerror(errno) << "\n";
             return false;
         }
     }
     return false;
+};
+
+void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
+	while (!MessagingInterface::aborted()) {
+		try {
+			sock.send(buf, buflen);
+			break;
+		}
+		catch (zmq::error_t) {
+			if (zmq_errno() == EINTR) continue;
+			throw;
+		}
+	}
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
