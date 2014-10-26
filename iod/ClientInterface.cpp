@@ -313,6 +313,9 @@ void IODCommandThread::operator()() {
                 else if (ds == "MESSAGES" || (ds == "CLEAR" && count == 2 && params[1] == "MESSAGES") ) {
                     command = new IODCommandShowMessages;
                 }
+                else if (ds == "SCHEDULER") {
+                    command = new IODCommandSchedulerState;
+                }
                 else if (ds == "NOTICE") {
                     command = new IODCommandNotice;
                 }

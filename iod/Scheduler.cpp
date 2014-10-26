@@ -42,6 +42,15 @@ static void setTime(struct timeval &now, unsigned long delta) {
 	}
 }
 
+std::string Scheduler::getStatus() { 
+	char buf[100];
+	if (state == e_running) 
+		snprintf(buf, 100, "busy");
+	else
+		snprintf(buf, 100, "state: %d, items: %ld", state, items.size());
+	return buf;
+}
+
 bool ScheduledItem::operator<(const ScheduledItem& other) const {
     if (delivery_time.tv_sec < other.delivery_time.tv_sec) return true;
     if (delivery_time.tv_sec == other.delivery_time.tv_sec) return delivery_time.tv_usec < other.delivery_time.tv_usec;
@@ -70,10 +79,11 @@ void PriorityQueue::push(ScheduledItem *item) {
 
 ScheduledItem::ScheduledItem(long when, Package *p) :package(p), action(0) {
 	setTime(delivery_time, when);
+	DBG_SCHEDULER << "scheduled package: " << delivery_time.tv_sec << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec << "\n";
 }
 ScheduledItem::ScheduledItem(long when, Action *a) :package(0), action(a) {
 	setTime(delivery_time, when);
-	DBG_SCHEDULER << "scheduled: " << delivery_time.tv_sec << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec << "\n";
+	DBG_SCHEDULER << "scheduled action: " << delivery_time.tv_sec << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec << "\n";
 }
 
 std::ostream &ScheduledItem::operator <<(std::ostream &out) const {
@@ -118,7 +128,7 @@ void Scheduler::add(ScheduledItem*item) {
 					update_notify.connect("inproc://sch_items");
 					send_state = 1; // connected
 				}
-				update_notify.send("poke",4);
+				safeSend(update_notify,"poke",4);
 				break;
 			}		
 			catch(zmq::error_t err) {
@@ -186,7 +196,7 @@ void Scheduler::stop() {
 	state = e_aborted;
 	zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
 	update_notify.connect("inproc://sch_items");
-	update_notify.send("poke",4);
+	safeSend(update_notify,"poke",4);
 }
 	
 
@@ -219,7 +229,7 @@ void Scheduler::idle() {
 		if (state == e_waiting && is_ready) {
 			//std::cout << "scheduler wants time " <<items.size() << " total items\n";
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
-			sync.send("sched", 5); // tell clockwork we have something to do
+			safeSend(sync,"sched", 5); // tell clockwork we have something to do
 			state = e_waiting_cw;
 		}
 		if (state == e_waiting_cw && is_ready) {
@@ -249,8 +259,9 @@ void Scheduler::idle() {
 		}
 		if (state == e_running) {
 			//std::cout << "scheduler done\n";
-			sync.send("done", 4);
+			safeSend(sync,"done", 4);
 			safeRecv(sync, buf, 10, true, response_len); // wait for ack from clockwork
+			if (next() == 0) { DBG_SCHEDULER << "no more scheduled items\n"; }
 			state = e_waiting;
 		}
 	}

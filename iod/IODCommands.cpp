@@ -34,6 +34,7 @@
 #include "MessageEncoding.h"
 #include "Channel.h"
 #include "MessagingInterface.h"
+#include "Scheduler.h"
 #ifdef USE_ETHERCAT
 #include <tool/MasterDevice.h>
 #endif
@@ -955,6 +956,11 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         free(cstr_result);
         return true;
     }
+
+    bool IODCommandSchedulerState::run(std::vector<Value> &params) {
+		result_str = Scheduler::instance()->getStatus();
+		return true;
+	}
 
     bool IODCommandModbusRefresh::run(std::vector<Value> &params) {
 		std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();

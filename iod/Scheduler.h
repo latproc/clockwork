@@ -81,6 +81,7 @@ public:
     void idle();
 	bool empty() { return items.empty(); }
     int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
+	std::string getStatus();
 
 	void operator()();
 	void stop();
