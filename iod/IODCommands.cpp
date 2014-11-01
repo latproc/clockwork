@@ -958,7 +958,11 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 
     bool IODCommandSchedulerState::run(std::vector<Value> &params) {
-		result_str = Scheduler::instance()->getStatus();
+		std::stringstream ss;
+		ss << "Status: " <<  Scheduler::instance()->getStatus() << "\n";
+		if (!Scheduler::instance()->empty()) 
+			ss << "next: " << *(Scheduler::instance()->next());
+		result_str = ss.str();
 		return true;
 	}
 
