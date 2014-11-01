@@ -114,7 +114,13 @@ void Dispatcher::deliverZ(Package *p)
 void Dispatcher::idle()
 {
     socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PULL);
+	
+	try {
     socket->bind("inproc://dispatcher");
+	}
+	catch(zmq::error_t err) {
+		std::cerr << "error binding to dispatcher socket " << zmq_strerror(errno) << "\n";
+	}
 
 	// this sync socket is used to request access to shared resources from
 	// the driver
