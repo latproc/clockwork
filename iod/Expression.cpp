@@ -213,7 +213,12 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
         trigger->release();
     }
     else if (scheduled_time > 0) {
-        DBG_SCHEDULER << "no event scheduled for " << ( (target)?target->getName() : "unknown" ) << ".  over time\n";
+		struct timeval now;
+		gettimeofday(&now, 0);
+        long now_t = now.tv_sec * 1000000 + now.tv_usec;
+        uint64_t delta = now_t - target->lastStateEvaluationTime();
+        DBG_SCHEDULER << "no event scheduled for " << ( (target)?target->getName() : "unknown" ) 
+			<< ".  over time by " << (current_time - scheduled_time)  << ". last eval: " << delta << "\n";
     }
     if (right_p) right_p->scheduleTimerEvents(target);
 }
