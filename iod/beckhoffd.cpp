@@ -505,6 +505,7 @@ void usage(int argc, char const *argv[])
 }
 
 bool program_done = false;
+bool machine_is_ready = false;
 
 int main (int argc, char const *argv[])
 {
@@ -518,6 +519,7 @@ int main (int argc, char const *argv[])
 
 #ifndef EC_SIMULATOR
 	collectSlaveConfig(true); // load slave information from the EtherCAT master and configure the domain
+	IOComponent::setupIOMap();
 	ECInterface::instance()->activate();
 #endif
 	generateIOComponentMappings();
@@ -555,10 +557,13 @@ int main (int argc, char const *argv[])
 				continue; // TBD watch for infinite loop here
 			}
 		}
+		if (ECInterface::domain1_state.wc_state == 2 && ECInterface::master_state.link_up) {
+			machine_is_ready = true;
 #ifdef EC_SIMULATOR
-		checkInputs(); // simulated wiring between inputs and outputs
+			checkInputs(); // simulated wiring between inputs and outputs
 #endif
-		IOComponent::processAll();
+			IOComponent::processAll(0,0,0);
+		}
 		ecat_sync.send("go",2); // collect state
 	}
     stateMonitor.stop();
