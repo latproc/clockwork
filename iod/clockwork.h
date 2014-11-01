@@ -27,7 +27,8 @@
 extern std::list<std::string>error_messages;
 extern int num_errors;
 
-int loadConfig(int argc, char const *argv[]);
+int loadOptions(int argc, char const *argv[], std::list<std::string> &files);
+int loadConfig(std::list<std::string> &files);
 
 void initialise_machines();
 

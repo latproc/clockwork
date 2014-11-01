@@ -711,20 +711,12 @@ void semantic_analysis() {
 	MachineInstance::sort();
 }
 
-int loadConfig(int argc, char const *argv[]) {
-    struct timeval now_tv;
+int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
     const char *logfilename = NULL;
     long maxlogsize = 20000;
-    int i;
-    int opened_file = 0;
-    tzset(); /* this initialises the tz info required by ctime().  */
-    gettimeofday(&now_tv, NULL);
-    srandom(now_tv.tv_usec);
-    
-    
-    std::list<std::string> files;
+
     /* check for commandline options, later we process config files in the order they are named */
-    i=1;
+    int i=1;
     while ( i<argc)
     {
         if (strcmp(argv[i], "-v") == 0)
@@ -806,6 +798,16 @@ int loadConfig(int argc, char const *argv[]) {
 	if (!debug_config()) set_debug_config("iod.conf");
 	
     std::cout << (argc-1) << " arguments\n";
+	return 0;
+}
+
+int loadConfig(std::list<std::string> &files) {
+    struct timeval now_tv;
+    int i;
+    int opened_file = 0;
+    tzset(); /* this initialises the tz info required by ctime().  */
+    gettimeofday(&now_tv, NULL);
+    srandom(now_tv.tv_usec);
     
     int modbus_result = load_preset_modbus_mappings();
     if (modbus_result) return modbus_result;
