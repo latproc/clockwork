@@ -126,23 +126,25 @@ void checkInputs()
 
 void load_debug_config()
 {
-    std::ifstream program_config(debug_config());
-    if (program_config)
-    {
-        std::string debug_flag;
-        while (program_config >> debug_flag)
-        {
-            if (debug_flag[0] == '#') continue;
-            int dbg = LogState::instance()->lookup(debug_flag);
-            if (dbg) LogState::instance()->insert(dbg);
-            else if (machines.count(debug_flag))
-            {
-                MachineInstance *mi = machines[debug_flag];
-                if (mi) mi->setDebug(true);
-            }
-            else std::cerr << "Warning: unrecognised DEBUG Flag " << debug_flag << "\n";
-        }
-    }
+	if (debug_config()) {
+	    std::ifstream program_config(debug_config());
+	    if (program_config)
+	    {
+	        std::string debug_flag;
+	        while (program_config >> debug_flag)
+	        {
+	            if (debug_flag[0] == '#') continue;
+	            int dbg = LogState::instance()->lookup(debug_flag);
+	            if (dbg) LogState::instance()->insert(dbg);
+	            else if (machines.count(debug_flag))
+	            {
+	                MachineInstance *mi = machines[debug_flag];
+	                if (mi) mi->setDebug(true);
+	            }
+	            else std::cerr << "Warning: unrecognised DEBUG Flag " << debug_flag << "\n";
+	        }
+	    }
+	}
 }
 
 static void finish(int sig)
@@ -186,6 +188,8 @@ void generateIOComponentModules()
         std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
         while (iter != machines.end())
         {
+			const int error_buf_size = 100;
+			char error_buf[error_buf_size];
             MachineInstance *m = (*iter).second;
             iter++;
             --remaining;
@@ -202,33 +206,39 @@ void generateIOComponentModules()
                 unsigned int entry_position = 0;
                 if (m->_type == "COUNTERRATE")
                 {
-                    name = m->parameters[1].real_name;
-                    entry_position = m->parameters[2].val.iValue;
+			name = m->parameters[1].real_name;
+			entry_position = m->parameters[2].val.iValue;
                 }
                 else
                 {
-                    name = m->parameters[0].real_name;
-                    entry_position = m->parameters[1].val.iValue;
+			name = m->parameters[0].real_name;
+			entry_position = m->parameters[1].val.iValue;
                 }
 
                 std::cerr << "Setting up point " << m->getName() << " " << entry_position << " on module " << name << "\n";
                 MachineInstance *module_mi = MachineInstance::find(name.c_str());
                 if (!module_mi)
                 {
-                    std::cerr << "No machine called " << name << "\n";
-                    continue;
+			snprintf(error_buf, error_buf_size, "Not machine called %s", name.c_str());
+			MessageLog::instance()->add(error_buf);
+			std::cerr << error_buf << "\n";
+			continue;
                 }
                 if (!module_mi->properties.exists("position"))   // module position not given
                 {
-                    std::cerr << "Machine " << name << " does not specify a position\n";
-                    continue;
+			snprintf(error_buf, error_buf_size, "Machine %s does not specify a position", name.c_str());
+			MessageLog::instance()->add(error_buf);
+			std::cerr << error_buf << "\n";
+			continue;
                 }
                 std::cerr << module_mi->properties.lookup("position").kind << "\n";
                 int module_position = module_mi->properties.lookup("position").iValue;
                 if (module_position == -1)    // module position unmapped
                 {
-                    std::cerr << "Machine " << name << " position not mapped\n";
-                    continue;
+			snprintf(error_buf, error_buf_size, "Machine %s position not mapped", name.c_str());
+			MessageLog::instance()->add(error_buf);
+			std::cerr << error_buf << "\n";
+			continue;
                 }
 
 #ifndef EC_SIMULATOR
@@ -239,13 +249,20 @@ void generateIOComponentModules()
                 ECModule *module = ECInterface::findModule(module_position);
                 if (!module)
                 {
-                    std::cerr << "No module found at position " << module_position << "\n";
+					snprintf(error_buf, error_buf_size, "No module found at position %d", module_position);
+					MessageLog::instance()->add(error_buf);
+                    std::cerr << error_buf << "\n";
+					error_messages.push_back(error_buf);
+					++num_errors;
                     continue;
                 }
 
                 if (entry_position >= module->num_entries)
                 {
-                    std::cerr << "No entry " << entry_position << " on module " << module_position << "\n";
+					snprintf(error_buf, error_buf_size, "No entry %d on module %d (%s)", 
+						entry_position, module_position, name.c_str());
+					MessageLog::instance()->add(error_buf);
+                    std::cerr << error_buf << "\n";
                     continue; // could not find this device
                 }
                 EntryDetails *ed = &module->entry_details[entry_position];
@@ -375,6 +392,9 @@ int main(int argc, char const *argv[])
     Logger::instance()->setLevel(Logger::Debug);
     LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
 
+	std::list<std::string> source_files;
+	int load_result = loadOptions(argc, argv, source_files);
+	if (load_result) return load_result;
     load_debug_config();
 
 #if 0
@@ -407,7 +427,7 @@ int main(int argc, char const *argv[])
     IODCommandListJSON::no_display.insert("TRACEABLE");
 
     statistics = new Statistics;
-    int load_result = loadConfig(argc, argv);
+    load_result = loadConfig(source_files);
     if (load_result)
         return load_result;
     if (dependency_graph())
@@ -466,7 +486,10 @@ int main(int argc, char const *argv[])
     ECInterface::FREQUENCY=1000000 / delay;
 
 #ifndef EC_SIMULATOR
-    collectSlaveConfig(true);
+	{
+    	char *slave_config = collectSlaveConfig(true);
+		if (slave_config) free(slave_config);
+	}
     ECInterface::instance()->activate();
 #endif
     generateIOComponentModules();
