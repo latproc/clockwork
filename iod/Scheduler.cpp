@@ -27,6 +27,7 @@
 #include "MessagingInterface.h"
 #include "MessageLog.h"
 #include <zmq.hpp>
+#include <boost/thread/mutex.hpp>
 
 Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000;
@@ -43,11 +44,15 @@ static void setTime(struct timeval &now, unsigned long delta) {
 }
 
 std::string Scheduler::getStatus() { 
+	struct timeval now;
+	gettimeofday(&now, 0);
 	char buf[100];
 	if (state == e_running) 
 		snprintf(buf, 100, "busy");
 	else
-		snprintf(buf, 100, "state: %d, items: %ld", state, items.size());
+		snprintf(buf, 100, "state: %d, items: %ld, now: %ld.%06ld, last notification: %10.6f", 
+			state, items.size(), now.tv_sec, now.tv_usec, (float)notification_sent/1000000.0f);
+	notification_sent = 0;
 	return buf;
 }
 
@@ -96,7 +101,7 @@ std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
     return item.operator<<(out);
 }
 
-Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PULL), next_delay_time(0) { 
+Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PULL), next_delay_time(0), notification_sent(0) { 
 	update_sync.bind("inproc://sch_items");
 	next_time.tv_sec = 0;
 	next_time.tv_usec = 0;
@@ -108,18 +113,23 @@ bool CompareSheduledItems::operator()(const ScheduledItem *a, const ScheduledIte
 }
 
 void Scheduler::add(ScheduledItem*item) {
-    DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
-	//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
-	items.push(item);
-	next_time = next()->delivery_time;
+    ScheduledItem *top = 0;
+	{
+		boost::mutex::scoped_lock(q_mutex);
+	    DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
+		//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
+		items.push(item);
+    	top = next();
+		next_time = top->delivery_time;
+	}
 	// should update next_delay_time
 	struct timeval now;
 	gettimeofday(&now, 0);
-    ScheduledItem *top = next();
-    next_delay_time = get_diff_in_microsecs(&top->delivery_time, &now);
+		
+    next_delay_time = get_diff_in_microsecs(&next_time, &now);
 	//DBG_SCHEDULER << "After schedule::add() " << *this << "\n";
 	if (!notification_sent) {
-		notification_sent = true;
+		notification_sent = now.tv_sec * 1000000L + now.tv_usec;
 		zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
 		int send_state = 0; // disconnected
 		while (true) {
@@ -170,16 +180,19 @@ std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
 bool Scheduler::ready() {
 	if (empty()) { next_delay_time = -1; return false; }
 	//DBG_SCHEDULER<< "scheduler checking " << *this << "\n";
-	if (next_time.tv_sec == 0) {
-		next_time = next()->delivery_time;
+	{
+		boost::mutex::scoped_lock(q_mutex);
+	    ScheduledItem *top = next();
+		if (next_time.tv_sec == 0) {
+			next_time = top->delivery_time;
+		}
+		struct timeval now;
+		gettimeofday(&now, 0);
+	    next_delay_time = get_diff_in_microsecs(&top->delivery_time, &now);
+		//if (now.tv_sec > next_time.tv_sec) return true;
+		//if (now.tv_sec == next_time.tv_sec) return now.tv_usec >= next_time.tv_usec;
+	    if (next_delay_time<=0) return true;
 	}
-	struct timeval now;
-	gettimeofday(&now, 0);
-    ScheduledItem *top = next();
-    next_delay_time = get_diff_in_microsecs(&top->delivery_time, &now);
-	//if (now.tv_sec > next_time.tv_sec) return true;
-	//if (now.tv_sec == next_time.tv_sec) return now.tv_usec >= next_time.tv_usec;
-    if (next_delay_time<=0) return true;
 	return false;
 }
 
@@ -222,12 +235,10 @@ void Scheduler::idle() {
 				usleep((unsigned int)delay);
 			else
 				safeRecv(update_sync, buf, 10, false, response_len, delay/1000);
-			//std::cout << "scheduler got some work\n";
-			notification_sent = false; // if more items are pushed we will want to know
+			notification_sent = 0; // if more items are pushed we will want to know
 		}
 		is_ready = ready();
 		if (state == e_waiting && is_ready) {
-			//std::cout << "scheduler wants time " <<items.size() << " total items\n";
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
 			safeSend(sync,"sched", 5); // tell clockwork we have something to do
 			state = e_waiting_cw;
@@ -235,14 +246,17 @@ void Scheduler::idle() {
 		if (state == e_waiting_cw && is_ready) {
 			safeRecv(sync, buf, 10, true, response_len);
             DBG_SCHEDULER << "scheduler received ok from driver\n";
-			//std::cout << "scheduler executing\n";
 			state = e_running;
 		}
 		
 		while ( state == e_running && is_ready) {
-			ScheduledItem *item = next();
-			DBG_SCHEDULER << "Scheduled item " << (*item) << " ready. \n"; //(" << items.size() << " items)\n"<< *this;
-			pop();
+			ScheduledItem *item = 0;
+			{
+				boost::mutex::scoped_lock(q_mutex);
+				item = next();
+				DBG_SCHEDULER << "Scheduled item " << (*item) << " ready. \n"; //(" << items.size() << " items)\n"<< *this;
+				pop();
+			}
 			next_time.tv_sec = 0;
 			if (item->package) {
                 DBG_SCHEDULER << " handling package on " << item->package->receiver->getName() << "\n";

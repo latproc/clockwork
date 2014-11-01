@@ -18,6 +18,7 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#include <assert.h>
 #include <unistd.h>
 #include "IOComponent.h"
 #include <sstream>
@@ -118,7 +119,7 @@ void ProcessingThread::stop()
 }
 
 
-void ProcessingThread::checkAndUpdateCycleDelay()
+bool ProcessingThread::checkAndUpdateCycleDelay()
 {
     Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
     long delay = 100;
@@ -126,10 +127,13 @@ void ProcessingThread::checkAndUpdateCycleDelay()
         delay = cycle_delay_v->iValue;
     if (delay != cycle_delay)
     {
+		set_cycle_time(delay);
         ECInterface::FREQUENCY = 1000000 / delay;
         //ECInterface::instance()->start();
         cycle_delay = delay;
+		return true;
     }
+	return false;
 }
 
 void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
@@ -138,12 +142,12 @@ void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
     // if it has requested it.
     // first stage is to give access second stage is to assert we are taking access back
     
-    resource_mgr.send("go", 2);
+    safeSend(resource_mgr,"go", 2);
 	status = e_waiting;
     char buf[10];
     size_t len = 0;
 	safeRecv(resource_mgr, buf, 10, true, len);
-	resource_mgr.send("bye", 3);
+	safeSend(resource_mgr,"bye", 3);
 #if 0
     while (len == 0)
     {
@@ -163,6 +167,16 @@ void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
 #endif
 }
 
+static uint8_t *incoming_process_data = 0;
+static uint8_t *incoming_process_mask = 0;
+static uint32_t incoming_data_size;
+
+static void display(uint8_t *p) {
+	int max = IOComponent::getMaxIOOffset();
+	int min = IOComponent::getMinIOOffset();
+    for (int i=min; i<=max; ++i) 
+		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+}
 
 int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatcher, zmq::socket_t &scheduler)
 {
@@ -176,8 +190,74 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
             res = zmq::poll(&items[0], 4, 100);
             if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
             {
-                len = ecat_sync.recv(buf, 10, ZMQ_NOBLOCK);
+				//std::cout << "receiving data from EtherCAT\n";
+				// the EtherCAT message carries a mask and data
+
+				int64_t more;
+				size_t more_size = sizeof (more);
+				uint8_t stage = 1;
+				//  Process all parts of the message
+				while (true) {
+					try {
+							switch (stage) {
+								case 1: 
+								{
+									zmq::message_t message;
+									// data length
+									ecat_sync.recv(&message);
+									size_t msglen = message.size();
+									assert(msglen == sizeof(incoming_data_size));
+									memcpy(&incoming_data_size, message.data(), msglen);
+									len = incoming_data_size;
+									++stage;
+								}
+								case 2: 
+								{
+									// data
+									ecat_sync.getsockopt( ZMQ_RCVMORE, &more, &more_size);
+									assert(more);
+									zmq::message_t message;
+									ecat_sync.recv(&message);
+									size_t msglen = message.size();
+									assert(msglen == incoming_data_size);
+									if (incoming_process_data) delete incoming_process_data;
+									incoming_process_data = new uint8_t[msglen];
+									memcpy(incoming_process_data, message.data(), msglen);
+									std::cout << "got data: "; display(incoming_process_data);
+									std::cout << "\n";
+									++stage;
+								}
+								case 3: 
+								{
+									// mask
+									zmq::message_t message;
+									ecat_sync.getsockopt( ZMQ_RCVMORE, &more, &more_size);
+									assert(more);
+									ecat_sync.recv(&message);
+									size_t msglen = message.size();
+									assert(msglen == incoming_data_size);
+									if (incoming_process_mask) delete incoming_process_mask;
+									incoming_process_mask = new uint8_t[msglen];
+									memcpy(incoming_process_mask, message.data(), msglen);
+									std::cout << "got mask: "; display(incoming_process_mask);
+									std::cout << "\n";
+									++stage;
+								}
+								default: ;
+							}
+							break;
+					}
+					catch(zmq::error_t err) {
+						if (zmq_errno() == EINTR) {
+							//std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
+							usleep(500); 
+							continue;
+						}
+					}
+				}
+				
                 if (len) status = e_handling_ecat;
+				else std::cout << "received zero length EtherCAT data\n";
             }
             else if (items[CMD_ITEM].revents & ZMQ_POLLIN)
             {
@@ -216,22 +296,6 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
 void ProcessingThread::operator()()
 {
     
-#if 0
-	boost::thread::attributes attrs;
-	// set portable attributes
-	// ...
-	//attr.set_stack_size(4096*10);
-#if defined(BOOST_THREAD_PLATFORM_WIN32)
-    // ... window version
-#elif defined(BOOST_THREAD_PLATFORM_PTHREAD)
-    // ... pthread version
-    //pthread_attr_setschedpolicy(attr.get_native_handle(), SCHED_RR);
-    pthread_setname_np(attrs.get_native_handler(), "iod processing");
-#else
-#error "Boost threads unavailable on this platform"
-#endif
-#endif
-
 #ifdef __APPLE__
     pthread_setname_np("iod processing");
 #else
@@ -256,16 +320,22 @@ void ProcessingThread::operator()()
     zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     ecat_sync.connect("inproc://ethercat_sync");
 
-    sched_sync.send("go",2); // scheduled items
+    safeSend(sched_sync,"go",2); // scheduled items
     usleep(10000);
-    dispatch_sync.send("go",2); //  permit handling of events
+    safeSend(dispatch_sync,"go",2); //  permit handling of events
     usleep(10000);
-    ecat_sync.send("go",2); // collect state
+    safeSend(ecat_sync,"go",2); // collect state
     usleep(10000);
+
+    zmq::socket_t ecat_out(*MessagingInterface::getContext(), ZMQ_REQ);
+    ecat_out.connect("inproc://ethercat_output");
 	
     checkAndUpdateCycleDelay();
 
     uint64_t last_checked_cycle_time = 0;
+
+
+	enum { s_update_idle, s_update_sent } update_state = s_update_idle;
 
 #ifdef USE_EXPERIMENTAL_IDLE_LOOP
 
@@ -307,12 +377,12 @@ void ProcessingThread::operator()()
             if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync, sched_sync)) break;
             if (MachineInstance::workToDo()) break;
         }
-        //		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
-        //			std::cout << "ecat waiting\n";
-        //		if (items[CMD_ITEM].revents & ZMQ_POLLIN)
-        //			std::cout << "command waiting\n";
-        //		if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
-        //			std::cout << "dispatcher waiting\n";
+       	if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+       		std::cout << "ecat waiting\n";
+       	if (items[CMD_ITEM].revents & ZMQ_POLLIN)
+       		std::cout << "command waiting\n";
+       	if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
+       		std::cout << "dispatcher waiting\n";
         if (program_done) break;
         if (status == e_handling_cmd) {
 			waitForCommandProcessing(resource_mgr);
@@ -326,10 +396,10 @@ void ProcessingThread::operator()()
                 MachineInstance::forceIdleCheck();
 			}
 			else {
-				dispatch_sync.send("continue",3);
+				safeSend(dispatch_sync,"continue",3);
 				// wait for the dispatcher
 				safeRecv(dispatch_sync, buf, 10, true, len);
-				dispatch_sync.send("bye",3);
+				safeSend(dispatch_sync,"bye",3);
                 MachineInstance::forceIdleCheck();
 				status = e_waiting;
 			}
@@ -342,12 +412,13 @@ void ProcessingThread::operator()()
 			if (processingState != eIdle) {
 				// cannot process scheduled events at present
 				status = e_waiting;
+				std::cout << "can't handle scheduler\n";
 			}
 			else {
-				sched_sync.send("continue",3);
+				safeSend(sched_sync,"continue",3);
 				// wait for the dispatcher
 				safeRecv(sched_sync, buf, 10, true, len);
-				sched_sync.send("bye",3);
+				safeSend(sched_sync,"bye",3);
                 MachineInstance::forceStableStateCheck();
 				status = e_waiting;
 			}
@@ -362,11 +433,16 @@ void ProcessingThread::operator()()
 */		
 		else if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
+			std::cout << "got EtherCAT data\n";
             if (machine_is_ready)
             {
+				std::cout << "processing EtherCAT data\n";
                 delta = get_diff_in_microsecs(&start_t, &end_t);
                 cycle_delay_stat->add(delta);
-                IOComponent::processAll();
+                IOComponent::processAll(
+					incoming_data_size, 
+					incoming_process_mask, 
+					incoming_process_data);
                 gettimeofday(&end_t, 0);
                 
                 delta = get_diff_in_microsecs(&end_t, &start_t);
@@ -378,9 +454,12 @@ void ProcessingThread::operator()()
                 delta2 = delta;
                 
             }
+			else
+				std::cout << "received EtherCAT data but machine is not ready\n";
             //if (MachineInstance::workToDo()) {
             //    DBG_SCHEDULER << " work to do. scheduling another check\n";
-                ecat_sync.send("go",2);
+			//std::cout << "EtherCAT data update complete\n";
+			safeSend(ecat_sync,"go",2);
             //}
             //else { DBG_SCHEDULER << " no more work to do\n"; }
         }
@@ -398,9 +477,70 @@ void ProcessingThread::operator()()
                 if (MachineInstance::checkStableStates(50000))
                     processingState = eIdle;
             }
-            
+		}
+		if (machine_is_ready && IOComponent::updatesWaiting() ) {
+			if (update_state == s_update_idle) {
+				IOUpdate *upd = IOComponent::getUpdates();
+				if (upd) {
+					uint32_t size = upd->size;
+					uint8_t stage = 1;
+					while (true) {
+						try {
+							switch (stage) {
+								case 1:
+									{
+										zmq::message_t iomsg(4);
+										memcpy(iomsg.data(), (void*)&size, 4); 
+										ecat_out.send(iomsg, ZMQ_SNDMORE);
+										++stage;
+									}
+								case 2:
+									{
+										zmq::message_t iomsg(size);
+										memcpy(iomsg.data(), (void*)upd->data, size);
+										ecat_out.send(iomsg, ZMQ_SNDMORE);
+										++stage;
+									}
+								case 3:
+									{
+										zmq::message_t iomsg(size);
+										memcpy(iomsg.data(), (void*)upd->mask, size);
+										ecat_out.send(iomsg);
+										++stage;
+									}
+								default: ;
+							}
+							break;
+						}
+						catch (zmq::error_t err) {
+							if (zmq_errno() == EINTR) {
+								//std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
+								usleep(500); 
+								continue;
+							}
+							assert(false);
+						}
+					}
+					//std::cout << "update sent. Waiting for ack\n";
+					delete upd;
+					update_state = s_update_sent;
+				}
+			}
         }
-        
+		if (update_state == s_update_sent) {
+			char buf[10];
+			size_t len;
+			try {
+			//safeRecv(ecat_out, buf, 10, true, len);
+				if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
+					//std::cout << "update notification done\n";
+					update_state = s_update_idle;
+				}
+			}
+			catch (zmq::error_t err) {
+				assert(zmq_errno() == EINTR);
+			}
+		}
         
         // periodically check to see if the cycle time has been changed
         // more work is needed here since the signaller needs to be told about this
@@ -452,11 +592,11 @@ void ProcessingThread::operator()()
                 status = e_waiting;
             }
             else {
-                dispatch_sync.send("continue",3);
+                safeSend(dispatch_sync,"continue",3);
                 // wait for the dispatcher
                 safeRecv(dispatch_sync, buf, 10, true, len);
                 //				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
-                dispatch_sync.send("bye",3);
+                safeSend(dispatch_sync,"bye",3);
                 status = e_waiting;
             }
         }
@@ -466,11 +606,11 @@ void ProcessingThread::operator()()
                 status = e_waiting;
             }
             else {
-                sched_sync.send("continue",3);
+                safeSend(sched_sync,"continue",3);
                 // wait for the dispatcher
                 safeRecv(sched_sync, buf, 10, true, len);
                 //				buf[len] = 0; std::cout << "dispatcher thread said: " << buf << "\n";
-                sched_sync.send("bye",3);
+                safeSend(sched_sync,"bye",3);
                 status = e_waiting;
             }
         }
@@ -582,10 +722,9 @@ void ProcessingThread::operator()()
                         last_checked_cycle_time = end_t.tv_sec *1000000 + end_t.tv_usec;
                         checkAndUpdateCycleDelay();
                     }
-                    
                 }
             }
-            ecat_sync.send("go",2); // update io
+            safeSend(ecat_sync,"go",2); // update io
             status = e_waiting;
         }
         if (program_done) break;

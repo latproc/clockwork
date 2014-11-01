@@ -11,6 +11,7 @@ public:
     void operator()();
     void stop() { program_done = true; }
 	void setCycleDelay(long delay);
+	bool checkAndUpdateCycleDelay();
 private:
 	State status;
 	bool program_done;

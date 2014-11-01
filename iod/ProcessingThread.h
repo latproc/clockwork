@@ -7,7 +7,7 @@ public:
     void operator()();
     ProcessingThread(ControlSystemMachine &m);
     void stop();
-    void checkAndUpdateCycleDelay();
+    bool checkAndUpdateCycleDelay();
     
     ControlSystemMachine &machine;
     int sequence;

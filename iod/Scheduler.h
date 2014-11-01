@@ -101,7 +101,8 @@ protected:
 	} state;
 	zmq::socket_t update_sync;
 	long next_delay_time;
-	bool notification_sent; // the scheduler has been notified that an item is scheduled
+	unsigned long notification_sent; // the scheduler has been notified that an item is scheduled
+	boost::mutex q_mutex;
 };
 
 //std::ostream &operator<<(std::ostream &out, const Scheduler &m);

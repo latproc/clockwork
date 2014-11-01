@@ -55,6 +55,15 @@ struct MQTTTopic {
     MQTTTopic(const std::string&t, const std::string&m) : topic(t), message(m) { }
 };
 
+class IOUpdate {
+public:
+	IOUpdate():size(0), data(0), mask(0) { }
+	~IOUpdate() { delete mask; }
+	uint32_t size;
+	uint8_t *data; // shared pointer to process data
+	uint8_t *mask; // allocated pointer to current mask
+};
+
 class MachineInstance;
 class IOComponent : public Transmitter {
 public:
@@ -65,12 +74,15 @@ public:
 		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-	static void processAll();
+	static void processAll(size_t data_size, uint8_t *mask, uint8_t *data);
 	static void setupIOMap();
 	static int getMinIOOffset();
 	static int getMaxIOOffset();
+	static uint8_t *getProcessData() { return process_data; }
+	static uint8_t *getProcessMask() { return process_mask; }
 	static int notifyComponentsAt(unsigned int offset);
 	static bool hasUpdates();
+	static IOUpdate *getUpdates();
 #ifndef EC_SIMULATOR
 	ECModule *owner() { return ECInterface::findModule(address.module_position); }
 #endif
@@ -120,8 +132,21 @@ public:
 	typedef std::map<std::string, IOComponent*> DeviceList;
 	static IOComponent::DeviceList devices;
 	static IOComponent* lookup_device(const std::string name);
+
+	int index() { return io_index; } // this component's index into the io array
+	void setIndex(int idx) { io_index=idx; }
+
+	static int updatesWaiting() { return outputs_waiting; }
+
 protected:
 	int getStatus(); 
+	int io_index; // the index of the first bit in this component's address space
+	static int outputs_waiting; // this many outputs are waiting to change
+	static size_t process_data_size;
+	static uint8_t *process_data;
+	static uint8_t *process_mask;
+	static unsigned int max_offset;
+	static unsigned int min_offset;
 };
 std::ostream &operator<<(std::ostream&out, const IOComponent &);
 

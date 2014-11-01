@@ -101,7 +101,8 @@ bool ECModule::operational() {
 #endif
 
 
-ECInterface::ECInterface() :initialised(0), active(false) {
+ECInterface::ECInterface() :initialised(0), active(false), process_data(0), process_mask(0),
+		update_data(0), update_mask(0) {
 	initialised = init();
 }
 
@@ -281,7 +282,105 @@ ECInterface *ECInterface::instance() {
 	return instance_;
 }
 
-static uint8_t *last_domain_data = 0;
+uint32_t ECInterface::getProcessDataSize() {
+	int max = IOComponent::getMaxIOOffset();
+	int min = IOComponent::getMinIOOffset();
+	return max - min + 1;
+}
+
+void ECInterface::setProcessData (uint8_t *pd) { 
+	if (process_data) delete process_data; process_data = pd; 
+}
+uint8_t *ECInterface::getProcessMask() { return IOComponent::getProcessMask(); }
+
+void ECInterface::setProcessMask (uint8_t *m) { 
+	if (process_mask) delete process_mask; process_mask = m; 
+}
+
+void ECInterface::setUpdateData (uint8_t *ud) {
+	if (update_data) delete update_data;
+	update_data = ud;
+}
+void ECInterface::setUpdateMask (uint8_t *m){
+	if (update_mask) delete update_mask;
+	update_mask = m;
+}
+uint8_t *ECInterface::getUpdateData() { return update_data; }
+uint8_t *ECInterface::getUpdateMask() { return update_mask; }
+
+// copy interesting bits that have changed from the supplied
+// data into the process data and the saved copy of the process data.
+// the latter is because we want to properly detect changes in the
+// next read cycle
+
+static void display(uint8_t *p) {
+	int max = IOComponent::getMaxIOOffset();
+	int min = IOComponent::getMinIOOffset();
+    for (int i=min; i<=max; ++i) 
+		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+}
+
+
+void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
+	int max = IOComponent::getMaxIOOffset();
+	int min = IOComponent::getMinIOOffset();
+	uint8_t *domain1_pd = ecrt_domain_data(domain1) ;
+	uint8_t *pd = domain1_pd;
+	uint8_t *saved_pd = process_data;
+
+/*
+	std::cout << "updating domain (size = " << size << ")\n";
+	std::cout << "process: "; display(pd); std::cout << "\n";
+	std::cout << "   mask: "; display(mask); std::cout << "\n";
+	std::cout << "   data: "; display(data); std::cout << "\n";
+*/
+    for (unsigned int i=0; i<size; ++i) {
+        if (*mask && *data != *pd){
+/*
+			std::cout << "at " << i << " data (" 
+				<< (unsigned int)(*data) << ") different to domain ("
+				<< (unsigned int)(*pd) << ")\n";
+*/
+            uint8_t bitmask = 0x01;
+			int count = 0;
+            while (bitmask) {
+                if (*mask & bitmask ) { // we care about this bit
+					uint8_t pdb = *pd & bitmask;
+					uint8_t db = *data & bitmask;
+                    if ( pdb != db ) { // changed
+						//std::cout << "bit " << i << ":" << count << " changed to ";
+                        if ( db ) { 
+							*pd |= bitmask; 
+							//std::cout << "on";
+						}
+                        else {
+							*pd &= (uint8_t)(0xff - bitmask);
+							//std::cout << "off";
+						}
+                    }
+                }
+                bitmask = bitmask << 1;
+				++count;
+            }
+        }
+        ++pd; ++mask; ++data;
+    }
+}
+
+void ECInterface::receiveState() {
+	if (!master || !initialised || !active) {
+		std::cerr << "master not ready to collect state" << std::flush;
+		return;
+	}
+    // receive process data
+    ecrt_master_receive(master);
+    ecrt_domain_process(domain1);
+	check_domain1_state();
+	// check for master state (optional)
+	check_master_state();
+	// check for islave configuration state(s) (optional)
+	check_slave_config_states();
+}
 
 int ECInterface::collectState() {
 	if (!master || !initialised || !active) {
@@ -289,9 +388,6 @@ int ECInterface::collectState() {
 		return 0;
 	}
 #ifndef EC_SIMULATOR
-    // receive process data
-    ecrt_master_receive(master);
-    ecrt_domain_process(domain1);
 
 //    uint8_t *domain1_pd = ecrt_domain_data(domain1) ;
 //	for (int i=0; i<100; ++i) 
@@ -299,30 +395,76 @@ int ECInterface::collectState() {
 //	std::cout << "\n";
 
 	// workout what io components need to process updates
-  uint8_t *domain1_pd = ecrt_domain_data(domain1) ;
-	int affected_machines = 0;
+	uint8_t *domain1_pd = ecrt_domain_data(domain1) ;
+	if (!domain1_pd) return 0;
+	uint8_t *pd = domain1_pd;
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
-	for (int i=min; i<=max; ++i) {
-		if (!last_domain_data || last_domain_data[i] != domain1_pd[i])
-			affected_machines += IOComponent::notifyComponentsAt(i);
+	int affected_bits = 0;
+
+	// the result of this is a list of data bits to be changed and
+	// a mask indicating which bits are important
+	size_t domain_size = ecrt_domain_size(domain1);
+	assert(domain_size >= max+1);
+	uint8_t *update_data = new uint8_t[domain_size]; 
+	uint8_t *update_mask = new uint8_t[domain_size]; 
+	memset(update_data, 0, domain_size);
+	memset(update_mask, 0, domain_size);
+
+	// first time through, copy the domain process data to our local copy
+	// and set the process mask to include every bit we care about
+
+	// after that, look at all bits we care about and if the bit has changed
+	// copy its new value to the update data and include the bit in the
+	// update mask
+	uint8_t *last_pd = instance()->getProcessData();
+	uint8_t *pm = IOComponent::getProcessMask(); // these are the important bits
+	uint8_t *q = update_data; // convenience pointer
+
+    for (int i=min; i<=max; ++i) {
+		update_mask[i] = 0; // assume no updates in this octet
+        if (!last_pd) { // first time through, copy all the domain data and mask
+            update_data[i] = domain1_pd[i] & *pm;
+            update_mask[i] = *pm;
+        }
+        else if (*last_pd != domain1_pd[i]){
+            uint8_t bitmask = 0x01;
+			int count = 0;
+            while (bitmask) {
+                if (*pm & bitmask ) { // we care about this bit
+                    if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
+						std::cout << "incoming bit " << i << ":" << count 
+							<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
+
+                        if ( *pd & bitmask ) *q |= bitmask;
+                        else *q &= (uint8_t)(0xff - bitmask);
+                        update_mask[i] |= bitmask;
+						++affected_bits;
+                    }
+                }
+                bitmask = bitmask << 1;
+				++count;
+            }
+        }
+        ++pd; ++q; ++pm; if (last_pd)++last_pd;
+    }
+	if (affected_bits) {
+	std::cout << "update\n" << "data: "; display(update_data); 
+	std::cout << "\nmask: "; display(update_mask);
+	std::cout << " " << affected_bits << " bits changed\n";
 	}
+
 	// save the domain data for the next check
-	if (last_domain_data) delete last_domain_data;
-	last_domain_data = new uint8_t[max+1];
-	memcpy(last_domain_data, domain1_pd, max-min+1);
+	assert(min==0);
+	pd = new uint8_t[max+1];
+	memcpy(pd+min, domain1_pd, max-min+1);
+	instance()->setProcessData(pd);
+	instance()->setUpdateData(update_data);
+	instance()->setUpdateMask(update_mask);
 
 #endif
-	//IOComponent::processAll();
-	//std::cout << "/" << std::flush;
-	check_domain1_state();
-	// check for master state (optional)
-	check_master_state();
 
-	// check for islave configuration state(s) (optional)
-	check_slave_config_states();
-
-	return IOComponent::hasUpdates() ? 1 : 0;
+	return affected_bits;
 }
 void ECInterface::sendUpdates() {
 	if (!master || !initialised || !active) {

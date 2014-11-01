@@ -116,8 +116,10 @@ public:
 	void check_domain1_state(void);
 	void check_master_state(void);
 	void check_slave_config_states(void);
+	void receiveState(); // get state from EtherCAT, use collectState() to process it
 	int collectState(); // returns non-zero if there are machines that are affected by the new state
 	void sendUpdates();
+	void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
 	
 	bool start();
 	bool stop();
@@ -133,10 +135,24 @@ public:
 	static std::vector<ECModule *>modules;
 	//bool configurePDOs();
 	static ECModule *findModule(int position);
+	uint8_t *getProcessData() { return process_data; }
+	uint8_t *getProcessMask();
+	void setProcessData (uint8_t *pd);
+	void setProcessMask (uint8_t *m);
+	uint32_t getProcessDataSize();
+
+	void setUpdateData (uint8_t *ud);
+	void setUpdateMask (uint8_t *m);
+	uint8_t *getUpdateData();
+	uint8_t *getUpdateMask();
 #endif
 private:
 	ECInterface();
 	static ECInterface *instance_;
+	uint8_t *process_data;
+	uint8_t *process_mask;
+	uint8_t *update_data;
+	uint8_t *update_mask;
 };
 
 #endif
