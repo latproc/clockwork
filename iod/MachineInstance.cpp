@@ -1060,8 +1060,6 @@ void MachineInstance::idle() {
 	if (!is_enabled) {
 		return;
 	}
-	if (getName() == "M_GrabHead1")
-		int x=1;
     if (!state_machine) {
         std::stringstream ss;
         ss << " machine " << _name << " has no state machine";
@@ -1175,7 +1173,13 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface) && m->enabled() ) ) {
             if (m->hasWork() || !m->active_actions.empty() ) {
-                DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << "\n";
+				Action *curr = m->executingCommand();
+				if (curr) {
+                	DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << " " << *curr << "\n";
+				}
+				else {
+                	DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << "\n";
+				}
                 m->idle();
             }
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
@@ -1226,7 +1230,6 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
         if ( m->enabled() && m->executingCommand() == NULL
             && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= start_processing )
         {
-						std::cout << m->getName() << " check stable states\n";
             m->setStableState();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
                 m->state_machine->plugin->state_check(m);
@@ -1582,7 +1585,7 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
-        //DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+        DBG_STATECHANGES << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
@@ -2539,6 +2542,10 @@ void MachineInstance::setStableState() {
                                 next_timer = v.iValue;
                         }
                     }
+                    if (s.uses_timer) {
+                        DBG_M_MESSAGING << _name << " scheduling condition tests for state " << s.state_name << "\n";
+                        s.condition.predicate->scheduleTimerEvents(this);
+					}
                     if (s.subcondition_handlers) {
                         std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
                         while (iter != s.subcondition_handlers->end()) {
