@@ -130,10 +130,9 @@ void IODCommandThread::operator()() {
     
     int linger = 0; // do not wait at socket close time
     cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-    std::stringstream sn;
-    sn << "tcp://0.0.0.0:" << command_port();
-    const char *port = sn.str().c_str();
-    cti->socket.bind (port);
+	char url_buf[30];
+	snprintf(url_buf, 30, "tcp://0.0.0.0:%d", command_port());
+    cti->socket.bind (url_buf);
     
     zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_REQ);
     access_req.connect("inproc://resource_mgr");
