@@ -62,6 +62,8 @@ void set_device_name(const char *new_name);
 void enable_tracing(bool which);
 bool tracing();
 
+unsigned long get_cycle_time();
+void set_cycle_time(unsigned long ct);
     
 #ifdef __cplusplus
 }

@@ -35,6 +35,7 @@ static int command_port_num = 5555;
 static bool keep_stats = false;
 static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
+static unsigned long cycle_time_ = 1000;
 
 const char *device_name() { return dev_name; }
 void set_device_name(const char *new_name) {
@@ -137,5 +138,7 @@ void enable_tracing(bool which) { is_tracing = which; }
 
 bool tracing() { return is_tracing; }
 
+void set_cycle_time(unsigned long new_time) { cycle_time_ = new_time; }
+unsigned long get_cycle_time() { return cycle_time_; }
 
 
