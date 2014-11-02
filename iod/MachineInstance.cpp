@@ -285,6 +285,8 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 }
 
 void MachineInstance::setNeedsCheck() {
+	if (!is_enabled) return;
+	if (!needs_check) std::cout << _name << " needs check\n";
     ++needs_check;
     ++total_machines_needing_check;
     //updateLastEvaluationTime();
@@ -294,14 +296,14 @@ void MachineInstance::setNeedsCheck() {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            dep->setNeedsCheck();
+            if (dep->is_enabled) dep->setNeedsCheck();
         }
     }
     else if (state_machine->token_id == ClockworkToken::REFERENCE) {
         std::set<MachineInstance*>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            dep->setNeedsCheck();
+            if (dep->is_enabled) dep->setNeedsCheck();
         }
     }
 }
@@ -319,6 +321,7 @@ std::string MachineInstance::fullName() const {
 void MachineInstance::enqueueAction(Action *a){
     if (a) active_actions.push_front(a);
     num_machines_with_work++;
+		std::cout << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
     has_work = true;
 }
 
@@ -359,6 +362,7 @@ bool TriggeredAction::active() {
 void MachineInstance::triggerFired(Trigger *trig) {
     setNeedsCheck();
     num_machines_with_work++;
+		std::cout << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
     has_work = true;
 }
 
@@ -716,7 +720,8 @@ void RateEstimatorInstance::setNeedsCheck() {
 }
 
 void RateEstimatorInstance::idle() {
-    if (hasWork()) {
+return;
+    if (is_enabled && hasWork()) {
         MachineInstance *pos_m = lookup(parameters[0]);
         long pos = 0;
         if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
@@ -1141,6 +1146,15 @@ const Value *MachineInstance::getTimerVal() {
 }
 
 static int recheck_idle = 0;
+long total_machines_with_work = 0;
+long total_plugins_with_work = 0;
+long loop_count = 0;
+long shortcuts = 0;
+long total_idle_calls = 0;
+long saved_loop_count = 0;
+long total_process_calls = 0;
+uint64_t total_processing_time = 0;
+long total_aborts = 0;
 
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     static int point_token = ClockworkToken::POINT;
@@ -1150,11 +1164,16 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     if (iter == active_machines.begin()) {
         struct timeval now;
         gettimeofday(&now, NULL);
+				saved_loop_count = loop_count;
         process_time = now.tv_sec * 1000000 + now.tv_usec;
         if (which == BUILTINS)
             builtins = true;
 #ifdef USE_EXPERIMENTAL_IDLE_LOOP
-        if (last_num_machines_with_work == 0 && num_machines_with_work == 0) return true;
+        if (last_num_machines_with_work == 0 && num_machines_with_work == 0) {
+					shortcuts++;
+					return true;
+				}
+				else std::cout << num_machines_with_work << " machines with work at MachineInstance::processAll\n";
 #endif
         last_num_machines_with_work = num_machines_with_work;
         num_machines_with_work = 0; // counts how many machines have work remaining at the end of this process
@@ -1172,23 +1191,21 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
         MachineInstance *m = *iter++;
         bool point = m->state_machine->token_id == point_token;
         if ( (builtins && point) || (!builtins && (!point || m->mq_interface) && m->enabled() ) ) {
+						if (m->hasWork()) { std::cout << m->_name << " has work\n"; ++total_machines_with_work; }
             if (m->hasWork() || !m->active_actions.empty() ) {
-				Action *curr = m->executingCommand();
-				if (curr) {
-                	DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << " " << *curr << "\n";
-				}
-				else {
-                	DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << "\n";
-				}
+                DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << "\n";
                 m->idle();
+								++total_idle_calls;
             }
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
                 m->state_machine->plugin->poll_actions(m);
-                ++num_machines_with_work;
+								++total_plugins_with_work;
+//TBD                ++num_machines_with_work;
             }
             if (m->hasWork() || !m->active_actions.empty()) {
                 DBG_ACTIONS << m->getName() << " has work\n";
                 ++num_machines_with_work;
+								std::cout << m->_name << " ADDED to machines with work " << num_machines_with_work << "\n";
             }
         }
         count--;
@@ -1196,8 +1213,11 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > max_time)
+            if (now_t - start_processing > max_time) {
+								total_processing_time += now_t - start_processing;
+								total_aborts++;
                 return false; // ran out of time to finish
+						}
             count = block_size;
         }
     }
@@ -1207,6 +1227,21 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     else {
         DBG_ACTIONS << " more actions to run\n";
     }
+		gettimeofday(&now, NULL);
+		uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+		total_processing_time += now_t - start_processing;
+		++loop_count; // completed a pass through all machines
+		total_process_calls += loop_count - saved_loop_count;
+		MachineInstance *system = MachineInstance::find("SYSTEM");
+		assert(system);
+		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
+		system->setValue("AVG_MACHINES_WITH_WORK_PER_KCYCLE", total_machines_with_work*1000 / loop_count);
+		system->setValue("AVG_WORK_PER_KCYCLE", total_idle_calls*1000 / loop_count);
+		system->setValue("CYCLES", loop_count);
+		system->setValue("AVG_PLUGIN_WORK_PER_KCYCLE", total_plugins_with_work * 1000 / loop_count);
+		system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
+		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", total_processing_time * 1000 / loop_count);
+		system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
     iter = active_machines.begin(); // prepare for the next cycle
     return true; // complete the cycle
 }
@@ -1585,7 +1620,7 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
-        DBG_STATECHANGES << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+        //DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
@@ -2436,6 +2471,7 @@ void MachineInstance::push(Action *new_action) {
 	DBG_M_ACTIONS << _name << " pushing " << *new_action << "\n";
 	active_actions.push_back(new_action);
     num_machines_with_work++;
+		std::cout << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
     has_work = true;
 	return;
 }
@@ -2545,7 +2581,7 @@ void MachineInstance::setStableState() {
                     if (s.uses_timer) {
                         DBG_M_MESSAGING << _name << " scheduling condition tests for state " << s.state_name << "\n";
                         s.condition.predicate->scheduleTimerEvents(this);
-					}
+										}
                     if (s.subcondition_handlers) {
                         std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
                         while (iter != s.subcondition_handlers->end()) {

@@ -83,10 +83,12 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
     current_time = now.tv_sec * 1000000 + now.tv_usec;
 
 
+#if 0
 	std::cout << "IOComponent::processAll()\n";
 	std::cout << "size: " << data_size << "\n";
 	std::cout << "data: "; display( data); std::cout << "\n";
 	std::cout << "mask: "; display( mask); std::cout << "\n";
+#endif
 
 	assert(data_size == process_data_size);
 	// step through the incoming mask and update bits in process data
@@ -95,7 +97,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 	uint8_t *q = process_data;
 	for (unsigned int i=0; i<process_data_size; ++i) {
 		if (!last_process_data) {
-			notifyComponentsAt(i);
+			if (*m) notifyComponentsAt(i);
 		}
 		if (*p != *q && *m) { // copy masked bits if any
 			uint8_t bitmask = 0x01;
@@ -106,24 +108,27 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 			// update the bit
 			while (bitmask) {
 				if ( *m & bitmask) {
-					std::cout << "looking up " << i << ":" << j << "\n";
+					//std::cout << "looking up " << i << ":" << j << "\n";
 					IOComponent *ioc = (*indexed_components)[ i*8+j ];
-					if (!ioc) std::cout << "no component found\n";
-					else std::cout << "found " << ioc->io_name << "\n";
+					if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; else std::cout << "found " << ioc->io_name << "\n";
 					if (ioc && ioc->last_event != e_none) { 
 						// pending locally sourced change on this io
+						std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
 						updatedComponents.insert(ioc);
 					}
 					else if ( (*p & bitmask) != (*q & bitmask) ) {
 						// remotely source change on this io
-						if (ioc) updatedComponents.insert(ioc);
+						if (ioc) {
+							std::cout << " adding " << ioc->io_name << " due to bit change\n";
+							updatedComponents.insert(ioc);
+						}
 
 						if (*p & bitmask) *q |= bitmask; 
 						else *q &= (uint8_t)(0xff - bitmask);
 					}
-					else { 
-						std::cout << "no change " << (unsigned int)*p << " vs " << 
-							(unsigned int)*q << "\n";}
+					//else { 
+					//	std::cout << "no change " << (unsigned int)*p << " vs " << 
+					//		(unsigned int)*q << "\n";}
 				}
 				bitmask = bitmask << 1;
 				++j;
@@ -142,13 +147,14 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 	std::set<IOComponent*>::iterator iter = updatedComponents.begin();
 	while (iter != updatedComponents.end()) {
 		IOComponent *ioc = *iter++;
-		//std::cout << "processing " << ioc->io_name << "\n";
+		std::cout << "processing " << ioc->io_name << "\n";
 		ioc->read_time = current_time;
-		if (ioc->last_event == e_none) updatedComponents.erase(ioc);
+		//if (ioc->last_event == e_none) 
+			updatedComponents.erase(ioc); 
+		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
 		ioc->idle();
 	}
-#endif
-#ifndef USE_EXPERIMENTAL_IDLE_LOOP
+#else
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
@@ -429,11 +435,11 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
 		//std::cout << "component list at offset " << offset << " size: " << cl->size() << "\n";
 		std::list<IOComponent*>::iterator items = cl->begin();
 		//std::cout << "items: \n";
-		while (items != cl->end()) {
-			IOComponent *c = *items++;
+		//while (items != cl->end()) {
+		//	IOComponent *c = *items++;
 			//std::cout << c->io_name << "\n";
-		}
-		items = cl->begin();
+		//}
+		//items = cl->begin();
 		while (items != cl->end()) {
 			IOComponent *c = *items++;
 			if (c) {
@@ -579,6 +585,7 @@ void IOComponent::setupIOMap() {
 
 
 void IOComponent::idle() {
+	MachineInstance *self = dynamic_cast<MachineInstance*>(this);
 	assert(process_data);
 	//std::cout << io_name << "::idle() " << last_event << "\n";
 	uint8_t *offset = process_data + address.io_offset;
@@ -610,23 +617,26 @@ void IOComponent::idle() {
 			{
 				std::list<MachineInstance*>::iterator iter;
 #ifndef DISABLE_LEAVE_FUNCTIONS
-				if (address.value) evt ="on_leave";
-				else evt = "off_leave";
-				iter = depends.begin();
-				while (iter != depends.end()) {
-					MachineInstance *m = *iter++;
-					Message msg(evt);
-					if (m->receives(msg, this)) m->execute(msg, this);
+				if (self && self->enabled()) {
+					if (address.value) evt ="on_leave";
+					else evt = "off_leave";
+					iter = depends.begin();
+					while (iter != depends.end()) {
+						MachineInstance *m = *iter++;
+						Message msg(evt);
+						if (m->receives(msg, this)) m->execute(msg, this);
+					}
 				}
 #endif
-                
-				if (value) evt = "on_enter";
-				else evt = "off_enter";
-				iter = depends.begin();
-				while (iter != depends.end()) {
-					MachineInstance *m = *iter++;
-					Message msg(evt);
-					m->execute(msg, this);
+  			if (self && self->enabled()) {              
+					if (value) evt = "on_enter";
+					else evt = "off_enter";
+					iter = depends.begin();
+					while (iter != depends.end()) {
+						MachineInstance *m = *iter++;
+						Message msg(evt);
+						m->execute(msg, this);
+					}
 				}
 			}
 			address.value = value;
@@ -665,6 +675,7 @@ void IOComponent::idle() {
 			if (address.value != val || strcmp(type(), "CounterRate") == 0) {
 				//address.value = get_bits(offset, bitpos, address.bitlen);
 				address.value = filter(val);
+				if (self && !self->enabled()) return;
 				last_event = e_none;
 				const char *evt = "property_change";
 				std::list<MachineInstance*>::iterator iter = depends.begin();
