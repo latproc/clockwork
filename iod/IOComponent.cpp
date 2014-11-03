@@ -69,11 +69,16 @@ IOComponent* IOComponent::lookup_device(const std::string name) {
 // these components need to synchronise with clockwork
 std::set<IOComponent*> updatedComponents;
 
-static void display(uint8_t *p) {
+static void display(uint8_t *p, unsigned int count = 0) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
-    for (int i=min; i<=max; ++i) 
-		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+	if (count == 0)
+		for (int i=min; i<=max; ++i) 
+			std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+	else
+		for (unsigned int i=0; i<count; ++i) 
+			std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+	std::cout << std::dec;
 }
 
 void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
@@ -555,7 +560,7 @@ void IOComponent::setupIOMap() {
 	process_data = new uint8_t[process_data_size];
 
 	io_map.resize(max_offset+1);
-	for (int i=0; i<=max_offset; ++i) io_map[i] = 0;
+	for (unsigned int i=0; i<=max_offset; ++i) io_map[i] = 0;
 	iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
@@ -648,8 +653,24 @@ void IOComponent::idle() {
 			address.value = pending_value;
 		}
 		else {
+			std::cout << io_name << " object of size " << address.bitlen << " val: ";
+			display(offset, 1);
+			std:: cout << " bit pos: " << bitpos << " ";
 			int32_t val = 0;
-			if (address.bitlen == 8) 
+			if (address.bitlen < 8)  {
+				uint8_t bitmask = 0x8 >> bitpos;
+				val = 0;
+				for (unsigned int count = 0; count < address.bitlen; ++count) {
+					val = val + ( *offset & bitmask );
+					bitmask = bitmask >> 1;
+					// check for objects traversing byte boundaries
+					if (count< address.bitlen && !bitmask) { bitmask = 0x80; ++offset; }
+				}
+				
+				while (bitmask) { val = val >> 1; bitmask = bitmask >> 1; }
+				std::cout << " value: " << val << "\n";
+			}
+			else if (address.bitlen == 8) 
 				val = EC_READ_S8(offset);
 			else if (address.bitlen == 16) 
 				val = EC_READ_S16(offset);
