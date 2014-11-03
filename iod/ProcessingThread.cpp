@@ -223,8 +223,7 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
 									if (incoming_process_data) delete incoming_process_data;
 									incoming_process_data = new uint8_t[msglen];
 									memcpy(incoming_process_data, message.data(), msglen);
-									std::cout << "got data: "; display(incoming_process_data);
-									std::cout << "\n";
+									//std::cout << "got data: "; display(incoming_process_data); std::cout << "\n";
 									++stage;
 								}
 								case 3: 
@@ -239,8 +238,7 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
 									if (incoming_process_mask) delete incoming_process_mask;
 									incoming_process_mask = new uint8_t[msglen];
 									memcpy(incoming_process_mask, message.data(), msglen);
-									std::cout << "got mask: "; display(incoming_process_mask);
-									std::cout << "\n";
+									//std::cout << "got mask: "; display(incoming_process_mask); std::cout << "\n";
 									++stage;
 								}
 								default: ;
@@ -250,7 +248,7 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
 					catch(zmq::error_t err) {
 						if (zmq_errno() == EINTR) {
 							//std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
-							usleep(500); 
+							usleep(50); 
 							continue;
 						}
 					}
@@ -377,12 +375,14 @@ void ProcessingThread::operator()()
             if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync, sched_sync)) break;
             if (MachineInstance::workToDo()) break;
         }
+#if 0
        	if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
        		std::cout << "ecat waiting\n";
        	if (items[CMD_ITEM].revents & ZMQ_POLLIN)
        		std::cout << "command waiting\n";
        	if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
        		std::cout << "dispatcher waiting\n";
+#endif
         if (program_done) break;
         if (status == e_handling_cmd) {
 			waitForCommandProcessing(resource_mgr);
@@ -433,16 +433,13 @@ void ProcessingThread::operator()()
 */		
 		else if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
-			std::cout << "got EtherCAT data\n";
+					//std::cout << "got EtherCAT data\n";
             if (machine_is_ready)
             {
-				std::cout << "processing EtherCAT data\n";
+					//std::cout << "processing EtherCAT data\n";
                 delta = get_diff_in_microsecs(&start_t, &end_t);
                 cycle_delay_stat->add(delta);
-                IOComponent::processAll(
-					incoming_data_size, 
-					incoming_process_mask, 
-					incoming_process_data);
+                IOComponent::processAll( incoming_data_size, incoming_process_mask, incoming_process_data);
                 gettimeofday(&end_t, 0);
                 
                 delta = get_diff_in_microsecs(&end_t, &start_t);

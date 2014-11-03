@@ -205,7 +205,7 @@ void EtherCATThread::operator()() {
 #endif
 			int n = 0;
 			if (!machine_is_ready) {
-				std::cout << "machine is not ready..\n";
+				//std::cout << "machine is not ready..\n";
 				ECInterface::instance()->receiveState();
 				ECInterface::instance()->sendUpdates();
 				continue;
@@ -221,7 +221,7 @@ void EtherCATThread::operator()() {
 
 			if ( status == e_collect && (first_run || n) && machine_is_ready) {
 				first_run = false;
-				std::cout << "io changed, forwarding to clockwork\n";
+				//std::cout << "io changed, forwarding to clockwork\n";
 				uint32_t size = ECInterface::instance()->getProcessDataSize();
 
 				uint8_t stage = 1;
@@ -238,9 +238,9 @@ void EtherCATThread::operator()() {
 							case 2:
 							{
 								zmq::message_t iomsg(size);
-								std::cout << "sending ";
-								display(ECInterface::instance()->getUpdateData());
-								std::cout << "\n";
+								//std::cout << "sending ";
+								//display(ECInterface::instance()->getUpdateData());
+								//std::cout << "\n";
 								memcpy(iomsg.data(), (void*)ECInterface::instance()->getUpdateData(),size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
@@ -260,12 +260,12 @@ void EtherCATThread::operator()() {
 					catch (zmq::error_t err) {
 						if (zmq_errno() == EINTR) { 
 							std::cout << "interrupted when sending update (" << stage << ")\n";
-							usleep(50000); 
+							usleep(50); 
 							continue; 
 						}
 					}
 				}
-				std::cout << "update sent to clockwork\n";
+				//std::cout << "update sent to clockwork\n";
 				status = e_update;
 			}
 			if (status == e_update) {
@@ -274,7 +274,7 @@ void EtherCATThread::operator()() {
 					char buf[10];
 					if (sync_sock->recv(buf, 10, ZMQ_DONTWAIT)) {
 						status = e_collect;
-						std::cout << "got response from clockwork\n";
+						//std::cout << "got response from clockwork\n";
 					}
 				}
 				catch (zmq::error_t) {

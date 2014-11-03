@@ -317,7 +317,8 @@ static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
     for (int i=min; i<=max; ++i) 
-		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+			std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+		std::cout << std::dec;
 }
 
 
@@ -433,8 +434,7 @@ int ECInterface::collectState() {
             while (bitmask) {
                 if (*pm & bitmask ) { // we care about this bit
                     if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-						std::cout << "incoming bit " << i << ":" << count 
-							<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
+												//std::cout << "incoming bit " << i << ":" << count << " changed to " << ((*pd & bitmask)?1:0) << "\n";
 
                         if ( *pd & bitmask ) *q |= bitmask;
                         else *q &= (uint8_t)(0xff - bitmask);
@@ -448,11 +448,13 @@ int ECInterface::collectState() {
         }
         ++pd; ++q; ++pm; if (last_pd)++last_pd;
     }
+#if 1
 	if (affected_bits) {
 	std::cout << "update\n" << "data: "; display(update_data); 
 	std::cout << "\nmask: "; display(update_mask);
 	std::cout << " " << affected_bits << " bits changed\n";
 	}
+#endif
 
 	// save the domain data for the next check
 	assert(min==0);
