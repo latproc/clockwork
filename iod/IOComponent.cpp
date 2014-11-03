@@ -115,16 +115,16 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 				if ( *m & bitmask) {
 					//std::cout << "looking up " << i << ":" << j << "\n";
 					IOComponent *ioc = (*indexed_components)[ i*8+j ];
-					if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; else std::cout << "found " << ioc->io_name << "\n";
+					//if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; else std::cout << "found " << ioc->io_name << "\n";
 					if (ioc && ioc->last_event != e_none) { 
 						// pending locally sourced change on this io
-						std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
+						//std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
 						updatedComponents.insert(ioc);
 					}
 					if ( (*p & bitmask) != (*q & bitmask) ) {
 						// remotely source change on this io
 						if (ioc) {
-							std::cout << " adding " << ioc->io_name << " due to bit change\n";
+							//std::cout << " adding " << ioc->io_name << " due to bit change\n";
 							updatedComponents.insert(ioc);
 						}
 
@@ -152,11 +152,11 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 	std::set<IOComponent*>::iterator iter = updatedComponents.begin();
 	while (iter != updatedComponents.end()) {
 		IOComponent *ioc = *iter++;
-		std::cout << "processing " << ioc->io_name << "\n";
+		//std::cout << "processing " << ioc->io_name << "\n";
 		ioc->read_time = current_time;
 		if (ioc->last_event == e_none) 
 			updatedComponents.erase(ioc); 
-		else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
+		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
 		ioc->idle();
 	}
 #else
@@ -630,7 +630,7 @@ void IOComponent::idle() {
 						MachineInstance *m = *iter++;
 						Message msg(evt);
 						if (m->receives(msg, this)) m->execute(msg, this);
-						std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+						//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
 						//m->setNeedsCheck();
 						m->checkActions();
 					}
@@ -644,7 +644,7 @@ void IOComponent::idle() {
 						MachineInstance *m = *iter++;
 						Message msg(evt);
 						m->execute(msg, this);
-						std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+						//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
 						//m->setNeedsCheck();
 						m->checkActions();
 					}
@@ -669,9 +669,9 @@ void IOComponent::idle() {
 			address.value = pending_value;
 		}
 		else {
-			std::cout << io_name << " object of size " << address.bitlen << " val: ";
-			display(offset, 1);
-			std:: cout << " bit pos: " << bitpos << " ";
+			//std::cout << io_name << " object of size " << address.bitlen << " val: ";
+			//display(offset, 1);
+			//std:: cout << " bit pos: " << bitpos << " ";
 			int32_t val = 0;
 			if (address.bitlen < 8)  {
 				uint8_t bitmask = 0x8 >> bitpos;
@@ -684,7 +684,7 @@ void IOComponent::idle() {
 				}
 				
 				while (bitmask) { val = val >> 1; bitmask = bitmask >> 1; }
-				std::cout << " value: " << val << "\n";
+				//std::cout << " value: " << val << "\n";
 			}
 			else if (address.bitlen == 8) 
 				val = EC_READ_S8(offset);
@@ -710,7 +710,7 @@ void IOComponent::idle() {
 					MachineInstance *m = *iter++;
 					Message msg(evt);
 					m->execute(msg, this);
-					std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+					//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
 					//m->setNeedsCheck();
 					m->checkActions();
 				}

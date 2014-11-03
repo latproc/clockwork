@@ -433,23 +433,19 @@ void ProcessingThread::operator()()
 */		
 		else if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
+					static unsigned long total_mp_time = 0;
+					static unsigned long mp_count = 0;
 					//std::cout << "got EtherCAT data\n";
             if (machine_is_ready)
             {
-					//std::cout << "processing EtherCAT data\n";
-                delta = get_diff_in_microsecs(&start_t, &end_t);
-                cycle_delay_stat->add(delta);
+                gettimeofday(&end_t, 0);
                 IOComponent::processAll( incoming_data_size, incoming_process_mask, incoming_process_data);
-                gettimeofday(&end_t, 0);
-                
-                delta = get_diff_in_microsecs(&end_t, &start_t);
-                statistics->io_scan_time.add(delta);
-                delta2 = delta;
-                gettimeofday(&end_t, 0);
-                delta = get_diff_in_microsecs(&end_t, &start_t);
-                statistics->points_processing.add(delta - delta2);
-                delta2 = delta;
-                
+                gettimeofday(&start_t, 0);
+                delta = get_diff_in_microsecs(&start_t, &end_t);
+								MachineInstance *system = MachineInstance::find("SYSTEM");
+								assert(system);
+								total_mp_time += delta;
+								system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
             }
 			else
 				std::cout << "received EtherCAT data but machine is not ready\n";
@@ -466,12 +462,12 @@ void ProcessingThread::operator()()
                 processingState = ePollingMachines;
             if (processingState == ePollingMachines)
             {
-                if (MachineInstance::processAll(50000, MachineInstance::NO_BUILTINS))
+                if (MachineInstance::processAll(150000, MachineInstance::NO_BUILTINS))
                     processingState = eStableStates;
             }
             if (processingState == eStableStates)
             {
-                if (MachineInstance::checkStableStates(50000))
+                if (MachineInstance::checkStableStates(150000))
                     processingState = eIdle;
             }
 		}

@@ -448,7 +448,7 @@ int ECInterface::collectState() {
         }
         ++pd; ++q; ++pm; if (last_pd)++last_pd;
     }
-#if 1
+#if 0
 	if (affected_bits) {
 	std::cout << "update\n" << "data: "; display(update_data); 
 	std::cout << "\nmask: "; display(update_mask);
