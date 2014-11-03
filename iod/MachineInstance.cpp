@@ -287,6 +287,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 void MachineInstance::setNeedsCheck() {
 	if (!is_enabled) return;
 	if (!needs_check) std::cout << _name << " needs check\n";
+	else std::cout << _name << " already flagged for check\n";
     ++needs_check;
     ++total_machines_needing_check;
     //updateLastEvaluationTime();
@@ -306,6 +307,15 @@ void MachineInstance::setNeedsCheck() {
             if (dep->is_enabled) dep->setNeedsCheck();
         }
     }
+	if (io_interface) {
+		std::cout << _name << " has hw io, updating dependent machines\n";
+        std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+        while (dep_iter != depends.end()) {
+            MachineInstance *dep = *dep_iter++;
+            if (dep->is_enabled) dep->setNeedsCheck();
+        }
+	}
+
 }
 
 std::string MachineInstance::fullName() const {
@@ -319,12 +329,18 @@ std::string MachineInstance::fullName() const {
 }
 
 void MachineInstance::enqueueAction(Action *a){
-    if (a) active_actions.push_front(a);
-    num_machines_with_work++;
+    if (a) {
+		active_actions.push_front(a);
+	}
+	    num_machines_with_work++;
 		std::cout << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
-    has_work = true;
+		has_work = true;
 }
 
+void MachineInstance::forceIdleCheck() { 
+	num_machines_with_work++; 
+	std::cout << " forced an ifle check " << num_machines_with_work << "\n";
+}
 
 
 #if 0
@@ -362,10 +378,15 @@ bool TriggeredAction::active() {
 void MachineInstance::triggerFired(Trigger *trig) {
     setNeedsCheck();
     num_machines_with_work++;
-		std::cout << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
+	std::cout << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
     has_work = true;
 }
 
+void MachineInstance::checkActions() {
+    num_machines_with_work++;
+	std::cout << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
+    has_work = true;
+}
 
 void MachineInstance::resetTemporaryStringStream() {
 	ss.clear();
@@ -1155,11 +1176,11 @@ long saved_loop_count = 0;
 long total_process_calls = 0;
 uint64_t total_processing_time = 0;
 long total_aborts = 0;
+static unsigned int last_num_machines_with_work = 1;
 
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
     static int point_token = ClockworkToken::POINT;
     static std::list<MachineInstance *>::iterator iter = active_machines.begin();
-    static unsigned int last_num_machines_with_work = 1;
     bool builtins = false;
     if (iter == active_machines.begin()) {
         struct timeval now;
@@ -1265,6 +1286,7 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
         if ( m->enabled() && m->executingCommand() == NULL
             && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= start_processing )
         {
+			std::cout << "calling " << m->getName() << "::setStableState()\n";
             m->setStableState();
             if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
                 m->state_machine->plugin->state_check(m);
@@ -1274,12 +1296,25 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
                      && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ))
                 ++total_machines_needing_check;
         }
+        else if ( m->enabled() && m->executingCommand() == NULL
+            && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) 
+				&& m->next_poll > start_processing ) {
+			std::cout << m->getName() << " skipping stable state check due to throttling\n";
+		}
+        else if ( m->enabled() && m->executingCommand() != NULL
+            && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) ) {
+			std::cout << m->getName() << " skipped stable state tests due to active actions\n";
+			m->displayActive(std::cout);
+		}
         count--;
         if (count<=0) {
             struct timeval now;
             gettimeofday(&now, NULL);
             uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-            if (now_t - start_processing > max_time) return false; // ran out of time to finish
+            if (now_t - start_processing > max_time) {
+				std::cout << " aborting stable state checks\n";
+				return false; // ran out of time to finish
+			}
             count = block_size;
         }
     }
@@ -1559,7 +1594,7 @@ Action::Status MachineInstance::setState(const char *sn) {
 
 Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
     forceStableStateCheck();
-    forceIdleCheck();
+    //forceIdleCheck();
 
     Action::Status stat = Action::Complete;
 	// update the Modbus interface for self 
@@ -3183,7 +3218,7 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 
 void MachineInstance::setValue(const std::string &property, Value new_value) {
     forceStableStateCheck();
-    forceIdleCheck();
+    //forceIdleCheck();
 	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine

@@ -120,10 +120,9 @@ public:
 	void addDependent(MachineInstance *m) {
 		depends.push_back(m);
 	}
+	std::list<MachineInstance*> depends;
     
     virtual int32_t filter(int32_t);
-
-	std::list<MachineInstance*>depends;
 
 
 	void setName(std::string new_name) { io_name = new_name; }

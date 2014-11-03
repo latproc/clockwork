@@ -350,6 +350,7 @@ public:
 	void disable();
 	inline bool enabled() const { return is_enabled; }
 	void clearAllActions();
+	void checkActions();
 
 	// basic lock functionality 
 	bool lock(MachineInstance *requester) { if (locked && locked != requester) return false; else {locked = requester; return true; } }
@@ -404,7 +405,7 @@ public:
     void unpublish() { --published; }
     
     static void forceStableStateCheck() { total_machines_needing_check++; }
-    static void forceIdleCheck() { num_machines_with_work++; }
+    static void forceIdleCheck();
     static bool workToDo() { return num_machines_with_work + total_machines_needing_check > 0; }
 
 protected:

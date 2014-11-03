@@ -121,7 +121,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 						std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
 						updatedComponents.insert(ioc);
 					}
-					else if ( (*p & bitmask) != (*q & bitmask) ) {
+					if ( (*p & bitmask) != (*q & bitmask) ) {
 						// remotely source change on this io
 						if (ioc) {
 							std::cout << " adding " << ioc->io_name << " due to bit change\n";
@@ -154,9 +154,9 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 		IOComponent *ioc = *iter++;
 		std::cout << "processing " << ioc->io_name << "\n";
 		ioc->read_time = current_time;
-		//if (ioc->last_event == e_none) 
+		if (ioc->last_event == e_none) 
 			updatedComponents.erase(ioc); 
-		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
+		else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
 		ioc->idle();
 	}
 #else
@@ -622,7 +622,7 @@ void IOComponent::idle() {
 			{
 				std::list<MachineInstance*>::iterator iter;
 #ifndef DISABLE_LEAVE_FUNCTIONS
-				if (self && self->enabled()) {
+				if (!self || (self && self->enabled()) ) {
 					if (address.value) evt ="on_leave";
 					else evt = "off_leave";
 					iter = depends.begin();
@@ -630,10 +630,13 @@ void IOComponent::idle() {
 						MachineInstance *m = *iter++;
 						Message msg(evt);
 						if (m->receives(msg, this)) m->execute(msg, this);
+						std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+						//m->setNeedsCheck();
+						m->checkActions();
 					}
 				}
 #endif
-  			if (self && self->enabled()) {              
+  			if (!self || (self && self->enabled()) ) {              
 					if (value) evt = "on_enter";
 					else evt = "off_enter";
 					iter = depends.begin();
@@ -641,6 +644,9 @@ void IOComponent::idle() {
 						MachineInstance *m = *iter++;
 						Message msg(evt);
 						m->execute(msg, this);
+						std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+						//m->setNeedsCheck();
+						m->checkActions();
 					}
 				}
 			}
@@ -696,7 +702,7 @@ void IOComponent::idle() {
 			if (address.value != val || strcmp(type(), "CounterRate") == 0) {
 				//address.value = get_bits(offset, bitpos, address.bitlen);
 				address.value = filter(val);
-				if (self && !self->enabled()) return;
+				if (!self || (self && !self->enabled()) ) return;
 				last_event = e_none;
 				const char *evt = "property_change";
 				std::list<MachineInstance*>::iterator iter = depends.begin();
@@ -704,6 +710,9 @@ void IOComponent::idle() {
 					MachineInstance *m = *iter++;
 					Message msg(evt);
 					m->execute(msg, this);
+					std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+					//m->setNeedsCheck();
+					m->checkActions();
 				}
 			}
 		}
