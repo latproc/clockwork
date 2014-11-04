@@ -41,14 +41,14 @@ static std::vector<IOComponent*> *indexed_components = 0;
 IOComponent::DeviceList IOComponent::devices;
 
 IOComponent::IOComponent(IOAddress addr) 
-		: last_event(e_none), address(addr), io_index(-1) { 
+		: last_event(e_none), address(addr), io_index(-1), raw_value(0) { 
 	processing_queue.push_back(this); 
 	// the io_index is the bit offset of the first bit in this objects address space
 	io_index = addr.io_offset*8 + addr.io_bitpos;
 	
 }
 
-IOComponent::IOComponent() : last_event(e_none), io_index(-1) { 
+IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0) { 
 	processing_queue.push_back(this); 
 	// use the same io-updated index as the processing queue position
 }
@@ -666,7 +666,7 @@ void IOComponent::idle() {
 				EC_WRITE_U32(offset, pending_value);
 			}
 			last_event = e_none;
-			address.value = pending_value;
+			//address.value = pending_value;
 		}
 		else {
 			//std::cout << io_name << " object of size " << address.bitlen << " val: ";
@@ -699,20 +699,22 @@ void IOComponent::idle() {
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
-			if (address.value != val || strcmp(type(), "CounterRate") == 0) {
-				//address.value = get_bits(offset, bitpos, address.bitlen);
-				address.value = filter(val);
-				if (!self || (self && !self->enabled()) ) return;
-				last_event = e_none;
-				const char *evt = "property_change";
-				std::list<MachineInstance*>::iterator iter = depends.begin();
-				while (iter != depends.end()) {
-					MachineInstance *m = *iter++;
-					Message msg(evt);
-					m->execute(msg, this);
-					//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
-					//m->setNeedsCheck();
-					m->checkActions();
+			if (raw_value != val || strcmp(type(), "CounterRate") == 0) {
+				//std::cout << "raw io value changed from " << raw_value << " to " << val << "\n";
+				raw_value = val;
+				int32_t new_val = filter(val);
+				if (address.value != new_val) {
+					address.value = filter(val);
+					last_event = e_none;
+					const char *evt = "property_change";
+					std::list<MachineInstance*>::iterator iter = depends.begin();
+					while (iter != depends.end()) {
+						MachineInstance *m = *iter++;
+						Message msg(evt);
+						m->execute(msg, this);
+						//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+						m->checkActions();
+					}
 				}
 			}
 		}

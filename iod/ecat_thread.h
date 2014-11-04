@@ -15,7 +15,7 @@ public:
 private:
 	State status;
 	bool program_done;
-	long cycle_delay;
+	unsigned long cycle_delay;
 	zmq::socket_t *cmd_sock;
 	zmq::socket_t *sync_sock;
 	int rtc; // file descriptor of the RTC if it is being used

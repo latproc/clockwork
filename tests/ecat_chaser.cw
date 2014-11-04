@@ -15,6 +15,10 @@ AInSettings MACHINE { IDLE INITIAL; }
 ain_settings AInSettings;
 ain ANALOGINPUT EL3151, 10, ain_settings;
 
+SpeedSettings MACHINE { idle INITIAL; }
+a1speed_settings SpeedSettings;
+a1speed RATEESTIMATOR ain,a1speed_settings;
+
 out5 POINT Outputs,0;
 out6 POINT Outputs,1;
 out7 POINT Outputs,2;

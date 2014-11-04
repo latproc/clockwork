@@ -172,8 +172,8 @@ public:
 	bool isStableState(State &state);
     State *findState(const char *name);
     virtual ~MachineClass() { all_machine_classes.remove(this); }
-	void disableAutomaticStateChanges() { allow_auto_states = false; }
-	void enableAutomaticStateChanges() { allow_auto_states = true; }
+	void disableAutomaticStateChanges();
+	void enableAutomaticStateChanges();
     static MachineClass *find(const char *name);
     State default_state;
 	State initial_state;
@@ -313,6 +313,7 @@ public:
     void notifyDependents(Message &msg);
 	
 	bool needsCheck();
+	void resetNeedsCheck();
 	void resetTemporaryStringStream();
 
     static bool processAll(uint32_t max_time, PollType which);
@@ -404,7 +405,7 @@ public:
     void publish() { ++published; }
     void unpublish() { --published; }
     
-    static void forceStableStateCheck() { total_machines_needing_check++; }
+    static void forceStableStateCheck();
     static void forceIdleCheck();
     static bool workToDo() { return num_machines_with_work + total_machines_needing_check > 0; }
 
@@ -504,7 +505,7 @@ public:
     void setValue(const std::string &property, Value new_value);
     long filter(long val);
     virtual void idle();
-		virtual bool hasWork() { return true; }
+	virtual bool hasWork();
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
     CounterRateInstance &operator=(const CounterRateInstance &orig);
@@ -524,7 +525,7 @@ public:
     long filter(long val);
     virtual void setNeedsCheck();
     virtual void idle();
-		virtual bool hasWork();
+	virtual bool hasWork();
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
     RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);

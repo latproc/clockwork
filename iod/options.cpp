@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "options.h"
+#include <iostream>
 
 static int opt_verbose = 0;
 static int opt_test_only = 0;
@@ -138,7 +139,10 @@ void enable_tracing(bool which) { is_tracing = which; }
 
 bool tracing() { return is_tracing; }
 
-void set_cycle_time(unsigned long new_time) { cycle_time_ = new_time; }
+void set_cycle_time(unsigned long new_time) { 
+	std::cout << "cycle time changed to " << new_time << "\n";
+	cycle_time_ = new_time; 
+}
 unsigned long get_cycle_time() { return cycle_time_; }
 
 

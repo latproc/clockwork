@@ -134,13 +134,13 @@ void Dispatcher::idle()
 	// we get to this point. Note that this thread will then 
 	// block until it gets a sync-start from the driver.
     started = true;
-	std::cout << "Dispatcher started\n";
+	DBG_DISPATCHER << "Dispatcher started\n";
 	
 	char buf[11];
 	size_t response_len = 0;
 	safeRecv(sync, buf, 10, true, response_len); // wait for an ok to start from cw
 	buf[response_len]= 0;
-	std::cout << "Dispatcher got sync start: " << buf << "\n";
+	DBG_DISPATCHER << "Dispatcher got sync start: " << buf << "\n";
 	
     /*
     { // wait for a start command
@@ -183,38 +183,12 @@ void Dispatcher::idle()
 		}
         if (status == e_waiting_cw)
         {
-#if 0
-            try     // wait for sync signal from clockwork
-            {
-                char sync_buf[10];
-                size_t sync_len = 0;
-                zmq::pollitem_t items[] = {  { sync, 0, ZMQ_POLLIN, 0 },};
-                int rc = zmq::poll( &items[0], 1, 500);
-                if (!rc) continue;
-                if (items[0].revents & ZMQ_POLLIN)
-                {
-                    sync_len = sync.recv(sync_buf, 10);
-                    if (sync_len == 0 && errno == EAGAIN) continue;
-                }
-                else continue;
-            }
-            catch (zmq::error_t e)
-            {
-                if (errno == EINTR) continue;
-                std::cerr << "Dispatch: " << zmq_strerror(errno) << "\n";
-                usleep(100000);
-                break;
-            }
-#else
-			//std::cout << "Dispatcher waiting to work\n";
 			sync.send("dispatch",8);
             safeRecv(sync, buf, 10, true, response_len);
-#endif
             status = e_running;
         }
         else if (status == e_running)
         {
-			//std::cout << "Dispatcher running\n";
             while (items[0].revents & ZMQ_POLLIN)
             {
                 zmq::message_t reply;
@@ -223,8 +197,8 @@ void Dispatcher::idle()
                 size_t len = socket->recv(&p, sizeof(Package*), ZMQ_DONTWAIT);
                 if (len)
                 {
-                    MachineInstance::forceStableStateCheck();
-                    MachineInstance::forceIdleCheck();
+                    //MachineInstance::forceStableStateCheck();
+                    //MachineInstance::forceIdleCheck();
                     
                     DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
                     Receiver *to = p->receiver;
@@ -335,11 +309,11 @@ void Dispatcher::idle()
             }
             if (items[1].revents & ZMQ_POLLIN)
             {
-                std::cout << "dispatcher command\n";
+                DBG_DISPATCHER << "dispatcher command\n";
             }
             sync.send("done", 4);
 			safeRecv(sync, buf, 10, true, response_len); // wait for ack from cw
-			//std::cout << "Dispatcher done\n";
+			DBG_DISPATCHER << "Dispatcher done\n";
             status = e_waiting;
         }
     }
