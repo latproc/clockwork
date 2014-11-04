@@ -117,6 +117,7 @@ SymbolTable::SymbolTable() {
         keywords->add("YEAR", 0L);
         keywords->add("TIMEZONE", Value("",Value::t_string));
         keywords->add("TIMESTAMP", Value("",Value::t_string));
+        keywords->add("RANDOM", 0L);
         reserved = new std::set<std::string>;
         reserved->insert("NAME");
         reserved->insert("PERSISTENT");
@@ -172,6 +173,12 @@ Value &SymbolTable::getKeyValue(const char *name) {
             res = msecs;
             return res;
         }
+		else if (strcmp("RANDOM", name) == 0) {
+			unsigned long val = random();
+			std::cout << " random value " << val << "\n";
+			res = val;
+			return res;
+		}
         // the remaining values are all time fields
         time_t now = time(0);
         struct tm lt;
