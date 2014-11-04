@@ -441,10 +441,10 @@ void ProcessingThread::operator()()
                 IOComponent::processAll( incoming_data_size, incoming_process_mask, incoming_process_data);
                 gettimeofday(&start_t, 0);
                 delta = get_diff_in_microsecs(&start_t, &end_t);
-								MachineInstance *system = MachineInstance::find("SYSTEM");
-								assert(system);
-								total_mp_time += delta;
-								system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
+								//MachineInstance *system = MachineInstance::find("SYSTEM");
+								//assert(system);
+								//total_mp_time += delta;
+								//system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
             }
 			else
 				std::cout << "received EtherCAT data but machine is not ready\n";
