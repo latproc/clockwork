@@ -1270,6 +1270,7 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	total_processing_time += now_t - start_processing;
 	++loop_count; // completed a pass through all machines
 	total_process_calls += loop_count - saved_loop_count;
+#if 0
 	MachineInstance *system = MachineInstance::find("SYSTEM");
 	assert(system);
 	system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
@@ -1280,6 +1281,7 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
 	system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", total_processing_time * 1000 / loop_count);
 	system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
+#endif
 	iter = active_machines.begin(); // prepare for the next cycle
 	return true; // complete the cycle
 }
