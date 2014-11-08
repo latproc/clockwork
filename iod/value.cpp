@@ -765,9 +765,13 @@ std::string Value::asString() const {
 }
 
 std::string Value::quoted() const {
+	std::string val = this->asString();
+	if (val[0] != '\"' || val.back() != '\"') {
     std::string res = "\"";
-    res += this->asString() + "\"";
+    res += val + "\"";
     return res;
+	}
+	else return val;
 }
 
 bool Value::asInteger(long &x) const {
