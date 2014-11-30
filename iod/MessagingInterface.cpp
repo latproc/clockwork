@@ -71,7 +71,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
         }
     }
     return false;
-};
+}
 
 void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 	while (!MessagingInterface::aborted()) {
