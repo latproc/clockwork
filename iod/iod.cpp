@@ -485,13 +485,13 @@ int main(int argc, char const *argv[])
 	if (cycle_delay_v) cycle_delay_v->iValue = delay;
 	ECInterface::FREQUENCY=1000000 / delay;
 
-ifndef EC_SIMULATOR
+#ifndef EC_SIMULATOR
 	{
 		char *slave_config = collectSlaveConfig(true);
 		if (slave_config) free(slave_config);
 	}
 	ECInterface::instance()->activate();
-#endi
+#endif
 	generateIOComponentModules();
 	IOComponent::setupIOMap();
 	//MachineInstance::displayAll();
