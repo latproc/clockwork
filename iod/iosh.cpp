@@ -47,7 +47,17 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
     size_t len = strlen(msg);
     zmq::message_t reply (len);
     memcpy ((void *) reply.data (), msg, len);
-    socket.send (reply);
+	while (true) {
+		try {
+		    socket.send (reply);
+			break;
+		}
+		catch (zmq::error_t) {
+			if (zmq_errno() == EINTR) continue;
+			throw;
+		}
+	}
+	
 }
 
 #ifdef USE_READLINE
