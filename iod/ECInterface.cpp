@@ -28,21 +28,28 @@
 #include <errno.h>
 #include <string.h>
 #include <list>
+#include <fstream>
+#include "cJSON.h"
 #include <boost/thread.hpp>
 #include "ECInterface.h"
 #include "IOComponent.h"
 #include <boost/thread/condition.hpp>
+#include "Statistic.h"
+#include "Statistics.h"
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
+#include <tool/MasterDevice.h>
 #include "hw_config.h"
 
 struct list_head {
     struct list_head *next, *prev;
 };
+#if 0
 typedef enum {
     EC_ORIG_INTERNAL, /**< Internal. */
     EC_ORIG_EXTERNAL /**< External. */
 } ec_origin_t;
+#endif
 
 #include "domain.h"
 #endif
@@ -50,6 +57,7 @@ typedef enum {
 extern boost::mutex ecat_mutex;
 extern boost::condition_variable_any ecat_polltime;
 
+extern Statistics *statistics;
 void signal_handler(int signum);
 
 int ECInterface::FREQUENCY = 2000;
@@ -109,8 +117,8 @@ ECInterface::ECInterface() :initialised(0), active(false), process_data(0), proc
 #ifndef EC_SIMULATOR
 
 bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
-	std::cout << name << ": " << alias <<", " << position 
-		<< std::hex<< vendor_id << ", " << product_code << std::dec <<"\n";
+	//std::cout << name << ": " << alias <<", " << position 
+	//	<< std::hex<< vendor_id << ", " << product_code << std::dec <<"\n";
 	if (master) slave_config = ecrt_master_slave_config(master, alias, position, vendor_id, product_code);
 	return slave_config != 0;
 }
@@ -255,6 +263,12 @@ bool ECInterface::init() {
     }
     else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created\n";
 
+#if 0
+	IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
+	IODCommandThread::registerCommand("MASTER", new IODCommandMasterInfo);
+	IODCommandThread::registerCommand("SLAVES", new IODCommandGetSlaveConfig);
+#endif
+
 	return true;
 	//return configurePDOs();
 #endif
@@ -313,6 +327,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -320,7 +335,7 @@ static void display(uint8_t *p) {
 			std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 		std::cout << std::dec;
 }
-
+#endif
 
 void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	int max = IOComponent::getMaxIOOffset();
@@ -345,7 +360,7 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
             uint8_t bitmask = 0x01;
 			int count = 0;
             while (bitmask) {
-                if (*mask & bitmask ) { // we care about this bit
+                if ( *mask & bitmask ) { // we care about this bit
 					uint8_t pdb = *pd & bitmask;
 					uint8_t db = *data & bitmask;
                     if ( pdb != db ) { // changed
@@ -406,9 +421,9 @@ int ECInterface::collectState() {
 	// the result of this is a list of data bits to be changed and
 	// a mask indicating which bits are important
 	size_t domain_size = ecrt_domain_size(domain1);
-	assert(domain_size >= max+1);
-	uint8_t *update_data = new uint8_t[domain_size]; 
-	uint8_t *update_mask = new uint8_t[domain_size]; 
+	assert(domain_size >= (size_t)max+1);
+	if (!update_data) update_data = new uint8_t[domain_size]; 
+	if (!update_mask) update_mask = new uint8_t[domain_size]; 
 	memset(update_data, 0, domain_size);
 	memset(update_mask, 0, domain_size);
 
@@ -425,8 +440,9 @@ int ECInterface::collectState() {
     for (int i=min; i<=max; ++i) {
 		update_mask[i] = 0; // assume no updates in this octet
         if (!last_pd) { // first time through, copy all the domain data and mask
-            update_data[i] = domain1_pd[i] & *pm;
+            update_data[i] = domain1_pd[i]; //TBD & *pm;
             update_mask[i] = *pm;
+			affected_bits++;
         }
         else if (*last_pd != domain1_pd[i]){
             uint8_t bitmask = 0x01;
@@ -434,7 +450,8 @@ int ECInterface::collectState() {
             while (bitmask) {
                 if (*pm & bitmask ) { // we care about this bit
                     if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-												//std::cout << "incoming bit " << i << ":" << count << " changed to " << ((*pd & bitmask)?1:0) << "\n";
+						//std::cout << "incoming bit " << i << ":" << count 
+						//	<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
 
                         if ( *pd & bitmask ) *q |= bitmask;
                         else *q &= (uint8_t)(0xff - bitmask);
@@ -457,12 +474,13 @@ int ECInterface::collectState() {
 #endif
 
 	// save the domain data for the next check
-	assert(min==0);
 	pd = new uint8_t[max+1];
-	memcpy(pd+min, domain1_pd, max-min+1);
+	memcpy(pd, domain1_pd, domain_size);
 	instance()->setProcessData(pd);
-	instance()->setUpdateData(update_data);
-	instance()->setUpdateMask(update_mask);
+	memcpy(update_data, domain1_pd, domain_size);
+	memcpy(update_mask, getProcessMask(), domain_size);
+	//instance()->setUpdateData(update_data);
+	//instance()->setUpdateMask(update_mask);
 
 #endif
 
@@ -589,3 +607,352 @@ bool ECInterface::stop() {
 #endif
 	return true;
 }
+
+#ifdef USE_ETHERCAT
+
+#include <Command.h>
+int tool_main(int argc, char **argv);
+typedef list<Command *> CommandList;
+extern CommandList commandList;
+
+
+// in a real environment we can look for devices on the bus
+
+ec_pdo_entry_info_t *c_entries = 0;
+ec_pdo_info_t *c_pdos = 0;
+ec_sync_info_t *c_syncs = 0;
+EntryDetails *c_entry_details = 0;
+
+
+cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool reconfigure)
+{
+    ec_ioctl_slave_sync_t sync;
+    ec_ioctl_slave_sync_pdo_t pdo;
+    ec_ioctl_slave_sync_pdo_entry_t entry;
+    unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
+
+	const unsigned int estimated_max_entries = 128;
+	const unsigned int estimated_max_pdos = 32;
+	const unsigned int estimated_max_syncs = 32;
+    unsigned int total_entries = 0, total_pdos = 0, total_syncs = 0;
+    
+	cJSON *root = cJSON_CreateObject();
+	cJSON_AddNumberToObject(root, "position", slave.position);
+	cJSON_AddNumberToObject(root, "vendor_id", slave.vendor_id);
+	cJSON_AddNumberToObject(root, "revision_number", slave.revision_number);
+	cJSON_AddNumberToObject(root, "alias", slave.alias);
+	cJSON_AddNumberToObject(root, "drawn_current", slave.current_on_ebus);
+	cJSON_AddStringToObject(root, "tab", "Modules");
+	cJSON_AddStringToObject(root, "class", "MODULE");
+	char *name = strdup(slave.name);
+	int name_len = strlen(name);
+	for (int i=0; i<name_len; ++i) name[i] &= 127;
+	cJSON_AddStringToObject(root, "name", name);
+	free(name);
+    
+    if (slave.sync_count) {
+		// add pdo entries for this slave
+		// note the assumptions here about the maximum number of entries, pdos and syncs we expect
+		const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
+		c_entries = (ec_pdo_entry_info_t *) malloc(c_entries_size);
+		memset(c_entries, 0, c_entries_size);
+        
+		c_entry_details = new EntryDetails[estimated_max_entries];
+        
+		const int c_pdos_size = sizeof(ec_pdo_info_t) * estimated_max_pdos;
+		c_pdos = (ec_pdo_info_t *) malloc(c_pdos_size);
+		memset(c_pdos, 0, c_pdos_size);
+        
+		const int c_syncs_size = sizeof(ec_sync_info_t) * estimated_max_syncs;
+		c_syncs = (ec_sync_info_t *) malloc(c_syncs_size);
+		memset(c_syncs, 0, c_syncs_size);
+        
+		total_syncs += slave.sync_count;
+		assert(total_syncs < estimated_max_syncs);
+		cJSON *json_syncs = cJSON_CreateArray();
+	    for (i = 0; i < slave.sync_count; i++) {
+			cJSON *json_sync = cJSON_CreateObject();
+	        m.getSync(&sync, slave.position, i);
+			c_syncs[i].index = sync.sync_index;
+			c_syncs[i].dir = EC_READ_BIT(&sync.control_register, 2) ? EC_DIR_OUTPUT : EC_DIR_INPUT;
+			c_syncs[i].n_pdos = (unsigned int) sync.pdo_count;
+			cJSON_AddNumberToObject(json_sync, "index", c_syncs[i].index);
+			cJSON_AddStringToObject(json_sync, "direction", (c_syncs[i].dir == EC_DIR_OUTPUT) ? "Output" : "Input");
+			if (sync.pdo_count)
+				c_syncs[i].pdos = c_pdos + pdo_pos;
+			else
+				c_syncs[i].pdos = 0;
+			c_syncs[i].watchdog_mode 
+				= EC_READ_BIT(&sync.control_register, 6) ? EC_WD_ENABLE : EC_WD_DISABLE;
+            
+			total_pdos += sync.pdo_count;
+			assert(total_pdos < estimated_max_pdos);
+			if (sync.pdo_count) {
+				cJSON* json_pdos = cJSON_CreateArray();
+		        for (j = 0; j < sync.pdo_count; j++) {
+		            m.getPdo(&pdo, slave.position, i, j);
+					cJSON* json_pdo = cJSON_CreateObject();
+					cJSON_AddNumberToObject(json_pdo, "index", pdo.index);
+					cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.entry_count);
+					cJSON_AddStringToObject(json_pdo, "name", (const char *)pdo.name);
+	       //std::cout << "sync: " << i << " pdo: " << j << " " <<pdo.name << ": ";
+					c_pdos[j + pdo_pos].index = pdo.index;
+					c_pdos[j + pdo_pos].n_entries = (unsigned int) pdo.entry_count;
+					if (pdo.entry_count)
+						c_pdos[j + pdo_pos].entries = c_entries + entry_pos;
+					else
+						c_pdos[j + pdo_pos].entries = 0;
+	                
+					if (pdo.entry_count) {
+						cJSON *json_entries = cJSON_CreateArray();
+						total_entries += pdo.entry_count;
+						assert(total_entries < estimated_max_entries);
+		            	for (k = 0; k < pdo.entry_count; k++) {
+							cJSON *json_entry = cJSON_CreateObject();
+		            	    m.getPdoEntry(&entry, slave.position, i, j, k);
+#if 0
+							std::cout << " entry: " << k 
+								<< "{" 
+								<< entry_pos << ", "
+								<< std::hex << (int)entry.index <<", " 
+								<< (int)entry.subindex<<", " 
+								<< (int)entry.bit_length <<", "
+								<<'"' << entry.name<<"\"}";
+#endif
+							c_entries[entry_pos].index = entry.index;
+							c_entries[entry_pos].subindex = entry.subindex;
+							c_entries[entry_pos].bit_length = entry.bit_length;
+							c_entry_details[entry_pos].name = (const char *)pdo.name;
+							c_entry_details[entry_pos].name += " ";
+							c_entry_details[entry_pos].name += (const char *)entry.name;
+							c_entry_details[entry_pos].entry_index = entry_pos;
+							c_entry_details[entry_pos].pdo_index = j + pdo_pos;
+							c_entry_details[entry_pos].sm_index = i;
+
+							cJSON_AddNumberToObject(json_entry, "pos", entry_pos);
+							cJSON_AddNumberToObject(json_entry, "index", entry.index);
+							cJSON_AddStringToObject(json_entry, "name", c_entry_details[entry_pos].name.c_str());
+							cJSON_AddNumberToObject(json_entry, "subindex", entry.subindex);
+							cJSON_AddNumberToObject(json_entry, "bit_length", entry.bit_length);
+		            		++entry_pos;
+	
+							cJSON_AddItemToArray(json_entries, json_entry);
+		            	}
+						cJSON_AddItemToObject(json_pdo, "entries", json_entries);
+					}
+			    	//std::cout << "\n";
+					cJSON_AddItemToArray(json_pdos, json_pdo);
+		        }
+				cJSON_AddItemToObject(json_sync, "pdos", json_pdos);
+    		}        
+	        pdo_pos += sync.pdo_count;
+			cJSON_AddItemToArray(json_syncs, json_sync);
+	    }
+		cJSON_AddItemToObject(root, "sync_managers", json_syncs);
+		c_syncs[slave.sync_count].index = 0xff;
+	}
+	else {
+		c_syncs = 0;
+		c_pdos = 0;
+		c_entries = 0;
+	}
+	if (reconfigure) {
+		ECModule *module = new ECModule();
+		module->name = slave.name;
+		module->alias = 0;
+		module->position = slave.position;
+		module->vendor_id = slave.vendor_id;
+		module->product_code = slave.product_code;
+		module->syncs = c_syncs;
+		module->pdos = c_pdos;
+		module->pdo_entries = c_entries;
+		module->sync_count = slave.sync_count;
+		module->entry_details = c_entry_details;
+		module->num_entries = total_entries;
+		if (!ECInterface::instance()->addModule(module, reconfigure)) delete module; // module may be already registered
+	}
+	else {
+		if (c_entries) free(c_entries);
+		if (c_pdos) free(c_pdos);
+		if (c_syncs) free(c_syncs);
+		delete[] c_entry_details;
+	}
+	
+	//std::stringstream result;
+	//result << "slave: " << slave.position << "\t"
+	//	<< "syncs: " << i << " pdos: " << pdo_pos << " entries: " << entry_pos << "\n";
+	//result << cJSON_Print(root);
+	//return result.str();
+
+	return root;
+}
+
+char *collectSlaveConfig(bool reconfigure)
+{
+	cJSON *root = cJSON_CreateArray();
+    MasterDevice m(0);
+    m.open(MasterDevice::Read);
+    
+    ec_ioctl_master_t master;
+    ec_ioctl_slave_t slave;
+
+	memset(&master, 0, sizeof(ec_ioctl_master_t));
+	memset(&slave, 0, sizeof(ec_ioctl_slave_t));
+    m.getMaster(&master);
+    
+	for (unsigned int i=0; i<master.slave_count; i++) {
+		m.getSlave(&slave, i);
+        cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave, true));
+    }
+	if (reconfigure)
+		ECInterface::instance()->addModule(0, true);
+	char *res = cJSON_Print(root);
+	cJSON_Delete(root);
+
+	/* save a description of the bus configuration */
+	std::ofstream logfile;
+	logfile.open("ecat.log", std::ofstream::out /* | std::ofstream::app */);
+	logfile << res << "\n";
+    logfile.close();
+
+	return res;
+}
+
+
+    bool IODCommandEtherCATTool::run(std::vector<Value> &params) {
+        if (params.size() > 1) {
+            int argc = params.size();
+            char **argv = (char**)malloc((argc+1) * sizeof(char*));
+            for (int i=0; i<argc; ++i) {
+                argv[i] = strdup(params[i].asString().c_str());
+            }
+            argv[argc] = 0;
+            std::stringstream tool_output;
+            std::stringstream tool_err;
+            std::streambuf *old_cout = std::cout.rdbuf(tool_output.rdbuf());
+            std::streambuf *old_cerr = std::cerr.rdbuf(tool_err.rdbuf());
+            int res = tool_main(argc, argv);
+			std::cout.rdbuf(old_cout);
+			std::cerr.rdbuf(old_cerr);
+            std::cout << tool_output.str() << "\n";
+            std::cerr << tool_err.str() << "\n";
+            for (int i=0; i<argc; ++i) {
+                free(argv[i]);
+            }
+            free(argv);
+            result_str = tool_output.str();
+			//cleanup the command list left over from the ethercat tool
+			CommandList::iterator iter = commandList.begin();
+			while (iter != commandList.end()) {
+				Command *cmd = *iter;
+				iter = commandList.erase(iter);
+				delete cmd;
+			}
+		
+            return true;
+        }
+        else {
+            error_str = "Usage: EC command [params]";
+            return false;
+        }
+    }
+
+    bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
+        char *res = collectSlaveConfig(false);
+        if (res) {
+            result_str = res;
+			free(res);
+            return true;
+        }
+        else {
+            error_str = "JSON Error";
+            return false;
+        }
+    }
+
+bool IODCommandMasterInfo::run(std::vector<Value> &params) {
+    //const ec_master_t *master = ECInterface::instance()->getMaster();
+    const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "slave_count", master_state->slaves_responding);
+    cJSON_AddNumberToObject(root, "link_up", master_state->link_up);
+    std::stringstream ss;
+    statistics->io_scan_time.report(ss);
+    statistics->points_processing.report(ss);
+    statistics->machine_processing.report(ss);
+    statistics->dispatch_processing.report(ss);
+    statistics->auto_states.report(ss);
+    Statistic::reportAll(ss);
+    ss << std::flush;
+    cJSON_AddStringToObject(root, "statistics", ss.str().c_str());
+    
+    char *res = cJSON_Print(root);
+    bool done;
+    if (res) {
+        result_str = res;
+        free(res);
+        done = true;
+    }
+    else {
+        error_str = "JSON error";
+        done = false;
+    }
+    cJSON_Delete(root);
+    return done;
+}
+
+#else
+
+bool IODCommandEtherCATTool::run(std::vector<Value> &params) {
+    error_str = "EtherCAT Tool is not available";
+    return false;
+}
+
+bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
+    cJSON *root = cJSON_CreateObject();
+    char *res = cJSON_Print(root);
+    cJSON_Delete(root);
+    if (res) {
+        result_str = res;
+        free(res);
+        return true;
+    }
+    else {
+        error_str = "JSON Error";
+        return false;
+    }
+}
+bool IODCommandMasterInfo::run(std::vector<Value> &params) {
+    //const ec_master_t *master = ECInterface::instance()->getMaster();
+    //const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();
+    extern Statistics *statistics;
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "slave_count", 0);
+    cJSON_AddNumberToObject(root, "link_up", 0);
+    std::stringstream ss;
+    statistics->io_scan_time.report(ss);
+    statistics->points_processing.report(ss);
+    statistics->machine_processing.report(ss);
+    statistics->dispatch_processing.report(ss);
+    statistics->auto_states.report(ss);
+    Statistic::reportAll(ss);
+    ss << std::flush;
+    cJSON_AddStringToObject(root, "statistics", ss.str().c_str());
+    
+    char *res = cJSON_Print(root);
+    cJSON_Delete(root);
+    bool done;
+    if (res) {
+        result_str = res;
+        free(res);
+        done = true;
+    }
+    else {
+        error_str = "JSON error";
+        done = false;
+    }
+    return done;
+}
+
+#endif
+

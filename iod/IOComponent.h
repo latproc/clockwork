@@ -26,7 +26,7 @@
 #include <string>
 #include <ostream>
 #include "State.h"
-#include "ECInterface.h"
+//#include "ECInterface.h"
 #include "Message.h"
 #include "MQTTInterface.h"
 #include "filtering.h"
@@ -67,6 +67,7 @@ public:
 class MachineInstance;
 class IOComponent : public Transmitter {
 public:
+	enum Direction { DirInput, DirOutput, DirBidirectional };
 	typedef std::list<IOComponent *>::iterator Iterator;
 	static Iterator begin() { return processing_queue.begin(); }
 	static Iterator end() { return processing_queue.end(); }
@@ -84,7 +85,7 @@ public:
 	static bool hasUpdates();
 	static IOUpdate *getUpdates();
 #ifndef EC_SIMULATOR
-	ECModule *owner() { return ECInterface::findModule(address.module_position); }
+//	ECModule *owner() { return ECInterface::findModule(address.module_position); }
 #endif
 protected:
 	static std::map<std::string, IOAddress> io_names;
@@ -115,7 +116,6 @@ public:
 	IOAddress address;
 	uint32_t pending_value;
     uint64_t read_time; // the last read time
-
 	
 	void addDependent(MachineInstance *m) {
 		depends.push_back(m);
@@ -136,6 +136,7 @@ public:
 	void setIndex(int idx) { io_index=idx; }
 
 	static int updatesWaiting() { return outputs_waiting; }
+	Direction direction() { return direction_; }
 
 protected:
 	int getStatus(); 
@@ -147,13 +148,14 @@ protected:
 	static uint8_t *process_mask;
 	static unsigned int max_offset;
 	static unsigned int min_offset;
+	Direction direction_;
 };
 std::ostream &operator<<(std::ostream&out, const IOComponent &);
 
 
 class Output : public IOComponent {
 public:
-	Output(IOAddress addr) : IOComponent(addr) { }
+	Output(IOAddress addr) : IOComponent(addr) { direction_ = DirOutput; }
 //	Output(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "Output"; }
 	virtual void turnOn();
@@ -162,7 +164,7 @@ public:
 
 class Input : public IOComponent {
 public:
-	Input(IOAddress addr) : IOComponent(addr) { }
+	Input(IOAddress addr) : IOComponent(addr) { direction_ = DirInput; }
 //	Input(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "Input"; }
 };
@@ -198,7 +200,7 @@ private:
 
 class AnalogueOutput : public Output {
 public:
-	AnalogueOutput(IOAddress addr) : Output(addr) { }
+	AnalogueOutput(IOAddress addr) : Output(addr) { direction_ = DirOutput; }
 //	AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "AnalogueOutput"; }
 };

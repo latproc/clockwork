@@ -32,11 +32,13 @@ private:
     ClientInterfaceInternals *internals;
 };
 
+struct IODCommand;
 struct IODCommandThread {
     void operator()();
     IODCommandThread();
     void stop();
     bool done;
+	static void registerCommand(std::string name, IODCommand *cmd);
 private:
     ClientInterfaceInternals *internals;
 };

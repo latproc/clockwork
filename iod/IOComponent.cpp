@@ -38,6 +38,11 @@ unsigned int IOComponent::max_offset = 0;
 unsigned int IOComponent::min_offset = 1000000L;
 static std::vector<IOComponent*> *indexed_components = 0;
 
+void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
+	uint8_t bitmask = 1<<bitpos;
+	if (val) *q |= bitmask; else *q &= (uint8_t)(0xff - bitmask);
+}
+
 IOComponent::DeviceList IOComponent::devices;
 
 IOComponent::IOComponent(IOAddress addr) 
@@ -48,7 +53,7 @@ IOComponent::IOComponent(IOAddress addr)
 	
 }
 
-IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0) { 
+IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0), direction_(DirBidirectional) { 
 	processing_queue.push_back(this); 
 	// use the same io-updated index as the processing queue position
 }
@@ -91,6 +96,8 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 #if 0
 	std::cout << "IOComponent::processAll()\n";
 	std::cout << "size: " << data_size << "\n";
+	std::cout << "pdta: "; display( process_data); std::cout << "\n";
+	std::cout << "pmsk: "; display( process_mask); std::cout << "\n";
 	std::cout << "data: "; display( data); std::cout << "\n";
 	std::cout << "mask: "; display( mask); std::cout << "\n";
 #endif
@@ -115,7 +122,8 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 				if ( *m & bitmask) {
 					//std::cout << "looking up " << i << ":" << j << "\n";
 					IOComponent *ioc = (*indexed_components)[ i*8+j ];
-					//if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; else std::cout << "found " << ioc->io_name << "\n";
+					//if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; 
+					//else std::cout << "found " << ioc->io_name << "\n";
 					if (ioc && ioc->last_event != e_none) { 
 						// pending locally sourced change on this io
 						//std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
@@ -143,9 +151,8 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 	}
 	
 	// save the domain data for the next check
-	if (last_process_data) delete last_process_data;
-	last_process_data = new uint8_t[max_offset+1];
-	memcpy(last_process_data + min_offset, process_data, max_offset - min_offset + 1);
+	if (!last_process_data) last_process_data = new uint8_t[process_data_size];
+	memcpy(last_process_data, process_data, process_data_size);
 
     
 #ifdef USE_EXPERIMENTAL_IDLE_LOOP
@@ -228,41 +235,6 @@ unsigned char mem[1000];
 #define EC_WRITE_U32(offset, val) 0
 #endif
 
-/*
-unsigned int get_bits(uint8_t *offset, unsigned int bitpos, unsigned int bitlen)
-{
-	uint32_t val=0;
-	int n = bitlen;
-	if (n>32) n = 32;
-	if (bitlen == 1) {
-		val = EC_READ_BIT(offset, bitpos);
-	}
-	else if (bitlen == 8) 
-		val = EC_READ_U8(offset);
-	else if (bitlen == 16) 
-		val = EC_READ_U16(offset);
-	else if (bitlen == 32) 
-		val = EC_READ_U32(offset);
-    else {
-		uint8_t mask=1<<(bitpos%8);
-		while (n-- > 0) {
-			val = val<<1;
-			if (*offset & mask) ++val;
-			mask = mask >> 1;
-			if (mask == 0) {
-				mask=1<<7;
-				++offset;
-			}
-		}
-	}
-	return val;
-}
-*/
-void set_bits(uint8_t *offset, unsigned int bitpos, unsigned int bitlen, uint32_t value)
-{
-    
-}
-
 int32_t IOComponent::filter(int32_t val) {
     return val;
 }
@@ -280,6 +252,7 @@ public:
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
 	config = new InputFilterSettings();
+	direction_ = DirInput;
 }
 int32_t AnalogueInput::filter(int32_t raw) {
     if (config->property_changed) {
@@ -503,6 +476,8 @@ uint8_t *generateMask() {
 	std::set<IOComponent*>::iterator iter = updatedComponents.begin();
 	while (iter != updatedComponents.end()) {
 		IOComponent *ioc = *iter++;
+		if (ioc->direction() != IOComponent::DirOutput && ioc->direction() != IOComponent::DirBidirectional) 
+			continue;
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
@@ -556,14 +531,15 @@ void IOComponent::setupIOMap() {
 		if (offset > max_offset) max_offset = offset;
 		if (offset < min_offset) min_offset = offset;
 	}
-	std::cout << "min io offset: " << min_offset << "\n";
-	std::cout << "max io offset: " << max_offset << "\n";
-	std::cout << ( (max_offset+1)*8*sizeof(IOComponent*)) << " bytes reserved for index io\n";
+	//std::cout << "min io offset: " << min_offset << "\n";
+	//std::cout << "max io offset: " << max_offset << "\n";
+	std::cout << ( (max_offset+1)*sizeof(IOComponent*)) << " bytes reserved for index io\n";
 
 	indexed_components = new std::vector<IOComponent*>( (max_offset+1) *8);
 
 	process_data_size = max_offset+1;
 	process_data = new uint8_t[process_data_size];
+	memset(process_data, 0, process_data_size);
 
 	io_map.resize(max_offset+1);
 	for (unsigned int i=0; i<=max_offset; ++i) io_map[i] = 0;
@@ -575,7 +551,9 @@ void IOComponent::setupIOMap() {
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
 		int bytes = 1;
-		(*indexed_components)[offset*8 + bitpos] = ioc;
+		//(*indexed_components)[offset*8 + bitpos] = ioc;
+		for (unsigned int i=0; i<ioc->address.bitlen; ++i) 
+			(*indexed_components)[offset*8 + bitpos + i] = ioc;
 		for (int i=0; i<bytes; ++i) {
 			std::list<IOComponent *> *cl = io_map[offset+i];
 			if (!cl) cl = new std::list<IOComponent *>();
@@ -597,23 +575,17 @@ void IOComponent::idle() {
 	int bitpos = address.io_bitpos;
 	offset += (bitpos / 8);
 	bitpos = bitpos % 8;
-/*
-	while (bitpos>=8) { 
-		++offset;
-		bitpos-=8;
-	}
-*/
 
 	if (address.bitlen == 1) {
-		int32_t value = EC_READ_BIT(offset, bitpos);
+		int32_t value = (*offset & (1<< bitpos)) ? 1 : 0;
 
 		// only outputs will have an e_on or e_off event queued, 
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
-			EC_WRITE_BIT(offset, bitpos, 1);			
+			set_bit(offset, bitpos, 1);			
 		}
 		else if (value &&last_event == e_off) {
-			EC_WRITE_BIT(offset, bitpos, 0);
+			set_bit(offset, bitpos, 0);
 		}
 		else {
 			last_event = e_none;
@@ -656,14 +628,16 @@ void IOComponent::idle() {
 	else {
 		if (last_event == e_change) {
 			if (address.bitlen == 8) {
-				EC_WRITE_U8(offset, (uint8_t)(pending_value % 256));
+				*offset = (uint8_t)pending_value & 0xff;
 			}
 			else if (address.bitlen == 16) {
 				uint16_t x = pending_value % 65536;
-				EC_WRITE_U16(offset, x);
+				*((uint16_t *)offset) = x;
+				//EC_WRITE_U16(offset, x);
 			}
 			else if (address.bitlen == 32) {
-				EC_WRITE_U32(offset, pending_value);
+				//EC_WRITE_U32(offset, pending_value);
+				*((uint32_t *)offset) = pending_value; // assumes little endian
 			}
 			last_event = e_none;
 			//address.value = pending_value;
@@ -687,11 +661,13 @@ void IOComponent::idle() {
 				//std::cout << " value: " << val << "\n";
 			}
 			else if (address.bitlen == 8) 
-				val = EC_READ_S8(offset);
-			else if (address.bitlen == 16) 
-				val = EC_READ_S16(offset);
+				val = *(int8_t*)(offset);
+			else if (address.bitlen == 16) {
+				val = *(int16_t*)(offset);
+				//std::cout << " 16bit value: " << val << " " << std::hex << val << std::dec << "\n";
+			}
 			else if (address.bitlen == 32) 
-				val = EC_READ_S32(offset);
+				val = *(int32_t*)(offset);
 			else {
 				val = 0;
 			}
@@ -699,7 +675,7 @@ void IOComponent::idle() {
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
-			if (raw_value != val || strcmp(type(), "CounterRate") == 0) {
+			if (raw_value != (uint32_t)val ) {
 				//std::cout << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
 				int32_t new_val = filter(val);
@@ -768,33 +744,6 @@ void IOComponent::setValue(uint32_t new_value) {
 	++outputs_waiting;
 	idle();
 }
-
-/*
-int IOComponent::getStatus() {
-	uint8_t *offset = ECInterface::domain1_pd + address.io_offset;
-	int bitpos = address.io_bitpos;
-	while (bitpos>=8) { 
-		++offset;
-		bitpos-=8;
-	}
-    if (address.bitlen == 1) {
-		int value = EC_READ_BIT(offset, bitpos);
-		return value;
-    }
-    else {
-		address.value = get_bits(offset, address.io_bitpos, address.bitlen);
-        last_event = e_none;
-        const char *evt = "value_changed";
-        std::list<MachineInstance*>::iterator iter = depends.begin();
-        while (iter != depends.end()) {
-            MachineInstance *m = *iter++;
-            Message msg(evt);
-            m->execute(msg, this);
-        }
-        return address.value;
-    }
-}
-*/
 
 bool IOComponent::isOn() {
 	return last_event == e_none && address.value != 0;

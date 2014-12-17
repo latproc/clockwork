@@ -23,6 +23,7 @@
 #include <string>
 #include <sstream>
 #include <list>
+#include <map>
 #include <zmq.hpp>
 
 #include "IODCommand.h"
@@ -57,9 +58,15 @@ struct CommandThreadInternals : public ClientInterfaceInternals {
 public:
     zmq::socket_t socket;
     pthread_t monitor_thread;
+	std::multimap<std::string, IODCommand*> commands;
     
     CommandThreadInternals() : socket(*MessagingInterface::getContext(), ZMQ_REP) {}
 };
+
+void IODCommandThread::registerCommand(std::string name, IODCommand *cmd) {
+
+}
+
 
 class MyMonitor : public zmq::monitor_t {
 public:
@@ -144,13 +151,11 @@ void IODCommandThread::operator()() {
     while (!done) {
         try {
             if (status == e_waiting_access) {
-                access_req.send("access", 6);
-                {
-                    size_t acc_len = 0;
-                    char acc_buf[10];
-                    while ( (acc_len=access_req.recv(acc_buf, 10)) == 0) ;
-                }
-                status = e_holding_access;
+				access_req.send("access", 6);
+				size_t acc_len = 0;
+				char acc_buf[10];
+				if (safeRecv(access_req, acc_buf, 10, true, acc_len, -1))
+                	status = e_holding_access;
             }
             if (status == e_holding_access) {
                 if ((*command)(params)) {
@@ -290,15 +295,6 @@ void IODCommandThread::operator()() {
                 }
                 else if (count > 2 && ds == "DATA") {
                     command = new IODCommandData;
-                }
-                else if (count > 1 && ds == "EC") {
-                    command = new IODCommandEtherCATTool;
-                }
-                else if (ds == "SLAVES") {
-                    command = new IODCommandGetSlaveConfig;
-                }
-                else if (count == 1 && ds == "MASTER") {
-                    command = new IODCommandMasterInfo;
                 }
                 else if (ds == "PROPERTY") {
                     command = new IODCommandProperty(data);

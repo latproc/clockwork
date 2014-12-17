@@ -49,7 +49,8 @@ public:
 
 struct IODCommand {
 public:
-    IODCommand()  : done(false), error_str(""), result_str("") {}
+    IODCommand( int minp = 0, int maxp = 100)  : done(false), error_str(""), 
+		result_str(""), min_params(minp), max_params(maxp) {}
     virtual ~IODCommand(){ }
     bool done;
 //    const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
@@ -66,6 +67,8 @@ protected:
 	virtual bool run(std::vector<Value> &params) = 0;
 	std::string error_str;
 	std::string result_str;
+	int min_params;
+	int max_params;
 };
 
 
