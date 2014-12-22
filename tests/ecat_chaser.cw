@@ -10,6 +10,7 @@ out4 POINT EK1814Outputs,3;
 
 group1 LIST out1,out2,out3,out4;
 
+/*
 EL3151 MODULE (position:5);
 AInSettings MACHINE { IDLE INITIAL; }
 ain_settings AInSettings;
@@ -29,6 +30,7 @@ out10 POINT Outputs,5;
 out11 POINT Outputs,6;
 out12 POINT Outputs,7;
 group2 LIST out5, out6, out7, out8, out9, out10, out11, out12;
+*/
 
 Cell MACHINE output, left, right {
 	OPTION tab test;
@@ -52,6 +54,7 @@ led02 Cell out2, led01, led03;
 led03 Cell out3, led02, led04;
 led04 Cell out4, led03, led01;
 
+/*
 led05 Cell out5, led12, led06;
 led06 Cell out6, led05, led07;
 led07 Cell out7, led06, led08;
@@ -64,4 +67,5 @@ led12 Cell out12, led11, led05;
 
 #led05 Cell led04, led06;
 #led06 Cell led05, led01;
+*/
 
