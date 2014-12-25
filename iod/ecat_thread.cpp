@@ -170,7 +170,7 @@ void EtherCATThread::operator()() {
 				}
 				perror("read rtc"); exit(1); 
 			}
-			if (rc == 0) std::cout << "zero bytes read from rtc\n";
+			if (rc == 0) NB_MSG << "zero bytes read from rtc\n";
 			if (period != ECInterface::FREQUENCY) {
 				period = ECInterface::FREQUENCY;
 				rc = ioctl(rtc, RTC_IRQP_SET, period);
@@ -191,22 +191,14 @@ void EtherCATThread::operator()() {
 				while ( (rc = nanosleep(&sleep_time, &remaining) == -1) ) {
 					sleep_time = remaining;
 				}
-	   		//gettimeofday(&now,0);
-	   		//delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
-				//			+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
-	       	//delay = cycle_delay-delta-20;
 			}
 
 			gettimeofday(&then,0);
-			//then.tv_usec += cycle_delay;
-			//while (then.tv_usec > 1000000) { then.tv_usec-=1000000; then.tv_sec++; }
-			//			std::cout << delay << " " << then.tv_sec << "." << std::setw(6) << std::setfill('0') << then.tv_usec << "\n";
-			//then = now;
 #endif
 #endif
 			int n = 0;
 			if (!machine_is_ready) {
-				//std::cout << "machine is not ready..\n";
+				//NB_MSG << "machine is not ready..\n";
 				ECInterface::instance()->receiveState();
 				ECInterface::instance()->sendUpdates();
 				continue;
@@ -217,13 +209,16 @@ void EtherCATThread::operator()() {
 					n = ECInterface::instance()->collectState();
 			}
 			//if (n) 
-				//std::cout << n << " changes when collecting state\n";
+				//NB_MSG << n << " changes when collecting state\n";
 			// send all process domain data once the domain is operational
 
 			if ( status == e_collect && (first_run || n) && machine_is_ready) {
 				first_run = false;
-				//std::cout << "io changed, forwarding to clockwork\n";
+				//NB_MSG << "io changed, forwarding to clockwork\n";
 				uint32_t size = ECInterface::instance()->getProcessDataSize();
+
+				// sending a three-part message, each stage may be interrupted
+				// so we use a try-catch around the whole process 
 
 				uint8_t stage = 1;
 				while(true) {
@@ -239,9 +234,9 @@ void EtherCATThread::operator()() {
 							case 2:
 							{
 								zmq::message_t iomsg(size);
-								//std::cout << "sending ";
+								//NB_MSG << "sending ";
 								//display(ECInterface::instance()->getUpdateData());
-								//std::cout << "\n";
+								//NB_MSG << "\n";
 								memcpy(iomsg.data(), (void*)ECInterface::instance()->getUpdateData(),size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
@@ -260,13 +255,13 @@ void EtherCATThread::operator()() {
 					}
 					catch (zmq::error_t err) {
 						if (zmq_errno() == EINTR) { 
-							std::cout << "interrupted when sending update (" << stage << ")\n";
+							//NB_MSG << "interrupted when sending update (" << stage << ")\n";
 							usleep(50); 
 							continue; 
 						}
 					}
 				}
-				//std::cout << "update sent to clockwork\n";
+				//NB_MSG << "update sent to clockwork\n";
 				status = e_update;
 			}
 			if (status == e_update) {
@@ -275,19 +270,19 @@ void EtherCATThread::operator()() {
 					char buf[10];
 					if (sync_sock->recv(buf, 10, ZMQ_DONTWAIT)) {
 						status = e_collect;
-						//std::cout << "got response from clockwork\n";
+						//NB_MSG << "got response from clockwork\n";
 					}
 				}
 				catch (zmq::error_t) {
 					if (zmq_errno() != EINTR) {
-						std::cout << "EtherCAT error " << zmq_strerror(errno) << "checking for update from clockwork\n";
+						NB_MSG << "EtherCAT error " << zmq_strerror(errno) << "checking for update from clockwork\n";
 					}
 				}
-				//std::cout << "sent EtherCAT update, waiting for response\n";
+				//NB_MSG << "sent EtherCAT update, waiting for response\n";
 				//char buf[10];
 				//size_t len;
 				//safeRecv(*sync_sock, buf, 10, true, len);
-				//std::cout << "EtherCAT update done\n";
+				//NB_MSG << "EtherCAT update done\n";
 			}
 
 	
@@ -301,7 +296,7 @@ void EtherCATThread::operator()() {
 				zmq::message_t iomsg;
 				received = recv(out_sock, iomsg);
 				if (!received) break;
-				//std::cout << "received output from clockwork "
+				//NB_MSG << "received output from clockwork "
 				//	<< "size: " << iomsg.size() << "\n";
 				assert(iomsg.size() == sizeof(len));
 				memcpy(&len, iomsg.data(), iomsg.size());
@@ -331,7 +326,7 @@ void EtherCATThread::operator()() {
 				memcpy(cw_mask, iomsg.data(), iomsg.size());
 				}
 	
-				//std::cout << "acknowledging receipt of clockwork output\n";
+				//NB_MSG << "acknowledging receipt of clockwork output\n";
 				safeSend(out_sock,"ok", 2);
 				ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 			}

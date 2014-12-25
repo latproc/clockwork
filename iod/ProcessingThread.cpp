@@ -178,7 +178,12 @@ static void display(uint8_t *p) {
 		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 }
 
-int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatcher, zmq::socket_t &scheduler)
+int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], 
+		zmq::socket_t &ecat_sync, 
+		zmq::socket_t &resource_mgr, 
+		zmq::socket_t &dispatcher, 
+		zmq::socket_t &scheduler, 
+		zmq::socket_t &ecat_out)
 {
 	int res = 0;
     while (!program_done && status == e_waiting)
@@ -187,7 +192,7 @@ int ProcessingThread::pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_
         {
             long len = 0;
             char buf[10];
-            res = zmq::poll(&items[0], 4, 1000);
+            res = zmq::poll(&items[0], 5, poll_wait);
             if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
             {
 				//std::cout << "receiving data from EtherCAT\n";
@@ -364,13 +369,17 @@ void ProcessingThread::operator()()
             { ecat_sync, 0, ZMQ_POLLIN, 0 },
             { resource_mgr, 0, ZMQ_POLLIN, 0 },
             { dispatch_sync, 0, ZMQ_POLLIN, 0 },
-            { sched_sync, 0, ZMQ_POLLIN, 0 }
+            { sched_sync, 0, ZMQ_POLLIN, 0 },
+            { ecat_out, 0, ZMQ_POLLIN, 0 }
         };
         size_t len = 0;
         char buf[10];
+		int poll_wait = 1000;
         while (!program_done && len == 0)
         {
-            if (pollZMQItems(items, ecat_sync, resource_mgr, dispatch_sync, sched_sync)) break;
+			if (IOComponent::updatesWaiting()) poll_wait=10;
+            if (pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, 
+					sched_sync, ecat_out)) break;
             if (MachineInstance::workToDo()) break;
         }
 #if 0
@@ -518,6 +527,8 @@ void ProcessingThread::operator()()
 					update_state = s_update_sent;
 				}
 			}
+			//else
+			//	NB_MSG << "uave updates but update state is not idle yet\n";
         }
 		if (update_state == s_update_sent) {
 			char buf[10];

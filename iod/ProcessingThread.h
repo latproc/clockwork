@@ -17,12 +17,17 @@ public:
     static const int CMD_ITEM = 1;
     static const int DISPATCHER_ITEM = 2;
     static const int SCHEDULER_ITEM = 3;
+    static const int ECAT_OUT_ITEM = 4;
     
-    enum Status { e_waiting, e_handling_ecat, e_handling_cmd, e_waiting_cmd, e_handling_dispatch,
-		e_handling_sched } ;
+    enum Status { e_waiting, e_handling_ecat, e_handling_cmd, 
+				e_waiting_cmd, e_handling_dispatch,
+				e_handling_sched } ;
     Status status;
 
-    int pollZMQItems(zmq::pollitem_t items[], zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatch, zmq::socket_t &sched);
+    int pollZMQItems(int poll_time, 
+			zmq::pollitem_t items[], zmq::socket_t &ecat_sync, 
+			zmq::socket_t &resource_mgr, zmq::socket_t &dispatch, 
+			zmq::socket_t &sched, zmq::socket_t &ecat_out);
 
     void waitForCommandProcessing(zmq::socket_t &resource_mgr);
 
