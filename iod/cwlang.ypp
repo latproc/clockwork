@@ -118,6 +118,7 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
+%token CONSTRAINT
 
 %union {
 	int iVal;
@@ -679,7 +680,7 @@ value {
 |'(' predicate ')' {
     $$ = $2;
 }
-| NOT expression { $$ = new Predicate(0, opNOT, $2); }
+| NOT expression { $$ = new Predicate(new Predicate(0), opNOT, $2); }
 | expression GE expression { $$ = new Predicate($1, opGE, $3);}
 | expression LE expression { $$ = new Predicate($1, opLE, $3);}
 | expression GT expression { $$ = new Predicate($1, opGT, $3);}
