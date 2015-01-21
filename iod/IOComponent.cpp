@@ -26,9 +26,11 @@
 #include "MessagingInterface.h"
 #include <netinet/in.h>
 #include "Logger.h"
+#include <ecrt.h>
 
 /* byte swapping macros using either custom code or the network byte order std functions */
-#if 1
+#if __BIGENDIAN
+#if 0
 #define toU16(m,v) \
     *((uint16_t*)m) = \
         ((((uint16_t)v)&0xff00) >> 8) \
@@ -54,6 +56,12 @@
 #define fromU16(m) ntohs( *(uint16_t*)m)
 #define toU32(m,v) *(uint32_t*)(m) = htonl( (v) )
 #define fromU32(m) ntohl( *(uint32_t*)m)
+#endif
+#else
+#define toU16(m,v) EC_WRITE_U16(m,v)
+#define fromU16(m) EC_READ_U16(m)
+#define toU32(m,v) EC_WRITE_U32(m,v)
+#define fromU32(m) EC_READ_U32(m)
 #endif
 
 std::list<IOComponent *> IOComponent::processing_queue;
@@ -191,11 +199,16 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 		++p; ++q; ++m;
 	}
 	
-	// save the domain data for the next check
-	if (!last_process_data) last_process_data = new uint8_t[process_data_size];
-	memcpy(last_process_data, process_data, process_data_size);
-
+	if (hardware_state == s_operational) {
+		// save the domain data for the next check
+		if (!last_process_data) {
+			std::cerr << "Record process data\n";
+			last_process_data = new uint8_t[process_data_size];
+		}
+		memcpy(last_process_data, process_data, process_data_size);
+	}
     
+	//std::cout << updatedComponents.size() << " component updates from hardware\n";
 #ifdef USE_EXPERIMENTAL_IDLE_LOOP
 	std::set<IOComponent*>::iterator iter = updatedComponents.begin();
 	while (iter != updatedComponents.end()) {
@@ -557,9 +570,9 @@ IOUpdate *IOComponent::getDefaults() {
 	res->size = max_offset - min_offset + 1;
 	res->data = getProcessData();
 	res->mask = getProcessMask();
-	//std::cout << "preparing to send " << res->size << ":"; display(res->data); 
-	//std::cout << ":"; display(res->mask);
-	//std::cout << "\n";
+	std::cout << "preparing to send " << res->size << ":"; display(res->data); 
+	std::cout << ":"; display(res->mask);
+	std::cout << "\n";
 	return res;
 }
 
@@ -679,16 +692,15 @@ void IOComponent::idle() {
 	}
 	else {
 		if (last_event == e_change) {
+			std::cout << " assigning " << pending_value << " to address " << (unsigned long)offset << "\n";
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
 			else if (address.bitlen == 16) {
 				uint16_t x = pending_value % 65536;
 				toU16(offset, x);
-				//EC_WRITE_U16(offset, x);
 			}
 			else if (address.bitlen == 32) {
-				//EC_WRITE_U32(offset, pending_value);
 				toU32(offset, pending_value); 
 			}
 			last_event = e_none;
@@ -727,21 +739,24 @@ void IOComponent::idle() {
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
-			if (raw_value != (uint32_t)val ) {
-				//std::cout << "raw io value changed from " << raw_value << " to " << val << "\n";
+			if (hardware_state == s_hardware_init || (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
+				std::cout << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
 				int32_t new_val = filter(val);
-				if (address.value != new_val) {
+				if (hardware_state == s_hardware_init || (hardware_state == s_operational && address.value != new_val) ) {
 					address.value = filter(val);
 					last_event = e_none;
-					const char *evt = "property_change";
-					std::list<MachineInstance*>::iterator iter = depends.begin();
-					while (iter != depends.end()) {
-						MachineInstance *m = *iter++;
-						Message msg(evt);
-						m->execute(msg, this);
-						//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
-						m->checkActions();
+					std::cout << " assigned " << val << " to address " << address << "\n";
+					if (hardware_state == s_operational) {
+						const char *evt = "property_change";
+						std::list<MachineInstance*>::iterator iter = depends.begin();
+						while (iter != depends.end()) {
+							MachineInstance *m = *iter++;
+							Message msg(evt);
+							m->execute(msg, this);
+							std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+							m->checkActions();
+						}
 					}
 				}
 			}

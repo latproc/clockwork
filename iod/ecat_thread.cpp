@@ -114,7 +114,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
-#if 0
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -123,6 +123,8 @@ static void display(uint8_t *p) {
 }
 #endif
 
+enum DriverState { s_driver_init, s_driver_operational };
+DriverState driver_state = s_driver_init;
 // data from clockwork should be one of these two types.
 // process data will only be used if default data has been sent
 const int DEFAULT_DATA = 1;
@@ -250,7 +252,7 @@ void EtherCATThread::operator()() {
 			bool need_ping = keep_alive>0 && (last_ping + keep_alive - 5000 - period < now) ? true : false;
 
 			if ( status == e_collect && (first_run || n || need_ping) && machine_is_ready) {
-				first_run = false;
+				if (driver_state == s_driver_operational) first_run = false;
 				need_ping = false;
 				uint32_t size = ECInterface::instance()->getProcessDataSize();
 
@@ -271,9 +273,9 @@ void EtherCATThread::operator()() {
 							case 2:
 							{
 								zmq::message_t iomsg(size);
-								//NB_MSG << "sending ";
-								//display(ECInterface::instance()->getUpdateData());
-								//NB_MSG << "\n";
+								NB_MSG << "sending ";
+								display(ECInterface::instance()->getUpdateData());
+								NB_MSG << "\n";
 								memcpy(iomsg.data(), (void*)ECInterface::instance()->getUpdateData(),size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
@@ -381,8 +383,11 @@ void EtherCATThread::operator()() {
 				assert(packet_type == DEFAULT_DATA || packet_type == PROCESS_DATA);
 				if (packet_type == DEFAULT_DATA)
 					setDefaultData(len, cw_data, cw_mask);
-				if (default_data) // do not update the domain unless we already have default data
+				else if (packet_type == PROCESS_DATA && driver_state == s_driver_init)
+					driver_state = s_driver_operational;
+				if (default_data) { // do not update the domain unless we already have default data
 					ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+				}
 				else {
 					std::cout << "got data update with no default set. Ignoring IO update\n";
 				}

@@ -184,11 +184,17 @@ void initialiseOutputs() {
 		MachineInstance *m = *iter++;
 		Value &val = m->properties.lookup("default");
 		if (val == SymbolTable::Null) continue;
-		std::cout << "Initialising " << m->getName() << " to " << val << "\n";
-		if (m->_type == "ANALOGUEOUTPUT") {
-			m->setValue("VALUE", val);
+		if (val.kind == Value::t_integer || m->_type == "ANALOGOUTPUT") {
+			std::cout << "Initialising value for " << m->getName() << " to " << val << "\n";
+			long i_val = 0;
+			if (val.asInteger(i_val)) {
+				m->setValue("VALUE", i_val);
+				if (m->io_interface) m->io_interface->setValue(i_val);
+				else { std::cout << " warning: " << m->getName() << " is not connected to hardware\n"; }
+			}
 		}
 		else  {
+			std::cout << "Initialising state of " << m->getName() << " to " << val << "\n";
 			m->setState(val.asString().c_str());
 		}
 	}

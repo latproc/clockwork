@@ -544,7 +544,7 @@ void ProcessingThread::operator()()
 							assert(false);
 						}
 					}
-					//std::cout << "update sent. Waiting for ack\n";
+					std::cout << "update sent. Waiting for ack\n";
 					delete upd;
 					update_state = s_update_sent;
 				}
