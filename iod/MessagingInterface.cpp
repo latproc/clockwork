@@ -59,13 +59,13 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
                 int n = zmq::poll( &items[0], 1, timeout);
 				if (!n && block) continue;
                 if (items[0].revents & ZMQ_POLLIN) {
-     	            response_len = sock.recv(buf, buflen);
+     	            response_len = sock.recv(buf, buflen, 0);
                 if (!response_len && block) continue;
             }
             return (response_len == 0) ? false : true;
         }
         catch (zmq::error_t e) {
-            if (errno == EINTR) { std::cout << "interrupted system call, retrying\n"; continue; }
+            if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; continue; }
             std::cerr << zmq_strerror(errno) << "\n";
             return false;
         }
@@ -89,14 +89,13 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
     while (1) {
         try {
-            //std::cout << "sent " << msg << "\n";
             size_t len = sock.send(msg, strlen(msg));
             if (!len) continue;
             break;
         }
         catch (zmq::error_t e) {
             if (errno == EINTR) continue;
-            std::cout << "sendMessage: " << zmq_strerror(errno) << "\n";
+            std::cerr << "sendMessage: " << zmq_strerror(errno) << "\n";
             return false;
         }
     }
@@ -212,7 +211,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
             test_bind.disconnect(address_buf);
-            std::cout << "found available port " << res << "\n";
+            std::cerr << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
@@ -314,7 +313,7 @@ char *MessagingInterface::send(const char *txt) {
                         char *data = (char *)malloc(len+1);
                         memcpy(data, reply.data(), len);
                         data[len] = 0;
-                        std::cout << url << ": " << data << "\n";
+                        std::cerr << url << ": " << data << "\n";
                         return data;
                     }
                 }
@@ -424,10 +423,10 @@ void SocketMonitor::operator()() {
             monitor(sock, socket_name);
         }
         catch (zmq::error_t io) {
-            std::cout << "ZMQ error: " << zmq_strerror(errno) << " in socket monitor\n";
+            std::cerr << "ZMQ error: " << zmq_strerror(errno) << " in socket monitor\n";
         }
         catch (std::exception ex) {
-            std::cout << "unknown exception setting up a socket monitor\n";
+            std::cerr << "unknown exception setting up a socket monitor\n";
         }
     }
 }
@@ -600,7 +599,7 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
 bool SubscriptionManager::requestChannel() {
     size_t len = 0;
     if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-        std::cout << "Requesting channel " << channel_name << "\n";
+        std::cerr << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup.send(channel_setup, strlen(channel_setup));
         assert(len);
@@ -613,7 +612,7 @@ bool SubscriptionManager::requestChannel() {
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
-        std::cout << "Got channel " << buf << "\n";
+        std::cerr << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
@@ -635,7 +634,7 @@ bool SubscriptionManager::requestChannel() {
             }
             else {
                 setSetupStatus(SubscriptionManager::e_disconnected);
-                std::cout << " failed to parse: " << buf << "\n";
+                std::cerr << " failed to parse: " << buf << "\n";
                 current_channel = "";
             }
             cJSON_Delete(chan);
