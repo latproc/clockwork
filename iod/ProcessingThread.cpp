@@ -550,7 +550,7 @@ void ProcessingThread::operator()()
 				}
 			}
 			//else
-			//	NB_MSG << "uave updates but update state is not idle yet\n";
+			//	NB_MSG << "have updates but update state is not idle yet\n";
         }
 		if (update_state == s_update_sent) {
 			char buf[10];

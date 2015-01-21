@@ -417,9 +417,8 @@ void generateIOComponentModules()
 class IODHardwareActivation : public HardwareActivation {
 	public:
 		void operator()(void) {
-#ifndef EC_SIMULATOR
-			ECInterface::instance()->activate();
-#endif
+			NB_MSG << "----------- Initialising machines ------------\n";
+			//ECInterface::instance()->activate();
 			initialise_machines();
 		}
 };
@@ -557,6 +556,7 @@ if (num_errors > 0) {
 #endif
 
 	std::cout << "-------- Initialising ---------\n";
+	ECInterface::instance()->activate();
 
 	setup_signals();
 
