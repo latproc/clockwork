@@ -37,9 +37,8 @@ Cell MACHINE output, left, right {
 	#error WHEN SELF IS error 
 	#	OR (right IS NOT on AND right IS NOT off AND right IS NOT error)
 	#	OR (left IS NOT on AND left IS NOT off AND left IS NOT error);
-    #on WHEN right IS off AND SELF IS on AND TIMER <= 10;
-		#AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER >= 1000);
-	turningOn WHEN left IS on AND output IS off;
+	turningOn WHEN SELF IS waiting AND TIMER>=10;
+	waiting WHEN left IS on AND output IS off;
 	on WHEN output IS on AND right IS NOT on;
     off DEFAULT;
 	off INITIAL;
