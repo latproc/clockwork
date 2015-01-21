@@ -61,7 +61,7 @@
 extern bool machine_is_ready;
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 
-EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(10 * 1000),last_ping(0) { 
+EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(0),last_ping(0) { 
 }
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
@@ -114,12 +114,14 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
     for (int i=min; i<=max; ++i) 
 		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 }
+#endif
 
 // data from clockwork should be one of these two types.
 // process data will only be used if default data has been sent
@@ -139,8 +141,10 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 	default_mask = new uint8_t[len];
 	memcpy(default_mask, data, len);
 
+#if 0
 	std::cout << "default data: "; display(default_data); std::cout << "\n";
 	std::cout << "default mask: "; display(default_mask); std::cout << "\n";
+#endif
 } 
 
 void EtherCATThread::operator()() {
@@ -236,12 +240,14 @@ void EtherCATThread::operator()() {
 				if (status == e_collect)
 					n = ECInterface::instance()->collectState();
 			}
+#if 0
 			if (last_ping && keep_alive)
 				assert(last_ping + keep_alive >= now);
+#endif
 			// send all process domain data once the domain is operational
 			// check keep-alives on the clockwork communications channel
 			//   four periods: 4 * period / 1000 = period/250
-			bool need_ping = (last_ping + keep_alive - 5000 - period < now) ? true : false;
+			bool need_ping = keep_alive>0 && (last_ping + keep_alive - 5000 - period < now) ? true : false;
 
 			if ( status == e_collect && (first_run || n || need_ping) && machine_is_ready) {
 				first_run = false;
