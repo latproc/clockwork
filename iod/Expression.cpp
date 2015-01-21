@@ -207,7 +207,7 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     //TBD there is an issue with testing current_time <= scheduled_time because there may have been some
     // processing delays and current time may already be a little > scheduled time. This is especially
     // true on slow clock cycles. For now we reschedule the trigger for up to 10ms past the necessary time.
-    if (current_time <= scheduled_time + 10) {
+    if (current_time *1000 <= scheduled_time *1000 - 10) {
         Trigger *trigger = new Trigger("Timer");
         Scheduler::instance()->add(new ScheduledItem( (scheduled_time - current_time) * 1000, new FireTriggerAction(target, trigger)));
         trigger->release();
@@ -216,9 +216,9 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
 		struct timeval now;
 		gettimeofday(&now, 0);
         long now_t = now.tv_sec * 1000000 + now.tv_usec;
-        uint64_t delta = now_t - target->lastStateEvaluationTime();
+        int64_t delta = now_t - target->lastStateEvaluationTime();
         DBG_SCHEDULER << "no event scheduled for " << ( (target)?target->getName() : "unknown" ) 
-			<< ".  over time by " << (current_time - scheduled_time)  << ". last eval: " << delta << "\n";
+			<< ".  over time by " << (int64_t)(current_time - scheduled_time)  << ". last eval: " << delta << "\n";
     }
     if (right_p) right_p->scheduleTimerEvents(target);
 }
@@ -582,7 +582,9 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
  */
 
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
-    if (p->left_p && p->left_p->op == opNone && p->right_p && p->right_p->op == opNone && (p->op == opEQ || p->op == opNE)) {
+    if (p->left_p && p->left_p->op == opNone 
+			&& p->right_p && p->right_p->op == opNone 
+			&& (p->op == opEQ || p->op == opNE)) {
         if (p->left_p->entry.kind == Value::t_symbol && p->right_p->entry.kind == Value::t_symbol) {
             MachineInstance *lhm = m->lookup(p->left_p->entry);
             MachineInstance *rhm = m->lookup(p->right_p->entry);
@@ -610,6 +612,11 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         //    std::cout << *(p->right_p) << " refers to a state\n";
         stack.push(p->op);
     }
+	else if (p->op == opNOT) {
+		stack.push(ExprNode(SymbolTable::True));
+        if (!prep(stack, p->right_p, m, false, reevaluate)) return false;
+        stack.push(p->op);
+	}
     else {
         Value *result = resolve(p, m, left, reevaluate);
         if (*result == SymbolTable::Null) {
