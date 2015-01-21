@@ -43,6 +43,7 @@ COMMANDS			return COMMANDS;
 COMBINATION         return COMBINATION;
 COMMON              return COMMON;
 CONDITION           return CONDITION;
+CONSTRAINT			return CONSTRAINT;
 COPY                return COPY;
 COUNT               return COUNT;
 CREATE              return CREATE;

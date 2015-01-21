@@ -107,8 +107,9 @@ void checkInputs()
 }
 #endif
 
-ProcessingThread::ProcessingThread(ControlSystemMachine &m)
-: machine(m), sequence(0), cycle_delay(1000), status(e_waiting)
+ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator)
+: machine(m), sequence(0), cycle_delay(1000), status(e_waiting),
+	activate_hardware(activator)
 {
 }
 
@@ -323,6 +324,8 @@ void ProcessingThread::operator()()
     zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     ecat_sync.connect("inproc://ethercat_sync");
 
+	IOComponent::setHardwareState(IOComponent::s_hardware_init);
+
     safeSend(sched_sync,"go",2); // scheduled items
     usleep(10000);
     safeSend(dispatch_sync,"go",2); //  permit handling of events
@@ -426,8 +429,8 @@ void ProcessingThread::operator()()
 				// wait for the dispatcher
 				safeRecv(sched_sync, buf, 10, true, len);
 				safeSend(sched_sync,"bye",3);
-				std::cout << "processing thread forcing a stable state check\n";
-                MachineInstance::forceStableStateCheck();
+				//std::cout << "processing thread forcing a stable state check\n";
+                //MachineInstance::forceStableStateCheck();
 				status = e_waiting;
 			}
 		}
@@ -441,19 +444,19 @@ void ProcessingThread::operator()()
 */		
 		else if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
         {
-					static unsigned long total_mp_time = 0;
-					static unsigned long mp_count = 0;
-					//std::cout << "got EtherCAT data\n";
+			static unsigned long total_mp_time = 0;
+			static unsigned long mp_count = 0;
+			//std::cout << "got EtherCAT data\n";
             if (machine_is_ready)
             {
                 gettimeofday(&end_t, 0);
                 IOComponent::processAll( incoming_data_size, incoming_process_mask, incoming_process_data);
                 gettimeofday(&start_t, 0);
                 delta = get_diff_in_microsecs(&start_t, &end_t);
-								//MachineInstance *system = MachineInstance::find("SYSTEM");
-								//assert(system);
-								//total_mp_time += delta;
-								//system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
+				//MachineInstance *system = MachineInstance::find("SYSTEM");
+				//assert(system);
+				//total_mp_time += delta;
+				//system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
             }
 			else
 				std::cout << "received EtherCAT data but machine is not ready\n";
@@ -479,9 +482,18 @@ void ProcessingThread::operator()()
                     processingState = eIdle;
             }
 		}
-		if (machine_is_ready && IOComponent::updatesWaiting() ) {
+		if (machine_is_ready && 
+				(
+					IOComponent::updatesWaiting() 
+					|| IOComponent::getHardwareState() == IOComponent::s_hardware_init
+				)
+			) {
 			if (update_state == s_update_idle) {
-				IOUpdate *upd = IOComponent::getUpdates();
+				IOUpdate *upd = 0;
+				if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+					upd = IOComponent::getDefaults();
+				else
+					upd = IOComponent::getUpdates();
 				if (upd) {
 					uint32_t size = upd->size;
 					uint8_t stage = 1;
@@ -497,12 +509,22 @@ void ProcessingThread::operator()()
 									}
 								case 2:
 									{
+										uint8_t packet_type = 2;
+										if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+											packet_type = 1;
+										zmq::message_t iomsg(1);
+										memcpy(iomsg.data(), (void*)&packet_type, 1); 
+										ecat_out.send(iomsg, ZMQ_SNDMORE);
+										++stage;
+									}
+								case 3:
+									{
 										zmq::message_t iomsg(size);
 										memcpy(iomsg.data(), (void*)upd->data, size);
 										ecat_out.send(iomsg, ZMQ_SNDMORE);
 										++stage;
 									}
-								case 3:
+								case 4:
 									{
 										zmq::message_t iomsg(size);
 										memcpy(iomsg.data(), (void*)upd->mask, size);
@@ -515,8 +537,8 @@ void ProcessingThread::operator()()
 						}
 						catch (zmq::error_t err) {
 							if (zmq_errno() == EINTR) {
-								//std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
-								usleep(500); 
+								std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
+								usleep(50); 
 								continue;
 							}
 							assert(false);
@@ -538,6 +560,10 @@ void ProcessingThread::operator()()
 				if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
 					//std::cout << "update notification done\n";
 					update_state = s_update_idle;
+					if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)  {
+						activate_hardware();
+						IOComponent::setHardwareState(IOComponent::s_operational);
+					}
 				}
 			}
 			catch (zmq::error_t err) {
@@ -547,6 +573,7 @@ void ProcessingThread::operator()()
         
         // periodically check to see if the cycle time has been changed
         // more work is needed here since the signaller needs to be told about this
+		gettimeofday(&end_t, 0);
         uint64_t now_usecs = end_t.tv_sec *1000000 + end_t.tv_usec;
         if (now_usecs - last_checked_cycle_time > 100000L) {
             last_checked_cycle_time = end_t.tv_sec *1000000 + end_t.tv_usec;

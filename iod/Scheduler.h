@@ -43,6 +43,11 @@ struct ScheduledItem {
 	ScheduledItem(long when, Package *p);
 	ScheduledItem(long when, Action *a);
     std::ostream &operator <<(std::ostream &out) const;
+
+private:
+	bool operator<=(const ScheduledItem& other) const;
+	bool operator>(const ScheduledItem& other) const;
+	bool operator==(const ScheduledItem& other) const;
 };
 
 std::ostream &operator <<(std::ostream &out, const ScheduledItem &item);
@@ -52,10 +57,11 @@ class PriorityQueue {
 public:
 	PriorityQueue() {}
 	void push(ScheduledItem *item);
-	ScheduledItem* top() const { return queue.front(); }
-	bool empty() const { return queue.empty(); }
-	void pop() { queue.pop_front(); }
-	size_t size() const { return queue.size(); }
+	ScheduledItem* top() const;
+	bool empty() const;
+	void pop();
+	size_t size() const;
+	bool check() const;
 
 	std::list<ScheduledItem*> queue;
 
@@ -75,8 +81,8 @@ public:
 	static Scheduler *instance() { if (!instance_) instance_ = new Scheduler(); return instance_; }
     //std::ostream &operator<<(std::ostream &out) const;
 	void add(ScheduledItem*);
-	ScheduledItem *next() const { if (items.empty()) return 0; else return items.top(); }
-	void pop() { items.pop(); }
+	ScheduledItem *next() const;
+	void pop();
 	bool ready();
     void idle();
 	bool empty() { return items.empty(); }
@@ -85,13 +91,14 @@ public:
 
 	void operator()();
 	void stop();
+	int64_t getNextDelay();
     
 protected:
     Scheduler();
 	~Scheduler() {}
 	static Scheduler *instance_;
-    std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
-    //PriorityQueue items;
+    //std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
+    PriorityQueue items;
 	struct timeval next_time;
 	enum State { 
 		e_waiting,  // waiting for something to do

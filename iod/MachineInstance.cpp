@@ -1166,9 +1166,31 @@ void MachineInstance::idle() {
 	return;
 }
 
-uint64_t get_diff_in_microsecs(struct timeval *now, struct timeval *then) {
-	uint64_t t = (now->tv_sec - then->tv_sec);
-	t = t * 1000000 + (now->tv_usec - then->tv_usec);
+uint64_t nowMicrosecs() {
+	struct timeval now;
+	gettimeofday(&now, 0);
+	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
+}
+
+int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then) {
+//   uint64_t t = (now->tv_sec - then->tv_sec);
+//   t = t * 1000000 + (now->tv_usec - then->tv_usec);
+//	return t;
+	uint64_t now_t = now->tv_sec * 1000000L + now->tv_usec;
+	uint64_t then_t = then->tv_sec * 1000000L + then->tv_usec;
+	int64_t t = now_t - then_t;
+	return t;
+}
+
+int64_t get_diff_in_microsecs(uint64_t now_t, const struct timeval *then) {
+	uint64_t then_t = then->tv_sec * 1000000L + then->tv_usec;
+	int64_t t = now_t - then_t;
+	return t;
+}
+
+int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
+	uint64_t now_t = now->tv_sec * 1000000L + now->tv_usec;
+	int64_t t = now_t - then_t;
 	return t;
 }
 
@@ -1726,12 +1748,13 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 				long timer_val;
 				// first disable any trigger that may still be enabled
 				if ( s.trigger) {
-					//NB_MSG << "clearing trigger for state " << s.state_name << "\n";
+					DBG_M_SCHEDULER << _name << " clearing trigger for state " << s.state_name << "\n";
 					if (s.trigger->enabled() ) {
 						DBG_M_SCHEDULER << _name << " disabling " << s.trigger->getName() << "\n";
 						s.trigger->disable();
 					}
 					s.trigger->release();
+					s.trigger = 0;
 				}
 				s.condition.predicate->clearTimerEvents(this);
 
@@ -1756,7 +1779,7 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 				}
 				if (s.condition.predicate->op == opGT) timer_val++;
 				else if (s.condition.predicate->op == opLT) --timer_val;
-				DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val*1000 << "us\n";
+				DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
 				// prepare a new trigger. note: very short timers will still be scheduled
 				// TBD move this outside of the loop and only apply it for the earliest timer
 				s.trigger = new Trigger("Timer");
@@ -2655,7 +2678,8 @@ void MachineInstance::setStableState() {
 							}
 						}
 						if (s.uses_timer) {
-							DBG_M_MESSAGING << _name << " scheduling condition tests for state " << s.state_name << "\n";
+							DBG_M_MESSAGING << _name << "[" << current_state.getName() 
+								<< "] scheduling condition tests for state " << s.state_name << "\n";
 							s.condition.predicate->scheduleTimerEvents(this);
 						}
 						if (s.subcondition_handlers) {
@@ -2671,7 +2695,8 @@ void MachineInstance::setStableState() {
 					else {
 						DBG_M_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
 						if (s.uses_timer) {
-							DBG_M_MESSAGING << _name << " scheduling condition tests for state " << s.state_name << "\n";
+							DBG_M_MESSAGING << _name  << "[" << current_state.getName() 
+								<< "] scheduling condition tests for state " << s.state_name << "\n";
 							s.condition.predicate->scheduleTimerEvents(this);
 							//Value v = s.timer_val;
 							// there is a bug here; if the timer used in this state is on a different machine

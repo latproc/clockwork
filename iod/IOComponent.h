@@ -84,6 +84,7 @@ public:
 	static int notifyComponentsAt(unsigned int offset);
 	static bool hasUpdates();
 	static IOUpdate *getUpdates();
+	static IOUpdate *getDefaults();
 #ifndef EC_SIMULATOR
 //	ECModule *owner() { return ECInterface::findModule(address.module_position); }
 #endif
@@ -138,6 +139,10 @@ public:
 	static int updatesWaiting() { return outputs_waiting; }
 	Direction direction() { return direction_; }
 
+	enum HardwareState { s_hardware_init, s_operational };
+	static HardwareState getHardwareState();
+	static void setHardwareState(HardwareState state);
+
 protected:
 	int getStatus(); 
 	int io_index; // the index of the first bit in this component's address space
@@ -149,6 +154,9 @@ protected:
 	static unsigned int max_offset;
 	static unsigned int min_offset;
 	Direction direction_;
+	static HardwareState hardware_state;
+	static uint8_t *default_data;
+	static uint8_t *default_mask;
 };
 std::ostream &operator<<(std::ostream&out, const IOComponent &);
 

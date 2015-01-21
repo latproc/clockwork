@@ -176,6 +176,24 @@ bool setup_signals()
 }
 
 
+std::list<MachineInstance *>output_points;
+
+void initialiseOutputs() {
+	std::list<MachineInstance *>::iterator iter = output_points.begin();
+	while (iter != output_points.end()) {
+		MachineInstance *m = *iter++;
+		Value &val = m->properties.lookup("default");
+		if (val == SymbolTable::Null) continue;
+		std::cout << "Initialising " << m->getName() << " to " << val << "\n";
+		if (m->_type == "ANALOGUEOUTPUT") {
+			m->setValue("VALUE", val);
+		}
+		else  {
+			m->setState(val.asString().c_str());
+		}
+	}
+} 
+
 void generateIOComponentModules()
 {
 	std::list<Output *> output_list;
@@ -194,9 +212,10 @@ void generateIOComponentModules()
 			iter++;
 			--remaining;
 			if ( (m->_type == "POINT" || m->_type == "ANALOGINPUT"  || m->_type == "COUNTERRATE"
-						|| m->_type == "COUNTER" || m->_type == "RATEESTIMATOR"
+						|| m->_type == "COUNTER" 
 						|| m->_type == "STATUS_FLAG" || m->_type == "ANALOGOUTPUT" ) && m->parameters.size() > 1)
 			{
+				output_points.push_back(m);
 				// points should have two parameters, the name of the io module and the bit offset
 				//Parameter module = m->parameters[0];
 				//Parameter offset = m->parameters[1];
@@ -215,21 +234,38 @@ void generateIOComponentModules()
 					entry_position = m->parameters[1].val.iValue;
 				}
 
-				std::cerr << "Setting up point " << m->getName() << " " << entry_position << " on module " << name << "\n";
+				std::cerr << "Setting up point " << m->getName() 
+					<< " " << entry_position << " on module " << name << "\n";
 				MachineInstance *module_mi = MachineInstance::find(name.c_str());
 				if (!module_mi)
 				{
 					snprintf(error_buf, error_buf_size, "No machine called %s", name.c_str());
 					MessageLog::instance()->add(error_buf);
 					std::cerr << error_buf << "\n";
+					error_messages.push_back(error_buf);
+					++num_errors;
 					continue;
 				}
 				if (!module_mi->properties.exists("position"))   // module position not given
 				{
-					snprintf(error_buf, error_buf_size, "Machine %s does not specify a position", name.c_str());
+					snprintf(error_buf, error_buf_size, "Machine %s does not specify a position", 
+						module_mi->getName().c_str());
 					MessageLog::instance()->add(error_buf);
 					std::cerr << error_buf << "\n";
+					error_messages.push_back(error_buf);
+					++num_errors;
 					continue;
+				}
+				if (m->_type == "ANALOGOUTPUT") {
+					Value &default_value = m->properties.lookup("default");
+					if (default_value == SymbolTable::Null) {
+						snprintf(error_buf, error_buf_size, 
+							"Machine %s must specify a default value", m->getName().c_str());
+						MessageLog::instance()->add(error_buf);
+						std::cerr << error_buf << "\n";
+						error_messages.push_back(error_buf);
+						++num_errors;
+					}
 				}
 				std::cerr << module_mi->properties.lookup("position").kind << "\n";
 				int module_position = module_mi->properties.lookup("position").iValue;
@@ -249,7 +285,8 @@ void generateIOComponentModules()
 				ECModule *module = ECInterface::findModule(module_position);
 				if (!module)
 				{
-					snprintf(error_buf, error_buf_size, "No module found at position %d", module_position);
+					snprintf(error_buf, error_buf_size, "No module found at position %d for %s", 
+						module_position, m->getName().c_str());
 					MessageLog::instance()->add(error_buf);
 					std::cerr << error_buf << "\n";
 					error_messages.push_back(error_buf);
@@ -377,6 +414,15 @@ void generateIOComponentModules()
 	}
 }
 
+class IODHardwareActivation : public HardwareActivation {
+	public:
+		void operator()(void) {
+#ifndef EC_SIMULATOR
+			ECInterface::instance()->activate();
+#endif
+			initialise_machines();
+		}
+};
 
 int main(int argc, char const *argv[])
 {
@@ -490,12 +536,21 @@ int main(int argc, char const *argv[])
 		char *slave_config = collectSlaveConfig(true);
 		if (slave_config) free(slave_config);
 	}
-	ECInterface::instance()->activate();
 #endif
 	generateIOComponentModules();
 	IOComponent::setupIOMap();
-	//MachineInstance::displayAll();
-	//ECInterface::instance()->start();
+	initialiseOutputs();
+
+if (num_errors > 0) {
+	// display errors and warnings
+	BOOST_FOREACH(std::string &error, error_messages) {
+		std::cerr << error << "\n";
+	}
+	// abort if there were errors
+	std::cerr << "Errors detected. Aborting\n";
+	return 2;
+}
+
 
 #ifdef EC_SIMULATOR
 	wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
@@ -503,7 +558,6 @@ int main(int argc, char const *argv[])
 
 	std::cout << "-------- Initialising ---------\n";
 
-	initialise_machines();
 	setup_signals();
 
 	std::cout << "-------- Starting EtherCAT Interface ---------\n";
@@ -523,7 +577,8 @@ int main(int argc, char const *argv[])
 	ModbusAddress::message("STARTUP");
 	Dispatcher::start();
 
-	ProcessingThread processMonitor(machine);
+	IODHardwareActivation iod_activation;
+	ProcessingThread processMonitor(machine, iod_activation);
 	boost::thread process(boost::ref(processMonitor));
 	// do not start a thread, simply run this process directly
 	//processMonitor();

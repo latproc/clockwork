@@ -19,6 +19,9 @@ private:
 	zmq::socket_t *cmd_sock;
 	zmq::socket_t *sync_sock;
 	int rtc; // file descriptor of the RTC if it is being used
+	unsigned int keep_alive;
+	uint64_t last_ping;
+
 
 	bool waitForSync(zmq::socket_t &sync);
 };

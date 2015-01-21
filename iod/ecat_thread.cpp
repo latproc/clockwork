@@ -43,6 +43,7 @@
 #include "IOComponent.h"
 #include "clockwork.h"
 #include "options.h"
+#include "Statistic.h"
 #include "ecat_thread.h"
 
 #define USE_RTC 1
@@ -60,7 +61,7 @@
 extern bool machine_is_ready;
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 
-EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000) { 
+EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(10 * 1000),last_ping(0) { 
 }
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
@@ -74,6 +75,12 @@ bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
 #ifndef USE_RTC
 //#define USE_SIGNALLER 1
 #endif
+
+static uint64_t nowMicrosecs() {
+	struct timeval now;
+	gettimeofday(&now, 0);
+	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
+}
 
 static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 	bool received = false;
@@ -97,12 +104,6 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 
 bool EtherCATThread::checkAndUpdateCycleDelay()
 {
-#if 0
-    Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-    long delay = 100;
-    if (cycle_delay_v && cycle_delay_v->iValue >= 100)
-        delay = cycle_delay_v->iValue;
-#endif
     if (cycle_delay != get_cycle_time())
     {
         cycle_delay = get_cycle_time();
@@ -120,26 +121,49 @@ static void display(uint8_t *p) {
 		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 }
 
+// data from clockwork should be one of these two types.
+// process data will only be used if default data has been sent
+const int DEFAULT_DATA = 1;
+const int PROCESS_DATA = 2;
+
+size_t default_data_size = 0;
+uint8_t *default_data = 0;
+uint8_t *default_mask = 0;
+
+void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
+	if (default_data) delete default_data;
+	if (default_mask) delete default_mask;
+	default_data_size = len;
+	default_data = new uint8_t[len];
+	memcpy(default_data, data, len);
+	default_mask = new uint8_t[len];
+	memcpy(default_mask, data, len);
+
+	std::cout << "default data: "; display(default_data); std::cout << "\n";
+	std::cout << "default mask: "; display(default_mask); std::cout << "\n";
+} 
+
 void EtherCATThread::operator()() {
     pthread_setname_np(pthread_self(), "iod ethercat");
+	Statistic *keep_alive_stat = new Statistic("keep alive margin");
+	Statistic::add(keep_alive_stat);
 
 #ifdef USE_RTC
 	rtc = open("/dev/rtc", 0);
 	if (rtc == -1) { perror("open rtc"); exit(1); }
-	unsigned long period = ECInterface::FREQUENCY;
+	unsigned long freq = ECInterface::FREQUENCY;
 
-	int rc = ioctl(rtc, RTC_IRQP_SET, period);
-	if (rc == -1) { perror("set rtc period"); exit(1); }
+	int rc = ioctl(rtc, RTC_IRQP_SET, freq);
+	if (rc == -1) { perror("set rtc freq"); exit(1); }
 
-	rc = ioctl(rtc, RTC_IRQP_READ, &period);
+	rc = ioctl(rtc, RTC_IRQP_READ, &freq);
 	if (rc == -1) { perror("ioctl"); exit(1); }
-	std::cout << "Real time clock: period set to : " << period << "\n";
+	std::cout << "Real time clock: freq set to : " << freq << "\n";
 
 	rc = ioctl(rtc, RTC_PIE_ON, 0);
 	if (rc == -1) { perror("enable rtc pie"); exit(1); }
 #endif
-	struct timeval then;
-	gettimeofday(&then, 0);
+	uint64_t then = nowMicrosecs();
 	
 	sync_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REP);
 	sync_sock->bind("inproc://ethercat_sync");
@@ -170,17 +194,20 @@ void EtherCATThread::operator()() {
 				}
 				perror("read rtc"); exit(1); 
 			}
-			if (rc == 0) NB_MSG << "zero bytes read from rtc\n";
-			if (period != ECInterface::FREQUENCY) {
-				period = ECInterface::FREQUENCY;
-				rc = ioctl(rtc, RTC_IRQP_SET, period);
-				if (rc == -1) { perror("set rtc period"); exit(1); }
+			if (rc == 0) { NB_MSG << "zero bytes read from rtc\n"; }
+			if (freq != ECInterface::FREQUENCY) {
+				unsigned long saved_freq = freq;
+				freq = ECInterface::FREQUENCY;
+				rc = ioctl(rtc, RTC_IRQP_SET, freq);
+				if (rc == -1) { 
+					perror("set rtc freq"); 
+					freq = saved_freq; // will retry
+				}
 			}
+			uint64_t now = nowMicrosecs();
 #else
-			struct timeval now;
-			gettimeofday(&now,0);
-			int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
-						+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
+			uint64_t now = nowMicrosecs();
+			int64_t delta = now - then;
 			int64_t delay = cycle_delay-delta-100;
 			if (delay>0) {
 				struct timespec sleep_time;
@@ -196,6 +223,7 @@ void EtherCATThread::operator()() {
 			gettimeofday(&then,0);
 #endif
 #endif
+			uint64_t period = 1000000/freq;
 			int n = 0;
 			if (!machine_is_ready) {
 				//NB_MSG << "machine is not ready..\n";
@@ -208,13 +236,16 @@ void EtherCATThread::operator()() {
 				if (status == e_collect)
 					n = ECInterface::instance()->collectState();
 			}
-			//if (n) 
-				//NB_MSG << n << " changes when collecting state\n";
+			if (last_ping && keep_alive)
+				assert(last_ping + keep_alive >= now);
 			// send all process domain data once the domain is operational
+			// check keep-alives on the clockwork communications channel
+			//   four periods: 4 * period / 1000 = period/250
+			bool need_ping = (last_ping + keep_alive - 5000 - period < now) ? true : false;
 
-			if ( status == e_collect && (first_run || n) && machine_is_ready) {
+			if ( status == e_collect && (first_run || n || need_ping) && machine_is_ready) {
 				first_run = false;
-				//NB_MSG << "io changed, forwarding to clockwork\n";
+				need_ping = false;
 				uint32_t size = ECInterface::instance()->getProcessDataSize();
 
 				// sending a three-part message, each stage may be interrupted
@@ -268,8 +299,15 @@ void EtherCATThread::operator()() {
 
 				try {
 					char buf[10];
-					if (sync_sock->recv(buf, 10, ZMQ_DONTWAIT)) {
+					int len = 0;
+					if ( (len = sync_sock->recv(buf, 10, ZMQ_DONTWAIT)) ) {
 						status = e_collect;
+						if (keep_alive) {
+							uint64_t this_ping_time = nowMicrosecs();
+							if (last_ping && keep_alive_stat)
+								keep_alive_stat->add(keep_alive - (this_ping_time - last_ping));
+							last_ping = this_ping_time;
+						}
 						//NB_MSG << "got response from clockwork\n";
 					}
 				}
@@ -278,16 +316,11 @@ void EtherCATThread::operator()() {
 						NB_MSG << "EtherCAT error " << zmq_strerror(errno) << "checking for update from clockwork\n";
 					}
 				}
-				//NB_MSG << "sent EtherCAT update, waiting for response\n";
-				//char buf[10];
-				//size_t len;
-				//safeRecv(*sync_sock, buf, 10, true, len);
-				//NB_MSG << "EtherCAT update done\n";
 			}
-
 	
 			// check for communication from clockwork
 			zmq::message_t output_update;
+			uint8_t packet_type = 0;
 			
 			bool received = true;
 			while ( received) {
@@ -305,6 +338,17 @@ void EtherCATThread::operator()() {
 				size_t more_size = sizeof(more);
 				out_sock.getsockopt(ZMQ_RCVMORE, &more, &more_size);
 				assert(more);
+
+				// Packet Type
+				{
+				zmq::message_t iomsg;
+				received = recv(out_sock, iomsg);
+				if (!received) break;
+				//NB_MSG << "received output from clockwork "
+				//	<< "size: " << iomsg.size() << "\n";
+				assert(iomsg.size() == sizeof(packet_type));
+				memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
+				}
 
 				uint8_t *cw_data;
 				{
@@ -328,11 +372,19 @@ void EtherCATThread::operator()() {
 	
 				//NB_MSG << "acknowledging receipt of clockwork output\n";
 				safeSend(out_sock,"ok", 2);
-				ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+				assert(packet_type == DEFAULT_DATA || packet_type == PROCESS_DATA);
+				if (packet_type == DEFAULT_DATA)
+					setDefaultData(len, cw_data, cw_mask);
+				if (default_data) // do not update the domain unless we already have default data
+					ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+				else {
+					std::cout << "got data update with no default set. Ignoring IO update\n";
+				}
 			}
 			ECInterface::instance()->sendUpdates();
 			checkAndUpdateCycleDelay();
 		}	
 	//}
+	keep_alive_stat->report(std::cout);
 }
 

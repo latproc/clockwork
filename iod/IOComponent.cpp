@@ -24,6 +24,37 @@
 #include <iomanip>
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
+#include <netinet/in.h>
+#include "Logger.h"
+
+/* byte swapping macros using either custom code or the network byte order std functions */
+#if 1
+#define toU16(m,v) \
+    *((uint16_t*)m) = \
+        ((((uint16_t)v)&0xff00) >> 8) \
+      | ((((uint16_t)v)&0x00ff) << 8)
+#define fromU16(m) \
+    ( ((*(uint16_t*)m) & 0xff00) >> 8) \
+      | ( (*((uint16_t*)m) & 0x00ff) << 8)
+#define toU32(m,v) \
+    *((uint32_t*)m) = \
+        ((((uint32_t)v)&0xff000000) >> 24) \
+      | ((((uint32_t)v)&0x00ff0000) >>  8) \
+      | ((((uint32_t)v)&0x0000ff00) <<  8) \
+      | ((((uint32_t)v)&0x000000ff) << 24)
+#define fromU32(m) \
+    ( ((*(uint32_t*)m) & 0xff000000) >> 24) \
+  | ( (*((uint32_t*)m) & 0x00ff0000) >> 8) \
+  | ( ((*(uint32_t*)m) & 0x0000ff00) << 8) \
+  | ( (*((uint32_t*)m) & 0x000000ff) << 24)
+
+#else
+#include <netinet/in.h>
+#define toU16(m,v) *(uint16_t*)(m) = htons( (v) )
+#define fromU16(m) ntohs( *(uint16_t*)m)
+#define toU32(m,v) *(uint32_t*)(m) = htonl( (v) )
+#define fromU32(m) ntohl( *(uint32_t*)m)
+#endif
 
 std::list<IOComponent *> IOComponent::processing_queue;
 std::map<std::string, IOAddress> IOComponent::io_names;
@@ -31,16 +62,26 @@ static uint64_t current_time;
 size_t IOComponent::process_data_size = 0;
 uint8_t *IOComponent::process_data = 0;
 uint8_t *IOComponent::process_mask = 0;
+uint8_t *IOComponent::default_data = 0;
+uint8_t *IOComponent::default_mask = 0;
 int IOComponent::outputs_waiting = 0;
 static uint8_t *last_process_data = 0;
 
 unsigned int IOComponent::max_offset = 0;
 unsigned int IOComponent::min_offset = 1000000L;
 static std::vector<IOComponent*> *indexed_components = 0;
+IOComponent::HardwareState IOComponent::hardware_state = s_hardware_init;
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 	uint8_t bitmask = 1<<bitpos;
 	if (val) *q |= bitmask; else *q &= (uint8_t)(0xff - bitmask);
+}
+
+IOComponent::HardwareState IOComponent::getHardwareState() { return hardware_state; }
+void IOComponent::setHardwareState(IOComponent::HardwareState state) { 
+	NB_MSG << "Hardware state  set to " << 
+		((state == s_hardware_init) ? "Hardware Initialisation" : "Operational") << "\n";
+	hardware_state = state; 
 }
 
 IOComponent::DeviceList IOComponent::devices;
@@ -511,6 +552,17 @@ IOUpdate *IOComponent::getUpdates() {
 	return res;
 }
 
+IOUpdate *IOComponent::getDefaults() {
+	IOUpdate *res = new IOUpdate;
+	res->size = max_offset - min_offset + 1;
+	res->data = getProcessData();
+	res->mask = getProcessMask();
+	//std::cout << "preparing to send " << res->size << ":"; display(res->data); 
+	//std::cout << ":"; display(res->mask);
+	//std::cout << "\n";
+	return res;
+}
+
 
 void IOComponent::setupIOMap() {
 	max_offset = 0;
@@ -632,12 +684,12 @@ void IOComponent::idle() {
 			}
 			else if (address.bitlen == 16) {
 				uint16_t x = pending_value % 65536;
-				*((uint16_t *)offset) = x;
+				toU16(offset, x);
 				//EC_WRITE_U16(offset, x);
 			}
 			else if (address.bitlen == 32) {
 				//EC_WRITE_U32(offset, pending_value);
-				*((uint32_t *)offset) = pending_value; // assumes little endian
+				toU32(offset, pending_value); 
 			}
 			last_event = e_none;
 			//address.value = pending_value;
@@ -663,11 +715,11 @@ void IOComponent::idle() {
 			else if (address.bitlen == 8) 
 				val = *(int8_t*)(offset);
 			else if (address.bitlen == 16) {
-				val = *(int16_t*)(offset);
+				val = fromU16(offset);
 				//std::cout << " 16bit value: " << val << " " << std::hex << val << std::dec << "\n";
 			}
 			else if (address.bitlen == 32) 
-				val = *(int32_t*)(offset);
+				val = fromU32(offset);
 			else {
 				val = 0;
 			}

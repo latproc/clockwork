@@ -1,11 +1,17 @@
 #ifndef __cw_processingthread_h__
 #define __cw_processingthread_h__
 
+class HardwareActivation {
+	public:
+		virtual ~HardwareActivation() {}
+		virtual void operator()(void) { }
+};
+
 class ProcessingThread
 {
 public:
     void operator()();
-    ProcessingThread(ControlSystemMachine &m);
+    ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator);
     void stop();
     bool checkAndUpdateCycleDelay();
     
@@ -35,6 +41,7 @@ private:
     
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);
+	HardwareActivation &activate_hardware;
 };
 
 #endif

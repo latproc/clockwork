@@ -42,7 +42,10 @@
 
 extern SymbolTable globals;
 
-uint64_t get_diff_in_microsecs(struct timeval *now, struct timeval *then);
+uint64_t nowMicrosecs();
+int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then);
+int64_t get_diff_in_microsecs(uint64_t now, const struct timeval *then);
+int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then);
 
 class MachineInstance;
 class MachineClass;
@@ -470,6 +473,7 @@ protected:
     friend class PopListFrontValue;
     friend class ItemAtPosValue;
     friend void fixListState(MachineInstance &list);
+	friend void initialiseOutputs();
 
 	friend int changeState(void *s, const char *new_state);
 };
