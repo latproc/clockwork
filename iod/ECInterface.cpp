@@ -378,7 +378,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 1
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -395,12 +395,12 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	uint8_t *pd = domain1_pd;
 	uint8_t *saved_pd = process_data;
 
-/* */
+/*
 	std::cout << "updating domain (size = " << size << ")\n";
 	std::cout << "process: "; display(pd); std::cout << "\n";
 	std::cout << "   mask: "; display(mask); std::cout << "\n";
 	std::cout << "   data: "; display(data); std::cout << "\n";
-/* */
+*/
     for (unsigned int i=0; i<size; ++i) {
         if (*mask && *data != *pd){
 /*
@@ -436,7 +436,7 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 
 void ECInterface::receiveState() {
 	if (!master || !initialised || !active) {
-		std::cerr << "master not ready to collect state" << std::flush;
+		std::cerr << "master not ready to collect state\n" << std::flush;
 		return;
 	}
     // receive process data
@@ -451,7 +451,7 @@ void ECInterface::receiveState() {
 
 int ECInterface::collectState() {
 	if (!master || !initialised || !active) {
-		std::cerr << "master not ready to collect state" << std::flush;
+		std::cerr << "master not ready to collect state\n" << std::flush;
 		return 0;
 	}
 #ifndef EC_SIMULATOR
@@ -539,7 +539,7 @@ int ECInterface::collectState() {
 }
 void ECInterface::sendUpdates() {
 	if (!master || !initialised || !active) {
-		std::cerr << "master not ready to send updates" << std::flush;
+		std::cerr << "master not ready to send updates\n" << std::flush;
 		return;
 	}
 #ifndef EC_SIMULATOR
