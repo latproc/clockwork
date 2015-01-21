@@ -66,7 +66,7 @@ public:
     void setOwner(TriggerOwner *new_owner) { owner = new_owner; }
 	bool enabled() const { return is_active; }
 	bool fired() const { return seen; }
-	void fire() { seen = true; if (owner) owner->triggerFired(this); }
+	void fire() { if (seen) return; seen = true; if (owner) owner->triggerFired(this); }
 	void reset() { seen = false; }
 	void enable() { is_active = true; }
 	void disable() { is_active = false; }
