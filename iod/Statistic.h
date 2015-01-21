@@ -85,6 +85,17 @@ public:
 			stat->report(out);
 		}
 	}
+	static void reportAll(cJSON *obj) {
+		std::list<Statistic*>::iterator iter = stats.begin();
+		while (iter != stats.end()) {
+			cJSON *item = cJSON_CreateObject();
+			cJSON *info = cJSON_CreateArray();
+	 		Statistic *stat = *iter++;
+			stat->reportArray(info);
+			cJSON_AddItemToObject(item, stat->getName().c_str(), info);
+			cJSON_AddItemToArray(obj, item);
+		}
+	}
     const std::string &getName() const { return text; }
     int getCount() { return count; }
     float getSum() { return sum; }
