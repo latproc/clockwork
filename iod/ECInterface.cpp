@@ -60,16 +60,13 @@ extern boost::condition_variable_any ecat_polltime;
 extern Statistics *statistics;
 void signal_handler(int signum);
 
-int ECInterface::FREQUENCY = 2000;
+unsigned int ECInterface::FREQUENCY = 2000;
 ec_master_t *ECInterface::master = NULL;
 ec_master_state_t ECInterface::master_state = {};
 
 ec_domain_t *ECInterface::domain1 = NULL;
 ec_domain_state_t ECInterface::domain1_state = {};
 uint8_t *ECInterface::domain1_pd = 0;
-
-ec_slave_config_t *ECInterface::sc_dig_in = NULL;
-ec_slave_config_state_t ECInterface::sc_dig_in_state = {};
 
 #ifndef EC_SIMULATOR
 
@@ -105,6 +102,24 @@ bool ECModule::online() {
 bool ECModule::operational() {
 	return slave_config_state.operational;
 }
+
+SDOEntry::SDOEntry( uint16_t index, uint8_t subindex, const uint8_t *data, size_t size)
+		: index_(index), subindex_(subindex), data_(0), size_(size), 
+			realtime_request(0), done(false) {
+	data_ = new uint8_t[size];
+	assert(data_);
+	memcpy(data_, data, size);
+}
+
+SDOEntry::SDOEntry( ec_sdo_request_t *sdo_req) 
+	: index_(0), subindex_(0), data_(0), size_(0), 
+			realtime_request(sdo_req), done(false) 
+{
+}
+
+
+SDOEntry::~SDOEntry() { if (data_) { delete data_; data_=0; }}
+
 
 #endif
 
@@ -145,6 +160,37 @@ std::ostream &ECModule::operator <<(std::ostream & out)const {
 	return out;
 }
 
+void ECModule::prepareSDORequest(uint16_t index, uint8_t subindex, size_t size) {
+	ec_slave_config_t *x = ecrt_master_slave_config(ECInterface::master, 0, position, 
+								 vendor_id, product_code);
+    ec_slave_config_state_t s;
+    ecrt_slave_config_state(x, &s);
+
+	ec_sdo_request_t *sdo = ecrt_slave_config_create_sdo_request(x, index, subindex, size);
+	SDOEntry *entry = new SDOEntry(sdo);
+	sdo_entries.push_back(entry);
+}
+
+void ECModule::read_sdo(ec_sdo_request_t *sdo)
+{
+    switch (ecrt_sdo_request_state(sdo)) {
+        case EC_REQUEST_UNUSED: // request was not used yet
+            ecrt_sdo_request_read(sdo); // trigger first read
+            break;
+        case EC_REQUEST_BUSY:
+            fprintf(stderr, "Still busy...\n");
+            break;
+        case EC_REQUEST_SUCCESS:
+            fprintf(stderr, "SDO value: 0x%04X\n",
+                    EC_READ_U16(ecrt_sdo_request_data(sdo)));
+            ecrt_sdo_request_read(sdo); // trigger next read
+            break;
+        case EC_REQUEST_ERROR:
+            fprintf(stderr, "Failed to read SDO!\n");
+            ecrt_sdo_request_read(sdo); // retry reading
+            break;
+    }
+}
 
 ECModule *ECInterface::findModule(int pos) {
 	if (pos < 0 || (unsigned int)pos >= modules.size()) return 0;
@@ -204,6 +250,11 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 	}
 
 	return true;
+}
+
+bool ECInterface::prepare() {
+    std::cerr << "Preparing IO...";
+    return false;
 }
 
 bool ECInterface::activate() {
@@ -344,12 +395,12 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	uint8_t *pd = domain1_pd;
 	uint8_t *saved_pd = process_data;
 
-/*
+/* */
 	std::cout << "updating domain (size = " << size << ")\n";
 	std::cout << "process: "; display(pd); std::cout << "\n";
 	std::cout << "   mask: "; display(mask); std::cout << "\n";
 	std::cout << "   data: "; display(data); std::cout << "\n";
-*/
+/* */
     for (unsigned int i=0; i<size; ++i) {
         if (*mask && *data != *pd){
 /*
@@ -492,6 +543,11 @@ void ECInterface::sendUpdates() {
 		return;
 	}
 #ifndef EC_SIMULATOR
+	struct timeval now;
+	gettimeofday(&now, 0);
+	ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
+	ecrt_master_sync_reference_clock(master);
+	ecrt_master_sync_slave_clocks(master);
     ecrt_domain_queue(domain1);
     ecrt_master_send(master);
 #endif

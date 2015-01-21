@@ -40,6 +40,24 @@ public:
 	unsigned int pdo_index;
 };
 
+class SDOEntry {
+	uint16_t  	index_;
+	uint8_t  	subindex_;
+	uint8_t 	*data_;
+	size_t  	size_;
+	ec_sdo_request_t	*realtime_request;
+	bool done;
+	
+	public:
+	
+	SDOEntry( ec_sdo_request_t *);
+	SDOEntry( uint16_t index, uint8_t subindex, const uint8_t *data, size_t size);
+	~SDOEntry();
+	private:
+	SDOEntry( const SDOEntry &);
+	SDOEntry &operator=(const SDOEntry &);
+};
+
 class ECModule {
 public:
 	ECModule();
@@ -48,6 +66,7 @@ public:
 	bool ecrtSlaveConfigPdos();
 	bool online();
 	bool operational();
+	void read_sdo(ec_sdo_request_t *sdo);
 	std::ostream &operator <<(std::ostream &)const;
 public:
 	ec_slave_config_t *slave_config;
@@ -66,6 +85,10 @@ public:
 	std::string name;
 	unsigned int num_entries;
 	EntryDetails *entry_details;
+	void addSDOEntry(SDOEntry *);
+	void prepareSDORequest(uint16_t index, uint8_t subindex, size_t size);
+	std::list<SDOEntry*> initialisation_entries;
+	std::list<SDOEntry *> sdo_entries;
 };
 
 #else
@@ -91,7 +114,7 @@ typedef struct ECPDOEntryReg{} ec_pdo_entry_reg_t;
 
 class ECInterface {
 public:
-	static int FREQUENCY;
+	static unsigned int FREQUENCY;
 	static ec_master_t *master;
 	static ec_master_state_t master_state;
 
@@ -99,13 +122,6 @@ public:
 	static ec_domain_state_t domain1_state;
 	static uint8_t *domain1_pd;
 
-	static ec_slave_config_state_t sc_dig_in_state;
-	static ec_slave_config_t *sc_dig_in;
-
-	static unsigned int off_dig_out;
-	static unsigned int off_dig_in;
-    static unsigned int off_multi_out;
-    static unsigned int off_multi_in;
 	bool initialised;
 	bool active;
 
@@ -129,6 +145,7 @@ public:
     const ec_master_t *getMaster() { return master; }
     const ec_master_state_t *getMasterState() { return &master_state; }
 #ifndef EC_SIMULATOR
+	bool prepare();
 	bool activate();
 	bool addModule(ECModule *m, bool reset_io);
 	bool online();
