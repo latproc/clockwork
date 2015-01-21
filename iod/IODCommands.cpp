@@ -1007,6 +1007,12 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                 cJSON_AddItemToArray(result, stat);
             }
         }
+		{
+            cJSON *stats = cJSON_CreateArray();
+			Statistic::reportAll(stats);
+			cJSON_AddItemToArray(result, stats);
+		}
+		
         //std::string s(out.str());
         if (result) {
             char *r_str = cJSON_Print(result);
