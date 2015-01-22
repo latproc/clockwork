@@ -179,11 +179,13 @@ bool setup_signals()
 std::list<MachineInstance *>output_points;
 
 void initialiseOutputs() {
+	std::list<MachineInstance *>default_outputs;
 	std::list<MachineInstance *>::iterator iter = output_points.begin();
 	while (iter != output_points.end()) {
 		MachineInstance *m = *iter++;
 		Value &val = m->properties.lookup("default");
 		if (val == SymbolTable::Null) continue;
+		default_outputs.push_back(m);
 		if (val.kind == Value::t_integer || m->_type == "ANALOGOUTPUT") {
 			std::cout << "Initialising value for " << m->getName() << " to " << val << "\n";
 			long i_val = 0;
@@ -198,6 +200,8 @@ void initialiseOutputs() {
 			m->setState(val.asString().c_str());
 		}
 	}
+	IOComponent::setDefaultData(IOComponent::getProcessData());
+	IOComponent::setDefaultMask(IOComponent::generateMask(default_outputs));
 } 
 
 void generateIOComponentModules()

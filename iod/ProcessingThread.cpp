@@ -172,12 +172,14 @@ static uint8_t *incoming_process_data = 0;
 static uint8_t *incoming_process_mask = 0;
 static uint32_t incoming_data_size;
 
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
     for (int i=min; i<=max; ++i) 
-		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
 }
+#endif
 
 int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], 
 		zmq::socket_t &ecat_sync, 
@@ -490,8 +492,14 @@ void ProcessingThread::operator()()
 			) {
 			if (update_state == s_update_idle) {
 				IOUpdate *upd = 0;
-				if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+				if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
+					//std::cout << "Sending defaults to EtherCAT\n";
 					upd = IOComponent::getDefaults();
+					//display(upd->data);
+					//std::cout << "\n";
+					activate_hardware();
+					IOComponent::setHardwareState(IOComponent::s_operational);
+				}
 				else
 					upd = IOComponent::getUpdates();
 				if (upd) {
@@ -522,6 +530,9 @@ void ProcessingThread::operator()()
 										zmq::message_t iomsg(size);
 										memcpy(iomsg.data(), (void*)upd->data, size);
 										ecat_out.send(iomsg, ZMQ_SNDMORE);
+										//std::cout << "sending to EtherCAT:\n";
+										//display(upd->data);
+										//std::cout << "\n";
 										++stage;
 									}
 								case 4:
@@ -544,7 +555,7 @@ void ProcessingThread::operator()()
 							assert(false);
 						}
 					}
-					std::cout << "update sent. Waiting for ack\n";
+					//std::cout << "update sent. Waiting for ack\n";
 					delete upd;
 					update_state = s_update_sent;
 				}
@@ -558,12 +569,8 @@ void ProcessingThread::operator()()
 			try {
 			//safeRecv(ecat_out, buf, 10, true, len);
 				if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
-					//std::cout << "update notification done\n";
+					//std::cout << "update acknowledged\n";
 					update_state = s_update_idle;
-					if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)  {
-						activate_hardware();
-						IOComponent::setHardwareState(IOComponent::s_operational);
-					}
 				}
 			}
 			catch (zmq::error_t err) {

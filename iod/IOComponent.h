@@ -81,10 +81,15 @@ public:
 	static int getMaxIOOffset();
 	static uint8_t *getProcessData() { return process_data; }
 	static uint8_t *getProcessMask() { return process_mask; }
+	static uint8_t *getDefaultData() { return default_data; }
+	static uint8_t *getDefaultMask() { return default_mask; }
+	static void setDefaultData(uint8_t *);
+	static void setDefaultMask(uint8_t *);
 	static int notifyComponentsAt(unsigned int offset);
 	static bool hasUpdates();
 	static IOUpdate *getUpdates();
 	static IOUpdate *getDefaults();
+	static uint8_t *generateMask(std::list<MachineInstance*> &outputs);
 #ifndef EC_SIMULATOR
 //	ECModule *owner() { return ECInterface::findModule(address.module_position); }
 #endif
@@ -139,7 +144,7 @@ public:
 	static int updatesWaiting() { return outputs_waiting; }
 	Direction direction() { return direction_; }
 
-	enum HardwareState { s_hardware_init, s_operational };
+	enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };
 	static HardwareState getHardwareState();
 	static void setHardwareState(HardwareState state);
 

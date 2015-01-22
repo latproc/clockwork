@@ -114,12 +114,12 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
-#if 1
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
-    for (int i=min; i<=max; ++i) 
-		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
+	for (int i=min; i<=max; ++i) 
+		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
 }
 #endif
 
@@ -273,9 +273,13 @@ void EtherCATThread::operator()() {
 							case 2:
 							{
 								zmq::message_t iomsg(size);
-								NB_MSG << "sending ";
-								display(ECInterface::instance()->getUpdateData());
-								NB_MSG << "\n";
+#if 0
+								if (driver_state == s_driver_init) {
+									std::cout << "sending ";
+									display(ECInterface::instance()->getUpdateData());
+									std::cout << "\n";
+								}
+#endif
 								memcpy(iomsg.data(), (void*)ECInterface::instance()->getUpdateData(),size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
@@ -352,8 +356,10 @@ void EtherCATThread::operator()() {
 				zmq::message_t iomsg;
 				received = recv(out_sock, iomsg);
 				if (!received) break;
-				//NB_MSG << "received output from clockwork "
-				//	<< "size: " << iomsg.size() << "\n";
+
+				if (driver_state == s_driver_init) {
+					NB_MSG << "received initial values from clockwork; size: " << iomsg.size() << "\n";
+				}
 				assert(iomsg.size() == sizeof(packet_type));
 				memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
 				}
@@ -379,18 +385,22 @@ void EtherCATThread::operator()() {
 				}
 	
 				//NB_MSG << "acknowledging receipt of clockwork output\n";
+#if 0
+				if (!default_data) {
+				  	std::cout << "received default data from driver\n";
+						display(cw_data);
+				}
+#endif
 				safeSend(out_sock,"ok", 2);
 				assert(packet_type == DEFAULT_DATA || packet_type == PROCESS_DATA);
 				if (packet_type == DEFAULT_DATA)
 					setDefaultData(len, cw_data, cw_mask);
-				else if (packet_type == PROCESS_DATA && driver_state == s_driver_init)
+				else if (packet_type == PROCESS_DATA && driver_state == s_driver_init) {
+					//std::cout << "Started getting process data from driver\n";
 					driver_state = s_driver_operational;
-				if (default_data) { // do not update the domain unless we already have default data
-					ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+					//display(cw_data);
 				}
-				else {
-					std::cout << "got data update with no default set. Ignoring IO update\n";
-				}
+				ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 			}
 			ECInterface::instance()->sendUpdates();
 			checkAndUpdateCycleDelay();
