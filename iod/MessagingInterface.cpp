@@ -424,6 +424,8 @@ void SocketMonitor::operator()() {
         }
         catch (zmq::error_t io) {
             std::cerr << "ZMQ error: " << zmq_strerror(errno) << " in socket monitor\n";
+						if (errno == ENOENT || errno == EINVAL) // monitoring a socket that has been removed. exit and rely on restart code (TBD)
+							exit(2);
         }
         catch (std::exception ex) {
             std::cerr << "unknown exception setting up a socket monitor\n";
