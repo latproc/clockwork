@@ -1,3 +1,9 @@
+FlasherOne MACHINE { 
+	on WHEN SELF IS on AND TIMER < 1000 OR SELF IS off AND TIMER>=1000;
+	off DEFAULT;
+}
+flasher1 FlasherOne;
+
 # this machine tests a cycle of events that use an execute and a transition table
 # to drive the state machine.
 
