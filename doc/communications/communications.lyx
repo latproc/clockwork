@@ -76,7 +76,7 @@ This document describes the future communications framework for Clockwork.
  A Clockwork driver program provides a runtime environment to execute several
  machines in parallel.
  Each driver may communicate with other programs via message passing and
- publisher/subscriber models.
+ publisher-subscriber models.
  
 \end_layout
 
@@ -128,6 +128,15 @@ The latproc system is to be split into a communications hub with scripting
  implemented in a variety of database/memory systems but the key observation
  is that the repository is not expected to notify Clockwork instances of
  data changes.
+\end_layout
+
+\begin_layout Standard
+TBD.
+ The repository is only used for configuration settings, not state; Before
+ it can be used for also holding state information, there needs to be a
+ way for programs to collect the data from the repository without losing
+ changes that occur during the collection.
+ 
 \end_layout
 
 \begin_layout Standard
@@ -186,11 +195,15 @@ interface definitions
 
 \end_deeper
 \begin_layout Itemize
-creates shadow machines for machines that are updated externally
+creates shadow machines for machines that are updated externally,
 \end_layout
 
 \begin_layout Itemize
-establishes connections as described in the interface definitions
+establishes connections as described in the interface definitions,
+\end_layout
+
+\begin_layout Itemize
+loads current state for the external machines and
 \end_layout
 
 \begin_layout Itemize
@@ -203,6 +216,12 @@ Note that failure to establish communications does not cause an instance
  aborted by an external source.
  Communication interfaces can be interrogated within Clockwork and the channel
  state can be used to affect the execution of the models.
+\end_layout
+
+\begin_layout Standard
+Interfaces should be configured with a heartbeat that ensures that hardware
+ drivers can reset to defaults if there is a loss of communication with
+ the control system for any reason.
 \end_layout
 
 \begin_layout Section
@@ -263,6 +282,10 @@ RECEIVES command_name, \SpecialChar \ldots{}
  ';'
 \end_layout
 
+\begin_layout LyX-Code
+KEEPALIVE ping_time ';'
+\end_layout
+
 \end_deeper
 \begin_layout LyX-Code
 }
@@ -294,6 +317,11 @@ KEY a pre-shared key.
  If the channel definition includes an IDENTIFIER option, both sides must
  be able to demonstrate that they know the identifier.
  The identifier itself should never be transmitted on the channel.
+\end_layout
+
+\begin_layout Description
+KEEPALIVE ensure there is communication on the channel at least as often
+ as the given value in ms
 \end_layout
 
 \begin_layout Description
@@ -535,6 +563,10 @@ If a message send fails there is no way for the clockwork program to know
 \begin_layout Enumerate
 When a message arrives it should not be delivered unless the target machine
  has no active actions
+\end_layout
+
+\begin_layout Enumerate
+How should default values be specicified?
 \end_layout
 
 \begin_layout Subsection
@@ -1022,6 +1054,15 @@ EtherCAT
 When the EtherCAT driver connects to Clockwork, it announces the modules
  that it has control over either by providing the names from the shared
  repository or by providing the definitions directly on the channel.
+ BLOCKs contain REGIONs that have a number of BITs, numbered from 1 and
+ also using default names that follow the pattern 'a','b',\SpecialChar \ldots{}
+,'aa',ab',\SpecialChar \ldots{}
+.
+\end_layout
+
+\begin_layout Standard
+TBD fix this example, the syncmanagers actually define the regions and the
+ pdos are just fields.
 \end_layout
 
 \begin_layout LyX-Code
@@ -1063,7 +1104,43 @@ Inputs
 \end_layout
 
 \begin_layout LyX-Code
-BIT[8];
+BIT[8] {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+INITIAL 0; # this can also be done via a prepare statement
+\end_layout
+
+\begin_layout LyX-Code
+MAP { # unnamed map, this is the default interpretation for this region
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+BIT[3];
+\end_layout
+
+\begin_layout LyX-Code
+valve BIT;
+\end_layout
+
+\begin_layout LyX-Code
+motor BIT;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[3]; # avoid warnings by labelling all 8 bits
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+byte MAP { BYTE; } // a named map, pdo1.byte interprets the region as a single
+ byte
 \end_layout
 
 \end_deeper
@@ -1074,6 +1151,21 @@ BIT[8];
 \end_deeper
 \begin_layout LyX-Code
 }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+The options proved in this definition are specific to the channel type,
+ EtherCAT in this case.
+ The REGION and specifications are used by clockwork to determine the memory
+ structure.
+ In the above definition, the first region in the block is labelled 'pdo1',
+ it is eight bits wide with pdo1.valve and pdo1.motor being at bits 'd' and
+ 'e'.
 \end_layout
 
 \begin_layout Standard
@@ -1081,11 +1173,120 @@ A Clockwork script can bind objects to fields:
 \end_layout
 
 \begin_layout LyX-Code
-EL1814 MODULE 1, 0; # bit 0 of module with position 1
+EK1814 MODULE 1, 0; # bit 0 of module with position 1
 \end_layout
 
 \begin_layout Standard
 The above legacy syntax is not general enough (TBD)
+\end_layout
+
+\begin_layout Standard
+The EtherCAT polling program communicates with clockwork via two message
+ queues.
+ Each message contains a mask and a bit set.
+ The receiver of the message updates the bits in processing memory that
+ match the mask and ignores other bits.
+\end_layout
+
+\begin_layout Standard
+In clockwork, when IO is updated, a bits are set in the mask due to be sent
+ to the ethercat interface and the value is updated.
+ When all components are updated in process memory, the mask and the data
+ are sent to the EtherCAT interface.
+ When the EtherCAT thread starts it receives an IO mask from clockwork that
+ defines all of the bits that clockwork is interested in.
+ If there are no relevant changes in the bitmap the thread does not send
+ anything to clockwork.
+ When clockwork updates output points, it messages the updates to the ethercat
+ thread.
+\end_layout
+
+\begin_layout Standard
+TBD
+\end_layout
+
+\begin_layout Enumerate
+handle queue growth - clear the queue up to the last entry in both directions.
+ do we care if clockwork toggles an output faster than the io can detect
+ it?
+\end_layout
+
+\begin_layout Enumerate
+in reading data changes, the queue should be 'played' through clockwork
+ in order to ensure no transitions are lost.
+\end_layout
+
+\begin_layout Subsubsection
+Default values
+\end_layout
+
+\begin_layout Standard
+When a driver starts it needs to be provided with default values for all
+ analogue values.
+ These defaults are loaded whenever there is a problem with communication
+ to clockwork.
+ Startup faults can cause serious issues, especially in the case of errors
+ such as incorrect defaults for analogue outputs.
+ Hardware will normally be designed with the assumption thaa the default
+ state for digital outputs is 'off'.
+ 
+\end_layout
+
+\begin_layout Standard
+Analogue values must be intialised before EtherCAT enters the operational
+ state.
+ The ethercat interface will ensure that all analogue outputs referenced
+ by the program will be correctly initialised before entering the operational
+ state.
+ The initial values can be made within the BLOCK definition, as shown above
+ but also constraints can be added so that basic control errors can be avoided.
+\end_layout
+
+\begin_layout LyX-Code
+Module BLOCK {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+[\SpecialChar \ldots{}
+]
+\end_layout
+
+\begin_layout LyX-Code
+PREPARE pdo1 INITIAL 0b00000000 MASK 0x11111111;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+# name the bits that have constraints set
+\end_layout
+
+\begin_layout LyX-Code
+valve BIT pdo1[3];
+\end_layout
+
+\begin_layout LyX-Code
+motor BIT pdo1[4];
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+MotorValveOff CONDITION valve { valve IS off }
+\end_layout
+
+\begin_layout LyX-Code
+CONSTRAINT motor1.TurnOn REQUIRES MotorValveOff;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout Subsection
@@ -1102,6 +1303,35 @@ Clockwork provides a facility to export properties, states and commands
 
 \begin_layout Subsection
 Persistence
+\end_layout
+
+\begin_layout Standard
+Devices that are persistent are loaded from a database when the program
+ starts and are constantly updated in the database as the program runs.
+ The standard persistence channel uses an option to determine which machines
+ should have their state reported through the channel.
+\end_layout
+
+\begin_layout LyX-Code
+# The standard definition for persistence
+\end_layout
+
+\begin_layout LyX-Code
+PERSISTENCE_CHANNEL CHANNEL {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION host "localhost";
+\end_layout
+
+\begin_layout LyX-Code
+MONITORS PERSISTENT == "true";
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout Section

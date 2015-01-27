@@ -1107,5 +1107,17 @@ This extension provides an object of type EtherCAT_Entry when instantiated,
  The extension also adds an SDO object for performing SDO functions.
 \end_layout
 
+\begin_layout Subsection
+Type Extensions
+\end_layout
+
+\begin_layout Standard
+Machines should be able to be defined as extensions of existing machines.
+ Initially these extensions will only be able to add actions and commands.
+ Some thought will be needed as to whether actions will be executed before
+ or after existing actions.
+ 
+\end_layout
+
 \end_body
 \end_document
