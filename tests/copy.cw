@@ -21,3 +21,12 @@ Test MACHINE L_Done, L_FrontDone {
 }
 
 test Test done, front_done;
+
+STARTUP MACHINE {
+	off INITIAL;
+	on STATE;
+
+	ENTER on { ENABLE done; ENABLE front_done; }
+}
+
+startup STARTUP;
