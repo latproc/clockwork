@@ -129,7 +129,7 @@ bool ProcessingThread::checkAndUpdateCycleDelay()
     if (delay != cycle_delay)
     {
 		set_cycle_time(delay);
-        ECInterface::FREQUENCY = 1000000 / delay;
+        //ECInterface::FREQUENCY = 1000000 / delay;
         //ECInterface::instance()->start();
         cycle_delay = delay;
 		return true;
@@ -217,6 +217,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 									assert(msglen == sizeof(incoming_data_size));
 									memcpy(&incoming_data_size, message.data(), msglen);
 									len = incoming_data_size;
+									if (len == 0) { stage = 4; break; }
 									++stage;
 								}
 								case 2: 
@@ -263,7 +264,6 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 				}
 				
                 if (len) status = e_handling_ecat;
-				else std::cout << "received zero length EtherCAT data\n";
             }
             else if (items[CMD_ITEM].revents & ZMQ_POLLIN)
             {
@@ -552,6 +552,8 @@ void ProcessingThread::operator()()
 								usleep(50); 
 								continue;
 							}
+							else
+								std::cerr << zmq_strerror(zmq_errno());
 							assert(false);
 						}
 					}

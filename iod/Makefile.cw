@@ -49,7 +49,7 @@ SRCS = CallMethodAction.cpp		LogAction.cpp			WaitAction.cpp \
 	DebugExtra.cpp			Logger.cpp			beckhoffd.cpp \
 	DisableAction.cpp		MachineCommandAction.cpp	cw.cpp \
 	Dispatcher.cpp			MachineInstance.cpp		iod.cpp \
-	ECInterface.cpp			Message.cpp			iosh.cpp \
+	Message.cpp			iosh.cpp \
 	EnableAction.cpp		MessagingInterface.cpp		cwlang.tab.cpp \
 	ExecuteMessageAction.cpp	ModbusInterface.cpp		cwlang.yy.cpp \
 	Expression.cpp			PredicateAction.cpp		modbusd.cpp \
@@ -122,8 +122,9 @@ beckhoffd:	beckhoffd.cpp IODCommand.h ECInterface.o IOComponent.o Message.o Mess
 #cw.o:	cw.cpp	MessagingInterface.h
 #		$(CC) -c -o $@ cw.cpp 
 
-cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o \
-			Dispatcher.o dynamic_value.o value.o symboltable.o DebugExtra.o Logger.o State.o cJSON.o options.o \
+cw:	cw.o IODCommand.h IOComponent.o Message.o MessagingInterface.o \
+			Dispatcher.o dynamic_value.o value.o symboltable.o \
+			DebugExtra.o Logger.o State.o cJSON.o options.o \
 			MachineInstance.o Plugin.o \
 			cwlang.tab.o cwlang.yy.o Scheduler.o FireTriggerAction.o IfCommandAction.o Expression.o \
 			DisableAction.o EnableAction.o ExpressionAction.o LogAction.o PredicateAction.o \
@@ -145,7 +146,7 @@ cw:	cw.o IODCommand.h ECInterface.o IOComponent.o Message.o MessagingInterface.o
 			SetStateAction.o WaitAction.o SendMessageAction.o HandleMessageAction.o CallMethodAction.o \
 			ExecuteMessageAction.o MachineCommandAction.o IODCommands.o ProcessingThread.o \
 			regular_expressions.cpp PatternAction.o clockwork.o ClientInterface.o MQTTInterface.o \
-			ECInterface.o IOComponent.o Message.o MessagingInterface.o MessageLog.o \
+			IOComponent.o Message.o MessagingInterface.o MessageLog.o \
 			PersistentStore.o filtering.o anet.o Channel.o MessageEncoding.o \
 			$(BOOST_THREAD_LIB) $(BOOST_FILESYSTEM_LIB) -lzmq \
 			-lmosquitto -ldl
@@ -308,7 +309,6 @@ MachineCommandAction.o:	\
 		SetStateAction.h
 
 cw.o:	\
-		ECInterface.h\
 		ControlSystemMachine.h\
 		IOComponent.h\
 		State.h\

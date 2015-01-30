@@ -287,9 +287,8 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 void MachineInstance::setNeedsCheck() {
 	if (!getStateMachine() || !getStateMachine()->allow_auto_states) return;
 	if (!is_enabled) return;
-	if (!needs_check) { DBG_AUTOSTATES << _name << " needs check\n"; }
-	else { DBG_AUTOSTATES << _name << " already flagged for check\n"; }
-	++needs_check;
+	if (!needs_check) { ++needs_check;  DBG_AUTOSTATES << _name << " needs check\n"; }
+	//++needs_check;
 	++total_machines_needing_check;
 	//updateLastEvaluationTime();
 	if (!state_machine) return;
@@ -992,6 +991,17 @@ void MachineInstance::describe(std::ostream &out) {
 		message_handling_stats.report(out);
 		out << "\n";
 	}
+	if (state_machine && !state_machine->commands.empty()) {
+		out << "Commands:\n";
+		std::map<std::string, MachineCommandTemplate*>::iterator cmd_iter = state_machine->commands.begin();
+		const char *delim = "";
+		while (cmd_iter != state_machine->commands.end()) {
+			const std::pair<std::string, MachineCommandTemplate*> &curr = *cmd_iter++;
+			out << delim << curr.first;
+			delim = ", ";
+		}
+	}
+
 	if (!active_actions.empty()) {
 		out << "active actions: (" << active_actions.size() << ")\n";
 		displayActive(out);

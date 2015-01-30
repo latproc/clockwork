@@ -311,6 +311,7 @@ void Predicate::flushCache() {
     cached_entry = 0;
     last_calculation = 0;
     needs_reevaluation = true;
+    stack.stack.clear();
     if (dyn_value) {
         delete dyn_value;
         dyn_value = 0;
@@ -582,6 +583,7 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
  */
 
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+	// check for state comparison
     if (p->left_p && p->left_p->op == opNone 
 			&& p->right_p && p->right_p->op == opNone 
 			&& (p->op == opEQ || p->op == opNE)) {
@@ -604,21 +606,26 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
     }
     
     if (p->left_p) {
+		// binary operator: push left, right and op
+		//std::cout << " resolving left tree\n";
         if (!prep(stack, p->left_p, m, true, reevaluate)) return false;
-		//if (p->left_p->mi)
-        //    std::cout << *(p->left_p) << " refers to a machine\n";
+		
+		//std::cout << " resolving right tree\n";
         if (!prep(stack, p->right_p, m, false, reevaluate)) return false;
-		//if (p->left_p->mi)
-        //    std::cout << *(p->right_p) << " refers to a state\n";
+		//std::cout << " pushing operator " << p->op << "\n";
         stack.push(p->op);
     }
 	else if (p->op == opNOT) {
+		//std::cout << " pushing 'true'\n";
 		stack.push(ExprNode(SymbolTable::True));
+		//std::cout << " resolving right tree\n";
         if (!prep(stack, p->right_p, m, false, reevaluate)) return false;
+		//std::cout << " pushing operator " << p->op << "\n";
         stack.push(p->op);
 	}
     else {
         Value *result = resolve(p, m, left, reevaluate);
+		//std::cout << "prep: resolved " << *result << "\n";
         if (*result == SymbolTable::Null) {
             return false; //result = &p->entry;
         }
@@ -664,15 +671,21 @@ Value Predicate::evaluate(MachineInstance *m) {
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
         struct timeval now;
-        if (predicate->last_evaluation_time < m->lastStateEvaluationTime() )
+        if (predicate->last_evaluation_time < m->lastStateEvaluationTime() ) {
+			//std::cout << "clearing predicate stack\n";
             predicate->stack.stack.clear();
-	    if (predicate->stack.stack.size() == 0 )
+		}
+	    if (predicate->stack.stack.size() == 0 ) {
             if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {
                 std::stringstream ss;
                 ss << m->getName() << " condition failed: predicate failed to resolve: " << *this->predicate << "\n";
                 MessageLog::instance()->add(ss.str().c_str());
                 return false;
             }
+			//std::cout << "predicate stack prepared ok: " << *predicate << "\n";
+		}
+		//else
+			//std::cout << "predicate stack already prepared.. skipping preparation\n";
         //std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
         //Stack work(predicate->stack);
         std::list<ExprNode>::const_iterator work = predicate->stack.stack.begin();
@@ -685,6 +698,8 @@ bool Condition::operator()(MachineInstance *m) {
         predicate->last_evaluation_time = t;
         last_evaluation = ss.str();
 	    if (last_result.kind == Value::t_bool) return last_result.bValue;
+		else
+			std::cout << "warning:  last result kind is not bool: " << last_result << "\n";
 	}
     return false;
 }

@@ -26,7 +26,9 @@
 #include "MessagingInterface.h"
 #include <netinet/in.h>
 #include "Logger.h"
+#ifndef EC_SIMULATOR
 #include <ecrt.h>
+#endif
 
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
@@ -646,6 +648,8 @@ IOUpdate *IOComponent::getUpdates() {
 }
 
 IOUpdate *IOComponent::getDefaults() {
+	if (min_offset >= max_offset)
+		return 0;
 	IOUpdate *res = new IOUpdate;
 	res->size = max_offset - min_offset + 1;
 	copyMaskedBits(process_data, default_data, default_mask, process_data_size);

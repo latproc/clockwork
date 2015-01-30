@@ -23,8 +23,8 @@
 #include "Logger.h"
 
 SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value b,
-                                                       Value destination, Value property, SetOperation op,
-                                                       Predicate *pred, bool remove, Value start, Value end)
+		Value destination, Value property, SetOperation op,
+		Predicate *pred, bool remove, Value start, Value end)
     :   count(num), src_a_name(a.asString()), src_b_name(b.asString()),
         dest_name(destination.asString()), property_name(property.asString()),
         operation(op),
@@ -158,7 +158,8 @@ Action::Status IntersectSetOperation::doOperation() {
         status = Failed;
         return status;
     }
-    if (count == -1 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+    if (count == -1 || !count.asInteger(to_copy)) 
+			to_copy = source_a_machine->parameters.size();
 #ifdef DEPENDENCYFIX
     MachineInstance *last_machine_a = 0;
     MachineInstance *last_machine_b = 0;
@@ -231,7 +232,8 @@ Action::Status IntersectSetOperation::doOperation() {
                 if (matched) break; // already matched this item, no need to keep looking
             }
             else {
-                if (v1.kind == Value::t_symbol && (b.kind == Value::t_string || b.kind == Value::t_integer)) {
+                if (v1.kind == Value::t_symbol 
+					&& (b.kind == Value::t_string || b.kind == Value::t_integer)) {
                     if (CompareSymbolAndValue(owner, v1, property_name, b)) {
                         dest_machine->addParameter(a, v1.cached_machine);
                         break;
@@ -424,9 +426,14 @@ Action::Status SelectSetOperation::doOperation() {
                 source_a_machine->addLocal(a, mi);
                 source_a_machine->locals[0].val = Value("ITEM");
                 source_a_machine->locals[0].real_name = a.sValue;
+				//std::cout << "step " << i << " " << source_a_machine->locals[0].real_name << "\n";
                 if (!mi)
                     throw new SetOperationException();
-                if (condition.predicate) condition.predicate->flushCache();
+                if (condition.predicate) {
+					//std::cout << "flushing predicate cache\n";
+					condition.predicate->flushCache();
+				}
+				
                 if ( (!condition.predicate || condition(owner)) ){
                     if (!MachineIncludesParameter(dest_machine,a)) {
                         dest_machine->addParameter(a);
@@ -447,6 +454,10 @@ Action::Status SelectSetOperation::doOperation() {
                     if (num_copied >= to_copy) break;
                     if (remove_selected) continue; // skip the increment to next parameter
                 }
+				else if (condition.predicate) {
+					//std::cout << "evaluation of " << condition.last_evaluation 
+					//	<< " gave " << condition.last_result << "\n";
+				}
             }
             else {
                 if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
