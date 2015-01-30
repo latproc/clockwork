@@ -40,10 +40,12 @@ public:
     ChannelImplementation() : state(DISCONNECTED), monitors_exports(false) {}
     virtual ~ChannelImplementation();
     void addMonitor(const char *);
+    void addIgnorePattern(const char *);
     void addMonitorPattern(const char *);
     void addMonitorProperty(const char *,Value &);
     void addMonitorExports();
     void removeMonitor(const char *);
+    void removeIgnorePattern(const char *);
     void removeMonitorPattern(const char *);
     void removeMonitorProperty(const char *, Value &);
     void removeMonitorExports();
@@ -58,6 +60,7 @@ public:
 protected:
     State state;
     std::set<std::string> monitors_patterns;
+    std::set<std::string> ignores_patterns;
     std::set<std::string> monitors_names;
     std::map<std::string, Value> monitors_properties;
     bool monitors_exports;

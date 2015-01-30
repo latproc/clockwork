@@ -551,10 +551,30 @@ void ChannelImplementation::addMonitor(const char *s) {
     monitors_names.insert(s);
     modified();
 }
-void ChannelImplementation::removeMonitor(const char *s) {
-    std::cerr << "remove monitor for " << s << "\n";
-    monitors_names.erase(s);
+void ChannelImplementation::addIgnorePattern(const char *s) {
+    std::cerr << "add " << s << " to ignore list\n";
+    ignores_patterns.insert(s);
     modified();
+}
+void ChannelImplementation::removeIgnorePattern(const char *s) {
+    std::cerr << "remove " << s << " from ignore list\n";
+    ignores_patterns.erase(s);
+    modified();
+}
+void ChannelImplementation::removeMonitor(const char *s) {
+    std::cerr << "remove monitor for " << s;
+	if (monitors_names.count(s)) {
+	    monitors_names.erase(s);
+    	modified();
+		std::cerr << "\n";
+	}
+	else {
+		std::cerr << "...not found\n";
+		std::string pattern = "^";
+		pattern += s;
+		pattern += "$";
+		addIgnorePattern(pattern.c_str());
+	}
 }
 void ChannelImplementation::addMonitorPattern(const char *s) {
     monitors_patterns.insert(s);
@@ -816,5 +836,27 @@ void Channel::setupFilters() {
         }
     }
     
+    iter = definition()->ignores_patterns.begin();
+    while (iter != definition()->ignores_patterns.end()) {
+        const std::string &pattern = *iter++;
+        rexp_info *rexp = create_pattern(pattern.c_str());
+        if (!rexp->compilation_error) {
+            std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
+            while (machines != MachineInstance::end()) {
+                MachineInstance *machine = *machines++;
+                if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                    if (this->machines.count(machine)) {
+						std::cout << "unpublished " << machine->getName() << "\n";
+                        machine->unpublish();
+                        this->machines.erase(machine);
+                    }
+                }
+            }
+        }
+        else {
+            MessageLog::instance()->add(rexp->compilation_error);
+            std::cerr << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
+        }
+    }
 }
 

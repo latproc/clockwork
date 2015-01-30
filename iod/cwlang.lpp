@@ -68,6 +68,8 @@ FIRST               return FIRST;
 FROM				return FROM;
 GLOBAL              return GLOBAL;
 GROUP               return GROUP;
+IGNORE				return IGNORE;
+IGNORES				return IGNORES;
 INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;

@@ -85,18 +85,20 @@ std::map<std::string, StringList> wiring;
 
 
 void load_debug_config() {
-	std::ifstream program_config(debug_config());
-	if (program_config) {
-		std::string debug_flag;
-		while (program_config >> debug_flag) {
-			if (debug_flag[0] == '#') continue;
-			int dbg = LogState::instance()->lookup(debug_flag);
-			if (dbg) LogState::instance()->insert(dbg);
-			else if (machines.count(debug_flag)) {
-				MachineInstance *mi = machines[debug_flag];
-				if (mi) mi->setDebug(true);
+	if (debug_config()) {
+		std::ifstream program_config(debug_config());
+		if (program_config) {
+			std::string debug_flag;
+			while (program_config >> debug_flag) {
+				if (debug_flag[0] == '#') continue;
+				int dbg = LogState::instance()->lookup(debug_flag);
+				if (dbg) LogState::instance()->insert(dbg);
+				else if (machines.count(debug_flag)) {
+					MachineInstance *mi = machines[debug_flag];
+					if (mi) mi->setDebug(true);
+				}
+				else std::cerr << "Warning: unrecognised DEBUG Flag " << debug_flag << "\n";
 			}
-			else std::cerr << "Warning: unrecognised DEBUG Flag " << debug_flag << "\n";
 		}
 	}
 }
@@ -127,18 +129,31 @@ bool setup_signals()
     return true;
 }
 
+class IODHardwareActivation : public HardwareActivation {
+	public:
+		void operator()(void) {
+			NB_MSG << "----------- Initialising machines ------------\n";
+			initialise_machines();
+		}
+};
+
 int main (int argc, char const *argv[])
 {
-    zmq::context_t *context = new zmq::context_t;
-    MessagingInterface::setContext(context);
+	zmq::context_t *context = new zmq::context_t;
+	MessagingInterface::setContext(context);
 	Logger::instance();
-    MessageLog::setMaxMemory(10000);
+	Dispatcher::instance();
+	MessageLog::setMaxMemory(10000);
+	Scheduler::instance();
+	ControlSystemMachine machine;
 
-    Logger::instance()->setLevel(Logger::Debug);
+
+	Logger::instance()->setLevel(Logger::Debug);
 	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
-    //std::ofstream log("/tmp/cw.log");
-    //if (log) Logger::instance()->setOutputStream(&log);
 
+	std::list<std::string> source_files;
+	int load_result = loadOptions(argc, argv, source_files);
+	if (load_result) return load_result;
 	load_debug_config();
 
 	IODCommandListJSON::no_display.insert("tab");
@@ -154,17 +169,15 @@ int main (int argc, char const *argv[])
 	IODCommandListJSON::no_display.insert("PERSISTENT");
 	IODCommandListJSON::no_display.insert("POLLING_DELAY");
 	IODCommandListJSON::no_display.insert("TRACEABLE");
+	IODCommandListJSON::no_display.insert("default");
 
 	statistics = new Statistics;
-    int load_result = 0;
-    {
-        load_result = loadConfig(argc, argv);
-        if (load_result) {
-            Dispatcher::instance()->stop();
-            return load_result;
-        }
-    }
-    
+	load_result = loadConfig(source_files);
+	if (load_result) {
+		Dispatcher::instance()->stop();
+		return load_result;
+	}
+
     if (dependency_graph()) {
         std::ofstream graph(dependency_graph());
         if (graph) {
@@ -204,15 +217,15 @@ int main (int argc, char const *argv[])
 		return load_result;
 	}
 	
-    MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start();
+	MQTTInterface::instance()->init();
+	MQTTInterface::instance()->start();
     
 	std::list<Output *> output_list;
 	{
         {
             size_t remaining = machines.size();
             std::cout << remaining << " Machines\n";
-            std::cout << "Linking POINTs to hardware\n";
+            std::cout << "Initialising MQTT\n";
             
             // find and process all MQTT Modules as they are required before POINTS that use them
             std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
@@ -296,23 +309,20 @@ int main (int argc, char const *argv[])
 	}
 	//MachineInstance::displayAll();
 #ifdef EC_SIMULATOR
-		wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
+	wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
 #endif
 
-	std::cout << "-------- Initialising ---------\n";
-	initialise_machines();
+	bool sigok = setup_signals();
+	assert(sigok);
     
-    bool sigok = setup_signals();
-    assert(sigok);
+	//zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
+	//resource_mgr.bind("inproc://resource_mgr");
     
-    //zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
-    //resource_mgr.bind("inproc://resource_mgr");
+	zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
+	sim_io.bind("inproc://ethercat_sync");
     
-    zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
-    sim_io.bind("inproc://ethercat_sync");
-    
-    std::cout << "-------- Starting Scheduler ---------\n";
-    boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
+	std::cout << "-------- Starting Scheduler ---------\n";
+	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
     
 	std::cout << "-------- Starting Command Interface ---------\n";	
 	IODCommandThread stateMonitor;
@@ -321,31 +331,13 @@ int main (int argc, char const *argv[])
 	// Inform the modbus interface we have started
 	load_debug_config();
 	ModbusAddress::message("STARTUP");
+	Dispatcher::start();
 
-    Dispatcher::start();
-
-    //zmq::socket_t process_sync(*MessagingInterface::getContext(), ZMQ_REP);
-    //process_sync.bind("inproc://process_sync");
-
-    ControlSystemMachine machine;
-    ProcessingThread processMonitor(machine);
+	IODHardwareActivation iod_activation;
+	ProcessingThread processMonitor(machine, iod_activation);
 	boost::thread process(boost::ref(processMonitor));
     
     MQTTInterface::instance()->activate();
-/*
-    int processing_sequence = processMonitor.sequence;
-    {
-        size_t ps_len = 0;
-        char buf[10];
-        while (ps_len == 0) {
-            try {
-                ps_len = process_sync.recv(buf,10);
-            } catch (zmq::error_t) {
-                std::cerr << zmq_strerror(errno) << "\n";
-            }
-        }
-    }
- */
 
     char buf[10];
     size_t response_len;
@@ -356,44 +348,14 @@ int main (int argc, char const *argv[])
     gettimeofday(&then,0);
     while (!program_done) {
         MQTTInterface::instance()->collectState();
-/*        {
-            process_sync.send("go", 2);
-            size_t ps_len = 0;
-            char buf[10];
-            while (ps_len == 0) {
-                try {
-                    ps_len = process_sync.recv(buf,10);
-                } catch (zmq::error_t) {
-                    std::cerr << zmq_strerror(errno) << "\n";
-                }
-            }
-        }
-        if (processing_sequence != processMonitor.sequence) { // did the model update?
-            ++processing_sequence;
-        }
-        {   // handshake to give the command handler access to shared resources for a while
-            // if it has requested it.
-            char buf[10];
-            while (resource_mgr.recv(buf, 10, ZMQ_NOBLOCK)) {
-                resource_mgr.send("go", 2);
-                size_t msglen = 0;
-                while ( (msglen = resource_mgr.recv(buf, 10) ) == 0 ) ;
-                resource_mgr.send("ok",2);
-            }
-        }
-        
-        zmq::pollitem_t *poll_items = 0;
-        int active_channels = Channel::pollChannels(poll_items, 20, 0);
-        if (active_channels) {
-            Channel::handleChannels();
-        }
- */
-        sim_io.send("ecat", 4);
-        safeRecv(sim_io, buf, 10, true, response_len);
+
+        //sim_io.send("ecat", 4);
+        //safeRecv(sim_io, buf, 10, true, response_len);
         struct timeval now;
         gettimeofday(&now,0);
         
-        int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 + ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
+        int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
+					+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
         // use the clockwork interpreter's current cycle delay
         Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
         assert(cycle_delay_v);

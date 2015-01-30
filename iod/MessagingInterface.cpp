@@ -424,6 +424,8 @@ void SocketMonitor::operator()() {
         }
         catch (zmq::error_t io) {
             std::cerr << "ZMQ error: " << zmq_strerror(errno) << " in socket monitor\n";
+						if (errno == ENOENT || errno == EINVAL) // monitoring a socket that has been removed. exit and rely on restart code (TBD)
+							exit(2);
         }
         catch (std::exception ex) {
             std::cerr << "unknown exception setting up a socket monitor\n";
@@ -788,7 +790,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
     
     char buf[1000];
     size_t msglen = 0;
-    if (run_status == e_waiting_cmd && items[1].revents & ZMQ_POLLIN) {
+    if (rc > 0 && run_status == e_waiting_cmd && items[1].revents & ZMQ_POLLIN) {
         safeRecv(cmd, buf, 1000, false, msglen);
         if ( msglen ) {
             buf[msglen] = 0;
@@ -802,7 +804,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
         cmd.send(msg, strlen(msg));
         run_status = e_waiting_cmd;
     }
-    else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
+    else if (rc > 0 && run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
         if (safeRecv(*setup, buf, 1000, false, msglen)) {
             if (msglen && msglen<1000) {
                 cmd.send(buf, msglen);

@@ -118,7 +118,7 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
-%token CONSTRAINT
+%token CONSTRAINT IGNORE IGNORES
 
 %union {
 	int iVal;
@@ -320,6 +320,9 @@ chn_definition_section:
 | MONITORS name_list ';'    {
     BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addMonitor(name.c_str());
+}
+| IGNORES PATTERN ';'  {
+    current_channelclass->addIgnorePattern($2);
 }
 | MONITORS PATTERN ';'  {
     current_channelclass->addMonitorPattern($2);

@@ -26,7 +26,9 @@
 #include "MessagingInterface.h"
 #include <netinet/in.h>
 #include "Logger.h"
+#ifndef EC_SIMULATOR
 #include <ecrt.h>
+#endif
 
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
@@ -78,11 +80,37 @@ static uint8_t *last_process_data = 0;
 unsigned int IOComponent::max_offset = 0;
 unsigned int IOComponent::min_offset = 1000000L;
 static std::vector<IOComponent*> *indexed_components = 0;
-IOComponent::HardwareState IOComponent::hardware_state = s_hardware_init;
+IOComponent::HardwareState IOComponent::hardware_state = s_hardware_preinit;
+
+static void display(uint8_t *p, unsigned int count = 0);
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 	uint8_t bitmask = 1<<bitpos;
 	if (val) *q |= bitmask; else *q &= (uint8_t)(0xff - bitmask);
+}
+
+void copyMaskedBits(uint8_t *dest, uint8_t*src, uint8_t *mask, size_t len) {
+
+	uint8_t*result = dest;
+	std::cout << "copying masked bits: \n";
+	display(dest); std::cout << "\n";
+	display(src); std::cout << "\n";
+	display(mask); std::cout << "\n";
+
+	while (len--) {
+		uint8_t bitmask = 0x80;
+		for (int i=0; i<8; ++i) {
+			if ( *mask & bitmask ) {
+				if (*src & bitmask)
+					*dest |= bitmask;
+				else
+					*dest &= (uint8_t)(0xff - bitmask);
+			}
+			bitmask = bitmask >> 1;
+		}
+		++src; ++dest; ++mask;
+	}
+	display(result); std::cout << "\n";
 }
 
 IOComponent::HardwareState IOComponent::getHardwareState() { return hardware_state; }
@@ -123,7 +151,7 @@ IOComponent* IOComponent::lookup_device(const std::string name) {
 // these components need to synchronise with clockwork
 std::set<IOComponent*> updatedComponents;
 
-static void display(uint8_t *p, unsigned int count = 0) {
+static void display(uint8_t *p, unsigned int count) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
 	if (count == 0)
@@ -152,6 +180,15 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 #endif
 
 	assert(data_size == process_data_size);
+
+	if (hardware_state == s_hardware_preinit) {
+		// the initial process data has arrived from EtherCAT. keep the previous data as the defaults
+		// so they can be applied asap
+		memcpy(process_data, data, process_data_size);
+		setHardwareState(s_hardware_init);
+		return;
+	}
+
 	// step through the incoming mask and update bits in process data
 	uint8_t *p = data;
 	uint8_t *m = mask;
@@ -514,7 +551,52 @@ uint8_t *generateProcessMask() {
 	return res;
 }
 
-uint8_t *generateMask() {
+void IOComponent::setDefaultData(uint8_t *data){
+	std::cout << "Setting default data to : \n";
+	display(data);
+	std::cout << "\n";
+	if (default_data) delete default_data;
+	default_data = new uint8_t[process_data_size];
+	memcpy(default_data, data, process_data_size);
+}
+
+void IOComponent::setDefaultMask(uint8_t *mask){
+	std::cout << "Setting default mask to : \n";
+	display(mask);
+	std::cout << "\n";
+	if (default_mask) delete default_mask;
+	default_mask = mask;
+}
+
+uint8_t *IOComponent::generateMask(std::list<MachineInstance*> &outputs) {
+	unsigned int max = IOComponent::getMaxIOOffset();
+	unsigned int min = IOComponent::getMinIOOffset();
+	// process data size
+	uint8_t *res = new uint8_t[max+1];
+	memset(res, 0, max+1);
+
+	std::list<MachineInstance*>::iterator iter = outputs.begin();
+	while (iter != outputs.end()) {
+		MachineInstance *m = *iter++;
+		IOComponent *ioc = m->io_interface;
+		if (ioc) {
+			unsigned int offset = ioc->address.io_offset;
+			unsigned int bitpos = ioc->address.io_bitpos;
+			offset += bitpos/8;
+			bitpos = bitpos % 8;
+			uint8_t mask = 0x01 << bitpos;
+			// set  a bit in the mask for each bit of this value
+			for (unsigned int i=0; i<ioc->address.bitlen; ++i) {
+				res[offset] |= mask;
+				mask = mask << 1;
+				if (!mask) {mask = 0x01; ++offset; }
+			}
+		}
+	}
+	return res;
+}
+
+static uint8_t *generateUpdateMask() {
 	//  returns null if there are no updates, otherwise returns
 	// a mask for the update data
 
@@ -550,7 +632,7 @@ uint8_t *generateMask() {
 
 IOUpdate *IOComponent::getUpdates() {
 	outputs_waiting = 0; // reset work indicator flag
-	uint8_t *mask = generateMask();
+	uint8_t *mask = ::generateUpdateMask();
 	if (!mask) {
 		//std::cout << " no changes detected\n";
 		return 0;
@@ -566,13 +648,17 @@ IOUpdate *IOComponent::getUpdates() {
 }
 
 IOUpdate *IOComponent::getDefaults() {
+	if (min_offset >= max_offset)
+		return 0;
 	IOUpdate *res = new IOUpdate;
 	res->size = max_offset - min_offset + 1;
+	copyMaskedBits(process_data, default_data, default_mask, process_data_size);
 	res->data = getProcessData();
-	res->mask = getProcessMask();
-	std::cout << "preparing to send " << res->size << ":"; display(res->data); 
-	std::cout << ":"; display(res->mask);
-	std::cout << "\n";
+	res->mask = default_mask;
+
+	std::cout << "preparing to send defaults " << res->size << " bytes\n"; 
+	display(res->data); std::cout << "\n"; 
+	display(res->mask); std::cout << "\n";
 	return res;
 }
 
@@ -598,7 +684,7 @@ void IOComponent::setupIOMap() {
 	}
 	//std::cout << "min io offset: " << min_offset << "\n";
 	//std::cout << "max io offset: " << max_offset << "\n";
-	std::cout << ( (max_offset+1)*sizeof(IOComponent*)) << " bytes reserved for index io\n";
+	//std::cout << ( (max_offset+1)*sizeof(IOComponent*)) << " bytes reserved for index io\n";
 
 	indexed_components = new std::vector<IOComponent*>( (max_offset+1) *8);
 
@@ -624,10 +710,10 @@ void IOComponent::setupIOMap() {
 			if (!cl) cl = new std::list<IOComponent *>();
 			cl->push_back(ioc);
 			io_map[offset+i] = cl;
-			std::cout << "offset: " << (offset+i) << " io name: " << ioc->io_name << "\n";
+			//std::cout << "offset: " << (offset+i) << " io name: " << ioc->io_name << "\n";
 		}
 	}
-	std::cout << "\n\n\n";
+	//std::cout << "\n\n\n";
 	process_mask = generateProcessMask();
 }
 
@@ -692,7 +778,7 @@ void IOComponent::idle() {
 	}
 	else {
 		if (last_event == e_change) {
-			std::cout << " assigning " << pending_value << " to address " << (unsigned long)offset << "\n";
+			//std::cout << " assigning " << pending_value << " to offset " << (unsigned long)(offset - process_data) << "\n";
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
@@ -704,6 +790,8 @@ void IOComponent::idle() {
 				toU32(offset, pending_value); 
 			}
 			last_event = e_none;
+			//display(process_data);
+			//std::cout << "\n";
 			//address.value = pending_value;
 		}
 		else {
@@ -740,13 +828,13 @@ void IOComponent::idle() {
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
 			if (hardware_state == s_hardware_init || (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
-				std::cout << "raw io value changed from " << raw_value << " to " << val << "\n";
+				//std::cout << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
 				int32_t new_val = filter(val);
-				if (hardware_state == s_hardware_init || (hardware_state == s_operational && address.value != new_val) ) {
+				if (hardware_state == s_operational && address.value != new_val) {
 					address.value = filter(val);
 					last_event = e_none;
-					std::cout << " assigned " << val << " to address " << address << "\n";
+					//std::cout << " assigned " << val << " to address " << address << "\n";
 					if (hardware_state == s_operational) {
 						const char *evt = "property_change";
 						std::list<MachineInstance*>::iterator iter = depends.begin();
@@ -754,7 +842,7 @@ void IOComponent::idle() {
 							MachineInstance *m = *iter++;
 							Message msg(evt);
 							m->execute(msg, this);
-							std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+							//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
 							m->checkActions();
 						}
 					}
@@ -765,10 +853,10 @@ void IOComponent::idle() {
 }
 
 void IOComponent::turnOn() { 
-	std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
+	//std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
 }
 void IOComponent::turnOff() { 
-	std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
+	//std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
 }
 
 void Output::turnOn() { 
