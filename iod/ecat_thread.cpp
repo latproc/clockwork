@@ -114,7 +114,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
-#if 0
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -133,6 +133,9 @@ const int PROCESS_DATA = 2;
 size_t default_data_size = 0;
 uint8_t *default_data = 0;
 uint8_t *default_mask = 0;
+uint8_t *last_data = 0;
+uint8_t *dbg_mask = 0;
+uint8_t *cmp_data = 0;
 
 void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 	if (default_data) delete default_data;
@@ -280,9 +283,30 @@ void EtherCATThread::operator()() {
 									std::cout << "\n";
 								}
 #endif
-								memcpy(iomsg.data(), (void*)ECInterface::instance()->getUpdateData(),size); 
+								uint8_t *upd_data = ECInterface::instance()->getUpdateData();
+								memcpy(iomsg.data(), (void*)upd_data, size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
+								if (size && last_data ==0) { 
+										last_data = new uint8_t[size];
+										memset(last_data, 0, size);
+										dbg_mask = new uint8_t[size];
+										memset(dbg_mask, 0xff, size);
+										memset(dbg_mask+47, 0, 2);
+										dbg_mask[46] = 0x7f;
+										dbg_mask[26] = 0x7f;
+										dbg_mask[36] = 0x7f;
+										cmp_data = new uint8_t[size];
+								}
+								if (size) {
+									uint8_t *p = upd_data, *q = cmp_data, *msk = dbg_mask;
+									for (size_t ii=0; ii<size; ++ii) *q++ = *p++ & *msk++;
+									if (memcmp( cmp_data, last_data, size) != 0) {
+											std::cout << " "; display(dbg_mask); std::cout << "\n";
+											std::cout << ">"; display(upd_data); std::cout << "\n";
+									}
+									memcpy(last_data, cmp_data, size);
+								}
 							}
 							case 3:
 							{
@@ -399,6 +423,10 @@ void EtherCATThread::operator()() {
 					//std::cout << "Started getting process data from driver\n";
 					driver_state = s_driver_operational;
 					//display(cw_data);
+				}
+				else {
+					std::cout << "!"; display(cw_mask); std::cout << "\n";
+					std::cout << "<"; display(cw_data); std::cout << "\n";
 				}
 				ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 			}
