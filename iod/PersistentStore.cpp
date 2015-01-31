@@ -83,7 +83,7 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
         PersistentStore::PropertyPair entry;
         BOOST_FOREACH(entry, entries) {
 			if (entry.second.kind == Value::t_string || entry.second.kind == Value::t_symbol)
-	            out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
+	            out << prop.first << " " << entry.first << " " << entry.second << "\n";
 			else
 	            out << prop.first << " " << entry.first << " " << entry.second << "\n";
         }
