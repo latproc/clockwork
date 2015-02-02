@@ -560,6 +560,7 @@ void ProcessingThread::operator()()
 					//std::cout << "update sent. Waiting for ack\n";
 					delete upd;
 					update_state = s_update_sent;
+					IOComponent::updatesSent();
 				}
 			}
 			//else

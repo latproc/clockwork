@@ -114,7 +114,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
-#if 1
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -287,6 +287,7 @@ void EtherCATThread::operator()() {
 								memcpy(iomsg.data(), (void*)upd_data, size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
+#if 0
 								if (size && last_data ==0) { 
 										last_data = new uint8_t[size];
 										memset(last_data, 0, size);
@@ -307,6 +308,7 @@ void EtherCATThread::operator()() {
 									}
 									memcpy(last_data, cmp_data, size);
 								}
+#endif
 							}
 							case 3:
 							{
@@ -424,10 +426,12 @@ void EtherCATThread::operator()() {
 					driver_state = s_driver_operational;
 					//display(cw_data);
 				}
+#if 0
 				else {
 					std::cout << "!"; display(cw_mask); std::cout << "\n";
 					std::cout << "<"; display(cw_data); std::cout << "\n";
 				}
+#endif
 				ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 			}
 			ECInterface::instance()->sendUpdates();

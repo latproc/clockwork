@@ -147,6 +147,7 @@ public:
 	enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };
 	static HardwareState getHardwareState();
 	static void setHardwareState(HardwareState state);
+  static void updatesSent() { updates_sent = true; }
 
 protected:
 	int getStatus(); 
@@ -162,6 +163,7 @@ protected:
 	static HardwareState hardware_state;
 	static uint8_t *default_data;
 	static uint8_t *default_mask;
+	static bool updates_sent;
 };
 std::ostream &operator<<(std::ostream&out, const IOComponent &);
 

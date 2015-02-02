@@ -821,10 +821,13 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
+	//std::cout << getName() << " filter(" << val << ")\n";
 	if (false && settings->positions.length() < settings->positions.BUFSIZE)
 		speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
-	else
+	else {
 		speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
+	  //std::cout << getName() << " filter(" << val << ") => " << speed << "\n";
+	}
 	return speed;
 }
 
