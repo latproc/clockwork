@@ -196,7 +196,7 @@ void Scheduler::add(ScheduledItem*item) {
     top = next();
 	next_time = top->delivery_time;
     next_delay_time = getNextDelay();
-	assert(next_delay_time < 60000000L);
+	//assert(next_delay_time < 60000000L);
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	if (!last_notification) {
 		zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
