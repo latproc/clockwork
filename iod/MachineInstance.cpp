@@ -743,13 +743,15 @@ bool RateEstimatorInstance::hasWork() {
 		been_idle = pos->io_interface->read_time - settings->update_t;
 	}
 	else {
-	  std::cout << _name << " process time: " << process_time << " upd: " << settings->update_t << "\n";
+	  std::cout << _name << " process delta: " << (process_time - settings->update_t) << "\n";
 		been_idle = process_time - settings->update_t;
 	}
 	if (been_idle >= (uint64_t)idle_time) {
 		DBG_AUTOSTATES  << _name << " has work; been idle: " << been_idle << "\n";
 		return true;
 	}
+    else if (settings->velocity != 0)
+        return true;
 	return false;
 }
 
@@ -765,19 +767,19 @@ void RateEstimatorInstance::idle() {
 		long pos = 0;
 		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
 			setValue("VALUE", pos);
-		needs_check = 0;
+		if (pos == 0) needs_check = 0;
 	}
 }
 
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
 	settings = new CounterRateFilterSettings(4);
-	if (!idle_time) idle_time = 50000;
+	if (!idle_time) idle_time = 10000;
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 	: MachineInstance(name, type, instance_type) {
 		settings = new CounterRateFilterSettings(4);
-		if (!idle_time) idle_time = 50000;
+		if (!idle_time) idle_time = 10000;
 	}
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
@@ -798,22 +800,22 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 			settings->property_changed = false;
 		}
 
-		//reset once the buffers have been filled with zeros
-		if (!val) ++settings->zero_count;
-		else if (false && settings->zero_count > settings->times.length()) {
-			settings->zero_count = 0;
-			// reset buffers;
-			settings->start_t = settings->update_t;
-			settings->times.reset();
-			settings->readings.reset();
-			settings->positions.reset();
-		}
-
 		uint64_t delta_t = settings->update_t - settings->start_t;
 		settings->times.append(delta_t);
 		settings->position = (int32_t)val;
 		settings->positions.append(settings->position);
 		settings->velocity = (int32_t)filter((int32_t)settings->position);
+
+        //reset once the buffers have been filled with zeros
+        if (!settings->velocity) ++settings->zero_count;
+        else if (settings->zero_count > settings->times.length()) {
+            settings->zero_count = 0;
+            // reset buffers;
+            settings->start_t = settings->update_t;
+            settings->times.reset();
+            settings->readings.reset();
+            settings->positions.reset();
+        }
 
 		MachineInstance::setValue(property, settings->velocity);
 		MachineInstance::setValue("position", settings->position);
@@ -826,7 +828,7 @@ long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
 	//std::cout << getName() << " filter(" << val << ")\n";
-	if (false && settings->positions.length() < settings->positions.BUFSIZE)
+	if (true && settings->positions.length() < settings->positions.BUFSIZE)
 		speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
 	else {
 		speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
