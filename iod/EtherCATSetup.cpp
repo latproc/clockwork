@@ -136,8 +136,10 @@ void generateIOComponentModules()
 					entry_position = m->parameters[1].val.iValue;
 				}
 
+#if 0
 				std::cerr << "Setting up point " << m->getName() 
 					<< " " << entry_position << " on module " << name << "\n";
+#endif
 				MachineInstance *module_mi = MachineInstance::find(name.c_str());
 				if (!module_mi)
 				{
@@ -169,7 +171,6 @@ void generateIOComponentModules()
 						++num_errors;
 					}
 				}
-				std::cerr << module_mi->properties.lookup("position").kind << "\n";
 				int module_position = module_mi->properties.lookup("position").iValue;
 				if (module_position == -1)    // module position unmapped
 				{
@@ -211,12 +212,14 @@ void generateIOComponentModules()
 
 				if (direction == EC_DIR_OUTPUT)
 				{
+#if 0
 					std::cerr << "Adding new output device " << m->getName()
 						<< " position: " << entry_position
 						<< " name: " << module->entry_details[offset_idx].name
 						<< " bit_pos: " << module->bit_positions[offset_idx]
 						<< " offset: " << module->offsets[offset_idx]
 						<< " bitlen: " << bitlen <<  "\n";
+#endif
 					IOAddress addr (
 							IOComponent::add_io_entry(ed->name.c_str(),
 								module_position,
@@ -246,6 +249,7 @@ void generateIOComponentModules()
 				{
 					//sstr << m->getName() << "_IN_" << entry_position << std::flush;
 					//const char *name_str = sstr.str().c_str();
+#if 0
 					std::cerr << "Adding new input device " << m->getName()
 						<< " position: " << entry_position
 						<< " name: " << module->entry_details[offset_idx].name
@@ -253,6 +257,7 @@ void generateIOComponentModules()
 						<< " bit_pos: " << module->bit_positions[offset_idx]
 						<< " offset: " << module->offsets[offset_idx]
 						<<  " bitlen: " << bitlen << "\n";
+#endif
 					IOAddress addr( IOComponent::add_io_entry(ed->name.c_str(),
 								module_position,
 								module->offsets[offset_idx],

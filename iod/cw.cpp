@@ -258,7 +258,7 @@ int main (int argc, char const *argv[])
                 else if (m->_type == "POINT" && m->parameters.size() > 1 && m->parameters[1].val.kind == Value::t_integer) {
                         std::string name = m->parameters[0].real_name;
                         int bit_position = (int)m->parameters[1].val.iValue;
-                        std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
+                        //std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
                         MachineInstance *module_mi = MachineInstance::find(name.c_str());
                         if (!module_mi) {
                             std::cerr << "No machine called " << name << "\n";
@@ -280,7 +280,7 @@ int main (int argc, char const *argv[])
                         DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
                     else   {
                         std::string name = m->parameters[0].real_name;
-                        DBG_MSG << "Setting up " << m->_type << " " << m->getName() << " \n";
+                        //DBG_MSG << "Setting up " << m->_type << " " << m->getName() << " \n";
                         MQTTModule *module = MQTTInterface::instance()->findModule(m->parameters[0].real_name);
                         if (!module) {
                             std::cerr << "No MQTT Broker called " << m->parameters[0].real_name << "\n";

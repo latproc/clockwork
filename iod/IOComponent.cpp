@@ -247,7 +247,6 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 	if (hardware_state == s_operational) {
 		// save the domain data for the next check
 		if (!last_process_data) {
-			std::cerr << "Record process data\n";
 			last_process_data = new uint8_t[process_data_size];
 		}
 		memcpy(last_process_data, process_data, process_data_size);
@@ -258,8 +257,8 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 	std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
 	while (iter != updatedComponentsIn.end()) {
 		IOComponent *ioc = *iter++;
-		//std::cout << "processing " << ioc->io_name << "\n";
 		ioc->read_time = current_time;
+		//std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
 		if (ioc->last_event == e_none)  {
 			updatedComponentsIn.erase(ioc); 
 			if (updates_sent && updatedComponentsOut.count(ioc)) {
@@ -289,11 +288,13 @@ IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
 	addr.io_bitpos = bit_offset;
     addr.entry_position = entry_pos;
 	addr.description = name;
-	if (io_names.find(std::string(name)) != io_names.end())  {
+  char buf[80];
+  snprintf(buf, 80, "io:%s_%d", name, module_pos);
+	if (io_names.find(std::string(buf)) != io_names.end())  {
 		std::cerr << "IOComponent::add_io_entry: warning - an IO component named " 
-			<< name << " already existed\n";
+			<< name << " already existed on module " << module_pos << "\n";
 	}
-	io_names[name] = addr;
+	io_names[buf] = addr;
 	return addr;
 }
 
@@ -799,7 +800,7 @@ void IOComponent::idle() {
 	}
 	else {
 		if (last_event == e_change) {
-			std::cout << " assigning " << pending_value << " to offset " << (unsigned long)(offset - process_data) ;
+			//std::cerr << " assigning " << pending_value << " to offset " << (unsigned long)(offset - process_data) ;
 			if (self) std::cout << " for " << self->getName() << "\n";
 			else std::cout << " for " << io_name << "\n";
 			if (address.bitlen == 8) {
@@ -855,13 +856,13 @@ void IOComponent::idle() {
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
 			if (hardware_state == s_hardware_init || (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
-				//std::cout << "raw io value changed from " << raw_value << " to " << val << "\n";
+				//std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
 				int32_t new_val = filter(val);
-				if (hardware_state == s_operational && address.value != new_val) {
+				if (hardware_state == s_operational ) { //&& address.value != new_val) {
 					address.value = filter(val);
 					last_event = e_none;
-					//std::cout << " assigned " << val << " to address " << address << "\n";
+					//std::cerr << " assigned " << val << " to address " << address << "\n";
 					if (hardware_state == s_operational) {
 						const char *evt = "property_change";
 						std::list<MachineInstance*>::iterator iter = depends.begin();
@@ -869,7 +870,7 @@ void IOComponent::idle() {
 							MachineInstance *m = *iter++;
 							Message msg(evt);
 							m->execute(msg, this);
-							//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+							//std::cerr << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
 							m->checkActions();
 						}
 					}
