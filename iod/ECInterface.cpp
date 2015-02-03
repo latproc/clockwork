@@ -347,6 +347,8 @@ ECInterface *ECInterface::instance() {
 	return instance_;
 }
 
+#ifndef EC_SIMULATOR
+
 uint32_t ECInterface::getProcessDataSize() {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -552,6 +554,7 @@ void ECInterface::sendUpdates() {
     ecrt_master_send(master);
 #endif
 }
+#endif
 
 /*****************************************************************************/
 
@@ -978,6 +981,7 @@ bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
         return false;
     }
 }
+
 bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     //const ec_master_t *master = ECInterface::instance()->getMaster();
     //const ec_master_state_t *master_state = ECInterface::instance()->getMasterState();

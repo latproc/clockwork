@@ -24,9 +24,9 @@
 #include <iostream>
 #include <sys/types.h>
 
+#include "IODCommand.h"
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
-#include "IODCommand.h"
 
 /* the entry details structure is used to gather extra data about
   an entry in a module that the Etherlab master structures doesn't
@@ -175,6 +175,7 @@ private:
 
 #ifdef USE_ETHERCAT
 char *collectSlaveConfig(bool reconfigure);
+#endif
 
 struct IODCommandEtherCATTool : public IODCommand {
     bool run(std::vector<Value> &params);
@@ -187,6 +188,5 @@ struct IODCommandMasterInfo : public IODCommand {
 struct IODCommandGetSlaveConfig : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
-#endif
 
 #endif

@@ -805,7 +805,6 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 
 int loadConfig(std::list<std::string> &files) {
     struct timeval now_tv;
-    int i;
     int opened_file = 0;
     tzset(); /* this initialises the tz info required by ctime().  */
     gettimeofday(&now_tv, NULL);
