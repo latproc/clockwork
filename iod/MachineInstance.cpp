@@ -774,12 +774,12 @@ void RateEstimatorInstance::idle() {
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
 	settings = new CounterRateFilterSettings(4);
-	if (!idle_time) idle_time = 10000;
+	if (!idle_time) idle_time = 50000;
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 	: MachineInstance(name, type, instance_type) {
 		settings = new CounterRateFilterSettings(4);
-		if (!idle_time) idle_time = 10000;
+		if (!idle_time) idle_time = 50000;
 	}
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
@@ -828,7 +828,7 @@ long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
 	//std::cout << getName() << " filter(" << val << ")\n";
-	if (true && settings->positions.length() < settings->positions.BUFSIZE)
+	if (false && settings->positions.length() < settings->positions.BUFSIZE)
 		speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
 	else {
 		speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;

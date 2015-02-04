@@ -242,6 +242,25 @@ void EtherCATThread::operator()() {
 			}
 			else {
 				ECInterface::instance()->receiveState();
+				static uint64_t last_ref_time =  ECInterface::instance()->getReferenceTime();
+				uint32_t ref_time =  ECInterface::instance()->getReferenceTime();
+				if (ref_time) {
+					uint32_t last_ref32 = last_ref_time % 0x100000000;
+					uint64_t delta_ref = 0;
+					if (last_ref32 > ref_time) {
+						//std::cerr << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n";
+						delta_ref = 0x100000000 + (uint64_t)ref_time;
+						//std::cerr << std::hex << std::setw(16) << last_ref32 << std::dec << "\n";
+						//std::cerr << std::hex << std::setw(16) << delta_ref << std::dec << "\n";
+						//std::cerr << std::hex << std::setw(8) << ref_time << std::dec << "\n";
+						delta_ref -= last_ref32;
+					}
+					else
+						delta_ref = ref_time - last_ref_time;
+					if ( fabs((int32_t)delta_ref-2000000) > 500000)
+						std::cerr << "cycle: " << delta_ref << " error: " << (int32_t)(delta_ref-2000000)<< "\n";
+					last_ref_time += delta_ref;
+				}
 				if (status == e_collect)
 					n = ECInterface::instance()->collectState();
 			}

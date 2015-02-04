@@ -125,11 +125,16 @@ SDOEntry::~SDOEntry() { if (data_) { delete data_; data_=0; }}
 
 
 ECInterface::ECInterface() :initialised(0), active(false), process_data(0), process_mask(0),
-		update_data(0), update_mask(0) {
+		update_data(0), update_mask(0), reference_time(0) {
 	initialised = init();
 }
 
 #ifndef EC_SIMULATOR
+
+uint32_t ECInterface::getReferenceTime() {
+	return reference_time;
+}
+
 
 bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
 	//std::cout << name << ": " << alias <<", " << position 
@@ -444,6 +449,8 @@ void ECInterface::receiveState() {
     // receive process data
     ecrt_master_receive(master);
     ecrt_domain_process(domain1);
+	int err = ecrt_master_reference_clock_time(master, &reference_time);
+	if (err == -ENXIO) { reference_time = -1; } // no reference clocks
 	check_domain1_state();
 	// check for master state (optional)
 	check_master_state();

@@ -158,6 +158,7 @@ public:
 	void setProcessData (uint8_t *pd);
 	void setProcessMask (uint8_t *m);
 	uint32_t getProcessDataSize();
+	uint32_t getReferenceTime();
 
 	void setUpdateData (uint8_t *ud);
 	void setUpdateMask (uint8_t *m);
@@ -171,6 +172,7 @@ private:
 	uint8_t *process_mask;
 	uint8_t *update_data;
 	uint8_t *update_mask;
+	uint32_t reference_time;
 };
 
 #ifdef USE_ETHERCAT
