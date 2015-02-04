@@ -446,11 +446,11 @@ void ECInterface::receiveState() {
 		std::cerr << "master not ready to collect state\n" << std::flush;
 		return;
 	}
-    // receive process data
-    ecrt_master_receive(master);
-    ecrt_domain_process(domain1);
+	// receive process data
+	ecrt_master_receive(master);
 	int err = ecrt_master_reference_clock_time(master, &reference_time);
 	if (err == -ENXIO) { reference_time = -1; } // no reference clocks
+	ecrt_domain_process(domain1);
 	check_domain1_state();
 	// check for master state (optional)
 	check_master_state();

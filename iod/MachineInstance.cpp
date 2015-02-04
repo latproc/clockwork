@@ -739,18 +739,18 @@ bool RateEstimatorInstance::hasWork() {
 	static MachineInstance *pos = lookup(parameters[0]);
 	uint64_t been_idle = 0;
 	if (pos && pos->io_interface) {
-	  std::cout << _name << " pos: " << pos->io_interface->io_name << " read time: " << pos->io_interface->read_time << " upd: " << settings->update_t << "\n";
+	  //std::cout << _name << " pos: " << pos->io_interface->io_name << " read time: " << pos->io_interface->read_time << " upd: " << settings->update_t << "\n";
 		been_idle = pos->io_interface->read_time - settings->update_t;
 	}
 	else {
-	  std::cout << _name << " process delta: " << (process_time - settings->update_t) << "\n";
+	  //std::cout << _name << " process delta: " << (process_time - settings->update_t) << "\n";
 		been_idle = process_time - settings->update_t;
 	}
 	if (been_idle >= (uint64_t)idle_time) {
 		DBG_AUTOSTATES  << _name << " has work; been idle: " << been_idle << "\n";
 		return true;
 	}
-    else if (settings->velocity != 0)
+	else if (settings->velocity != 0)
         return true;
 	return false;
 }

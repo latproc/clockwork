@@ -242,6 +242,8 @@ void EtherCATThread::operator()() {
 			}
 			else {
 				ECInterface::instance()->receiveState();
+#if 1
+				// distributed clocks. TBD
 				static uint64_t last_ref_time =  ECInterface::instance()->getReferenceTime();
 				uint32_t ref_time =  ECInterface::instance()->getReferenceTime();
 				if (ref_time) {
@@ -257,10 +259,11 @@ void EtherCATThread::operator()() {
 					}
 					else
 						delta_ref = ref_time - last_ref_time;
-					if ( fabs((int32_t)delta_ref-2000000) > 500000)
+					if ( fabs((int64_t)delta_ref-period) > period*1000/10)
 						std::cerr << "cycle: " << delta_ref << " error: " << (int32_t)(delta_ref-2000000)<< "\n";
 					last_ref_time += delta_ref;
 				}
+#endif
 				if (status == e_collect)
 					n = ECInterface::instance()->collectState();
 			}
