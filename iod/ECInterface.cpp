@@ -125,6 +125,10 @@ ECInterface::ECInterface() :initialised(0), active(false), process_data(0), proc
 
 #ifndef EC_SIMULATOR
 
+void ECInterface::setReferenceTime(uint32_t now) {
+	reference_time = now;
+}
+
 uint32_t ECInterface::getReferenceTime() {
 	return reference_time;
 }
@@ -441,6 +445,9 @@ void ECInterface::receiveState() {
 		return;
 	}
 	// receive process data
+	//struct timeval now;
+	//gettimeofday(&now, 0);
+	//reference_time = ((uint64_t)now.tv_sec*1000000L + now.tv_usec) % 0x100000000;
 	ecrt_master_receive(master);
 #ifdef USE_DC
 	int err = ecrt_master_reference_clock_time(master, &reference_time);

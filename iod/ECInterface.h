@@ -159,6 +159,7 @@ public:
 	void setProcessMask (uint8_t *m);
 	uint32_t getProcessDataSize();
 	uint32_t getReferenceTime();
+	void setReferenceTime(uint32_t now);
 
 	void setUpdateData (uint8_t *ud);
 	void setUpdateMask (uint8_t *m);
