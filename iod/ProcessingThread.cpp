@@ -172,7 +172,7 @@ static uint8_t *incoming_process_data = 0;
 static uint8_t *incoming_process_mask = 0;
 static uint32_t incoming_data_size;
 
-#if 0
+#ifdef DEBUG
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -549,7 +549,7 @@ void ProcessingThread::operator()()
 						catch (zmq::error_t err) {
 							if (zmq_errno() == EINTR) {
 								std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
-								usleep(50); 
+								//usleep(50); 
 								continue;
 							}
 							else

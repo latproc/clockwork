@@ -398,7 +398,7 @@ Value ItemAtPosValue::operator()(MachineInstance *mi) {
                 return last_result;
             }
         }
-        if (idx>=0 && idx < machine_list->parameters.size()) {
+        if (idx>=0 && idx < (long)machine_list->parameters.size()) {
             last_result = machine_list->parameters[idx].val;
             if (remove_from_list) {
                 machine_list->parameters.erase(machine_list->parameters.begin()+idx);

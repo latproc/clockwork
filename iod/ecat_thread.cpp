@@ -114,7 +114,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
-#if 0
+#ifdef DEBUG
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -146,7 +146,7 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 	default_mask = new uint8_t[len];
 	memcpy(default_mask, data, len);
 
-#if 0
+#ifdef DEBUG
 	std::cout << "default data: "; display(default_data); std::cout << "\n";
 	std::cout << "default mask: "; display(default_mask); std::cout << "\n";
 #endif
@@ -233,7 +233,7 @@ void EtherCATThread::operator()() {
 #endif
 #endif
 			uint64_t period = 1000000/freq;
-			int n = 0;
+			int num_updates = 0;
 			if (!machine_is_ready) {
 				//NB_MSG << "machine is not ready..\n";
 				ECInterface::instance()->receiveState();
@@ -242,7 +242,7 @@ void EtherCATThread::operator()() {
 			}
 			else {
 				ECInterface::instance()->receiveState();
-#if 1
+#ifdef USE_DC
 				// distributed clocks. TBD
 				static uint64_t last_ref_time =  ECInterface::instance()->getReferenceTime();
 				uint32_t ref_time =  ECInterface::instance()->getReferenceTime();
@@ -259,13 +259,13 @@ void EtherCATThread::operator()() {
 					}
 					else
 						delta_ref = ref_time - last_ref_time;
-					if ( fabs((int64_t)delta_ref-period) > period*1000/10)
-						std::cerr << "cycle: " << delta_ref << " error: " << (int32_t)(delta_ref-2000000)<< "\n";
+					//if ( fabs((int64_t)delta_ref-period) > period*1000/10)
+					//	std::cerr << "cycle: " << delta_ref << " error: " << (int32_t)(delta_ref-2000000)<< "\n";
 					last_ref_time += delta_ref;
 				}
 #endif
 				if (status == e_collect)
-					n = ECInterface::instance()->collectState();
+					num_updates = ECInterface::instance()->collectState();
 			}
 #if 0
 			if (last_ping && keep_alive)
@@ -276,7 +276,7 @@ void EtherCATThread::operator()() {
 			//   four periods: 4 * period / 1000 = period/250
 			bool need_ping = keep_alive>0 && (last_ping + keep_alive - 5000 - period < now) ? true : false;
 
-			if ( status == e_collect && (first_run || n || need_ping) && machine_is_ready) {
+			if ( status == e_collect && (first_run || num_updates || need_ping) && machine_is_ready) {
 				if (driver_state == s_driver_operational) first_run = false;
 				need_ping = false;
 				uint32_t size = ECInterface::instance()->getProcessDataSize();
@@ -285,6 +285,9 @@ void EtherCATThread::operator()() {
 				// so we use a try-catch around the whole process 
 
 				uint8_t stage = 1;
+#ifdef DEBUG
+				bool found_change = false;
+#endif
 				while(true) {
 					try {
 						switch(stage) {
@@ -309,7 +312,7 @@ void EtherCATThread::operator()() {
 								memcpy(iomsg.data(), (void*)upd_data, size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
-#if 0
+#ifdef DEBUG
 								if (size && last_data ==0) { 
 										last_data = new uint8_t[size];
 										memset(last_data, 0, size);
@@ -325,6 +328,7 @@ void EtherCATThread::operator()() {
 									uint8_t *p = upd_data, *q = cmp_data, *msk = dbg_mask;
 									for (size_t ii=0; ii<size; ++ii) *q++ = *p++ & *msk++;
 									if (memcmp( cmp_data, last_data, size) != 0) {
+											found_change = true;
 											std::cout << " "; display(dbg_mask); std::cout << "\n";
 											std::cout << ">"; display(upd_data); std::cout << "\n";
 									}
@@ -338,6 +342,10 @@ void EtherCATThread::operator()() {
 								uint8_t *mask = ECInterface::instance()->getUpdateMask(); 
 								memcpy(iomsg.data(), (void*)mask,size); 
 								sync_sock->send(iomsg);
+#ifdef DEBUG
+								if (found_change)
+									std::cout << ">"; display(mask); std::cout << "\n";
+#endif
 								++stage;
 							}
 							default: ;
@@ -433,10 +441,11 @@ void EtherCATThread::operator()() {
 				}
 	
 				//NB_MSG << "acknowledging receipt of clockwork output\n";
-#if 0
+#ifdef DEBUG
 				if (!default_data) {
 				  	std::cout << "received default data from driver\n";
 						display(cw_data);
+						std::cout << "\n";
 				}
 #endif
 				safeSend(out_sock,"ok", 2);
@@ -444,11 +453,11 @@ void EtherCATThread::operator()() {
 				if (packet_type == DEFAULT_DATA)
 					setDefaultData(len, cw_data, cw_mask);
 				else if (packet_type == PROCESS_DATA && driver_state == s_driver_init) {
-					//std::cout << "Started getting process data from driver\n";
+					if (!default_data) std::cout << "Getting process data from driver with no default set\n";
 					driver_state = s_driver_operational;
 					//display(cw_data);
 				}
-#if 0
+#ifdef DEBUG
 				else {
 					std::cout << "!"; display(cw_mask); std::cout << "\n";
 					std::cout << "<"; display(cw_data); std::cout << "\n";

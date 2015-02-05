@@ -720,9 +720,11 @@ INTEGER   {
 | SYMBOL {
     $$ = new Value($1); 
 }
+/* redundant
 | SYMBOL INCLUDES SYMBOL {
     $$ =  new Value(new IncludesValue($3, $1));
 }
+*/
 | SYMBOL INCLUDES value {
     Value *v = $3;
     $$ =  new Value(new IncludesValue(*v, $1));

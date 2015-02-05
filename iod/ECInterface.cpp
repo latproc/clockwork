@@ -44,12 +44,6 @@
 struct list_head {
     struct list_head *next, *prev;
 };
-#if 0
-typedef enum {
-    EC_ORIG_INTERNAL, /**< Internal. */
-    EC_ORIG_EXTERNAL /**< External. */
-} ec_origin_t;
-#endif
 
 #include "domain.h"
 #endif
@@ -385,7 +379,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 0
+#ifdef DEBUG
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -448,8 +442,10 @@ void ECInterface::receiveState() {
 	}
 	// receive process data
 	ecrt_master_receive(master);
+#ifdef USE_DC
 	int err = ecrt_master_reference_clock_time(master, &reference_time);
 	if (err == -ENXIO) { reference_time = -1; } // no reference clocks
+#endif
 	ecrt_domain_process(domain1);
 	check_domain1_state();
 	// check for master state (optional)
@@ -497,39 +493,41 @@ int ECInterface::collectState() {
 	uint8_t *pm = IOComponent::getProcessMask(); // these are the important bits
 	uint8_t *q = update_data; // convenience pointer
 
-    for (int i=min; i<=max; ++i) {
+	for (int i=min; i<=max; ++i) {
 		update_mask[i] = 0; // assume no updates in this octet
-        if (!last_pd) { // first time through, copy all the domain data and mask
-            update_data[i] = domain1_pd[i]; //TBD & *pm;
-            update_mask[i] = *pm;
+		if (!last_pd) { // first time through, copy all the domain data and mask
+			update_data[i] = domain1_pd[i]; //TBD & *pm;
+			update_mask[i] = *pm;
 			affected_bits++;
-        }
-        else if (*last_pd != domain1_pd[i]){
-            uint8_t bitmask = 0x01;
+		}
+		else if (*last_pd != domain1_pd[i]){
+			uint8_t bitmask = 0x01;
 			int count = 0;
-            while (bitmask) {
-                if (*pm & bitmask ) { // we care about this bit
-                    if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-						//std::cout << "incoming bit " << i << ":" << count 
-						//	<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
-
-                        if ( *pd & bitmask ) *q |= bitmask;
-                        else *q &= (uint8_t)(0xff - bitmask);
-                        update_mask[i] |= bitmask;
+			while (bitmask) {
+				if (*pm & bitmask ) { // we care about this bit
+					if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
+#ifdef DEBUG
+						if (i != 47 ) // ignore analog changes on our machine
+							std::cout << "incoming bit " << i << ":" << count 
+								<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
+#endif
+						if ( *pd & bitmask ) *q |= bitmask;
+						else *q &= (uint8_t)(0xff - bitmask);
+						update_mask[i] |= bitmask;
 						++affected_bits;
-                    }
-                }
-                bitmask = bitmask << 1;
+					}
+				}
+				bitmask = bitmask << 1;
 				++count;
-            }
-        }
-        ++pd; ++q; ++pm; if (last_pd)++last_pd;
-    }
-#if 0
+			}
+		}
+		++pd; ++q; ++pm; if (last_pd)++last_pd;
+	}
+#ifdef DEBUG
 	if (affected_bits) {
-	std::cout << "update\n" << "data: "; display(update_data); 
-	std::cout << "\nmask: "; display(update_mask);
-	std::cout << " " << affected_bits << " bits changed\n";
+		std::cout << "data: "; display(update_data); 
+		std::cout << "\nmask: "; display(update_mask);
+		std::cout << " " << affected_bits << " bits changed\n";
 	}
 #endif
 
@@ -538,7 +536,7 @@ int ECInterface::collectState() {
 	memcpy(pd, domain1_pd, domain_size);
 	instance()->setProcessData(pd);
 	memcpy(update_data, domain1_pd, domain_size);
-	memcpy(update_mask, getProcessMask(), domain_size);
+//	memcpy(update_mask, getProcessMask(), domain_size); 
 	//instance()->setUpdateData(update_data);
 	//instance()->setUpdateMask(update_mask);
 
