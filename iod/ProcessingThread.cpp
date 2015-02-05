@@ -382,9 +382,8 @@ void ProcessingThread::operator()()
 		int poll_wait = 1000;
         while (!program_done && len == 0)
         {
-			if (IOComponent::updatesWaiting()) poll_wait=10;
-            if (pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, 
-					sched_sync, ecat_out)) break;
+			if (IOComponent::updatesWaiting()) poll_wait=100;
+            if (pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out)) break;
             if (MachineInstance::workToDo()) break;
         }
 #if 0
@@ -498,7 +497,6 @@ void ProcessingThread::operator()()
 					//display(upd->data);
 					//std::cout << "\n";
 					activate_hardware();
-					IOComponent::setHardwareState(IOComponent::s_operational);
 				}
 				else
 					upd = IOComponent::getUpdates();
@@ -574,6 +572,8 @@ void ProcessingThread::operator()()
 				if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
 					//std::cout << "update acknowledged\n";
 					update_state = s_update_idle;
+					if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+						IOComponent::setHardwareState(IOComponent::s_operational);
 				}
 			}
 			catch (zmq::error_t err) {

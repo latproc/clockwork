@@ -264,8 +264,7 @@ void EtherCATThread::operator()() {
 						delta_ref = ref_time - last_ref_time;
 					//int64_t err = delta_ref - period;
 					//if ( fabs(err) > (float)period/10)
-					//std::cerr << "ref: " << ref_time 
-					//	<< " cycle: " << delta_ref << " error: " << err << "\n";
+					std::cerr << "ref: " << ref_time << " cycle: " << delta_ref << " error: " << err << "\n";
 					last_ref_time += delta_ref;
 				}
 #endif
@@ -459,8 +458,8 @@ void EtherCATThread::operator()() {
 					setDefaultData(len, cw_data, cw_mask);
 				else if (packet_type == PROCESS_DATA && driver_state == s_driver_init) {
 					if (!default_data) std::cout << "Getting process data from driver with no default set\n";
-					driver_state = s_driver_operational;
-					//display(cw_data);
+					else
+						driver_state = s_driver_operational;
 				}
 #ifdef DEBUG
 				else {
@@ -468,7 +467,8 @@ void EtherCATThread::operator()() {
 					std::cout << "<"; display(cw_data); std::cout << "\n";
 				}
 #endif
-				ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+				if (default_data)
+					ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 			}
 			ECInterface::instance()->sendUpdates();
 			checkAndUpdateCycleDelay();

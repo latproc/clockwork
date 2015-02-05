@@ -801,8 +801,8 @@ void IOComponent::idle() {
 	else {
 		if (last_event == e_change) {
 			//std::cerr << " assigning " << pending_value << " to offset " << (unsigned long)(offset - process_data) ;
-			if (self) std::cout << " for " << self->getName() << "\n";
-			else std::cout << " for " << io_name << "\n";
+			//if (self) std::cout << " for " << self->getName() << "\n";
+			//else std::cout << " for " << io_name << "\n";
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
