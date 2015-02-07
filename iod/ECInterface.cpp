@@ -513,7 +513,7 @@ int ECInterface::collectState() {
 			while (bitmask) {
 				if (*pm & bitmask ) { // we care about this bit
 					if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-#if 1
+#if 0
 						if (i != 47 ) // ignore analog changes on our machine
 							std::cout << "incoming bit " << i << ":" << count 
 								<< " changed to " << ((*pd & bitmask)?1:0) << "\n";

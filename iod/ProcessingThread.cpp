@@ -232,7 +232,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 									if (incoming_process_data) delete incoming_process_data;
 									incoming_process_data = new uint8_t[msglen];
 									memcpy(incoming_process_data, message.data(), msglen);
-									std::cout << "got data: "; display(incoming_process_data); std::cout << "\n";
+									//std::cout << "got data: "; display(incoming_process_data); std::cout << "\n";
 									++stage;
 								}
 								case 3: 
@@ -247,7 +247,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 									if (incoming_process_mask) delete incoming_process_mask;
 									incoming_process_mask = new uint8_t[msglen];
 									memcpy(incoming_process_mask, message.data(), msglen);
-									std::cout << "got mask: "; display(incoming_process_mask); std::cout << "\n";
+									//std::cout << "got mask: "; display(incoming_process_mask); std::cout << "\n";
 									++stage;
 								}
 								default: ;
@@ -458,6 +458,15 @@ void ProcessingThread::operator()()
 				//assert(system);
 				//total_mp_time += delta;
 				//system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
+/*
+					if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit)
+					{
+						IOComponent::setHardwareState(IOComponent::s_hardware_init);
+						activate_hardware();
+					}
+					else if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+						IOComponent::setHardwareState(IOComponent::s_operational);
+*/
             }
 			else
 				std::cout << "received EtherCAT data but machine is not ready\n";
@@ -486,7 +495,7 @@ void ProcessingThread::operator()()
 		if (machine_is_ready && 
 				(
 					IOComponent::updatesWaiting() 
-					|| IOComponent::getHardwareState() == IOComponent::s_hardware_init
+					|| IOComponent::getHardwareState() != IOComponent::s_operational
 				)
 			) {
 			if (update_state == s_update_idle) {
@@ -496,7 +505,6 @@ void ProcessingThread::operator()()
 					upd = IOComponent::getDefaults();
 					//display(upd->data);
 					//std::cout << "\n";
-					activate_hardware();
 				}
 				else
 					upd = IOComponent::getUpdates();
@@ -516,7 +524,7 @@ void ProcessingThread::operator()()
 								case 2:
 									{
 										uint8_t packet_type = 2;
-										if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+										if (IOComponent::getHardwareState() != IOComponent::s_operational)
 											packet_type = 1;
 										zmq::message_t iomsg(1);
 										memcpy(iomsg.data(), (void*)&packet_type, 1); 
@@ -560,6 +568,7 @@ void ProcessingThread::operator()()
 					update_state = s_update_sent;
 					IOComponent::updatesSent();
 				}
+				else std::cout << "warning: getUpdate/getDefault returned null\n";
 			}
 			//else
 			//	NB_MSG << "have updates but update state is not idle yet\n";
@@ -568,12 +577,16 @@ void ProcessingThread::operator()()
 			char buf[10];
 			size_t len;
 			try {
-			//safeRecv(ecat_out, buf, 10, true, len);
 				if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
 					//std::cout << "update acknowledged\n";
 					update_state = s_update_idle;
 					if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+					{
 						IOComponent::setHardwareState(IOComponent::s_operational);
+						activate_hardware();
+					}
+//					else if (IOComponent::getHardwareState() == IOComponent::s_hardware_init)
+//						IOComponent::setHardwareState(IOComponent::s_operational);
 				}
 			}
 			catch (zmq::error_t err) {

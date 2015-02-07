@@ -419,11 +419,12 @@ void EtherCATThread::operator()() {
 				received = recv(out_sock, iomsg);
 				if (!received) break;
 
-				if (driver_state == s_driver_init) {
-					NB_MSG << "received initial values from clockwork; size: " << iomsg.size() << "\n";
-				}
 				assert(iomsg.size() == sizeof(packet_type));
 				memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
+				if (driver_state == s_driver_init) {
+					NB_MSG << "received initial values from clockwork; size: " 
+						<< iomsg.size() << " packet: " << packet_type << "\n";
+				}
 				}
 
 				uint8_t *cw_data;

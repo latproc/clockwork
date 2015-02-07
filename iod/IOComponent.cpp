@@ -93,7 +93,7 @@ void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 void copyMaskedBits(uint8_t *dest, uint8_t*src, uint8_t *mask, size_t len) {
 
 	uint8_t*result = dest;
-#if 1
+#if 0
 	std::cout << "copying masked bits: \n";
 	display(dest); std::cout << "\n";
 	display(src); std::cout << "\n";
@@ -189,7 +189,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 
 		assert(data != io_process_data);
 
-#if 1
+#if 0
 	for (size_t ii=0; ii<data_size; ++ii) if (mask[ii]) {
 		std::cout << "IOComponent::processAll()\n";
 		std::cout << "size: " << data_size << "\n";
@@ -207,7 +207,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 		// the initial process data has arrived from EtherCAT. keep the previous data as the defaults
 		// so they can be applied asap
 		memcpy(io_process_data, data, process_data_size);
-		setHardwareState(s_hardware_init);
+		//setHardwareState(s_hardware_init);
 		return;
 	}
 
@@ -231,19 +231,19 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 			// update the bit
 			while (bitmask) {
 				if ( *m & bitmask) {
-					std::cout << "looking up " << i << ":" << j << "\n";
+					//std::cout << "looking up " << i << ":" << j << "\n";
 					IOComponent *ioc = (*indexed_components)[ i*8+j ];
 					if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; 
-					else std::cout << "found " << ioc->io_name << "\n";
+					//else std::cout << "found " << ioc->io_name << "\n";
 					if (ioc && ioc->last_event != e_none) { 
 						// pending locally sourced change on this io
-						std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
+						//std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
 						updatedComponentsIn.insert(ioc);
 					}
 					if ( (*p & bitmask) != (*q & bitmask) ) {
 						// remotely source change on this io
 						if (ioc) {
-							std::cout << " adding " << ioc->io_name << " due to bit change\n";
+							//std::cout << " adding " << ioc->io_name << " due to bit change\n";
 							updatedComponentsIn.insert(ioc);
 						}
 
@@ -677,15 +677,16 @@ IOUpdate *IOComponent::getUpdates() {
 	res->size = max_offset - min_offset + 1;
 	res->data = getUpdateData();
 	res->mask = mask;
+#if 0
 	std::cout << "preparing to send " << res->size << ":"; display(res->data); 
 	std::cout << ":"; display(res->mask);
 	std::cout << "\n";
+#endif
 	return res;
 }
 
 IOUpdate *IOComponent::getDefaults() {
-std::cout <<" get default data \n";
-	if (min_offset >= max_offset)
+	if (min_offset > max_offset)
 		return 0;
 	IOUpdate *res = new IOUpdate;
 	res->size = max_offset - min_offset + 1;
@@ -761,7 +762,7 @@ void IOComponent::setupIOMap() {
 void IOComponent::idle() {
 	MachineInstance *self = dynamic_cast<MachineInstance*>(this);
 	assert(io_process_data);
-	std::cout << io_name << "::idle() " << last_event << "\n";
+	//std::cout << io_name << "::idle() " << last_event << "\n";
 	if (!update_data) getUpdateData();
 	uint8_t *offset = update_data + address.io_offset;
 	int bitpos = address.io_bitpos;
@@ -774,7 +775,7 @@ void IOComponent::idle() {
 		// only outputs will have an e_on or e_off event queued, 
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
-			std::cout << "IOComponent::idle setting bit " << (offset - update_data) << ":" << bitpos << "\n";
+			//std::cout << "IOComponent::idle setting bit " << (offset - update_data) << ":" << bitpos << "\n";
 			set_bit(offset, bitpos, 1);			
 			updates_sent = false;
 		}
@@ -877,7 +878,8 @@ void IOComponent::idle() {
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
-			if (hardware_state == s_hardware_init || (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
+			if (hardware_state == s_hardware_init 
+				|| (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
 				//std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
 				int32_t new_val = filter(val);
