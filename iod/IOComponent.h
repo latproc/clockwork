@@ -79,8 +79,9 @@ public:
 	static void setupIOMap();
 	static int getMinIOOffset();
 	static int getMaxIOOffset();
-	static uint8_t *getProcessData() { return process_data; }
-	static uint8_t *getProcessMask() { return process_mask; }
+	static uint8_t *getProcessData() { return io_process_data; }
+	static uint8_t *getProcessMask() { return io_process_mask; }
+	static uint8_t *getUpdateData();
 	static uint8_t *getDefaultData() { return default_data; }
 	static uint8_t *getDefaultMask() { return default_mask; }
 	static void setDefaultData(uint8_t *);
@@ -155,8 +156,9 @@ protected:
 	uint32_t raw_value;
 	static int outputs_waiting; // this many outputs are waiting to change
 	static size_t process_data_size;
-	static uint8_t *process_data;
-	static uint8_t *process_mask;
+	static uint8_t *io_process_data;
+	static uint8_t *io_process_mask;
+	static uint8_t *update_data;
 	static unsigned int max_offset;
 	static unsigned int min_offset;
 	Direction direction_;

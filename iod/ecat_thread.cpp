@@ -114,7 +114,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
-#ifdef DEBUG
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -147,8 +147,8 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 	memcpy(default_mask, data, len);
 
 #ifdef DEBUG
-	std::cout << "default data: "; display(default_data); std::cout << "\n";
-	std::cout << "default mask: "; display(default_mask); std::cout << "\n";
+//	std::cout << "default data: "; display(default_data); std::cout << "\n";
+//	std::cout << "default mask: "; display(default_mask); std::cout << "\n";
 #endif
 } 
 
@@ -336,6 +336,7 @@ void EtherCATThread::operator()() {
 											std::cout << " "; display(dbg_mask); std::cout << "\n";
 											std::cout << ">"; display(upd_data); std::cout << "\n";
 									}
+									else found_change = false;
 									memcpy(last_data, cmp_data, size);
 								}
 #endif
@@ -347,8 +348,9 @@ void EtherCATThread::operator()() {
 								memcpy(iomsg.data(), (void*)mask,size); 
 								sync_sock->send(iomsg);
 #ifdef DEBUG
-								if (found_change)
-									std::cout << ">"; display(mask); std::cout << "\n";
+								if (found_change) {
+									std::cout << "&"; display(mask); std::cout << "\n";
+								}
 #endif
 								++stage;
 							}
@@ -445,7 +447,7 @@ void EtherCATThread::operator()() {
 				}
 	
 				//NB_MSG << "acknowledging receipt of clockwork output\n";
-#ifdef DEBUG
+#if 0
 				if (!default_data) {
 				  	std::cout << "received default data from driver\n";
 						display(cw_data);
@@ -461,7 +463,7 @@ void EtherCATThread::operator()() {
 					else
 						driver_state = s_driver_operational;
 				}
-#ifdef DEBUG
+#if 0
 				else {
 					std::cout << "!"; display(cw_mask); std::cout << "\n";
 					std::cout << "<"; display(cw_data); std::cout << "\n";

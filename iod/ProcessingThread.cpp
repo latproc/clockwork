@@ -172,7 +172,7 @@ static uint8_t *incoming_process_data = 0;
 static uint8_t *incoming_process_mask = 0;
 static uint32_t incoming_data_size;
 
-#ifdef DEBUG
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -232,7 +232,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 									if (incoming_process_data) delete incoming_process_data;
 									incoming_process_data = new uint8_t[msglen];
 									memcpy(incoming_process_data, message.data(), msglen);
-									//std::cout << "got data: "; display(incoming_process_data); std::cout << "\n";
+									std::cout << "got data: "; display(incoming_process_data); std::cout << "\n";
 									++stage;
 								}
 								case 3: 
@@ -247,7 +247,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 									if (incoming_process_mask) delete incoming_process_mask;
 									incoming_process_mask = new uint8_t[msglen];
 									memcpy(incoming_process_mask, message.data(), msglen);
-									//std::cout << "got mask: "; display(incoming_process_mask); std::cout << "\n";
+									std::cout << "got mask: "; display(incoming_process_mask); std::cout << "\n";
 									++stage;
 								}
 								default: ;

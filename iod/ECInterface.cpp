@@ -383,7 +383,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#ifdef DEBUG
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -513,7 +513,7 @@ int ECInterface::collectState() {
 			while (bitmask) {
 				if (*pm & bitmask ) { // we care about this bit
 					if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-#ifdef DEBUG
+#if 1
 						if (i != 47 ) // ignore analog changes on our machine
 							std::cout << "incoming bit " << i << ":" << count 
 								<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
@@ -530,7 +530,7 @@ int ECInterface::collectState() {
 		}
 		++pd; ++q; ++pm; if (last_pd)++last_pd;
 	}
-#ifdef DEBUG
+#if 0
 	if (affected_bits) {
 		std::cout << "data: "; display(update_data); 
 		std::cout << "\nmask: "; display(update_mask);
