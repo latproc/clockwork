@@ -92,8 +92,10 @@ void initialiseOutputs() {
 			m->setState(val.asString().c_str());
 		}
 	}
-	IOComponent::setDefaultData(IOComponent::getProcessData());
-	IOComponent::setDefaultMask(IOComponent::generateMask(default_outputs));
+	IOComponent::setDefaultData(IOComponent::getProcessData()); // takes a copy
+	uint8_t *dm = IOComponent::generateMask(default_outputs);
+	IOComponent::setDefaultMask(dm); // takes a copy
+	delete dm;
 } 
 
 void generateIOComponentModules()

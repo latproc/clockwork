@@ -558,11 +558,12 @@ bool IOComponent::hasUpdates() {
 	return !updatedComponentsOut.empty();
 }
 
-uint8_t *generateProcessMask() {
+uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 	unsigned int max = IOComponent::getMaxIOOffset();
 	unsigned int min = IOComponent::getMinIOOffset();
 	// process data size
-	uint8_t *res = new uint8_t[max+1];
+	if (res && len != max+1) { delete res; res = 0; }
+	if (!res) res = new uint8_t[max+1];
 	memset(res, 0, max+1);
 
 	IOComponent::Iterator iter = IOComponent::begin();
@@ -583,25 +584,28 @@ uint8_t *generateProcessMask() {
 	return res;
 }
 
+// copy the provied data to the default data block
 void IOComponent::setDefaultData(uint8_t *data){
 #if 0
 	std::cout << "Setting default data to : \n";
 	display(data);
 	std::cout << "\n";
 #endif
-	if (default_data) delete default_data;
-	default_data = new uint8_t[process_data_size];
+	if (!default_data) 	
+		default_data = new uint8_t[process_data_size];
 	memcpy(default_data, data, process_data_size);
 }
 
+// copy the provided mask to the default data mask
 void IOComponent::setDefaultMask(uint8_t *mask){
 #if 0
 	std::cout << "Setting default mask to : \n";
 	display(mask);
 	std::cout << "\n";
 #endif
-	if (default_mask) delete default_mask;
-	default_mask = mask;
+	if (!default_mask) 
+		default_mask = new uint8_t[process_data_size];
+	memcpy(default_mask, mask, process_data_size);
 }
 
 uint8_t *IOComponent::generateMask(std::list<MachineInstance*> &outputs) {
@@ -755,7 +759,7 @@ void IOComponent::setupIOMap() {
 		}
 	}
 	//std::cout << "\n\n\n";
-	io_process_mask = generateProcessMask();
+	io_process_mask = generateProcessMask(io_process_mask, process_data_size);
 }
 
 

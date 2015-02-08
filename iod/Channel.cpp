@@ -81,7 +81,7 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-            std::cout << "found available port " << res << "\n";
+            //std::cout << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
@@ -128,7 +128,7 @@ void Channel::startSubscriber() {
     if (!port_val.asInteger(port)) port = 5555;
     //char buf[150];
     ////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
-    std::cout << " channel " << _name << " " << port << "\n";
+    //std::cout << " channel " << _name << " " << port << "\n";
     communications_manager = new SubscriptionManager(definition()->name.c_str(),
                               host.asString().c_str(), (int)port);
 
@@ -376,7 +376,7 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
                 std::string response;
                 char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
                 sendMessage(cmd, chn->communications_manager->setup,response);
-                std::cout << "channel " << name << " got response: " << response << "\n";
+                //std::cout << "channel " << name << " got response: " << response << "\n";
 								free(cmd);
             }
             else if (chn->mif) {
@@ -384,9 +384,9 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
                 chn->mif->send(cmd);
 								free(cmd);
             }
-            else {
-                std::cout << "channel " << name << " wants to send property change\n";
-            }
+            //else {
+            //    std::cout << "channel " << name << " wants to send property change\n";
+            //}
         }
     }
 }
@@ -483,7 +483,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
                 std::string response;
                 char *cmd = MessageEncoding::encodeState(name, new_state); // send command
                 sendMessage(cmd, chn->communications_manager->setup,response);
-                std::cout << "channel " << name << " got response: " << response << "\n";
+                //std::cout << "channel " << name << " got response: " << response << "\n";
             }
             else if (chn->mif) {
                 char *cmd = MessageEncoding::encodeState(name, new_state); // send command
@@ -515,7 +515,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
                 std::string response;
                 char *cmd = MessageEncoding::encodeCommand(command, params); // send command
                 sendMessage(cmd, chn->communications_manager->setup,response);
-                std::cout << "channel " << name << " got response: " << response << "\n";
+                //std::cout << "channel " << name << " got response: " << response << "\n";
 								free(cmd);
             }
             else if (chn->mif) {
@@ -721,7 +721,7 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
             break;
         }
     }
-    if (rc>0) std::cout << rc << " channels with activity\n";
+    //if (rc>0) std::cout << rc << " channels with activity\n";
     return rc;
 }
 
@@ -756,8 +756,9 @@ void Channel::checkCommunications() {
         setState(ChannelImplementation::CONNECTED);
     
     if ( !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
-        if (message_handler->receiveMessage(communications_manager->subscriber))
-            std::cout << "Channel got message: " << message_handler->data << "\n";
+        if (message_handler->receiveMessage(communications_manager->subscriber)) {
+            //std::cout << "Channel got message: " << message_handler->data << "\n";
+				}
     }
 
 }
@@ -819,7 +820,7 @@ void Channel::setupFilters() {
     while (prop_iter != definition()->monitors_properties.end()) {
         const std::pair<std::string, Value> &item = *prop_iter++;
         std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
-        std::cout << "settingup channel: searching for machines where " <<item.first << " == " << item.second << "\n";
+        //std::cout << "setting up channel: searching for machines where " <<item.first << " == " << item.second << "\n";
         while (machines != MachineInstance::end()) {
             MachineInstance *machine = *machines++;
             if (machine && !this->machines.count(machine)) {
@@ -828,7 +829,7 @@ void Channel::setupFilters() {
                 //  or if the machine has the property and it matches the provided value
                 if ( val != SymbolTable::Null &&
                         (item.second == SymbolTable::Null || val == item.second) ) {
-                    std::cout << "found match " << machine->getName() <<"\n";
+                    //std::cout << "found match " << machine->getName() <<"\n";
                     this->machines.insert(machine);
                     machine->publish();
                 }
@@ -838,25 +839,25 @@ void Channel::setupFilters() {
     
     iter = definition()->ignores_patterns.begin();
     while (iter != definition()->ignores_patterns.end()) {
-        const std::string &pattern = *iter++;
-        rexp_info *rexp = create_pattern(pattern.c_str());
-        if (!rexp->compilation_error) {
-            std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
-            while (machines != MachineInstance::end()) {
-                MachineInstance *machine = *machines++;
-                if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
-                    if (this->machines.count(machine)) {
-						std::cout << "unpublished " << machine->getName() << "\n";
-                        machine->unpublish();
-                        this->machines.erase(machine);
-                    }
-                }
-            }
-        }
-        else {
-            MessageLog::instance()->add(rexp->compilation_error);
-            std::cerr << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
-        }
+	    const std::string &pattern = *iter++;
+	    rexp_info *rexp = create_pattern(pattern.c_str());
+	    if (!rexp->compilation_error) {
+		    std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
+		    while (machines != MachineInstance::end()) {
+			    MachineInstance *machine = *machines++;
+			    if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
+				    if (this->machines.count(machine)) {
+					    //std::cout << "unpublished " << machine->getName() << "\n";
+					    machine->unpublish();
+					    this->machines.erase(machine);
+				    }
+			    }
+		    }
+	    }
+	    else {
+		    MessageLog::instance()->add(rexp->compilation_error);
+		    std::cerr << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
+	    }
     }
 }
 

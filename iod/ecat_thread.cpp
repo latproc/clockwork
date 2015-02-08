@@ -141,9 +141,9 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 	if (default_data) delete default_data;
 	if (default_mask) delete default_mask;
 	default_data_size = len;
-	default_data = new uint8_t[len];
+	if (!default_data) default_data = new uint8_t[len];
 	memcpy(default_data, data, len);
-	default_mask = new uint8_t[len];
+	if (!default_mask) default_mask = new uint8_t[len];
 	memcpy(default_mask, data, len);
 
 #ifdef DEBUG
@@ -470,8 +470,10 @@ void EtherCATThread::operator()() {
 					std::cout << "<"; display(cw_data); std::cout << "\n";
 				}
 #endif
-				if (default_data)
+				if (default_data) // only update the domain if default data has been setup
 					ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+				delete cw_mask;
+				delete cw_data;
 			}
 			ECInterface::instance()->sendUpdates();
 			checkAndUpdateCycleDelay();
