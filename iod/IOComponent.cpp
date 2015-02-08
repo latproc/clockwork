@@ -215,6 +215,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 	uint8_t *p = data;
 	uint8_t *m = mask;
 	uint8_t *q = io_process_data;
+  IOComponent *just_added = 0;
 	for (unsigned int i=0; i<process_data_size; ++i) {
 		if (!last_process_data) {
 			if (*m) notifyComponentsAt(i);
@@ -233,26 +234,36 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 				if ( *m & bitmask) {
 					//std::cout << "looking up " << i << ":" << j << "\n";
 					IOComponent *ioc = (*indexed_components)[ i*8+j ];
-					if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; 
-					//else std::cout << "found " << ioc->io_name << "\n";
-					if (ioc && ioc->last_event != e_none) { 
-						// pending locally sourced change on this io
-						//std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
-						updatedComponentsIn.insert(ioc);
-					}
-					if ( (*p & bitmask) != (*q & bitmask) ) {
-						// remotely source change on this io
-						if (ioc) {
-							//std::cout << " adding " << ioc->io_name << " due to bit change\n";
+					if (ioc && ioc != just_added) {
+						just_added = ioc;
+						if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; 
+						//else std::cout << "found " << ioc->io_name << "\n";
+						if (ioc && ioc->last_event != e_none) { 
+							// pending locally sourced change on this io
+							//std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
 							updatedComponentsIn.insert(ioc);
 						}
+						if ( (*p & bitmask) != (*q & bitmask) ) {
+							// remotely source change on this io
+							if (ioc) {
+								//std::cout << " adding " << ioc->io_name << " due to bit change\n";
+								updatedComponentsIn.insert(ioc);
+							}
 
-						if (*p & bitmask) *q |= bitmask; 
-						else *q &= (uint8_t)(0xff - bitmask);
+							if (*p & bitmask) *q |= bitmask; 
+							else *q &= (uint8_t)(0xff - bitmask);
+						}
+						//else { 
+						//	std::cout << "no change " << (unsigned int)*p << " vs " << 
+						//		(unsigned int)*q << "\n";}
 					}
-					//else { 
-					//	std::cout << "no change " << (unsigned int)*p << " vs " << 
-					//		(unsigned int)*q << "\n";}
+					else {
+						if (!ioc) std::cout << "IOComponent::processAll(): no io component at " << i <<":" <<j <<" but mask bit is set\n";
+						if ( (*p & bitmask) != (*q & bitmask) ) {
+							if (*p & bitmask) *q |= bitmask; 
+							else *q &= (uint8_t)(0xff - bitmask);
+						}
+					}
 				}
 				bitmask = bitmask << 1;
 				++j;

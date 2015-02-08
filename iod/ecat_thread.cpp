@@ -423,7 +423,7 @@ void EtherCATThread::operator()() {
 				memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
 				if (driver_state == s_driver_init) {
 					NB_MSG << "received initial values from clockwork; size: " 
-						<< iomsg.size() << " packet: " << packet_type << "\n";
+						<< len << " packet: " << packet_type << "\n";
 				}
 				}
 
