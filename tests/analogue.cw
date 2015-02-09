@@ -25,3 +25,7 @@ pressure_Error STATUS_FLAG EL3051, 0, 4;
 pressure_TxPDO_State STATUS_FLAG EL3051, 0, 7;
 pressure_TxPDO_Toggle STATUS_FLAG EL3051, 0, 8;
 pressure ANALOGINPUT EL3051, 0, 9;
+
+SpeedSettings MACHINE { idle INITIAL; }
+a1speed_settings SpeedSettings;
+pressure_rate RATEESTIMATOR pressure,a1speed_settings;

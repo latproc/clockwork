@@ -111,6 +111,7 @@ public:
 	virtual ~IOComponent() { processing_queue.remove(this); }
 	virtual void setInitialState();
 	const char *getStateString();
+	virtual void markChange();
 	virtual void idle();
 	virtual void turnOn();
 	virtual void turnOff();
