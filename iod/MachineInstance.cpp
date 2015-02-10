@@ -1612,6 +1612,9 @@ bool MachineInstance::stateExists(State &seek) {
 		if (*iter == seek) return true;
 		iter++;
 	}
+	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+		if (stable_states[ss_idx].state_name == seek.getName()) return true;
+	}
 	return false;
 }
 
