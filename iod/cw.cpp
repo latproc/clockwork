@@ -276,8 +276,9 @@ int main (int argc, char const *argv[])
                         }
                 }
                 else {
-                    if (m->_type != "POINT" && m->_type != "PUBLISHER" && m->_type != "SUBSCRIBER")
-                        DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
+                    if (m->_type != "POINT" && m->_type != "PUBLISHER" && m->_type != "SUBSCRIBER") {
+                        //DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
+										}
                     else   {
                         std::string name = m->parameters[0].real_name;
                         //DBG_MSG << "Setting up " << m->_type << " " << m->getName() << " \n";

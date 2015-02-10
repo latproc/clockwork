@@ -311,12 +311,14 @@ void generateIOComponentModules()
 			}
 			else
 			{
+#if 0
 				if (m->_type != "POINT" && m->_type != "STATUS_FLAG" && m->_type != "COUNTERRATE"
 						&& m->_type != "COUNTER"
 						&& m->_type != "ANALOGINPUT" && m->_type != "ANALOGOUTPUT" )
 					DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
 				else
 					DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (no parameters)\n";
+#endif
 			}
 		}
 		assert(remaining==0);
