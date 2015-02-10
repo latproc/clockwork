@@ -56,7 +56,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		}
 		State value(new_state.sValue.c_str());
 		if (!machine->hasState(new_state.sValue)) {
-			const Value &deref = machine->getValue(new_state.sValue.c_str());
+			const Value &deref = owner->getValue(new_state.sValue.c_str());
 			if (deref.kind != Value::t_symbol && deref.kind != Value::t_string) {
 				machine->getValue(new_state.sValue.c_str());
 				std::stringstream ss;
