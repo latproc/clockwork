@@ -40,7 +40,7 @@ public:
     std::ostream &operator<<(std::ostream &out) const;
     virtual bool operator==(const State &other) const;
     virtual bool operator!=(const State &other) const;
-    const std::string getName() const { return text; }
+    const std::string &getName() const { return text; }
     int getId() const { return token_id; }
     bool is(int tok) { return token_id == tok; }
     Value *getNameValue() { return &name; }
