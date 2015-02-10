@@ -1311,17 +1311,20 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	total_processing_time += now_t - start_processing;
 	++loop_count; // completed a pass through all machines
 	total_process_calls += loop_count - saved_loop_count;
-#if 0
-	MachineInstance *system = MachineInstance::find("SYSTEM");
+#if 1
+	static MachineInstance *system = 0;
+	if (!system) system = MachineInstance::find("SYSTEM");
 	assert(system);
-	system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
-	system->setValue("AVG_MACHINES_WITH_WORK_PER_KCYCLE", total_machines_with_work*1000 / loop_count);
-	system->setValue("AVG_WORK_PER_KCYCLE", total_idle_calls*1000 / loop_count);
-	system->setValue("CYCLES", loop_count);
-	system->setValue("AVG_PLUGIN_WORK_PER_KCYCLE", total_plugins_with_work * 1000 / loop_count);
-	system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
-	system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", total_processing_time * 1000 / loop_count);
-	system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
+	if (loop_count % 100 == 1) {
+		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
+		system->setValue("AVG_MACHINES_WITH_WORK_PER_KCYCLE", total_machines_with_work*1000 / loop_count);
+		system->setValue("AVG_WORK_PER_KCYCLE", total_idle_calls*1000 / loop_count);
+		system->setValue("CYCLES", loop_count);
+		system->setValue("AVG_PLUGIN_WORK_PER_KCYCLE", total_plugins_with_work * 1000 / loop_count);
+		system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
+		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", total_processing_time * 1000 / loop_count);
+		system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
+	}
 #endif
 	iter = active_machines.begin(); // prepare for the next cycle
 	return true; // complete the cycle
@@ -2487,13 +2490,19 @@ void MachineInstance::setInitialState() {
 		snprintf(buf, 100,"Warning: setting initial state on %s when it has no state machine\n", _name.c_str());
 		MessageLog::instance()->add(buf);
 	}
+} 
+
+void MachineInstance::publish() { 
+	++published; 
 }
+void MachineInstance::unpublish() { --published; }
 
 void MachineInstance::enable() {
 	if (is_enabled) return;
 	is_enabled = true; 
 	error_state = 0; 
 	clearAllActions(); 
+	if (io_interface) io_interface->idle();
 	for (unsigned int i = 0; i<locals.size(); ++i) {
 		if (!locals[i].machine) {
 			std::stringstream ss;

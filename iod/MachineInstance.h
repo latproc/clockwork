@@ -405,8 +405,8 @@ public:
     
     virtual long filter(long val) { return val; }
     
-    void publish() { ++published; }
-    void unpublish() { --published; }
+    void publish();
+    void unpublish();
     
     static void forceStableStateCheck();
     static void forceIdleCheck();
