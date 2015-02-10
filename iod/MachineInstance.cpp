@@ -1322,7 +1322,7 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		system->setValue("CYCLES", loop_count);
 		system->setValue("AVG_PLUGIN_WORK_PER_KCYCLE", total_plugins_with_work * 1000 / loop_count);
 		system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
-		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", total_processing_time * 1000 / loop_count);
+		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", (long)(total_processing_time * 1000 / loop_count));
 		system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
 	}
 #endif
