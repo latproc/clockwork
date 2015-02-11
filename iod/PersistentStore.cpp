@@ -85,7 +85,9 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
 		BOOST_FOREACH(entry, entries) {
 			if (entry.second.kind == Value::t_string)
 				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
-			else
+			else if (entry.second.kind == Value::t_symbol && entry.second.sValue.find(" ") != std::string::npos)
+				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
+			else 
 				out << prop.first << " " << entry.first << " " << entry.second << "\n";
 		}
 	}
