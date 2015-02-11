@@ -7,6 +7,14 @@ STARTUP MACHINE {
 	ENTER startup {
 		LOG "starting up"
 	}
+
+	COMMAND start { 
+		ENABLE norm;
+	}
+
+	COMMAND stop {
+		DISABLE norm;
+	}
 }
 
 startup STARTUP(tab:Tests);
@@ -17,4 +25,10 @@ Dummy MACHINE {
 
 }
 
+Normal MACHINE
+{
+	ENTER INIT { LOG "Started" }
+}
+
 dummy Dummy(tab:Tests);
+norm Normal(tab:Tests);
