@@ -1273,37 +1273,37 @@ static unsigned int last_num_machines_with_work = 1;
 #if 1
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
+	uint64_t start_processing = nowMicrosecs();
+	uint64_t now = start_processing;
 
 	std::list<Package*>::iterator evt_iter = pending_events.begin();
-	while (evt_iter != pending_events.end()) {
+	while (evt_iter != pending_events.end() && (max_time == 0 || now - start_processing < max_time) ) {
 		Package *pkg = *evt_iter;
 		evt_iter = pending_events.erase(evt_iter);
 		MachineInstance *mi = dynamic_cast<MachineInstance*>(pkg->receiver);
-		std::cout << mi->getName() << " executing " << *(pkg->message) << "\n";
+		//std::cout << mi->getName() << " executing " << *(pkg->message) << "\n";
 		if (mi) mi->execute(*(pkg->message), pkg->transmitter);
 		delete pkg;
 		++total_process_calls;
-		busy_machines.insert(mi);
+		if (mi) mi->setNeedsCheck();
+		now = nowMicrosecs();
 	}
 
-	uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-	total_processing_time += now_t - start_processing;
-	++loop_count; // completed a pass through all machines
 
 	std::set<MachineInstance*>::iterator busy_it = busy_machines.begin();
-	while (busy_it != busy_machines.end()) {
+	while (busy_it != busy_machines.end() && ( max_time == 0 || now - start_processing < max_time ) ) {
 		MachineInstance *mi = *busy_it;
-		//std::cout << mi->getName() << "::idle()\n";
 		mi->idle();
 		if (!mi->executingCommand()) {
 			busy_it = busy_machines.erase(busy_it);
 			if (mi->is_active) pending_state_change.insert(mi);
 		}
 		else busy_it++;
+		now = nowMicrosecs();
 	}
+
+	total_processing_time += now - start_processing;
+	if (now - start_processing < max_time) ++loop_count; // completed a pass through all machines
 	
 #if 1
 	static MachineInstance *system = 0;
@@ -1319,9 +1319,9 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", (long)(total_processing_time * 1000 / loop_count));
 		system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
 	}
+#endif
 	return true;
 }
-#endif
 #else
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	std::list<Package*>::iterator evt_iter = pending_events.begin();
@@ -1428,13 +1428,15 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 static int last_machines_needing_check = 1;
 #if 1
 bool MachineInstance::checkStableStates(uint32_t max_time) {
+	uint64_t start_processing = nowMicrosecs();
 	total_machines_needing_check = 0;
 	std::set<MachineInstance *>::iterator iter = MachineInstance::pending_state_change.begin();
-	while (iter != MachineInstance::pending_state_change.end()) {
+	while (iter != MachineInstance::pending_state_change.end() 
+				&& ( max_time == 0 || nowMicrosecs() - start_processing < max_time) ) {
 		MachineInstance *mi = *iter;
 		if (mi->executingCommand() == 0) {
 			iter = pending_state_change.erase(iter);
-			std::cout << mi->getName() << "::setStableState()\n";
+			//std::cout << mi->getName() << "::setStableState()\n";
 			mi->setStableState();
 		}
 		else {
@@ -1443,7 +1445,10 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 			iter++;
 		}
 	}
-	return true;
+	if (!max_time ||  nowMicrosecs() - start_processing < max_time) 
+		return true;
+	else
+		return false;
 }
 #else
 
@@ -1852,7 +1857,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
-		DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+		//DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);

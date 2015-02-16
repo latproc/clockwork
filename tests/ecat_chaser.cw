@@ -43,9 +43,10 @@ Cell MACHINE output, left, right {
 	#error WHEN SELF IS error 
 	#	OR (right IS NOT on AND right IS NOT off AND right IS NOT error)
 	#	OR (left IS NOT on AND left IS NOT off AND left IS NOT error);
-	turningOn WHEN stopping IS off AND SELF IS waiting AND TIMER>=10;
-	waiting WHEN stopping IS off AND left IS on AND output IS off;
-	on WHEN stopping IS off AND output IS on AND right IS NOT on;
+	off WHEN stopping IS on;
+	turningOn WHEN SELF IS waiting AND TIMER>=10;
+	waiting WHEN left IS on AND output IS off;
+	on WHEN output IS on AND right IS NOT on;
     off DEFAULT;
 	off INITIAL;
     COMMAND start { SET stopping TO off; SET output TO on }

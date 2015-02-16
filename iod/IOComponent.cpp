@@ -794,9 +794,9 @@ void IOComponent::markChange() {
 		// only outputs will have an e_on or e_off event queued, 
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
-			std::cout << "IOComponent::markChange setting bit " 
-				<< (offset - update_data) << ":" << bitpos 
-				<< " for " << io_name << "\n";
+			//std::cout << "IOComponent::markChange setting bit " 
+			//	<< (offset - update_data) << ":" << bitpos 
+			//	<< " for " << io_name << "\n";
 			set_bit(offset, bitpos, 1);			
 			updates_sent = false;
 		}
@@ -808,9 +808,9 @@ void IOComponent::markChange() {
 	}
 	else {
 		if (last_event == e_change) {
-			std::cerr << " assigning " << pending_value 
-				<< " to offset " << (unsigned long)(offset - update_data)
-			    << " for " << io_name << "\n";
+			//std::cerr << " assigning " << pending_value 
+			//	<< " to offset " << (unsigned long)(offset - update_data)
+			//    << " for " << io_name << "\n";
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
@@ -836,7 +836,7 @@ void IOComponent::markChange() {
 
 void IOComponent::handleChange(std::list<Package*> &work_queue) {
 	assert(io_process_data);
-	std::cout << io_name << "::handleChange() " << last_event << "\n";
+	//std::cout << io_name << "::handleChange() " << last_event << "\n";
 	uint8_t *offset = io_process_data + address.io_offset;
 	int bitpos = address.io_bitpos;
 	offset += (bitpos / 8);

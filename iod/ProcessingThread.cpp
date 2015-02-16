@@ -461,18 +461,18 @@ void ProcessingThread::operator()()
 					gettimeofday(&end_t, 0);
 					IOComponent::processAll( incoming_data_size, incoming_process_mask, 
 						incoming_process_data, io_work_queue);
-		if  (!io_work_queue.empty()) {
-			std::cout << io_work_queue.size() << " io items changed\n";
-		}
+//		if  (!io_work_queue.empty()) {
+//			std::cout << io_work_queue.size() << " io items changed\n";
+//		}
 					std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
 					while (io_work != io_work_queue.end()) {
 						IOComponent *ioc = *io_work;
 						ioc->handleChange(MachineInstance::pendingEvents());
 						io_work = io_work_queue.erase(io_work);
 					}
-		if  (!MachineInstance::pendingEvents().empty()) {
-			std::cout << MachineInstance::pendingEvents().size() << " pending events\n";
-		}
+//		if  (!MachineInstance::pendingEvents().empty()) {
+//			std::cout << MachineInstance::pendingEvents().size() << " pending events\n";
+//		}
 					gettimeofday(&start_t, 0);
 					delta = get_diff_in_microsecs(&start_t, &end_t);
 					total_mp_time += delta;
