@@ -327,6 +327,11 @@ void ProcessingThread::operator()()
 	assert(system);
 
 	enum { s_update_idle, s_update_sent } update_state = s_update_idle;
+    
+    if (IOComponent::devices.empty() ) {
+        IOComponent::setHardwareState(IOComponent::s_operational);
+        activate_hardware();
+    }
 
 	while (!program_done)
 	{
@@ -515,7 +520,7 @@ void ProcessingThread::operator()()
 			}
 			start_t = end_t;
 		}
-		if (machine_is_ready && 
+		if (machine_is_ready && !IOComponent::devices.empty() &&
 				(
 				 IOComponent::updatesWaiting() 
 				 || IOComponent::getHardwareState() != IOComponent::s_operational

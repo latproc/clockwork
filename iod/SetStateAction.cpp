@@ -42,7 +42,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 
 	if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
 		std::stringstream ss;
-		ss << owner->fullName() << " " << new_state << " must be a symbol or string" << std::flush;
+		ss << *this << " failed. " << owner->fullName() << " " << new_state << " must be a symbol or string" << std::flush;
 		error_str = strdup(ss.str().c_str());
 		status = Failed;
 		owner->stop(this);
@@ -55,28 +55,32 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			DBG_M_ACTIONS << owner->getName() << " lookup for " << target.get() << " returned " << machine->getName() << "\n"; 
 		}
 		State value(new_state.sValue.c_str());
-		if (!machine->hasState(new_state.sValue)) {
-			const Value &deref = owner->getValue(new_state.sValue.c_str());
+		const Value &deref = owner->getValue(new_state.sValue.c_str());
+		if (deref != SymbolTable::Null) {
+			DBG_M_ACTIONS << *this << " dereferenced " << new_state << " to " << deref << "\n";
 			if (deref.kind != Value::t_symbol && deref.kind != Value::t_string) {
-				machine->getValue(new_state.sValue.c_str());
 				std::stringstream ss;
-				ss << owner->fullName() << " " << deref << " ("<<deref.kind<<")" << " must be a symbol or string" << std::flush;
+				ss << owner->fullName() << " state " << deref << " ("<<deref.kind<<")" << " must be a symbol or string" << std::flush;
 				error_str = strdup(ss.str().c_str());
+				DBG_M_ACTIONS << error_str << "\n";
 				status = Failed;
 				owner->stop(this);
 				return status; 
 			}
-			else if (!machine->hasState(deref.sValue.c_str())){
+			else if (!machine->hasState(deref.sValue)){
 				std::stringstream ss;
-				ss << owner->fullName() << " does not have a state " << new_state << std::flush;
+				ss << machine->fullName();
+				if (machine->getStateMachine()) ss << " of class " << machine->getStateMachine()->name << " ";
+				ss << " does not have a state " << deref.sValue << std::flush;
 				error_str = strdup(ss.str().c_str());
+				DBG_M_ACTIONS << error_str << "\n";
 				status = Failed;
 				owner->stop(this);
 				return status;
 			}
 			value = deref.sValue.c_str();
+			DBG_M_ACTIONS << owner->fullName() << " setting state of " << machine->fullName() <<" to dereferenced value " << value << "\n";
 		}
-		//machine = (*pos).second;
 		if (machine->io_interface) {
 			std::string txt(machine->io_interface->getStateString());
 			if (txt == value.getName()) {
@@ -96,9 +100,12 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
 			return status;
 		}
-		else if ( (value.getName() == "INTEGER" && machine->getCurrent().getName() == "INTEGER")
-				|| machine->stateExists(value)
-			) {
+		else 
+// TBD concerned about the cost of MachineInstance::stateExists 
+//			if ( (value.getName() == "INTEGER" && machine->getCurrent().getName() == "INTEGER")
+//				|| machine->stateExists(value)
+//			) 
+		{
 			if (machine->getCurrent().getName() == value.getName()) {
 				DBG_M_ACTIONS << machine->getName() << " is already " << value << " skipping " << *this << "\n";
 				status = Complete;
@@ -154,6 +161,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
 			return status;
 		}
+#if 0
 		else {
 			std::stringstream ss;
 			ss << "no machine found from " << owner->getName() << " to handle " << target.get() << ".SetState(" << value.getName() << ")" << std::flush;
@@ -162,6 +170,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			owner->stop(this);
 			return status; 
 		}
+#endif
 		result_str = "OK";
 		status = Running;
 		setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
@@ -212,6 +221,9 @@ Action::Status SetStateAction::checkComplete() {
 				status = Complete;
 				owner->stop(this);
 				return status;
+			}
+			else {
+				DBG_M_ACTIONS << owner->getName() << " still waiting for " << machine->getName() << " to move to state " << value << "\n";
 			}
 		}
 	}

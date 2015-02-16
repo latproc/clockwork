@@ -1738,6 +1738,9 @@ bool MachineInstance::stateExists(State &seek) {
 		if (*iter == seek) return true;
 		iter++;
 	}
+	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+		if (stable_states[ss_idx].state_name == seek.getName()) return true;
+	}
 	return false;
 }
 
@@ -3446,6 +3449,9 @@ void MachineInstance::setStableState() {
 					if (s.getName() == state_name) {
 						return true;
 					}
+				}
+				for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+					if (stable_states[ss_idx].state_name == state_name) return true;
 				}
 				/*std::list<Transition>::const_iterator trans_i = transitions.begin();
 				  while (trans_i != transitions.end()) {

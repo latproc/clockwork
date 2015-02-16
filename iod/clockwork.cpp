@@ -90,7 +90,6 @@ void usage(int argc, char const *argv[])
 static void listDirectory( const std::string pathToCheck, std::list<std::string> &file_list)
 {
     boost::filesystem::path dir(pathToCheck.c_str());
-    std::cout << dir << "\n";
     try {
         for (boost::filesystem::directory_iterator iter = boost::filesystem::directory_iterator(dir); iter != boost::filesystem::directory_iterator(); iter++)
         {
@@ -136,7 +135,7 @@ int load_preset_modbus_mappings() {
 		while (modbus_mappings_file.getline(buf, 200,'\n')) {
 			++lineno;
 			std::stringstream line(buf);
-			std::cout << buf << "\n";
+			//std::cout << buf << "\n";
 			std::string group_addr, group, addr, name, type;
             int length = 1;
 			line >> group_addr ;
@@ -147,7 +146,7 @@ int load_preset_modbus_mappings() {
                 if (!(line >> length) )
                     generate_length = true;
 				group.erase(pos);
-				std::cout << "$$$$$$$$$$$$ " << group << " " << name << "\n";
+				//std::cout << "$$$$$$$$$$$$ " << group << " " << name << "\n";
 				addr = group_addr;
 				addr = group_addr.substr(pos+1);
 				std::string lookup_name(name);
@@ -155,7 +154,7 @@ int load_preset_modbus_mappings() {
 					size_t pos = lookup_name.rfind("cmd_");
 					if (pos != std::string::npos) {
 						lookup_name = lookup_name.replace(pos,4,"");
-						std::cout << "fixed name " << name << " to " << lookup_name << "\n";
+						//std::cout << "fixed name " << name << " to " << lookup_name << "\n";
 						name = lookup_name;
 					}
 				}
@@ -407,12 +406,12 @@ void semantic_analysis() {
     
     // display machine classes and build a map of names to classes
     // also move the DEFAULT stable state to the end
-    std::cout << "\nMachine Classes\n";
-    std::ostream_iterator<Parameter> out(std::cout, ", ");
+    //std::cout << "\nMachine Classes\n";
+    //std::ostream_iterator<Parameter> out(std::cout, ", ");
     BOOST_FOREACH(MachineClass*mc, MachineClass::all_machine_classes) {
-        std::cout << mc->name << " (";
-        std::copy(mc->parameters.begin(), mc->parameters.end(), out);
-        std::cout << ")\n";
+        //std::cout << mc->name << " (";
+        //std::copy(mc->parameters.begin(), mc->parameters.end(), out);
+        //std::cout << ")\n";
         if (mc->stable_states.size()) {
             std::ostream_iterator<StableState> ss_out(std::cout, ", ");
             
@@ -431,9 +430,9 @@ void semantic_analysis() {
 				mc->stable_states[n-1] = tmp;
 			}
             
-            std::cout << "stable states: ";
-            std::copy(mc->stable_states.begin(), mc->stable_states.end(), ss_out);
-            std::cout <<"\n";
+            //std::cout << "stable states: ";
+            //std::copy(mc->stable_states.begin(), mc->stable_states.end(), ss_out);
+            //std::cout <<"\n";
         }
         machine_classes[mc->name] = mc;
     }
