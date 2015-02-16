@@ -333,6 +333,7 @@ void ProcessingThread::operator()()
         activate_hardware();
     }
 
+	std::set<IOComponent *>io_work_queue;
 	while (!program_done)
 	{
 		machine.idle();
@@ -352,7 +353,7 @@ void ProcessingThread::operator()()
 		else
 			machine_is_ready = false;
 
-		enum { eIdle, eStableStates, ePollingMachines} processingState = eIdle;
+		enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
 		struct timeval start_t, end_t;
 		//boost::mutex::scoped_lock lock(thread_protection_mutex);
 		gettimeofday(&start_t, 0);
@@ -368,11 +369,11 @@ void ProcessingThread::operator()()
 		char buf[10];
 		int poll_wait = 1000;
 
-		std::set<IOComponent *>io_work_queue;
 		while (!program_done)
 		{
 			if (IOComponent::updatesWaiting()) poll_wait=100; else poll_wait=1000;
 			if (pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out)) break;
+			if  (!io_work_queue.empty()) break;
 			if (MachineInstance::workToDo()) break;
 		}
 		gettimeofday(&end_t, 0);
@@ -386,6 +387,46 @@ void ProcessingThread::operator()()
 			total_poll_time = 0;
 		}
 		start_t = end_t;
+
+		/* this loop priorities ethercat processing but if a certain
+			number of ethercat cycles have been processed with no 
+			other activities being given time, we git other jobs
+			some time anyway.
+		*/
+		static int ecat_handled_count = 0;
+		const int max_ecat_only_cycles = 5;
+		if (ecat_handled_count < max_ecat_only_cycles && items[ECAT_ITEM].revents & ZMQ_POLLIN)
+		{
+			++ecat_handled_count;
+			static unsigned long total_mp_time = 0;
+			static unsigned long mp_count = 0;
+			uint8_t *mask_p = incoming_process_mask;
+			int n = incoming_data_size;
+			while (n-- && *mask_p == 0) ++mask_p;
+			if (*mask_p) { // io has indicated a change
+				if (machine_is_ready)
+				{
+				//std::cout << "got EtherCAT data\n";
+					gettimeofday(&end_t, 0);
+					IOComponent::processAll( incoming_data_size, incoming_process_mask, 
+						incoming_process_data, io_work_queue);
+					gettimeofday(&start_t, 0);
+					delta = get_diff_in_microsecs(&start_t, &end_t);
+					total_mp_time += delta;
+					if (++mp_count>=100) {
+						system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
+						mp_count = 0;
+						total_mp_time = 0;
+					}
+				}
+				else
+					std::cout << "received EtherCAT data but machine is not ready\n";
+			}
+			safeSend(ecat_sync,"go",2);
+			if (program_done) break;
+			continue;
+		}
+		ecat_handled_count = 0; // reset this counter since other tasks are now getting time
 #if 0
 		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
 			std::cout << "ecat waiting\n";
@@ -394,6 +435,17 @@ void ProcessingThread::operator()()
 		if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
 			std::cout << "dispatcher waiting\n";
 #endif
+
+		if (program_done) break;
+		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
+			std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
+			while (io_work != io_work_queue.end()) {
+				IOComponent *ioc = *io_work;
+				ioc->handleChange(MachineInstance::pendingEvents());
+				io_work = io_work_queue.erase(io_work);
+			}
+		}
+
 		if (program_done) break;
 		if (status == e_handling_cmd) {
 			waitForCommandProcessing(resource_mgr);
@@ -408,7 +460,7 @@ void ProcessingThread::operator()()
 		if (program_done) break;
 
 		if (status == e_handling_dispatch) {
-			if (processingState != eIdle) {
+			if (processing_state != eIdle) {
 				// cannot process dispatch events at present
 				status = e_waiting;
 				MachineInstance::forceIdleCheck();
@@ -428,7 +480,7 @@ void ProcessingThread::operator()()
 			else { DBG_DISPATCHER << " no more work to do after dispatch\n"; }
 		}
 		else if (status == e_handling_sched) {
-			if (processingState != eIdle) {
+			if (processing_state != eIdle) {
 				// cannot process scheduled events at present
 				status = e_waiting;
 				std::cout << "can't handle scheduler\n";
@@ -451,63 +503,23 @@ void ProcessingThread::operator()()
 		if (active_channels) {
 		Channel::handleChannels();
 		}
-		 */		
-		else if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
-		{
-			static unsigned long total_mp_time = 0;
-			static unsigned long mp_count = 0;
-			uint8_t *mask_p = incoming_process_mask;
-			int n = incoming_data_size;
-			while (n-- && *mask_p == 0) ++mask_p;
-			if (*mask_p) { // io has indicated a change
-				if (machine_is_ready)
-				{
-				//std::cout << "got EtherCAT data\n";
-					gettimeofday(&end_t, 0);
-					IOComponent::processAll( incoming_data_size, incoming_process_mask, 
-						incoming_process_data, io_work_queue);
-//		if  (!io_work_queue.empty()) {
-//			std::cout << io_work_queue.size() << " io items changed\n";
-//		}
-					std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
-					while (io_work != io_work_queue.end()) {
-						IOComponent *ioc = *io_work;
-						ioc->handleChange(MachineInstance::pendingEvents());
-						io_work = io_work_queue.erase(io_work);
-					}
-//		if  (!MachineInstance::pendingEvents().empty()) {
-//			std::cout << MachineInstance::pendingEvents().size() << " pending events\n";
-//		}
-					gettimeofday(&start_t, 0);
-					delta = get_diff_in_microsecs(&start_t, &end_t);
-					total_mp_time += delta;
-					if (++mp_count>=100) {
-						system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
-						mp_count = 0;
-						total_mp_time = 0;
-					}
-				}
-				else
-					std::cout << "received EtherCAT data but machine is not ready\n";
-			}
-			safeSend(ecat_sync,"go",2);
-		}
+		*/
 		if (machine_is_ready && MachineInstance::workToDo() )
 		{
 			static unsigned long total_cw_time = 0;
 			static unsigned long cw_count = 0;
 
-			if (processingState == eIdle)
-				processingState = ePollingMachines;
-			if (processingState == ePollingMachines)
+			if (processing_state == eIdle)
+				processing_state = ePollingMachines;
+			if (processing_state == ePollingMachines)
 			{
 				if (MachineInstance::processAll(150000, MachineInstance::NO_BUILTINS))
-					processingState = eStableStates;
+					processing_state = eStableStates;
 			}
-			if (processingState == eStableStates)
+			if (processing_state == eStableStates)
 			{
 				if (MachineInstance::checkStableStates(150000))
-					processingState = eIdle;
+					processing_state = eIdle;
 			}
 
 			gettimeofday(&end_t, 0);
