@@ -222,6 +222,18 @@ class IOComponent;
 class MQTTModule;
 struct cJSON;
 
+class MachineEvent {
+public:
+	MachineInstance *mi;
+	Message *msg;
+	MachineEvent(MachineInstance *, Message *);
+	MachineEvent(MachineInstance *, const Message &);
+	~MachineEvent();
+private:
+	MachineEvent(const MachineEvent&);
+	MachineEvent &operator=(const MachineEvent&);
+};
+
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
     friend class MachineInstanceFactory;
 public:
@@ -313,7 +325,12 @@ public:
 	// this depends on machine m if it is in m's list of dependants or if the machine
 	// is in this machines listen list.
 	bool dependsOn(Transmitter *m);
-    void notifyDependents(Message &msg);
+
+	// indicate that dependent machine should check their state
+    void notifyDependents(); 
+
+	// forward the message to dependents and notify them to check their state
+    void notifyDependents(Message &msg); 
 	
 	bool needsCheck();
 	void resetNeedsCheck();
@@ -410,7 +427,9 @@ public:
     
     static void forceStableStateCheck();
     static void forceIdleCheck();
-    static bool workToDo() { return num_machines_with_work + total_machines_needing_check > 0; }
+    static bool workToDo();
+	static std::set<MachineInstance*>& busyMachines();
+	static std::list<Package*>& pendingEvents();
 
 protected:
 	int needs_check;
@@ -422,8 +441,8 @@ protected:
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
-	Action::Status setState(State &new_state, bool reexecute = false);
-    Action::Status setState(const char *new_state);
+	Action::Status setState(State &new_state, bool resume = false);
+    Action::Status setState(const char *new_state, bool resume = false);
 	bool is_enabled;
 	Value state_timer;
 	MachineInstance *locked;
@@ -458,6 +477,9 @@ protected:
     static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
     static std::list<MachineInstance*> active_machines; // machines that require idle() processing
     static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
+    static std::set<MachineInstance*> busy_machines; // machines that have work queued to them
+    static std::set<MachineInstance*> pending_state_change; // machines that need to check their stable states
+    static std::list<Package*> pending_events; // machines that shadow remote machines
     static unsigned int num_machines_with_work;
     static unsigned int total_machines_needing_check;
 

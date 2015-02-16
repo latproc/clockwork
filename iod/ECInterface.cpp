@@ -484,6 +484,9 @@ int ECInterface::collectState() {
 	// the result of this is a list of data bits to be changed and
 	// a mask indicating which bits are important
 	size_t domain_size = ecrt_domain_size(domain1);
+	if ((long)domain_size < 0) {
+		return 0;
+	}
 	assert(domain_size >= (size_t)max+1);
 	if (!update_data) update_data = new uint8_t[domain_size]; 
 	if (!update_mask) update_mask = new uint8_t[domain_size]; 

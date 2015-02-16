@@ -257,6 +257,9 @@ std::list<MachineInstance*> MachineInstance::all_machines;
 std::list<MachineInstance*> MachineInstance::automatic_machines;
 std::list<MachineInstance*> MachineInstance::active_machines;
 std::list<MachineInstance*> MachineInstance::shadow_machines;
+std::set<MachineInstance*> MachineInstance::busy_machines;
+std::list<Package*> MachineInstance::pending_events;
+std::set<MachineInstance*> MachineInstance::pending_state_change;
 std::map<std::string, MachineInterface *> MachineInterface::all_interfaces;
 std::map<std::string, HardwareAddress> MachineInstance::hw_names;
 
@@ -287,12 +290,17 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 void MachineInstance::setNeedsCheck() {
 	if (!getStateMachine() || !getStateMachine()->allow_auto_states) return;
 	if (!is_enabled) return;
-	if (!needs_check) { ++needs_check;  DBG_AUTOSTATES << _name << " needs check\n"; }
-	//++needs_check;
-	++total_machines_needing_check;
-	//updateLastEvaluationTime();
+	if (!needs_check) { 
+		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n"; 
+		++total_machines_needing_check;
+	}
 	if (!state_machine) return;
+	if (!active_actions.empty() || !mail_queue.empty())
+		busy_machines.insert(this);
+	else
+		pending_state_change.insert(this);
 	next_poll = 0;
+#if 0
 	if (state_machine->token_id == ClockworkToken::LIST) {
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
@@ -308,14 +316,14 @@ void MachineInstance::setNeedsCheck() {
 		}
 	}
 	if (io_interface) {
-		//std::cout << _name << " has hw io, updating dependent machines\n";
+		std::cout << _name << " has hw io, updating dependent machines\n";
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
 			MachineInstance *dep = *dep_iter++;
 			if (dep->is_enabled) dep->setNeedsCheck();
 		}
 	}
-
+#endif
 }
 
 std::string MachineInstance::fullName() const {
@@ -335,7 +343,15 @@ void MachineInstance::enqueueAction(Action *a){
 	num_machines_with_work++;
 	DBG_AUTOSTATES << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
 	has_work = true;
+	busy_machines.insert(this);
 }
+
+bool MachineInstance::workToDo() { 
+	return !pending_events.empty() || !busy_machines.empty() || !pending_state_change.empty()
+				|| num_machines_with_work + total_machines_needing_check > 0; 
+}
+std::set<MachineInstance*>& MachineInstance::busyMachines() { return busy_machines; }
+std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
 
 void MachineInstance::forceIdleCheck() { 
 	num_machines_with_work++; 
@@ -377,15 +393,19 @@ bool TriggeredAction::active() {
 
 void MachineInstance::triggerFired(Trigger *trig) {
 	setNeedsCheck();
+/*
 	num_machines_with_work++;
 	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
 	has_work = true;
+	busy_machines.insert(this);
+*/
 }
 
 void MachineInstance::checkActions() {
 	num_machines_with_work++;
 	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
 	has_work = true;
+	busy_machines.insert(this);
 }
 
 void MachineInstance::resetTemporaryStringStream() {
@@ -756,9 +776,9 @@ bool RateEstimatorInstance::hasWork() {
 }
 
 void RateEstimatorInstance::setNeedsCheck() {
-	if (!needs_check) {
+	//if (!needs_check) {
 		MachineInstance::setNeedsCheck();
-	}
+	//}
 }
 
 void RateEstimatorInstance::idle() {
@@ -1009,6 +1029,16 @@ void MachineInstance::describe(std::ostream &out) {
 			out << delim << curr.first;
 			delim = ", ";
 		}
+		out << "\n";
+	}
+
+	if (!mail_queue.empty()) {
+		out << "queued messages: " << mail_queue.size() << "\n";
+		std::list<Package*>::iterator evt_iter = pending_events.begin();
+		while (evt_iter != pending_events.end()) {
+			Package *pkg = *evt_iter++;
+			out << *pkg << "\n";
+		}
 	}
 
 	if (!active_actions.empty()) {
@@ -1125,12 +1155,14 @@ void MachineInstance::idle() {
 		return;
 	}
 	if (!state_machine) {
-		std::stringstream ss;
-		ss << " machine " << _name << " has no state machine";
-		char *log_msg = strdup(ss.str().c_str());
-		MessageLog::instance()->add(log_msg);
-		DBG_M_ACTIONS << log_msg << "\n";
-		free(log_msg);
+		if (LOGS(DebugExtra::instance()->DEBUG_ACTIONS)) {
+			std::stringstream ss;
+			ss << " machine " << _name << " has no state machine";
+			char *log_msg = strdup(ss.str().c_str());
+			MessageLog::instance()->add(log_msg);
+			DBG_M_ACTIONS << log_msg << "\n";
+			free(log_msg);
+		}
 		return;
 	}
 	CaptureDuration cd(message_handling_stats);
@@ -1178,7 +1210,7 @@ void MachineInstance::idle() {
 			DBG_M_MESSAGING << _name << " found package " << p << "\n";
 			mail_queue.pop_front();
 			handle(p.message, p.transmitter, p.needs_receipt);
-			forceIdleCheck();
+			//forceIdleCheck();
 		}
 	}
 	if (mail_queue.empty() && active_actions.empty()) has_work = false;
@@ -1238,7 +1270,69 @@ uint64_t total_processing_time = 0;
 long total_aborts = 0;
 static unsigned int last_num_machines_with_work = 1;
 
+#if 1
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
+
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
+
+	std::list<Package*>::iterator evt_iter = pending_events.begin();
+	while (evt_iter != pending_events.end()) {
+		Package *pkg = *evt_iter;
+		evt_iter = pending_events.erase(evt_iter);
+		MachineInstance *mi = dynamic_cast<MachineInstance*>(pkg->receiver);
+		std::cout << mi->getName() << " executing " << *(pkg->message) << "\n";
+		if (mi) mi->execute(*(pkg->message), pkg->transmitter);
+		delete pkg;
+		++total_process_calls;
+		busy_machines.insert(mi);
+	}
+
+	uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+	total_processing_time += now_t - start_processing;
+	++loop_count; // completed a pass through all machines
+
+	std::set<MachineInstance*>::iterator busy_it = busy_machines.begin();
+	while (busy_it != busy_machines.end()) {
+		MachineInstance *mi = *busy_it;
+		//std::cout << mi->getName() << "::idle()\n";
+		mi->idle();
+		if (!mi->executingCommand()) {
+			busy_it = busy_machines.erase(busy_it);
+			if (mi->is_active) pending_state_change.insert(mi);
+		}
+		else busy_it++;
+	}
+	
+#if 1
+	static MachineInstance *system = 0;
+	if (!system) system = MachineInstance::find("SYSTEM");
+	system->setValue("PENDING_STATE_CHANGE", pending_state_change.size());
+	if (loop_count % 100 == 1) {
+		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
+		system->setValue("AVG_MACHINES_WITH_WORK_PER_KCYCLE", total_machines_with_work*1000 / loop_count);
+		system->setValue("AVG_WORK_PER_KCYCLE", total_idle_calls*1000 / loop_count);
+		system->setValue("CYCLES", loop_count);
+		system->setValue("AVG_PLUGIN_WORK_PER_KCYCLE", total_plugins_with_work * 1000 / loop_count);
+		system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
+		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", (long)(total_processing_time * 1000 / loop_count));
+		system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
+	}
+	return true;
+}
+#endif
+#else
+bool MachineInstance::processAll(uint32_t max_time, PollType which) {
+	std::list<Package*>::iterator evt_iter = pending_events.begin();
+	while (evt_iter != pending_events.end()) {
+		Package *pkg = *evt_iter;
+		evt_iter = pending_events.erase(evt_iter);
+		MachineInstance *mi = dynamic_cast<MachineInstance*>(pkg->receiver);
+		if (mi) mi->execute(*(pkg->message), pkg->transmitter);
+		delete pkg;
+	}
+
 	static int point_token = ClockworkToken::POINT;
 	static std::list<MachineInstance *>::iterator iter = active_machines.begin();
 	bool builtins = false;
@@ -1329,8 +1423,30 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	iter = active_machines.begin(); // prepare for the next cycle
 	return true; // complete the cycle
 }
+#endif
 
 static int last_machines_needing_check = 1;
+#if 1
+bool MachineInstance::checkStableStates(uint32_t max_time) {
+	total_machines_needing_check = 0;
+	std::set<MachineInstance *>::iterator iter = MachineInstance::pending_state_change.begin();
+	while (iter != MachineInstance::pending_state_change.end()) {
+		MachineInstance *mi = *iter;
+		if (mi->executingCommand() == 0) {
+			iter = pending_state_change.erase(iter);
+			std::cout << mi->getName() << "::setStableState()\n";
+			mi->setStableState();
+		}
+		else {
+			std::cout << "waiting for " << mi->getName() << ": " << *mi->executingCommand() << "\n";
+			busy_machines.insert(mi);
+			iter++;
+		}
+	}
+	return true;
+}
+#else
+
 bool MachineInstance::checkStableStates(uint32_t max_time) {
 #ifdef USE_EXPERIMENTAL_IDLE_LOOP
 	if (last_machines_needing_check == 0 && total_machines_needing_check == 0) return true;
@@ -1398,6 +1514,7 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 	}
 	return true;
 }
+#endif
 
 void MachineInstance::displayAutomaticMachines() {
 	BOOST_FOREACH(MachineInstance *m, MachineInstance::automatic_machines) {
@@ -1454,9 +1571,9 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
 		mi->addDependancy(this);
 		mi->listenTo(this);
 	}
-	if (_type == "LIST") {
-		setNeedsCheck();
-	}
+	//if (_type == "LIST" || _type == "REFERENCE")
+	setNeedsCheck();
+	//}
 }
 
 void MachineInstance::removeParameter(int which) {
@@ -1493,8 +1610,9 @@ void MachineInstance::addLocal(Value param, MachineInstance *mi) {
 			if (s.condition.predicate) s.condition.predicate->flushCache();
 		}
 	}
-	if (_type == "REFERENCE") {
-		setNeedsCheck();
+	setNeedsCheck();
+	if (_type == "LIST" || _type == "REFERENCE") {
+		notifyDependents();
 		/*if (owner) {
 		  std::set<MachineInstance*>::iterator dep_iter = owner->depends.begin();
 		  while (dep_iter != owner->depends.end()) {
@@ -1530,6 +1648,9 @@ void MachineInstance::removeLocal(int index) {
 	while (index-- && iter != locals.end()) iter++;
 	if (iter != locals.end()) locals.erase(iter);
 	setNeedsCheck();
+	if (_type == "LIST" || _type == "REFERENCE") {
+		notifyDependents();
+	}
 }
 
 void MachineInstance::setProperties(const SymbolTable &props) {
@@ -1623,9 +1744,9 @@ bool MachineInstance::stateExists(State &seek) {
  */
 bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	// passive machines do not receive messages
-	if (!is_active) return false;
+	//if (!is_active) return false;
 	// all active machines receive messages from themselves
-	if (from == this) {
+	if (from == this || (io_interface && from == io_interface) ) {
 		DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from itself\n";
 		return true; 
 	}    
@@ -1644,11 +1765,11 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 		const Transition &t = *iter++;
 		if (t.trigger == m) return true;
 	}
-	DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
+	DBG_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
 	return false;
 }
 
-Action::Status MachineInstance::setState(const char *sn) {
+Action::Status MachineInstance::setState(const char *sn, bool resume) {
 	char buf[150];
 	if (!state_machine) {
 		snprintf(buf, 150, "Error: setting state to %s on a machine (%s) with no statemachine", sn, _name.c_str());
@@ -1663,7 +1784,7 @@ Action::Status MachineInstance::setState(const char *sn) {
 		DBG_MSG << buf << "\n";
 		return Action::Failed;
 	}
-	return setState(*s);
+	return setState(*s, resume);
 }
 
 void MachineInstance::forceStableStateCheck() { 
@@ -1671,9 +1792,7 @@ void MachineInstance::forceStableStateCheck() {
 	total_machines_needing_check++; 
 }
 
-Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
-	//forceStableStateCheck();
-	//forceIdleCheck();
+Action::Status MachineInstance::setState(State &new_state, bool resume) {
 
 	Action::Status stat = Action::Complete;
 	// update the Modbus interface for self 
@@ -1697,8 +1816,7 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 			}
 		}
 	}
-	assert(reexecute == false);
-	if (reexecute || current_state != new_state) {
+	if (resume || current_state != new_state) {
 		std::string last = current_state.getName();
 
 #ifndef DISABLE_LEAVE_FUNCTIONS
@@ -1726,15 +1844,15 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 				}
 				//TBD execute the message on the dependant machine
 				dep->execute(msg, this);
-				if (dep->_type == "LIST") {
-					dep->setNeedsCheck();
-				}
+				//if (dep->_type == "LIST") {
+				dep->setNeedsCheck();
+				//}
 			}
 		}
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
-		//DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+		DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
@@ -1914,22 +2032,41 @@ Action::Status MachineInstance::setState(State &new_state, bool reexecute) {
 	return stat;
 }
 
-void MachineInstance::notifyDependents(Message &msg){
+void MachineInstance::notifyDependents(){
 	std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 	while (dep_iter != depends.end()) {
 		MachineInstance *dep = *dep_iter++;
 		if (this == dep) continue;
-		DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is " << current_state.getName() << " using " << msg << "\n";
+		if (!dep->is_enabled) continue;
+		if (!dep->is_active && !dep->io_interface) continue;
+		DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " to check state\n";
 		Action *act = dep->executingCommand();
 		if (act) {
 			if (act->getStatus() == Action::Suspended) act->resume();
 			DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
 		}
+		dep->setNeedsCheck();
+	}
+}
+
+void MachineInstance::notifyDependents(Message &msg){
+	std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+	while (dep_iter != depends.end()) {
+		MachineInstance *dep = *dep_iter++;
+		if (this == dep) continue;
+		if (!dep->is_enabled) continue;
+		if (!dep->is_active && !dep->io_interface) continue;
+		DBG_M_MESSAGING << _name << " should tell " << dep->getName() 
+			<< " it is " << current_state.getName() << " using " << msg << "\n";
+		Action *act = dep->executingCommand();
+		if (act) {
+			if (act->getStatus() == Action::Suspended) act->resume();
+			DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() 
+				<< "]" << " is executing " << *act << "\n";
+		}
 		//TBD execute the message on the dependant machine
 		if (dep->receives(msg, this)) dep->execute(msg, this);
-		if (dep->_type == "LIST") {
-			dep->setNeedsCheck();
-		}
+		dep->setNeedsCheck();
 	}
 }
 
@@ -2146,11 +2283,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		NB_MSG << _name << " error: dropping empty message\n";
 		return Action::Failed;
 	}
-	//setNeedsCheck(); // TBD is this necessary? ######--- check
 	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
-	std::string event_name(m.getText());
-	if (from && event_name.find('.') == std::string::npos)
-		event_name = from->getName() + "." + m.getText();
 
 	if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
 		if (!state_machine) return Action::Failed;
@@ -2177,6 +2310,10 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		// a POINT won't have an actions that depend on triggers so it's safe to return now
 		return Action::Complete;
 	}
+
+	std::string event_name(m.getText());
+	if (from && event_name.find('.') == std::string::npos)
+		event_name = from->getName() + "." + m.getText();
 
 	// fire the triggers on any suspended commands that might be waiting for them.
 	if (executingCommand()) {
@@ -2236,6 +2373,8 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
 	enqueueAction(hma);
+	busy_machines.insert(this);
+	std::cout << _name << " queued message " << m << "\n";
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
@@ -2286,6 +2425,13 @@ MachineClass *MachineClass::find(const char *name) {
 	return 0;
 }
 
+MachineEvent::MachineEvent(MachineInstance *machine, Message *message) :
+	 mi(machine), msg(message) {}
+
+MachineEvent::MachineEvent(MachineInstance *machine, const Message &message) :
+	mi(machine), msg(new Message(message)) { }
+
+MachineEvent::~MachineEvent() { delete msg; }
 
 MachineInterface::MachineInterface(const char *class_name) : MachineClass(class_name) {
 	assert(all_interfaces.count(class_name) == 0);
@@ -2327,17 +2473,16 @@ void MachineInstance::start(Action *a) {
 
 void MachineInstance::displayActive(std::ostream &note) {
 	if (active_actions.empty()) return;
-	note << _name << ':' << id << " stack: ";
+	note << _name << ':' << id << " stack:\n";
 	const char *delim = "";
 	BOOST_FOREACH(Action *act, active_actions) {
 		note << delim << " " << *act << " (status=" << act->getStatus() << ")";
-		delim = ", ";
+		delim = "\n";
 	}
 }
 
 // stop removes the action
 void MachineInstance::stop(Action *a) { 
-	setNeedsCheck();
 	//	if (active_actions.back() != a) {
 	//		DBG_M_ACTIONS << _name << "Top of action stack is no longer " << *a << "\n";
 	//		return;
@@ -2367,6 +2512,7 @@ void MachineInstance::stop(Action *a) {
 			if (next->suspended()) next->resume();
 		}
 	}
+	setNeedsCheck();
 }
 
 void Action::suspend() {
@@ -2383,6 +2529,7 @@ void Action::resume() {
 	status = saved_status;
 	DBG_M_ACTIONS << "resumed: (status: " << status << ") " << *this << "\n";
 	if (status == Suspended) status = Running;
+	owner->setNeedsCheck();
 }
 
 void Action::recover() {
@@ -2502,7 +2649,7 @@ void MachineInstance::enable() {
 	is_enabled = true; 
 	error_state = 0; 
 	clearAllActions(); 
-	if (io_interface) io_interface->idle();
+	if (io_interface) io_interface->handleChange(pending_events);
 	for (unsigned int i = 0; i<locals.size(); ++i) {
 		if (!locals[i].machine) {
 			std::stringstream ss;
@@ -2600,6 +2747,7 @@ void MachineInstance::push(Action *new_action) {
 	num_machines_with_work++;
 	DBG_M_ACTIONS << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
 	has_work = true;
+	busy_machines.insert(this);
 	return;
 }
 
@@ -3461,6 +3609,9 @@ void MachineInstance::setStableState() {
 				// actually changes value
 				if (changed) {
 					DBG_M_PROPERTIES << "telling dependent machines about the change\n";
+					setNeedsCheck();
+					notifyDependents();
+#if 0
 					std::set<MachineInstance *>::iterator d_iter = depends.begin();
 					while (d_iter != depends.end()) {
 						MachineInstance *dep = *d_iter++;
@@ -3468,6 +3619,7 @@ void MachineInstance::setStableState() {
 						//Message *msg = new Message("property_change");
 						//send(msg, dep);
 					}
+#endif
 				}
 			}
 		}

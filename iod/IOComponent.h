@@ -22,6 +22,7 @@
 #define __IOComponent
 
 #include <list>
+#include <set>
 #include <map>
 #include <string>
 #include <ostream>
@@ -75,7 +76,8 @@ public:
 		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-	static void processAll(size_t data_size, uint8_t *mask, uint8_t *data);
+	static void processAll(size_t data_size, uint8_t *mask, uint8_t *data, 
+			std::set<IOComponent *> &updatedMachines);
 	static void setupIOMap();
 	static int getMinIOOffset();
 	static int getMaxIOOffset();
@@ -91,9 +93,6 @@ public:
 	static IOUpdate *getUpdates();
 	static IOUpdate *getDefaults();
 	static uint8_t *generateMask(std::list<MachineInstance*> &outputs);
-#ifndef EC_SIMULATOR
-//	ECModule *owner() { return ECInterface::findModule(address.module_position); }
-#endif
 protected:
 	static std::map<std::string, IOAddress> io_names;
 private:
@@ -112,7 +111,7 @@ public:
 	virtual void setInitialState();
 	const char *getStateString();
 	virtual void markChange();
-	virtual void idle();
+	virtual void handleChange(std::list<Package*>&work_queue);
 	virtual void turnOn();
 	virtual void turnOff();
 	bool isOn();
@@ -129,6 +128,8 @@ public:
 		depends.push_back(m);
 	}
 	std::list<MachineInstance*> depends;
+
+	void addOwner(MachineInstance *m) { owners.push_back(m); }
     
     virtual int32_t filter(int32_t);
 
@@ -167,6 +168,7 @@ protected:
 	static uint8_t *default_data;
 	static uint8_t *default_mask;
 	static bool updates_sent;
+	std::list<MachineInstance*>owners;
 };
 std::ostream &operator<<(std::ostream&out, const IOComponent &);
 
@@ -230,7 +232,7 @@ public:
     ~PIDController();
     //	AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
 	virtual const char *type() { return "SpeedController"; }
-    void idle();
+	void handleChange(std::list<Package*>&work_queue);
     virtual int32_t filter(int32_t raw);
     void update(); // clockwork uses this to notify of updates
     PID_Settings *config;

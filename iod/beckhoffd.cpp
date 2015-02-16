@@ -562,7 +562,16 @@ int main (int argc, char const *argv[])
 #ifdef EC_SIMULATOR
 			checkInputs(); // simulated wiring between inputs and outputs
 #endif
-			IOComponent::processAll(0,0,0);
+			std::set<IOComponent*> io_work_queue;
+			std::list<Package*>dummy;
+			IOComponent::processAll(0,0,0, io_work_queue);
+			std::set<IOComponent*>::iterator io_work = io_work_queue.begin();
+			while (io_work != io_work_queue.end()) {
+					IOComponent *ioc = *io_work;
+					ioc->handleChange(dummy);
+					io_work = io_work_queue.erase(io_work);
+			}
+
 		}
 		ecat_sync.send("go",2); // collect state
 	}

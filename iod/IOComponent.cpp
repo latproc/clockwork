@@ -26,6 +26,7 @@
 #include "MessagingInterface.h"
 #include <netinet/in.h>
 #include "Logger.h"
+#include <algorithm>
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #endif
@@ -158,7 +159,7 @@ std::set<IOComponent*> updatedComponentsIn;
 std::set<IOComponent*> updatedComponentsOut;
 bool IOComponent::updates_sent = false;
 
-#if 1
+#if 0
 static void display(uint8_t *p, unsigned int count) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -181,7 +182,8 @@ uint8_t* IOComponent::getUpdateData() {
 	return update_data;
 }
 
-void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
+void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data, 
+			std::set<IOComponent *> &updated_machines) {
 	// receive process data updates and mask to yield updated components
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -299,7 +301,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data) {
 			}
 		//}
 		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
-		ioc->idle();
+		updated_machines.insert(ioc);
 	}
 #else
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
@@ -508,7 +510,7 @@ void PIDController::update() {
     config->property_changed = true;
 }
 
-void PIDController::idle() {
+void PIDController::handleChange(std::list<Package*>&work_queue) {
     //calculate..
     
     if (config->property_changed) {
@@ -519,7 +521,7 @@ void PIDController::idle() {
         //config->
     }
     
-    IOComponent::idle();
+    IOComponent::handleChange(work_queue);
 }
 
 /* ---------- */
@@ -779,7 +781,6 @@ void IOComponent::setupIOMap() {
 }
 
 void IOComponent::markChange() {
-	MachineInstance *self = dynamic_cast<MachineInstance*>(this);
 	assert(io_process_data);
 	if (!update_data) getUpdateData();
 	uint8_t *offset = update_data + address.io_offset;
@@ -793,7 +794,9 @@ void IOComponent::markChange() {
 		// only outputs will have an e_on or e_off event queued, 
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
-			//std::cout << "IOComponent::idle setting bit " << (offset - update_data) << ":" << bitpos << "\n";
+			std::cout << "IOComponent::markChange setting bit " 
+				<< (offset - update_data) << ":" << bitpos 
+				<< " for " << io_name << "\n";
 			set_bit(offset, bitpos, 1);			
 			updates_sent = false;
 		}
@@ -801,13 +804,13 @@ void IOComponent::markChange() {
 			set_bit(offset, bitpos, 0);
 			updates_sent = false;
 		}
+		last_event = e_none;
 	}
 	else {
 		if (last_event == e_change) {
-			//std::cerr << " assigning " << pending_value 
-			//	<< " to offset " << (unsigned long)(offset - update_data) ;
-			//if (self) std::cout << " for " << self->getName() << "\n";
-			//else std::cout << " for " << io_name << "\n";
+			std::cerr << " assigning " << pending_value 
+				<< " to offset " << (unsigned long)(offset - update_data)
+			    << " for " << io_name << "\n";
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
@@ -831,10 +834,9 @@ void IOComponent::markChange() {
 }
 
 
-void IOComponent::idle() {
-	MachineInstance *self = dynamic_cast<MachineInstance*>(this);
+void IOComponent::handleChange(std::list<Package*> &work_queue) {
 	assert(io_process_data);
-	//std::cout << io_name << "::idle() " << last_event << "\n";
+	std::cout << io_name << "::handleChange() " << last_event << "\n";
 	uint8_t *offset = io_process_data + address.io_offset;
 	int bitpos = address.io_bitpos;
 	offset += (bitpos / 8);
@@ -843,80 +845,62 @@ void IOComponent::idle() {
 	if (address.bitlen == 1) {
 		int32_t value = (*offset & (1<< bitpos)) ? 1 : 0;
 
-		// only outputs will have an e_on or e_off event queued, 
-		// if they do, set the bit accordingly, ignoring the previous value
-		if (!value && last_event == e_on) {
-			//std::cout << "IOComponent::idle setting bit " << (offset - update_data) << ":" << bitpos << "\n";
-			set_bit(offset, bitpos, 1);			
-			updates_sent = false;
-		}
-		else if (value &&last_event == e_off) {
-			set_bit(offset, bitpos, 0);
-			updates_sent = false;
-		}
-		else {
-			last_event = e_none;
 			const char *evt;
-			if (address.value != value) 
+			if (address.value != value)  // TBD is this test necessary?
 			{
 				std::list<MachineInstance*>::iterator iter;
 #ifndef DISABLE_LEAVE_FUNCTIONS
-				if (!self || (self && self->enabled()) ) {
 					if (address.value) evt ="on_leave";
 					else evt = "off_leave";
+					std::list<MachineInstance*>::iterator owner_iter = owners.begin();
+					while (owner_iter != owners.end()) {
+						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt)) );
+					}
+
+#if 0
 					iter = depends.begin();
 					while (iter != depends.end()) {
 						MachineInstance *m = *iter++;
-						Message msg(evt);
-						if (m->receives(msg, this)) m->execute(msg, this);
-						//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
-						//m->setNeedsCheck();
-						m->checkActions();
+						if (std::find(owners.begin(), owners.end(), m) != owners.end()) { 
+							std::cout << m->getName() << " is an owner\n"; continue; 
+						}
+						if (m->receives(msg, this)) {
+							work_queue.push_back( new MachineEvent(m, msg) );
+						}
+						else std::cout << m->getName() << " does not receive " << evt << "\n";
+						std::cout << io_name << "(hw) telling " << m->getName() 
+							<< " it needs to check states (" << evt << ")\n";
 					}
-				}
 #endif
-  			if (!self || (self && self->enabled()) ) {              
+
+#endif
 					if (value) evt = "on_enter";
 					else evt = "off_enter";
+					owner_iter = owners.begin();
+					while (owner_iter != owners.end()) {
+						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt)) );
+					}
+
+#if 0
 					iter = depends.begin();
 					while (iter != depends.end()) {
 						MachineInstance *m = *iter++;
-						Message msg(evt);
-						m->execute(msg, this);
-						//std::cout << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
+						if (m->receives(msg, this)) {
+							m->enqueue(pkg);
+							work_queue.push_back( new MachineEvent(m, msg) );
+						}
+						else std::cout << m->getName() << " does not receive " << evt << "\n";
+						//m->execute(msg, this);
+						std::cout << io_name << "(hw) telling " << m->getName() 
+							<< " it needs to check states (" << evt << ")\n";
 						//m->setNeedsCheck();
-						m->checkActions();
+						//m->checkActions();
 					}
-				}
+#endif
 			}
 			address.value = value;
-		}
 	}
 	else {
-		if (last_event == e_change) {
-			//std::cerr << " assigning " << pending_value << " to offset " << (unsigned long)(offset - update_data) ;
-			//if (self) std::cout << " for " << self->getName() << "\n";
-			//else std::cout << " for " << io_name << "\n";
-			if (address.bitlen == 8) {
-				*offset = (uint8_t)pending_value & 0xff;
-			}
-			else if (address.bitlen == 16) {
-				uint16_t x = pending_value % 65536;
-				toU16(offset, x);
-			}
-			else if (address.bitlen == 32) {
-				toU32(offset, pending_value); 
-			}
-			last_event = e_none;
-#if 0
-			std::cout << "@";
-			display(update_data);
-			std::cout << "\n";
-#endif
-			updates_sent = false;
-			//address.value = pending_value;
-		}
-		else {
 			//std::cout << io_name << " object of size " << address.bitlen << " val: ";
 			//display(offset, 1);
 			//std:: cout << " bit pos: " << bitpos << " ";
@@ -971,7 +955,6 @@ void IOComponent::idle() {
 					}
 				}
 			}
-		}
 	}
 }
 

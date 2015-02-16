@@ -1,14 +1,19 @@
 # here is a program that produces a light chaser pattern on a 
 # list of lights.
 
-EK1814Outputs MODULE (position:0);
+EK1814 MODULE (position:0);
 Outputs MODULE (position:2);
-out1 POINT EK1814Outputs,0;
-out2 POINT EK1814Outputs,1;
-out3 POINT EK1814Outputs,2;
-out4 POINT EK1814Outputs,3;
+out1 POINT EK1814,0;
+out2 POINT EK1814,1;
+out3 POINT EK1814,2;
+out4 POINT EK1814,3;
 
 group1 LIST out1,out2,out3,out4;
+
+in1 POINT EK1814, 4;
+in2 POINT EK1814, 5;
+in3 POINT EK1814, 6;
+in4 POINT EK1814, 7;
 
 /*
 EL3151 MODULE (position:5);
@@ -34,15 +39,18 @@ group2 LIST out5, out6, out7, out8, out9, out10, out11, out12;
 
 Cell MACHINE output, left, right {
 	OPTION tab test;
+	stopping FLAG;
 	#error WHEN SELF IS error 
 	#	OR (right IS NOT on AND right IS NOT off AND right IS NOT error)
 	#	OR (left IS NOT on AND left IS NOT off AND left IS NOT error);
-	turningOn WHEN SELF IS waiting AND TIMER>=10;
-	waiting WHEN left IS on AND output IS off;
-	on WHEN output IS on AND right IS NOT on;
+	turningOn WHEN stopping IS off AND SELF IS waiting AND TIMER>=10;
+	waiting WHEN stopping IS off AND left IS on AND output IS off;
+	on WHEN stopping IS off AND output IS on AND right IS NOT on;
     off DEFAULT;
 	off INITIAL;
-    COMMAND start { SET output TO on }
+    COMMAND start { SET stopping TO off; SET output TO on }
+    COMMAND reset { SET stopping TO off; }
+    COMMAND stop { SET stopping TO on }
 	ENTER turningOn { SET output TO on; }
 	#LEAVE on { SET right TO on; }
 	ENTER off { SET output TO off; }
@@ -52,6 +60,8 @@ led01 Cell out1, led04, led02;
 led02 Cell out2, led01, led03;
 led03 Cell out3, led02, led04;
 led04 Cell out4, led03, led01;
+
+leds LIST led01, led02, led03, led04;
 
 /*
 led05 Cell out5, led12, led06;

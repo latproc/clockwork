@@ -236,6 +236,7 @@ void generateIOComponentModules()
 						o->setName(m->getName().c_str());
 						m->io_interface = o;
 						o->addDependent(m);
+						o->addOwner(m);
 					}
 					else
 					{
@@ -245,6 +246,7 @@ void generateIOComponentModules()
 						o->setName(m->getName().c_str());
 						m->io_interface = o;
 						o->addDependent(m);
+						o->addOwner(m);
 					}
 				}
 				else
@@ -272,6 +274,7 @@ void generateIOComponentModules()
 						in->setName(m->getName().c_str());
 						m->io_interface = in;
 						in->addDependent(m);
+						in->addOwner(m);
 					}
 					else
 					{
@@ -284,6 +287,7 @@ void generateIOComponentModules()
 							in->setName(m->getName().c_str());
 							m->io_interface = in;
 							in->addDependent(m);
+							in->addOwner(m);
 						}
 						else if (m->_type == "COUNTER")
 						{
@@ -294,6 +298,7 @@ void generateIOComponentModules()
 							in->setName(m->getName().c_str());
 							m->io_interface = in;
 							in->addDependent(m);
+							in->addOwner(m);
 						}
 						else
 						{
@@ -304,6 +309,7 @@ void generateIOComponentModules()
 							in->setName(m->getName().c_str());
 							m->io_interface = in;
 							in->addDependent(m);
+							in->addOwner(m);
 						}
 					}
 				}

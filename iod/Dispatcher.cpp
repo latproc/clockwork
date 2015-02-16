@@ -277,10 +277,11 @@ void Dispatcher::idle()
                         {
                             DBG_DISPATCHER << "Dispatcher queued " << *p << " to " << to->getName() <<  "\n";
                             to->enqueue(*p);
-                            MachineInstance::forceIdleCheck();
+                            //MachineInstance::forceIdleCheck();
                             MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
                             if (mi)
                             {
+								MachineInstance::busyMachines().insert(mi);
                                 Action *curr = mi->executingCommand();
                                 if (curr)
                                 {
@@ -291,13 +292,14 @@ void Dispatcher::idle()
                     }
                     else
                     {
+						std::cout << "Warning: sending " << m << " to all receivers\n";
                         ReceiverList::iterator iter = all_receivers.begin();
                         while (iter != all_receivers.end())
                         {
                             Receiver *r = *iter++;
                             if (r->receives(m, from)) {
                                 r->enqueue(*p);
-                                MachineInstance::forceIdleCheck();
+                                //MachineInstance::forceIdleCheck();
                             }
                         }
                     }

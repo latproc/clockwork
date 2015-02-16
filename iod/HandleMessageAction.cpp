@@ -39,6 +39,14 @@ Action::Status HandleMessageAction::run() {
 	owner->start(this);
 	DBG_M_MESSAGING << "Handling message " << *package.message << " from "
 		<< package.transmitter->getName() << " to " << owner->getName() << "\n";
+
+	if (owner->io_interface && package.transmitter == owner->io_interface) {
+		owner->execute(package.message, package.transmitter);
+		status = Complete;
+		owner->stop(this);
+		return status;
+	}
+
 	handler = owner->findHandler(*package.message, package.transmitter, package.needs_receipt);
 	if (handler) {
 		suspend();
