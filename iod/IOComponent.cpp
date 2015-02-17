@@ -528,10 +528,10 @@ void PIDController::handleChange(std::list<Package*>&work_queue) {
 
 
 const char *IOComponent::getStateString() {
-	if (last_event == e_on) return "turning_on";
-	else if (last_event == e_off) return "turning_off";
-	else if (last_event == e_change) return "changing";
+	if (last_event == e_change) return "unstable";
 	else if (address.bitlen > 1) return "stable";
+	else if (last_event == e_on) return "turning_on";
+	else if (last_event == e_off) return "turning_off";
 	else if (address.value == 0) return "off"; else return "on";
 }
 
