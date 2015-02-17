@@ -2789,9 +2789,14 @@ void MachineInstance::setStableState() {
 	updateLastEvaluationTime();
 
 	if (io_interface) {
-		State *s = state_machine->findState(io_interface->getStateString());
-		assert(s);
-		setState(*s);
+		const char *io_state_name = io_interface->getStateString();
+		State *s = state_machine->findState(io_state_name);
+		if (s) setState(*s);
+		else {
+			char buf[200];
+			snprintf(buf, 200,"Warning: %s does not have a state %s to match the hardware\n", _name.c_str(), io_state_name);
+			MessageLog::instance()->add(buf);
+		}
 	}
 	else if ( ( !state_machine && _type=="LIST") || (state_machine && state_machine->token_id == ClockworkToken::LIST) ) {
 		//DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
