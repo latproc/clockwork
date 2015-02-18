@@ -315,7 +315,8 @@ bool ECInterface::init() {
 	std::cerr << "failed to create domain\n";
         return false;
     }
-    else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created\n";
+    else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created"
+		<< " with size " << ecrt_domain_size(domain1) << "\n";
 
 #if 0
 	IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
