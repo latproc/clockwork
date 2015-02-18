@@ -937,9 +937,19 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 				|| (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
 				//std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
+				int32_t old_val = address.value;
 				int32_t new_val = filter(val);
 				if (hardware_state == s_operational ) { //&& address.value != new_val) {
 					address.value = filter(val);
+
+					if (address.value != old_val) {
+						std::list<MachineInstance*>::iterator owner_iter = owners.begin();
+						owner_iter = owners.begin();
+						while (owner_iter != owners.end()) {
+							work_queue.push_back( new Package(this, *owner_iter++, new Message("property_change")) );
+						}
+					}
+#if 0
 					last_event = e_none;
 					//std::cerr << " assigned " << val << " to address " << address << "\n";
 					if (hardware_state == s_operational) {
@@ -953,6 +963,7 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 							m->checkActions();
 						}
 					}
+#endif
 				}
 			}
 	}
