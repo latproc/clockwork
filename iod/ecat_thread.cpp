@@ -289,7 +289,7 @@ void EtherCATThread::operator()() {
 				// so we use a try-catch around the whole process 
 
 				uint8_t stage = 1;
-#ifdef DEBUG
+#if 1
 				bool found_change = false;
 #endif
 				while(true) {
@@ -316,16 +316,16 @@ void EtherCATThread::operator()() {
 								memcpy(iomsg.data(), (void*)upd_data, size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
-#ifdef DEBUG
+#if 1
 								if (size && last_data ==0) { 
 										last_data = new uint8_t[size];
 										memset(last_data, 0, size);
 										dbg_mask = new uint8_t[size];
 										memset(dbg_mask, 0xff, size);
 										memset(dbg_mask+47, 0, 2);
-										dbg_mask[46] = 0x7f;
-										dbg_mask[26] = 0x7f;
-										dbg_mask[36] = 0x7f;
+										if (size>46) dbg_mask[46] = 0x7f;
+										if (size>26) dbg_mask[26] = 0x7f;
+										if (size>36) dbg_mask[36] = 0x7f;
 										cmp_data = new uint8_t[size];
 								}
 								if (size) {
@@ -347,7 +347,7 @@ void EtherCATThread::operator()() {
 								uint8_t *mask = ECInterface::instance()->getUpdateMask(); 
 								memcpy(iomsg.data(), (void*)mask,size); 
 								sync_sock->send(iomsg);
-#ifdef DEBUG
+#if 1
 								if (found_change) {
 									std::cout << "&"; display(mask); std::cout << "\n";
 								}

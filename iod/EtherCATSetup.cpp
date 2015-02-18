@@ -253,11 +253,11 @@ void generateIOComponentModules()
 				{
 					//sstr << m->getName() << "_IN_" << entry_position << std::flush;
 					//const char *name_str = sstr.str().c_str();
-#if 0
+#if 1
 					std::cerr << "Adding new input device " << m->getName()
 						<< " position: " << entry_position
 						<< " name: " << module->entry_details[offset_idx].name
-						<< " sm_idx: " << ed->sm_index
+						<< " sm_idx: " << std::hex << ed->sm_index << std::dec
 						<< " bit_pos: " << module->bit_positions[offset_idx]
 						<< " offset: " << module->offsets[offset_idx]
 						<<  " bitlen: " << bitlen << "\n";
