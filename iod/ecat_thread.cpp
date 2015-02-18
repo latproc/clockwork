@@ -61,7 +61,7 @@
 extern bool machine_is_ready;
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 
-EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(0),last_ping(0) { 
+EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000),last_ping(0) { 
 }
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
@@ -278,7 +278,7 @@ void EtherCATThread::operator()() {
 			// send all process domain data once the domain is operational
 			// check keep-alives on the clockwork communications channel
 			//   four periods: 4 * period / 1000 = period/250
-			bool need_ping = keep_alive>0 && (last_ping + keep_alive - 5000 - period < now) ? true : false;
+			bool need_ping = keep_alive>0 && (last_ping + keep_alive - period < now) ? true : false;
 
 			if ( status == e_collect && (first_run || num_updates || need_ping) && machine_is_ready) {
 				if (driver_state == s_driver_operational) first_run = false;
