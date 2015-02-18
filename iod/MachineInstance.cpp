@@ -2313,6 +2313,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			}
 		}
 		else if (m.getText() == "property_change" ) {
+			std::cout << _name << " value changed to " << io_interface->address.value << "\n";
 			setValue("VALUE", io_interface->address.value);
 		}
 		// a POINT won't have an actions that depend on triggers so it's safe to return now
