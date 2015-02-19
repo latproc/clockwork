@@ -288,17 +288,26 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 }
 
 void MachineInstance::setNeedsCheck() {
-	if (!getStateMachine() || !getStateMachine()->allow_auto_states) return;
+	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
+	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
+	if (!getStateMachine() ) return;
 	if (!is_enabled) return;
 	if (!needs_check) { 
 		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n"; 
 		++total_machines_needing_check;
 	}
-	if (!state_machine) return;
-	if (!active_actions.empty() || !mail_queue.empty())
+	if (!active_actions.empty() || !mail_queue.empty()) {
+		//std::cout << _name << " queued for action processing\n";
 		busy_machines.insert(this);
-	else
+	}
+	else if (getStateMachine()->allow_auto_states) {
+		//std::cout << _name << " queued for stable state checks\n";
 		pending_state_change.insert(this);
+	}
+	else {
+		//std::cout << _name << " queued for action processing\n";
+		busy_machines.insert(this);
+	}
 	next_poll = 0;
 #if 0
 	if (state_machine->token_id == ClockworkToken::LIST) {
@@ -759,11 +768,11 @@ bool RateEstimatorInstance::hasWork() {
 	static MachineInstance *pos = lookup(parameters[0]);
 	uint64_t been_idle = 0;
 	if (pos && pos->io_interface) {
-	  //std::cout << _name << " pos: " << pos->io_interface->io_name << " read time: " << pos->io_interface->read_time << " upd: " << settings->update_t << "\n";
+	  std::cout << _name << " pos: " << pos->io_interface->io_name << " read time: " << pos->io_interface->read_time << " upd: " << settings->update_t << "\n";
 		been_idle = pos->io_interface->read_time - settings->update_t;
 	}
 	else {
-	  //std::cout << _name << " process delta: " << (process_time - settings->update_t) << "\n";
+	  std::cout << _name << " process delta: " << (process_time - settings->update_t) << "\n";
 		been_idle = process_time - settings->update_t;
 	}
 	if (been_idle >= (uint64_t)idle_time) {
@@ -782,12 +791,20 @@ void RateEstimatorInstance::setNeedsCheck() {
 }
 
 void RateEstimatorInstance::idle() {
-	if (is_enabled && hasWork()) {
+	if (is_enabled) { // && hasWork()) {
+		MachineInstance::idle();
 		MachineInstance *pos_m = lookup(parameters[0]);
 		long pos = 0;
 		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
 			setValue("VALUE", pos);
 		if (pos == 0) needs_check = 0;
+		if (settings->velocity) {
+			Trigger *trigger = new Trigger("Timer");
+			Scheduler::instance()->add(
+				new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
+			trigger->release();
+			setNeedsCheck();
+		}
 	}
 }
 
@@ -1154,6 +1171,7 @@ void MachineInstance::idle() {
 	if (!is_enabled) {
 		return;
 	}
+	if (!is_active) return;
 	if (!state_machine) {
 		if (LOGS(DebugExtra::instance()->DEBUG_ACTIONS)) {
 			std::stringstream ss;
@@ -1297,6 +1315,7 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		if (!mi->executingCommand()) {
 			busy_it = busy_machines.erase(busy_it);
 			if (mi->is_active) pending_state_change.insert(mi);
+			//else std::cout << " non active machine " << mi->getName() << " had pending state change\n";
 		}
 		else busy_it++;
 		now = nowMicrosecs();
@@ -2313,7 +2332,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			}
 		}
 		else if (m.getText() == "property_change" ) {
-			std::cout << _name << " value changed to " << io_interface->address.value << "\n";
+			//std::cout << _name << " value changed to " << io_interface->address.value << "\n";
 			setValue("VALUE", io_interface->address.value);
 		}
 		// a POINT won't have an actions that depend on triggers so it's safe to return now

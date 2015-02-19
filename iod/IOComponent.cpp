@@ -739,7 +739,7 @@ void IOComponent::setupIOMap() {
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
-		bitpos = bitpos / 8;
+		bitpos = bitpos % 8;
 		if (ioc->address.bitlen>=8) offset += ioc->address.bitlen/8 - 1;
 		if (offset > max_offset) max_offset = offset;
 		if (offset < min_offset) min_offset = offset;
@@ -808,8 +808,8 @@ void IOComponent::markChange() {
 	}
 	else {
 		if (last_event == e_change) {
-			//std::cerr << " assigning " << pending_value 
-			//	<< " to offset " << (unsigned long)(offset - update_data)
+			//std::cerr << " marking change to " << pending_value 
+			//	<< " at offset " << (unsigned long)(offset - update_data)
 			//    << " for " << io_name << "\n";
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
@@ -902,8 +902,8 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 	}
 	else {
 			//std::cout << io_name << " object of size " << address.bitlen << " val: ";
-			//display(offset, 1);
-			//std:: cout << " bit pos: " << bitpos << " ";
+			//display(offset, address.bitlen/8);
+			//std::cout << " bit pos: " << bitpos << " ";
 			int32_t val = 0;
 			if (address.bitlen < 8)  {
 				uint8_t bitmask = 0x8 >> bitpos;
@@ -942,6 +942,7 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 				if (hardware_state == s_operational ) { //&& address.value != new_val) {
 					address.value = filter(val);
 
+					//if (owners.empty()) std::cout << "owner is not defined\n";
 					if (address.value != old_val) {
 						std::list<MachineInstance*>::iterator owner_iter = owners.begin();
 						owner_iter = owners.begin();

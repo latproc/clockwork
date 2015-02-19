@@ -22,8 +22,8 @@ pressure_Overrange POINT EL3051, 1;
 #pressure_Limit1 POINT EL3051, 2;
 #pressure_Limit2 POINT EL3051, 3;
 pressure_Error POINT EL3051, 4;
-pressure_TxPDO_State POINT EL3051, 7;
-pressure_TxPDO_Toggle POINT EL3051, 8;
+#pressure_TxPDO_State POINT EL3051, 7;
+#pressure_TxPDO_Toggle POINT EL3051, 8;
 ANALOGIN_SETTINGS MACHINE { idle INITIAL; }
 pressure_settings ANALOGIN_SETTINGS;
 pressure ANALOGINPUT EL3051, 9, pressure_settings;
