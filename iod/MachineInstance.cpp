@@ -309,7 +309,6 @@ void MachineInstance::setNeedsCheck() {
 		busy_machines.insert(this);
 	}
 	next_poll = 0;
-#if 0
 	if (state_machine->token_id == ClockworkToken::LIST) {
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
@@ -324,6 +323,7 @@ void MachineInstance::setNeedsCheck() {
 			if (dep->is_enabled) dep->setNeedsCheck();
 		}
 	}
+#if 0
 	if (io_interface) {
 		std::cout << _name << " has hw io, updating dependent machines\n";
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
