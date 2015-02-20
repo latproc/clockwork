@@ -116,9 +116,13 @@ AnyInValue::AnyInValue(const AnyInValue &other) {
     state = other.state;
     machine_list_name = other.machine_list_name;
     machine_list = 0;
+	state_property = 0;
 }
 
 Value AnyInValue::operator()(MachineInstance *mi) {
+	if (state_property == 0)
+		state_property = & mi->getValue(state);
+
     if (last_process_time <= mi->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
@@ -134,13 +138,16 @@ Value AnyInValue::operator()(MachineInstance *mi) {
         MessageLog::instance()->add(ss.str().c_str());
         last_result = false; return last_result;
     }
+	std::string state_val = state;
+	if (state_property != & SymbolTable::Null)
+		state_val = state_property->asString();
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
-        //std::cout << mi->getName() << " machine " << machine_list->parameters[i].machine->getName()
-       // << " is  "<< machine_list->parameters[i].machine->getCurrent().getName() <<" want " << state << "\n";
+        std::cout << mi->getName() << " machine " << machine_list->parameters[i].machine->getName()
+        << " is  "<< machine_list->parameters[i].machine->getCurrent().getName() <<" want " << state_val << "\n";
         
-        if (state == machine_list->parameters[i].machine->getCurrent().getName()) {
+        if (state_val == machine_list->parameters[i].machine->getCurrent().getName()) {
             last_result = true; return last_result;
         }
     }
@@ -152,8 +159,12 @@ AllInValue::AllInValue(const AllInValue &other) {
     state = other.state;
     machine_list_name = other.machine_list_name;
     machine_list = 0;
+	state_property = 0;
 }
 Value AllInValue::operator()(MachineInstance *mi) {
+	if (state_property == 0)
+		state_property = & mi->getValue(state);
+
     if (last_process_time <= mi->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
@@ -171,11 +182,15 @@ Value AllInValue::operator()(MachineInstance *mi) {
         last_result = false; return last_result;
     }
     if (machine_list->parameters.size() == 0) {  last_result = false; return last_result; }
+
+	std::string state_val = state;
+	if (state_property != & SymbolTable::Null)
+		state_val = state_property->asString();
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
         
-        if (state != machine_list->parameters[i].machine->getCurrent().getName()) {
+        if (state_val != machine_list->parameters[i].machine->getCurrent().getName()) {
             last_result = false; return last_result;
         }
     }
@@ -188,9 +203,13 @@ CountValue::CountValue(const CountValue &other) {
     state = other.state;
     machine_list_name = other.machine_list_name;
     machine_list = 0;
+	state_property = 0;
 }
 
 Value CountValue::operator()(MachineInstance *mi) {
+	if (state_property == 0)
+		state_property = & mi->getValue(state);
+
     if (last_process_time <= mi->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
@@ -203,12 +222,16 @@ Value CountValue::operator()(MachineInstance *mi) {
         return false;
     }
     if (machine_list->parameters.size() == 0) return 0;
+
+	std::string state_val = state;
+	if (state_property != & SymbolTable::Null)
+		state_val = state_property->asString();
     int result = 0;
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
         
-        if (state == machine_list->parameters[i].machine->getCurrent().getName()) ++result;
+        if (state_val == machine_list->parameters[i].machine->getCurrent().getName()) ++result;
     }
     last_result = result;
     return last_result;

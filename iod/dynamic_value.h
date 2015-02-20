@@ -72,7 +72,7 @@ private:
 
 class AnyInValue : public DynamicValue {
 public:
-    AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
+    AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0) {}
     virtual ~AnyInValue() {}
     virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
@@ -84,11 +84,12 @@ private:
     std::string state;
     std::string machine_list_name;
     MachineInstance *machine_list;
+	Value *state_property;
 };
 
 class AllInValue : public DynamicValue {
 public:
-    AllInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0) {}
+    AllInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0) {}
     virtual ~AllInValue() {}
     virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
@@ -100,12 +101,13 @@ private:
     std::string state;
     std::string machine_list_name;
     MachineInstance *machine_list;
+	Value *state_property;
 };
 
 
 class CountValue : public DynamicValue {
 public:
-    CountValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
+    CountValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0)  { }
     virtual ~CountValue() {}
     virtual Value operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
@@ -117,6 +119,7 @@ private:
     std::string state;
     std::string machine_list_name;
     MachineInstance *machine_list;
+	Value *state_property;
 };
 
 class IncludesValue : public DynamicValue {

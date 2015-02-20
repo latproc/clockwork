@@ -46,7 +46,7 @@ TestScript MACHINE test {
         WAITFOR test IS both;
         SET x1 TO off;
         WAITFOR test IS on_a;
-        INCLUDE f1 IN b;
+        INCLUDE f1 IN l2;
         WAITFOR test IS both;
         SET SELF TO ok;
     }
