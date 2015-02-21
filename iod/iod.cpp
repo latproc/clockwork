@@ -289,7 +289,7 @@ int main(int argc, char const *argv[])
 	}
 
 	Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-	long delay = 2000;
+	long delay = 1000;
 	if (cycle_delay_v) cycle_delay_v->iValue = delay;
 	ECInterface::FREQUENCY=1000000 / delay;
 
