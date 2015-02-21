@@ -379,17 +379,18 @@ void ProcessingThread::operator()()
 			{ ecat_out, 0, ZMQ_POLLIN, 0 }
 		};
 		char buf[10];
-		int poll_wait = 1000;
+		int poll_wait = cycle_delay;
 		uint64_t curr_t = 0;
 		while (!program_done)
 		{
-			if (IOComponent::updatesWaiting()) poll_wait=100; else poll_wait=1000;
+			curr_t = nowMicrosecs();
+			if (IOComponent::updatesWaiting()) poll_wait=cycle_delay/10; else poll_wait=cycle_delay;
 			if (pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out)) break;
 			if  (!io_work_queue.empty()) break;
 			if (MachineInstance::workToDo()) break;
-			curr_t = nowMicrosecs();
 			if (curr_t - last_checked_plugins > 10000) break;
 		}
+		curr_t = nowMicrosecs();
 		gettimeofday(&end_t, 0);
 		static unsigned long total_poll_time = 0;
 		static unsigned long poll_count = 0;

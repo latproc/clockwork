@@ -1490,10 +1490,13 @@ static int last_machines_needing_check = 1;
 void MachineInstance::checkPluginStates() {
 	uint64_t start_processing = nowMicrosecs();
 	std::set<MachineInstance *>::iterator pl_iter = plugin_machines.begin();
-	while (pl_iter != plugin_machines.begin())  {
+	while (pl_iter != plugin_machines.end())  {
 		MachineInstance *m = *pl_iter++;
 		if (!m->is_enabled) continue;
-		if (m->next_poll > start_processing) continue;
+		if (m->next_poll > start_processing) { 
+			std::cout << "skipping " << m->getName() << "\n"; 
+			continue;
+		}
 		DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
 		m->setStableState();
 		if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
@@ -2654,6 +2657,7 @@ void MachineInstance::markActive() {
 	is_active = true;
 	active_machines.remove(this);
 	active_machines.push_back(this);
+	if (state_machine && state_machine->plugin) markPlugin();
 }
 
 void MachineInstance::markPassive() {
