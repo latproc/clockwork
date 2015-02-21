@@ -769,7 +769,7 @@ bool RateEstimatorInstance::hasWork() {
 	static MachineInstance *pos = lookup(parameters[0]);
 	uint64_t been_idle = 0;
 	if (pos && pos->io_interface) {
-	  std::cout << _name << " pos: " << pos->io_interface->io_name << " read time: " << pos->io_interface->read_time << " upd: " << settings->update_t << "\n";
+	  //std::cout << _name << " pos: " << pos->io_interface->io_name << " read time: " << pos->io_interface->read_time << " upd: " << settings->update_t << "\n";
 		been_idle = pos->io_interface->read_time - settings->update_t;
 	}
 	else {
@@ -786,9 +786,10 @@ bool RateEstimatorInstance::hasWork() {
 }
 
 void RateEstimatorInstance::setNeedsCheck() {
-	//if (!needs_check) {
-		MachineInstance::setNeedsCheck();
-	//}
+	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
+	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
+	MachineInstance::setNeedsCheck();
+	busy_machines.insert(this);
 }
 
 void RateEstimatorInstance::idle() {
@@ -805,7 +806,16 @@ void RateEstimatorInstance::idle() {
 		double delta = 0;
 		uint64_t curr_t = (pos_m->io_interface) ? pos_m->io_interface->read_time : process_time;
 		delta = (double)(curr_t - settings->update_t) / 1000.0;
-		if (!delta) return;
+		if (!delta)  {
+			if (settings->velocity) {
+				Trigger *trigger = new Trigger("Timer");
+				Scheduler::instance()->add(
+					new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
+				trigger->release();
+				setNeedsCheck();
+			}
+			return;
+		}
 
 		Value & pos_v = pos_m->getValue("VALUE");
 		assert(pos_v.kind == Value::t_integer);
@@ -813,6 +823,7 @@ void RateEstimatorInstance::idle() {
 		static long last_pos = pos_v.iValue;
 		long pos = pos_v.iValue;
 		
+/*
 	  	std::cout << _name 
 			<< " last_pos: " << last_pos << " pos: " << pos_v.iValue
 			<< " pos: " << pos_v.iValue
@@ -820,6 +831,7 @@ void RateEstimatorInstance::idle() {
 			<< " upd: " << settings->update_t
 			<< " delta: " << delta
 			<< " vel: " << ( (delta) ? (float)(pos - last_pos) * 1000.0/ delta : 0)<< "\n";
+*/
 		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
 			setValue("VALUE", pos);
 		//if (pos == 0) needs_check = 0;
@@ -864,8 +876,8 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 			settings->property_changed = false;
 		}
 
-		uint64_t delta_t = settings->update_t - settings->start_t;
-		settings->times.append(delta_t);
+		//uint64_t delta_t = settings->update_t - settings->start_t;
+		settings->times.append(settings->update_t);
 		settings->position = (int32_t)val;
 		settings->positions.append(settings->position);
 		settings->velocity = (int32_t)filter((int32_t)settings->position);
@@ -891,13 +903,12 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
-	std::cout << getName() << " filter(" << val << ")\n";
-	if (false && settings->positions.length() < settings->positions.BUFSIZE)
+	//if (false && settings->positions.length() < settings->positions.BUFSIZE)
 		speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
-	else {
-		speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
+	//else {
+	//	speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
 	  //std::cout << getName() << " filter(" << val << ") => " << speed << "\n";
-	}
+	//}
 	return speed;
 }
 
