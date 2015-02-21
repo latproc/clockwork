@@ -258,6 +258,7 @@ std::list<MachineInstance*> MachineInstance::automatic_machines;
 std::list<MachineInstance*> MachineInstance::active_machines;
 std::list<MachineInstance*> MachineInstance::shadow_machines;
 std::set<MachineInstance*> MachineInstance::busy_machines;
+std::set<MachineInstance*> MachineInstance::plugin_machines;
 std::list<Package*> MachineInstance::pending_events;
 std::set<MachineInstance*> MachineInstance::pending_state_change;
 std::map<std::string, MachineInterface *> MachineInterface::all_interfaces;
@@ -1339,7 +1340,8 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	while (busy_it != busy_machines.end() && ( max_time == 0 || now - start_processing < max_time ) ) {
 		MachineInstance *mi = *busy_it;
 		mi->idle();
-		if (!mi->executingCommand()) {
+		if (mi->state_machine && mi->state_machine->plugin) mi->state_machine->plugin->poll_actions(mi);
+		if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
 			busy_it = busy_machines.erase(busy_it);
 			if (mi->is_active) pending_state_change.insert(mi);
 			//else std::cout << " non active machine " << mi->getName() << " had pending state change\n";
@@ -1473,6 +1475,24 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 
 static int last_machines_needing_check = 1;
 #if 1
+
+void MachineInstance::checkPluginStates() {
+	uint64_t start_processing = nowMicrosecs();
+	std::set<MachineInstance *>::iterator pl_iter = plugin_machines.begin();
+	while (pl_iter != plugin_machines.begin())  {
+		MachineInstance *m = *pl_iter++;
+		if (!m->is_enabled) continue;
+		if (m->next_poll > start_processing) continue;
+		DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
+		m->setStableState();
+		if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
+			DBG_AUTOSTATES  << "calling " << m->getName() << "plugin state_check()\n";
+			m->state_machine->plugin->state_check(m);
+			m->setNeedsCheck();
+		}
+	}
+}
+
 bool MachineInstance::checkStableStates(uint32_t max_time) {
 	uint64_t start_processing = nowMicrosecs();
 	total_machines_needing_check = 0;
@@ -2628,6 +2648,10 @@ void MachineInstance::markActive() {
 void MachineInstance::markPassive() {
 	is_active = false;
 	active_machines.remove(this);
+}
+
+void MachineInstance::markPlugin() {
+	plugin_machines.insert(this);
 }
 
 void MachineInstance::resume() {

@@ -339,7 +339,8 @@ public:
     static bool processAll(uint32_t max_time, PollType which);
 	//static void updateAllTimers(PollType which);
 	//void updateTimer(long dt);
-    static bool checkStableStates(uint32_t max_time);
+	static bool checkStableStates(uint32_t max_time);
+	static void checkPluginStates();
 	static size_t countAutomaticMachines() { return automatic_machines.size(); }
 	static void displayAutomaticMachines();
 	static void displayAll();
@@ -353,6 +354,7 @@ public:
     static void addActiveMachine(MachineInstance* m) { active_machines.push_back(m); }
     void markActive();
     void markPassive();
+		void markPlugin();
     
 	MachineClass *getStateMachine() const { return state_machine; }
 	void setInitialState();
@@ -479,6 +481,7 @@ protected:
     static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
     static std::set<MachineInstance*> busy_machines; // machines that have work queued to them
     static std::set<MachineInstance*> pending_state_change; // machines that need to check their stable states
+    static std::set<MachineInstance*> plugin_machines; // machines that have plugins
     static std::list<Package*> pending_events; // machines that shadow remote machines
     static unsigned int num_machines_with_work;
     static unsigned int total_machines_needing_check;

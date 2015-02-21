@@ -333,6 +333,7 @@ void ProcessingThread::operator()()
 	checkAndUpdateCycleDelay();
 
 	uint64_t last_checked_cycle_time = 0;
+	uint64_t last_checked_plugins = 0;
 
 	MachineInstance *system = MachineInstance::find("SYSTEM");
 	assert(system);
@@ -379,13 +380,15 @@ void ProcessingThread::operator()()
 		};
 		char buf[10];
 		int poll_wait = 1000;
-
+		uint64_t curr_t = 0;
 		while (!program_done)
 		{
 			if (IOComponent::updatesWaiting()) poll_wait=100; else poll_wait=1000;
 			if (pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out)) break;
 			if  (!io_work_queue.empty()) break;
 			if (MachineInstance::workToDo()) break;
+			curr_t = nowMicrosecs();
+			if (curr_t - last_checked_plugins > 10000) break;
 		}
 		gettimeofday(&end_t, 0);
 		static unsigned long total_poll_time = 0;
@@ -455,6 +458,12 @@ void ProcessingThread::operator()()
 				ioc->handleChange(MachineInstance::pendingEvents());
 				io_work = io_work_queue.erase(io_work);
 			}
+		}
+		
+		if (program_done) break;
+		if (processing_state == eIdle && curr_t - last_checked_plugins > 10000) {
+			MachineInstance::checkPluginStates();
+			last_checked_plugins = curr_t;
 		}
 
 		if (program_done) break;
