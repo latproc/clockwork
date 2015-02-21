@@ -791,31 +791,57 @@ void RateEstimatorInstance::setNeedsCheck() {
 }
 
 void RateEstimatorInstance::idle() {
+	MachineInstance *pos_m = lookup(parameters[0]);
+	if (!pos_m) return;
+	if (!settings) {
+		if (pos_m->io_interface)
+			settings = new CounterRateFilterSettings(4);
+		else
+			settings = new CounterRateFilterSettings(8);
+	}
 	if (is_enabled) { // && hasWork()) {
 		MachineInstance::idle();
-		MachineInstance *pos_m = lookup(parameters[0]);
-		long pos = 0;
+		double delta = 0;
+		uint64_t curr_t = (pos_m->io_interface) ? pos_m->io_interface->read_time : process_time;
+		delta = (double)(curr_t - settings->update_t) / 1000.0;
+		if (!delta) return;
+
+		Value & pos_v = pos_m->getValue("VALUE");
+		assert(pos_v.kind == Value::t_integer);
+		assert(pos_v != SymbolTable::Null);
+		static long last_pos = pos_v.iValue;
+		long pos = pos_v.iValue;
+		
+	  	std::cout << _name 
+			<< " last_pos: " << last_pos << " pos: " << pos_v.iValue
+			<< " pos: " << pos_v.iValue
+			<< " read time: " << curr_t
+			<< " upd: " << settings->update_t
+			<< " delta: " << delta
+			<< " vel: " << ( (delta) ? (float)(pos - last_pos) * 1000.0/ delta : 0)<< "\n";
 		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
 			setValue("VALUE", pos);
-		if (pos == 0) needs_check = 0;
-		if (settings->velocity) {
+		//if (pos == 0) needs_check = 0;
+		if (pos != last_pos || settings->velocity) {
 			Trigger *trigger = new Trigger("Timer");
 			Scheduler::instance()->add(
 				new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
 			trigger->release();
-			setNeedsCheck();
+			//setNeedsCheck();
 		}
+		last_pos = pos;
 	}
 }
 
 
 RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-	settings = new CounterRateFilterSettings(4);
+	settings = 0;
 	if (!idle_time) idle_time = 50000;
 }
 RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
 	: MachineInstance(name, type, instance_type) {
-		settings = new CounterRateFilterSettings(4);
+		settings = 0;
+
 		if (!idle_time) idle_time = 50000;
 	}
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
@@ -864,7 +890,7 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
-	//std::cout << getName() << " filter(" << val << ")\n";
+	std::cout << getName() << " filter(" << val << ")\n";
 	if (false && settings->positions.length() < settings->positions.BUFSIZE)
 		speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
 	else {
@@ -1307,6 +1333,7 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		now = nowMicrosecs();
 	}
 
+	process_time = now;
 
 	std::set<MachineInstance*>::iterator busy_it = busy_machines.begin();
 	while (busy_it != busy_machines.end() && ( max_time == 0 || now - start_processing < max_time ) ) {

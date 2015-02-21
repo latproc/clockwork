@@ -187,6 +187,7 @@ void EtherCATThread::operator()() {
 	int res = zmq_setsockopt (clock_sync, ZMQ_SUBSCRIBE, "", 0);
     assert (res == 0);
             
+	uint64_t global_clock = 0;
 	bool first_run = true;
 	while (!program_done && !waitForSync(*sync_sock)) ;
 	while (!program_done) {
@@ -251,7 +252,7 @@ void EtherCATThread::operator()() {
 				if (ref_time) {
 					uint32_t last_ref32 = last_ref_time % 0x100000000;
 					int64_t delta_ref = 0;
-					if (last_ref32 > ref_time) {
+					if (last_ref32 > ref_time) { // rollover
 						//std::cerr << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n";
 						delta_ref = 0x100000000 + (uint64_t)ref_time;
 						//std::cerr << std::hex << std::setw(8) << ref_time << std::dec << "\n";
@@ -266,7 +267,12 @@ void EtherCATThread::operator()() {
 					//if ( fabs(err) > (float)period/10)
 					std::cerr << "ref: " << ref_time << " cycle: " << delta_ref << " error: " << err << "\n";
 					last_ref_time += delta_ref;
+					global_clock += delta_ref;
 				}
+				else
+					global_clock += period;
+#else
+				global_clock += period;
 #endif
 				if (status == e_collect)
 					num_updates = ECInterface::instance()->collectState();
@@ -297,12 +303,19 @@ void EtherCATThread::operator()() {
 						switch(stage) {
 							case 1:
 							{
+								zmq::message_t iomsg(sizeof(global_clock));
+								memcpy(iomsg.data(), (void*)&global_clock, sizeof(global_clock) ); 
+								sync_sock->send(iomsg, ZMQ_SNDMORE);
+								++stage;
+							}
+							case 2:
+							{
 								zmq::message_t iomsg(4);
 								memcpy(iomsg.data(), (void*)&size, 4); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
 							}
-							case 2:
+							case 3:
 							{
 								zmq::message_t iomsg(size);
 #if 0
@@ -341,7 +354,7 @@ void EtherCATThread::operator()() {
 								}
 #endif
 							}
-							case 3:
+							case 4:
 							{
 								zmq::message_t iomsg(size);
 								uint8_t *mask = ECInterface::instance()->getUpdateMask(); 

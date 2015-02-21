@@ -70,6 +70,7 @@
 std::list<IOComponent *> IOComponent::processing_queue;
 std::map<std::string, IOAddress> IOComponent::io_names;
 static uint64_t current_time;
+uint64_t IOComponent::io_clock;
 size_t IOComponent::process_data_size = 0;
 uint8_t *IOComponent::io_process_data = 0;
 uint8_t *IOComponent::io_process_mask = 0;
@@ -182,8 +183,9 @@ uint8_t* IOComponent::getUpdateData() {
 	return update_data;
 }
 
-void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data, 
+void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data, 
 			std::set<IOComponent *> &updated_machines) {
+	io_clock = clock;
 	// receive process data updates and mask to yield updated components
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -291,7 +293,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data,
 	std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
 	while (iter != updatedComponentsIn.end()) {
 		IOComponent *ioc = *iter++;
-		ioc->read_time = current_time;
+		ioc->read_time = io_clock;
 		//std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
 		//if (ioc->last_event == e_none)  {
 			updatedComponentsIn.erase(ioc); 
@@ -307,7 +309,7 @@ void IOComponent::processAll(size_t data_size, uint8_t *mask, uint8_t *data,
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
-		ioc->read_time = current_time;
+		ioc->read_time = io_clock;
 		ioc->idle();
 	}
 #endif

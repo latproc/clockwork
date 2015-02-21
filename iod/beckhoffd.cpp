@@ -564,7 +564,8 @@ int main (int argc, char const *argv[])
 #endif
 			std::set<IOComponent*> io_work_queue;
 			std::list<Package*>dummy;
-			IOComponent::processAll(0,0,0, io_work_queue);
+			uint64_t clock = start_t.tv_sec * 1000000 + start_t.tv_usec;
+			IOComponent::processAll(clock, 0,0,0, io_work_queue);
 			std::set<IOComponent*>::iterator io_work = io_work_queue.begin();
 			while (io_work != io_work_queue.end()) {
 					IOComponent *ioc = *io_work;

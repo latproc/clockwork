@@ -3,6 +3,12 @@
 # performs the correct state changes.
 # If the test machine fails to change state it is reset and the 
 # driver locks itself into an error state.
+#
+# functions tested:
+#
+#  use of ANY .. ARE  using a property for the state being tested
+#  continued execution of scripts after a WAITFOR
+#  resetting a machine from a script
 
 f1 FLAG;
 f2 FLAG;

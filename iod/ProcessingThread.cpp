@@ -154,6 +154,7 @@ void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
 static uint8_t *incoming_process_data = 0;
 static uint8_t *incoming_process_mask = 0;
 static uint32_t incoming_data_size;
+static uint64_t global_clock = 0;
 
 #if 1
 static void display(uint8_t *p) {
@@ -191,7 +192,17 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 				while (true) {
 					try {
 						switch (stage) {
-							case 1: 
+							case 1:
+								{
+									zmq::message_t message;
+									// data length
+									ecat_sync.recv(&message);
+									size_t msglen = message.size();
+									assert(msglen == sizeof(global_clock));
+									memcpy(&global_clock, message.data(), msglen);
+									++stage;
+								}
+							case 2: 
 								{
 									zmq::message_t message;
 									// data length
@@ -203,7 +214,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 									if (len == 0) { stage = 4; break; }
 									++stage;
 								}
-							case 2: 
+							case 3: 
 								{
 									// data
 									ecat_sync.getsockopt( ZMQ_RCVMORE, &more, &more_size);
@@ -217,7 +228,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 									//std::cout << "got data: "; display(incoming_process_data); std::cout << "\n";
 									++stage;
 								}
-							case 3: 
+							case 4: 
 								{
 									// mask
 									zmq::message_t message;
@@ -408,7 +419,7 @@ void ProcessingThread::operator()()
 				{
 				//std::cout << "got EtherCAT data\n";
 					gettimeofday(&end_t, 0);
-					IOComponent::processAll( incoming_data_size, incoming_process_mask, 
+					IOComponent::processAll( global_clock, incoming_data_size, incoming_process_mask, 
 						incoming_process_data, io_work_queue);
 					gettimeofday(&start_t, 0);
 					delta = get_diff_in_microsecs(&start_t, &end_t);

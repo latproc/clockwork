@@ -76,7 +76,7 @@ public:
 		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-	static void processAll(size_t data_size, uint8_t *mask, uint8_t *data, 
+	static void processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data, 
 			std::set<IOComponent *> &updatedMachines);
 	static void setupIOMap();
 	static int getMinIOOffset();
@@ -123,6 +123,7 @@ public:
 	IOAddress address;
 	uint32_t pending_value;
     uint64_t read_time; // the last read time
+	static uint64_t ioClock() { return io_clock; }
 	
 	void addDependent(MachineInstance *m) {
 		depends.push_back(m);
@@ -153,6 +154,7 @@ public:
   static void updatesSent() { updates_sent = true; }
 
 protected:
+	static uint64_t io_clock;
 	int getStatus(); 
 	int io_index; // the index of the first bit in this component's address space
 	uint32_t raw_value;
