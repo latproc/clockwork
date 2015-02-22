@@ -796,8 +796,9 @@ void RateEstimatorInstance::idle() {
 	MachineInstance *pos_m = lookup(parameters[0]);
 	if (!pos_m) return;
 	if (!settings) {
+		if (settings) delete settings;
 		if (pos_m->io_interface)
-			settings = new CounterRateFilterSettings(4);
+			settings = new CounterRateFilterSettings(8);
 		else
 			settings = new CounterRateFilterSettings(8);
 	}
@@ -1658,6 +1659,7 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
 	}
 	//if (_type == "LIST" || _type == "REFERENCE")
 	setNeedsCheck();
+	notifyDependents();
 	//}
 }
 
@@ -1672,6 +1674,7 @@ void MachineInstance::removeParameter(int which) {
 	}
 	parameters.erase(parameters.begin()+which);
 	setNeedsCheck();
+	notifyDependents();
 }
 
 void MachineInstance::addLocal(Value param, MachineInstance *mi) {
