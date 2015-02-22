@@ -566,7 +566,8 @@ When a message arrives it should not be delivered unless the target machine
 \end_layout
 
 \begin_layout Enumerate
-How should default values be specicified?
+How should default values be specified? Currently as a default property
+ on outputs only.
 \end_layout
 
 \begin_layout Subsection
