@@ -1515,12 +1515,12 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 				&& ( max_time == 0 || nowMicrosecs() - start_processing < max_time) ) {
 		MachineInstance *mi = *iter;
 		if (mi->executingCommand() == 0) {
-			iter = pending_state_change.erase(iter);
 			//std::cout << mi->getName() << "::setStableState()\n";
-			mi->setStableState();
+			// leave the state check on the queue until it is stable
+			if (!mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
 		}
 		else {
-			std::cout << "waiting for " << mi->getName() << ": " << *mi->executingCommand() << "\n";
+			//std::cout << "waiting for " << mi->getName() << ": " << *mi->executingCommand() << "\n";
 			busy_machines.insert(mi);
 			iter++;
 		}
@@ -2859,16 +2859,17 @@ void MachineInstance::updateLastEvaluationTime() {
 	}
 }
 
-void MachineInstance::setStableState() {
+bool MachineInstance::setStableState() {
+	bool changed_state = false;
 	CaptureDuration cd(stable_states_stats);
 	DBG_M_AUTOSTATES << _name << " checking stable states\n";
 	if (!state_machine || !state_machine->allow_auto_states) {
 		DBG_M_AUTOSTATES << _name << " aborting stable states check due to configuration\n";
-		return;
+		return false;
 	}
 	if ( executingCommand() || !mail_queue.empty() ) {
 		DBG_M_AUTOSTATES << _name << " aborting stable states check due to command execution\n";
-		return;
+		return false;
 	}
 	// we must not set our stable state if objects we depend on are still updating their own state
 	needs_check = 0;
@@ -2915,6 +2916,7 @@ void MachineInstance::setStableState() {
 				if (s.condition(this)) {
 					DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
 					if (current_state.getName() != s.state_name) {
+						changed_state = true;
 						if (tracing() && isTraceable()) {
 							resetTemporaryStringStream();
 							ss << current_state.getName() <<"->" << s.state_name << " " << *s.condition.predicate;
@@ -3031,7 +3033,8 @@ void MachineInstance::setStableState() {
 			}
 		}}
 #endif
-		}
+	return changed_state;
+}
 
 		void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			//if (state_machine) return;

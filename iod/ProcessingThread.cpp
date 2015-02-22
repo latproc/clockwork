@@ -182,7 +182,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 			res = zmq::poll(&items[0], 5, poll_wait);
 			if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
 			{
-				//std::cout << "receiving data from EtherCAT\n";
+				//DBG_MSG << "receiving data from EtherCAT\n";
 				// the EtherCAT message carries a mask and data
 
 				int64_t more;
@@ -334,6 +334,7 @@ void ProcessingThread::operator()()
 
 	uint64_t last_checked_cycle_time = 0;
 	uint64_t last_checked_plugins = 0;
+	uint64_t last_checked_machines = 0;
 
 	MachineInstance *system = MachineInstance::find("SYSTEM");
 	assert(system);
@@ -348,6 +349,7 @@ void ProcessingThread::operator()()
 	std::set<IOComponent *>io_work_queue;
 	while (!program_done)
 	{
+		unsigned int machine_check_delay = cycle_delay / 2;
 		machine.idle();
 		if (machine.connected())
 		{
@@ -385,10 +387,13 @@ void ProcessingThread::operator()()
 		{
 			curr_t = nowMicrosecs();
 			if (IOComponent::updatesWaiting()) poll_wait=cycle_delay/10; else poll_wait=cycle_delay;
-			if (pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out)) break;
-			if  (!io_work_queue.empty()) break;
-			if (MachineInstance::workToDo()) break;
+			int systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
+			//DBG_MSG << "loop " << status << " "  << systems_waiting << "\n";
+			if (systems_waiting > 0) break;
+			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
+			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
 			if (curr_t - last_checked_plugins > 10000) break;
+			status = e_waiting;
 		}
 		curr_t = nowMicrosecs();
 		gettimeofday(&end_t, 0);
@@ -525,7 +530,7 @@ void ProcessingThread::operator()()
 		Channel::handleChannels();
 		}
 		*/
-		if (machine_is_ready && MachineInstance::workToDo() )
+		if (curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
 		{
 			static unsigned long total_cw_time = 0;
 			static unsigned long cw_count = 0;
@@ -539,8 +544,10 @@ void ProcessingThread::operator()()
 			}
 			if (processing_state == eStableStates)
 			{
-				if (MachineInstance::checkStableStates(150000))
+				if (MachineInstance::checkStableStates(150000)) {
 					processing_state = eIdle;
+					last_checked_machines = curr_t; // check complete
+				}
 			}
 
 			gettimeofday(&end_t, 0);

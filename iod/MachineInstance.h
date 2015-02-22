@@ -292,7 +292,7 @@ public:
     Value *lookupState(const Value &) const;
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
-    void setStableState();
+    bool setStableState(); // returns true if a state change was made
     
     std::string fullName() const;
     
