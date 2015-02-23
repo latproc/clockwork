@@ -392,7 +392,7 @@ void ProcessingThread::operator()()
 			if (systems_waiting > 0) break;
 			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
 			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
-			if (curr_t - last_checked_plugins > 10000) break;
+			if (curr_t - last_checked_plugins >= 5000) break;
 			status = e_waiting;
 		}
 		curr_t = nowMicrosecs();
@@ -434,7 +434,7 @@ void ProcessingThread::operator()()
 					delta = get_diff_in_microsecs(&start_t, &end_t);
 					total_mp_time += delta;
 					if (++mp_count>=100) {
-						system->setValue("AVG_PROCESSING_TIME", total_mp_time*1000 / ++mp_count);
+						system->setValue("AVG_IO_TIME", total_mp_time*1000 / mp_count);
 						mp_count = 0;
 						total_mp_time = 0;
 					}
@@ -467,9 +467,20 @@ void ProcessingThread::operator()()
 		}
 		
 		if (program_done) break;
-		if (processing_state == eIdle && curr_t - last_checked_plugins > 10000) {
+		if (processing_state == eIdle && curr_t - last_checked_plugins >= 5000) {
+			static uint64_t total_plugin_time = 0;
+			static int pi_count = 0;
+			uint64_t start_plugin_time = nowMicrosecs();
 			MachineInstance::checkPluginStates();
-			last_checked_plugins = curr_t;
+			uint64_t end_plugin_time = nowMicrosecs();
+			last_checked_plugins = end_plugin_time;;
+			uint64_t delta_t = end_plugin_time - start_plugin_time;
+			total_plugin_time += delta;
+			if (++pi_count>=100) {
+				system->setValue("AVG_PLUGIN_TIME", total_plugin_time*1000 / pi_count);
+				pi_count = 0;
+				total_plugin_time = 0;
+			}
 		}
 
 		if (program_done) break;

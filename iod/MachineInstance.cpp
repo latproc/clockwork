@@ -1495,15 +1495,20 @@ void MachineInstance::checkPluginStates() {
 		MachineInstance *m = *pl_iter++;
 		if (!m->is_enabled) continue;
 		if (m->next_poll > start_processing) { 
-			std::cout << "skipping " << m->getName() << "\n"; 
 			continue;
 		}
-		DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
-		m->setStableState();
-		if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
-			DBG_AUTOSTATES  << "calling " << m->getName() << "plugin state_check()\n";
-			m->state_machine->plugin->state_check(m);
-			m->setNeedsCheck();
+		//updateLastEvaluationTime();
+		//DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
+		//m->setStableState();
+		if (m->state_machine && m->state_machine->plugin)  {
+			if ( m->state_machine->plugin->state_check) {
+				DBG_AUTOSTATES  << "calling " << m->getName() << "plugin state_check()\n";
+				m->state_machine->plugin->state_check(m);
+				//m->setNeedsCheck();
+			}
+			if ( m->state_machine->plugin->poll_actions) {
+				m->state_machine->plugin->poll_actions(m);
+			}
 		}
 	}
 }
