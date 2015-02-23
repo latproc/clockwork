@@ -127,7 +127,7 @@ Value AnyInValue::operator()(MachineInstance *mi) {
         last_process_time = currentTime();
     }
     else {
-        std::cout << "avoiding recalc of " << *this << "\n";
+        //std::cout << "avoiding recalc of " << *this << "\n";
         return last_result;
     }
     
@@ -144,8 +144,8 @@ Value AnyInValue::operator()(MachineInstance *mi) {
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
-        std::cout << mi->getName() << " machine " << machine_list->parameters[i].machine->getName()
-        << " is  "<< machine_list->parameters[i].machine->getCurrent().getName() <<" want " << state_val << "\n";
+        //std::cout << mi->getName() << " machine " << machine_list->parameters[i].machine->getName()
+        //<< " is  "<< machine_list->parameters[i].machine->getCurrent().getName() <<" want " << state_val << "\n";
         
         if (state_val == machine_list->parameters[i].machine->getCurrent().getName()) {
             last_result = true; return last_result;
@@ -169,7 +169,7 @@ Value AllInValue::operator()(MachineInstance *mi) {
         last_process_time = currentTime();
     }
     else {
-        std::cout << "avoiding recalc of " << *this << "\n";
+        //std::cout << "avoiding recalc of " << *this << "\n";
         return last_result;
     }
 
