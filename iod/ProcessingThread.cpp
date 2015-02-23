@@ -477,7 +477,7 @@ void ProcessingThread::operator()()
 			uint64_t delta_t = end_plugin_time - start_plugin_time;
 			total_plugin_time += delta;
 			if (++pi_count>=100) {
-				system->setValue("AVG_PLUGIN_TIME", total_plugin_time*1000 / pi_count);
+				system->setValue("AVG_PLUGIN_TIME", (long)(total_plugin_time*1000 / pi_count) );
 				pi_count = 0;
 				total_plugin_time = 0;
 			}
