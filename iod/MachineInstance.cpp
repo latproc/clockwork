@@ -808,6 +808,7 @@ void RateEstimatorInstance::idle() {
 		uint64_t curr_t = (pos_m->io_interface) ? pos_m->io_interface->read_time : process_time;
 		delta = (double)(curr_t - settings->update_t) / 1000.0;
 		if (!delta)  {
+            /*
 			if (settings->velocity) {
 				Trigger *trigger = new Trigger("Timer");
 				Scheduler::instance()->add(
@@ -815,6 +816,7 @@ void RateEstimatorInstance::idle() {
 				trigger->release();
 				setNeedsCheck();
 			}
+             */
 			return;
 		}
 
@@ -877,8 +879,10 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 			settings->property_changed = false;
 		}
 
-		//uint64_t delta_t = settings->update_t - settings->start_t;
-		settings->times.append(settings->update_t);
+        // use current time - start time as t0 to avoid floating point resolution issues
+		uint64_t delta_t = settings->update_t - settings->start_t;
+        //std::cout << "adding reading: " << delta_t << " " << (int32_t)val << "\n";
+		settings->times.append(delta_t);
 		settings->position = (int32_t)val;
 		settings->positions.append(settings->position);
 		settings->velocity = (int32_t)filter((int32_t)settings->position);
@@ -904,9 +908,13 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
-	//if (false && settings->positions.length() < settings->positions.BUFSIZE)
-		speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
-	//else {
+	//if (false && settings->positions.length() < settings->positions.BUFSIZE) {
+    float ds = (float)settings->positions.difference(settings->positions.length()-1, 0);
+    float dt = (float)settings->times.difference(settings->times.length()-1,0);
+    speed = ds / dt  * 1000000;
+    //std::cout << "ds: " << ds << " dt: " << dt << "\n";
+	//}
+    //else {
 	//	speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
 	  //std::cout << getName() << " filter(" << val << ") => " << speed << "\n";
 	//}
