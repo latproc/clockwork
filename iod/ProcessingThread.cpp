@@ -175,7 +175,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 		zmq::socket_t &ecat_out)
 {
 	int res = 0;
-	while (!program_done && (status == e_waiting || status == e_waiting_cmd) )
+	while (!program_done ) // && (status == e_waiting || status == e_waiting_cmd) )
 	{
 		try
 		{
@@ -317,8 +317,10 @@ void ProcessingThread::operator()()
 	uint64_t last_checked_plugins = 0;
 	uint64_t last_checked_machines = 0;
 
-	static unsigned long total_cmd_time = 0;
-	static unsigned long cmd_count = 0;
+	unsigned long total_cmd_time = 0;
+	unsigned long cmd_count = 0;
+	unsigned long total_sched_time = 0;
+	unsigned long sched_count = 0;
 
 	uint64_t start_cmd = 0;
 
@@ -554,7 +556,8 @@ void ProcessingThread::operator()()
 			//std::cout << "scheduler waiting " << status << "\n";
 				if (status == e_waiting) 
 				{
-					size_t len = sched_sync.recv(buf, 10, ZMQ_NOBLOCK);
+					//size_t len = sched_sync.recv(buf, 10, ZMQ_NOBLOCK);
+					size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
 					if (len) {
 						status = e_handling_sched;
 					}
@@ -565,13 +568,25 @@ void ProcessingThread::operator()()
 			size_t len = 0;
 			start = nowMicrosecs();
 			safeSend(sched_sync,"continue",3);
+			status = e_waiting_sched;
+		}
+		if (status == e_waiting_sched) {
 			//std::cout << "waiting for the scheduler\n";
 			// wait for the dispatcher
-			safeRecv(sched_sync, buf, 10, true, len);
-			safeSend(sched_sync,"bye",3);
-			end = nowMicrosecs();
+			size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
+			if (len) {
+				safeSend(sched_sync,"bye",3);
+				status = e_waiting;
+				end = nowMicrosecs();
+				delta = end - start;
+				total_sched_time += delta;
+				if (++sched_count>100) {
+					system->setValue("AVG_SCHED_TIME", total_sched_time*1000 / sched_count);
+					sched_count = 0;
+					total_sched_time = 0;
+				}
+			}
 			//std::cout << "scheduler done " << (end-start) <<"us\n";
-			status = e_waiting;
 		}
 		/*
 		// poll channels

@@ -25,9 +25,10 @@ public:
     static const int SCHEDULER_ITEM = 3;
     static const int ECAT_OUT_ITEM = 4;
     
-    enum Status { e_waiting, e_handling_ecat, e_handling_cmd, 
-				e_waiting_cmd, e_command_done, e_handling_dispatch,
-				e_handling_sched } ;
+    enum Status { e_waiting, e_handling_ecat, 
+				e_handling_cmd, e_waiting_cmd, e_command_done, 
+				e_handling_dispatch,
+				e_handling_sched, e_waiting_sched } ;
     Status status;
 
     int pollZMQItems(int poll_time, 
