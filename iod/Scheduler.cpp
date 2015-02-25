@@ -159,11 +159,11 @@ ScheduledItem::ScheduledItem(long when, Action *a) :package(0), action(a) {
 std::ostream &ScheduledItem::operator <<(std::ostream &out) const {
 	struct timeval now;
 	gettimeofday(&now, 0);
-    int64_t delta = get_diff_in_microsecs( &delivery_time, &now);
-    out << delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec
+	int64_t delta = get_diff_in_microsecs( &delivery_time, &now);
+	out << delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec
 		<< " (" << delta << ") ";
-    if (package) out << *package; else if (action) out << *action;
-    return out;
+	if (package) out << *package; else if (action) out << *action;
+	return out;
 }
 
 std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
@@ -185,18 +185,18 @@ int64_t Scheduler::getNextDelay() {
 	if (empty()) return -1;
     ScheduledItem *top = next();
 	next_time = top->delivery_time;
-    return get_diff_in_microsecs(&next_time, nowMicrosecs());
+	return get_diff_in_microsecs(&next_time, nowMicrosecs());
 }
 
 void Scheduler::add(ScheduledItem*item) {
-    ScheduledItem *top = 0;
+	ScheduledItem *top = 0;
 	boost::mutex::scoped_lock(q_mutex);
 	DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
 	//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
 	items.push(item);
-    top = next();
+	top = next();
 	next_time = top->delivery_time;
-    next_delay_time = getNextDelay();
+	next_delay_time = getNextDelay();
 	//assert(next_delay_time < 60000000L);
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	if (!last_notification) {
@@ -225,8 +225,9 @@ void Scheduler::add(ScheduledItem*item) {
 	}
 	else {
 		long wait_duration = nowMicrosecs() - last_notification;
-		if (wait_duration >= 60L * 1000000L && item->action) std::cout << "long delay of " << wait_duration << " for " << item->action->getOwner()->getName() << "\n";
-		assert (wait_duration < 60L * 1000000L);
+		if (wait_duration >= 1000000L && item->action) 
+			std::cout << "scheduler waiting for a long time for a response: " << wait_duration << "\n";
+		assert (wait_duration < 1000000L);
 	}
 }
 
@@ -336,24 +337,24 @@ void Scheduler::idle() {
 			next_time.tv_sec = 0;
 			next_time.tv_usec = 0;
 			if (item->package) {
-                DBG_SCHEDULER << " handling package on " << item->package->receiver->getName() << "\n";
+				DBG_SCHEDULER << " handling package on " << item->package->receiver->getName() << "\n";
 				item->package->receiver->handle(item->package->message, item->package->transmitter);
 				delete item->package;
-	            delete item;
+				delete item;
 				++items_found;
 			}
 			else if (item->action) {
-                DBG_SCHEDULER << " pushing action to  " << item->action->getOwner()->getName() << "\n";
+				DBG_SCHEDULER << " pushing action to  " << item->action->getOwner()->getName() << "\n";
 				item->action->getOwner()->push(item->action);
-	            delete item;
+				delete item;
 				++items_found;
 			}
 			is_ready = ready();
 		}
-		if (items_found)
-            MachineInstance::forceIdleCheck();
+		//if (items_found)
+		//	MachineInstance::forceIdleCheck();
 		if (state == e_running) {
-			//std::cout << "scheduler done\n";
+			//DBG_MSG << "scheduler done\n";
 			safeSend(sync,"done", 4);
 			safeRecv(sync, buf, 10, true, response_len); // wait for ack from clockwork
 			if (next() == 0) { DBG_SCHEDULER << "no more scheduled items\n"; }
