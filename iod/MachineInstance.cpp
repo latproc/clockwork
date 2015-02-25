@@ -4169,14 +4169,14 @@ bool MachineInstance::setStableState() {
 		}
 
 		void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, int new_value) {
-			std::string name = fullName();
+			std::string name(fullName());
 			DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 			int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
 			if (!modbus_addresses.count(index)) {
 				NB_MSG << name << " Error: bad modbus address lookup for " << base_addr << "\n";
 				return;
 			}
-			std::string item_name = modbus_addresses[index];
+			const std::string &item_name = modbus_addresses[index];
 			if (!modbus_exports.count(item_name)) {
 				NB_MSG << name << " Error: bad modbus name lookup for " << item_name << "\n";
 				return;
@@ -4193,11 +4193,6 @@ bool MachineInstance::setStableState() {
 						snprintf(buf, 100, "received a modbus update for machine %s but that machine has no export property\n", name.c_str());
 						MessageLog::instance()->add(buf);
 					}
-					//Value &export_type = properties.lookup("export");
-					// disabling this test because does not seem valid when talking with a PLC instead of a panel
-					//assert( (export_type.kind == Value::t_string || export_type.kind == Value::t_symbol)
-					//	&& export_type.sValue == "rw");
-					//assert(addr.getOffset() == 0);
 
 					DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
 					if (new_value) {
@@ -4243,7 +4238,6 @@ bool MachineInstance::setStableState() {
 			else {
 				NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
 			}
-			//++needs_check;
 		}
 
 		int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {
