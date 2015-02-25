@@ -678,7 +678,6 @@ class CounterRateFilterSettings {
 		counter_machine(0), noise_tolerance_val(0), zero_count(0) {
 			struct timeval now;
 			gettimeofday(&now, 0);
-			start_t = now.tv_sec * 1000000 + now.tv_usec;
 			update_t = start_t;
 		}
 };
@@ -880,6 +879,7 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 		}
 
         // use current time - start time as t0 to avoid floating point resolution issues
+		if (settings->start_t == 0) settings->start_t = settings->update_t;
 		uint64_t delta_t = settings->update_t - settings->start_t;
         //std::cout << "adding reading: " << delta_t << " " << (int32_t)val << "\n";
 		settings->times.append(delta_t);
