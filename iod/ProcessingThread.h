@@ -26,7 +26,7 @@ public:
     static const int ECAT_OUT_ITEM = 4;
     
     enum Status { e_waiting, e_handling_ecat, e_handling_cmd, 
-				e_waiting_cmd, e_handling_dispatch,
+				e_waiting_cmd, e_command_done, e_handling_dispatch,
 				e_handling_sched } ;
     Status status;
 

@@ -173,7 +173,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 		zmq::socket_t &ecat_out)
 {
 	int res = 0;
-	while (!program_done && status == e_waiting)
+	while (!program_done && (status == e_waiting || status == e_waiting_cmd) )
 	{
 		try
 		{
@@ -261,7 +261,10 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 			{
 				len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
 				if (len) {
-					status = e_handling_cmd;
+					if (status == e_waiting_cmd)
+						status = e_command_done;
+					else
+						status = e_handling_cmd;
 				}
 			}
 			else if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
@@ -495,15 +498,24 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if (status == e_handling_cmd) {
-            gettimeofday(&start_t, 0);
-			waitForCommandProcessing(resource_mgr);
+			gettimeofday(&start_t, 0);
+			//waitForCommandProcessing(resource_mgr);
+			safeSend(resource_mgr,"go", 2);
+			status = e_waiting_cmd;
+		}
+		if (status == e_command_done) {
+			char buf[10];
+			size_t len = 0;
+			safeSend(resource_mgr,"bye", 3);
 			static unsigned long total_cmd_time = 0;
 			static unsigned long cmd_count = 0;
 			gettimeofday(&end_t, 0);
 			delta = get_diff_in_microsecs(&end_t, &start_t);
 			total_cmd_time += delta;
 			system->setValue("AVG_COMMAND_TIME", total_cmd_time*1000 / ++cmd_count);
+			if (cmd_count>5) { cmd_count = 0; total_cmd_time = 0; }
 			start_t = end_t;
+			status = e_waiting;
 		}
 		if (program_done) break;
 
@@ -550,7 +562,7 @@ void ProcessingThread::operator()()
 		Channel::handleChannels();
 		}
 		*/
-		if (curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
+		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
 		{
             gettimeofday(&start_t, 0);
 			static unsigned long total_cw_time = 0;
@@ -581,7 +593,7 @@ void ProcessingThread::operator()()
 			}
 			start_t = end_t;
 		}
-		if (machine_is_ready && !IOComponent::devices.empty() &&
+		if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
 				(
 				 IOComponent::updatesWaiting() 
 				 || IOComponent::getHardwareState() != IOComponent::s_operational
@@ -698,7 +710,6 @@ void ProcessingThread::operator()()
 			checkAndUpdateCycleDelay();
 		}
 
-		status = e_waiting;
 		if (program_done) break;
 	}
 	//		std::cout << std::flush;
