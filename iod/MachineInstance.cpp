@@ -362,6 +362,7 @@ bool MachineInstance::workToDo() {
 }
 std::set<MachineInstance*>& MachineInstance::busyMachines() { return busy_machines; }
 std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
+std::set<MachineInstance*>& MachineInstance::pluginMachines() { return plugin_machines; }
 
 void MachineInstance::forceIdleCheck() { 
 	num_machines_with_work++; 
@@ -1286,6 +1287,10 @@ uint64_t nowMicrosecs() {
 	struct timeval now;
 	gettimeofday(&now, 0);
 	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
+}
+
+uint64_t nowMicrosecs(const struct timeval &now) {
+    return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
 }
 
 int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then) {

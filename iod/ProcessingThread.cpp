@@ -392,16 +392,16 @@ void ProcessingThread::operator()()
 			if (systems_waiting > 0) break;
 			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
 			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
-			if (curr_t - last_checked_plugins >= 5000) break;
+			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) break;
 			status = e_waiting;
 		}
-		curr_t = nowMicrosecs();
 		gettimeofday(&end_t, 0);
+        curr_t = nowMicrosecs(end_t);
 		static unsigned long total_poll_time = 0;
 		static unsigned long poll_count = 0;
 		delta = get_diff_in_microsecs(&end_t, &start_t);
 		total_poll_time += delta;
-		if (++poll_count >= 500) {
+		if (++poll_count >= 100) {
 			system->setValue("AVG_POLL_TIME", total_poll_time*1000 / poll_count);
 			poll_count = 0;
 			total_poll_time = 0;
@@ -414,7 +414,7 @@ void ProcessingThread::operator()()
 			some time anyway.
 		*/
 		static int ecat_handled_count = 0;
-		const int max_ecat_only_cycles = 5;
+		const int max_ecat_only_cycles = 2;
 		if (ecat_handled_count < max_ecat_only_cycles && items[ECAT_ITEM].revents & ZMQ_POLLIN)
 		{
 			++ecat_handled_count;
@@ -423,7 +423,7 @@ void ProcessingThread::operator()()
 			uint8_t *mask_p = incoming_process_mask;
 			int n = incoming_data_size;
 			while (n-- && *mask_p == 0) ++mask_p;
-			if (*mask_p) { // io has indicated a change
+			if (n) { // io has indicated a change
 				if (machine_is_ready)
 				{
 				//std::cout << "got EtherCAT data\n";
@@ -458,16 +458,26 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
+            uint64_t start = nowMicrosecs();
 			std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
 			while (io_work != io_work_queue.end()) {
 				IOComponent *ioc = *io_work;
 				ioc->handleChange(MachineInstance::pendingEvents());
 				io_work = io_work_queue.erase(io_work);
 			}
-		}
+            static unsigned long total_iowork_time = 0;
+            static unsigned long iowork_count = 0;
+            delta = nowMicrosecs() - start;
+            total_poll_time += delta;
+            if (++iowork_count >= 100) {
+                system->setValue("AVG_IOWORK_TIME", total_iowork_time*1000 / iowork_count);
+                iowork_count = 0;
+                total_iowork_time = 0;
+            }
+        }
 		
 		if (program_done) break;
-		if (processing_state == eIdle && curr_t - last_checked_plugins >= 5000) {
+        if (processing_state == eIdle && !MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) {
 			static uint64_t total_plugin_time = 0;
 			static int pi_count = 0;
 			uint64_t start_plugin_time = nowMicrosecs();
@@ -485,6 +495,7 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if (status == e_handling_cmd) {
+            gettimeofday(&start_t, 0);
 			waitForCommandProcessing(resource_mgr);
 			static unsigned long total_cmd_time = 0;
 			static unsigned long cmd_count = 0;
@@ -528,8 +539,6 @@ void ProcessingThread::operator()()
 				// wait for the dispatcher
 				safeRecv(sched_sync, buf, 10, true, len);
 				safeSend(sched_sync,"bye",3);
-				//std::cout << "processing thread forcing a stable state check\n";
-				//MachineInstance::forceStableStateCheck();
 				status = e_waiting;
 			}
 		}
@@ -543,6 +552,7 @@ void ProcessingThread::operator()()
 		*/
 		if (curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
 		{
+            gettimeofday(&start_t, 0);
 			static unsigned long total_cw_time = 0;
 			static unsigned long cw_count = 0;
 
