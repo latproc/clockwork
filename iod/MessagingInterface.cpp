@@ -52,25 +52,25 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 //    gettimeofday(&now, 0);
 //    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
     
-    response_len = 0;
-    while (!MessagingInterface::aborted()) {
-        try {
-                zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-                int n = zmq::poll( &items[0], 1, timeout);
-				if (!n && block) continue;
-                if (items[0].revents & ZMQ_POLLIN) {
-     	            response_len = sock.recv(buf, buflen, 0);
-                if (!response_len && block) continue;
-            }
-            return (response_len == 0) ? false : true;
-        }
-        catch (zmq::error_t e) {
-            if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; continue; }
-            std::cerr << zmq_strerror(errno) << "\n";
-            return false;
-        }
-    }
-    return false;
+	response_len = 0;
+	while (!MessagingInterface::aborted()) {
+		try {
+			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+			int n = zmq::poll( &items[0], 1, timeout);
+			if (!n && block) continue;
+			if (items[0].revents & ZMQ_POLLIN) {
+				response_len = sock.recv(buf, buflen, 0);
+				if (!response_len && block) continue;
+			}
+			return (response_len == 0) ? false : true;
+		}
+		catch (zmq::error_t e) {
+			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; continue; }
+			std::cerr << zmq_strerror(errno) << "\n";
+			return false;
+		}
+	}
+	return false;
 }
 
 void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
