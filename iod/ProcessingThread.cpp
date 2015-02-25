@@ -137,6 +137,7 @@ bool ProcessingThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
+/*
 void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
 {
 	// handshake to give the command handler access to shared resources for a while
@@ -150,6 +151,7 @@ void ProcessingThread::waitForCommandProcessing(zmq::socket_t &resource_mgr)
 	safeRecv(resource_mgr, buf, 10, true, len);
 	safeSend(resource_mgr,"bye", 3);
 }
+*/
 
 static uint8_t *incoming_process_data = 0;
 static uint8_t *incoming_process_mask = 0;
@@ -180,6 +182,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 			long len = 0;
 			char buf[10];
 			res = zmq::poll(&items[0], 5, poll_wait);
+			if (!res) return res;
 			if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
 			{
 				//DBG_MSG << "receiving data from EtherCAT\n";
@@ -248,38 +251,13 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 					}
 					catch(zmq::error_t err) {
 						if (zmq_errno() == EINTR) {
-							//std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
-							usleep(50); 
+							std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
+							//usleep(50); 
 							continue;
 						}
 					}
 				}
-
-				if (len) status = e_handling_ecat;
-			}
-			else if (items[CMD_ITEM].revents & ZMQ_POLLIN)
-			{
-				len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
-				if (len) {
-					if (status == e_waiting_cmd)
-						status = e_command_done;
-					else
-						status = e_handling_cmd;
-				}
-			}
-			else if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
-			{
-				len = dispatcher.recv(buf, 10, ZMQ_NOBLOCK);
-				if (len) {
-					status = e_handling_dispatch;
-				}
-			}
-			else if (items[SCHEDULER_ITEM].revents & ZMQ_POLLIN)
-			{
-				len = scheduler.recv(buf, 10, ZMQ_NOBLOCK);
-				if (len) {
-					status = e_handling_sched;
-				}
+				break;
 			}
 			break;
 		}
@@ -339,6 +317,11 @@ void ProcessingThread::operator()()
 	uint64_t last_checked_plugins = 0;
 	uint64_t last_checked_machines = 0;
 
+	static unsigned long total_cmd_time = 0;
+	static unsigned long cmd_count = 0;
+
+	uint64_t start_cmd = 0;
+
 	MachineInstance *system = MachineInstance::find("SYSTEM");
 	assert(system);
 
@@ -371,9 +354,9 @@ void ProcessingThread::operator()()
 			machine_is_ready = false;
 
 		enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
-		struct timeval start_t, end_t;
+		uint64_t start, end;
 		//boost::mutex::scoped_lock lock(thread_protection_mutex);
-		gettimeofday(&start_t, 0);
+		start = nowMicrosecs();
 
 		zmq::pollitem_t items[] =
 		{
@@ -384,13 +367,15 @@ void ProcessingThread::operator()()
 			{ ecat_out, 0, ZMQ_POLLIN, 0 }
 		};
 		char buf[10];
-		int poll_wait = cycle_delay;
+		int poll_wait = cycle_delay / 1000;
+		if (poll_wait == 0) poll_wait = 1;
 		uint64_t curr_t = 0;
+		int systems_waiting = 0;
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
-			if (IOComponent::updatesWaiting()) poll_wait=cycle_delay/10; else poll_wait=cycle_delay;
-			int systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
+			//if (IOComponent::updatesWaiting()) poll_wait=cycle_delay/5; else poll_wait=cycle_delay;
+			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop " << status << " "  << systems_waiting << "\n";
 			if (systems_waiting > 0) break;
 			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
@@ -398,29 +383,26 @@ void ProcessingThread::operator()()
 			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) break;
 			status = e_waiting;
 		}
-		gettimeofday(&end_t, 0);
-        curr_t = nowMicrosecs(end_t);
+		end = nowMicrosecs();
+    curr_t = end;
+	
 		static unsigned long total_poll_time = 0;
 		static unsigned long poll_count = 0;
-		delta = get_diff_in_microsecs(&end_t, &start_t);
+		delta = end - start;
 		total_poll_time += delta;
 		if (++poll_count >= 100) {
 			system->setValue("AVG_POLL_TIME", total_poll_time*1000 / poll_count);
 			poll_count = 0;
 			total_poll_time = 0;
 		}
-		start_t = end_t;
 
 		/* this loop priorities ethercat processing but if a certain
 			number of ethercat cycles have been processed with no 
 			other activities being given time, we git other jobs
 			some time anyway.
 		*/
-		static int ecat_handled_count = 0;
-		const int max_ecat_only_cycles = 2;
-		if (ecat_handled_count < max_ecat_only_cycles && items[ECAT_ITEM].revents & ZMQ_POLLIN)
+		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
 		{
-			++ecat_handled_count;
 			static unsigned long total_mp_time = 0;
 			static unsigned long mp_count = 0;
 			uint8_t *mask_p = incoming_process_mask;
@@ -430,11 +412,11 @@ void ProcessingThread::operator()()
 				if (machine_is_ready)
 				{
 				//std::cout << "got EtherCAT data\n";
-					gettimeofday(&end_t, 0);
+					start = nowMicrosecs();
 					IOComponent::processAll( global_clock, incoming_data_size, incoming_process_mask, 
 						incoming_process_data, io_work_queue);
-					gettimeofday(&start_t, 0);
-					delta = get_diff_in_microsecs(&start_t, &end_t);
+					end = nowMicrosecs();
+					delta = end - start;
 					total_mp_time += delta;
 					if (++mp_count>=100) {
 						system->setValue("AVG_IO_TIME", total_mp_time*1000 / mp_count);
@@ -446,41 +428,34 @@ void ProcessingThread::operator()()
 					std::cout << "received EtherCAT data but machine is not ready\n";
 			}
 			safeSend(ecat_sync,"go",2);
-			if (program_done) break;
-			continue;
 		}
-		ecat_handled_count = 0; // reset this counter since other tasks are now getting time
-#if 0
-		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
-			std::cout << "ecat waiting\n";
-		if (items[CMD_ITEM].revents & ZMQ_POLLIN)
-			std::cout << "command waiting\n";
-		if (items[DISPATCHER_ITEM].revents & ZMQ_POLLIN)
-			std::cout << "dispatcher waiting\n";
+#if 1
+//		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+//			std::cout << "ecat waiting\n";
 #endif
 
 		if (program_done) break;
 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
-            uint64_t start = nowMicrosecs();
+			start = nowMicrosecs();
 			std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
 			while (io_work != io_work_queue.end()) {
 				IOComponent *ioc = *io_work;
 				ioc->handleChange(MachineInstance::pendingEvents());
 				io_work = io_work_queue.erase(io_work);
 			}
-            static unsigned long total_iowork_time = 0;
-            static unsigned long iowork_count = 0;
-            delta = nowMicrosecs() - start;
-            total_poll_time += delta;
-            if (++iowork_count >= 100) {
-                system->setValue("AVG_IOWORK_TIME", total_iowork_time*1000 / iowork_count);
-                iowork_count = 0;
-                total_iowork_time = 0;
-            }
-        }
+			static unsigned long total_iowork_time = 0;
+			static unsigned long iowork_count = 0;
+			delta = nowMicrosecs() - start;
+			total_poll_time += delta;
+			if (++iowork_count >= 100) {
+				system->setValue("AVG_IOWORK_TIME", total_iowork_time*1000 / iowork_count);
+				iowork_count = 0;
+				total_iowork_time = 0;
+			}
+		}
 		
 		if (program_done) break;
-        if (processing_state == eIdle && !MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) {
+		if (processing_state == eIdle && !MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) {
 			static uint64_t total_plugin_time = 0;
 			static int pi_count = 0;
 			uint64_t start_plugin_time = nowMicrosecs();
@@ -497,62 +472,106 @@ void ProcessingThread::operator()()
 		}
 
 		if (program_done) break;
+		if (status == e_waiting || status == e_waiting_cmd)  {
+			if (items[CMD_ITEM].revents & ZMQ_POLLIN) {
+				//std::cout << "command waiting " << status << "\n";
+				size_t len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
+				if (len) {
+					if (status == e_waiting_cmd) {
+						//std::cout << "command done\n";
+						status = e_command_done;
+					}
+					else {
+						//std::cout << "handling a command\n";
+						status = e_handling_cmd;
+					}
+				}
+			}
+		}
+
 		if (status == e_handling_cmd) {
-			gettimeofday(&start_t, 0);
-			//waitForCommandProcessing(resource_mgr);
+			uint64_t start_cmd_time = nowMicrosecs();
+			if (start_cmd_time - start_cmd > 60L * 1000000L) {
+				cmd_count = 0;
+				total_cmd_time = 0;
+			}
+			start_cmd = start_cmd_time;
 			safeSend(resource_mgr,"go", 2);
 			status = e_waiting_cmd;
+			//std::cout << "handed over to command processing\n";
 		}
 		if (status == e_command_done) {
 			char buf[10];
 			size_t len = 0;
 			safeSend(resource_mgr,"bye", 3);
-			static unsigned long total_cmd_time = 0;
-			static unsigned long cmd_count = 0;
-			gettimeofday(&end_t, 0);
-			delta = get_diff_in_microsecs(&end_t, &start_t);
+			end = nowMicrosecs();
+			delta = end - start_cmd;
 			total_cmd_time += delta;
 			system->setValue("AVG_COMMAND_TIME", total_cmd_time*1000 / ++cmd_count);
-			if (cmd_count>5) { cmd_count = 0; total_cmd_time = 0; }
-			start_t = end_t;
+			if (cmd_count>10) { cmd_count = 0; total_cmd_time = 0; }
 			status = e_waiting;
 		}
 		if (program_done) break;
 
+		if (status == e_waiting && items[DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
+			//std::cout << "dispatcher waiting " << status << "\n";
+			if (status == e_waiting) 
+			{
+				size_t len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
+				if (len) {
+					status = e_handling_dispatch;
+				}
+			}
+		}
 		if (status == e_handling_dispatch) {
 			if (processing_state != eIdle) {
 				// cannot process dispatch events at present
 				status = e_waiting;
-				MachineInstance::forceIdleCheck();
+				//std::cout << " cannot handle dispatch (machine processing underway)\n";
 			}
 			else {
 				size_t len = 0;
+				start = nowMicrosecs();
 				safeSend(dispatch_sync,"continue",3);
 				// wait for the dispatcher
+				//std::cout << "waiting for the dispatcher\n";
 				safeRecv(dispatch_sync, buf, 10, true, len);
 				safeSend(dispatch_sync,"bye",3);
-				MachineInstance::forceIdleCheck();
+				end = nowMicrosecs();
+				//std::cout << "dispatch done " << (end-start) <<"us\n";
+				//MachineInstance::forceIdleCheck();
 				status = e_waiting;
 			}
-			if (MachineInstance::workToDo()) {
-				DBG_DISPATCHER << " work to do after dispatch\n";;
-			}
-			else { DBG_DISPATCHER << " no more work to do after dispatch\n"; }
 		}
-		else if (status == e_handling_sched) {
+
+		if (status == e_waiting && items[SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
 			if (processing_state != eIdle) {
 				// cannot process scheduled events at present
 				status = e_waiting;
-				std::cout << "can't handle scheduler\n";
+				//std::cout << " cannot handle scheduler (machine processing underway)\n";
 			}
 			else {
-				size_t len = 0;
-				safeSend(sched_sync,"continue",3);
-				// wait for the dispatcher
-				safeRecv(sched_sync, buf, 10, true, len);
-				safeSend(sched_sync,"bye",3);
-				status = e_waiting;
+			//std::cout << "scheduler waiting " << status << "\n";
+				if (status == e_waiting) 
+				{
+					size_t len = sched_sync.recv(buf, 10, ZMQ_NOBLOCK);
+					if (len) {
+						status = e_handling_sched;
+					}
+				}
 			}
+		}
+		if (status == e_handling_sched) {
+			size_t len = 0;
+			start = nowMicrosecs();
+			safeSend(sched_sync,"continue",3);
+			//std::cout << "waiting for the scheduler\n";
+			// wait for the dispatcher
+			safeRecv(sched_sync, buf, 10, true, len);
+			safeSend(sched_sync,"bye",3);
+			end = nowMicrosecs();
+			//std::cout << "scheduler done " << (end-start) <<"us\n";
+			status = e_waiting;
 		}
 		/*
 		// poll channels
@@ -564,7 +583,7 @@ void ProcessingThread::operator()()
 		*/
 		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
 		{
-            gettimeofday(&start_t, 0);
+			start = nowMicrosecs();
 			static unsigned long total_cw_time = 0;
 			static unsigned long cw_count = 0;
 
@@ -583,15 +602,14 @@ void ProcessingThread::operator()()
 				}
 			}
 
-			gettimeofday(&end_t, 0);
-			delta = get_diff_in_microsecs(&end_t, &start_t);
+			end = nowMicrosecs();
+			delta = end - start;
 			total_cw_time += delta;
 			if (++cw_count>100) {
 				system->setValue("AVG_CLOCKWORK_TIME", total_cw_time*1000 / cw_count);
 				cw_count = 0;
 				total_cw_time = 0;
 			}
-			start_t = end_t;
 		}
 		if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
 				(
@@ -599,6 +617,7 @@ void ProcessingThread::operator()()
 				 || IOComponent::getHardwareState() != IOComponent::s_operational
 				)
 		   ) {
+			start = nowMicrosecs();
 			static unsigned long total_update_time = 0;
 			static unsigned long update_count = 0;
 
@@ -672,11 +691,10 @@ void ProcessingThread::operator()()
 					update_state = s_update_sent;
 					IOComponent::updatesSent();
 
-					gettimeofday(&end_t, 0);
-					delta = get_diff_in_microsecs(&end_t, &start_t);
+					end = nowMicrosecs();
+					delta = end - start;
 					total_update_time += delta;
 					system->setValue("AVG_UPDATE_TIME", total_update_time*1000 / ++update_count);
-					start_t = end_t;
 				}
 				else std::cout << "warning: getUpdate/getDefault returned null\n";
 			}
@@ -703,10 +721,9 @@ void ProcessingThread::operator()()
 
 		// periodically check to see if the cycle time has been changed
 		// more work is needed here since the signaller needs to be told about this
-		gettimeofday(&end_t, 0);
-		uint64_t now_usecs = end_t.tv_sec *1000000 + end_t.tv_usec;
-		if (now_usecs - last_checked_cycle_time > 100000L) {
-			last_checked_cycle_time = end_t.tv_sec *1000000 + end_t.tv_usec;
+		end = nowMicrosecs();
+		if (end - last_checked_cycle_time > 100000L) {
+			last_checked_cycle_time = end;
 			checkAndUpdateCycleDelay();
 		}
 
