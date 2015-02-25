@@ -403,6 +403,11 @@ bool TriggeredAction::active() {
 
 
 void MachineInstance::triggerFired(Trigger *trig) {
+	static const std::string str_publish("publish");
+	if (trig->matches(str_publish)) {
+		std::cout << "trigger fired, sending property changes\n";
+		Channel::sendPropertyChanges(this);
+	}
 	setNeedsCheck();
 /*
 	num_machines_with_work++;

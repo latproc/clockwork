@@ -118,7 +118,7 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
-%token CONSTRAINT IGNORE IGNORES
+%token CONSTRAINT IGNORE IGNORES THROTTLE
 
 %union {
 	int iVal;
@@ -362,6 +362,7 @@ chn_definition_section:
         current_channelclass->addReceiveName(name.c_str());
 }
 | OPTION chn_option_settings ';'
+| THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2); }
 ;
 
 machine_list:
