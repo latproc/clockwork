@@ -225,6 +225,7 @@ void Scheduler::add(ScheduledItem*item) {
 	}
 	else {
 		long wait_duration = nowMicrosecs() - last_notification;
+		if (wait_duration >= 60L * 1000000L && item->action) std::cout << "long delay of " << wait_duration << " for " << item->action->getOwner()->getName() << "\n";
 		assert (wait_duration < 60L * 1000000L);
 	}
 }
