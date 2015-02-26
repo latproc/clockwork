@@ -128,6 +128,7 @@ Action::Status IncludeAction::run() {
                 p.val = Value("ITEM");
                 p.val.cached_machine = p.machine;
                 if (old && new_assignment && old != new_assignment) {
+					list_machine->setNeedsCheck();
                     Message msg("changed");
                     list_machine->notifyDependents(msg);
                 }
