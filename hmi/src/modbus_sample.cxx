@@ -113,6 +113,26 @@ void stop(Fl_Widget *w, void *data) {
     } 
 }
 
+void change_screen(Fl_Widget *w, void *data) {
+	Fl_Output *screen_num = (Fl_Output*)data;
+	Fl_Input *in = (Fl_Input*)w;
+	const char *val = in->value();
+	long scr = 0;
+	char *endp = 0;
+	scr = strtol(val, &endp, 10);
+	if (endp != val ) {
+		mb->tab_rw_rq_registers[1074] = (uint16_t)scr;
+		char buf[10];
+		sprintf(buf, "%d", mb->tab_rw_rq_registers[1074]);
+		screen_num->value(buf);
+		int rc = modbus_write_register(mb->ctx, 1074, mb->tab_rw_rq_registers[1074]);
+		if (rc == -1) {
+			fprintf(stderr, "%s\n", modbus_strerror(errno));
+		}
+	}
+}
+
+
 int main(int argc, char **argv) {
   Fl_Window *window = new Fl_Window(340,360);
   Fl_Box *box = new Fl_Box(20,40,300,60,"modbus.lpc");
@@ -129,6 +149,10 @@ int main(int argc, char **argv) {
 
   Fl_Output *screen_num = new Fl_Output(70, 220, 60, 30, "Page");
   screen_num->labelsize(14);
+
+  Fl_Input *next_screen = new Fl_Input(70, 270, 60, 30, "Next");
+  next_screen->labelsize(14);
+  next_screen->callback(change_screen, (void*)screen_num);
 
   window->end();
   window->show(argc, argv);

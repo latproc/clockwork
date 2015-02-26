@@ -54,11 +54,12 @@ Action::Status IncludeAction::run() {
 	if (list_machine) {
 /*
 		std::stringstream ss;
-		ss << "inserting " << entry << " kind: " << entry.kind << "\n";
+		ss << owner->getName() << "inserting " << entry << " kind: " << entry.kind << "\n";
 		char *msg = strdup(ss.str().c_str());
 		MessageLog::instance()->add(msg);
 		free(msg);
 */
+		std::cout << owner->getName() << "inserting " << entry << " kind: " << entry.kind << "\n";
         if (list_machine->_type == "REFERENCE") {
             MachineInstance *old = 0;
             if (list_machine->locals.size()) {
