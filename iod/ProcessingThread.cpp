@@ -376,7 +376,6 @@ void ProcessingThread::operator()()
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
-			//if (IOComponent::updatesWaiting()) poll_wait=cycle_delay/5; else poll_wait=cycle_delay;
 			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop " << status << " "  << systems_waiting << "\n";
 			if (systems_waiting > 0) break;
@@ -388,6 +387,7 @@ void ProcessingThread::operator()()
 		end = nowMicrosecs();
     curr_t = end;
 	
+#ifdef KEEPSTATS
 		static unsigned long total_poll_time = 0;
 		static unsigned long poll_count = 0;
 		delta = end - start;
@@ -397,6 +397,7 @@ void ProcessingThread::operator()()
 			poll_count = 0;
 			total_poll_time = 0;
 		}
+#endif
 
 		/* this loop priorities ethercat processing but if a certain
 			number of ethercat cycles have been processed with no 
@@ -414,9 +415,12 @@ void ProcessingThread::operator()()
 				if (machine_is_ready)
 				{
 				//std::cout << "got EtherCAT data\n";
+#ifdef KEEPSTATS
 					start = nowMicrosecs();
+#endif
 					IOComponent::processAll( global_clock, incoming_data_size, incoming_process_mask, 
 						incoming_process_data, io_work_queue);
+#ifdef KEEPSTATS
 					end = nowMicrosecs();
 					delta = end - start;
 					total_mp_time += delta;
@@ -425,6 +429,7 @@ void ProcessingThread::operator()()
 						mp_count = 0;
 						total_mp_time = 0;
 					}
+#endif
 				}
 				else
 					std::cout << "received EtherCAT data but machine is not ready\n";
@@ -438,13 +443,16 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
+#ifdef KEEPSTATS
 			start = nowMicrosecs();
+#endif
 			std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
 			while (io_work != io_work_queue.end()) {
 				IOComponent *ioc = *io_work;
 				ioc->handleChange(MachineInstance::pendingEvents());
 				io_work = io_work_queue.erase(io_work);
 			}
+#ifdef KEEPSTATS
 			static unsigned long total_iowork_time = 0;
 			static unsigned long iowork_count = 0;
 			delta = nowMicrosecs() - start;
@@ -454,14 +462,18 @@ void ProcessingThread::operator()()
 				iowork_count = 0;
 				total_iowork_time = 0;
 			}
+#endif
 		}
 		
 		if (program_done) break;
 		if (processing_state == eIdle && !MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) {
+#ifdef KEEPSTATS
 			static uint64_t total_plugin_time = 0;
 			static int pi_count = 0;
 			uint64_t start_plugin_time = nowMicrosecs();
+#endif
 			MachineInstance::checkPluginStates();
+#ifdef KEEPSTATS
 			uint64_t end_plugin_time = nowMicrosecs();
 			last_checked_plugins = end_plugin_time;;
 			uint64_t delta_t = end_plugin_time - start_plugin_time;
@@ -471,20 +483,18 @@ void ProcessingThread::operator()()
 				pi_count = 0;
 				total_plugin_time = 0;
 			}
+#endif
 		}
 
 		if (program_done) break;
 		if (status == e_waiting || status == e_waiting_cmd)  {
 			if (items[CMD_ITEM].revents & ZMQ_POLLIN) {
-				//std::cout << "command waiting " << status << "\n";
 				size_t len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
 				if (len) {
 					if (status == e_waiting_cmd) {
-						//std::cout << "command done\n";
 						status = e_command_done;
 					}
 					else {
-						//std::cout << "handling a command\n";
 						status = e_handling_cmd;
 					}
 				}
@@ -492,31 +502,33 @@ void ProcessingThread::operator()()
 		}
 
 		if (status == e_handling_cmd) {
+#ifdef KEEPSTATS
 			uint64_t start_cmd_time = nowMicrosecs();
 			if (start_cmd_time - start_cmd > 60L * 1000000L) {
 				cmd_count = 0;
 				total_cmd_time = 0;
 			}
 			start_cmd = start_cmd_time;
+#endif
 			safeSend(resource_mgr,"go", 2);
 			status = e_waiting_cmd;
-			//std::cout << "handed over to command processing\n";
 		}
 		if (status == e_command_done) {
 			char buf[10];
 			size_t len = 0;
 			safeSend(resource_mgr,"bye", 3);
+#ifdef KEEPSTATS
 			end = nowMicrosecs();
 			delta = end - start_cmd;
 			total_cmd_time += delta;
 			system->setValue("AVG_COMMAND_TIME", total_cmd_time*1000 / ++cmd_count);
 			if (cmd_count>10) { cmd_count = 0; total_cmd_time = 0; }
+#endif
 			status = e_waiting;
 		}
 		if (program_done) break;
 
 		if (status == e_waiting && items[DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
-			//std::cout << "dispatcher waiting " << status << "\n";
 			if (status == e_waiting) 
 			{
 				size_t len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
@@ -529,19 +541,21 @@ void ProcessingThread::operator()()
 			if (processing_state != eIdle) {
 				// cannot process dispatch events at present
 				status = e_waiting;
-				//std::cout << " cannot handle dispatch (machine processing underway)\n";
 			}
 			else {
 				size_t len = 0;
+#ifdef KEEPSTATS
 				start = nowMicrosecs();
+#endif
 				safeSend(dispatch_sync,"continue",3);
 				// wait for the dispatcher
 				//std::cout << "waiting for the dispatcher\n";
 				safeRecv(dispatch_sync, buf, 10, true, len);
 				safeSend(dispatch_sync,"bye",3);
+#ifdef KEEPSTATS
 				end = nowMicrosecs();
 				//std::cout << "dispatch done " << (end-start) <<"us\n";
-				//MachineInstance::forceIdleCheck();
+#endif
 				status = e_waiting;
 			}
 		}
@@ -566,7 +580,9 @@ void ProcessingThread::operator()()
 		}
 		if (status == e_handling_sched) {
 			size_t len = 0;
+#ifdef KEEPSTATS
 			start = nowMicrosecs();
+#endif
 			safeSend(sched_sync,"continue",3);
 			status = e_waiting_sched;
 		}
@@ -577,6 +593,7 @@ void ProcessingThread::operator()()
 			if (len) {
 				safeSend(sched_sync,"bye",3);
 				status = e_waiting;
+#ifdef KEEPSTATS
 				end = nowMicrosecs();
 				delta = end - start;
 				total_sched_time += delta;
@@ -585,6 +602,7 @@ void ProcessingThread::operator()()
 					sched_count = 0;
 					total_sched_time = 0;
 				}
+#endif
 			}
 			//std::cout << "scheduler done " << (end-start) <<"us\n";
 		}
@@ -598,9 +616,11 @@ void ProcessingThread::operator()()
 		*/
 		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
 		{
+#ifdef KEEPSTATS
 			start = nowMicrosecs();
 			static unsigned long total_cw_time = 0;
 			static unsigned long cw_count = 0;
+#endif
 
 			if (processing_state == eIdle)
 				processing_state = ePollingMachines;
@@ -617,6 +637,7 @@ void ProcessingThread::operator()()
 				}
 			}
 
+#ifdef KEEPSTATS
 			end = nowMicrosecs();
 			delta = end - start;
 			total_cw_time += delta;
@@ -625,6 +646,7 @@ void ProcessingThread::operator()()
 				cw_count = 0;
 				total_cw_time = 0;
 			}
+#endif
 		}
 		if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
 				(
@@ -632,9 +654,11 @@ void ProcessingThread::operator()()
 				 || IOComponent::getHardwareState() != IOComponent::s_operational
 				)
 		   ) {
+#ifdef KEEPSTATS
 			start = nowMicrosecs();
 			static unsigned long total_update_time = 0;
 			static unsigned long update_count = 0;
+#endif
 
 			if (update_state == s_update_idle) {
 				IOUpdate *upd = 0;
@@ -706,10 +730,12 @@ void ProcessingThread::operator()()
 					update_state = s_update_sent;
 					IOComponent::updatesSent();
 
+#ifdef KEEPSTATS
 					end = nowMicrosecs();
 					delta = end - start;
 					total_update_time += delta;
 					system->setValue("AVG_UPDATE_TIME", total_update_time*1000 / ++update_count);
+#endif
 				}
 				else std::cout << "warning: getUpdate/getDefault returned null\n";
 			}
@@ -736,9 +762,9 @@ void ProcessingThread::operator()()
 
 		// periodically check to see if the cycle time has been changed
 		// more work is needed here since the signaller needs to be told about this
-		end = nowMicrosecs();
-		if (end - last_checked_cycle_time > 100000L) {
-			last_checked_cycle_time = end;
+		static int cycle_check_counter = 0;
+		if (++cycle_check_counter > 100) {
+			cycle_check_counter = 0;
 			checkAndUpdateCycleDelay();
 		}
 
