@@ -57,6 +57,13 @@ Value *MachineInstance::polling_delay = 0;
 unsigned int MachineInstance::num_machines_with_work = 1; // machine idle processing will occur if this value is non zero
 unsigned int MachineInstance::total_machines_needing_check = 1;
 
+class MachineInstance::Cache {
+public:
+	std::string *full_name;
+
+  Cache() : full_name(0) { }
+};
+
 Parameter::Parameter(Value v) : val(v), machine(0) {
 	;
 }
@@ -336,14 +343,16 @@ void MachineInstance::setNeedsCheck() {
 #endif
 }
 
-std::string MachineInstance::fullName() const {
+std::string &MachineInstance::fullName() const {
+	if (cache->full_name) return *cache->full_name;
 	std::string res = _name;
 	MachineInstance *o = owner;
 	while (o) {
 		res = o->getName() + "." + res;
 		o = o->owner;
 	}
-	return res;
+	cache->full_name = new std::string(res);
+	return *cache->full_name;
 }
 
 void MachineInstance::enqueueAction(Action *a){
@@ -927,9 +936,6 @@ long RateEstimatorInstance::filter(long val) {
 	return speed;
 }
 
-
-
-
 MachineInstance::MachineInstance(InstanceType instance_type)
 	: Receiver(""), 
 	_type("Undefined"), 
@@ -957,8 +963,10 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	idle_time(0),
 	next_poll(0),
 	is_traceable(false),
-	published(0)
+	published(0),
+	cache(0)
 {
+	cache = new Cache;
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
@@ -995,8 +1003,10 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	data(0),
 	idle_time(0),
 	is_traceable(false),
-	published(0)
+	published(0),
+	cache(0)
 {
+	cache = new Cache;
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
@@ -1349,41 +1359,38 @@ static unsigned int last_num_machines_with_work = 1;
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 
 	uint64_t start_processing = nowMicrosecs();
-	uint64_t now = start_processing;
+	process_time = start_processing;
 
 	std::list<Package*>::iterator evt_iter = pending_events.begin();
-	while (evt_iter != pending_events.end() && (max_time == 0 || now - start_processing < max_time) ) {
+	while (evt_iter != pending_events.end() ) {
 		Package *pkg = *evt_iter;
 		evt_iter = pending_events.erase(evt_iter);
 		MachineInstance *mi = dynamic_cast<MachineInstance*>(pkg->receiver);
-		//std::cout << mi->getName() << " executing " << *(pkg->message) << "\n";
 		if (mi) mi->execute(*(pkg->message), pkg->transmitter);
 		delete pkg;
 		++total_process_calls;
 		if (mi) mi->setNeedsCheck();
-		now = nowMicrosecs();
 	}
 
-	process_time = now;
+	process_time = nowMicrosecs();
 
 	std::set<MachineInstance*>::iterator busy_it = busy_machines.begin();
-	while (busy_it != busy_machines.end() && ( max_time == 0 || now - start_processing < max_time ) ) {
+	while (busy_it != busy_machines.end() ) {
 		MachineInstance *mi = *busy_it;
 		mi->idle();
 		if (mi->state_machine && mi->state_machine->plugin) mi->state_machine->plugin->poll_actions(mi);
 		if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
 			busy_it = busy_machines.erase(busy_it);
 			if (mi->is_active) pending_state_change.insert(mi);
-			//else std::cout << " non active machine " << mi->getName() << " had pending state change\n";
 		}
 		else busy_it++;
-		now = nowMicrosecs();
 	}
 
+#if 0
+  uint64_t now = nowMicrosecs();
 	total_processing_time += now - start_processing;
 	if (now - start_processing < max_time) ++loop_count; // completed a pass through all machines
 	
-#if 1
 	static MachineInstance *system = 0;
 	if (!system) system = MachineInstance::find("SYSTEM");
 	system->setValue("PENDING_STATE_CHANGE", pending_state_change.size());
@@ -1515,14 +1522,9 @@ void MachineInstance::checkPluginStates() {
 		if (m->next_poll > start_processing) { 
 			continue;
 		}
-		//updateLastEvaluationTime();
-		//DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
-		//m->setStableState();
 		if (m->state_machine && m->state_machine->plugin)  {
 			if ( m->state_machine->plugin->state_check) {
-				DBG_AUTOSTATES  << "calling " << m->getName() << "plugin state_check()\n";
 				m->state_machine->plugin->state_check(m);
-				//m->setNeedsCheck();
 			}
 			if ( m->state_machine->plugin->poll_actions) {
 				m->state_machine->plugin->poll_actions(m);
@@ -1532,27 +1534,20 @@ void MachineInstance::checkPluginStates() {
 }
 
 bool MachineInstance::checkStableStates(uint32_t max_time) {
-	uint64_t start_processing = nowMicrosecs();
 	total_machines_needing_check = 0;
 	std::set<MachineInstance *>::iterator iter = MachineInstance::pending_state_change.begin();
-	while (iter != MachineInstance::pending_state_change.end() 
-				&& ( max_time == 0 || nowMicrosecs() - start_processing < max_time) ) {
+	while (iter != MachineInstance::pending_state_change.end() ) {
 		MachineInstance *mi = *iter;
 		if (mi->executingCommand() == 0) {
-			//std::cout << mi->getName() << "::setStableState()\n";
 			// leave the state check on the queue until it is stable
 			if (!mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
 		}
 		else {
-			//std::cout << "waiting for " << mi->getName() << ": " << *mi->executingCommand() << "\n";
 			busy_machines.insert(mi);
 			iter++;
 		}
 	}
-	if (!max_time ||  nowMicrosecs() - start_processing < max_time) 
-		return true;
-	else
-		return false;
+	return true;
 }
 #else
 
@@ -2888,7 +2883,7 @@ void MachineInstance::updateLastEvaluationTime() {
 bool MachineInstance::setStableState() {
 	bool changed_state = false;
 	CaptureDuration cd(stable_states_stats);
-	DBG_M_AUTOSTATES << _name << " checking stable states\n";
+	DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()  <<")\n";
 	if (!state_machine || !state_machine->allow_auto_states) {
 		DBG_M_AUTOSTATES << _name << " aborting stable states check due to configuration\n";
 		return false;
@@ -2942,6 +2937,7 @@ bool MachineInstance::setStableState() {
 				if (s.condition(this)) {
 					DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
 					if (current_state.getName() != s.state_name) {
+						DBG_M_AUTOSTATES << " changing state\n";
 						changed_state = true;
 						if (tracing() && isTraceable()) {
 							resetTemporaryStringStream();
@@ -2971,10 +2967,10 @@ bool MachineInstance::setStableState() {
 						state_change = 0;
 					}
 						else {
-							//DBG_M_AUTOSTATES << " already there\n";
+							DBG_M_AUTOSTATES << " already there\n";
 							// reschedule timer triggers for this state
 							if (s.uses_timer) {
-								//DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
+								DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
 								Value v = getValue(s.timer_val.sValue);
 								if (v.kind == Value::t_integer && v.iValue < next_timer)
 									next_timer = v.iValue;

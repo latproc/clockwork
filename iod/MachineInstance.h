@@ -245,8 +245,9 @@ protected:
     MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
     
 public:
-    virtual ~MachineInstance();
+	virtual ~MachineInstance();
 	virtual Receiver *asReceiver() { return this; }
+	class Cache;
     
     void triggerFired(Trigger *trig);
 
@@ -295,9 +296,8 @@ public:
     void stopListening(MachineInstance *m);
     bool setStableState(); // returns true if a state change was made
     
-    std::string fullName() const;
+    std::string &fullName() const;
     
-    //std::string _name;
     std::string _type;
     std::vector<Parameter> parameters;    
     std::vector<Parameter> locals;    
@@ -472,6 +472,7 @@ public:
     static Value *polling_delay;
     Value is_traceable;
     int published;
+		Cache *cache;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
