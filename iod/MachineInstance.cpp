@@ -57,6 +57,17 @@ Value *MachineInstance::polling_delay = 0;
 unsigned int MachineInstance::num_machines_with_work = 1; // machine idle processing will occur if this value is non zero
 unsigned int MachineInstance::total_machines_needing_check = 1;
 
+class MachineInstance::SharedCache {
+public:
+	MachineInstance *system;
+
+	SharedCache() : system(0) {}
+private:
+	SharedCache(const SharedCache &other);
+	SharedCache &operator=(const SharedCache &other);
+};
+MachineInstance::SharedCache *MachineInstance::shared = 0;
+
 class MachineInstance::Cache {
 public:
 	std::string *full_name;
@@ -673,8 +684,8 @@ MachineShadowInstance::~MachineShadowInstance() {
 
 class CounterRateFilterSettings {
 	public:
-		int32_t position;
-		int32_t velocity;
+		long position;
+		long velocity;
 		bool property_changed;
 		// analogue filter fields
 		uint32_t noise_tolerance; // filter out changes with +/- this range
@@ -706,11 +717,13 @@ CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, 
 	}
 CounterRateInstance::~CounterRateInstance() { delete settings; }
 
+#if 0
 bool CounterRateInstance::hasWork() { 
 	struct timeval now;
 	gettimeofday(&now, 0);
 	return ( (uint64_t)now.tv_sec*1000000L + now.tv_usec >= (uint64_t) next_poll);
 }
+#endif
 
 void CounterRateInstance::setValue(const std::string &property, Value new_value) {
 	if (property == "VALUE") {
@@ -744,9 +757,9 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value)
 		if ( abs(mean - settings->last_sent) > abs(settings->noise_tolerance) ) {
 			settings->last_sent = mean;
 		}
-		settings->position = (int32_t)settings->last_sent;
+		settings->position = settings->last_sent;
 		settings->positions.append(settings->position);
-		settings->velocity = (int32_t)filter((int32_t)settings->position);
+		settings->velocity = filter(settings->position);
 
 		MachineInstance::setValue(property, settings->velocity);
 		MachineInstance::setValue("position", settings->position);
@@ -776,6 +789,7 @@ void CounterRateInstance::idle() {
 	}
 }
 
+#if 0
 bool RateEstimatorInstance::hasWork() {
 	//struct timeval now;
 	//gettimeofday(&now, 0);
@@ -798,6 +812,7 @@ bool RateEstimatorInstance::hasWork() {
         return true;
 	return false;
 }
+#endif
 
 void RateEstimatorInstance::setNeedsCheck() {
 	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
@@ -923,16 +938,10 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
-	//if (false && settings->positions.length() < settings->positions.BUFSIZE) {
-    float ds = (float)settings->positions.difference(settings->positions.length()-1, 0);
-    float dt = (float)settings->times.difference(settings->times.length()-1,0);
-    speed = ds / dt  * 1000000;
-    //std::cout << "ds: " << ds << " dt: " << dt << "\n";
-	//}
-    //else {
-	//	speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
-	  //std::cout << getName() << " filter(" << val << ") => " << speed << "\n";
-	//}
+	float ds = (float)settings->positions.difference(0,settings->positions.length()-1);
+	float dt = (float)settings->times.difference(0,settings->times.length()-1);
+	speed = ds / dt  * 1000000;
+	std::cout << _name << " ds: " << ds << " dt: " << dt << " v: " << speed << "\n";
 	return speed;
 }
 
@@ -966,6 +975,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	published(0),
 	cache(0)
 {
+	if (!shared) shared = new SharedCache;
 	cache = new Cache;
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
@@ -1006,6 +1016,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	published(0),
 	cache(0)
 {
+	if (!shared) shared = new SharedCache;
 	cache = new Cache;
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
@@ -1391,8 +1402,8 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	total_processing_time += now - start_processing;
 	if (now - start_processing < max_time) ++loop_count; // completed a pass through all machines
 	
-	static MachineInstance *system = 0;
-	if (!system) system = MachineInstance::find("SYSTEM");
+	if (!shared->system) shared->system = MachineInstance::find("SYSTEM");
+	MachineInstance *system = shared->system;
 	system->setValue("PENDING_STATE_CHANGE", pending_state_change.size());
 	if (loop_count % 100 == 1) {
 		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
@@ -1490,9 +1501,9 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	total_processing_time += now_t - start_processing;
 	++loop_count; // completed a pass through all machines
 	total_process_calls += loop_count - saved_loop_count;
-#if 1
-	static MachineInstance *system = 0;
-	if (!system) system = MachineInstance::find("SYSTEM");
+#if 0
+	if (!shared->system) shared->system = MachineInstance::find("SYSTEM");
+	MachineInstance *system = shared->system;
 	assert(system);
 	if (loop_count % 100 == 1) {
 		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
@@ -1514,6 +1525,7 @@ static int last_machines_needing_check = 1;
 #if 1
 
 void MachineInstance::checkPluginStates() {
+	//std::list<uint64_t> stats;
 	uint64_t start_processing = nowMicrosecs();
 	std::set<MachineInstance *>::iterator pl_iter = plugin_machines.begin();
 	while (pl_iter != plugin_machines.end())  {
@@ -1522,6 +1534,7 @@ void MachineInstance::checkPluginStates() {
 		if (m->next_poll > start_processing) { 
 			continue;
 		}
+		uint64_t start = nowMicrosecs();
 		if (m->state_machine && m->state_machine->plugin)  {
 			if ( m->state_machine->plugin->state_check) {
 				m->state_machine->plugin->state_check(m);
@@ -1530,7 +1543,18 @@ void MachineInstance::checkPluginStates() {
 				m->state_machine->plugin->poll_actions(m);
 			}
 		}
+		//uint64_t delta = nowMicrosecs() - start;
+		//stats.push_back(delta);
 	}
+#if 0
+  std::list<uint64_t>::iterator iter = stats.begin();
+  while (iter != stats.end()) {
+		uint64_t x = *iter++;
+		std::cout << x << " ";
+	}
+	if (!stats.empty()) std::cout << "\n";
+	DBG_MSG << "-- " << (nowMicrosecs() - start_processing) << "\n";
+#endif
 }
 
 bool MachineInstance::checkStableStates(uint32_t max_time) {
