@@ -74,6 +74,7 @@ public:
 	bool matches(const std::string &event) { 
 		return is_active && event == name;
 	}
+	const std::string &getName() { return name; }
 	
 protected:
 	std::string name;

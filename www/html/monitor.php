@@ -746,6 +746,8 @@ print <<<'EOD'
           $(this).click(function(){
             $.get("index.php", { describe: $(this).attr("name").replace("-",".") },
             function(data){
+				var top  = window.pageYOffset || document.documentElement.scrollTop;
+			    var left = window.pageXOffset || document.documentElement.scrollLeft;
                 $("#info").html("<pre id=\"info-details\">"+data+"</pre>");
 				$("#info").css("width",window.innerWidth - 200)
 				$("#info").css("height",window.innerHeight - 200)
@@ -772,8 +774,8 @@ print <<<EOD
 <div>$banner</div>
 <fieldset><legend>IO Control</legend>
 <div style="position:relative;background-color:white">
-  <div id="hideinfo" style="height:18px;width:64px;text-align:center;font-size:16px;position:absolute;left:600px;top:80px;display:none;z-index:1000;background-color:yellow;">hide</div>
-  <div id="info" style="border:1px solid black;position:absolute; left:100px;top:100px;width:800px;height:500px;background-color:white; overflow:auto;display:none;z-index:1000;" >
+  <div id="hideinfo" style="height:18px;width:64px;text-align:center;font-size:16px;position:fixed;left:600px;top:80px;display:none;z-index:1000;background-color:yellow;">hide</div>
+  <div id="info" style="border:1px solid black;position:fixed; left:100px;top:100px;width:800px;height:500px;background-color:white; overflow:auto;display:none;z-index:1000;" >
   </div>
 </div>
 $page_body

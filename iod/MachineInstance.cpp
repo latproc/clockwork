@@ -57,6 +57,24 @@ Value *MachineInstance::polling_delay = 0;
 unsigned int MachineInstance::num_machines_with_work = 1; // machine idle processing will occur if this value is non zero
 unsigned int MachineInstance::total_machines_needing_check = 1;
 
+class MachineInstance::SharedCache {
+public:
+	MachineInstance *system;
+
+	SharedCache() : system(0) {}
+private:
+	SharedCache(const SharedCache &other);
+	SharedCache &operator=(const SharedCache &other);
+};
+MachineInstance::SharedCache *MachineInstance::shared = 0;
+
+class MachineInstance::Cache {
+public:
+	std::string *full_name;
+
+  Cache() : full_name(0) { }
+};
+
 Parameter::Parameter(Value v) : val(v), machine(0) {
 	;
 }
@@ -336,14 +354,16 @@ void MachineInstance::setNeedsCheck() {
 #endif
 }
 
-std::string MachineInstance::fullName() const {
+std::string &MachineInstance::fullName() const {
+	if (cache->full_name) return *cache->full_name;
 	std::string res = _name;
 	MachineInstance *o = owner;
 	while (o) {
 		res = o->getName() + "." + res;
 		o = o->owner;
 	}
-	return res;
+	cache->full_name = new std::string(res);
+	return *cache->full_name;
 }
 
 void MachineInstance::enqueueAction(Action *a){
@@ -362,6 +382,7 @@ bool MachineInstance::workToDo() {
 }
 std::set<MachineInstance*>& MachineInstance::busyMachines() { return busy_machines; }
 std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
+std::set<MachineInstance*>& MachineInstance::pluginMachines() { return plugin_machines; }
 
 void MachineInstance::forceIdleCheck() { 
 	num_machines_with_work++; 
@@ -402,6 +423,11 @@ bool TriggeredAction::active() {
 
 
 void MachineInstance::triggerFired(Trigger *trig) {
+	static const std::string str_publish("publish");
+	if (trig->matches(str_publish)) {
+		std::cout << "trigger fired, sending property changes\n";
+		Channel::sendPropertyChanges(this);
+	}
 	setNeedsCheck();
 /*
 	num_machines_with_work++;
@@ -658,8 +684,8 @@ MachineShadowInstance::~MachineShadowInstance() {
 
 class CounterRateFilterSettings {
 	public:
-		int32_t position;
-		int32_t velocity;
+		long position;
+		long velocity;
 		bool property_changed;
 		// analogue filter fields
 		uint32_t noise_tolerance; // filter out changes with +/- this range
@@ -678,7 +704,6 @@ class CounterRateFilterSettings {
 		counter_machine(0), noise_tolerance_val(0), zero_count(0) {
 			struct timeval now;
 			gettimeofday(&now, 0);
-			start_t = now.tv_sec * 1000000 + now.tv_usec;
 			update_t = start_t;
 		}
 };
@@ -692,11 +717,13 @@ CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, 
 	}
 CounterRateInstance::~CounterRateInstance() { delete settings; }
 
+#if 0
 bool CounterRateInstance::hasWork() { 
 	struct timeval now;
 	gettimeofday(&now, 0);
 	return ( (uint64_t)now.tv_sec*1000000L + now.tv_usec >= (uint64_t) next_poll);
 }
+#endif
 
 void CounterRateInstance::setValue(const std::string &property, Value new_value) {
 	if (property == "VALUE") {
@@ -730,9 +757,9 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value)
 		if ( abs(mean - settings->last_sent) > abs(settings->noise_tolerance) ) {
 			settings->last_sent = mean;
 		}
-		settings->position = (int32_t)settings->last_sent;
+		settings->position = settings->last_sent;
 		settings->positions.append(settings->position);
-		settings->velocity = (int32_t)filter((int32_t)settings->position);
+		settings->velocity = filter(settings->position);
 
 		MachineInstance::setValue(property, settings->velocity);
 		MachineInstance::setValue("position", settings->position);
@@ -762,6 +789,7 @@ void CounterRateInstance::idle() {
 	}
 }
 
+#if 0
 bool RateEstimatorInstance::hasWork() {
 	//struct timeval now;
 	//gettimeofday(&now, 0);
@@ -784,6 +812,7 @@ bool RateEstimatorInstance::hasWork() {
         return true;
 	return false;
 }
+#endif
 
 void RateEstimatorInstance::setNeedsCheck() {
 	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
@@ -808,6 +837,7 @@ void RateEstimatorInstance::idle() {
 		uint64_t curr_t = (pos_m->io_interface) ? pos_m->io_interface->read_time : process_time;
 		delta = (double)(curr_t - settings->update_t) / 1000.0;
 		if (!delta)  {
+            /*
 			if (settings->velocity) {
 				Trigger *trigger = new Trigger("Timer");
 				Scheduler::instance()->add(
@@ -815,6 +845,7 @@ void RateEstimatorInstance::idle() {
 				trigger->release();
 				setNeedsCheck();
 			}
+             */
 			return;
 		}
 
@@ -877,8 +908,11 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 			settings->property_changed = false;
 		}
 
-		//uint64_t delta_t = settings->update_t - settings->start_t;
-		settings->times.append(settings->update_t);
+        // use current time - start time as t0 to avoid floating point resolution issues
+		if (settings->start_t == 0) settings->start_t = settings->update_t;
+		uint64_t delta_t = settings->update_t - settings->start_t;
+        //std::cout << "adding reading: " << delta_t << " " << (int32_t)val << "\n";
+		settings->times.append(delta_t);
 		settings->position = (int32_t)val;
 		settings->positions.append(settings->position);
 		settings->velocity = (int32_t)filter((int32_t)settings->position);
@@ -904,17 +938,12 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 long RateEstimatorInstance::filter(long val) {
 	if (settings->positions.length() < 4) return 0;
 	float speed = 0;
-	//if (false && settings->positions.length() < settings->positions.BUFSIZE)
-		speed = (float)settings->positions.difference(settings->positions.length()-1, 0) / (float)settings->times.difference(settings->times.length()-1,0) * 1000000;
-	//else {
-	//	speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
-	  //std::cout << getName() << " filter(" << val << ") => " << speed << "\n";
-	//}
+	float ds = (float)settings->positions.difference(0,settings->positions.length()-1);
+	float dt = (float)settings->times.difference(0,settings->times.length()-1);
+	speed = ds / dt  * 1000000;
+	std::cout << _name << " ds: " << ds << " dt: " << dt << " v: " << speed << "\n";
 	return speed;
 }
-
-
-
 
 MachineInstance::MachineInstance(InstanceType instance_type)
 	: Receiver(""), 
@@ -943,8 +972,11 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	idle_time(0),
 	next_poll(0),
 	is_traceable(false),
-	published(0)
+	published(0),
+	cache(0)
 {
+	if (!shared) shared = new SharedCache;
+	cache = new Cache;
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
@@ -981,8 +1013,11 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	data(0),
 	idle_time(0),
 	is_traceable(false),
-	published(0)
+	published(0),
+	cache(0)
 {
+	if (!shared) shared = new SharedCache;
+	cache = new Cache;
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
@@ -1280,6 +1315,10 @@ uint64_t nowMicrosecs() {
 	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
 }
 
+uint64_t nowMicrosecs(const struct timeval &now) {
+    return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
+}
+
 int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then) {
 //   uint64_t t = (now->tv_sec - then->tv_sec);
 //   t = t * 1000000 + (now->tv_usec - then->tv_usec);
@@ -1331,43 +1370,40 @@ static unsigned int last_num_machines_with_work = 1;
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 
 	uint64_t start_processing = nowMicrosecs();
-	uint64_t now = start_processing;
+	process_time = start_processing;
 
 	std::list<Package*>::iterator evt_iter = pending_events.begin();
-	while (evt_iter != pending_events.end() && (max_time == 0 || now - start_processing < max_time) ) {
+	while (evt_iter != pending_events.end() ) {
 		Package *pkg = *evt_iter;
 		evt_iter = pending_events.erase(evt_iter);
 		MachineInstance *mi = dynamic_cast<MachineInstance*>(pkg->receiver);
-		//std::cout << mi->getName() << " executing " << *(pkg->message) << "\n";
 		if (mi) mi->execute(*(pkg->message), pkg->transmitter);
 		delete pkg;
 		++total_process_calls;
 		if (mi) mi->setNeedsCheck();
-		now = nowMicrosecs();
 	}
 
-	process_time = now;
+	process_time = nowMicrosecs();
 
 	std::set<MachineInstance*>::iterator busy_it = busy_machines.begin();
-	while (busy_it != busy_machines.end() && ( max_time == 0 || now - start_processing < max_time ) ) {
+	while (busy_it != busy_machines.end() ) {
 		MachineInstance *mi = *busy_it;
 		mi->idle();
 		if (mi->state_machine && mi->state_machine->plugin) mi->state_machine->plugin->poll_actions(mi);
 		if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
 			busy_it = busy_machines.erase(busy_it);
 			if (mi->is_active) pending_state_change.insert(mi);
-			//else std::cout << " non active machine " << mi->getName() << " had pending state change\n";
 		}
 		else busy_it++;
-		now = nowMicrosecs();
 	}
 
+#if 0
+  uint64_t now = nowMicrosecs();
 	total_processing_time += now - start_processing;
 	if (now - start_processing < max_time) ++loop_count; // completed a pass through all machines
 	
-#if 1
-	static MachineInstance *system = 0;
-	if (!system) system = MachineInstance::find("SYSTEM");
+	if (!shared->system) shared->system = MachineInstance::find("SYSTEM");
+	MachineInstance *system = shared->system;
 	system->setValue("PENDING_STATE_CHANGE", pending_state_change.size());
 	if (loop_count % 100 == 1) {
 		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
@@ -1465,9 +1501,9 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	total_processing_time += now_t - start_processing;
 	++loop_count; // completed a pass through all machines
 	total_process_calls += loop_count - saved_loop_count;
-#if 1
-	static MachineInstance *system = 0;
-	if (!system) system = MachineInstance::find("SYSTEM");
+#if 0
+	if (!shared->system) shared->system = MachineInstance::find("SYSTEM");
+	MachineInstance *system = shared->system;
 	assert(system);
 	if (loop_count % 100 == 1) {
 		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
@@ -1489,6 +1525,7 @@ static int last_machines_needing_check = 1;
 #if 1
 
 void MachineInstance::checkPluginStates() {
+	//std::list<uint64_t> stats;
 	uint64_t start_processing = nowMicrosecs();
 	std::set<MachineInstance *>::iterator pl_iter = plugin_machines.begin();
 	while (pl_iter != plugin_machines.end())  {
@@ -1497,44 +1534,44 @@ void MachineInstance::checkPluginStates() {
 		if (m->next_poll > start_processing) { 
 			continue;
 		}
-		//updateLastEvaluationTime();
-		//DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
-		//m->setStableState();
+		uint64_t start = nowMicrosecs();
 		if (m->state_machine && m->state_machine->plugin)  {
 			if ( m->state_machine->plugin->state_check) {
-				DBG_AUTOSTATES  << "calling " << m->getName() << "plugin state_check()\n";
 				m->state_machine->plugin->state_check(m);
-				//m->setNeedsCheck();
 			}
 			if ( m->state_machine->plugin->poll_actions) {
 				m->state_machine->plugin->poll_actions(m);
 			}
 		}
+		//uint64_t delta = nowMicrosecs() - start;
+		//stats.push_back(delta);
 	}
+#if 0
+  std::list<uint64_t>::iterator iter = stats.begin();
+  while (iter != stats.end()) {
+		uint64_t x = *iter++;
+		std::cout << x << " ";
+	}
+	if (!stats.empty()) std::cout << "\n";
+	DBG_MSG << "-- " << (nowMicrosecs() - start_processing) << "\n";
+#endif
 }
 
 bool MachineInstance::checkStableStates(uint32_t max_time) {
-	uint64_t start_processing = nowMicrosecs();
 	total_machines_needing_check = 0;
 	std::set<MachineInstance *>::iterator iter = MachineInstance::pending_state_change.begin();
-	while (iter != MachineInstance::pending_state_change.end() 
-				&& ( max_time == 0 || nowMicrosecs() - start_processing < max_time) ) {
+	while (iter != MachineInstance::pending_state_change.end() ) {
 		MachineInstance *mi = *iter;
 		if (mi->executingCommand() == 0) {
-			//std::cout << mi->getName() << "::setStableState()\n";
 			// leave the state check on the queue until it is stable
 			if (!mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
 		}
 		else {
-			//std::cout << "waiting for " << mi->getName() << ": " << *mi->executingCommand() << "\n";
 			busy_machines.insert(mi);
 			iter++;
 		}
 	}
-	if (!max_time ||  nowMicrosecs() - start_processing < max_time) 
-		return true;
-	else
-		return false;
+	return true;
 }
 #else
 
@@ -2870,7 +2907,7 @@ void MachineInstance::updateLastEvaluationTime() {
 bool MachineInstance::setStableState() {
 	bool changed_state = false;
 	CaptureDuration cd(stable_states_stats);
-	DBG_M_AUTOSTATES << _name << " checking stable states\n";
+	DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()  <<")\n";
 	if (!state_machine || !state_machine->allow_auto_states) {
 		DBG_M_AUTOSTATES << _name << " aborting stable states check due to configuration\n";
 		return false;
@@ -2924,6 +2961,7 @@ bool MachineInstance::setStableState() {
 				if (s.condition(this)) {
 					DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
 					if (current_state.getName() != s.state_name) {
+						DBG_M_AUTOSTATES << " changing state\n";
 						changed_state = true;
 						if (tracing() && isTraceable()) {
 							resetTemporaryStringStream();
@@ -2953,10 +2991,10 @@ bool MachineInstance::setStableState() {
 						state_change = 0;
 					}
 						else {
-							//DBG_M_AUTOSTATES << " already there\n";
+							DBG_M_AUTOSTATES << " already there\n";
 							// reschedule timer triggers for this state
 							if (s.uses_timer) {
-								//DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
+								DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
 								Value v = getValue(s.timer_val.sValue);
 								if (v.kind == Value::t_integer && v.iValue < next_timer)
 									next_timer = v.iValue;
@@ -4156,14 +4194,14 @@ bool MachineInstance::setStableState() {
 		}
 
 		void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, int new_value) {
-			std::string name = fullName();
+			std::string name(fullName());
 			DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 			int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
 			if (!modbus_addresses.count(index)) {
 				NB_MSG << name << " Error: bad modbus address lookup for " << base_addr << "\n";
 				return;
 			}
-			std::string item_name = modbus_addresses[index];
+			const std::string &item_name = modbus_addresses[index];
 			if (!modbus_exports.count(item_name)) {
 				NB_MSG << name << " Error: bad modbus name lookup for " << item_name << "\n";
 				return;
@@ -4180,11 +4218,6 @@ bool MachineInstance::setStableState() {
 						snprintf(buf, 100, "received a modbus update for machine %s but that machine has no export property\n", name.c_str());
 						MessageLog::instance()->add(buf);
 					}
-					//Value &export_type = properties.lookup("export");
-					// disabling this test because does not seem valid when talking with a PLC instead of a panel
-					//assert( (export_type.kind == Value::t_string || export_type.kind == Value::t_symbol)
-					//	&& export_type.sValue == "rw");
-					//assert(addr.getOffset() == 0);
 
 					DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
 					if (new_value) {
@@ -4230,7 +4263,6 @@ bool MachineInstance::setStableState() {
 			else {
 				NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
 			}
-			//++needs_check;
 		}
 
 		int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {

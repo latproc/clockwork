@@ -16,6 +16,8 @@ State ChannelImplementation::DISCONNECTED("DISCONNECTED");
 State ChannelImplementation::CONNECTING("CONNECTING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 
+std::map< MachineInstance *, MachineRecord> Channel::pending_items;
+
 
 MachineRef::MachineRef() : refs(1) {
 }
@@ -25,7 +27,7 @@ ChannelImplementation::~ChannelImplementation() { }
 
 Channel::Channel(const std::string ch_name, const std::string type)
         : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),
-            name(ch_name), port(0), mif(0), communications_manager(0)
+            name(ch_name), port(0), mif(0), communications_manager(0), throttle_time(0)
 {
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
@@ -179,6 +181,8 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
     chn->setPort(port);
     chn->setDefinition(defn);
     chn->setStateMachine(defn);
+		if (defn->getThrottleTime()) std::cout << " channel " << channel_name << " is throttled (" << defn->getThrottleTime() << ")\n";
+		chn->setThrottleTime(defn->getThrottleTime());
     if (defn->monitors_exports) chn->monitors_exports = true;
     chn->modified();
     chn->setupShadows();
@@ -371,22 +375,61 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
         if (!chn->machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-            //if (!chn->machines.count(machine)) chn->machines.insert(machine);
-            if (chn->communications_manager) {
+						if (chn->throttle_time) {
+							//std::cout << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
+							pending_items[machine].properties[key.asString()] = val;
+						}
+						else {
+            	//if (!chn->machines.count(machine)) chn->machines.insert(machine);
+            	if (chn->communications_manager) {
                 std::string response;
                 char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
                 sendMessage(cmd, chn->communications_manager->setup,response);
                 //std::cout << "channel " << name << " got response: " << response << "\n";
 								free(cmd);
-            }
-            else if (chn->mif) {
+            	}
+            	else if (chn->mif) {
                 char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
                 chn->mif->send(cmd);
 								free(cmd);
-            }
-            //else {
-            //    std::cout << "channel " << name << " wants to send property change\n";
-            //}
+            	}
+						}
+        }
+    }
+}
+
+// send the property changes that have been recorded for this machine
+void Channel::sendPropertyChanges(MachineInstance *machine) {
+    if (!all) return;
+    std::string name = machine->fullName();
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        Channel *chn = (*iter).second; iter++;
+        
+        if (!chn->machines.count(machine))
+            continue;
+				
+				if (!chn->throttle_time) continue;
+
+				std::map<MachineInstance *, MachineRecord>::iterator found = pending_items.find(machine);
+        if (chn->filtersAllow(machine) && found != pending_items.end() ) {
+						MachineRecord &machine = (*found).second;
+						std::map<std::string, Value>::iterator iter = machine.properties.begin();
+						while (iter != machine.properties.end()) {
+							std::pair<std::string, Value> item = *iter;
+            	if (chn->communications_manager) {
+                std::string response;
+                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
+                sendMessage(cmd, chn->communications_manager->setup,response);
+								free(cmd);
+            	}
+            	else if (chn->mif) {
+                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
+                chn->mif->send(cmd);
+								free(cmd);
+            	}
+							iter = machine.properties.erase(iter);
+						}
         }
     }
 }

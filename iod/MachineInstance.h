@@ -43,6 +43,7 @@
 extern SymbolTable globals;
 
 uint64_t nowMicrosecs();
+uint64_t nowMicrosecs(const struct timeval &now);
 int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then);
 int64_t get_diff_in_microsecs(uint64_t now, const struct timeval *then);
 int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then);
@@ -244,8 +245,10 @@ protected:
     MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
     
 public:
-    virtual ~MachineInstance();
+	virtual ~MachineInstance();
 	virtual Receiver *asReceiver() { return this; }
+	class SharedCache;
+	class Cache;
     
     void triggerFired(Trigger *trig);
 
@@ -270,7 +273,7 @@ public:
 	Action::Status execute(const Message&m, Transmitter *from);
     virtual void handle(const Message&, Transmitter *from, bool send_receipt = false);
     virtual void idle();
-		virtual bool hasWork() { return has_work; }
+		//virtual bool hasWork() { return has_work; }
 	void collect(const Package &package);
 
 	std::map<std::string, MachineInstance *> localised_names;
@@ -294,9 +297,8 @@ public:
     void stopListening(MachineInstance *m);
     bool setStableState(); // returns true if a state change was made
     
-    std::string fullName() const;
+    std::string &fullName() const;
     
-    //std::string _name;
     std::string _type;
     std::vector<Parameter> parameters;    
     std::vector<Parameter> locals;    
@@ -432,6 +434,7 @@ public:
     static bool workToDo();
 	static std::set<MachineInstance*>& busyMachines();
 	static std::list<Package*>& pendingEvents();
+    static std::set<MachineInstance*>& pluginMachines();
 
 protected:
 	int needs_check;
@@ -470,6 +473,8 @@ public:
     static Value *polling_delay;
     Value is_traceable;
     int published;
+		static SharedCache *shared;
+		Cache *cache;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
@@ -519,7 +524,7 @@ public:
     MachineShadowInstance();
     ~MachineShadowInstance();
     virtual void idle();
-    virtual bool hasWork() { return false; }
+    //virtual bool hasWork() { return false; }
 
     friend class MachineInstanceFactory;
 };
@@ -534,7 +539,7 @@ public:
     void setValue(const std::string &property, Value new_value);
     long filter(long val);
     virtual void idle();
-	virtual bool hasWork();
+	//virtual bool hasWork();
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
     CounterRateInstance &operator=(const CounterRateInstance &orig);
@@ -554,7 +559,7 @@ public:
     long filter(long val);
     virtual void setNeedsCheck();
     virtual void idle();
-	virtual bool hasWork();
+	//virtual bool hasWork();
     CounterRateFilterSettings *getSettings() { return settings; }
 private:
     RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);

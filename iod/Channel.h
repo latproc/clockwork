@@ -89,6 +89,9 @@ public:
     void addSendName(const char *);
     void addReceiveName(const char *);
     void addOptionName(const char *n, Value &v);
+
+		void setThrottleTime(unsigned int t) { throttle_time = t; }
+		unsigned int getThrottleTime() { return throttle_time; }
     
     const std::string &getIdent() { return identifier; }
     const std::string &getKey() { return psk; }
@@ -106,6 +109,7 @@ private:
     std::set<std::string> send_messages;
     std::set<std::string> recv_messages;
     std::map<std::string, Value> options;
+		unsigned int throttle_time;
     
     friend class Channel;
 };
@@ -119,6 +123,13 @@ public:
     virtual bool receiveMessage(zmq::socket_t &sock) = 0;
     char *data;
     size_t data_size;
+};
+
+class MachineRecord {
+public:
+	MachineInstance *machine;
+	uint64_t last_sent;
+	std::map<std::string, Value> properties;
 };
 
 
@@ -164,12 +175,17 @@ public:
     
     void setPort(unsigned int new_port);
     unsigned int getPort() const;
+
+		void setThrottleTime(unsigned int t) { throttle_time = t; }
     
     // poll channels and return number of descriptors with activity
     static int pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n = 0);
     static void handleChannels();
     void setMessageHandler(MessageHandler *handler)  { message_handler = handler; }
     zmq::pollitem_t *getPollItems();
+
+    static void sendPropertyChanges(MachineInstance *machine);
+		typedef std::map<std::string, Value> PropertyRecords;
     
 private:
     void checkCommunications();
@@ -187,6 +203,9 @@ private:
     SubscriptionManager *communications_manager;
     zmq::pollitem_t *poll_items;
     MessageHandler *message_handler;
+
+		static std::map<MachineInstance *, MachineRecord> pending_items;
+		unsigned int throttle_time;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

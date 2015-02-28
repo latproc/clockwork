@@ -129,6 +129,7 @@ STATES              return STATES;
 STRING              return STRINGTYPE;
 TAG					return TAG;
 TAKE                return TAKE;
+THROTTLE						return THROTTLE;
 TO                  return TO;
 TRANSITION          return TRANSITION;
 UNLOCK				return UNLOCK;
