@@ -17,6 +17,9 @@ in2 POINT EK1814, 5;
 in3 POINT EK1814, 6;
 in4 POINT EK1814, 7;
 
+inputs LIST in1, in2, in3, in4, pressure, pressure_Underrange, pressure_Overrange;
+outputs LIST out1, out2, out3, out4;
+
 pressure_Underrange POINT EL3051, 0;
 pressure_Overrange POINT EL3051, 1;
 #pressure_Limit1 POINT EL3051, 2;
