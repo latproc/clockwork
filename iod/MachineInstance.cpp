@@ -941,7 +941,7 @@ long RateEstimatorInstance::filter(long val) {
 	float ds = (float)settings->positions.difference(0,settings->positions.length()-1);
 	float dt = (float)settings->times.difference(0,settings->times.length()-1);
 	speed = ds / dt  * 1000000;
-	std::cout << _name << " ds: " << ds << " dt: " << dt << " v: " << speed << "\n";
+	//std::cout << _name << " ds: " << ds << " dt: " << dt << " v: " << speed << "\n";
 	return speed;
 }
 
