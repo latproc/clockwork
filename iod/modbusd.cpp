@@ -257,7 +257,7 @@ struct ModbusServerThread
 								if (modbus_context) modbus_free(modbus_context);
 								modbus_context = 0;
 
-								std::cout << "pausing modbus: makeing new..\n";
+								std::cout << "pausing modbus: making new..\n";
 								modbus_context = modbus_new_tcp("0.0.0.0", 1502);
 								modbus_mapping = modbus_mapping_new(10000, 10000, 10000, 10000);
 								modbus_state = ms_paused;
@@ -343,20 +343,22 @@ struct ModbusServerThread
 												int fc = query[function_code_offset];
 												// ensure changes to coils are not sent to iod if they are not required
 												bool ignore_coil_change = false;
-												if (fc == 3)
+												if (fc == 3) // register read - why are we keeping the previous value?
 												{
-														int num_bytes = query[function_code_offset+4];
+#if 0
+														int num_regs = query[function_code_offset+4];
 														char *src = (char*) &modbus_mapping->tab_registers[addr]; //(char*) &query[function_code_offset+6];
-														previous_value = (char *)malloc(num_bytes+1);
+														previous_value = (char *)malloc(2*num_regs+1);
 														char *dest = previous_value;
-														for (int i=0; i<num_bytes/2; ++i)
+														for (int i=0; i<num_regs; ++i)
 														{
 																*dest++ = *(src+1);
 																*dest++ = *src++;
 																src++;
 														}
+#endif
 												}
-												else if (fc == 5)    // coil write function
+												else if (fc == 5) // coil write function
 												{
 														ignore_coil_change = (query_backup[function_code_offset + 3] && modbus_mapping->tab_bits[addr]);
 														if (DEBUG_BASIC && ignore_coil_change) std::cout << "ignoring coil change " << addr
@@ -364,8 +366,7 @@ struct ModbusServerThread
 												}
 												else if (fc == 15)
 												{
-														int num_coils = (query_backup[function_code_offset+3] <<16)
-																+ query_backup[function_code_offset + 4];
+														int num_coils = getInt( &query[function_code_offset+3]);
 														int num_bytes = query_backup[function_code_offset+5];
 														int curr_coil = 0;
 														unsigned char *data = query_backup + function_code_offset + 6;
@@ -403,8 +404,7 @@ struct ModbusServerThread
 												}
 												else if (fc == 16)
 												{
-														int num_words = (query_backup[function_code_offset+3] <<16)
-																+ query_backup[function_code_offset + 4];
+														int num_words = getInt(&query_backup[function_code_offset+3]);
 														//int num_bytes = query_backup[function_code_offset+5];
 														unsigned char *data = query_backup + function_code_offset + 6; // interpreted as binary
 														for (int reg = 0; reg<num_words; ++reg)
@@ -416,7 +416,6 @@ struct ModbusServerThread
 																if (active_addresses.find(addr_str) != active_addresses.end())
 																{
 																		uint16_t val = 0;
-																		//val = ((*data >> 4) * 10 + (*data & 0xf)); ++data; val = val*100 + ((*data >> 4) * 10 + (*data & 0xf)); // BCD
 																		val = getInt(data);
 																		data += 2;
 																		if (!initialised_address[addr_str] || val != modbus_mapping->tab_registers[addr])
@@ -442,42 +441,49 @@ struct ModbusServerThread
 												}
 												else if (fc == 1)
 												{
+														int num_coils = getInt( &query[function_code_offset+3]);
 														char buf[20];
 														snprintf(buf, 19, "%d.%d", 1, addr);
 														std::string addr_str(buf);
 														if (active_addresses.find(addr_str) != active_addresses.end() )
-																if (DEBUG_BASIC)
-																		std::cout << timestamp << " connection " << conn << " read discrete " << addr
-																				<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
-																				<< "\n";
+																if (DEBUG_BASIC) {
+																		std::cout << timestamp << " connection " << conn << " read " << num_coils << " discrete " << addr
+																				<< " (";
+																		for (int bitn=0; bitn<num_coils; ++bitn)
+																				std::cout  << (int)(modbus_mapping->tab_input_bits[addr+bitn])<<" ";
+																		std::cout <<")\n";
+																}
 												}
 												else if (fc == 3)
 												{
+#if 0
 														if (DEBUG_VERBOSE_TOPLC)
 																std::cout << timestamp << " connection " << conn << " got rw_register " << addr << "\n";
-														int num_bytes = query_backup[function_code_offset+4];
+														int num_regs = query_backup[function_code_offset+4];
 														char *src = (char*) &modbus_mapping->tab_registers[addr];
-														char *new_value = (char *)malloc(num_bytes+1);
+														char *new_value = (char *)malloc(2*num_regs);
 														char *dest = new_value;
-														for (int i=0; i<num_bytes/2; ++i)
+														for (int i=0; i<num_regs; ++i)
 														{
 																*dest++ = *(src+1);
 																*dest++ = *src++;
 																src++;
 														}
-														if (strncmp(new_value, previous_value, num_bytes) != 0)
-														{
-																if (DEBUG_BASIC) std::cout << "connection " << conn << " num bytes: " << num_bytes << " rw register " << addr << "\n";
+														bool changed = false;
+														for (int i=0; i<num_regs; ++i) {
+															if ( ((uint16_t*)(dest))[i] != modbus_mapping->tab_registers[addr+i])
+																if (DEBUG_BASIC) std::cout << "connection " << conn << " num regs: " << num_regs << " changed rw register " << (addr+i) << "\n";
 														}
 														free(new_value);
 														free(previous_value);
+#endif
 												}
 												else if (fc == 4)
 												{
-														int num_bytes = query_backup[function_code_offset+5];
+														int num_regs = query_backup[function_code_offset+5];
 														if (DEBUG_VERBOSE_TOPLC)
 																if (DEBUG_BASIC) std::cout << timestamp << " connection " << conn
-																		<< " num bytes: " << num_bytes << " got register " << addr << "\n";
+																		<< " num regs: " << num_regs << " got register " << addr << "\n";
 												}
 												else if (fc == 15 || fc == 16)
 												{
@@ -963,7 +969,9 @@ int main(int argc, const char * argv[])
 		}
 		catch (...)
 		{
-				std::cerr << "Exception of unknown type!\n";
+			std::cerr << "Exception of unknown type!\n";
+			finish(SIGTERM);
+			exit(1);
 		}
 
 		//modbus_interface.pause(); // terminate modbus connections
