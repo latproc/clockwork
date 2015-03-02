@@ -190,10 +190,12 @@ int64_t Scheduler::getNextDelay() {
 
 void Scheduler::add(ScheduledItem*item) {
 	ScheduledItem *top = 0;
-	boost::mutex::scoped_lock(q_mutex);
-	DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
-	//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
-	items.push(item);
+	{
+		boost::mutex::scoped_lock(q_mutex);
+		DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
+		//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
+		items.push(item);
+	}
 	top = next();
 	next_time = top->delivery_time;
 	next_delay_time = getNextDelay();
@@ -213,7 +215,7 @@ void Scheduler::add(ScheduledItem*item) {
 				break;
 			}		
 			catch(zmq::error_t err) {
-				if (zmq_errno() == EINTR) continue;
+				if (zmq_errno() == EINTR || zmq_errno() == EAGAIN) continue;
 				
 				char errmsg[100];
 				snprintf(errmsg, 100, "Scheduler::add error: %s", zmq_strerror( zmq_errno()));
@@ -227,7 +229,7 @@ void Scheduler::add(ScheduledItem*item) {
 		long wait_duration = nowMicrosecs() - last_notification;
 		if (wait_duration >= 1000000L && item->action) 
 			std::cout << "scheduler waiting for a long time for a response: " << wait_duration << "\n";
-		assert (wait_duration < 1000000L);
+		//assert (wait_duration < 1000000L);
 	}
 }
 
@@ -282,7 +284,7 @@ void Scheduler::idle() {
 	sync.bind("inproc://scheduler_sync");
 	char buf[10];
 	size_t response_len = 0;
-	safeRecv(sync, buf, 10, true, response_len);
+	while (!  safeRecv(sync, buf, 10, true, response_len)) usleep(100);
 	std::cout << "Scheduler started\n";
 
 	state = e_waiting;
@@ -297,23 +299,41 @@ void Scheduler::idle() {
 			}
 #endif
 			long delay = next_delay_time;
+			bool got_work = false;
+			notification_sent = 0; // checking now, if more items are pushed we will want to know
 			if (items.empty()) {
 				// empty, just wait for someone to add some work
-				safeRecv(update_sync, buf, 10, false, response_len, 100);
+				if (safeRecv(update_sync, buf, 10, false, response_len, 100)) 
+					got_work = true;
+				//else
+				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
 			}
 			else if (delay <= 0) {
-				safeRecv(update_sync, buf, 10, false, response_len, 0);
+				if (safeRecv(update_sync, buf, 10, false, response_len, 0))
+					got_work = true;
+				//else
+				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
 			}
 			else if (delay < 1000) {
-				safeRecv(update_sync, buf, 10, false, response_len, 0);
+				if (safeRecv(update_sync, buf, 10, false, response_len, 0))
+					got_work = true;
+				//else
+				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
 				usleep((unsigned int)delay);
 			}
 			else
-				safeRecv(update_sync, buf, 10, false, response_len, delay/1000);
-			notification_sent = 0; // if more items are pushed we will want to know
+				if (safeRecv(update_sync, buf, 10, false, response_len, delay/1000))
+					got_work = true;
+				//else
+				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+			//if (got_work) state = e_have_work;
+			//state = e_have_work;
 		}
+		//if (state == e_have_work) {
 		is_ready = ready();
-		if (state == e_waiting && is_ready) {
+		//	state = e_waiting;
+		//}
+		if ( state == e_waiting && is_ready) {
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
 			safeSend(sync,"sched", 5); // tell clockwork we have something to do
 			state = e_waiting_cw;
@@ -354,11 +374,13 @@ void Scheduler::idle() {
 		//if (items_found)
 		//	MachineInstance::forceIdleCheck();
 		if (state == e_running) {
-			//DBG_MSG << "scheduler done\n";
+			DBG_SCHEDULER << "scheduler done\n";
 			safeSend(sync,"done", 4);
-			safeRecv(sync, buf, 10, true, response_len); // wait for ack from clockwork
+			if (next() == 0) { DBG_SCHEDULER << "no more scheduled items, waiting for cw ack\n"; }
+			while (!safeRecv(sync, buf, 10, true, response_len, 100)) usleep(10); // wait for ack from clockwork
 			if (next() == 0) { DBG_SCHEDULER << "no more scheduled items\n"; }
 			state = e_waiting;
+			
 		}
 	}
 }

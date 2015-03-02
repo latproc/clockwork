@@ -65,8 +65,10 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			return (response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
-			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; continue; }
 			std::cerr << zmq_strerror(errno) << "\n";
+			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
+				if (block) continue;
+			}
 			return false;
 		}
 	}

@@ -102,6 +102,7 @@ protected:
 	struct timeval next_time;
 	enum State { 
 		e_waiting,  // waiting for something to do
+		e_have_work, // new items have been pushed and need to be checked
 		e_waiting_cw,  // waiting to begin processing
 		e_running, 	// processing triggered events
 		e_aborted 	// time to shutdown

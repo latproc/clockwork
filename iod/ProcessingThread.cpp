@@ -334,6 +334,7 @@ void ProcessingThread::operator()()
         activate_hardware();
     }
 
+	enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
 	std::set<IOComponent *>io_work_queue;
 	while (!program_done)
 	{
@@ -355,7 +356,6 @@ void ProcessingThread::operator()()
 		else
 			machine_is_ready = false;
 
-		enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
 		uint64_t start, end;
 		//boost::mutex::scoped_lock lock(thread_protection_mutex);
 		start = nowMicrosecs();
@@ -377,13 +377,15 @@ void ProcessingThread::operator()()
 		{
 			curr_t = nowMicrosecs();
 			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
-			//DBG_MSG << "loop " << status << " "  << systems_waiting << "\n";
+			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
+			//	<< " waiting: " << systems_waiting << "\n";
 			if (systems_waiting > 0) break;
 			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
 			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
 			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) break;
-			status = e_waiting;
+			//status = e_waiting;
 		}
+		//DBG_MSG << "handling activity\n";
 		end = nowMicrosecs();
     curr_t = end;
 	
