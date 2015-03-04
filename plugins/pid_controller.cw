@@ -10,8 +10,8 @@ PIDCONFIGURATION MACHINE {
 	OPTION inverted false; # do not invert power
 
 	OPTION Kp 100000;
-	OPTION Ki 20;
-	OPTION Kd 1000;
+	OPTION Ki 0;
+	OPTION Kd 0;
 }
 
 PIDCONTROL MACHINE {
@@ -360,21 +360,19 @@ int poll_actions(void *scope) {
 
 		double Ep = set_point - *data->speed;
 		if (data->state != cs_stopped) {
-			double dt = (now_t - data->last_poll)/1000;
-			double dp = *data->speed - data->last_speed;
+			double dt = (now_t - data->last_poll)/1000000;
+			double de = Ep - data->last_Ep;
 			data->total_err += (data->last_Ep + Ep)/2 * dt;
 			data->last_Ep = Ep;
 			data->last_speed = *data->speed;
 
-			double Dout = (int) (data->Kp * Ep + data->Ki * data->total_err - data->Kd * dp / dt);
+			double Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de / dt);
 			if (data->debug && *data->debug) 
-				if (fabs(Ep)>0.5) 
+				if (fabs(Ep)>5) 
 					printf("%s Ep: %5.3f Ierr: %5.3f dp/dt: %5.3f\n", data->conveyor_name,
 							Ep, data->total_err, dp/dt );
 			
-			if (Dout > 100.0) Dout = 100.0;
-			if (Dout < -100.0) Dout = -100.0;
-			new_power += Dout;
+			new_power = Dout;
 		}
 
 		if (set_point != 0.0 && std_state) 
@@ -390,6 +388,9 @@ int poll_actions(void *scope) {
 	}
 
 	if (new_power != data->current_power) {
+		if (new_power == 0.0) {}
+		else if ( new_power > data->current_power + 100) new_power = data->current_power + 100;
+		else if (new_power < data->current_power - 100) new_power = data->current_power - 100;
 		if (data->debug && *data->debug) printf("%s setting power to %d\n", data->conveyor_name, (int)new_power);
 		setIntValue(scope, "driver.VALUE", output_scaled( data, (long)new_power) );
 		data->current_power = new_power;
