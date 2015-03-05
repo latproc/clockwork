@@ -1,7 +1,7 @@
 PIDCONFIGURATION MACHINE {
 	OPTION PERSISTENT true;
 	EXPORT RW 32BIT min_update_time, StartTimeout, fwd_step_up, fwd_step_down, rev_step_up, rev_step_down;
-	OPTION min_update_time 20; # minimum time between normal control updates
+	OPTION min_update_time 40; # minimum time between normal control updates
 	OPTION StartTimeout 500;		#conveyor start timeout
 	OPTION fwd_step_up 40000; # maximum change per second
 	OPTION fwd_step_down 60000; # maximum change per second
@@ -9,9 +9,12 @@ PIDCONFIGURATION MACHINE {
 	OPTION rev_step_down 60000; # maximum change per second
 	OPTION inverted false; # do not invert power
 
-	OPTION Kp 100000;
-	OPTION Ki 0;
-	OPTION Kd 0;
+	#OPTION Kp 9000000;
+	#OPTION Ki 800000;
+	#OPTION Kd 40;
+	OPTION Kp 8000000;
+	OPTION Ki 1600000;
+	OPTION Kd 5000;
 }
 
 PIDCONTROL MACHINE {
@@ -277,17 +280,18 @@ int poll_actions(void *scope) {
 		void *controller = 0;
 		current = getState(scope);
 		control = 0;
+/*
 		printf("%ld\t %s test: %s %ld, stop: %ld, pow: %ld, pos: %ld\n", (long)delta_t, data->conveyor_name,
 							 (current)? current : "null", 
                 *data->set_point,
                 *data->stop_position,
                 *data->target_power,
                 *data->position);
-		
+*/		
 		controller = getNamedScope(scope, "control");
 		if (controller) {
 			control = getState(controller);
-			printf("%s controller state: %s\n", data->conveyor_name, (control) ? control : "null");
+			/*printf("%s controller state: %s\n", data->conveyor_name, (control) ? control : "null");*/
 			if (strcmp(control, "stop") == 0)
 				command = cmd_stop;
 			else if (strcmp(control, "drive") == 0)
@@ -311,6 +315,7 @@ int poll_actions(void *scope) {
 		if (command == cmd_stop) {
 			if (data->debug && *data->debug) printf("%s stop command\n", data->conveyor_name);
 			data->current_power = 0;
+			*data->set_point = 0;
 			new_power = 0;
 			data->stop_marker = 0;
 			data->last_set_point = 0;
@@ -356,11 +361,15 @@ int poll_actions(void *scope) {
 		}
 		else {
 			data->state = cs_speed;
+			if (data->last_set_point != set_point) {
+				data->last_set_point = set_point;
+				data->total_err *= 0.1;
+			}
 		}
 
 		double Ep = set_point - *data->speed;
 		if (data->state != cs_stopped) {
-			double dt = (now_t - data->last_poll)/1000000;
+			double dt = ((double)(now_t - data->last_poll))/1000000;
 			double de = Ep - data->last_Ep;
 			data->total_err += (data->last_Ep + Ep)/2 * dt;
 			data->last_Ep = Ep;
@@ -369,8 +378,10 @@ int poll_actions(void *scope) {
 			double Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de / dt);
 			if (data->debug && *data->debug) 
 				if (fabs(Ep)>5) 
-					printf("%s Ep: %5.3f Ierr: %5.3f dp/dt: %5.3f\n", data->conveyor_name,
-							Ep, data->total_err, dp/dt );
+/*
+					printf("%s Set: %5.3f spd: %ld Ep: %5.3f Ierr: %5.3f de/dt: %5.3f\n", data->conveyor_name, 
+						set_point, *data->speed, Ep, data->total_err, de/dt );
+*/
 			
 			new_power = Dout;
 		}
@@ -378,7 +389,7 @@ int poll_actions(void *scope) {
 		if (set_point != 0.0 && std_state) 
 			changeState(std_state, "Working");
 		else if (set_point == 0.0 && fabs(Ep) < 40) {
-			printf("%s stopped\n", data->conveyor_name);
+			/*printf("%s stopped\n", data->conveyor_name);*/
 			data->state = cs_stopped;
 			data->total_err = 0.0;
 			changeState(std_state, "Resetting");
@@ -389,10 +400,15 @@ int poll_actions(void *scope) {
 
 	if (new_power != data->current_power) {
 		if (new_power == 0.0) {}
-		else if ( new_power > data->current_power + 100) new_power = data->current_power + 100;
-		else if (new_power < data->current_power - 100) new_power = data->current_power - 100;
-		if (data->debug && *data->debug) printf("%s setting power to %d\n", data->conveyor_name, (int)new_power);
-		setIntValue(scope, "driver.VALUE", output_scaled( data, (long)new_power) );
+		else if ( new_power > data->current_power + 500) new_power = data->current_power + 500;
+		else if (new_power < data->current_power - 500) new_power = data->current_power - 500;
+		long power = output_scaled(data, (long) new_power);
+/*
+		if (data->debug && *data->debug) printf("%s setting power to %ld (scaled: %ld)\n", 
+			data->conveyor_name, (long)new_power, power);
+*/
+		
+		setIntValue(scope, "driver.VALUE", power);
 		data->current_power = new_power;
 	}
 

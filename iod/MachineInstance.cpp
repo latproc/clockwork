@@ -877,8 +877,8 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 		settings->position = (int32_t)val;
 		settings->readings.append(settings->position, delta_t);
         settings->velocity = settings->readings.rate() * 1000000;
-        std::cout << _name << " adding reading: " << (int32_t)val <<" " << delta_t << " "
-        <<  settings->velocity << " "<< settings->readings.front << " " << settings->readings.back <<"\n";
+        //std::cout << _name << " adding reading: " << (int32_t)val <<" " << delta_t << " "
+        //<<  settings->velocity << " "<< settings->readings.front << " " << settings->readings.back <<"\n";
 		//settings->velocity = (int32_t)filter((int32_t)settings->position);
 
         //reset once the buffers have been filled with zeros
