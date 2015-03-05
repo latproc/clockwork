@@ -265,8 +265,9 @@ int poll_actions(void *scope) {
 
 	gettimeofday(&now, 0);
 	now_t = now.tv_sec * 1000000 + now.tv_usec;
+	uint64_t delta_t = now_t - data->last_poll;
 
-	if ( (now_t - data->last_poll)/1000 < *data->min_update_time) return PLUGIN_COMPLETED;
+	if ( delta_t/1000 < *data->min_update_time) return PLUGIN_COMPLETED;
 
 	new_power = data->current_power;
 
@@ -276,17 +277,17 @@ int poll_actions(void *scope) {
 		void *controller = 0;
 		current = getState(scope);
 		control = 0;
-		/*printf("%s test: %s %ld, stop: %ld, pow: %ld, pos: %ld\n", data->conveyor_name,
+		printf("%ld\t %s test: %s %ld, stop: %ld, pow: %ld, pos: %ld\n", (long)delta_t, data->conveyor_name,
 							 (current)? current : "null", 
                 *data->set_point,
                 *data->stop_position,
                 *data->target_power,
                 *data->position);
-		*/
+		
 		controller = getNamedScope(scope, "control");
 		if (controller) {
 			control = getState(controller);
-			//printf("%s controller state: %s\n", data->conveyor_name, (control) ? control : "null");
+			printf("%s controller state: %s\n", data->conveyor_name, (control) ? control : "null");
 			if (strcmp(control, "stop") == 0)
 				command = cmd_stop;
 			else if (strcmp(control, "drive") == 0)
@@ -315,7 +316,7 @@ int poll_actions(void *scope) {
 			data->last_set_point = 0;
 			setIntValue(scope, "SetPoint", 0);
 			if (!interlocked) {
-				printf("%s stopped\n", data->conveyor_name);
+				/*printf("%s stopped\n", data->conveyor_name);*/
 				data->state = cs_stopped;
 				if (std_state) changeState(std_state, "Ready");
 			}
@@ -333,7 +334,7 @@ int poll_actions(void *scope) {
 
 		/* Seek to the stop position if there is one otherwise maintain the set point */
 
-		double set_point = 0.0;
+		double set_point = *data->set_point;
 
 		/* if the stop position has changed, we attempt to move to that position */
 		if (*data->stop_position && data->last_stop_position != *data->stop_position) {
@@ -353,9 +354,8 @@ int poll_actions(void *scope) {
 		else if ( data->state == cs_position ) { 
 				set_point = calc_set_point(*data->position, *data->stop_position);
 		}
-		else if (set_point != 0.0) {
+		else {
 			data->state = cs_speed;
-			set_point = *data->set_point;
 		}
 
 		double Ep = set_point - *data->speed;

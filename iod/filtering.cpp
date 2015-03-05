@@ -13,11 +13,13 @@ int Buffer::length()
 }
 
 void Buffer::reset() {
+    boost::mutex::scoped_lock(q_mutex);
     front = back = -1;
 }
 
 float Buffer::difference(int idx_a, int idx_b) const
 {
+  boost::mutex::scoped_lock(q_mutex);
   float a = getFloatAtOffset(idx_a);
   float b = getFloatAtOffset(idx_b);
   a = a - b;
@@ -27,6 +29,7 @@ float Buffer::difference(int idx_a, int idx_b) const
 
 float Buffer::distance(int idx_a, int idx_b) const
 {
+  boost::mutex::scoped_lock(q_mutex);
   float a = difference(idx_a, idx_b);
   a = fabs(a);
   if (a<0.0001) a = 0.0f;
@@ -35,6 +38,7 @@ float Buffer::distance(int idx_a, int idx_b) const
 
 float Buffer::average(int n)
 {
+  boost::mutex::scoped_lock(q_mutex);
   float res = 0.0f;
   if (front == -1) return 0.0f; // empty buffer
   if (n == 0) return 0.0f;
@@ -59,6 +63,7 @@ float Buffer::average(int n)
 
 void LongBuffer::append(long val)
 {
+    boost::mutex::scoped_lock(q_mutex);
     front = (front + 1) % BUFSIZE;
     buf[front] = val;
     if (front == back || back == -1)
@@ -72,7 +77,6 @@ void LongBuffer::set(unsigned int n, long value)
 {
     buf[ (front + BUFSIZE - n) % BUFSIZE] = value;
 }
-
 
 float LongBuffer::getFloatAtOffset(int offset) const
 {
@@ -96,6 +100,7 @@ float FloatBuffer::getFloatAtIndex(int idx) const
 
 void FloatBuffer::append( float val)
 {
+    boost::mutex::scoped_lock(q_mutex);
     front = (front + 1) % BUFSIZE;
     buf[front] = val;
     if (front == back || back == -1)
@@ -114,6 +119,7 @@ void FloatBuffer::set(unsigned int n, float value)
 
 float FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
 {
+  boost::mutex::scoped_lock(q_mutex);
   float sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f;
   float sumXsquared = 0.0f, sumYsquared = 0.0f;
   int n = length()-1;
@@ -135,3 +141,52 @@ float FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
   //float c = (sumXsquared * sumY - sumXY * sumX) / denom;
   return m;
 }
+
+
+float SampleBuffer::getFloatAtOffset(int offset) const {
+    return values[ (front + BUFSIZE - offset) % BUFSIZE];
+}
+
+float SampleBuffer::getFloatAtIndex(int idx) const {
+    return values[ idx ];
+}
+void SampleBuffer::append( float val, uint64_t time) {
+    boost::mutex::scoped_lock(q_mutex);
+    
+    /* if we are not running on a real time system, we may have missed samples
+       the following generates the missing samples based on past recording rates.
+     */
+	if (front != -1 && time == times[front]) return;
+	unsigned int n = length();
+    if (n > BUFSIZE/2) {
+		double mean_change = ((values[front] - values[back])) / n;
+		double period = ((double)(times[front] - times[back])) / n;
+		int missing = ((double)(time - times[front]) )/ period;
+		if (missing >= 3){
+			std::cout << "synthesizing missing data: " << missing << "\n";
+			uint64_t last_time = times[front];
+			reset();
+			if (missing > BUFSIZE/2) missing = BUFSIZE/2;
+			for (int i=missing; i>0; --i)
+			append(val-i*mean_change, time - i * (time-last_time)/missing);
+		}
+    }
+    front = (front + 1) % BUFSIZE;
+    if (front == back || back == -1)
+        back = (back + 1) % BUFSIZE;
+    values[front] = val;
+    times[front] = time;
+}
+
+float SampleBuffer::rate() const // returns dv/dt between the two sample positions
+{
+    if (front == back || back == -1) return 0.0f;
+    double v1 = values[back], v2 = values[front];
+    double t1 = times[back], t2 = times[front];
+    double ds = v2-v1;
+    double dt = t2-t1;
+    return ds/dt;
+}
+
+
+

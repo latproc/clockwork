@@ -31,4 +31,4 @@ cat "$script" | awk -v file="$script" '
 
 echo gcc -Wall -pedantic $LDFLAGS -I /usr/local/include -I../iod plugin_$$.c -o "$out" 
 gcc $LDFLAGS -I../iod plugin_$$.c -o "$out" 
-#rm plugin_$$.c
+rm plugin_$$.c

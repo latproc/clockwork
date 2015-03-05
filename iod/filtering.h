@@ -1,7 +1,11 @@
 #ifndef __FILTERING_H__
 #define __FILTERING_H__
 
-class Buffer
+#include <boost/thread.hpp>
+#include <boost/thread/lockable_adapter.hpp>
+
+
+class Buffer : public boost::basic_lockable_adapter<boost::recursive_mutex>
 {
 public:
     const int BUFSIZE;
@@ -19,6 +23,7 @@ public:
 private:
     Buffer(const Buffer &);
     Buffer &operator=(const Buffer&);
+    boost::recursive_mutex q_mutex;
 };
 
 class LongBuffer : public Buffer
@@ -53,6 +58,30 @@ public:
 private:
     FloatBuffer(const FloatBuffer &);
     FloatBuffer &operator=(const FloatBuffer&);
+};
+
+class Sample {
+    float value;
+    uint64_t time;
+};
+
+class SampleBuffer : public Buffer {
+public:
+    float *values;
+    uint64_t *times;
+    float getFloatAtOffset(int offset) const;
+    float getFloatAtIndex(int idx) const;
+    
+    void append( float val, uint64_t time);
+    
+    float rate() const; // returns dv/dt between the two sample positions
+    
+    SampleBuffer(int buf_size) : Buffer(buf_size) { values = new float[buf_size]; times = new uint64_t[buf_size]; }
+    ~SampleBuffer() { delete[] values; delete[] times; }
+
+private:
+    SampleBuffer(const SampleBuffer &);
+    SampleBuffer &operator=(const SampleBuffer&);
 };
 
 #endif

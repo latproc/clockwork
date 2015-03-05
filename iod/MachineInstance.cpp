@@ -371,7 +371,7 @@ void MachineInstance::enqueueAction(Action *a){
 		active_actions.push_front(a);
 	}
 	num_machines_with_work++;
-	DBG_AUTOSTATES << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
+	DBG_ACTIONS << _name << " New Action queued: " << *a << "\n";
 	has_work = true;
 	busy_machines.insert(this);
 }
@@ -690,18 +690,18 @@ class CounterRateFilterSettings {
 		// analogue filter fields
 		uint32_t noise_tolerance; // filter out changes with +/- this range
 		int32_t last_sent; // this is the value to send unless the read value moves away from the mean
+        int32_t last_pos;
 
 		uint64_t start_t;
 		uint64_t update_t;
-		LongBuffer times;
-		LongBuffer readings;
-		FloatBuffer positions;
+        uint64_t last_update_t;
+        SampleBuffer readings;
 		MachineInstance *counter_machine;
 		Value *noise_tolerance_val;
 		long zero_count;
 		CounterRateFilterSettings(unsigned int sz) : position(0), velocity(0), property_changed(false),
-		noise_tolerance(20),last_sent(0), start_t(0), times(sz), readings(8), positions(sz),
-		counter_machine(0), noise_tolerance_val(0), zero_count(0) {
+		noise_tolerance(20),last_sent(0), last_pos(0), start_t(0), update_t(0), last_update_t(0),
+                readings(sz),counter_machine(0), noise_tolerance_val(0), zero_count(0) {
 			struct timeval now;
 			gettimeofday(&now, 0);
 			update_t = start_t;
@@ -738,27 +738,25 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value)
 
 		//reset once the buffers have been filled with zeros
 		if (!val) ++settings->zero_count;
-		else if (settings->zero_count > settings->times.length()) {
+        else settings->zero_count = 0;
+		if (settings->zero_count > settings->readings.length()) {
 			settings->zero_count = 0;
 			// reset buffers;
-			settings->start_t = settings->update_t;
-			settings->times.reset();
+			//settings->start_t = settings->update_t;
 			settings->readings.reset();
-			settings->positions.reset();
 		}
-		settings->readings.append(val);
-		struct timeval now;
-		gettimeofday(&now, 0);
-		settings->update_t = now.tv_sec * 1000000 + now.tv_usec;
+        
+        if ( (settings->update_t - settings->last_update_t)/1000 == 0 )
+            return;
+        settings->last_update_t = settings->update_t;
 		uint64_t delta_t = settings->update_t - settings->start_t;
-		settings->times.append(delta_t);
+        settings->readings.append( val, delta_t);
 
 		int32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
 		if ( abs(mean - settings->last_sent) > abs(settings->noise_tolerance) ) {
 			settings->last_sent = mean;
 		}
 		settings->position = settings->last_sent;
-		settings->positions.append(settings->position);
 		settings->velocity = filter(settings->position);
 
 		MachineInstance::setValue(property, settings->velocity);
@@ -771,9 +769,10 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value)
 }
 
 long CounterRateInstance::filter(long val) {
-	if (settings->positions.length() < 4) return 0;
+	if (settings->readings.length() < 4) return 0;
 	//float speed = settings->positions.difference(settings->positions.length()-1, 0) / settings->times.difference(settings->times.length()-1,0) * 250000;
-	float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
+	//float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
+    float speed = settings->readings.rate();
 	return speed;
 }
 
@@ -788,31 +787,6 @@ void CounterRateInstance::idle() {
 		}
 	}
 }
-
-#if 0
-bool RateEstimatorInstance::hasWork() {
-	//struct timeval now;
-	//gettimeofday(&now, 0);
-	//return (now.tv_sec*1000000L + now.tv_usec >= next_poll);
-	static MachineInstance *pos = lookup(parameters[0]);
-	uint64_t been_idle = 0;
-	if (pos && pos->io_interface) {
-	  //std::cout << _name << " pos: " << pos->io_interface->io_name << " read time: " << pos->io_interface->read_time << " upd: " << settings->update_t << "\n";
-		been_idle = pos->io_interface->read_time - settings->update_t;
-	}
-	else {
-	  std::cout << _name << " process delta: " << (process_time - settings->update_t) << "\n";
-		been_idle = process_time - settings->update_t;
-	}
-	if (been_idle >= (uint64_t)idle_time) {
-		DBG_AUTOSTATES  << _name << " has work; been idle: " << been_idle << "\n";
-		return true;
-	}
-	else if (settings->velocity != 0)
-        return true;
-	return false;
-}
-#endif
 
 void RateEstimatorInstance::setNeedsCheck() {
 	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
@@ -832,32 +806,23 @@ void RateEstimatorInstance::idle() {
 			settings = new CounterRateFilterSettings(8);
 	}
 	if (is_enabled) { // && hasWork()) {
-		MachineInstance::idle();
 		double delta = 0;
 		uint64_t curr_t = (pos_m->io_interface) ? pos_m->io_interface->read_time : process_time;
-		delta = (double)(curr_t - settings->update_t) / 1000.0;
+
+        delta = (double)(curr_t - settings->update_t) / 1000.0;
 		if (!delta)  {
-            /*
-			if (settings->velocity) {
-				Trigger *trigger = new Trigger("Timer");
-				Scheduler::instance()->add(
-					new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
-				trigger->release();
-				setNeedsCheck();
-			}
-             */
 			return;
 		}
+        MachineInstance::idle();
 
 		Value & pos_v = pos_m->getValue("VALUE");
 		assert(pos_v.kind == Value::t_integer);
 		assert(pos_v != SymbolTable::Null);
-		static long last_pos = pos_v.iValue;
 		long pos = pos_v.iValue;
 		
 /*
 	  	std::cout << _name 
-			<< " last_pos: " << last_pos << " pos: " << pos_v.iValue
+			<< " last_pos: " << settings->last_pos << " pos: " << pos_v.iValue
 			<< " pos: " << pos_v.iValue
 			<< " read time: " << curr_t
 			<< " upd: " << settings->update_t
@@ -866,15 +831,13 @@ void RateEstimatorInstance::idle() {
 */
 		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
 			setValue("VALUE", pos);
-		//if (pos == 0) needs_check = 0;
-		if (pos != last_pos || settings->velocity) {
+		if (pos != settings->last_pos || settings->velocity) {
 			Trigger *trigger = new Trigger("Timer");
 			Scheduler::instance()->add(
 				new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
 			trigger->release();
-			//setNeedsCheck();
 		}
-		last_pos = pos;
+		settings->last_pos = pos;
 	}
 }
 
@@ -911,21 +874,20 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
         // use current time - start time as t0 to avoid floating point resolution issues
 		if (settings->start_t == 0) settings->start_t = settings->update_t;
 		uint64_t delta_t = settings->update_t - settings->start_t;
-        //std::cout << "adding reading: " << delta_t << " " << (int32_t)val << "\n";
-		settings->times.append(delta_t);
 		settings->position = (int32_t)val;
-		settings->positions.append(settings->position);
-		settings->velocity = (int32_t)filter((int32_t)settings->position);
+		settings->readings.append(settings->position, delta_t);
+        settings->velocity = settings->readings.rate() * 1000000;
+        std::cout << _name << " adding reading: " << (int32_t)val <<" " << delta_t << " "
+        <<  settings->velocity << " "<< settings->readings.front << " " << settings->readings.back <<"\n";
+		//settings->velocity = (int32_t)filter((int32_t)settings->position);
 
         //reset once the buffers have been filled with zeros
         if (!settings->velocity) ++settings->zero_count;
-        else if (settings->zero_count > settings->times.length()) {
-            settings->zero_count = 0;
+        else settings->zero_count = 0;
+        if (settings->zero_count > settings->readings.BUFSIZE) {
             // reset buffers;
-            settings->start_t = settings->update_t;
-            settings->times.reset();
+            //settings->start_t = settings->update_t;
             settings->readings.reset();
-            settings->positions.reset();
         }
 
 		MachineInstance::setValue(property, settings->velocity);
@@ -936,12 +898,8 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 }
 
 long RateEstimatorInstance::filter(long val) {
-	if (settings->positions.length() < 4) return 0;
-	float speed = 0;
-	float ds = (float)settings->positions.difference(0,settings->positions.length()-1);
-	float dt = (float)settings->times.difference(0,settings->times.length()-1);
-	speed = ds / dt  * 1000000;
-	//std::cout << _name << " ds: " << ds << " dt: " << dt << " v: " << speed << "\n";
+	if (settings->readings.length() < 2) return 0;
+    float speed = settings->readings.rate() * 1000000;
 	return speed;
 }
 
@@ -1223,7 +1181,6 @@ void MachineInstance::removeDependancy(MachineInstance *m) {
 	}
 }
 
-
 bool MachineInstance::dependsOn(Transmitter *m) {
 	std::set<Transmitter*>checked;
 	return checkDepend(checked, m, this);
@@ -1354,7 +1311,6 @@ const Value *MachineInstance::getTimerVal() {
 	return mtv->getLastResult();
 }
 
-static int recheck_idle = 0;
 long total_machines_with_work = 0;
 long total_plugins_with_work = 0;
 long loop_count = 0;
@@ -1364,7 +1320,6 @@ long saved_loop_count = 0;
 long total_process_calls = 0;
 uint64_t total_processing_time = 0;
 long total_aborts = 0;
-static unsigned int last_num_machines_with_work = 1;
 
 #if 1
 bool MachineInstance::processAll(uint32_t max_time, PollType which) {
@@ -1521,7 +1476,6 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 }
 #endif
 
-static int last_machines_needing_check = 1;
 #if 1
 
 void MachineInstance::checkPluginStates() {
@@ -1534,7 +1488,7 @@ void MachineInstance::checkPluginStates() {
 		if (m->next_poll > start_processing) { 
 			continue;
 		}
-		uint64_t start = nowMicrosecs();
+		//uint64_t start = nowMicrosecs();
 		if (m->state_machine && m->state_machine->plugin)  {
 			if ( m->state_machine->plugin->state_check) {
 				m->state_machine->plugin->state_check(m);
