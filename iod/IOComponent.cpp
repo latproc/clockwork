@@ -389,7 +389,7 @@ public:
     uint32_t last_sent; // this is the value to send unless the read value moves away from the mean
     uint16_t buffer_len;
     
-    InputFilterSettings() :property_changed(true), noise_tolerance(4), positions(8), last_sent(0), buffer_len(8) { }
+    InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(16), last_sent(0), buffer_len(16) { }
 };
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
