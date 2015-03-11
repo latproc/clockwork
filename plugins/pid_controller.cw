@@ -92,7 +92,7 @@ struct PIDData {
 	long *Kd_long;
 
 	/* internal values for ramping */
-	long current_power;
+	double current_power;
 	uint64_t ramp_start_time;
 	long ramp_start_power;		/* the power level at the point ramping started */
 	long ramp_start_target; 	/* the target that was set when ramping started */
@@ -239,7 +239,7 @@ int check_states(void *scope)
 		}
 
 		data->state = cs_init;
-		data->current_power = 0;
+		data->current_power = 0.0;
 		data->last_poll = 0;
 		data->last_position = *data->position;
 
@@ -287,18 +287,20 @@ int poll_actions(void *scope) {
 		void *controller = 0;
 		current = getState(scope);
 		control = 0;
-/*
-		printf("%ld\t %s test: %s %ld, stop: %ld, pow: %ld, pos: %ld\n", (long)delta_t, data->conveyor_name,
+
+		if (data->debug && *data->debug)
+			printf("%ld\t %s test: %s %ld, stop: %ld, pow: %5.3f, pos: %ld\n", (long)delta_t, data->conveyor_name,
 							 (current)? current : "null", 
                 *data->set_point,
                 *data->stop_position,
-                *data->target_power,
+                data->current_power,
                 *data->position);
-*/		
+		
 		controller = getNamedScope(scope, "control");
 		if (controller) {
 			control = getState(controller);
-			/*printf("%s controller state: %s\n", data->conveyor_name, (control) ? control : "null");*/
+			if (data->debug && *data->debug)
+				printf("%s controller state: %s\n", data->conveyor_name, (control) ? control : "null");
 			if (strcmp(control, "stop") == 0)
 				command = cmd_stop;
 			else if (strcmp(control, "drive") == 0)
@@ -320,14 +322,15 @@ int poll_actions(void *scope) {
 
 		if (command == cmd_stop) {
 			if (data->debug && *data->debug) printf("%s stop command\n", data->conveyor_name);
-			data->current_power = 0;
+			data->current_power = 0.0;
 			*data->set_point = 0;
 			new_power = 0;
 			data->stop_marker = 0;
 			data->last_set_point = 0;
 			setIntValue(scope, "SetPoint", 0);
 			if (!interlocked) {
-				/*printf("%s stopped\n", data->conveyor_name);*/
+				if (data->debug && *data->debug)
+					printf("%s stopped\n", data->conveyor_name);
 				data->state = cs_stopped;
 				if (std_state) changeState(std_state, "Ready");
 			}
@@ -338,7 +341,7 @@ int poll_actions(void *scope) {
 		}
 		if (interlocked) goto done_polling_actions;
 
-		if (data->current_power == 0 && (data->state == cs_init || data->state == cs_interlocked) ) {
+		if (data->current_power == 0.0 && (data->state == cs_init || data->state == cs_interlocked) ) {
 			if (std_state) changeState(std_state, "Ready");
 			data->state = cs_stopped;
 		}
@@ -376,14 +379,16 @@ int poll_actions(void *scope) {
 		else if (data->last_position == 0) data->last_position = *data->position;
 		long next_position = data->last_position + data->last_Ep + dt * set_point;
 		double Ep = next_position - *data->position;
-/*
-		printf ("%s pos: %ld, Ep: %5.3f, tot_e %5.3f, dt: %5.3f, pwr: %ld, spd: %5.3f, setpt: %5.3f, next: %ld\n", 
+
+		if (data->debug && *data->debug)
+			printf ("%s pos: %ld, Ep: %5.3f, tot_e %5.3f, dt: %5.3f, "
+					"pwr: %5.3f, spd: %5.3f, setpt: %5.3f, next: %ld\n", 
 			data->conveyor_name,
 			*data->position, Ep, data->total_err, dt, 
 			data->current_power,
 			(double)(*data->position - data->last_position) / dt,
 			set_point, next_position);
-*/
+
 		data->last_position = *data->position;
 		if (data->state != cs_stopped) {
 			double de = Ep - data->last_Ep;
@@ -391,12 +396,9 @@ int poll_actions(void *scope) {
 			data->last_Ep = Ep;
 
 			double Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de / dt);
-			if (data->debug && *data->debug) 
-				if (fabs(Ep)>5) 
-/*
+			if (data->debug && *data->debug && fabs(Ep)>5) 
 					printf("%s Set: %5.3f Ep: %5.3f Ierr: %5.3f de/dt: %5.3f\n", data->conveyor_name, 
 						set_point, Ep, data->total_err, de/dt );
-*/
 			
 			new_power = Dout;
 		}
@@ -421,10 +423,11 @@ int poll_actions(void *scope) {
 		else if ( new_power > data->current_power + 1000) new_power = data->current_power + 1000;
 		else if (new_power < data->current_power - 1000) new_power = data->current_power - 1000;
 		long power = output_scaled(data, (long) new_power);
-/*
-		if (data->debug && *data->debug) printf("%s setting power to %ld (scaled: %ld)\n", 
+
+		if (data->debug && *data->debug) 
+			printf("%s setting power to %ld (scaled: %ld)\n", 
 			data->conveyor_name, (long)new_power, power);
-*/
+
 		
 		setIntValue(scope, "driver.VALUE", power);
 		if (power == 0) changeState(std_state, "Ready");
