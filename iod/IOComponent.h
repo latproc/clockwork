@@ -131,6 +131,7 @@ public:
 	std::list<MachineInstance*> depends;
 
 	void addOwner(MachineInstance *m) { owners.push_back(m); }
+	bool ownersEnabled()const;
     
     virtual int32_t filter(int32_t);
 

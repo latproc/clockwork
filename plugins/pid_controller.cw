@@ -400,8 +400,8 @@ int poll_actions(void *scope) {
 
 	if (new_power != data->current_power) {
 		if (new_power == 0.0) {}
-		else if ( new_power > data->current_power + 500) new_power = data->current_power + 500;
-		else if (new_power < data->current_power - 500) new_power = data->current_power - 500;
+		else if ( new_power > data->current_power + 2000) new_power = data->current_power + 2000;
+		else if (new_power < data->current_power - 2000) new_power = data->current_power - 2000;
 		long power = output_scaled(data, (long) new_power);
 /*
 		if (data->debug && *data->debug) printf("%s setting power to %ld (scaled: %ld)\n", 

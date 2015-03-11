@@ -307,7 +307,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 }
 
 void MachineInstance::setNeedsCheck() {
-	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
+	//DBG_MSG << _name << "::setNeedsCheck(), enabled: " << is_enabled 
 	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
 	if (!getStateMachine() ) return;
 	if (!is_enabled) return;
@@ -316,15 +316,15 @@ void MachineInstance::setNeedsCheck() {
 		++total_machines_needing_check;
 	}
 	if (!active_actions.empty() || !mail_queue.empty()) {
-		//std::cout << _name << " queued for action processing\n";
+		//DBG_MSG << _name << " queued for action processing\n";
 		busy_machines.insert(this);
 	}
 	else if (getStateMachine()->allow_auto_states) {
-		//std::cout << _name << " queued for stable state checks\n";
+		//DBG_MSG << _name << " queued for stable state checks\n";
 		pending_state_change.insert(this);
 	}
 	else {
-		//std::cout << _name << " queued for action processing\n";
+		//DBG_MSG << _name << " queued for action processing\n";
 		busy_machines.insert(this);
 	}
 	next_poll = 0;
@@ -344,7 +344,7 @@ void MachineInstance::setNeedsCheck() {
 	}
 #if 0
 	if (io_interface) {
-		std::cout << _name << " has hw io, updating dependent machines\n";
+		DBG_MSG << _name << " has hw io, updating dependent machines\n";
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
 			MachineInstance *dep = *dep_iter++;
@@ -2462,7 +2462,6 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
 	enqueueAction(hma);
 	busy_machines.insert(this);
-	std::cout << _name << " queued message " << m << "\n";
 }
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
@@ -2555,7 +2554,7 @@ void MachineInstance::start(Action *a) {
 		ss << "starting action: " << *a;
 		setValue("TRACE", ss.str());
 	}
-	//    std::cout << "STARTING: " << *a << "\n";
+	//    DBG_MSG << "STARTING: " << *a << "\n";
 	active_actions.push_back(a->retain());
 }
 

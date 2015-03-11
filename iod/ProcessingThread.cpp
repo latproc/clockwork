@@ -338,7 +338,7 @@ void ProcessingThread::operator()()
 	std::set<IOComponent *>io_work_queue;
 	while (!program_done)
 	{
-		unsigned int machine_check_delay = cycle_delay / 2;
+		unsigned int machine_check_delay = cycle_delay;
 		machine.idle();
 		if (machine.connected())
 		{
@@ -369,7 +369,8 @@ void ProcessingThread::operator()()
 			{ ecat_out, 0, ZMQ_POLLIN, 0 }
 		};
 		char buf[10];
-		int poll_wait = cycle_delay / 1000;
+		int poll_wait = 2 * cycle_delay / 1000; // millisecs
+		machine_check_delay = cycle_delay;
 		if (poll_wait == 0) poll_wait = 1;
 		uint64_t curr_t = 0;
 		int systems_waiting = 0;
@@ -384,8 +385,25 @@ void ProcessingThread::operator()()
 			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
 			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 10000) break;
 			//status = e_waiting;
+			//DBG_MSG << "looping\n";
 		}
-		//DBG_MSG << "handling activity\n";
+#if 0
+		// debug code to work out what machines or systems tend to need processing
+		DBG_MSG << "handling activity " << systems_waiting
+			<< ( (items[ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
+			<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
+			<< ( (!io_work_queue.empty()) ? " io work" : "")
+			<< ( (curr_t - last_checked_machines > machine_check_delay) ? " machines" : "")
+			<< ( (curr_t - last_checked_plugins >= 10000) ? " plugins" : "")
+			<< "\n";
+		if (IOComponent::updatesWaiting()) {
+			extern std::set<IOComponent*> updatedComponentsOut;
+			std::set<IOComponent*>::iterator iter = updatedComponentsOut.begin();
+			while (iter != updatedComponentsOut.end()) std::cout << " " << (*iter++)->io_name;
+			std::cout << " \n";
+		}
+#endif
+		
 		end = nowMicrosecs();
     curr_t = end;
 	

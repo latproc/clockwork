@@ -349,7 +349,7 @@ void IOComponent::add_subscriber(const char *name, const char *topic) {
 
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
-	out << '[' << address.description<<" "
+	out << (io_clock-read_time) << " [" << address.description<<" "
 		<<address.module_position << " "
 		<< address.io_offset << ':' 
 		<< address.io_bitpos << "." 
@@ -656,6 +656,18 @@ uint8_t *IOComponent::generateMask(std::list<MachineInstance*> &outputs) {
 	return res;
 }
 
+bool IOComponent::ownersEnabled() const {
+	if (owners.empty()) return true;
+	else {
+		std::list<MachineInstance*>::const_iterator owners_iter = owners.begin();
+		while (owners_iter != owners.end()) {
+			MachineInstance *o = *owners_iter++;
+			if (o->enabled()) return true;
+		}
+	}
+	return false;
+}
+
 static uint8_t *generateUpdateMask() {
 	//  returns null if there are no updates, otherwise returns
 	// a mask for the update data
@@ -671,7 +683,9 @@ static uint8_t *generateUpdateMask() {
 
 	std::set<IOComponent*>::iterator iter = updatedComponentsOut.begin();
 	while (iter != updatedComponentsOut.end()) {
-		IOComponent *ioc = *iter++;
+		IOComponent *ioc = *iter;
+		if (ioc->ownersEnabled()) iter++; else iter = updatedComponentsOut.erase(iter);
+
 		if (ioc->direction() != IOComponent::DirOutput && ioc->direction() != IOComponent::DirBidirectional) 
 			continue;
 		unsigned int offset = ioc->address.io_offset;
