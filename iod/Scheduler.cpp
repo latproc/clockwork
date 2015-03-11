@@ -170,7 +170,7 @@ std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
     return item.operator<<(out);
 }
 
-Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PULL), next_delay_time(0), notification_sent(0) { 
+Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PULL), update_notify(0), next_delay_time(0), notification_sent(0) {
 	update_sync.bind("inproc://sch_items");
 	next_time.tv_sec = 0;
 	next_time.tv_usec = 0;
@@ -202,15 +202,15 @@ void Scheduler::add(ScheduledItem*item) {
 	//assert(next_delay_time < 60000000L);
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	if (!last_notification) {
-		zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
+		if (!update_notify) update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
 		int send_state = 0; // disconnected
 		while (true) {
 			try {
 				if (send_state == 0) {
-					update_notify.connect("inproc://sch_items");
+					update_notify->connect("inproc://sch_items");
 					send_state = 1; // connected
 				}
-				safeSend(update_notify,"poke",4);
+				safeSend(*update_notify,"poke",4);
 				notification_sent = nowMicrosecs();
 				break;
 			}		
@@ -221,6 +221,8 @@ void Scheduler::add(ScheduledItem*item) {
 				snprintf(errmsg, 100, "Scheduler::add error: %s", zmq_strerror( zmq_errno()));
 				std::cerr << errmsg << "\n";
 				MessageLog::instance()->add(errmsg);
+				delete update_notify;
+				update_notify = 0;
 				throw;
 			} 
 		}

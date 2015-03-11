@@ -108,6 +108,7 @@ protected:
 		e_aborted 	// time to shutdown
 	} state;
 	zmq::socket_t update_sync;
+	zmq::socket_t *update_notify;
 	long next_delay_time;
 	unsigned long notification_sent; // the scheduler has been notified that an item is scheduled
 	boost::mutex q_mutex;
