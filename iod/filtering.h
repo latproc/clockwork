@@ -73,6 +73,7 @@ public:
     float getFloatAtIndex(int idx) const;
     
     void append( float val, uint64_t time);
+    void quickAppend( float val, uint64_t time);
     
     float rate() const; // returns dv/dt between the two sample positions
     

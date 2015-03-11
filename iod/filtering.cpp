@@ -150,6 +150,13 @@ float SampleBuffer::getFloatAtOffset(int offset) const {
 float SampleBuffer::getFloatAtIndex(int idx) const {
     return values[ idx ];
 }
+void SampleBuffer::quickAppend( float val, uint64_t time) {
+	front = (front + 1) % BUFSIZE;
+	if (front == back || back == -1) back = (back + 1) % BUFSIZE;
+	values[front] = val;
+	times[front] = time;
+}
+
 void SampleBuffer::append( float val, uint64_t time) {
     boost::mutex::scoped_lock(q_mutex);
     
@@ -158,24 +165,23 @@ void SampleBuffer::append( float val, uint64_t time) {
      */
 	if (front != -1 && time == times[front]) return;
 	unsigned int n = length();
-    if (n > BUFSIZE/2) {
+  if (n > (unsigned int)BUFSIZE/2) {
 		double mean_change = ((values[front] - values[back])) / n;
 		double period = ((double)(times[front] - times[back])) / n;
 		int missing = ((double)(time - times[front]) )/ period;
 		if (missing >= 3){
-			std::cout << "synthesizing missing data: " << missing << "\n";
+			//DBG_MSG << "synthesizing missing data: " << missing << "\n";
 			uint64_t last_time = times[front];
 			reset();
 			if (missing > BUFSIZE/2) missing = BUFSIZE/2;
 			for (int i=missing; i>0; --i)
-			append(val-i*mean_change, time - i * (time-last_time)/missing);
+			quickAppend(val-i*mean_change, time - i * (time-last_time)/missing);
 		}
-    }
-    front = (front + 1) % BUFSIZE;
-    if (front == back || back == -1)
-        back = (back + 1) % BUFSIZE;
-    values[front] = val;
-    times[front] = time;
+	}
+	front = (front + 1) % BUFSIZE;
+	if (front == back || back == -1) back = (back + 1) % BUFSIZE;
+	values[front] = val;
+	times[front] = time;
 }
 
 float SampleBuffer::rate() const // returns dv/dt between the two sample positions
