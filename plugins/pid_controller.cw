@@ -12,9 +12,9 @@ PIDCONFIGURATION MACHINE {
 	#OPTION Kp 9000000;
 	#OPTION Ki 800000;
 	#OPTION Kd 40;
-	OPTION Kp 8000000;
-	OPTION Ki 1600000;
-	OPTION Kd 5000;
+	OPTION Kp 4000000;
+	OPTION Ki 700000;
+	OPTION Kd 0;
 }
 
 PIDCONTROL MACHINE {
@@ -98,6 +98,7 @@ struct PIDData {
 	long ramp_start_power;		/* the power level at the point ramping started */
 	long ramp_start_target; 	/* the target that was set when ramping started */
 	uint64_t last_poll;
+	long last_position;
 	long tolerance;
 	long last_set_point;
 	long last_stop_position;
@@ -155,12 +156,19 @@ long output_scaled(struct PIDData * settings, long power) {
 	return raw;
 }
 
-double calc_set_point(long current_position, long stop_position) {
+double calc_set_point(double set_point, long current_position, long stop_position) {
 	long diff = stop_position - current_position;
-	if (diff > 2000) return 2000.0;
-	else if (diff > 200) return 500.0;
-	else if (diff > -200) return 0.0;
-	else return -500.0;
+	if (set_point == 0) return 0.0;
+	if (set_point > 0) {
+		if (diff > 5000) return set_point;
+		else if (diff > 100) return 400.0;
+		else return 0;
+	}
+	else {
+		if (diff < -5000) return set_point;
+		else if (diff < -100) return -400.0;
+		else return 0;
+	}
 }
     
 PLUGIN_EXPORT
@@ -236,6 +244,7 @@ int check_states(void *scope)
 		data->state = cs_init;
 		data->current_power = 0;
 		data->last_poll = 0;
+		data->last_position = *data->position;
 
 		data->stop_marker = 0;
 		data->last_stop_position = 0;
@@ -353,23 +362,36 @@ int poll_actions(void *scope) {
 				data->state = cs_speed;
 			}
 			else
-				set_point = calc_set_point(*data->position, *data->stop_position);
+				set_point = calc_set_point(set_point, *data->position, *data->stop_position);
 			if (std_state) changeState(std_state, "Resetting");
 		}
 		else if ( data->state == cs_position ) { 
-				set_point = calc_set_point(*data->position, *data->stop_position);
+				set_point = calc_set_point(set_point, *data->position, *data->stop_position);
 		}
 		else {
 			data->state = cs_speed;
 			if (data->last_set_point != set_point) {
 				data->last_set_point = set_point;
-				data->total_err *= 0.1;
+				//data->total_err *= 0.1;
 			}
 		}
 
-		double Ep = set_point - *data->speed;
+		double dt = (double)(delta_t - 2000)/1000000.0; // 2ms allowance for latency
+		if (*data->position == 0) data->last_position = 0; // startup compensation before the conveyor starts to move
+		else if (data->last_position == 0) data->last_position = *data->position;
+		long next_position = data->last_position + data->last_Ep + dt * set_point;
+		double Ep = next_position - *data->position;
+/*
+		printf ("%s pos: %ld, Ep: %5.3f, tot_e %5.3f, dt: %5.3f, pwr: %ld, spd: %5.3f, setpt: %5.3f, next: %ld\n", 
+			data->conveyor_name,
+			*data->position, Ep, data->total_err, dt, 
+			data->current_power,
+			(double)(*data->position - data->last_position) / dt,
+			set_point, next_position);
+*/
+		data->last_position = *data->position;
+		//double Ep = set_point - *data->speed;
 		if (data->state != cs_stopped) {
-			double dt = ((double)(now_t - data->last_poll))/1000000;
 			double de = Ep - data->last_Ep;
 			data->total_err += (data->last_Ep + Ep)/2 * dt;
 			data->last_Ep = Ep;
@@ -388,10 +410,11 @@ int poll_actions(void *scope) {
 
 		if (set_point != 0.0 && std_state) 
 			changeState(std_state, "Working");
-		else if (set_point == 0.0 && fabs(Ep) < 40) {
+		else if (set_point == 0.0 ) {
 			/*printf("%s stopped\n", data->conveyor_name);*/
 			data->state = cs_stopped;
 			data->total_err = 0.0;
+			data->last_Ep = 0.0;
 			changeState(std_state, "Resetting");
 			new_power = 0;
 		}
@@ -400,8 +423,8 @@ int poll_actions(void *scope) {
 
 	if (new_power != data->current_power) {
 		if (new_power == 0.0) {}
-		else if ( new_power > data->current_power + 2000) new_power = data->current_power + 2000;
-		else if (new_power < data->current_power - 2000) new_power = data->current_power - 2000;
+		else if ( new_power > data->current_power + 1000) new_power = data->current_power + 1000;
+		else if (new_power < data->current_power - 1000) new_power = data->current_power - 1000;
 		long power = output_scaled(data, (long) new_power);
 /*
 		if (data->debug && *data->debug) printf("%s setting power to %ld (scaled: %ld)\n", 
