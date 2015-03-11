@@ -23,7 +23,7 @@ PIDCONTROL MACHINE {
 	none STATE;
 }
 
-PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_settings, driver, pos, freq_sampler {
+PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_settings, driver, pos {
     PLUGIN "pid_controller.so.1.0";
 
 %BEGIN_PLUGIN
@@ -57,7 +57,6 @@ struct PIDData {
     long *set_point;
     long *stop_position; 
     long *mark_position; 
-	long *speed;
 	long *position;
 	long *target_power;
 
@@ -104,7 +103,6 @@ struct PIDData {
 	long last_stop_position;
 	long default_debug; /* a default debug level if one is not specified in the script */
 	int inverted;
-	long last_speed;
 	double last_Ep;
 
 	char *conveyor_name;
@@ -190,7 +188,6 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "StopMarker", &data->mark_position);
 		ok = ok && getInt(scope, "StopPosition", &data->stop_position);
 		ok = ok && getInt(scope, "TargetPower", &data->target_power);
-		ok = ok && getInt(scope, "freq_sampler.VALUE", &data->speed);
 		ok = ok && getInt(scope, "pos.VALUE", &data->position);
 		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
 		ok = ok && getInt(scope, "settings.fwd_step_up", &data->fwd_step_up);
@@ -283,6 +280,7 @@ int poll_actions(void *scope) {
 
 	new_power = data->current_power;
 
+	void *std_state = getNamedScope(scope, "M_Control");
 	/* Determine what the controller should be doing */
 	{
 		enum {cmd_none, cmd_stop, cmd_drive} command;
@@ -310,7 +308,6 @@ int poll_actions(void *scope) {
 		}
 		else
 			command = cmd_stop;
-		void *std_state = getNamedScope(scope, "M_Control");
 		if (!std_state) log_message(scope, "Could not find named scope M_Control");
 
 		int interlocked = current && strcmp(current, "interlocked") == 0;
@@ -368,13 +365,11 @@ int poll_actions(void *scope) {
 		else if ( data->state == cs_position ) { 
 				set_point = calc_set_point(set_point, *data->position, *data->stop_position);
 		}
-		else {
-			data->state = cs_speed;
+		else 
 			if (data->last_set_point != set_point) {
+				if (data->last_set_point == 0) data->state = cs_speed;
 				data->last_set_point = set_point;
-				//data->total_err *= 0.1;
 			}
-		}
 
 		double dt = (double)(delta_t - 2000)/1000000.0; // 2ms allowance for latency
 		if (*data->position == 0) data->last_position = 0; // startup compensation before the conveyor starts to move
@@ -390,19 +385,17 @@ int poll_actions(void *scope) {
 			set_point, next_position);
 */
 		data->last_position = *data->position;
-		//double Ep = set_point - *data->speed;
 		if (data->state != cs_stopped) {
 			double de = Ep - data->last_Ep;
 			data->total_err += (data->last_Ep + Ep)/2 * dt;
 			data->last_Ep = Ep;
-			data->last_speed = *data->speed;
 
 			double Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de / dt);
 			if (data->debug && *data->debug) 
 				if (fabs(Ep)>5) 
 /*
-					printf("%s Set: %5.3f spd: %ld Ep: %5.3f Ierr: %5.3f de/dt: %5.3f\n", data->conveyor_name, 
-						set_point, *data->speed, Ep, data->total_err, de/dt );
+					printf("%s Set: %5.3f Ep: %5.3f Ierr: %5.3f de/dt: %5.3f\n", data->conveyor_name, 
+						set_point, Ep, data->total_err, de/dt );
 */
 			
 			new_power = Dout;
@@ -412,10 +405,12 @@ int poll_actions(void *scope) {
 			changeState(std_state, "Working");
 		else if (set_point == 0.0 ) {
 			/*printf("%s stopped\n", data->conveyor_name);*/
-			data->state = cs_stopped;
+			if (data->state != cs_stopped) {
+				changeState(std_state, "Resetting");
+				data->state = cs_stopped;
+			}
 			data->total_err = 0.0;
 			data->last_Ep = 0.0;
-			changeState(std_state, "Resetting");
 			new_power = 0;
 		}
 
@@ -432,6 +427,7 @@ int poll_actions(void *scope) {
 */
 		
 		setIntValue(scope, "driver.VALUE", power);
+		if (power == 0) changeState(std_state, "Ready");
 		data->current_power = new_power;
 	}
 
