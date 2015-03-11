@@ -162,6 +162,7 @@ $banner = "<p>Logged in as " . $user->getName() . ". <a href=\"admin.php?m=logou
 if ($user->isAdministrator()) {
 	$banner .= '&nbsp;&nbsp;<a href="admin.php?registration">Administration</a>';
 }
+$banner .= "*nbsp;&nbsp;<a href=\"monitor.php\">Monitor</a>";
 $banner .= "<p>";
 
 print <<<EOD
