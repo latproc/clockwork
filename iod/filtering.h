@@ -11,6 +11,7 @@ public:
     const int BUFSIZE;
     int front;
     int back;
+	double total_;
     virtual float getFloatAtOffset(int offset) const = 0;
     virtual float getFloatAtIndex(int idx) const = 0;
     float difference(int idx_a, int idx_b) const;

@@ -15,6 +15,7 @@ int Buffer::length()
 void Buffer::reset() {
     boost::mutex::scoped_lock(q_mutex);
     front = back = -1;
+	total_ = 0.0;
 }
 
 float Buffer::difference(int idx_a, int idx_b) const
@@ -45,6 +46,8 @@ float Buffer::average(int n)
   int len = length();
   if (len <= 0) return 0.0f;
   if (len < n) n = len;
+  return total_ / n;
+#if 0
   int i = (front + BUFSIZE - n + 1) % BUFSIZE;
   while (i != front)
   {
@@ -59,13 +62,16 @@ float Buffer::average(int n)
 #endif
   res += getFloatAtIndex(i);
   return res / n;
+#endif
 }
 
 void LongBuffer::append(long val)
 {
     boost::mutex::scoped_lock(q_mutex);
     front = (front + 1) % BUFSIZE;
+	if (front == back) total_ -= buf[front];
     buf[front] = val;
+	total_ += val;
     if (front == back || back == -1)
         back = (back + 1) % BUFSIZE;
 }
@@ -102,7 +108,9 @@ void FloatBuffer::append( float val)
 {
     boost::mutex::scoped_lock(q_mutex);
     front = (front + 1) % BUFSIZE;
+	if (front == back) total_ -= buf[front];
     buf[front] = val;
+	total_ += val;
     if (front == back || back == -1)
       back = (back + 1) % BUFSIZE;
 }
@@ -152,7 +160,9 @@ float SampleBuffer::getFloatAtIndex(int idx) const {
 }
 void SampleBuffer::quickAppend( float val, uint64_t time) {
 	front = (front + 1) % BUFSIZE;
+	if (front == back) total_ -= values[front];
 	if (front == back || back == -1) back = (back + 1) % BUFSIZE;
+	total_ += val;
 	values[front] = val;
 	times[front] = time;
 }
@@ -165,6 +175,7 @@ void SampleBuffer::append( float val, uint64_t time) {
      */
 	if (front != -1 && time == times[front]) return;
 	unsigned int n = length();
+  
   if (n > (unsigned int)BUFSIZE/2) {
 		double mean_change = ((values[front] - values[back])) / n;
 		double period = ((double)(times[front] - times[back])) / n;
@@ -179,7 +190,9 @@ void SampleBuffer::append( float val, uint64_t time) {
 		}
 	}
 	front = (front + 1) % BUFSIZE;
+	if (front == back) total_ -= values[front];
 	if (front == back || back == -1) back = (back + 1) % BUFSIZE;
+	total_ += val;
 	values[front] = val;
 	times[front] = time;
 }
