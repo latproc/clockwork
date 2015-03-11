@@ -185,13 +185,20 @@ ModbusClientThread *mb = 0;
 
 void press(Fl_Widget *w, void *data) {
 	int *addr= (int*)data;
-	mb->tab_rq_bits[*addr] = 1;
+	Fl_Button *btn = dynamic_cast<Fl_Button*>(w);
+	if (btn) {
+		int val = btn->value();
+		mb->tab_rq_bits[*addr] = val;
+	}
+	else
+		mb->tab_rq_bits[*addr] = 1;
     int rc = modbus_write_bit(mb->ctx, *addr, mb->tab_rq_bits[*addr]);
     if (rc != 1) {
         printf("ERROR modbus_write_bit (%d)\n", rc);
         printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[0]);
     } 
 }
+
 
 void start(Fl_Widget *w, void *data) {
 	int addr=1004; /* start */
