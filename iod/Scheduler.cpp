@@ -202,14 +202,12 @@ void Scheduler::add(ScheduledItem*item) {
 	//assert(next_delay_time < 60000000L);
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	if (!last_notification) {
-		if (!update_notify) update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
-		int send_state = 0; // disconnected
+		if (!update_notify) {
+			update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
+			update_notify->connect("inproc://sch_items");
+		}
 		while (true) {
 			try {
-				if (send_state == 0) {
-					update_notify->connect("inproc://sch_items");
-					send_state = 1; // connected
-				}
 				safeSend(*update_notify,"poke",4);
 				notification_sent = nowMicrosecs();
 				break;
