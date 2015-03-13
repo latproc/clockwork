@@ -61,11 +61,6 @@ private:
     FloatBuffer &operator=(const FloatBuffer&);
 };
 
-class Sample {
-    float value;
-    uint64_t time;
-};
-
 class SampleBuffer : public Buffer {
 public:
     float *values;
