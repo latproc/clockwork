@@ -185,7 +185,7 @@ ModbusClientThread *mb = 0;
 
 void press(Fl_Widget *w, void *data) {
 	int *addr= (int*)data;
-	Fl_Button *btn = dynamic_cast<Fl_Button*>(w);
+	Fl_Check_Button *btn = dynamic_cast<Fl_Check_Button*>(w);
 	if (btn) {
 		int val = btn->value();
 		mb->tab_rq_bits[*addr] = val;

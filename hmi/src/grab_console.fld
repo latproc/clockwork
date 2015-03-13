@@ -6,13 +6,9 @@ class GrabUserInterface {open
 } {
   Function {make_window()} {open
   } {
-    Fl_Window {} {open
-      xywh {0 45 642 587} type Double visible
+    Fl_Window {} {open selected
+      xywh {105 148 642 587} type Double hide
     } {
-      Fl_Button {} {
-        label {Start Motor}
-        xywh {45 35 95 25}
-      }
       Fl_Button {} {
         label {Raise Cutter}
         xywh {325 35 100 25}
@@ -30,28 +26,20 @@ class GrabUserInterface {open
         xywh {215 70 90 25}
       }
       Fl_Button {} {
-        label {Cutter Conveyor Forward}
-        xywh {195 160 180 25}
-      }
-      Fl_Button {} {
-        label {Cutter Conveyor Reverse}
-        xywh {195 195 180 25}
-      }
-      Fl_Button {} {
-        label {Cutter Conveyor Stop}
-        xywh {195 230 180 25}
-      }
-      Fl_Button {} {
         label {Tip Bale}
-        xywh {40 160 120 25}
+        xywh {40 195 120 25}
       }
       Fl_Check_Button {} {
         label {Cutter Conveyor Forward}
-        xywh {195 275 190 25} down_box DOWN_BOX
+        xywh {250 165 190 25} down_box DOWN_BOX
       }
       Fl_Check_Button {} {
         label {Cutter Conveyor Reverse}
-        xywh {195 310 190 25} down_box DOWN_BOX
+        xywh {250 195 190 25} down_box DOWN_BOX
+      }
+      Fl_Check_Button {} {
+        label {Automatic Mode}
+        xywh {40 165 140 25} down_box DOWN_BOX
       }
     }
   }
