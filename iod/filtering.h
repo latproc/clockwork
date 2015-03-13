@@ -2,10 +2,8 @@
 #define __FILTERING_H__
 
 #include <boost/thread.hpp>
-#include <boost/thread/lockable_adapter.hpp>
 
-
-class Buffer : public boost::basic_lockable_adapter<boost::recursive_mutex>
+class Buffer
 {
 public:
     const int BUFSIZE;
