@@ -18,7 +18,7 @@ if ((!isset($user))) {
 	<html> <head> 
 	</head>
 	<body>
-	<div>Please <a href="login.php">Login</a></div>
+	<div>Please <a href="admin.php">Login</a></div>
 	</body></html>
 EOD;
 	return;
