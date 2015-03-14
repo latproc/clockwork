@@ -92,7 +92,7 @@ public:
 		process_command(command);
 
 		while (!finished) {
-			
+			usleep(500000);	
 		}
 	}
 
@@ -287,6 +287,7 @@ int main(int argc, char **argv) {
 		//  sprintf(buf, "%d", modbus_interface.tab_rw_rq_registers[1074]);
 		//  screen_num->value(buf);
 		}
+		usleep(5000);
 	}
 
 	return Fl::run();

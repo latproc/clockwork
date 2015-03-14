@@ -287,13 +287,14 @@ struct ModbusServerThread
 						if ( (nfds = select(max_fd +1, &activity, 0, 0, &timeout)) == -1)
 						{
 								perror("select");
+								if (errno == EINVAL || errno == ENOENT) { modbus_state = ms_finished; break; }
+								usleep(100);
 								continue; // TBD
 						}
 						if (nfds == 0) continue;
 						for (int conn = 0; conn <= max_fd; ++conn)
 						{
 								if (!FD_ISSET(conn, &activity)) continue;
-
 								if (conn == socket)   // new connection
 								{
 										std::cout << "new modbus connection on socket " << socket << "\n";

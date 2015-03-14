@@ -59,7 +59,7 @@ Action::Status IncludeAction::run() {
 		MessageLog::instance()->add(msg);
 		free(msg);
 */
-		std::cout << owner->getName() << "inserting " << entry << " kind: " << entry.kind << "\n";
+		//std::cout << owner->getName() << " inserting " << entry << " kind: " << entry.kind << "\n";
         if (list_machine->_type == "REFERENCE") {
             MachineInstance *old = 0;
             if (list_machine->locals.size()) {

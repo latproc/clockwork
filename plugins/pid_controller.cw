@@ -20,6 +20,7 @@ PIDCONFIGURATION MACHINE {
 PIDCONTROL MACHINE {
 	stop INITIAL;
 	drive STATE;
+	seek STATE;
 	none STATE;
 }
 
@@ -283,7 +284,7 @@ int poll_actions(void *scope) {
 	void *std_state = getNamedScope(scope, "M_Control");
 	/* Determine what the controller should be doing */
 	{
-		enum {cmd_none, cmd_stop, cmd_drive} command;
+		enum {cmd_none, cmd_stop, cmd_drive, cmd_seek} command;
 		void *controller = 0;
 		current = getState(scope);
 		control = 0;
@@ -305,6 +306,8 @@ int poll_actions(void *scope) {
 				command = cmd_stop;
 			else if (strcmp(control, "drive") == 0)
 				command = cmd_drive;
+			else if (strcmp(control, "seek") == 0)
+				command = cmd_seek;
 			else 
 				command = cmd_none;
 		}
@@ -436,6 +439,9 @@ int poll_actions(void *scope) {
 
 done_polling_actions:
 	data->last_poll = now_t;
+	if (current) { free(current); current = 0; }
+	if (control) { free(control); control = 0; }
+	data->last_poll = now_t;
 	
     return PLUGIN_COMPLETED;
 }
@@ -463,6 +469,7 @@ done_polling_actions:
 		} ELSE {
 			StopPosition := StopMarker - rev_settings.StoppingDistance;
 		};
+		SET control TO seek;
 	}
 
 	# convenience commands
