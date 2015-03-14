@@ -685,6 +685,7 @@ void ProcessingThread::operator()()
 				if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
 					//std::cout << "Sending defaults to EtherCAT\n";
 					upd = IOComponent::getDefaults();
+					assert(upd);
 					//display(upd->data);
 					//std::cout << "\n";
 				}
@@ -757,7 +758,7 @@ void ProcessingThread::operator()()
 					system->setValue("AVG_UPDATE_TIME", total_update_time*1000 / ++update_count);
 #endif
 				}
-				else std::cout << "warning: getUpdate/getDefault returned null\n";
+				//else std::cout << "warning: getUpdate/getDefault returned null\n";
 			}
 			//else
 			//	NB_MSG << "have updates but update state is not idle yet\n";

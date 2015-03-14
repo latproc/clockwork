@@ -37,22 +37,16 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <stdint.h>
 #include <math.h>
 
-struct PIDData {
-	enum { 
-		pid_init, 
-		pid_interlocked, 
-		pid_off, 
-		pid_forward, 
-		pid_reverse, 
-		pid_idle 
-	} pid_state;
-	enum { 
+enum State { 
 		cs_init, 
 		cs_interlocked, /* something upstream is interlocked */
 		cs_stopped, 		/* sleeping */
 		cs_position,
 		cs_speed
-	} state;
+};
+
+struct PIDData {
+	enum State state;
 
 	/**** clockwork interface ***/
     long *set_point;
@@ -107,6 +101,7 @@ struct PIDData {
 	double last_Ep;
 
 	char *conveyor_name;
+	enum State saved_state;
 
 	/* stop/start control */
 	long stop_marker;
@@ -168,6 +163,12 @@ double calc_set_point(double set_point, long current_position, long stop_positio
 		else if (diff < -100) return -400.0;
 		else return 0;
 	}
+}
+
+double calc_next_position(struct PIDData*data, long current_position, long stop_position) {
+	long diff = stop_position - current_position;
+	if (fabs(diff) < 1000) return stop_position;
+
 }
     
 PLUGIN_EXPORT
@@ -239,6 +240,7 @@ int check_states(void *scope)
 			return PLUGIN_ERROR;
 		}
 
+		data->saved_state = cs_init;
 		data->state = cs_init;
 		data->current_power = 0.0;
 		data->last_poll = 0;
@@ -259,6 +261,24 @@ int check_states(void *scope)
 	return PLUGIN_COMPLETED;
 }
 
+static void stop(struct PIDData*data, void *scope) {
+	if (data->debug && *data->debug) printf("%s stop command\n", data->conveyor_name);
+	data->state = cs_stopped;
+	data->current_power = 0.0;
+	*data->set_point = 0;
+	data->stop_marker = 0;
+	data->last_set_point = 0;
+	data->last_stop_position = 0;
+	setIntValue(scope, "SetPoint", 0);
+	if (!data->state == cs_interlocked) {
+		if (data->debug && *data->debug)
+			printf("%s stopped\n", data->conveyor_name);
+		data->state = cs_stopped;
+	}
+	setIntValue(scope, "TargetPower", 0);
+	setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
+}
+
 PLUGIN_EXPORT
 int poll_actions(void *scope) {
 	struct PIDData *data = (struct PIDData*)getInstanceData(scope);
@@ -269,7 +289,6 @@ int poll_actions(void *scope) {
 	long calculated_set_point = 0;
 	long calculated_stop_position = 0;
 	char *current = 0;
-	char *control = 0;
 
 	if (!data) return PLUGIN_COMPLETED; /* not initialised yet; nothing to do */
 
@@ -280,14 +299,24 @@ int poll_actions(void *scope) {
 	if ( delta_t/1000 < *data->min_update_time) return PLUGIN_COMPLETED;
 
 	new_power = data->current_power;
+	enum State new_state = data->state;
 
-	void *std_state = getNamedScope(scope, "M_Control");
+	void *std_state = getNamedScope(scope, "M_Control"); // used to report state to other machines
+	if (!std_state) log_message(scope, "Could not find named scope M_Control");
+
 	/* Determine what the controller should be doing */
 	{
-		enum {cmd_none, cmd_stop, cmd_drive, cmd_seek} command;
-		void *controller = 0;
+		long next_position = 0;
+		double set_point = *data->set_point;
+		double dt = (double)(delta_t - 2000)/1000000.0; // 2ms allowance for latency
+
 		current = getState(scope);
-		control = 0;
+
+		if (strcmp(current, "interlocked") == 0) new_state = cs_interlocked;
+		else if (strcmp(current, "Stopped") == 0) new_state = cs_stopped;
+		else if (strcmp(current, "Speed") == 0) new_state = cs_speed;
+		else if (strcmp(current, "Seeking") == 0) new_state = cs_position;
+		else if (strcmp(current, "INIT") == 0) new_state = cs_init;
 
 		if (data->debug && *data->debug)
 			printf("%ld\t %s test: %s %ld, stop: %ld, pow: %5.3f, pos: %ld\n", (long)delta_t, data->conveyor_name,
@@ -297,90 +326,59 @@ int poll_actions(void *scope) {
                 data->current_power,
                 *data->position);
 		
-		controller = getNamedScope(scope, "control");
-		if (controller) {
-			control = getState(controller);
-			if (data->debug && *data->debug)
-				printf("%s controller state: %s\n", data->conveyor_name, (control) ? control : "null");
-			if (strcmp(control, "stop") == 0)
-				command = cmd_stop;
-			else if (strcmp(control, "drive") == 0)
-				command = cmd_drive;
-			else if (strcmp(control, "seek") == 0)
-				command = cmd_seek;
-			else 
-				command = cmd_none;
-		}
-		else
-			command = cmd_stop;
-		if (!std_state) log_message(scope, "Could not find named scope M_Control");
+		if (*data->position == 0) data->last_position = 0; // startup compensation before the conveyor starts to move
+		else if (data->last_position == 0) data->last_position = *data->position;
 
-		int interlocked = current && strcmp(current, "interlocked") == 0;
-
-		if (interlocked && data->state != cs_interlocked) {
-			if (std_state) changeState(std_state, "Unavailable");
-			data->state = cs_interlocked;
-			command = cmd_stop;
-		}
-
-		if (command == cmd_stop) {
-			if (data->debug && *data->debug) printf("%s stop command\n", data->conveyor_name);
-			data->current_power = 0.0;
-			*data->set_point = 0;
-			new_power = 0;
-			data->stop_marker = 0;
-			data->last_set_point = 0;
-			setIntValue(scope, "SetPoint", 0);
-			if (!interlocked) {
-				if (data->debug && *data->debug)
-					printf("%s stopped\n", data->conveyor_name);
-				data->state = cs_stopped;
-				if (std_state) changeState(std_state, "Ready");
+		if (new_state == cs_interlocked ) {
+			if (data->state != cs_interlocked)  {
+				stop(data, scope);
+				if (std_state) changeState(std_state, "Unavailable");
+				data->saved_state = data->state;
+				data->state = cs_interlocked;
 			}
-			setIntValue(scope, "TargetPower", 0);
-			setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
-			if (controller) changeState(controller, "none");
 			goto done_polling_actions;
 		}
-		if (interlocked) goto done_polling_actions;
 
 		if (data->current_power == 0.0 && (data->state == cs_init || data->state == cs_interlocked) ) {
 			if (std_state) changeState(std_state, "Ready");
 			data->state = cs_stopped;
 		}
 
-		/* Seek to the stop position if there is one otherwise maintain the set point */
+		if (new_state == cs_stopped) {
+			if (data->state != cs_stopped) stop(data, scope);
+			data->state = cs_stopped;
+			goto done_polling_actions;
+		}
 
-		double set_point = *data->set_point;
+		next_position = data->last_position + dt * set_point;
 
-		/* if the stop position has changed, we attempt to move to that position */
-		if (*data->stop_position && data->last_stop_position != *data->stop_position) {
-			printf("%s new stop position %ld\n", data->conveyor_name, *data->stop_position);
-			data->last_stop_position = *data->stop_position;
-			data->state = cs_position;
-			data->stop_marker = *data->mark_position;
-			if (!data->stop_marker) {
-				*data->set_point = 0;
-				set_point = 0;
+		if (new_state == cs_position) {
+			if (data->state != cs_position || (data->last_stop_position != *data->stop_position) ) {
+					data->state = cs_position;
+					printf("%s new stop position %ld\n", data->conveyor_name, *data->stop_position);
+					data->last_stop_position = *data->stop_position;
+					data->stop_marker = *data->mark_position;
+			}
+			// once we are very close we no longer calculate a moving target
+			if ( *data->position > *data->stop_position && *data->position - *data->stop_position <= *data->fwd_tolerance) {
+					next_position = *data->stop_position;
+					data->total_err *= 0.2; // TBD stop this from repeating
+			}
+			else if ( *data->position < *data->stop_position &&  *data->stop_position - *data->position <= *data->rev_tolerance) {
+					next_position = *data->stop_position;
+					data->total_err *= 0.2; // TBD stop this from repeating
+			}
+			// as we get close to the stop position, we may ramp down 
+			set_point = calc_set_point(set_point, *data->position, *data->stop_position);
+		}
+
+		if (new_state == cs_speed) {
+			if (data->state != cs_speed) {
 				data->state = cs_speed;
 			}
-			else
-				set_point = calc_set_point(set_point, *data->position, *data->stop_position);
-			if (std_state) changeState(std_state, "Resetting");
+			next_position += data->last_Ep;
 		}
-		else if ( data->state == cs_position ) { 
-				set_point = calc_set_point(set_point, *data->position, *data->stop_position);
-		}
-		else 
-			if (data->last_set_point != set_point) {
-				if (data->last_set_point == 0) data->state = cs_speed;
-				data->last_set_point = set_point;
-			}
 
-		double dt = (double)(delta_t - 2000)/1000000.0; // 2ms allowance for latency
-		if (*data->position == 0) data->last_position = 0; // startup compensation before the conveyor starts to move
-		else if (data->last_position == 0) data->last_position = *data->position;
-		long next_position = data->last_position + data->last_Ep + dt * set_point;
 		double Ep = next_position - *data->position;
 
 		if (data->debug && *data->debug)
@@ -393,7 +391,7 @@ int poll_actions(void *scope) {
 			set_point, next_position);
 
 		data->last_position = *data->position;
-		if (data->state != cs_stopped) {
+		if (data->state == cs_speed || data->state == cs_position) {
 			double de = Ep - data->last_Ep;
 			data->total_err += (data->last_Ep + Ep)/2 * dt;
 			data->last_Ep = Ep;
@@ -406,19 +404,12 @@ int poll_actions(void *scope) {
 			new_power = Dout;
 		}
 
-		if (set_point != 0.0 && std_state) 
-			changeState(std_state, "Working");
-		else if (set_point == 0.0 ) {
-			/*printf("%s stopped\n", data->conveyor_name);*/
-			if (data->state != cs_stopped) {
-				changeState(std_state, "Resetting");
-				data->state = cs_stopped;
-			}
-			data->total_err = 0.0;
-			data->last_Ep = 0.0;
-			new_power = 0;
+		if (std_state) {
+			if (data->state == cs_speed)
+				if (set_point != 0.0 ) changeState(std_state, "Working"); else changeState(std_state, "Resetting");
+			else if (data->state == cs_position)
+				if (new_power != 0.0 ) changeState(std_state, "Working"); else changeState(std_state, "Resetting");
 		}
-
 	}
 
 	if (new_power != data->current_power) {
@@ -440,7 +431,6 @@ int poll_actions(void *scope) {
 done_polling_actions:
 	data->last_poll = now_t;
 	if (current) { free(current); current = 0; }
-	if (control) { free(control); control = 0; }
 	data->last_poll = now_t;
 	
     return PLUGIN_COMPLETED;
@@ -460,7 +450,7 @@ done_polling_actions:
 	stopped WHEN control IS stop;
 	waiting DEFAULT;
 
-	COMMAND stop { SET control TO stop; }
+	COMMAND stop { SetPoint := 0; StopPosition := 0; StopMarker := 0; }
 
 	COMMAND MarkPos {
 		StopMarker := pos.VALUE;
