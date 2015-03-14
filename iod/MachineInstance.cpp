@@ -2788,7 +2788,20 @@ void MachineInstance::disable() {
 	if (io_interface) {
 		io_interface->turnOff();
 	}
-	gettimeofday(&disabled_time, 0); 
+	
+	Value &val = properties.lookup("default");
+	if (val != SymbolTable::Null) {
+		if (val.kind == Value::t_integer) {
+			std::cout << "Initialising value for " << _name << " to " << val << "\n";
+			long i_val = 0;
+			if (val.asInteger(i_val)) {
+				setValue("VALUE", i_val);
+				if (io_interface) io_interface->setValue((uint32_t)i_val);
+			}
+		}
+	}
+
+	gettimeofday(&disabled_time, 0);
 	if (_type == "LIST") // disabling a list disables the members
 		for (unsigned int i = 0; i<parameters.size(); ++i) {
 			if (parameters[i].machine) parameters[i].machine->disable();
