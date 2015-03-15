@@ -3051,7 +3051,7 @@ bool MachineInstance::setStableState() {
 		void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			//if (state_machine) return;
 			state_machine = machine_class;
-			DBG_MSG << _name << " is of class " << machine_class->name << "\n";
+			DBG_PARSER << _name << " is of class " << machine_class->name << "\n";
 			if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states
 					&& (machine_class->stable_states.size() || machine_class->name == "LIST" || machine_class->name == "REFERENCE"
 						|| (machine_class->plugin && machine_class->plugin->state_check)) )
@@ -3123,7 +3123,7 @@ bool MachineInstance::setStableState() {
 								// LISTS can have any number of parameters
 								// POINTs and ANALOGINPUTs can have 2 or three parameters
 								if (newsm->name == "LIST") {
-									DBG_MSG << "List has " << p.machine->parameters.size() << " parameters\n";
+									DBG_PARSER << "List has " << p.machine->parameters.size() << " parameters\n";
 									p.machine->setNeedsCheck();
 								}
 								if (newsm->name == "LIST"

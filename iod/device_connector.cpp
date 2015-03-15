@@ -102,7 +102,7 @@ void usage(int argc, const char * argv[]) {
         << " | (--serial_port portname --serial_settings baud:bits:parity:stop_bits:flow_control )\n"
         << " --property property_name [--client] [--name device_name]\n"
         << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ]\n"
-        << " --no_json --queue queue_name [--cw_port port] "
+        << " --no_json --queue queue_name --channel channel_name [--cw_port port] "
         << "\n";
 }
 
@@ -250,7 +250,13 @@ public:
             got_property = true;
         }
     }
-    
+	
+	void setChannelName(const char *chan) {
+		if (channel_) free(channel_);
+		channel_ = strdup(chan);
+	}
+	const char *getChannelName() const { if (channel_) return channel_; else return "DeviceConnector"; }
+	
     const char *pattern() { return pattern_; }
     void setPattern(const char *p) {
         if (pattern_) free(pattern_);
@@ -291,6 +297,7 @@ protected:
     char *serial_settings_;
     char *watch_;
     char *queue_;
+	char *channel_;
     bool collect_duplicates;
     bool disconnect_on_timeout;
     int cw_publisher;
@@ -899,6 +906,9 @@ int main(int argc, const char * argv[])
                 options.set_publisher_port(pport);
                 set_publisher_port(pport);
             }
+			else if (strcmp(argv[i], "--channel") == 0) {
+				options.setChannelName(argv[++i]);
+			}
             else {
                 std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
             }
@@ -922,7 +932,7 @@ int main(int argc, const char * argv[])
 	      ConnectionManager *connection_manager = 0;
 				try {
 	        if (options.watchProperty()) {
-	            connection_manager = new SubscriptionManager("DeviceConnector");
+				connection_manager = new SubscriptionManager(Options::instance()->getChannelName());
 	        }
 	        else {
 	            connection_manager = new CommandManager(Options::instance()->host());

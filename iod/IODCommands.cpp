@@ -372,7 +372,9 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                 return true;
 			}
 	        else {
-	            error_str = "Unknown device";
+				char buf[200];
+				snprintf(buf, 200, "Unknown device: %s", params[1].asString().c_str() );
+	            error_str = buf;
 	            return false;
 	        }
 		/*}
@@ -1093,7 +1095,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                             }
                             error_str = zmq_strerror(zmq_errno());
                             std::cerr << error_str << "\n";
-                            return false;
+                            exit(1);
                         }
                     }
                 }

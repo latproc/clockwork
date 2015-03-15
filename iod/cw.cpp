@@ -149,7 +149,7 @@ int main (int argc, char const *argv[])
 
 
 	Logger::instance()->setLevel(Logger::Debug);
-	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
 
 	std::list<std::string> source_files;
 	int load_result = loadOptions(argc, argv, source_files);

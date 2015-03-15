@@ -496,12 +496,12 @@ void semantic_analysis() {
         m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
             MachineInstance *mi = *m_iter++;
-        std::cout << "Machine " << mi->getName() << " has " << mi->parameters.size() << " parameters\n";
+        DBG_PARSER << "Machine " << mi->getName() << " has " << mi->parameters.size() << " parameters\n";
         
 		if (mi->getStateMachine() && mi->parameters.size() != mi->getStateMachine()->parameters.size()) {
             // the POINT class special; it can have either 2 or 3 parameters (yuk)
             if (mi->getStateMachine()->name == "LIST") {
-                DBG_MSG << "List has " << mi->parameters.size() << " parameters\n";
+                DBG_PARSER << "List has " << mi->parameters.size() << " parameters\n";
             }
             else if ((mi->getStateMachine()->name == "POINT"
                       && mi->getStateMachine()->parameters.size() >= 2
@@ -529,13 +529,17 @@ void semantic_analysis() {
         for (unsigned int i=0; i<mi->parameters.size(); i++) {
             Value p_i = mi->parameters[i].val;
             if (p_i.kind == Value::t_symbol) {
-                std::cout << "  parameter " << i << " " << p_i.sValue << " (" << mi->parameters[i].real_name << ")\n";
+                DBG_PARSER << "  parameter " << i << " " << p_i.sValue << " (" << mi->parameters[i].real_name << ")\n";
 				MachineInstance *found = mi->lookup(mi->parameters[i]); // uses the real_name field and caches the result
 				if (found) {
                     // special check of parameter types for points
                     if (mi->_type == "POINT" && i == 0 && found->_type != "MODULE" &&  found->_type != "MQTTBROKER") {
-                        std::cout << "Error: in the definition of " << mi->getName() << ", " <<
+						std::stringstream ss;
+						ss << "Error: in the definition of " << mi->getName() << ", " <<
                         p_i.sValue << " has type " << found->_type << " but should be MODULE or MQTTBROKER\n";
+						std::string s = ss.str();
+						++num_errors;
+						error_messages.push_back(s);
                     }
                     else {
                         mi->parameters[i].machine = found;
@@ -552,13 +556,14 @@ void semantic_analysis() {
 					MessageLog::instance()->add(ss.str().c_str());
 				}
             }
-		    else
-                std::cout << "  parameter " << i << " " << p_i << "\n";
-            
+			else {
+                DBG_PARSER << "  parameter " << i << " " << p_i << "\n";
+			}
+			
         }
 		// make sure that local machines have correct links to their
 		// parameters
-		DBG_MSG << "fixing parameter references for locals in " << mi->getName() << "\n";
+		DBG_PARSER << "fixing parameter references for locals in " << mi->getName() << "\n";
 		for (unsigned int i=0; i<mi->locals.size(); ++i) {
 			DBG_MSG << "   " << i << ": " << mi->locals[i].val << "\n";
             
