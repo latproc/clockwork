@@ -4,14 +4,14 @@ OUT_1 FLAG(tab:Outputs);
 OUT_2 FLAG(tab:Outputs);
 
 A CONSTANT(tab:Tests, export:reg) 123;
-B VARIABLE(tab:Tests, export:rw_reg) 456;
+B VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 456;
 C CONSTANT(tab:Tests, export:reg32) 554343;
-D VARIABLE(tab:Tests, export:rw_reg32) 10;
+D VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg32) 10;
 E CONSTANT(tab:Tests, export:str, strlen:30) "This is a message";
-F VARIABLE(tab:Tests, export:rw_str, strlen:25) "Another test message";
+F VARIABLE(tab:Tests, PERSISTENT:true, export:rw_str, strlen:25) "Another test message";
 
-PanelScreen VARIABLE(tab:Tests, export:rw_reg) 1;
-RequestScreen VARIABLE(tab:Tests, export:rw_reg) 1;
+PanelScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
+RequestScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
 
 Calc MACHINE {
 
@@ -74,7 +74,7 @@ Error MACHINE {
 }
 M_Error Error;
 
-RESPONSE VARIABLE(export:rw) "";
+RESPONSE VARIABLE(PERSISTENT:true, export:rw) "";
 
 Flash MACHINE (delay:500)output {
 

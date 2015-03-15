@@ -478,16 +478,6 @@ Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reeval
             else
                 p->cached_entry = res;
             return p->cached_entry;
-            /*
-			if (found->_type == "VARIABLE" || found->_type == "CONSTANT") {
-				p->cached_entry = &found->getValue("VALUE");
-				return p->cached_entry;
-			}
-			else {
-				p->cached_entry = found->getCurrentStateVal();
-				return p->cached_entry;
-			}
-             */
 		}
 	}
     else if (v->kind == Value::t_dynamic) {

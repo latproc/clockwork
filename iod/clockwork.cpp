@@ -367,7 +367,6 @@ void semantic_analysis() {
 	mc_variable->disableAutomaticStateChanges();
 	mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
     mc_variable->options["VALUE"] = "VAL_PARAM1";
-	mc_variable->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
 	
 	MachineClass *mc_constant = new MachineClass("CONSTANT");
 	mc_constant->states.push_back("ready");
