@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <iostream>
+#include <iomanip>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <errno.h>
 #include <modbus.h>
 #include <FL/Fl.H>
@@ -120,6 +123,18 @@ public:
 			tab_rq_registers(0), tab_rw_rq_registers(0), 
 			tab_rp_registers(0), finished(false), connected(false) {
     ctx = modbus_new_tcp(host, port);
+
+	/* Save original timeout */
+	unsigned int sec, usec;
+	int rc = modbus_get_byte_timeout(ctx, &sec, &usec);
+	if (rc == -1) perror("modbus_get_byte_timeout");
+	else {
+		std::cout << "original timeout: " << sec << "." << std::setw(3) << std::setfill('0') << (usec/1000) << "\n";
+		usec *= 2; 
+		if (usec >= 1000000) { usec -= 1000000; sec++; }
+		rc = modbus_set_byte_timeout(ctx, sec, usec);
+		if (rc == -1) perror("modbus_set_byte_timeout");
+	}
     modbus_set_debug(ctx, FALSE);
 
     if (modbus_connect(ctx) == -1) {
@@ -183,7 +198,7 @@ void operator()() {
 			int rc = -1;
 			int retry = 5;
 			while ( (rc = modbus_read_bits(ctx, item.first, 1, tab_rp_bits+item.first) == -1) ) {
-				fprintf(stderr, "%s\n", modbus_strerror(errno));
+				fprintf(stderr, "%s (%d), retrying %d\n", modbus_strerror(errno), errno, retry);
 				if (--retry == 0) {
 					modbus_flush(ctx);
 					modbus_close(ctx);
@@ -214,7 +229,7 @@ void operator()() {
 			int retry = 5;
 			uint8_t res; 
 			while ( ( rc = modbus_read_input_bits(ctx, item.first, 1, &res)  == -1) ) {
-				fprintf(stderr, "%s\n", modbus_strerror(errno));
+				fprintf(stderr, "%s (%d), retrying %d\n", modbus_strerror(errno), errno, retry);
 				if (--retry == 0) {
 					modbus_flush(ctx);
 					modbus_close(ctx);
@@ -243,7 +258,7 @@ void operator()() {
 			int retry = 5;
 			uint16_t res; 
 			while ( ( rc = modbus_read_registers(ctx, item.first, 1, &res)  == -1) ) {
-				fprintf(stderr, "%s\n", modbus_strerror(errno));
+				fprintf(stderr, "%s (%d), retrying %d\n", modbus_strerror(errno), errno, retry);
 				if (--retry == 0) {
 					modbus_flush(ctx);
 					modbus_close(ctx);
@@ -355,18 +370,31 @@ void init(int addr, Fl_Widget *w, bool is_input) {
 
 int main(int argc, char **argv) {
 	context = new zmq::context_t;
-
 	
+	const char *hostname = "127.0.0.1";
+	int portnum = 1502;
+	
+	int arg = 1;
+	while (arg<argc) {
+		if ( strcmp(argv[arg], "-h") == 0 && arg+1 < argc) hostname = argv[++arg];
+		else if ( strcmp(argv[arg], "-p") == 0 && arg+1 < argc) {
+			char *q;
+			long p = strtol(argv[++arg], &q,10);
+			if (q != argv[arg]) portnum = (int)p;
+		}
+		++arg;
+	}
+
 	LoaderPanel gui;
 	
-	ModbusClientThread modbus_interface("127.0.0.1", 1502);
+	ModbusClientThread modbus_interface(hostname, portnum);
 	mb = &modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
 
 	usleep(1000);
 
 	Fl_Window *window  = gui.make_window();
-	window->show(argc, argv);
+	window->show(1, argv);
 	Fl::lock();
 
 	
