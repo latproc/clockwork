@@ -65,10 +65,11 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			return (response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
-			std::cerr << zmq_strerror(errno) << "\n";
+			std::cerr << "safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
 				if (block) continue;
 			}
+			usleep(10);
 			return false;
 		}
 	}
@@ -293,7 +294,7 @@ char *MessagingInterface::send(const char *txt) {
             break;
         }
         catch (std::exception e) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR || errno == EAGAIN) continue;
             if (zmq_errno())
                 std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
@@ -425,9 +426,10 @@ void SocketMonitor::operator()() {
             monitor(sock, socket_name);
         }
         catch (zmq::error_t io) {
-            std::cerr << "ZMQ error: " << zmq_strerror(errno) << " in socket monitor\n";
-						if (errno == ENOENT || errno == EINVAL) // monitoring a socket that has been removed. exit and rely on restart code (TBD)
-							exit(2);
+            std::cerr << "ZMQ error " << errno << ": "<< zmq_strerror(errno) << " in socket monitor\n";
+				if (errno == ENOENT || errno == EINVAL) // monitoring a socket that has been removed. exit and rely on restart code (TBD)
+					exit(2);
+			usleep(10);
         }
         catch (std::exception ex) {
             std::cerr << "unknown exception setting up a socket monitor\n";
@@ -657,7 +659,7 @@ bool SubscriptionManager::setupConnections() {
         	setup.connect(ss.str().c_str());
 				}
 				catch(zmq::error_t err) {
-					std::cerr <<zmq_strerror(errno) << "\n";
+					std::cerr << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
 					return false;
 				}
         monit_setup->setEndPoint(ss.str().c_str());
