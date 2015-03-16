@@ -1,0 +1,69 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0303 
+header_name {.h} 
+code_name {.cxx}
+decl {\#include "loader_config.h"} {private local
+} 
+
+class LoaderPanel {open
+} {
+  Function {make_window()} {open
+  } {
+    Fl_Window {} {open
+      xywh {954 458 581 411} type Double visible
+    } {
+      Fl_Light_Button {} {
+        label I_BaleOnLoader
+        user_data {&I_BaleOnLoader}
+        callback press
+        xywh {25 25 205 40} align 340
+        code0 {init(I_BaleOnLoader, o);}
+      }
+      Fl_Light_Button {} {
+        label I_BaleAtLoaderPos
+        user_data {&I_BaleAtLoaderPos}
+        callback press
+        xywh {25 65 205 40}
+        code0 {init(I_BaleAtLoaderPos, o);}
+      }
+      Fl_Light_Button {} {
+        label I_LoaderUp
+        user_data {&I_LoaderUp}
+        callback press
+        xywh {25 105 205 40}
+        code0 {init(I_LoaderUp, o);}
+      }
+      Fl_Light_Button {} {
+        label I_LoaderBlockOn
+        user_data {&I_LoaderBlockOn}
+        callback press
+        xywh {295 24 205 40}
+        code0 {init(I_LoaderBlockOn, o);}
+      }
+      Fl_Light_Button {} {
+        label I_PanelBlockIgnore
+        user_data {&I_PanelBlockIgnore}
+        callback press
+        xywh {295 64 205 40}
+        code0 {init(I_PanelBlockIgnore, o);}
+      }
+      Fl_Light_Button {} {
+        label I_X33BlockIgnore
+        user_data {&I_X33BlockIgnore}
+        callback press
+        xywh {295 105 205 40}
+        code0 {init(I_X33BlockIgnore, o);}
+      }
+      Fl_Box {} {
+        label O_LoaderBlock
+        image {Output_on.png} deimage {Output_off.png} xywh {25 170 205 40} align 256
+        code0 {init(O_LoaderBlock, o, false);}
+      }
+      Fl_Box {} {
+        label M_WeightAvailable selected
+        image {Output_on.png} deimage {Output_off.png} xywh {295 170 205 40} align 256
+        code0 {init(M_WeightAvailable, o, false);}
+      }
+    }
+  }
+} 

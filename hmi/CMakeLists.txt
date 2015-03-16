@@ -57,3 +57,11 @@ TARGET_LINK_LIBRARIES(grab_machine ${FLTK_LIBRARIES})
 TARGET_LINK_LIBRARIES(grab_machine ${OPENGL_LIBRARIES})
 TARGET_LINK_LIBRARIES(grab_machine ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(grab_machine ${CMAKE_DL_LIBS})
+
+add_executable (loader_control src/loader_control.cxx src/loader_panel.cxx)
+target_link_libraries(loader_control Clockwork "zmq" ${Boost_LIBRARIES})
+TARGET_LINK_LIBRARIES(loader_control ${FLTK_LIBRARIES})
+TARGET_LINK_LIBRARIES(loader_control ${OPENGL_LIBRARIES})
+TARGET_LINK_LIBRARIES(loader_control ${MODBUS_LIBRARIES})
+TARGET_LINK_LIBRARIES(loader_control ${CMAKE_DL_LIBS})
+
