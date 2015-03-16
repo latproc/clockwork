@@ -9,4 +9,14 @@ I_X33BlockIgnore FLAG(export:rw);
 O_LoaderBlock FLAG(export:ro);
 M_WeightAvailable FLAG(export:ro);
 
+RawScales MACHINE {
+	OPTION rawWeight 0;
+	OPTION rawDecWeight 0;
+	OPTION rawUnderWeight 0;
+	OPTION rawOverWeight 0;
+	OPTION rawSteady 0;
+	EXPORT RW 16BIT rawWeight, rawDecWeight, rawSteady, rawUnderWeight, rawOverWeight;
+
+}
+M_rawScales RawScales;
 

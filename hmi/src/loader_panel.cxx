@@ -433,6 +433,26 @@ Fl_Double_Window* LoaderPanel::make_window() {
       o->align(Fl_Align(256));
       init(M_WeightAvailable, o, false);
     } // Fl_Box* o
+    { Fl_Value_Input* o = new Fl_Value_Input(135, 215, 115, 40, "Raw Weight");
+      o->callback((Fl_Callback*)save, (void*)(&M_rawScales_rawWeight));
+      init(M_rawScales_rawWeight, o);
+    } // Fl_Value_Input* o
+    { Fl_Value_Input* o = new Fl_Value_Input(395, 215, 115, 40, "Raw Dec Weight");
+      o->callback((Fl_Callback*)save, (void*)(&M_rawScales_rawDecWeight));
+      init(M_rawScales_rawDecWeight, o);
+    } // Fl_Value_Input* o
+    { Fl_Value_Input* o = new Fl_Value_Input(135, 270, 115, 40, "Raw Steady");
+      o->callback((Fl_Callback*)save, (void*)(&M_rawScales_rawSteady));
+      init(M_rawScales_rawSteady, o);
+    } // Fl_Value_Input* o
+    { Fl_Value_Input* o = new Fl_Value_Input(135, 320, 115, 40, "Raw Under Weight");
+      o->callback((Fl_Callback*)save, (void*)(&M_rawScales_rawUnderWeight));
+      init(M_rawScales_rawUnderWeight, o);
+    } // Fl_Value_Input* o
+    { Fl_Value_Input* o = new Fl_Value_Input(400, 320, 115, 40, "Raw Over Weight");
+      o->callback((Fl_Callback*)save, (void*)(&M_rawScales_rawOverWeight));
+      init(M_rawScales_rawOverWeight, o);
+    } // Fl_Value_Input* o
     o->end();
   } // Fl_Double_Window* o
   return w;

@@ -7,6 +7,8 @@
 #include <FL/Fl_Light_Button.H>
 extern void press(Fl_Light_Button*, void*);
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Value_Input.H>
+extern void save(Fl_Value_Input*, void*);
 
 class LoaderPanel {
 public:

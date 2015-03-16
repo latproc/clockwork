@@ -60,9 +60,44 @@ class LoaderPanel {open
         code0 {init(O_LoaderBlock, o, false);}
       }
       Fl_Box {} {
-        label M_WeightAvailable selected
+        label M_WeightAvailable
         image {Output_on.png} deimage {Output_off.png} xywh {295 170 205 40} align 256
         code0 {init(M_WeightAvailable, o, false);}
+      }
+      Fl_Value_Input {} {
+        label {Raw Weight}
+        user_data {&M_rawScales_rawWeight}
+        callback save
+        xywh {135 215 115 40}
+        code0 {init(M_rawScales_rawWeight, o);}
+      }
+      Fl_Value_Input {} {
+        label {Raw Dec Weight}
+        user_data {&M_rawScales_rawDecWeight}
+        callback save
+        xywh {395 215 115 40}
+        code0 {init(M_rawScales_rawDecWeight, o);}
+      }
+      Fl_Value_Input {} {
+        label {Raw Steady}
+        user_data {&M_rawScales_rawSteady}
+        callback save
+        xywh {135 270 115 40}
+        code0 {init(M_rawScales_rawSteady, o);}
+      }
+      Fl_Value_Input {} {
+        label {Raw Under Weight}
+        user_data {&M_rawScales_rawUnderWeight}
+        callback save
+        xywh {135 320 115 40}
+        code0 {init(M_rawScales_rawUnderWeight, o);}
+      }
+      Fl_Value_Input {} {
+        label {Raw Over Weight}
+        user_data {&M_rawScales_rawOverWeight}
+        callback save
+        xywh {400 320 115 40}
+        code0 {init(M_rawScales_rawOverWeight, o);}
       }
     }
   }

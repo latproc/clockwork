@@ -10,6 +10,7 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Output.H>
 #include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Value_Input.H>
 #include <boost/thread.hpp>
 #include "loader_panel.h"
 #include <zmq.hpp>
@@ -29,6 +30,8 @@ struct UpdateMessage {
 
 std::map<int, Fl_Widget *> active_addresses;
 std::map<int, Fl_Widget *> ro_bits;
+std::map<int, Fl_Widget *> inputs;
+
 
 void sendMessage(zmq::socket_t &socket, const char *message) {
     const char *msg = (message) ? message : "";
@@ -111,11 +114,12 @@ public:
     uint16_t *tab_rp_registers;
 
 	bool finished;
+	bool connected;
 
-	ModbusClientThread() : ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
+	ModbusClientThread(const char *host, int port) : ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
 			tab_rq_registers(0), tab_rw_rq_registers(0), 
-			tab_rp_registers(0), finished(false) {
-    ctx = modbus_new_tcp("127.0.0.1", 1502);
+			tab_rp_registers(0), finished(false), connected(false) {
+    ctx = modbus_new_tcp(host, port);
     modbus_set_debug(ctx, FALSE);
 
     if (modbus_connect(ctx) == -1) {
@@ -124,6 +128,7 @@ public:
         modbus_free(ctx);
 		ctx = 0;
     }
+	else connected = true;
 
     /* Allocate and initialize the different memory spaces */
 	int nb = 10000;
@@ -161,13 +166,36 @@ public:
 
 void operator()() {
 	while (!finished) {
+		if (!connected) {
+		    if (modbus_connect(ctx) == -1) {
+		        fprintf(stderr, "Connection failed: %s\n",
+		                modbus_strerror(errno));
+		        modbus_free(ctx);
+				ctx = 0;
+				usleep(1000000);
+				continue;
+		    }
+			else connected = true;
+		}
 		std::map<int, Fl_Widget*>::iterator iter = active_addresses.begin();
 		while (iter != active_addresses.end()) {
 			const std::pair<int, Fl_Widget*> item = *iter++;
-			int rc = modbus_read_bits(ctx, item.first, 1, tab_rp_bits+item.first);
-			if (rc == -1) {
+			int rc = -1;
+			int retry = 5;
+			while ( (rc = modbus_read_bits(ctx, item.first, 1, tab_rp_bits+item.first) == -1) ) {
 				fprintf(stderr, "%s\n", modbus_strerror(errno));
+				if (--retry == 0) {
+					modbus_flush(ctx);
+					modbus_close(ctx);
+					connected = false;
+					break;
+				}
+				usleep(1000);
+				if (errno == EAGAIN || errno == EINTR) continue; 
+				usleep(10000);
 			}
+			if (!connected) goto modbus_loop_end;
+			
 			if (tab_rp_bits[item.first] != tab_rq_bits[item.first]) {
 				tab_rq_bits[item.first] = tab_rp_bits[item.first];
 				
@@ -178,14 +206,26 @@ void operator()() {
 				
 			}
 		}
+		if (!connected) goto modbus_loop_end;
 		iter = ro_bits.begin();
 		while (iter != ro_bits.end()) {
 			const std::pair<int, Fl_Widget*> item = *iter++;
-			uint8_t res;
-			int rc = modbus_read_input_bits(ctx, item.first, 1, &res);
-			if (rc == -1) {
+			int rc = -1;
+			int retry = 5;
+			uint8_t res; 
+			while ( ( rc = modbus_read_input_bits(ctx, item.first, 1, &res)  == -1) ) {
 				fprintf(stderr, "%s\n", modbus_strerror(errno));
+				if (--retry == 0) {
+					modbus_flush(ctx);
+					modbus_close(ctx);
+					connected = false;
+					break;
+				}
+				usleep(1000);
+				if (errno == EAGAIN || errno == EINTR) continue; 
+				usleep(10000);
 			}
+			if (!connected) goto modbus_loop_end;
 			if (res != tab_ro_bits[item.first]) {
 				tab_ro_bits[item.first] = res;
 				
@@ -196,8 +236,38 @@ void operator()() {
 				
 			}
 		}
+		iter = inputs.begin();
+		while (iter != inputs.end()) {
+			const std::pair<int, Fl_Widget*> item = *iter++;
+			int rc = -1;
+			int retry = 5;
+			uint16_t res; 
+			while ( ( rc = modbus_read_registers(ctx, item.first, 1, &res)  == -1) ) {
+				fprintf(stderr, "%s\n", modbus_strerror(errno));
+				if (--retry == 0) {
+					modbus_flush(ctx);
+					modbus_close(ctx);
+					connected = false;
+					break;
+				}
+				usleep(1000);
+				if (errno == EAGAIN || errno == EINTR) continue; 
+				usleep(10000);
+			}
+			if (!connected) goto modbus_loop_end;
+			if (res != tab_rw_rq_registers[item.first]) {
+				tab_rw_rq_registers[item.first] = res;
+				
+				Fl::lock();
+				
+				Fl::awake((void *)new UpdateMessage(item.first, item.second, res) );
+				Fl::unlock();
+				
+			}
+		}
+
 		
-		
+modbus_loop_end:	
 		usleep(100000);
 	}
 }
@@ -234,6 +304,31 @@ void press(Fl_Light_Button*w, void*v) {
 	press((Fl_Widget *)w, v);
 }
 
+void save(Fl_Value_Input*in, void*data) {
+	int *addr = (int*)data;
+	double v = in->value();
+	std::cout << "reg: " << *addr << " has value " << v  << "\n";
+	long val = v + 0.5;
+	mb->tab_rw_rq_registers[*addr] = val;
+    int rc = modbus_write_register(mb->ctx, *addr, mb->tab_rw_rq_registers[*addr]);
+    if (rc != 1) {
+        printf("ERROR modbus_write_register (%d)\n", rc);
+        printf("Address = %d, value = %d\n", *addr, mb->tab_rw_rq_registers[*addr]);
+    } 
+}
+
+void init(int addr, Fl_Value_Input*w) {
+	inputs[addr] = w;
+	int rc = modbus_read_registers(mb->ctx, addr, 1, mb->tab_rp_registers+addr);
+	if (rc == -1) {
+		fprintf(stderr, "%s\n", modbus_strerror(errno));
+	}
+	if (mb->tab_rp_registers[addr] != mb->tab_rw_rq_registers[addr]) 
+		mb->tab_rw_rq_registers[addr] = mb->tab_rp_registers[addr];
+	std::cout << "reg 4:" << addr << " is " << mb->tab_rw_rq_registers[addr] << "\n";
+	w->value(mb->tab_rw_rq_registers[addr]);
+}
+
 void init(int addr, Fl_Widget *w, bool is_input) {
 	int rc = 0;
 	if (is_input) {
@@ -258,77 +353,13 @@ void init(int addr, Fl_Widget *w, bool is_input) {
 }
 
 
-void start(Fl_Widget *w, void *data) {
-	int addr=1004; /* start */
-	mb->tab_rq_bits[addr] = 1;
-    int rc = modbus_write_bit(mb->ctx, addr, mb->tab_rq_bits[addr]);
-    if (rc != 1) {
-        printf("ERROR modbus_write_bit (%d)\n", rc);
-        printf("Address = %d, value = %d\n", addr, mb->tab_rq_bits[0]);
-    } 
-}
-
-void stop(Fl_Widget *w, void *data) {
-	int addr=1005; /* stop */
-	mb->tab_rq_bits[addr] = 1;
-    int rc = modbus_write_bit(mb->ctx, addr, mb->tab_rq_bits[addr]);
-    if (rc != 1) {
-        printf("ERROR modbus_write_bit (%d)\n", rc);
-        printf("Address = %d, value = %d\n", addr, mb->tab_rq_bits[0]);
-    } 
-}
-
-void change_screen(Fl_Widget *w, void *data) {
-	Fl_Output *screen_num = (Fl_Output*)data;
-	Fl_Input *in = (Fl_Input*)w;
-	const char *val = in->value();
-	long scr = 0;
-	char *endp = 0;
-	scr = strtol(val, &endp, 10);
-	if (endp != val ) {
-		mb->tab_rw_rq_registers[1074] = (uint16_t)scr;
-		char buf[10];
-		sprintf(buf, "%d", mb->tab_rw_rq_registers[1074]);
-		screen_num->value(buf);
-		int rc = modbus_write_register(mb->ctx, 1074, mb->tab_rw_rq_registers[1074]);
-		if (rc == -1) {
-			fprintf(stderr, "%s\n", modbus_strerror(errno));
-		}
-	}
-}
-
-
 int main(int argc, char **argv) {
 	context = new zmq::context_t;
 
 	
 	LoaderPanel gui;
 	
-#if 0
-  Fl_Window *window = new Fl_Window(340,360);
-  Fl_Box *box = new Fl_Box(20,40,300,60,"modbus.lpc");
-  box->box(FL_NO_BOX);
-  box->labelfont(FL_BOLD+FL_ITALIC);
-  box->labelsize(24);
-
-  Fl_Button *start_btn= new Fl_Button(20, 140, 130, 50, "start");
-  start_btn->labelsize(36);
-  start_btn->callback(start, 0);
-  Fl_Button *stop_btn= new Fl_Button(170, 140, 130, 50, "stop");
-  stop_btn->labelsize(36);
-  stop_btn->callback(stop, 0);
-
-  Fl_Output *screen_num = new Fl_Output(70, 220, 60, 30, "Page");
-  screen_num->labelsize(14);
-
-  Fl_Input *next_screen = new Fl_Input(70, 270, 60, 30, "Next");
-  next_screen->labelsize(14);
-  next_screen->callback(change_screen, (void*)screen_num);
-
-  window->end();
-
-#endif
-	ModbusClientThread modbus_interface;
+	ModbusClientThread modbus_interface("127.0.0.1", 1502);
 	mb = &modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
 
@@ -353,6 +384,12 @@ int main(int argc, char **argv) {
 				else {
 					Fl_Box *box = dynamic_cast<Fl_Box*>(um->widget);
 					if (box) { if (um->value) box->activate(); else box->deactivate();}
+					else {
+						Fl_Value_Input *in = dynamic_cast<Fl_Value_Input*>(um->widget);
+						if (in) {
+							in->value(um->value);
+						}
+					}
 				}
 			}
 			delete um;
