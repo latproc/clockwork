@@ -32,8 +32,8 @@ class DynamicValue {
 public:
     DynamicValue() :scope(0), refs(0), last_process_time(0){ }
     virtual ~DynamicValue()  {}
-    virtual Value operator()(MachineInstance *scope); // uses the provided machine's scope
-    virtual Value operator()(); // uses the current scope for evaluation
+    virtual Value &operator()(MachineInstance *scope); // uses the provided machine's scope
+    virtual Value &operator()(); // uses the current scope for evaluation
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     Value *lastResult() { return &last_result; }
@@ -58,7 +58,7 @@ public:
     AssignmentValue(const char *dest, Value *val)
     : src(*val), dest_name(dest)  { }
     virtual ~AssignmentValue() {}
-    virtual Value operator()();
+    virtual Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     AssignmentValue(const AssignmentValue &);
@@ -74,7 +74,7 @@ class AnyInValue : public DynamicValue {
 public:
     AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0) {}
     virtual ~AnyInValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     AnyInValue(const AnyInValue &);
@@ -91,7 +91,7 @@ class AllInValue : public DynamicValue {
 public:
     AllInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0) {}
     virtual ~AllInValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     AllInValue(const AllInValue &);
@@ -109,7 +109,7 @@ class CountValue : public DynamicValue {
 public:
     CountValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0)  { }
     virtual ~CountValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     CountValue(const CountValue &);
@@ -126,7 +126,7 @@ class IncludesValue : public DynamicValue {
 public:
     IncludesValue(Value val, const char *list) : entry(val), machine_list_name(list), machine_list(0)  { }
     virtual ~IncludesValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     IncludesValue(const IncludesValue &);
@@ -144,7 +144,7 @@ public:
     ItemAtPosValue(const char *list, Value *val, bool remove = true)
         : index(*val), machine_list_name(list), machine_list(0), remove_from_list(remove)  { }
     virtual ~ItemAtPosValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     ItemAtPosValue(const ItemAtPosValue &);
@@ -161,7 +161,7 @@ class SizeValue : public DynamicValue {
 public:
     SizeValue(const char *list) : machine_list_name(list), machine_list(0)  { }
     virtual ~SizeValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     SizeValue(const SizeValue &);
@@ -177,7 +177,7 @@ public:
     PopListBackValue(const char *list, bool remove = true)
         : machine_list_name(list), machine_list(0), remove_from_list(remove)  { }
     virtual ~PopListBackValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     PopListBackValue(const PopListBackValue &);
@@ -194,7 +194,7 @@ public:
     PopListFrontValue(const char *list, bool remove = true)
         : machine_list_name(list), machine_list(0), remove_from_list(remove)  { }
     virtual ~PopListFrontValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     PopListFrontValue(const PopListFrontValue &);
@@ -211,7 +211,7 @@ class BitsetValue : public DynamicValue {
 public:
     BitsetValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
     virtual ~BitsetValue() {}
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     BitsetValue(const BitsetValue &);
@@ -227,7 +227,7 @@ class EnabledValue : public DynamicValue {
 public:
     EnabledValue(const char *name) : machine_name(name), machine(0) { }
     virtual ~EnabledValue() { }
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     EnabledValue(const EnabledValue &);
@@ -242,7 +242,7 @@ class DisabledValue : public DynamicValue {
 public:
     DisabledValue(const char *name) : machine_name(name), machine(0) { }
     virtual ~DisabledValue() { }
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     DisabledValue(const DisabledValue &);
@@ -258,7 +258,7 @@ class CastValue : public DynamicValue {
 public:
     CastValue(const char *name, const char *type_name) : property(name), kind(type_name) { }
     virtual ~CastValue() { }
-    virtual Value operator()(MachineInstance *);
+    virtual Value &operator()(MachineInstance *);
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     CastValue(const CastValue &);

@@ -613,8 +613,8 @@ void MachineValue::flushCache() {
 class VariableValue : public DynamicValue {
 	public:
 		VariableValue(MachineInstance *mi): machine_instance(mi) { }
-		virtual Value operator()(MachineInstance *m) {
-			if (machine_instance->getStateMachine()->token_id == ClockworkToken::VARIABLE 
+		virtual Value &operator()(MachineInstance *m) {
+			if (machine_instance->getStateMachine()->token_id == ClockworkToken::VARIABLE
 					|| machine_instance->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
 				last_result = machine_instance->getValue("VALUE");
 				return last_result;
@@ -642,12 +642,18 @@ DynamicValue *VariableValue::clone() const {
 class MachineTimerValue : public DynamicValue {
 	public:
 		MachineTimerValue(MachineInstance *mi): machine_instance(mi) { }
-		Value operator()(MachineInstance *m)  {
+		Value &operator()(MachineInstance *m)  {
+			assert(machine_instance);
+			if (!machine_instance) { last_result = false; return last_result; }
 			struct timeval now;
 			gettimeofday(&now, NULL);
-			long msecs = (long)get_diff_in_microsecs(&now, &m->start_time)/1000;
+			long msecs = (long)get_diff_in_microsecs(&now, &machine_instance->start_time)/1000;
 			last_result = msecs;
+			DBG_MSG << m->getName() << " update timer value " << last_result << "\n";
 			return last_result;
+		}
+		Value &operator()()  {
+			return operator()(machine_instance);
 		}
 		std::ostream &operator<<(std::ostream &out ) const {
 			return out << machine_instance->getName() << ".TIMER (" << last_result <<")";
@@ -1308,6 +1314,7 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 const Value *MachineInstance::getTimerVal() {
 	MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(state_timer.dynamicValue());
 	mtv->operator()(this);
+	DBG_MSG << _name << "::getTimerVal " << mtv->getLastResult()->iValue << "\n";
 	return mtv->getLastResult();
 }
 
@@ -1939,7 +1946,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
-		//DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+		DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
@@ -2035,7 +2042,11 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 							while (iter != timer_clauses.end()) {
 								Predicate *node = *iter++;
 								Value &tv = node->getTimerValue();
-								if (tv == SymbolTable::Null) continue;
+								/*MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(&tv);
+								if (!mtv)
+									int x=1;
+								mtv->operator()();
+								*/if (tv == SymbolTable::Null) continue;
 								if (tv.kind == Value::t_symbol || tv.kind == Value::t_string) {
 									Value v = getValue(tv.sValue);
 									if (v.kind != Value::t_integer) {

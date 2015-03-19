@@ -22,7 +22,7 @@ DynamicValue *DynamicValue::clone() const {
     return new DynamicValue(*this);
 }
 
-Value DynamicValue::operator()() {
+Value &DynamicValue::operator()() {
     return SymbolTable::False;
 }
 
@@ -31,7 +31,7 @@ void DynamicValue::flushCache() {
     last_process_time = 0;
 }
 
-Value DynamicValue::operator()(MachineInstance *m) {
+Value &DynamicValue::operator()(MachineInstance *m) {
     setScope(m);
     return operator()();
 }
@@ -102,7 +102,7 @@ AssignmentValue::AssignmentValue(const AssignmentValue &other) {
     src = other.src;
     dest_name = other.dest_name;
 }
-Value AssignmentValue::operator()() {
+Value &AssignmentValue::operator()() {
     MachineInstance *mi = getScope();
     if (src.kind == Value::t_symbol)
         last_result = mi->getValue(src.sValue);
@@ -119,11 +119,21 @@ AnyInValue::AnyInValue(const AnyInValue &other) {
 	state_property = 0;
 }
 
-Value AnyInValue::operator()(MachineInstance *mi) {
+Value &AnyInValue::operator()(MachineInstance *mi) {
+	
 	if (state_property == 0)
 		state_property = & mi->getValue(state);
 
-    if (last_process_time <= mi->lastStateEvaluationTime()) {
+	if (machine_list == NULL)
+		machine_list = mi->lookup(machine_list_name);
+
+	if (!machine_list) {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ANY IN "<<state<<" within " << mi->getName() << "\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = false; return last_result;
+	}
+
+	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
     else {
@@ -131,13 +141,6 @@ Value AnyInValue::operator()(MachineInstance *mi) {
         return last_result;
     }
     
-    if (machine_list == NULL)
-        machine_list = mi->lookup(machine_list_name);
-    if (!machine_list) {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ANY IN "<<state<<" test\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        last_result = false; return last_result;
-    }
 	std::string state_val = state;
 	if (state_property != & SymbolTable::Null)
 		state_val = state_property->asString();
@@ -161,9 +164,18 @@ AllInValue::AllInValue(const AllInValue &other) {
     machine_list = 0;
 	state_property = 0;
 }
-Value AllInValue::operator()(MachineInstance *mi) {
+Value &AllInValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
 		state_property = & mi->getValue(state);
+	if (machine_list == NULL) {
+		machine_list = mi->lookup(machine_list_name);
+	}
+	if (!machine_list) {
+		std::stringstream ss; ss << mi->getName() << " no machine "
+			<< machine_list_name << " for ALL "<<state<<" within " << mi->getName() << "\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = false; return last_result;
+	}
 
     if (last_process_time <= mi->lastStateEvaluationTime()) {
         last_process_time = currentTime();
@@ -173,14 +185,6 @@ Value AllInValue::operator()(MachineInstance *mi) {
         return last_result;
     }
 
-    if (machine_list == NULL) {
-        machine_list = mi->lookup(machine_list_name);
-    }
-    if (!machine_list) {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ALL "<<state<<" test\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        last_result = false; return last_result;
-    }
     if (machine_list->parameters.size() == 0) {  last_result = false; return last_result; }
 
 	std::string state_val = state;
@@ -206,22 +210,26 @@ CountValue::CountValue(const CountValue &other) {
 	state_property = 0;
 }
 
-Value CountValue::operator()(MachineInstance *mi) {
+Value &CountValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
 		state_property = & mi->getValue(state);
+	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	if (!machine_list) {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for COUNT "<<state<<" test\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = 0;
+		return last_result;
+	}
 
-    if (last_process_time <= mi->lastStateEvaluationTime()) {
+    if (last_process_time <= machine_list->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
     else return last_result;
 
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list) {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for COUNT "<<state<<" test\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        return false;
-    }
-    if (machine_list->parameters.size() == 0) return 0;
+	if (machine_list->parameters.size() == 0) {
+		last_result = 0;
+		return last_result;
+	}
 
 	std::string state_val = state;
 	if (state_property != & SymbolTable::Null)
@@ -243,20 +251,22 @@ IncludesValue::IncludesValue(const IncludesValue &other) {
     machine_list = 0;
 }
 
-Value IncludesValue::operator()(MachineInstance *mi) {
-    if (last_process_time <= mi->lastStateEvaluationTime()) {
+Value &IncludesValue::operator()(MachineInstance *mi) {
+	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	if (!machine_list)  {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = false; return last_result;
+	}
+
+	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
     else
         return last_result;
 
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        last_result = false; return last_result;
-    }
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (entry == machine_list->parameters[i].val )  { last_result = true; return last_result; }
         if (entry.asString() == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
     }
@@ -268,19 +278,20 @@ SizeValue::SizeValue(const SizeValue &other) {
     machine_list = 0;
 }
 
-Value SizeValue::operator()(MachineInstance *mi) {
-    if (last_process_time <= mi->lastStateEvaluationTime()) {
+Value &SizeValue::operator()(MachineInstance *mi) {
+	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	if (!machine_list)  {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for SIZE test\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = 0; return last_result;
+	}
+
+	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
     else
         return last_result;
 
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for SIZE test\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        last_result = false; return last_result;
-    }
     last_result = (long)machine_list->parameters.size();
     return last_result;
 }
@@ -302,7 +313,7 @@ std::ostream &PopListBackValue::operator<<(std::ostream &out ) const {
 std::ostream &operator<<(std::ostream &out, const PopListBackValue &val) { return val.operator<<(out); }
 
 
-Value PopListBackValue::operator()(MachineInstance *mi) {
+Value &PopListBackValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
@@ -314,6 +325,7 @@ Value PopListBackValue::operator()(MachineInstance *mi) {
     if (i>=0) {
         last_result = machine_list->parameters[i].val;
         if (machine_list->parameters[i].machine && !last_result.cached_machine) {
+			if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
             last_result.cached_machine = machine_list->parameters[i].machine;
             std::string msg("Warning parameter with machine pointer was not completely configured: ");
             msg += last_result.asString();
@@ -341,7 +353,7 @@ std::ostream &PopListFrontValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const PopListFrontValue &val) { return val.operator<<(out); }
 
-Value PopListFrontValue::operator()(MachineInstance *mi) {
+Value &PopListFrontValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
@@ -353,6 +365,7 @@ Value PopListFrontValue::operator()(MachineInstance *mi) {
         if (machine_list->locals.size()) {
             last_result = machine_list->locals[0].val;
             if (machine_list->locals[0].machine && !last_result.cached_machine) {
+				if (!machine_list->parameters[0].machine) mi->lookup(machine_list->parameters[0]);
                 last_result.cached_machine = machine_list->locals[0].machine;
                 std::string msg("Warning parameter with machine pointer was not completely configured: ");
                 msg += last_result.asString();
@@ -368,6 +381,7 @@ Value PopListFrontValue::operator()(MachineInstance *mi) {
         if (machine_list->parameters.size()) {
             last_result = machine_list->parameters[0].val;
             if (machine_list->parameters[0].machine && !last_result.cached_machine) {
+				if (!machine_list->parameters[0].machine) mi->lookup(machine_list->parameters[0]);
                 last_result.cached_machine = machine_list->parameters[0].machine;
                 std::string msg("Warning parameter with machine pointer was not completely configured: ");
                 msg += last_result.asString();
@@ -391,18 +405,19 @@ ItemAtPosValue::ItemAtPosValue(const ItemAtPosValue &other) {
     remove_from_list = other.remove_from_list;
     index = other.index;
 }
-Value ItemAtPosValue::operator()(MachineInstance *mi) {
-    if (last_process_time <= mi->lastStateEvaluationTime()) {
+Value &ItemAtPosValue::operator()(MachineInstance *mi) {
+	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	if (!machine_list)  {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = false; return last_result;
+	}
+
+	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
     else return last_result;
 
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        last_result = false; return last_result;
-    }
     if (machine_list->parameters.size()) {
         long idx = -1;
         if (index.kind == Value::t_symbol) {
@@ -422,6 +437,7 @@ Value ItemAtPosValue::operator()(MachineInstance *mi) {
             }
         }
         if (idx>=0 && idx < (long)machine_list->parameters.size()) {
+			if (!machine_list->parameters[idx].machine) mi->lookup(machine_list->parameters[idx]);
             last_result = machine_list->parameters[idx].val;
             if (remove_from_list) {
                 machine_list->parameters.erase(machine_list->parameters.begin()+idx);
@@ -442,18 +458,19 @@ BitsetValue::BitsetValue(const BitsetValue &other) {
     machine_list = 0;
     state = other.state;
 }
-Value BitsetValue::operator()(MachineInstance *mi) {
-    if (last_process_time <= mi->lastStateEvaluationTime()) {
+Value &BitsetValue::operator()(MachineInstance *mi) {
+	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	if (!machine_list)  {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = false; return last_result;
+	}
+
+	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
         last_process_time = currentTime();
     }
     else return last_result;
 
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
-    if (!machine_list)  {
-        std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
-        MessageLog::instance()->add(ss.str().c_str());
-        last_result = false; return last_result;
-    }
     unsigned long val = 0;
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         MachineInstance *entry = machine_list->parameters[i].machine;
@@ -474,7 +491,7 @@ EnabledValue::EnabledValue(const EnabledValue &other) {
     machine = 0;
 }
 DynamicValue *EnabledValue::clone() const { return new EnabledValue(*this); }
-Value EnabledValue::operator()(MachineInstance *mi) {
+Value &EnabledValue::operator()(MachineInstance *mi) {
     if (machine == NULL) machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for ENABLED test\n";
@@ -495,7 +512,7 @@ DisabledValue::DisabledValue(const DisabledValue &other) {
     machine = 0;
 }
 DynamicValue *DisabledValue::clone() const { return new DisabledValue(*this); }
-Value DisabledValue::operator()(MachineInstance *mi) {
+Value &DisabledValue::operator()(MachineInstance *mi) {
     if (machine == NULL) machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for DISABLED test\n";
@@ -516,7 +533,7 @@ CastValue::CastValue(const CastValue &other) {
     kind = other.kind;
 }
 DynamicValue *CastValue::clone() const { return new CastValue(*this); }
-Value CastValue::operator()(MachineInstance *mi) {
+Value &CastValue::operator()(MachineInstance *mi) {
     Value val = mi->properties.lookup(property.c_str());
     if (kind == "STRING")
         last_result = val.asString();
