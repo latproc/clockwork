@@ -17,6 +17,10 @@ PIDCONFIGURATION MACHINE {
 	OPTION Kd 0;
 }
 
+# Users of the pid control may change the driving speed of the controlled 
+# device at any time. If the device has been given a stop position the 
+# device will not drive even if a drive speed is set. 
+# The following state machine tracks whether the device has a stop position.
 PIDCONTROL MACHINE {
 	stop INITIAL;
 	drive STATE;
@@ -38,7 +42,6 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <math.h>
 
 enum State { 
-		cs_init, 
 		cs_interlocked, /* something upstream is interlocked */
 		cs_stopped, 		/* sleeping */
 		cs_position,
@@ -50,8 +53,8 @@ struct PIDData {
 
 	/**** clockwork interface ***/
     long *set_point;
-    long *stop_position; 
-    long *mark_position; 
+    long *stop_position;
+    long *mark_position;
 	long *position;
 	long *target_power;
 
@@ -151,25 +154,32 @@ long output_scaled(struct PIDData * settings, long power) {
 }
 
 double calc_set_point(double set_point, long current_position, long stop_position) {
+	// This function calculates whether to slow the conveyor down
+	// prior to stopping. If the conveyor has passed the stop the direction
+	// will be reversed.  To be absolutely correct it should take into 
+	// account the maximum set speed in each direction but we don't do that yet TBD
 	long diff = stop_position - current_position;
 	if (set_point == 0) return 0.0;
 	if (set_point > 0) {
-		if (diff > 5000) return set_point;
+		if (diff > 5000) return fabs(set_point);
 		else if (diff > 100) return 400.0;
 		else return 0;
 	}
 	else {
-		if (diff < -5000) return set_point;
+		if (diff < -5000) return -fabs(set_point);
 		else if (diff < -100) return -400.0;
 		else return 0;
 	}
 }
 
+#if 0
 double calc_next_position(struct PIDData*data, long current_position, long stop_position) {
 	long diff = stop_position - current_position;
+    double dt = *data->min_update_time / 1000.0;
 	if (fabs(diff) < 1000) return stop_position;
-
+    return *data->position;
 }
+#endif
     
 PLUGIN_EXPORT
 int check_states(void *scope)
@@ -240,8 +250,8 @@ int check_states(void *scope)
 			return PLUGIN_ERROR;
 		}
 
-		data->saved_state = cs_init;
-		data->state = cs_init;
+		data->saved_state = cs_stopped;
+		data->state = cs_stopped;
 		data->current_power = 0.0;
 		data->last_poll = 0;
 		data->last_position = *data->position;
@@ -313,10 +323,9 @@ int poll_actions(void *scope) {
 		current = getState(scope);
 
 		if (strcmp(current, "interlocked") == 0) new_state = cs_interlocked;
-		else if (strcmp(current, "Stopped") == 0) new_state = cs_stopped;
-		else if (strcmp(current, "Speed") == 0) new_state = cs_speed;
-		else if (strcmp(current, "Seeking") == 0) new_state = cs_position;
-		else if (strcmp(current, "INIT") == 0) new_state = cs_init;
+		else if (strcmp(current, "stopped") == 0) new_state = cs_stopped;
+		else if (strcmp(current, "speed") == 0) new_state = cs_speed;
+		else if (strcmp(current, "seeking") == 0) new_state = cs_position;
 
 		if (data->debug && *data->debug)
 			printf("%ld\t %s test: %s %ld, stop: %ld, pow: %5.3f, pos: %ld\n", (long)delta_t, data->conveyor_name,
@@ -339,11 +348,6 @@ int poll_actions(void *scope) {
 			goto done_polling_actions;
 		}
 
-		if (data->current_power == 0.0 && (data->state == cs_init || data->state == cs_interlocked) ) {
-			if (std_state) changeState(std_state, "Ready");
-			data->state = cs_stopped;
-		}
-
 		if (new_state == cs_stopped) {
 			if (data->state != cs_stopped) stop(data, scope);
 			data->state = cs_stopped;
@@ -360,11 +364,11 @@ int poll_actions(void *scope) {
 					data->stop_marker = *data->mark_position;
 			}
 			// once we are very close we no longer calculate a moving target
-			if ( *data->position > *data->stop_position && *data->position - *data->stop_position <= *data->fwd_tolerance) {
+			if ( *data->position < *data->stop_position && *data->stop_position - *data->position <= *data->fwd_tolerance) {
 					next_position = *data->stop_position;
 					data->total_err *= 0.2; // TBD stop this from repeating
 			}
-			else if ( *data->position < *data->stop_position &&  *data->stop_position - *data->position <= *data->rev_tolerance) {
+			else if ( *data->position > *data->stop_position &&  *data->position - *data->stop_position <= *data->rev_tolerance) {
 					next_position = *data->stop_position;
 					data->total_err *= 0.2; // TBD stop this from repeating
 			}
@@ -405,10 +409,12 @@ int poll_actions(void *scope) {
 		}
 
 		if (std_state) {
-			if (data->state == cs_speed)
+			if (data->state == cs_speed) {
 				if (set_point != 0.0 ) changeState(std_state, "Working"); else changeState(std_state, "Resetting");
-			else if (data->state == cs_position)
-				if (new_power != 0.0 ) changeState(std_state, "Working"); else changeState(std_state, "Resetting");
+			}
+			else if (data->state == cs_position) { 
+			    if (new_power != 0.0 ) changeState(std_state, "Working"); else changeState(std_state, "Resetting");
+			}
 		}
 	}
 
@@ -443,43 +449,59 @@ done_polling_actions:
 	OPTION TargetPower 0;
 	OPTION StopMarker 0;
 	OPTION DEBUG 0;
-	
-	control PIDCONTROL;
+	OPTION saved_state "stopped";
 	
 	interlocked WHEN driver IS interlocked;
-	stopped WHEN control IS stop;
-	waiting DEFAULT;
+	restore WHEN SELF IS interlocked; # restore state to what was happening before the interlock
+	stopped INITIAL;
+	seeking STATE;
+	speed STATE;
 
-	COMMAND stop { SetPoint := 0; StopPosition := 0; StopMarker := 0; }
+	ENTER stopped { saved_state := "stopped" }
+	ENTER seeking { saved_state := "seeking" }
+	ENTER speed { saved_state := "speed" }
+	ENTER restore { SET SELF TO saved_state; }
+
+	COMMAND stop { SET SELF TO stopped; }
+	ENTER stopped { SetPoint := 0; StopPosition := 0; StopMarker := 0; }
 
 	COMMAND MarkPos {
 		StopMarker := pos.VALUE;
+		IF (SetPoint == 0) {
+			StopPosition := StopMarker;
+		};
 		IF (SetPoint > 0) {
 			StopPosition := StopMarker + fwd_settings.StoppingDistance;
-		} ELSE {
+		};
+		IF (SetPoint < 0) {
 			StopPosition := StopMarker - rev_settings.StoppingDistance;
 		};
-		SET control TO seek;
+		SET SELF TO seeking;
 	}
 
 	# convenience commands
 	COMMAND slow {
 	    SetPoint := fwd_settings.SlowSpeed; 
+		SET SELF TO speed;
 	}
 	
 	COMMAND start { 
     	SetPoint := fwd_settings.FullSpeed;
+		SET SELF TO speed;
     }
 	
 	COMMAND slowrev { 
 	    SetPoint := rev_settings.SlowSpeed;
+		SET SELF TO speed;
 	}
 
 	COMMAND startrev { 
 	    SetPoint := rev_settings.FullSpeed;
+		SET SELF TO speed;
 	}
 
 	COMMAND clear {
 		StopPosition := pos.VALUE;
+		SET SELF TO seeking;
 	}
 }

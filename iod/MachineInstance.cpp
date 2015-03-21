@@ -649,7 +649,7 @@ class MachineTimerValue : public DynamicValue {
 			gettimeofday(&now, NULL);
 			long msecs = (long)get_diff_in_microsecs(&now, &machine_instance->start_time)/1000;
 			last_result = msecs;
-			DBG_MSG << m->getName() << " update timer value " << last_result << "\n";
+			//DBG_MSG << m->getName() << " update timer value " << last_result << "\n";
 			return last_result;
 		}
 		Value &operator()()  {
@@ -1314,7 +1314,7 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 const Value *MachineInstance::getTimerVal() {
 	MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(state_timer.dynamicValue());
 	mtv->operator()(this);
-	DBG_MSG << _name << "::getTimerVal " << mtv->getLastResult()->iValue << "\n";
+	//DBG_MSG << _name << "::getTimerVal " << mtv->getLastResult()->iValue << "\n";
 	return mtv->getLastResult();
 }
 
@@ -1946,7 +1946,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 #endif
 		gettimeofday(&start_time,0);
 		gettimeofday(&disabled_time,0);
-		DBG_MSG << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+		DBG_STATECHANGES << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
@@ -2200,6 +2200,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		DBG_M_MESSAGING << "received message " << m << " from " << from->getName() << "\n";
 	}
 	if (from == this || m.getText() == short_name) {
+		DBG_M_MESSAGING << _name << " checking transitions (" << transitions.size() << "\n";
 		std::list<Transition>::const_iterator iter = transitions.begin();
 		while (iter != transitions.end()) {
 			const Transition &t = *iter++;
