@@ -1,17 +1,14 @@
 PIDCONFIGURATION MACHINE {
 	OPTION PERSISTENT true;
 	EXPORT RW 32BIT min_update_time, StartTimeout, fwd_step_up, fwd_step_down, rev_step_up, rev_step_down;
-	OPTION min_update_time 40; # minimum time between normal control updates
-	OPTION StartTimeout 500;		#conveyor start timeout
-	OPTION fwd_step_up 40000; # maximum change per second
-	OPTION fwd_step_down 60000; # maximum change per second
-	OPTION rev_step_up 40000; # maximum change per second
-	OPTION rev_step_down 60000; # maximum change per second
-	OPTION inverted false; # do not invert power
+	OPTION min_update_time 20; # minimum time between normal control updates
+	OPTION StartTimeout 500;	 # conveyor start timeout
+	OPTION inverted false;     # do not invert power
+	OPTION stopping_time 300;  # 300ms stopping time
+	OPTION min_speed 0;      # minimum controllable speed 
+	OPTION speed 0;            # estimated current speed
+	OPTION position 0;         # estimated current speed
 
-	#OPTION Kp 9000000;
-	#OPTION Ki 800000;
-	#OPTION Kd 40;
 	OPTION Kp 3000000;
 	OPTION Ki 150000;
 	OPTION Kd 0;
@@ -60,10 +57,8 @@ struct PIDData {
 
 	/* ramp settings */
 	long *min_update_time;
-	long *fwd_step_up;		/* ramp increase per second */
-	long *fwd_step_down;
-	long *rev_step_up;		/* downward ramp change per second */
-	long *rev_step_down;
+	long *stopping_time;
+	long *min_speed;
 
 	long *max_forward;
 	long *max_reverse;
@@ -89,6 +84,10 @@ struct PIDData {
 	long *Ki_long;
 	long *Kd_long;
 
+	/* statistics/debug */
+	long *position_change;
+	long *estimated_speed;
+
 	/* internal values for ramping */
 	double current_power;
 	uint64_t ramp_start_time;
@@ -101,6 +100,7 @@ struct PIDData {
 	long last_stop_position;
 	long default_debug; /* a default debug level if one is not specified in the script */
 	int inverted;
+	long start_position;
 	double last_Ep;
 
 	char *conveyor_name;
@@ -153,6 +153,7 @@ long output_scaled(struct PIDData * settings, long power) {
 	return raw;
 }
 
+#if 0
 double calc_set_point(double set_point, long current_position, long stop_position) {
 	// This function calculates whether to slow the conveyor down
 	// prior to stopping. If the conveyor has passed the stop the direction
@@ -172,7 +173,6 @@ double calc_set_point(double set_point, long current_position, long stop_positio
 	}
 }
 
-#if 0
 double calc_next_position(struct PIDData*data, long current_position, long stop_position) {
 	long diff = stop_position - current_position;
     double dt = *data->min_update_time / 1000.0;
@@ -202,10 +202,13 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "TargetPower", &data->target_power);
 		ok = ok && getInt(scope, "pos.VALUE", &data->position);
 		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
-		ok = ok && getInt(scope, "settings.fwd_step_up", &data->fwd_step_up);
-		ok = ok && getInt(scope, "settings.fwd_step_down", &data->fwd_step_down);
-		ok = ok && getInt(scope, "settings.rev_step_up", &data->rev_step_up);
-		ok = ok && getInt(scope, "settings.rev_step_down", &data->rev_step_down);
+		ok = ok && getInt(scope, "settings.stopping_time", &data->stopping_time);
+		ok = ok && getInt(scope, "settings.min_speed", &data->min_speed);
+		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
+		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
+		ok = ok && getInt(scope, "settings.Kd", &data->Kd_long);
+		ok = ok && getInt(scope, "settings.speed", &data->estimated_speed);
+		ok = ok && getInt(scope, "settings.position", &data->position_change);
 
 		ok = ok && getInt(scope, "output_settings.MaxForward", &data->max_forward);
 		ok = ok && getInt(scope, "output_settings.MaxReverse", &data->max_reverse);
@@ -227,9 +230,6 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "rev_settings.TravelAllowance", &data->rev_travel_allowance);
 		ok = ok && getInt(scope, "rev_settings.tolerance", &data->rev_tolerance);
 
-		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
-		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
-		ok = ok && getInt(scope, "settings.Kd", &data->Kd_long);
 
 		if (!getInt(scope, "DEBUG", &data->debug) ) data->debug = &data->default_debug;
 		
@@ -255,6 +255,7 @@ int check_states(void *scope)
 		data->current_power = 0.0;
 		data->last_poll = 0;
 		data->last_position = *data->position;
+		data->start_position = data->last_position;
 
 		data->stop_marker = 0;
 		data->last_stop_position = 0;
@@ -322,7 +323,7 @@ int poll_actions(void *scope) {
 	{
 		long next_position = 0;
 		double set_point = *data->set_point;
-		double dt = (double)(delta_t - 2000)/1000000.0; // 2ms allowance for latency
+		double dt = (double)(delta_t)/1000000.0; // 2ms allowance for latency
 
 		current = getState(scope);
 
@@ -340,8 +341,14 @@ int poll_actions(void *scope) {
                 data->current_power,
                 *data->position);
 		
-		if (*data->position == 0) data->last_position = 0; // startup compensation before the conveyor starts to move
-		else if (data->last_position == 0) data->last_position = *data->position;
+		if (*data->position == 0) {
+			data->last_position = 0; // startup compensation before the conveyor starts to move
+			data->start_position = 0;
+		}
+		else if (data->last_position == 0) {
+			data->last_position = *data->position;
+			data->start_position = data->last_position;
+		}
 
 		if (new_state == cs_interlocked ) {
 			if (data->state != cs_interlocked)  {
@@ -354,7 +361,10 @@ int poll_actions(void *scope) {
 		}
 
 		if (new_state == cs_stopped) {
-			if (data->state != cs_stopped) stop(data, scope);
+			if (data->state != cs_stopped) {
+				stop(data, scope);
+				if (std_state) changeState(std_state, "Ready");
+			}
 			data->state = cs_stopped;
 			goto done_polling_actions;
 		}
@@ -363,9 +373,12 @@ int poll_actions(void *scope) {
 												&& sign(set_point) == sign(*data->stop_position - *data->position);
 		int overshot = new_state == cs_position && !approaching;
 
+		if (data->state == cs_stopped && (new_state == cs_position || new_state == cs_speed)) 
+			data->start_position = *data->position;
+
 		// adjust the set point to cater for whether we are close to the stop position
 		if (new_state == cs_position) {
-			double stopping_time = 0.2; // secs
+			double stopping_time = *data->stopping_time; // secs
 			if (!approaching) set_point = 0.0;
 			else {
 				// stopping distance at vel v with an even ramp is s=vt/2
@@ -374,6 +387,7 @@ int poll_actions(void *scope) {
 				if (dist != 0) ratio = (*data->stop_position - *data->position) / dist;
 				if ( fabs(ratio) <= 1.0 ) // time to ramp down
 					set_point *= fabs(ratio);
+					if (set_point < *data->min_speed) set_point = 0.0;
 			}
 		}
 
@@ -416,6 +430,15 @@ int poll_actions(void *scope) {
 
 		double Ep = next_position - *data->position;
 
+		
+		long speed = (double)(*data->position - data->last_position) / dt;
+		if (speed != *data->estimated_speed) {
+			setIntValue(scope, "settings.speed", speed);
+		}
+		long changed_pos = *data->position - data->start_position;
+		if (changed_pos != *data->position_change)
+			setIntValue(scope, "settings.position", changed_pos);
+
 		if (data->debug && *data->debug)
 			printf ("%s pos: %ld, Ep: %5.3f, tot_e %5.3f, dt: %5.3f, "
 					"pwr: %5.3f, spd: %5.3f, setpt: %5.3f, next: %ld\n", 
@@ -439,20 +462,20 @@ int poll_actions(void *scope) {
 			new_power = Dout;
 		}
 
-		if (std_state) {
-			if (data->state == cs_speed) {
-				if (set_point != 0.0 ) changeState(std_state, "Working"); else changeState(std_state, "Resetting");
+		if (std_state && (data->state == cs_speed || data->state == cs_position) ) {
+			if (new_power == 0.0 && data->current_power != 0.0) {
+		    changeState(std_state, "Resetting");
 			}
-			else if (data->state == cs_position) { 
-			    if (new_power != 0.0 ) changeState(std_state, "Working"); else changeState(std_state, "Resetting");
+			else if (new_power != 0.0 && data->current_power == 0.0) {
+		    changeState(std_state, "Working");
 			}
 		}
 	}
 
 	if (new_power != data->current_power) {
 		if (new_power == 0.0) {}
-		else if ( new_power > data->current_power + 1000) new_power = data->current_power + 1000;
-		else if (new_power < data->current_power - 1000) new_power = data->current_power - 1000;
+		else if ( new_power > data->current_power + 2000) new_power = data->current_power + 1000;
+		else if (new_power < data->current_power - 2000) new_power = data->current_power - 1000;
 		long power = output_scaled(data, (long) new_power);
 
 		if (data->debug && *data->debug) 
@@ -461,7 +484,7 @@ int poll_actions(void *scope) {
 
 		
 		setIntValue(scope, "driver.VALUE", power);
-		if (power == 0) changeState(std_state, "Ready");
+		if (new_power == 0) changeState(std_state, "Ready");
 		data->current_power = new_power;
 	}
 
@@ -484,17 +507,19 @@ done_polling_actions:
 	
 	interlocked WHEN driver IS interlocked;
 	restore WHEN SELF IS interlocked; # restore state to what was happening before the interlock
-	stopped INITIAL;
-	seeking STATE;
-	speed STATE;
+	stopped WHEN SELF IS stopped;
+	seeking WHEN SELF IS seeking;
+	speed WHEN SELF IS speed;
 
-	ENTER stopped { saved_state := "stopped" }
-	ENTER seeking { saved_state := "seeking" }
-	ENTER speed { saved_state := "speed" }
-	ENTER restore { SET SELF TO stopped; }  #SET SELF TO saved_state; }
-
-	COMMAND stop { SET SELF TO stopped; }
+	ENTER stopped { saved_state := "stopped"; }
+	ENTER seeking { saved_state := "seeking"; }
+	ENTER speed { saved_state := "speed"; }
+	ENTER INIT { SET SELF TO stopped; }
 	ENTER stopped { SetPoint := 0; StopPosition := 0; StopMarker := 0; }
+	ENTER restore { SET SELF TO stopped; } 
+	#ENTER restore { SET SELF TO saved_state; }
+
+	COMMAND stop { SET SELF TO stopped; saved_state := "stopped"; }
 
 	COMMAND MarkPos {
 		StopMarker := pos.VALUE;
@@ -512,22 +537,22 @@ done_polling_actions:
 
 	# convenience commands
 	COMMAND slow {
-	    SetPoint := fwd_settings.SlowSpeed; 
+	   SetPoint := fwd_settings.SlowSpeed; 
 		SET SELF TO speed;
 	}
 	
 	COMMAND start { 
-    	SetPoint := fwd_settings.FullSpeed;
+    SetPoint := fwd_settings.FullSpeed;
 		SET SELF TO speed;
-    }
+  }
 	
 	COMMAND slowrev { 
-	    SetPoint := rev_settings.SlowSpeed;
+	  SetPoint := rev_settings.SlowSpeed;
 		SET SELF TO speed;
 	}
 
 	COMMAND startrev { 
-	    SetPoint := rev_settings.FullSpeed;
+	  SetPoint := rev_settings.FullSpeed;
 		SET SELF TO speed;
 	}
 
