@@ -12,8 +12,8 @@ PIDCONFIGURATION MACHINE {
 	#OPTION Kp 9000000;
 	#OPTION Ki 800000;
 	#OPTION Kd 40;
-	OPTION Kp 4000000;
-	OPTION Ki 700000;
+	OPTION Kp 3000000;
+	OPTION Ki 150000;
 	OPTION Kd 0;
 }
 
@@ -279,6 +279,8 @@ static void stop(struct PIDData*data, void *scope) {
 	data->stop_marker = 0;
 	data->last_set_point = 0;
 	data->last_stop_position = 0;
+	data->last_Ep = 0;
+	data->total_err = 0;
 	setIntValue(scope, "SetPoint", 0);
 	if (!data->state == cs_interlocked) {
 		if (data->debug && *data->debug)
@@ -288,6 +290,8 @@ static void stop(struct PIDData*data, void *scope) {
 	setIntValue(scope, "TargetPower", 0);
 	setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
 }
+
+static int sign(double val) { return (0 < val) - (val < 0); }
 
 PLUGIN_EXPORT
 int poll_actions(void *scope) {
@@ -323,6 +327,7 @@ int poll_actions(void *scope) {
 		current = getState(scope);
 
 		if (strcmp(current, "interlocked") == 0) new_state = cs_interlocked;
+		else if (strcmp(current, "restore") == 0) new_state = cs_interlocked;
 		else if (strcmp(current, "stopped") == 0) new_state = cs_stopped;
 		else if (strcmp(current, "speed") == 0) new_state = cs_speed;
 		else if (strcmp(current, "seeking") == 0) new_state = cs_position;
@@ -354,6 +359,24 @@ int poll_actions(void *scope) {
 			goto done_polling_actions;
 		}
 
+		int approaching = new_state == cs_position 
+												&& sign(set_point) == sign(*data->stop_position - *data->position);
+		int overshot = new_state == cs_position && !approaching;
+
+		// adjust the set point to cater for whether we are close to the stop position
+		if (new_state == cs_position) {
+			double stopping_time = 0.2; // secs
+			if (!approaching) set_point = 0.0;
+			else {
+				// stopping distance at vel v with an even ramp is s=vt/2
+				double dist = set_point * stopping_time / 2.0;
+				double ratio = 0;
+				if (dist != 0) ratio = (*data->stop_position - *data->position) / dist;
+				if ( fabs(ratio) <= 1.0 ) // time to ramp down
+					set_point *= fabs(ratio);
+			}
+		}
+
 		next_position = data->last_position + dt * set_point;
 
 		if (new_state == cs_position) {
@@ -365,22 +388,30 @@ int poll_actions(void *scope) {
 			}
 			// once we are very close we no longer calculate a moving target
 			if ( *data->position < *data->stop_position && *data->stop_position - *data->position <= *data->fwd_tolerance) {
-					next_position = *data->stop_position;
-					data->total_err *= 0.2; // TBD stop this from repeating
+					//next_position = *data->stop_position;
+					//data->total_err *= 0.2; // TBD stop this from repeating
+					data->last_Ep = 0;
+					stop(data, scope);
 			}
 			else if ( *data->position > *data->stop_position &&  *data->position - *data->stop_position <= *data->rev_tolerance) {
-					next_position = *data->stop_position;
-					data->total_err *= 0.2; // TBD stop this from repeating
+					//next_position = *data->stop_position;
+					//data->total_err *= 0.2; // TBD stop this from repeating
+					data->last_Ep = 0;
+					stop(data, scope);
 			}
 			// as we get close to the stop position, we may ramp down 
-			set_point = calc_set_point(set_point, *data->position, *data->stop_position);
+			//set_point = calc_set_point(set_point, *data->position, *data->stop_position);
 		}
 
 		if (new_state == cs_speed) {
 			if (data->state != cs_speed) {
 				data->state = cs_speed;
 			}
+		}
+		if (data->state == cs_position || data->state == cs_speed)
 			next_position += data->last_Ep;
+		else {
+			next_position == *data->position;
 		}
 
 		double Ep = next_position - *data->position;
@@ -460,7 +491,7 @@ done_polling_actions:
 	ENTER stopped { saved_state := "stopped" }
 	ENTER seeking { saved_state := "seeking" }
 	ENTER speed { saved_state := "speed" }
-	ENTER restore { SET SELF TO saved_state; }
+	ENTER restore { SET SELF TO stopped; }  #SET SELF TO saved_state; }
 
 	COMMAND stop { SET SELF TO stopped; }
 	ENTER stopped { SetPoint := 0; StopPosition := 0; StopMarker := 0; }

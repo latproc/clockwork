@@ -383,7 +383,7 @@ void ProcessingThread::operator()()
 			if (systems_waiting > 0) break;
 			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
 			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
-			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 10000) break;
+			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
 			//status = e_waiting;
 			//DBG_MSG << "looping\n";
 		}
