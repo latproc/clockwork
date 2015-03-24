@@ -6,23 +6,10 @@ PIDCONFIGURATION MACHINE {
 	OPTION inverted false;     # do not invert power
 	OPTION stopping_time 300;  # 300ms stopping time
 	OPTION min_speed 0;      # minimum controllable speed 
-	OPTION speed 0;            # estimated current speed
-	OPTION position 0;         # estimated current speed
 
 	OPTION Kp 3000000;
 	OPTION Ki 150000;
 	OPTION Kd 0;
-}
-
-# Users of the pid control may change the driving speed of the controlled 
-# device at any time. If the device has been given a stop position the 
-# device will not drive even if a drive speed is set. 
-# The following state machine tracks whether the device has a stop position.
-PIDCONTROL MACHINE {
-	stop INITIAL;
-	drive STATE;
-	seek STATE;
-	none STATE;
 }
 
 PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_settings, driver, pos {
@@ -39,10 +26,12 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <math.h>
 
 enum State { 
+		cs_init,
 		cs_interlocked, /* something upstream is interlocked */
 		cs_stopped, 		/* sleeping */
 		cs_position,
-		cs_speed
+		cs_speed,
+		cs_atposition
 };
 
 struct PIDData {
@@ -104,7 +93,6 @@ struct PIDData {
 	double last_Ep;
 
 	char *conveyor_name;
-	enum State saved_state;
 
 	/* stop/start control */
 	long stop_marker;
@@ -153,34 +141,6 @@ long output_scaled(struct PIDData * settings, long power) {
 	return raw;
 }
 
-#if 0
-double calc_set_point(double set_point, long current_position, long stop_position) {
-	// This function calculates whether to slow the conveyor down
-	// prior to stopping. If the conveyor has passed the stop the direction
-	// will be reversed.  To be absolutely correct it should take into 
-	// account the maximum set speed in each direction but we don't do that yet TBD
-	long diff = stop_position - current_position;
-	if (set_point == 0) return 0.0;
-	if (set_point > 0) {
-		if (diff > 5000) return fabs(set_point);
-		else if (diff > 100) return 400.0;
-		else return 0;
-	}
-	else {
-		if (diff < -5000) return -fabs(set_point);
-		else if (diff < -100) return -400.0;
-		else return 0;
-	}
-}
-
-double calc_next_position(struct PIDData*data, long current_position, long stop_position) {
-	long diff = stop_position - current_position;
-    double dt = *data->min_update_time / 1000.0;
-	if (fabs(diff) < 1000) return stop_position;
-    return *data->position;
-}
-#endif
-    
 PLUGIN_EXPORT
 int check_states(void *scope)
 {
@@ -207,8 +167,8 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
 		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
 		ok = ok && getInt(scope, "settings.Kd", &data->Kd_long);
-		ok = ok && getInt(scope, "settings.speed", &data->estimated_speed);
-		ok = ok && getInt(scope, "settings.position", &data->position_change);
+		ok = ok && getInt(scope, "speed", &data->estimated_speed);
+		ok = ok && getInt(scope, "position", &data->position_change);
 
 		ok = ok && getInt(scope, "output_settings.MaxForward", &data->max_forward);
 		ok = ok && getInt(scope, "output_settings.MaxReverse", &data->max_reverse);
@@ -250,8 +210,7 @@ int check_states(void *scope)
 			return PLUGIN_ERROR;
 		}
 
-		data->saved_state = cs_stopped;
-		data->state = cs_stopped;
+		data->state = cs_init;
 		data->current_power = 0.0;
 		data->last_poll = 0;
 		data->last_position = *data->position;
@@ -316,9 +275,6 @@ int poll_actions(void *scope) {
 	new_power = data->current_power;
 	enum State new_state = data->state;
 
-	void *std_state = getNamedScope(scope, "M_Control"); // used to report state to other machines
-	if (!std_state) log_message(scope, "Could not find named scope M_Control");
-
 	/* Determine what the controller should be doing */
 	{
 		long next_position = 0;
@@ -332,6 +288,7 @@ int poll_actions(void *scope) {
 		else if (strcmp(current, "stopped") == 0) new_state = cs_stopped;
 		else if (strcmp(current, "speed") == 0) new_state = cs_speed;
 		else if (strcmp(current, "seeking") == 0) new_state = cs_position;
+		else if (strcmp(current, "atposition") == 0) new_state = cs_atposition;
 
 		if (data->debug && *data->debug)
 			printf("%ld\t %s test: %s %ld, stop: %ld, pow: %5.3f, pos: %ld\n", (long)delta_t, data->conveyor_name,
@@ -353,8 +310,6 @@ int poll_actions(void *scope) {
 		if (new_state == cs_interlocked ) {
 			if (data->state != cs_interlocked)  {
 				stop(data, scope);
-				if (std_state) changeState(std_state, "Unavailable");
-				data->saved_state = data->state;
 				data->state = cs_interlocked;
 			}
 			goto done_polling_actions;
@@ -363,9 +318,17 @@ int poll_actions(void *scope) {
 		if (new_state == cs_stopped) {
 			if (data->state != cs_stopped) {
 				stop(data, scope);
-				if (std_state) changeState(std_state, "Ready");
 			}
 			data->state = cs_stopped;
+			goto done_polling_actions;
+		}
+
+		if (new_state == cs_atposition) {
+			if ( ( *data->position < *data->stop_position 
+						&& *data->stop_position - *data->position > *data->fwd_tolerance )
+				|| ( *data->position > *data->stop_position 
+						&& *data->position - *data->stop_position > *data->rev_tolerance ) )
+			changeState(scope, "seeking");
 			goto done_polling_actions;
 		}
 
@@ -378,7 +341,7 @@ int poll_actions(void *scope) {
 
 		// adjust the set point to cater for whether we are close to the stop position
 		if (new_state == cs_position) {
-			double stopping_time = *data->stopping_time; // secs
+			double stopping_time = (double)*data->stopping_time / 1000.0; // secs
 			if (!approaching) set_point = 0.0;
 			else {
 				// stopping distance at vel v with an even ramp is s=vt/2
@@ -386,7 +349,7 @@ int poll_actions(void *scope) {
 				double ratio = 0;
 				if (dist != 0) ratio = (*data->stop_position - *data->position) / dist;
 				if ( fabs(ratio) <= 1.0 ) // time to ramp down
-					set_point *= fabs(ratio);
+					set_point *= fabs(ratio); // using an extra scaling factor here.. TBD
 					if (set_point < *data->min_speed) set_point = 0.0;
 			}
 		}
@@ -402,19 +365,19 @@ int poll_actions(void *scope) {
 			}
 			// once we are very close we no longer calculate a moving target
 			if ( *data->position < *data->stop_position && *data->stop_position - *data->position <= *data->fwd_tolerance) {
-					//next_position = *data->stop_position;
-					//data->total_err *= 0.2; // TBD stop this from repeating
 					data->last_Ep = 0;
-					stop(data, scope);
+					//stop(data, scope);
+					new_power = 0;
+					changeState(scope, "atposition");
+					goto calculated_power;
 			}
 			else if ( *data->position > *data->stop_position &&  *data->position - *data->stop_position <= *data->rev_tolerance) {
-					//next_position = *data->stop_position;
-					//data->total_err *= 0.2; // TBD stop this from repeating
 					data->last_Ep = 0;
-					stop(data, scope);
+					//stop(data, scope);
+					new_power = 0;
+					changeState(scope, "atposition");
+					goto calculated_power;
 			}
-			// as we get close to the stop position, we may ramp down 
-			//set_point = calc_set_point(set_point, *data->position, *data->stop_position);
 		}
 
 		if (new_state == cs_speed) {
@@ -433,11 +396,13 @@ int poll_actions(void *scope) {
 		
 		long speed = (double)(*data->position - data->last_position) / dt;
 		if (speed != *data->estimated_speed) {
-			setIntValue(scope, "settings.speed", speed);
+			setIntValue(scope, "speed", speed);
 		}
+/*
 		long changed_pos = *data->position - data->start_position;
 		if (changed_pos != *data->position_change)
-			setIntValue(scope, "settings.position", changed_pos);
+			setIntValue(scope, "position", changed_pos);
+*/
 
 		if (data->debug && *data->debug)
 			printf ("%s pos: %ld, Ep: %5.3f, tot_e %5.3f, dt: %5.3f, "
@@ -462,16 +427,9 @@ int poll_actions(void *scope) {
 			new_power = Dout;
 		}
 
-		if (std_state && (data->state == cs_speed || data->state == cs_position) ) {
-			if (new_power == 0.0 && data->current_power != 0.0) {
-		    changeState(std_state, "Resetting");
-			}
-			else if (new_power != 0.0 && data->current_power == 0.0) {
-		    changeState(std_state, "Working");
-			}
-		}
 	}
 
+calculated_power:
 	if (new_power != data->current_power) {
 		if (new_power == 0.0) {}
 		else if ( new_power > data->current_power + 2000) new_power = data->current_power + 1000;
@@ -484,7 +442,6 @@ int poll_actions(void *scope) {
 
 		
 		setIntValue(scope, "driver.VALUE", power);
-		if (new_power == 0) changeState(std_state, "Ready");
 		data->current_power = new_power;
 	}
 
@@ -504,22 +461,43 @@ done_polling_actions:
 	OPTION StopMarker 0;
 	OPTION DEBUG 0;
 	OPTION saved_state "stopped";
+	OPTION speed 0;            # estimated current speed
+	OPTION position 0;         # estimated current speed
 	
+	# This module uses the restore state to give the machine 
+	# somewhere to go once the driver is no longer interlocked. 
+	# Since we are not using stable states for stopped, seeking etc we 
+	# the machine would otherwise never leave interlocked.
 	interlocked WHEN driver IS interlocked;
 	restore WHEN SELF IS interlocked; # restore state to what was happening before the interlock
-	stopped WHEN SELF IS stopped;
-	seeking WHEN SELF IS seeking;
-	speed WHEN SELF IS speed;
+	stopped INITIAL;
+	seeking STATE;
+	speed STATE;
+	atposition STATE;
 
-	ENTER stopped { saved_state := "stopped"; }
-	ENTER seeking { saved_state := "seeking"; }
-	ENTER speed { saved_state := "speed"; }
-	ENTER INIT { SET SELF TO stopped; }
-	ENTER stopped { SetPoint := 0; StopPosition := 0; StopMarker := 0; }
+	ENTER interlocked {
+		SET M_Control TO Unavailable;
+	}
+	ENTER stopped { 
+		SET M_Control TO Ready;
+		saved_state := "stopped"; 
+		SetPoint := 0; StopPosition := 0; StopMarker := 0; }
+	ENTER seeking { 
+		SET M_Control TO Resetting;
+		saved_state := "seeking"; 
+	}
+	ENTER speed { 
+		SET M_Control TO Working;
+		saved_state := "speed"; 
+	}
+	ENTER atposition { 
+		SET M_Control TO Ready;
+		saved_state := "speed"; 
+	}
 	ENTER restore { SET SELF TO stopped; } 
 	#ENTER restore { SET SELF TO saved_state; }
 
-	COMMAND stop { SET SELF TO stopped; saved_state := "stopped"; }
+	COMMAND stop { SET SELF TO stopped; }
 
 	COMMAND MarkPos {
 		StopMarker := pos.VALUE;
