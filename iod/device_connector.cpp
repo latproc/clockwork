@@ -865,6 +865,9 @@ int main(int argc, const char * argv[])
             else if (strcmp(argv[i], "--host") == 0 && i < argc-1) {
                 options.setHost(argv[++i]);
             }
+            else if (strcmp(argv[i], "--cw_host") == 0 && i < argc-1) {
+                options.setIODHost(argv[++i]);
+            }
             else if (strcmp(argv[i], "--name") == 0 && i < argc-1) {
                 options.setName(argv[++i]);
             }
@@ -935,7 +938,7 @@ int main(int argc, const char * argv[])
 				connection_manager = new SubscriptionManager(Options::instance()->getChannelName());
 	        }
 	        else {
-	            connection_manager = new CommandManager(Options::instance()->host());
+	            connection_manager = new CommandManager(options.iodHost());
 	        }
 				}
 				catch(zmq::error_t io) {
@@ -1049,10 +1052,11 @@ int main(int argc, const char * argv[])
         monitor.join();
     }
     catch (std::exception e) {
-        if (zmq_errno())
+        if (zmq_errno()) 
             std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
         else
             std::cerr << e.what() << "\n";
+				exit(1);
     }
     return 0;
 }
