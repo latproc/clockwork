@@ -1,11 +1,11 @@
 PIDCONFIGURATION MACHINE {
 	OPTION PERSISTENT true;
-	EXPORT RW 32BIT min_update_time, StartTimeout, fwd_step_up, fwd_step_down, rev_step_up, rev_step_down;
+	EXPORT RW 32BIT min_update_time, StartTimeout, stopping_time, Kp, Ki, Kd;
+
 	OPTION min_update_time 20; # minimum time between normal control updates
 	OPTION StartTimeout 500;	 # conveyor start timeout
 	OPTION inverted false;     # do not invert power
 	OPTION stopping_time 300;  # 300ms stopping time
-	OPTION min_speed 0;      # minimum controllable speed 
 
 	OPTION Kp 2000000;
 	OPTION Ki 800000;
@@ -58,12 +58,10 @@ struct PIDData {
     long *stop_position;
     long *mark_position;
 	long *position;
-	long *target_power;
 
 	/* ramp settings */
 	long *min_update_time;
 	long *stopping_time;
-	long *min_speed;
 
 	long *max_forward;
 	long *max_reverse;
@@ -177,11 +175,9 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "SetPoint", &data->set_point);
 		ok = ok && getInt(scope, "StopMarker", &data->mark_position);
 		ok = ok && getInt(scope, "StopPosition", &data->stop_position);
-		ok = ok && getInt(scope, "TargetPower", &data->target_power);
 		ok = ok && getInt(scope, "pos.VALUE", &data->position);
 		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
 		ok = ok && getInt(scope, "settings.stopping_time", &data->stopping_time);
-		ok = ok && getInt(scope, "settings.min_speed", &data->min_speed);
 		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
 		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
 		ok = ok && getInt(scope, "settings.Kd", &data->Kd_long);
@@ -195,18 +191,7 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "output_settings.MinForward", &data->min_forward);
 		ok = ok && getInt(scope, "output_settings.MinReverse", &data->min_reverse);
 
-//		ok = ok && getInt(scope, "fwd_settings.SlowSpeed", &data->fwd_slow_speed);
-//		ok = ok && getInt(scope, "fwd_settings.FullSpeed", &data->fwd_full_speed);
-//		ok = ok && getInt(scope, "fwd_settings.PowerFactor", &data->fwd_power_factor);
-//		ok = ok && getInt(scope, "fwd_settings.StoppingDistance", &data->fwd_stopping_distance);
-//		ok = ok && getInt(scope, "fwd_settings.TravelAllowance", &data->fwd_travel_allowance);
 		ok = ok && getInt(scope, "fwd_settings.tolerance", &data->fwd_tolerance);
-
-//		ok = ok && getInt(scope, "rev_settings.SlowSpeed", &data->rev_slow_speed);
-//		ok = ok && getInt(scope, "rev_settings.FullSpeed", &data->rev_full_speed);
-//		ok = ok && getInt(scope, "rev_settings.PowerFactor", &data->rev_power_factor);
-//		ok = ok && getInt(scope, "rev_settings.StoppingDistance", &data->rev_stopping_distance);
-//		ok = ok && getInt(scope, "rev_settings.TravelAllowance", &data->rev_travel_allowance);
 		ok = ok && getInt(scope, "rev_settings.tolerance", &data->rev_tolerance);
 
 
@@ -271,7 +256,6 @@ static void stop(struct PIDData*data, void *scope) {
 			printf("%s stopped\n", data->conveyor_name);
 		data->state = cs_stopped;
 	}
-	setIntValue(scope, "TargetPower", 0);
 	setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
 }
 
@@ -283,7 +267,6 @@ int poll_actions(void *scope) {
 	struct timeval now;
 	uint64_t now_t = 0;
 	double new_power = 0.0f;
-	long calculated_target_power = 0;
 	long calculated_set_point = 0;
 	long calculated_stop_position = 0;
 	char *current = 0;
@@ -314,6 +297,11 @@ int poll_actions(void *scope) {
 		else if (strcmp(current, "speed") == 0) new_state = cs_speed;
 		else if (strcmp(current, "seeking") == 0) new_state = cs_position;
 		else if (strcmp(current, "atposition") == 0) new_state = cs_atposition;
+
+		if (set_point != 0 && (new_state == cs_position || new_state == cs_atposition ) 
+				&& sign(set_point) != sign(*data->stop_position - *data->position)) {
+			set_point = -set_point;
+		}
 
 		if (data->debug && *data->debug)
 			printf("%ld\t %s test: %s %ld, stop: %ld, pow: %5.3f, pos: %ld\n", (long)delta_t, data->conveyor_name,
@@ -355,8 +343,6 @@ int poll_actions(void *scope) {
 						&& *data->stop_position - *data->position > *data->fwd_tolerance )
 				|| ( *data->position > *data->stop_position 
 						&& *data->position - *data->stop_position > *data->rev_tolerance ) )
-			if (sign(set_point) != sign(*data->stop_position - *data->position))
-				set_point = -set_point;
 			changeState(scope, "seeking");
 			goto done_polling_actions;
 		}
@@ -379,19 +365,23 @@ int poll_actions(void *scope) {
 				if (dist != 0) ratio = (*data->stop_position - *data->position) / dist;
 				if ( fabs(ratio) <= 1.0 ) // time to ramp down
 					set_point *= fabs(ratio); // using an extra scaling factor here.. TBD
-					//if (set_point < *data->min_speed) set_point = 0.0;
 			}
 		}
 
 		next_position = data->last_position + dt * set_point;
 
-		if (new_state == cs_position) {
+		if (new_state == cs_position || new_state == cs_atposition) {
 			if (data->state != cs_position || (data->last_stop_position != *data->stop_position) ) {
 					data->state = cs_position;
 					printf("%s new stop position %ld\n", data->conveyor_name, *data->stop_position);
 					data->last_stop_position = *data->stop_position;
 					data->stop_marker = *data->mark_position;
+					// we may need to change direction for this movement
+					if (sign(set_point) != sign(*data->stop_position - *data->position))
+						setIntValue(scope, "SetPoint", *data->set_point);
 			}
+		}
+		if (new_state == cs_position) {
 			// once we are very close we no longer calculate a moving target
 			if ( set_point >= 0 && *data->position >= *data->stop_position - *data->fwd_tolerance/2 
 							&& *data->position <= *data->stop_position + *data->fwd_tolerance) {
@@ -533,10 +523,9 @@ int length(struct Buffer *buf) {
 
 
 %END_PLUGIN
-
+	EXPORT RW 32BIT Velocity, StopError;
 	OPTION SetPoint 0;
 	OPTION StopPosition 0;
-	OPTION TargetPower 0;
 	OPTION StopMarker 0;
 	OPTION DEBUG 0;
 	OPTION Velocity 0;            # estimated current velocity 
