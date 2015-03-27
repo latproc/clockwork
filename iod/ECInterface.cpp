@@ -198,6 +198,7 @@ void ECModule::read_sdo(ec_sdo_request_t *sdo)
 ECModule *ECInterface::findModule(int pos) {
 	if (pos < 0 || (unsigned int)pos >= modules.size()) return 0;
 	ECModule *m = modules.at(pos);
+	if (m->position != pos) std::cerr << "ERROR: " << m->product_code << " is not at position " << pos <<"\n";
 	assert(m->position == pos);
 	return m;
 #if 0
