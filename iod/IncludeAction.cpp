@@ -190,6 +190,16 @@ Action::Status IncludeAction::run() {
                     list_machine->addParameter(entry);
             }
         }
+				std::stringstream ss;
+				const char *delim="";
+				ss << "[";
+				for (unsigned int i=0; i<list_machine->parameters.size(); ++i) {
+					ss << delim << list_machine->parameters[i].val;
+					delim = ",";
+				}
+				ss << "]";
+				list_machine->setValue("DEBUG", ss.str().c_str());
+
         status = Complete;
 	}
     else {
