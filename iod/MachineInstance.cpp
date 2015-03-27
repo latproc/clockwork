@@ -2144,6 +2144,7 @@ void MachineInstance::notifyDependents(){
 			DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
 		}
 		dep->setNeedsCheck();
+//		if (dep->state_machine->token_id == ClockworkToken::LIST ) dep->notifyDependents();
 	}
 }
 
@@ -2165,6 +2166,7 @@ void MachineInstance::notifyDependents(Message &msg){
 		//TBD execute the message on the dependant machine
 		if (dep->receives(msg, this)) dep->execute(msg, this);
 		dep->setNeedsCheck();
+//		if (dep->state_machine->token_id == ClockworkToken::LIST ) dep->notifyDependents();
 	}
 }
 
