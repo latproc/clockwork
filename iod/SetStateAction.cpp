@@ -23,6 +23,7 @@
 #include "Logger.h"
 #include "IOComponent.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
 
 Action *SetStateActionTemplate::factory(MachineInstance *mi) 
 { 
@@ -43,7 +44,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 	if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
 		std::stringstream ss;
 		ss << *this << " failed. " << owner->fullName() << " " << new_state << " must be a symbol or string" << std::flush;
-		error_str = strdup(ss.str().c_str());
+		char * msg = strdup(ss.str().c_str());
+		MessageLog::instance()->add(msg);
+		error_str = msg;
 		status = Failed;
 		owner->stop(this);
 		return status; 
@@ -61,7 +64,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			if (deref.kind != Value::t_symbol && deref.kind != Value::t_string) {
 				std::stringstream ss;
 				ss << owner->fullName() << " state " << deref << " ("<<deref.kind<<")" << " must be a symbol or string" << std::flush;
-				error_str = strdup(ss.str().c_str());
+				char *msg = strdup(ss.str().c_str());
+				error_str = msg;
+				MessageLog::instance()->add(msg);
 				DBG_M_ACTIONS << error_str << "\n";
 				status = Failed;
 				owner->stop(this);
@@ -72,7 +77,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				ss << machine->fullName();
 				if (machine->getStateMachine()) ss << " of class " << machine->getStateMachine()->name << " ";
 				ss << " does not have a state " << deref.sValue << std::flush;
-				error_str = strdup(ss.str().c_str());
+				char *msg = strdup(ss.str().c_str());
+				MessageLog::instance()->add(msg);
+				error_str = msg;
 				DBG_M_ACTIONS << error_str << "\n";
 				status = Failed;
 				owner->stop(this);
