@@ -7,9 +7,9 @@ PIDCONFIGURATION MACHINE {
 	OPTION stopping_time 300;  # 300ms stopping time
 	OPTION min_speed 0;      # minimum controllable speed 
 
-	OPTION Kp 3000000;
-	OPTION Ki 150000;
-	OPTION Kd 0;
+	OPTION Kp 2000000;
+	OPTION Ki 800000;
+	OPTION Kd 40000;
 }
 
 PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_settings, driver, pos {
@@ -34,8 +34,24 @@ enum State {
 		cs_atposition
 };
 
+struct Buffer {
+    int bufsize;
+    int front;
+    int back;
+    double total;
+    double *values;
+    uint64_t *times;
+};
+
+struct Buffer *createBuffer(int size);
+void destroyBuffer(struct Buffer *buf);
+void addSample(struct Buffer *buf, double pos, long time);
+double rate(struct Buffer *buf);
+int size(struct Buffer *buf);
+
 struct PIDData {
 	enum State state;
+	struct Buffer *samples;
 
 	/**** clockwork interface ***/
     long *set_point;
@@ -56,26 +72,27 @@ struct PIDData {
 	long *min_reverse;
 
 	long *fwd_tolerance;
-	long *fwd_stopping_distance;
-	long *fwd_slow_speed;
-	long *fwd_full_speed;
-	long *fwd_power_factor;
-	long *fwd_travel_allowance;
+//	long *fwd_stopping_distance;
+//	long *fwd_slow_speed;
+//	long *fwd_full_speed;
+//	long *fwd_power_factor;
+//	long *fwd_travel_allowance;
 
 	long *rev_tolerance;
-	long *rev_stopping_distance;
-	long *rev_slow_speed;
-	long *rev_full_speed;
-	long *rev_power_factor;
-	long *rev_travel_allowance;
+//	long *rev_stopping_distance;
+//	long *rev_slow_speed;
+//	long *rev_full_speed;
+//	long *rev_power_factor;
+//	long *rev_travel_allowance;
 
 	long *Kp_long;
 	long *Ki_long;
 	long *Kd_long;
 
 	/* statistics/debug */
-	long *position_change;
+	long *stop_error;
 	long *estimated_speed;
+	long *current_position;
 
 	/* internal values for ramping */
 	double current_power;
@@ -156,6 +173,7 @@ int check_states(void *scope)
 			if (!data->conveyor_name) data->conveyor_name = strdup("UNKNOWN CONVEYOR");
 		}
 
+		data->samples = createBuffer(8);
 		ok = ok && getInt(scope, "SetPoint", &data->set_point);
 		ok = ok && getInt(scope, "StopMarker", &data->mark_position);
 		ok = ok && getInt(scope, "StopPosition", &data->stop_position);
@@ -167,8 +185,9 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
 		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
 		ok = ok && getInt(scope, "settings.Kd", &data->Kd_long);
-		ok = ok && getInt(scope, "speed", &data->estimated_speed);
-		ok = ok && getInt(scope, "position", &data->position_change);
+		ok = ok && getInt(scope, "Velocity", &data->estimated_speed);
+		ok = ok && getInt(scope, "Position", &data->current_position);
+		ok = ok && getInt(scope, "StopError", &data->stop_error);
 
 		ok = ok && getInt(scope, "output_settings.MaxForward", &data->max_forward);
 		ok = ok && getInt(scope, "output_settings.MaxReverse", &data->max_reverse);
@@ -176,18 +195,18 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "output_settings.MinForward", &data->min_forward);
 		ok = ok && getInt(scope, "output_settings.MinReverse", &data->min_reverse);
 
-		ok = ok && getInt(scope, "fwd_settings.SlowSpeed", &data->fwd_slow_speed);
-		ok = ok && getInt(scope, "fwd_settings.FullSpeed", &data->fwd_full_speed);
-		ok = ok && getInt(scope, "fwd_settings.PowerFactor", &data->fwd_power_factor);
-		ok = ok && getInt(scope, "fwd_settings.StoppingDistance", &data->fwd_stopping_distance);
-		ok = ok && getInt(scope, "fwd_settings.TravelAllowance", &data->fwd_travel_allowance);
+//		ok = ok && getInt(scope, "fwd_settings.SlowSpeed", &data->fwd_slow_speed);
+//		ok = ok && getInt(scope, "fwd_settings.FullSpeed", &data->fwd_full_speed);
+//		ok = ok && getInt(scope, "fwd_settings.PowerFactor", &data->fwd_power_factor);
+//		ok = ok && getInt(scope, "fwd_settings.StoppingDistance", &data->fwd_stopping_distance);
+//		ok = ok && getInt(scope, "fwd_settings.TravelAllowance", &data->fwd_travel_allowance);
 		ok = ok && getInt(scope, "fwd_settings.tolerance", &data->fwd_tolerance);
 
-		ok = ok && getInt(scope, "rev_settings.SlowSpeed", &data->rev_slow_speed);
-		ok = ok && getInt(scope, "rev_settings.FullSpeed", &data->rev_full_speed);
-		ok = ok && getInt(scope, "rev_settings.PowerFactor", &data->rev_power_factor);
-		ok = ok && getInt(scope, "rev_settings.StoppingDistance", &data->rev_stopping_distance);
-		ok = ok && getInt(scope, "rev_settings.TravelAllowance", &data->rev_travel_allowance);
+//		ok = ok && getInt(scope, "rev_settings.SlowSpeed", &data->rev_slow_speed);
+//		ok = ok && getInt(scope, "rev_settings.FullSpeed", &data->rev_full_speed);
+//		ok = ok && getInt(scope, "rev_settings.PowerFactor", &data->rev_power_factor);
+//		ok = ok && getInt(scope, "rev_settings.StoppingDistance", &data->rev_stopping_distance);
+//		ok = ok && getInt(scope, "rev_settings.TravelAllowance", &data->rev_travel_allowance);
 		ok = ok && getInt(scope, "rev_settings.tolerance", &data->rev_tolerance);
 
 
@@ -229,6 +248,11 @@ int check_states(void *scope)
 	data->Kd = (double) *data->Kd_long / 1000000.0f;
 
 	return PLUGIN_COMPLETED;
+}
+
+static void atposition(struct PIDData*data, void *scope) {
+	data->last_Ep = 0;
+	data->total_err = 0;
 }
 
 static void stop(struct PIDData*data, void *scope) {
@@ -275,11 +299,12 @@ int poll_actions(void *scope) {
 	new_power = data->current_power;
 	enum State new_state = data->state;
 
+	long next_position = 0;
+	double set_point = *data->set_point;
+	double dt = (double)(delta_t)/1000000.0; // 2ms allowance for latency
+
 	/* Determine what the controller should be doing */
 	{
-		long next_position = 0;
-		double set_point = *data->set_point;
-		double dt = (double)(delta_t)/1000000.0; // 2ms allowance for latency
 
 		current = getState(scope);
 
@@ -306,6 +331,8 @@ int poll_actions(void *scope) {
 			data->last_position = *data->position;
 			data->start_position = data->last_position;
 		}
+		//addSample(data->samples, *data->position, now_t);
+		//long speed = rate(data->samples);
 
 		if (new_state == cs_interlocked ) {
 			if (data->state != cs_interlocked)  {
@@ -328,6 +355,8 @@ int poll_actions(void *scope) {
 						&& *data->stop_position - *data->position > *data->fwd_tolerance )
 				|| ( *data->position > *data->stop_position 
 						&& *data->position - *data->stop_position > *data->rev_tolerance ) )
+			if (sign(set_point) != sign(*data->stop_position - *data->position))
+				set_point = -set_point;
 			changeState(scope, "seeking");
 			goto done_polling_actions;
 		}
@@ -350,7 +379,7 @@ int poll_actions(void *scope) {
 				if (dist != 0) ratio = (*data->stop_position - *data->position) / dist;
 				if ( fabs(ratio) <= 1.0 ) // time to ramp down
 					set_point *= fabs(ratio); // using an extra scaling factor here.. TBD
-					if (set_point < *data->min_speed) set_point = 0.0;
+					//if (set_point < *data->min_speed) set_point = 0.0;
 			}
 		}
 
@@ -364,26 +393,30 @@ int poll_actions(void *scope) {
 					data->stop_marker = *data->mark_position;
 			}
 			// once we are very close we no longer calculate a moving target
-			if ( *data->position < *data->stop_position && *data->stop_position - *data->position <= *data->fwd_tolerance) {
-					data->last_Ep = 0;
-					//stop(data, scope);
+			if ( set_point >= 0 && *data->position >= *data->stop_position - *data->fwd_tolerance/2 
+							&& *data->position <= *data->stop_position + *data->fwd_tolerance) {
+					atposition(data, scope);
 					new_power = 0;
-					changeState(scope, "atposition");
+					if ( fabs(*data->estimated_speed) < 50) {
+						changeState(scope, "atposition");
+						setIntValue(scope, "StopError", *data->stop_position - *data->position);
+					}
 					goto calculated_power;
 			}
-			else if ( *data->position > *data->stop_position &&  *data->position - *data->stop_position <= *data->rev_tolerance) {
-					data->last_Ep = 0;
-					//stop(data, scope);
+			else if ( set_point <= 0 &&  *data->position >= *data->stop_position + *data->rev_tolerance/2 
+							&&  *data->position <= *data->stop_position - *data->rev_tolerance) {
+					atposition(data, scope);
 					new_power = 0;
-					changeState(scope, "atposition");
+					if (fabs(*data->estimated_speed) < 50) {
+						changeState(scope, "atposition");
+						setIntValue(scope, "StopError", *data->stop_position - *data->position);
+					}
 					goto calculated_power;
 			}
 		}
 
-		if (new_state == cs_speed) {
-			if (data->state != cs_speed) {
-				data->state = cs_speed;
-			}
+		if (new_state == cs_speed && data->state != cs_speed) {
+			data->state = cs_speed;
 		}
 		if (data->state == cs_position || data->state == cs_speed)
 			next_position += data->last_Ep;
@@ -394,10 +427,6 @@ int poll_actions(void *scope) {
 		double Ep = next_position - *data->position;
 
 		
-		long speed = (double)(*data->position - data->last_position) / dt;
-		if (speed != *data->estimated_speed) {
-			setIntValue(scope, "speed", speed);
-		}
 /*
 		long changed_pos = *data->position - data->start_position;
 		if (changed_pos != *data->position_change)
@@ -413,7 +442,6 @@ int poll_actions(void *scope) {
 			(double)(*data->position - data->last_position) / dt,
 			set_point, next_position);
 
-		data->last_position = *data->position;
 		if (data->state == cs_speed || data->state == cs_position) {
 			double de = Ep - data->last_Ep;
 			data->total_err += (data->last_Ep + Ep)/2 * dt;
@@ -446,12 +474,63 @@ calculated_power:
 	}
 
 done_polling_actions:
+{
+	long speed = (double)(*data->position - data->last_position) / dt;
+	setIntValue(scope, "Velocity", speed);
+	setIntValue(scope, "Position", *data->current_position);
+}
+	data->last_position = *data->position;
 	data->last_poll = now_t;
 	if (current) { free(current); current = 0; }
 	data->last_poll = now_t;
 	
     return PLUGIN_COMPLETED;
 }
+
+struct Buffer *createBuffer(int size)
+{
+    struct Buffer *buf = (struct Buffer *)malloc(sizeof(struct Buffer));
+    buf->bufsize = size;
+    buf->front = -1;
+    buf->back = -1;
+    buf->values = (double*)malloc( sizeof(double) * size);
+    buf->times = (uint64_t*)malloc( sizeof(long) * size);
+		return buf;
+}
+
+void destroyBuffer(struct Buffer *buf) {
+    free(buf->values);
+    free(buf->times);
+    free(buf);
+}
+
+void addSample(struct Buffer *buf, double val, long time) {
+  buf->front = (buf->front + 1) % buf->bufsize;
+  if (buf->front == buf->back) buf->total -= buf->values[buf->front];
+  if (buf->front == buf->back || buf->back == -1) buf->back = (buf->back + 1) % buf->bufsize;
+  buf->total += val;
+  buf->values[buf->front] = val;
+  buf->times[buf->front] = time;
+}
+
+double rate(struct Buffer *buf) {
+    if (buf->front == buf->back || buf->back == -1) return 0.0f;
+    double v1 = buf->values[buf->back], v2 = buf->values[buf->front];
+    double t1 = buf->times[buf->back], t2 = buf->times[buf->front];
+    double ds = v2-v1;
+    double dt = t2-t1;
+    return ds/dt;
+}
+
+int size(struct Buffer *buf) {
+    return buf->bufsize;
+}
+
+int length(struct Buffer *buf) {
+    if (buf->front == -1) return 0;
+    return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
+}
+
 
 %END_PLUGIN
 
@@ -460,9 +539,9 @@ done_polling_actions:
 	OPTION TargetPower 0;
 	OPTION StopMarker 0;
 	OPTION DEBUG 0;
-	OPTION saved_state "stopped";
-	OPTION speed 0;            # estimated current speed
-	OPTION position 0;         # estimated current speed
+	OPTION Velocity 0;            # estimated current velocity 
+	OPTION StopError 0;
+	OPTION Position 0;
 	
 	# This module uses the restore state to give the machine 
 	# somewhere to go once the driver is no longer interlocked. 
@@ -480,22 +559,17 @@ done_polling_actions:
 	}
 	ENTER stopped { 
 		SET M_Control TO Ready;
-		saved_state := "stopped"; 
 		SetPoint := 0; StopPosition := 0; StopMarker := 0; }
 	ENTER seeking { 
 		SET M_Control TO Resetting;
-		saved_state := "seeking"; 
 	}
 	ENTER speed { 
 		SET M_Control TO Working;
-		saved_state := "speed"; 
 	}
 	ENTER atposition { 
 		SET M_Control TO Ready;
-		saved_state := "speed"; 
 	}
 	ENTER restore { SET SELF TO stopped; } 
-	#ENTER restore { SET SELF TO saved_state; }
 
 	COMMAND stop { SET SELF TO stopped; }
 
