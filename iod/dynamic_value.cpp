@@ -312,6 +312,17 @@ std::ostream &PopListBackValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const PopListBackValue &val) { return val.operator<<(out); }
 
+void displayList(MachineInstance *m) {
+    std::stringstream ss;
+    const char *delim="";
+    ss << "[";
+    for (unsigned int i=0; i<m->parameters.size(); ++i) {
+        ss << delim << m->parameters[i].val;
+        delim = ",";
+    }
+    ss << "]";
+    m->setValue("DEBUG", ss.str().c_str());
+}
 
 Value &PopListBackValue::operator()(MachineInstance *mi) {
     if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
@@ -334,6 +345,7 @@ Value &PopListBackValue::operator()(MachineInstance *mi) {
         if (remove_from_list){
             machine_list->parameters.pop_back();
             machine_list->setNeedsCheck();
+						displayList(machine_list);
         }
     }
     return last_result;
@@ -374,6 +386,7 @@ Value &PopListFrontValue::operator()(MachineInstance *mi) {
             if (remove_from_list){
                 machine_list->removeLocal(0);
                 machine_list->setNeedsCheck();
+								displayList(machine_list);
             }
         }
     }
@@ -391,6 +404,7 @@ Value &PopListFrontValue::operator()(MachineInstance *mi) {
                 machine_list->parameters.erase(machine_list->parameters.begin());
                 if (machine_list->_type == "LIST") {
                     machine_list->setNeedsCheck();
+										displayList(machine_list);
                 }
             }
         }
@@ -443,6 +457,7 @@ Value &ItemAtPosValue::operator()(MachineInstance *mi) {
                 machine_list->parameters.erase(machine_list->parameters.begin()+idx);
                 if (machine_list->_type == "LIST") {
                     machine_list->setNeedsCheck();
+										displayList(machine_list);
                 }
             }
             return last_result;
