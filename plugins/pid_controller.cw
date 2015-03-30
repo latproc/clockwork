@@ -24,6 +24,7 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <sys/time.h>
 #include <stdint.h>
 #include <math.h>
+#include <buffering.c>
 
 enum State { 
 		cs_init,
@@ -34,24 +35,9 @@ enum State {
 		cs_atposition
 };
 
-struct Buffer {
-    int bufsize;
-    int front;
-    int back;
-    double total;
-    double *values;
-    uint64_t *times;
-};
-
-struct Buffer *createBuffer(int size);
-void destroyBuffer(struct Buffer *buf);
-void addSample(struct Buffer *buf, double pos, long time);
-double rate(struct Buffer *buf);
-int size(struct Buffer *buf);
-
 struct PIDData {
 	enum State state;
-	struct Buffer *samples;
+	struct CircularBuffer *samples;
 
 	/**** clockwork interface ***/
     long *set_point;
@@ -319,8 +305,10 @@ int poll_actions(void *scope) {
 			data->last_position = *data->position;
 			data->start_position = data->last_position;
 		}
-		//addSample(data->samples, *data->position, now_t);
-		//long speed = rate(data->samples);
+		if ( abs(*data->position - data->last_position) > 10000 ) { // protection against wraparound
+			data->last_position = *data->position;
+			return PLUGIN_COMPLETED;
+		}
 
 		if (new_state == cs_interlocked ) {
 			if (data->state != cs_interlocked)  {
@@ -410,8 +398,10 @@ int poll_actions(void *scope) {
 		}
 		if (data->state == cs_position || data->state == cs_speed)
 			next_position += data->last_Ep;
+		else if (data->state == cs_atposition)
+			next_position = *data->stop_position;
 		else {
-			next_position == *data->position;
+			next_position = *data->position;
 		}
 
 		double Ep = next_position - *data->position;
@@ -465,7 +455,9 @@ calculated_power:
 
 done_polling_actions:
 {
-	long speed = (double)(*data->position - data->last_position) / dt;
+	addSample(data->samples, *data->position, now_t);
+	long speed = rate(data->samples);
+	//long speed = (double)(*data->position - data->last_position) / dt;
 	setIntValue(scope, "Velocity", speed);
 	setIntValue(scope, "Position", *data->current_position);
 }
@@ -476,51 +468,6 @@ done_polling_actions:
 	
     return PLUGIN_COMPLETED;
 }
-
-struct Buffer *createBuffer(int size)
-{
-    struct Buffer *buf = (struct Buffer *)malloc(sizeof(struct Buffer));
-    buf->bufsize = size;
-    buf->front = -1;
-    buf->back = -1;
-    buf->values = (double*)malloc( sizeof(double) * size);
-    buf->times = (uint64_t*)malloc( sizeof(long) * size);
-		return buf;
-}
-
-void destroyBuffer(struct Buffer *buf) {
-    free(buf->values);
-    free(buf->times);
-    free(buf);
-}
-
-void addSample(struct Buffer *buf, double val, long time) {
-  buf->front = (buf->front + 1) % buf->bufsize;
-  if (buf->front == buf->back) buf->total -= buf->values[buf->front];
-  if (buf->front == buf->back || buf->back == -1) buf->back = (buf->back + 1) % buf->bufsize;
-  buf->total += val;
-  buf->values[buf->front] = val;
-  buf->times[buf->front] = time;
-}
-
-double rate(struct Buffer *buf) {
-    if (buf->front == buf->back || buf->back == -1) return 0.0f;
-    double v1 = buf->values[buf->back], v2 = buf->values[buf->front];
-    double t1 = buf->times[buf->back], t2 = buf->times[buf->front];
-    double ds = v2-v1;
-    double dt = t2-t1;
-    return ds/dt;
-}
-
-int size(struct Buffer *buf) {
-    return buf->bufsize;
-}
-
-int length(struct Buffer *buf) {
-    if (buf->front == -1) return 0;
-    return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
-}
-
 
 %END_PLUGIN
 	EXPORT RW 32BIT Velocity, StopError;
