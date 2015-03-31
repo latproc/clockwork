@@ -1,3 +1,18 @@
+PIDSPEEDCONFIGURATION MACHINE {
+  OPTION PERSISTENT true;
+  EXPORT RW 32BIT SlowSpeed, FullSpeed, PowerFactor, StoppingDistance, TravelAllowance, tolerance, Kp, Ki, Kd;
+  OPTION SlowSpeed 40;
+  OPTION FullSpeed 1000;
+  OPTION StoppingDistance 3000;  # distance from the stopping point to begin slowing down
+  OPTION TravelAllowance 0;      # amount to travel after the mark before slowing down
+  OPTION tolerance 100;          # stopping position tolerance
+
+	OPTION Kp 2000000;
+	OPTION Ki 800000;
+	OPTION Kd 40000;
+}
+
+
 PIDCONFIGURATION MACHINE {
 	OPTION PERSISTENT true;
 	EXPORT RW 32BIT min_update_time, StartTimeout, stopping_time, Kp, Ki, Kd;
@@ -6,6 +21,7 @@ PIDCONFIGURATION MACHINE {
 	OPTION StartTimeout 500;	 # conveyor start timeout
 	OPTION inverted false;     # do not invert power
 	OPTION stopping_time 300;  # 300ms stopping time
+	OPTION MinSpeed 1000; 
 
 	OPTION Kp 2000000;
 	OPTION Ki 800000;
@@ -48,6 +64,7 @@ struct PIDData {
 	/* ramp settings */
 	long *min_update_time;
 	long *stopping_time;
+	long *min_speed;
 
 	long *max_forward;
 	long *max_reverse;
@@ -164,6 +181,7 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "pos.VALUE", &data->position);
 		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
 		ok = ok && getInt(scope, "settings.stopping_time", &data->stopping_time);
+		ok = ok && getInt(scope, "settings.MinSpeed", &data->min_speed);
 		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
 		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
 		ok = ok && getInt(scope, "settings.Kd", &data->Kd_long);
@@ -342,62 +360,98 @@ int poll_actions(void *scope) {
 		if (data->state == cs_stopped && (new_state == cs_position || new_state == cs_speed)) 
 			data->start_position = *data->position;
 
+		if (new_state == cs_position) {
+			// once we are very close we no longer calculate a moving target
+			if ( *data->stop_position >= *data->position && *data->position >= (*data->stop_position - *data->fwd_tolerance)
+							&& *data->position <= (*data->stop_position + *data->fwd_tolerance) ) {
+
+					if (data->debug && *data->debug) printf("%s within tolerance (fwd) speed = %ld pos:%ld stop:%ld\n", 
+						data->conveyor_name, *data->estimated_speed, *data->position, *data->stop_position);
+					//atposition(data, scope);
+					//new_power = 1000;
+					if ( fabs(*data->estimated_speed) < 50) {
+						if (data->debug && *data->debug) printf("%s at position (fwd)\n", data->conveyor_name);
+						changeState(scope, "atposition");
+						setIntValue(scope, "StopError", *data->stop_position - *data->position);
+						new_power = 0;
+						goto calculated_power;
+					}
+			}
+			else if ( *data->stop_position <= *data->position  &&  *data->position >= (*data->stop_position + *data->rev_tolerance)
+							&&  *data->position <= (*data->stop_position - *data->rev_tolerance) ) {
+					if (data->debug) printf("%s within tolerance (rev) speed = %ld pos:%ld stop:%ld\n", 
+						data->conveyor_name, *data->estimated_speed, *data->position, *data->stop_position);
+					//atposition(data, scope);
+					//new_power = -1000;
+					if (fabs(*data->estimated_speed) < 50) {
+						if (data->debug && *data->debug) printf("%s at position (rev)\n", data->conveyor_name);
+						changeState(scope, "atposition");
+						setIntValue(scope, "StopError", *data->stop_position - *data->position);
+						new_power = 0;
+						goto calculated_power;
+					}
+			}
+		}
 		// adjust the set point to cater for whether we are close to the stop position
 		if (new_state == cs_position) {
 			double stopping_time = (double)*data->stopping_time / 1000.0; // secs
-			if (!approaching) set_point = 0.0;
+			if (!approaching) {
+				if (data->debug && *data->debug) printf("%s overshot\n", data->conveyor_name);
+				set_point = 0.0;
+			}
 			else {
 				// stopping distance at vel v with an even ramp is s=vt/2
-				double dist = set_point * stopping_time / 2.0;
-				double ratio = 0;
-				if (dist != 0) ratio = (*data->stop_position - *data->position) / dist;
-				if ( fabs(ratio) <= 1.0 ) // time to ramp down
-					set_point *= fabs(ratio); // using an extra scaling factor here.. TBD
+				// we add 300ms to the time to cater for the delay before the system responds
+				// to changes of input
+				double ramp_dist = fabs(set_point) * (stopping_time+0.3) / 2.0;
+				double min_dist = *data->min_speed * 6 * *data->min_update_time / 1000.0;
+				double dist = *data->stop_position - *data->position;
+				if ( 0 && fabs(dist) < min_dist ) {
+					if (data->debug && *data->debug) printf("%s very close. using fixed power\n", data->conveyor_name);
+					if (dist < 0) new_power = -1; else new_power = 1;
+					goto calculated_power;
+				}
+				else {
+					double ratio = 0;
+					if (ramp_dist != 0) ratio = (*data->stop_position - *data->position) / ramp_dist;
+					if (data->debug) printf("%s approaching, ratio = %5.2f\n", data->conveyor_name, ratio);
+					if ( fabs(ratio) <= 1.0 ) { // time to ramp down
+						set_point *= fabs(ratio); // using an extra scaling factor here.. TBD
+						if (fabs(set_point) > *data->min_speed) set_point = *data->min_speed; 
+					}
+					if (set_point != 0 && sign(set_point) != sign(*data->stop_position - *data->position)) {
+						set_point = -set_point;
+						if (data->debug) printf("%s approaching - fixing direction: %5.3f\n", data->conveyor_name, set_point);
+					}
+				}
+			}
+		}
+
+		if (new_state == cs_position || new_state == cs_atposition) {
+			if (data->state != new_state || (data->last_stop_position != *data->stop_position) ) {
+					data->state = cs_position;
+					if (data->debug) printf("%s new stop position %ld\n", data->conveyor_name, *data->stop_position);
+					data->last_stop_position = *data->stop_position;
+					data->stop_marker = *data->mark_position;
+					// we may need to change direction for this movement
+					//if (sign(set_point) != sign(*data->stop_position - *data->position))
+					//	setIntValue(scope, "SetPoint", *data->set_point);
 			}
 		}
 
 		next_position = data->last_position + dt * set_point;
 
-		if (new_state == cs_position || new_state == cs_atposition) {
-			if (data->state != cs_position || (data->last_stop_position != *data->stop_position) ) {
-					data->state = cs_position;
-					printf("%s new stop position %ld\n", data->conveyor_name, *data->stop_position);
-					data->last_stop_position = *data->stop_position;
-					data->stop_marker = *data->mark_position;
-					// we may need to change direction for this movement
-					if (sign(set_point) != sign(*data->stop_position - *data->position))
-						setIntValue(scope, "SetPoint", *data->set_point);
-			}
-		}
-		if (new_state == cs_position) {
-			// once we are very close we no longer calculate a moving target
-			if ( set_point >= 0 && *data->position >= *data->stop_position - *data->fwd_tolerance/2 
-							&& *data->position <= *data->stop_position + *data->fwd_tolerance) {
-					atposition(data, scope);
-					new_power = 0;
-					if ( fabs(*data->estimated_speed) < 50) {
-						changeState(scope, "atposition");
-						setIntValue(scope, "StopError", *data->stop_position - *data->position);
-					}
-					goto calculated_power;
-			}
-			else if ( set_point <= 0 &&  *data->position >= *data->stop_position + *data->rev_tolerance/2 
-							&&  *data->position <= *data->stop_position - *data->rev_tolerance) {
-					atposition(data, scope);
-					new_power = 0;
-					if (fabs(*data->estimated_speed) < 50) {
-						changeState(scope, "atposition");
-						setIntValue(scope, "StopError", *data->stop_position - *data->position);
-					}
-					goto calculated_power;
-			}
-		}
-
 		if (new_state == cs_speed && data->state != cs_speed) {
 			data->state = cs_speed;
 		}
-		if (data->state == cs_position || data->state == cs_speed)
+		if (data->state == cs_position || data->state == cs_speed) {
 			next_position += data->last_Ep;
+			if (data->state == cs_position) {
+				if ( set_point > 0 && next_position > *data->stop_position 
+					|| set_point < 0 && next_position < *data->stop_position)
+				next_position = *data->stop_position;
+			}
+		}
 		else if (data->state == cs_atposition)
 			next_position = *data->stop_position;
 		else {
@@ -440,8 +494,8 @@ int poll_actions(void *scope) {
 calculated_power:
 	if (new_power != data->current_power) {
 		if (new_power == 0.0) {}
-		else if ( new_power > data->current_power + 2000) new_power = data->current_power + 1000;
-		else if (new_power < data->current_power - 2000) new_power = data->current_power - 1000;
+		else if ( new_power > data->current_power + 2000) new_power = data->current_power + 2000;
+		else if (new_power < data->current_power - 2000) new_power = data->current_power - 2000;
 		long power = output_scaled(data, (long) new_power);
 
 		if (data->debug && *data->debug) 
@@ -455,9 +509,9 @@ calculated_power:
 
 done_polling_actions:
 {
-	addSample(data->samples, *data->position, now_t);
-	long speed = rate(data->samples);
-	//long speed = (double)(*data->position - data->last_position) / dt;
+	//addSample(data->samples, *data->position, now_t);
+	//long speed = rate(data->samples);
+	long speed = (double)(*data->position - data->last_position) / dt;
 	setIntValue(scope, "Velocity", speed);
 	setIntValue(scope, "Position", *data->current_position);
 }
