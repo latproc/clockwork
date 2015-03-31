@@ -133,15 +133,15 @@ Value &AnyInValue::operator()(MachineInstance *mi) {
 		last_result = false; return last_result;
 	}
 
-	if (last_process_time <= mi->lastStateEvaluationTime()) {
-        last_process_time = currentTime();
-	}
-    else {
+#if 0
+	if (last_process_time > mi->lastStateEvaluationTime()) {
 		//DBG_MSG << "avoiding recalc of " << *this << " last_process_time: "
 		//	<< last_process_time << " last list eval: " << machine_list->lastStateEvaluationTime() << "\n";
         return last_result;
     }
+#endif
     
+	last_process_time = currentTime();
 	std::string state_val = state;
 	if (state_property != & SymbolTable::Null)
 		state_val = state_property->asString();
@@ -178,15 +178,15 @@ Value &AllInValue::operator()(MachineInstance *mi) {
 		last_result = false; return last_result;
 	}
 
-    if (last_process_time <= mi->lastStateEvaluationTime()) {
-        last_process_time = currentTime();
-    }
-    else {
+#if 0
+    if (last_process_time > mi->lastStateEvaluationTime()) {
         //std::cout << "avoiding recalc of " << *this << "\n";
         return last_result;
     }
+#endif
 
-    if (machine_list->parameters.size() == 0) {  last_result = false; return last_result; }
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {  last_result = false; return last_result; }
 
 	std::string state_val = state;
 	if (state_property != & SymbolTable::Null)
@@ -222,11 +222,12 @@ Value &CountValue::operator()(MachineInstance *mi) {
 		return last_result;
 	}
 
-    if (last_process_time <= machine_list->lastStateEvaluationTime()) {
-        last_process_time = currentTime();
-    }
-    else return last_result;
+#if 0
+    if (last_process_time > machine_list->lastStateEvaluationTime()) 
+    	return last_result;
+#endif
 
+	last_process_time = currentTime();
 	if (machine_list->parameters.size() == 0) {
 		last_result = 0;
 		return last_result;
@@ -260,18 +261,18 @@ Value &IncludesValue::operator()(MachineInstance *mi) {
 		last_result = false; return last_result;
 	}
 
-	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
-        last_process_time = currentTime();
-    }
-    else
-        return last_result;
+#if 0
+	if (last_process_time > machine_list->lastStateEvaluationTime())
+ 		return last_result;
+#endif
 
-    for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+	last_process_time = currentTime();
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
 		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
-        if (entry == machine_list->parameters[i].val )  { last_result = true; return last_result; }
-        if (entry.asString() == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
-    }
-    last_result = false; return last_result;
+		if (entry == machine_list->parameters[i].val )  { last_result = true; return last_result; }
+		if (entry.asString() == machine_list->parameters[i].real_name)  { last_result = true; return last_result; }
+	}
+	last_result = false; return last_result;
 }
 
 SizeValue::SizeValue(const SizeValue &other) {
@@ -287,14 +288,14 @@ Value &SizeValue::operator()(MachineInstance *mi) {
 		last_result = 0; return last_result;
 	}
 
-	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
-        last_process_time = currentTime();
-    }
-    else
-        return last_result;
+#if 0
+	if (last_process_time > machine_list->lastStateEvaluationTime())
+		return last_result;
+#endif
 
-    last_result = (long)machine_list->parameters.size();
-    return last_result;
+	last_process_time = currentTime();
+	last_result = (long)machine_list->parameters.size();
+	return last_result;
 }
 
 
@@ -428,11 +429,12 @@ Value &ItemAtPosValue::operator()(MachineInstance *mi) {
 		last_result = false; return last_result;
 	}
 
-	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
-        last_process_time = currentTime();
-    }
-    else return last_result;
+#if 0
+	if (last_process_time > machine_list->lastStateEvaluationTime())
+    return last_result;
+#endif
 
+	last_process_time = currentTime();
     if (machine_list->parameters.size()) {
         long idx = -1;
         if (index.kind == Value::t_symbol) {
@@ -482,11 +484,12 @@ Value &BitsetValue::operator()(MachineInstance *mi) {
 		last_result = false; return last_result;
 	}
 
-	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
-        last_process_time = currentTime();
-    }
-    else return last_result;
+#if 0
+	if (last_process_time > machine_list->lastStateEvaluationTime()) 
+		return last_result;
+#endif
 
+	last_process_time = currentTime();
     unsigned long val = 0;
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         MachineInstance *entry = machine_list->parameters[i].machine;
