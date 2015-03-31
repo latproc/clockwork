@@ -133,11 +133,12 @@ Value &AnyInValue::operator()(MachineInstance *mi) {
 		last_result = false; return last_result;
 	}
 
-	if (last_process_time <= machine_list->lastStateEvaluationTime()) {
+	if (last_process_time <= mi->lastStateEvaluationTime()) {
         last_process_time = currentTime();
-    }
+	}
     else {
-        //std::cout << "avoiding recalc of " << *this << "\n";
+		//DBG_MSG << "avoiding recalc of " << *this << " last_process_time: "
+		//	<< last_process_time << " last list eval: " << machine_list->lastStateEvaluationTime() << "\n";
         return last_result;
     }
     

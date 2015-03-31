@@ -1111,7 +1111,7 @@ void MachineInstance::describe(std::ostream &out) {
 		out << "Uses timer in stable state evaluation\n";
 	const Value *current_timer_val = getTimerVal();
 	out << "Timer: " << *current_timer_val << "\n";
-	if (stable_states.size()) {
+	if (stable_states.size() || state_machine->token_id == ClockworkToken::LIST) {
 		struct timeval now;
 		gettimeofday(&now, 0);
 		long now_t = now.tv_sec * 1000000 + now.tv_usec;
