@@ -20,33 +20,39 @@
 
 #ifndef cwlang_Command_h
 #define cwlang_Command_h
+#include <string.h>
+#include <stdlib.h>
+#include <string>
+#include <vector>
 
-class String {
+class IODString {
 public:
-    String(char *s) : s_str(0), str(s) { }
-	String(const char *s) : s_str(s), str(0) { }
-	String(const String &orig) { 
+    IODString(char *s) : s_str(0), str(s) { }
+	IODString(const char *s) : s_str(s), str(0) { }
+	IODString(const IODString &orig) { 
 		if (orig.str) str = strdup(orig.str);
 		s_str = orig.s_str;
 	}
-	String & operator=(const String &orig) {
-		if (orig.str) str = strdup(orig.str);
+	IODString & operator=(const IODString &orig) {
+		if (orig.str) str = strdup(orig.str); else str = 0;
 		s_str = orig.s_str;
 		return *this;
 	}
     const char *get() const { return (str) ? str : s_str; }
-    ~String() { if (str) free( str ); }
+    ~IODString() { if (str) free( str ); }
     const char *s_str;
 	char *str;
 };
 
-struct Command {
+struct MQTTDCommand {
 public:
-    Command()  : done(false), error_str(""), result_str("") {}
-    virtual ~Command(){ }
+    MQTTDCommand()  : done(false), error_str(""), result_str("") {}
+    virtual ~MQTTDCommand(){ }
     bool done;
-    const char *error() { return (error_str.str) ? error_str.get() : "" ;  }
-    const char *result() { return (result_str.str) ? result_str.get() : "" ;  }
+//    const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
+//    const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
+    const char *error() { return error_str.c_str(); }
+    const char *result() { return result_str.c_str(); }
     
 	bool operator()(std::vector<std::string> &params) {
 		done = run(params);
@@ -55,8 +61,8 @@ public:
     
 protected:
 	virtual bool run(std::vector<std::string> &params) = 0;
-	String error_str;
-	String result_str;
+	std::string error_str;
+	std::string result_str;
 };
 
 

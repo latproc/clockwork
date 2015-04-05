@@ -47,3 +47,6 @@ Thumbs.db
 ._*
 *.lyx~
 .~*
+
+#project build files
+iod/build/

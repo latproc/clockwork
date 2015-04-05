@@ -1,0 +1,166 @@
+Rules useless in parser due to conflicts
+
+    4 session: %empty
+
+
+State 0 conflicts: 2 shift/reduce, 3 reduce/reduce
+
+
+Grammar
+
+    0 $accept: session $end
+
+    1 session: %empty
+    2        | commandline
+    3        | session commandline
+    4        | %empty
+
+    5 commandline: command ';'
+    6            | ';'
+
+    7 command: SYMBOL
+    8        | command param
+
+    9 param: INTEGER
+   10      | SYMBOL
+   11      | STRINGVAL
+
+
+Terminals, with rules where they appear
+
+$end (0) 0
+';' (59) 5 6
+error (256)
+INTEGER (258) 9
+SYMBOL (259) 7 10
+STRINGVAL (260) 11
+
+
+Nonterminals, with rules where they appear
+
+$accept (7)
+    on left: 0
+session (8)
+    on left: 1 2 3 4, on right: 0 3
+commandline (9)
+    on left: 5 6, on right: 2 3
+command (10)
+    on left: 7 8, on right: 5 8
+param (11)
+    on left: 9 10 11, on right: 8
+
+
+State 0
+
+    0 $accept: . session $end
+
+    SYMBOL  shift, and go to state 1
+    ';'     shift, and go to state 2
+
+    $end      reduce using rule 1 (session)
+    $end      [reduce using rule 4 (session)]
+    SYMBOL    [reduce using rule 1 (session)]
+    SYMBOL    [reduce using rule 4 (session)]
+    ';'       [reduce using rule 1 (session)]
+    ';'       [reduce using rule 4 (session)]
+    $default  reduce using rule 1 (session)
+
+    session      go to state 3
+    commandline  go to state 4
+    command      go to state 5
+
+
+State 1
+
+    7 command: SYMBOL .
+
+    $default  reduce using rule 7 (command)
+
+
+State 2
+
+    6 commandline: ';' .
+
+    $default  reduce using rule 6 (commandline)
+
+
+State 3
+
+    0 $accept: session . $end
+    3 session: session . commandline
+
+    $end    shift, and go to state 6
+    SYMBOL  shift, and go to state 1
+    ';'     shift, and go to state 2
+
+    commandline  go to state 7
+    command      go to state 5
+
+
+State 4
+
+    2 session: commandline .
+
+    $default  reduce using rule 2 (session)
+
+
+State 5
+
+    5 commandline: command . ';'
+    8 command: command . param
+
+    INTEGER    shift, and go to state 8
+    SYMBOL     shift, and go to state 9
+    STRINGVAL  shift, and go to state 10
+    ';'        shift, and go to state 11
+
+    param  go to state 12
+
+
+State 6
+
+    0 $accept: session $end .
+
+    $default  accept
+
+
+State 7
+
+    3 session: session commandline .
+
+    $default  reduce using rule 3 (session)
+
+
+State 8
+
+    9 param: INTEGER .
+
+    $default  reduce using rule 9 (param)
+
+
+State 9
+
+   10 param: SYMBOL .
+
+    $default  reduce using rule 10 (param)
+
+
+State 10
+
+   11 param: STRINGVAL .
+
+    $default  reduce using rule 11 (param)
+
+
+State 11
+
+    5 commandline: command ';' .
+
+    $default  reduce using rule 5 (commandline)
+
+
+State 12
+
+    8 command: command param .
+
+    $default  reduce using rule 8 (command)
