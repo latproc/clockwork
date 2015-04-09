@@ -1,0 +1,2 @@
+#define Latproc_VERSION_MAJOR @Latproc_VERSION_MAJOR@
+#define Latproc_VERSION_MINOR @Latproc_VERSION_MINOR@
