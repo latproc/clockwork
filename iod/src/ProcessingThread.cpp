@@ -486,7 +486,7 @@ void ProcessingThread::operator()()
 		}
 		
 		if (program_done) break;
-		if (processing_state == eIdle && !MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 5000) {
+		if (processing_state == eIdle && !MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) {
 #ifdef KEEPSTATS
 			static uint64_t total_plugin_time = 0;
 			static int pi_count = 0;

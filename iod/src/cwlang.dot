@@ -2,7 +2,7 @@
 // Report bugs to <bug-bison@gnu.org>.
 // Home page: <http://www.gnu.org/software/bison/>.
 
-digraph "/opt/latproc/iod.new/src//cwlang.ypp"
+digraph "/opt/latproc/iod/src//cwlang.ypp"
 {
   node [fontname = courier, shape = box, colorscheme = paired6]
   edge [fontname = courier]

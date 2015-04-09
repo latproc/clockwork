@@ -1492,9 +1492,7 @@ void MachineInstance::checkPluginStates() {
 	while (pl_iter != plugin_machines.end())  {
 		MachineInstance *m = *pl_iter++;
 		if (!m->is_enabled) continue;
-		if (m->next_poll > start_processing) { 
-			continue;
-		}
+		//if (m->next_poll > start_processing) { continue; }
 		//uint64_t start = nowMicrosecs();
 		if (m->state_machine && m->state_machine->plugin)  {
 			if ( m->state_machine->plugin->state_check) {
