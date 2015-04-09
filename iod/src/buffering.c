@@ -29,12 +29,32 @@ void addSample(struct CircularBuffer *buf, double val, long time) {
   buf->times[buf->front] = time;
 }
 
+void addSampleDebug(struct CircularBuffer *buf, double val, long time) {
+	addSample(buf, val, time);
+	printf("buffer added: %5.2f, %ld at %d\n", val, time, buf->front);
+}
+
 double rate(struct CircularBuffer *buf) {
     if (buf->front == buf->back || buf->back == -1) return 0.0f;
     double v1 = buf->values[buf->back], v2 = buf->values[buf->front];
     double t1 = buf->times[buf->back], t2 = buf->times[buf->front];
     double ds = v2-v1;
     double dt = t2-t1;
+		if (dt == 0) return 0;
+    return ds/dt;
+}
+
+double rateDebug(struct CircularBuffer *buf) {
+    if (buf->front == buf->back || buf->back == -1) return 0.0f;
+    double v1 = buf->values[buf->back], v2 = buf->values[buf->front];
+    double t1 = buf->times[buf->back], t2 = buf->times[buf->front];
+    double ds = v2-v1;
+    double dt = t2-t1;
+		if (dt == 0) 
+			printf("error calculating rate: (%5.2f - %5.2f)/(%5.2f - %5.2f) = %5.2f / %5.2f \n", v2, v1, t2, t1, ds, dt);
+		else
+			printf("calculated rate: (%5.2f - %5.2f)/(%5.2f - %5.2f) = %5.2f / %5.2f = %5.2f\n", v2, v1, t2, t1, ds, dt, ds/dt);
+		if (dt == 0) return 0;
     return ds/dt;
 }
 
