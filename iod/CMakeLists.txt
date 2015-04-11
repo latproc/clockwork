@@ -240,5 +240,5 @@ target_link_libraries(persistd Clockwork "zmq" ${Boost_LIBRARIES} )
 add_executable(modbusd src/modbusd.cpp )
 target_link_libraries(modbusd Clockwork modbus "zmq" ${Boost_LIBRARIES} )
 
-install(TARGETS cw iod iosh device_connector modbusd persistd 
+install(TARGETS cw iosh device_connector modbusd persistd 
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
