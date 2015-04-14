@@ -4,10 +4,17 @@ project (Latproc)
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 8)
 
-set (CMAKE_CXX_FLAGS "-std=gnu++0x -g -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
+set (CMAKE_VERBOSE_MAKEFILE false)
+
+set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++11-extensions -Wno-unused-variable -Wno-deprecated-register")
+set (CMAKE_CXX_FLAGS_DEBUG "-g")
+set (CMAKE_CXX_FLAGS_RELEASE "-O")
+set (CMAKE_EXE_FLAGS_DEBUG "-g")
+set (CMAKE_EXE_FLAGS_RELEASE "-O")
 
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/src/)
+set (BUILD_DIR ${PROJECT_SOURCE_DIR}/build)
 
 configure_file (
   "${PROJECT_SOURCE_DIR}/LatprocConfig.h.in"
@@ -59,13 +66,13 @@ LINK_DIRECTORIES("/opt/local/lib")
 set (FLEX_EXECUTABLE lex)
 set (BISON_EXECUTABLE bison)
 
-set(cw_lex_output ${CLOCKWORK_DIR}/cwlang.yy.cpp)
-set(cw_yacc_output ${CLOCKWORK_DIR}/cwlang.tab.cpp)
+set(cw_lex_output ${BUILD_DIR}/cwlang.yy.cpp)
+set(cw_yacc_output ${BUILD_DIR}/cwlang.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
    SOURCE ${CLOCKWORK_DIR}/cwlang.lpp
    COMMAND ${FLEX_EXECUTABLE} 
-   ARGS -o${CLOCKWORK_DIR}/cwlang.yy.cpp
+   ARGS -o${BUILD_DIR}/cwlang.yy.cpp
 		${CLOCKWORK_DIR}/cwlang.lpp
    TARGET ClockworkParser
    OUTPUTS ${cw_lex_output})
@@ -75,7 +82,7 @@ set(cw_yacc_output ${CLOCKWORK_DIR}/cwlang.tab.cpp)
    SOURCE ${CLOCKWORK_DIR}/cwlang.ypp
    COMMAND ${BISON_EXECUTABLE} 
    ARGS -y 
-        -o ${CLOCKWORK_DIR}/cwlang.tab.cpp
+        -o ${BUILD_DIR}/cwlang.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cwlang.ypp
    TARGET ClockworkParser
    DEPENDS ${CLOCKWORK_DIR}/cwlang.lpp
@@ -201,13 +208,13 @@ target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRAR
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
-set(iosh_lex_output ${CLOCKWORK_DIR}/cmdline.yy.cpp)
-set(iosh_yacc_output ${CLOCKWORK_DIR}/cmdline.tab.cpp)
+set(iosh_lex_output ${BUILD_DIR}/cmdline.yy.cpp)
+set(iosh_yacc_output ${BUILD_DIR}/cmdline.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
    SOURCE ${CLOCKWORK_DIR}/cmdline.lpp
    COMMAND ${FLEX_EXECUTABLE} 
-   ARGS -o${CLOCKWORK_DIR}/cmdline.yy.cpp
+   ARGS -o${BUILD_DIR}/cmdline.yy.cpp
 		${CLOCKWORK_DIR}/cmdline.lpp
    TARGET ClockworkParser
    OUTPUTS ${iosh_lex_output})
@@ -217,7 +224,7 @@ set(iosh_yacc_output ${CLOCKWORK_DIR}/cmdline.tab.cpp)
    SOURCE ${CLOCKWORK_DIR}/cmdline.ypp
    COMMAND ${BISON_EXECUTABLE} 
    ARGS -y 
-        -o ${CLOCKWORK_DIR}/cmdline.tab.cpp
+        -o ${BUILD_DIR}/cmdline.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cmdline.ypp
    TARGET ClockworkParser
    DEPENDS ${CLOCKWORK_DIR}/cmdline.lpp
