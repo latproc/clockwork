@@ -2937,7 +2937,7 @@ bool MachineInstance::setStableState() {
 			//			|| (!s.trigger && s.condition(this)) ) {
 			if (!found_match) {
 				if (s.condition(this)) {
-					DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
+					DBG_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
 					if (current_state.getName() != s.state_name) {
 						DBG_M_AUTOSTATES << " changing state\n";
 						changed_state = true;
@@ -2953,112 +2953,112 @@ bool MachineInstance::setStableState() {
 								ch.triggered = false;
 							}
 						}
-						DBG_M_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name 
+						DBG_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name 
 							<< " due to condition: " << *s.condition.predicate << "\n";
 						MoveStateActionTemplate temp(_name.c_str(), s.state_name.c_str() );
 						state_change = new MoveStateAction(this, temp);
 						Action::Status action_status;
 						if ( (action_status = (*state_change)()) == Action::Failed) {
-							DBG_M_AUTOSTATES << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
+							DBG_AUTOSTATES << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
 						}
 						else {
-							DBG_M_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
+							DBG_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
 						}
 						//if (action_status == Action::Complete || action_status == Action::Failed) {
 						state_change->release();
 						state_change = 0;
 					}
-						else {
-							DBG_M_AUTOSTATES << " already there\n";
-							// reschedule timer triggers for this state
-							if (s.uses_timer) {
-								DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
-								Value v = getValue(s.timer_val.sValue);
-								if (v.kind == Value::t_integer && v.iValue < next_timer)
-									next_timer = v.iValue;
-							}
-						}
-						if (s.uses_timer) {
-							DBG_M_MESSAGING << _name << "[" << current_state.getName() 
-								<< "] scheduling condition tests for state " << s.state_name << "\n";
-							s.condition.predicate->scheduleTimerEvents(this);
-						}
-						if (s.subcondition_handlers) {
-							std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
-							while (iter != s.subcondition_handlers->end()) {
-								ConditionHandler *ch = &(*iter++);
-								ch->check(this);
-							}
-						}
-						found_match = true;
-						continue; // skip to the end of the stable state loop
-					}
 					else {
-						DBG_M_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
+						DBG_AUTOSTATES << " already there\n";
+						// reschedule timer triggers for this state
 						if (s.uses_timer) {
-							DBG_M_MESSAGING << _name  << "[" << current_state.getName() 
-								<< "] scheduling condition tests for state " << s.state_name << "\n";
-							s.condition.predicate->scheduleTimerEvents(this);
-							//Value v = s.timer_val;
-							// there is a bug here; if the timer used in this state is on a different machine
-							// the schedule we generate has to be based on the timer of the other machine.
-							//if (v.kind == Value::t_integer && v.iValue < next_timer) {
-							// we would like to say  next_timer = v.iValue; here but since we have already been in this
-							// state for some time we need to say:
-							//    Value current_timer = *getTimerVal();
-							//    next_timer = v.iValue - current_timer.iValue;
-							//}
+							DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
+							Value v = getValue(s.timer_val.sValue);
+							if (v.kind == Value::t_integer && v.iValue < next_timer)
+								next_timer = v.iValue;
 						}
 					}
-
-				}
-				if (next_timer < MAX_TIMER) {
-					/*
-					   If only we could now just schedule a timer event:
-					   Trigger *trigger = new Trigger("Timer");
-					   Scheduler::instance()->add(new ScheduledItem(next_timer*1000, new FireTriggerAction(owner, trigger)));
-					   unfortunately, the current code still has a bug because the 'uses_timer' flag of stable states
-					   simply indicates that the state depends on *something* that uses a timer but that may be another
-					   machine and that machine may not be in the state we are interested in.
-
-					   Workaround for now: check stable states every millisecond or so if any state uses a timer.
-					 */
-					/*  Trigger *trigger = new Trigger("Timer");
-					    Scheduler::instance()->add(new ScheduledItem(1000, new FireTriggerAction(this, trigger)));
-					    trigger->release(); */
-				}
-				// this state is not active so ensure its subcondition flags are turned off
-				{
+					if (s.uses_timer) {
+						DBG_SCHEDULER << _name << "[" << current_state.getName() 
+							<< "] scheduling condition tests for state " << s.state_name << "\n";
+						if (_name == "D_BaleAtLoaderPos")
+							int x = 1;
+						s.condition.predicate->scheduleTimerEvents(this);
+					}
 					if (s.subcondition_handlers) {
 						std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 						while (iter != s.subcondition_handlers->end()) {
-							ConditionHandler&ch = *iter++;
-							if (ch.command_name == "FLAG" ) {
-								MachineInstance *flag = lookup(ch.flag_name);
-								if (flag) {
-									State *s = flag->state_machine->findState("off");
-									flag->setState(*s);
-								}
-								else
-									std::cerr << _name << " error: flag " << ch.flag_name << " not found\n"; 
-							}
+							ConditionHandler *ch = &(*iter++);
+							ch->check(this);
 						}
+					}
+					found_match = true;
+					continue; // skip to the end of the stable state loop
+				}
+				else {
+					DBG_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
+					if (s.uses_timer) {
+						DBG_SCHEDULER << _name  << "[" << current_state.getName() 
+							<< "] scheduling condition tests for state " << s.state_name << "\n";
+						s.condition.predicate->scheduleTimerEvents(this);
+						//Value v = s.timer_val;
+						// there is a bug here; if the timer used in this state is on a different machine
+						// the schedule we generate has to be based on the timer of the other machine.
+						//if (v.kind == Value::t_integer && v.iValue < next_timer) {
+						// we would like to say  next_timer = v.iValue; here but since we have already been in this
+						// state for some time we need to say:
+						//    Value current_timer = *getTimerVal();
+						//    next_timer = v.iValue - current_timer.iValue;
+						//}
+					}
+				}
+
+			}
+			if (next_timer < MAX_TIMER) {
+				/*
+				   If only we could now just schedule a timer event:
+				   Trigger *trigger = new Trigger("Timer");
+				   Scheduler::instance()->add(new ScheduledItem(next_timer*1000, new FireTriggerAction(owner, trigger)));
+				   unfortunately, the current code still has a bug because the 'uses_timer' flag of stable states
+				   simply indicates that the state depends on *something* that uses a timer but that may be another
+				   machine and that machine may not be in the state we are interested in.
+
+				   Workaround for now: check stable states every millisecond or so if any state uses a timer.
+				 */
+				/*  Trigger *trigger = new Trigger("Timer");
+				    Scheduler::instance()->add(new ScheduledItem(1000, new FireTriggerAction(this, trigger)));
+				    trigger->release(); */
+			}
+			// this state is not active so ensure its subcondition flags are turned off
+			if (s.subcondition_handlers) {
+				std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+				while (iter != s.subcondition_handlers->end()) {
+					ConditionHandler&ch = *iter++;
+					if (ch.command_name == "FLAG" ) {
+						MachineInstance *flag = lookup(ch.flag_name);
+						if (flag) {
+							State *s = flag->state_machine->findState("off");
+							flag->setState(*s);
+						}
+						else
+							std::cerr << _name << " error: flag " << ch.flag_name << " not found\n"; 
 					}
 				}
 			}
 		}
+	}
 #if 0
-		if (!needs_check) { BOOST_FOREACH(Transmitter *t, listens) {
-			MachineInstance *m = dynamic_cast<MachineInstance *>(t);
-			if (m && m!= this && m->state_machine && m->state_machine-> allow_auto_states && m->needs_check) {
-				DBG_M_AUTOSTATES << _name << " waiting for " << m->getName() << " to stablize \n";
-				//needs_check = true;
-				return;
-			}
-		}}
+	if (!needs_check) { BOOST_FOREACH(Transmitter *t, listens) {
+		MachineInstance *m = dynamic_cast<MachineInstance *>(t);
+		if (m && m!= this && m->state_machine && m->state_machine-> allow_auto_states && m->needs_check) {
+			DBG_M_AUTOSTATES << _name << " waiting for " << m->getName() << " to stablize \n";
+			//needs_check = true;
+			return;
+		}
+	}}
 #endif
 	return changed_state;
-}
+	}
 
 		void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			//if (state_machine) return;

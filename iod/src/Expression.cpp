@@ -141,28 +141,37 @@ Value &Predicate::getTimerValue() {
 
 void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer events that trigger the supplied machine
 {
+	if (target->getName() == "D_BaleAtLoaderPos")
+		int x = 1;
+	
     long scheduled_time = -10000;
     long current_time = 0;
     // below, we check the clauses of this predicate and if we find a timer test
     // we set the above variables. At the end of the method, we actually set the timer
+	
 
 	if (left_p && left_p) left_p->scheduleTimerEvents(target);
-    
-    // clauses like (machine.TIMER >= 10)
-    if (left_p && left_p->entry.kind == Value::t_symbol
-            && left_p->entry.token_id == ClockworkToken::TIMER && right_p) {
 
-        if (right_p->entry.kind == Value::t_symbol && target->getValue(right_p->entry.sValue).asInteger(current_time))
-            ;
-        else if (right_p->entry.asInteger(scheduled_time))
+    // clauses like (machine.TIMER >= 10)
+    if (left_p
+		&& left_p->entry.kind == Value::t_symbol
+		&& left_p->entry.token_id == ClockworkToken::TIMER
+		&& right_p) {
+		//std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
+        if ( (right_p->entry.kind == Value::t_symbol
+			&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
+            || right_p->entry.asInteger(scheduled_time))
             current_time = target->getTimerVal()->iValue;
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
-    else if (left_p && left_p->entry.kind == Value::t_symbol && stringEndsWith(left_p->entry.sValue,".TIMER")) {
-        if (right_p->entry.kind == Value::t_symbol && target->getValue(right_p->entry.sValue).asInteger(current_time))
-            ;
-        else if (right_p->entry.asInteger(scheduled_time)) {
+    else if (left_p
+			 && left_p->entry.kind == Value::t_symbol
+			 && stringEndsWith(left_p->entry.sValue,".TIMER")) {
+		//std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
+        if ( (right_p->entry.kind == Value::t_symbol
+				&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
+				|| right_p->entry.asInteger(scheduled_time)) {
             // lookup the machine
             MachineInstance *timed_machine = 0;
             size_t pos = left_p->entry.sValue.find('.');
@@ -175,21 +184,28 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
     
-    // clauses like (10 <= machine.TIMER)
-    else if (right_p && right_p->entry.kind == Value::t_symbol
-                && right_p->entry.token_id == ClockworkToken::TIMER && left_p) {
-        if (left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(current_time))
-            ;
-        else if (left_p->entry.asInteger(scheduled_time))
+    // clauses like (10 <= TIMER)
+    else if (right_p
+			&& right_p->entry.kind == Value::t_symbol
+			&& right_p->entry.token_id == ClockworkToken::TIMER
+			&& left_p) {
+		//std::cout << "checking timers on " << left_p->entry << "\n";
+        if ( (left_p->entry.kind == Value::t_symbol
+				&& target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
+				|| left_p->entry.asInteger(scheduled_time))
             current_time = target->getTimerVal()->iValue;
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
-    else if (right_p && left_p && right_p->entry.kind == Value::t_symbol
-                    && stringEndsWith(right_p->entry.sValue,".TIMER")) {
-        if (left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(current_time))
-            ;
-        else if (left_p->entry.asInteger(scheduled_time)) {
+	// clauses like (10 <= machine.TIMER)
+    else if (right_p
+			&& left_p
+			&& right_p->entry.kind == Value::t_symbol
+			&& stringEndsWith(right_p->entry.sValue,".TIMER")) {
+		//std::cout << "checking timers on " << left_p->entry << " " << right_p->entry << "\n";
+        if ( (left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
+            || left_p->entry.asInteger(scheduled_time)
+			) {
             // lookup and cache the machine
             MachineInstance *timed_machine = 0;
             size_t pos = right_p->entry.sValue.find('.');
@@ -208,6 +224,7 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     // processing delays and current time may already be a little > scheduled time. This is especially
     // true on slow clock cycles. For now we reschedule the trigger for up to 10ms past the necessary time.
     if (current_time *1000 <= scheduled_time *1000 - 10) {
+		DBG_SCHEDULER << "Scheduling item for " << ((scheduled_time - current_time) * 1000) << "\n";
         Trigger *trigger = new Trigger("Timer");
         Scheduler::instance()->add(new ScheduledItem( (scheduled_time - current_time) * 1000, new FireTriggerAction(target, trigger)));
         trigger->release();
