@@ -2972,7 +2972,7 @@ bool MachineInstance::setStableState() {
 						DBG_AUTOSTATES << " already there\n";
 						// reschedule timer triggers for this state
 						if (s.uses_timer) {
-							DBG_MSG << "Should retrigger timer for " << s.state_name << "\n";
+							DBG_SCHEDULER << "Should retrigger timer for " << s.state_name << "("<<s.timer_val<< ")"<< "\n";
 							Value v = getValue(s.timer_val.sValue);
 							if (v.kind == Value::t_integer && v.iValue < next_timer)
 								next_timer = v.iValue;
@@ -2981,8 +2981,6 @@ bool MachineInstance::setStableState() {
 					if (s.uses_timer) {
 						DBG_SCHEDULER << _name << "[" << current_state.getName() 
 							<< "] scheduling condition tests for state " << s.state_name << "\n";
-						if (_name == "D_BaleAtLoaderPos")
-							int x = 1;
 						s.condition.predicate->scheduleTimerEvents(this);
 					}
 					if (s.subcondition_handlers) {

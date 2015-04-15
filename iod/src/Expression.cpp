@@ -141,9 +141,6 @@ Value &Predicate::getTimerValue() {
 
 void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer events that trigger the supplied machine
 {
-	if (target->getName() == "D_BaleAtLoaderPos")
-		int x = 1;
-	
     long scheduled_time = -10000;
     long current_time = 0;
     // below, we check the clauses of this predicate and if we find a timer test
@@ -222,10 +219,10 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     }
     //TBD there is an issue with testing current_time <= scheduled_time because there may have been some
     // processing delays and current time may already be a little > scheduled time. This is especially
-    // true on slow clock cycles. For now we reschedule the trigger for up to 10ms past the necessary time.
-    if (current_time *1000 <= scheduled_time *1000 + 10000) {
+    // true on slow clock cycles. For now we reschedule the trigger for up to 2ms past the necessary time.
+    if (current_time <= (scheduled_time + 2)) {
 		long t = (scheduled_time - current_time) * 1000;
-		if (t<=0) t = 10000;
+		if (t<2000) t = 2000;
 		DBG_SCHEDULER << "Scheduling item for " << t << "\n";
         Trigger *trigger = new Trigger("Timer");
         Scheduler::instance()->add(new ScheduledItem( t, new FireTriggerAction(target, trigger)));
