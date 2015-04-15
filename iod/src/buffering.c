@@ -2,6 +2,9 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "buffering.h"
+#ifdef TEST
+#include <math.h>
+#endif
 
 struct CircularBuffer *createBuffer(int size)
 {
@@ -76,6 +79,33 @@ int length(struct CircularBuffer *buf) {
     return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
 }
 
+double getVal(struct CircularBuffer *buf, int n) {
+	return buf->values[ (buf->front + buf->bufsize - n) % buf->bufsize];
+}
+
+double getTime(struct CircularBuffer *buf, int n) {
+	return buf->times[ (buf->front + buf->bufsize - n) % buf->bufsize];
+}
+
+double slope(struct CircularBuffer *buf) {
+    double sumX = 0.0, sumY = 0.0, sumXY = 0.0;
+    double sumXsquared = 0.0, sumYsquared = 0.0;
+    int n = length(buf)-1;
+    double t0 = getTime(buf, n);
+    for (int i = n-1; i>0; i--) {
+        double y = getVal(buf, i) - getVal(buf, n); // degrees
+        double x = getTime(buf, i) - t0;
+        sumX += x; sumY += y; sumXsquared += x*x; sumYsquared += y*y; sumXY += x*y;
+    }
+    double denom = (double)n*sumXsquared - sumX*sumX;
+	
+    double m = 0.0;
+	if (denom != 0.0) m  = ((double)n * sumXY - sumX*sumY) / denom;
+	
+    //double c = (sumXsquared * sumY - sumXY * sumX) / denom;
+    return m;
+}
+
 #ifdef TEST
 
 int failures = 0;
@@ -91,11 +121,27 @@ int main(int argc, const char *argv[]) {
     int i = 0;
     for (i=0; i<10; ++i) addSample(mybuf, i, i);
     ++tests; if (rate(mybuf) != 1.0) { fail(tests); }
-    for (i=0; i<10; ++i) addSample(mybuf, 1.5*i, i);
+    for (i=0; i<10; ++i) addSample(mybuf, i, 1.5*i);
     ++tests; if (rate(mybuf) != 1.5) { fail(tests); }
+    ++tests; if (slope(mybuf) != 1.5) { fail(tests); }
 	++tests; if (sum(mybuf) / 4 != average(mybuf)) { fail(tests); }
 	++tests; if (sum(mybuf) != (6 + 7 + 8 + 9)*1.5) { fail(tests); }
 	printf("tests:\t%d\nfailures:\t%d\n", tests, failures );
+
+	destroyBuffer(mybuf);
+
+	/* 
+		generate a sign curve and calculate the slope using
+		the rate() and slope() functions for comparison purposes
+	*/
+    mybuf = createBuffer(3);
+	for (i=0; i<70; i++) {
+		double x = i/4.0;
+		double y = sin( x );
+		addSample(mybuf, i, y);
+		if (i>mybuf->bufsize) printf("%d,%lf,%lf,%lf\n",i, cos(x)/4.0, rate(mybuf), slope(mybuf));
+	}
+
 	destroyBuffer(mybuf);
     return 0;
 }
