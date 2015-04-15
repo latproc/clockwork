@@ -223,10 +223,12 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     //TBD there is an issue with testing current_time <= scheduled_time because there may have been some
     // processing delays and current time may already be a little > scheduled time. This is especially
     // true on slow clock cycles. For now we reschedule the trigger for up to 10ms past the necessary time.
-    if (current_time *1000 <= scheduled_time *1000 - 10) {
-		DBG_SCHEDULER << "Scheduling item for " << ((scheduled_time - current_time) * 1000) << "\n";
+    if (current_time *1000 <= scheduled_time *1000 + 10000) {
+		long t = (scheduled_time - current_time) * 1000;
+		if (t<=0) t = 10000;
+		DBG_SCHEDULER << "Scheduling item for " << t << "\n";
         Trigger *trigger = new Trigger("Timer");
-        Scheduler::instance()->add(new ScheduledItem( (scheduled_time - current_time) * 1000, new FireTriggerAction(target, trigger)));
+        Scheduler::instance()->add(new ScheduledItem( t, new FireTriggerAction(target, trigger)));
         trigger->release();
     }
     else if (scheduled_time > 0) {
