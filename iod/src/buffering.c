@@ -20,7 +20,7 @@ void destroyBuffer(struct CircularBuffer *buf) {
     free(buf);
 }
 
-void addSample(struct CircularBuffer *buf, double val, long time) {
+void addSample(struct CircularBuffer *buf, long time, double val) {
   buf->front = (buf->front + 1) % buf->bufsize;
   if (buf->front == buf->back) buf->total -= buf->values[buf->front];
   if (buf->front == buf->back || buf->back == -1) buf->back = (buf->back + 1) % buf->bufsize;
@@ -29,7 +29,7 @@ void addSample(struct CircularBuffer *buf, double val, long time) {
   buf->times[buf->front] = time;
 }
 
-void addSampleDebug(struct CircularBuffer *buf, double val, long time) {
+void addSampleDebug(struct CircularBuffer *buf, long time, double val) {
 	addSample(buf, val, time);
 	printf("buffer added: %5.2f, %ld at %d\n", val, time, buf->front);
 }
