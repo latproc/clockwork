@@ -61,12 +61,12 @@ double rateDebug(struct CircularBuffer *buf) {
     return ds/dt;
 }
 
-double average(struct CircularBuffer *buf) {
+double bufferAverage(struct CircularBuffer *buf) {
 	int n = length(buf);
 	return (n==0) ? n : buf->total / n;
 }
 
-double sum(struct CircularBuffer *buf) {
+double bufferSum(struct CircularBuffer *buf) {
 	return buf->total;
 }
 
@@ -79,7 +79,7 @@ int length(struct CircularBuffer *buf) {
     return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
 }
 
-double getVal(struct CircularBuffer *buf, int n) {
+double getBufferValue(struct CircularBuffer *buf, int n) {
 	return buf->values[ (buf->front + buf->bufsize - n) % buf->bufsize];
 }
 
@@ -92,8 +92,9 @@ double slope(struct CircularBuffer *buf) {
     double sumXsquared = 0.0, sumYsquared = 0.0;
     int n = length(buf)-1;
     double t0 = getTime(buf, n);
-    for (int i = n-1; i>0; i--) {
-        double y = getVal(buf, i) - getVal(buf, n); // degrees
+		int i = 0;
+    for (i = n-1; i>0; i--) {
+        double y = getBufferValue(buf, i) - getBufferValue(buf, n); // degrees
         double x = getTime(buf, i) - t0;
         sumX += x; sumY += y; sumXsquared += x*x; sumYsquared += y*y; sumXY += x*y;
     }
