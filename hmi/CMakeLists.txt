@@ -6,7 +6,7 @@ set (HMI_VERSION_MINOR 8)
 
 set (CMAKE_CXX_FLAGS "-g -Wall --std=gnu++0x")
 
-set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/../iod/)
+set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/../iod/src)
 
 configure_file (
   "${PROJECT_SOURCE_DIR}/HMIConfig.h.in"

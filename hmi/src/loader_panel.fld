@@ -10,7 +10,7 @@ class LoaderPanel {open
   Function {make_window()} {open
   } {
     Fl_Window {} {open
-      xywh {954 458 581 411} type Double visible
+      xywh {621 181 809 408} type Double visible
     } {
       Fl_Light_Button {} {
         label I_BaleOnLoader
@@ -98,6 +98,11 @@ class LoaderPanel {open
         callback save
         xywh {400 320 115 40}
         code0 {init(M_rawScales_rawOverWeight, o);}
+      }
+      Fl_Light_Button {} {
+        label Auto
+        callback set_auto_mode
+        xywh {560 30 75 30}
       }
     }
   }

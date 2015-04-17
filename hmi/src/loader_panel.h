@@ -9,6 +9,7 @@ extern void press(Fl_Light_Button*, void*);
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Value_Input.H>
 extern void save(Fl_Value_Input*, void*);
+extern void set_auto_mode(Fl_Light_Button*, void*);
 
 class LoaderPanel {
 public:

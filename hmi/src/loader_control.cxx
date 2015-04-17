@@ -35,6 +35,8 @@ std::map<int, Fl_Widget *> active_addresses;
 std::map<int, Fl_Widget *> ro_bits;
 std::map<int, Fl_Widget *> inputs;
 
+bool auto_mode = false;
+
 
 void sendMessage(zmq::socket_t &socket, const char *message) {
     const char *msg = (message) ? message : "";
@@ -319,6 +321,11 @@ void press(Fl_Light_Button*w, void*v) {
 	press((Fl_Widget *)w, v);
 }
 
+void set_auto_mode(Fl_Light_Button*w, void*v) {
+	Fl_Light_Button *btn = dynamic_cast<Fl_Light_Button*>(w);
+	auto_mode = btn->value();
+}
+
 void save(Fl_Value_Input*in, void*data) {
 	int *addr = (int*)data;
 	double v = in->value();
@@ -392,6 +399,10 @@ int main(int argc, char **argv) {
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
 
 	usleep(1000);
+
+	int rc = modbus_write_register(mb->ctx, M_rawScales_rawUnderWeight, 110);
+	rc = modbus_write_register(mb->ctx, M_rawScales_rawOverWeight, 200);
+	rc = modbus_write_register(mb->ctx, M_rawScales_rawSteady, 77);
 
 	Fl_Window *window  = gui.make_window();
 	window->show(1, argv);
