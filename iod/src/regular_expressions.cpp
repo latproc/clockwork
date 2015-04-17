@@ -157,7 +157,7 @@ char * substitute_pattern(rexp_info *info, std::vector<std::string> &variables, 
     return strdup(string);
 }
 
-int each_match(rexp_info *info, const char *text, match_func f, void *user_data)
+int each_match(rexp_info *info, const char *text, size_t *end_idx, match_func f, void *user_data)
 {
     int matched_ok;
     matched_ok = execute_pattern(info, text);
@@ -186,6 +186,7 @@ int each_match(rexp_info *info, const char *text, match_func f, void *user_data)
             matched_ok = 1;
         }
     }
+	if (end_idx) *end_idx = offset;
     return result;
 }
 
@@ -319,7 +320,8 @@ int main(int argc, char *argv[])
                 printf("%s matches %s \n", text, pattern);
 
             info = create_pattern(pattern);
-            each_match(info, text, my_match_func, NULL);
+			size_t endidx = 0;
+            each_match(info, text, &endidx, my_match_func, NULL);
             if (subs)
             {
                 char *s = substitute_pattern(info, symbols, text, subs);

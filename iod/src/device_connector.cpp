@@ -464,7 +464,7 @@ struct MatchFunction {
     static int match_func(const char *match, int index, void *data)
     {
         //std::cout << "match: " << index << " " << match << "\n";
-        if (index == 0) {
+        if (data && index == 0) {
             size_t *n = (size_t*)data;
             *n += strlen(match);
         }
@@ -486,6 +486,7 @@ struct MatchFunction {
                         if (msg) {
                             if (!instance_) { MatchFunction::instance(); usleep(50); }
                             std::string response;
+							//std::cout << "sending: " << msg << "\n";
                             if (sendMessage(msg, MatchFunction::instance()->iod_interface, response)) {
                                 last_message = msg;
                                 last_send.tv_sec = now.tv_sec;
@@ -509,6 +510,7 @@ struct MatchFunction {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->machine(), Options::instance()->property(), res.c_str());
                     if (cmd) {
                         std::string response;
+						//std::cout << "sending: " << cmd << "\n";
                         if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
@@ -691,7 +693,7 @@ struct ConnectionThread {
                         
                         // recalculate offset as we step through matches
                         offset = 0;
-                        each_match(Options::instance()->regexpInfo(), buf, &MatchFunction::match_func, &offset);
+                        each_match(Options::instance()->regexpInfo(), buf, &offset, &MatchFunction::match_func, 0);
                         size_t len = strlen(buf);
 #if 0
                         std::cout << "buf: ";
@@ -705,6 +707,7 @@ struct ConnectionThread {
                             std::cout << std::hex << "   ";
                         }
                         std::cout << "^\n";
+						std::cout << "offset: " << offset << "\n";
 #endif
                         if (offset)  {
                             memmove(buf, buf+offset, len+1-offset);

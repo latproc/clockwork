@@ -76,7 +76,7 @@ Action::Status CopyAllPatternAction::run() {
     val = owner->getValue(property);
     std::vector<std::string>matches;
     rexp_info *info = create_pattern(pattern.c_str());
-    each_match(info, val.asString().c_str(), matched, &matches);
+    each_match(info, val.asString().c_str(), 0, matched, &matches);
     if (matches.size()) {
         std::string res;
         for (unsigned int i=0; i<matches.size(); ++i)

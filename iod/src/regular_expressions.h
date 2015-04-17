@@ -64,7 +64,7 @@ char * substitute_pattern(rexp_info *info, std::vector<std::string> &variables, 
 /* here is a way for users to iterate through each match */
 typedef int (match_func)(const char *match, int index, void *user_data);
 
-int each_match(rexp_info *info, const char *text, match_func f, void *user_data);
+int each_match(rexp_info *info, const char *text, size_t *end_offset, match_func f, void *user_data);
 
 
 #endif
