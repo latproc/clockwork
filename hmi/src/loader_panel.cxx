@@ -393,7 +393,7 @@ static Fl_RGB_Image image_Output_off(idata_Output_off, 32, 32, 4, 0);
 
 Fl_Double_Window* LoaderPanel::make_window() {
   Fl_Double_Window* w;
-  { Fl_Double_Window* o = new Fl_Double_Window(581, 411);
+  { Fl_Double_Window* o = new Fl_Double_Window(809, 408);
     w = o;
     o->user_data((void*)(this));
     { Fl_Light_Button* o = new Fl_Light_Button(25, 25, 205, 40, "I_BaleOnLoader");
@@ -453,6 +453,9 @@ Fl_Double_Window* LoaderPanel::make_window() {
       o->callback((Fl_Callback*)save, (void*)(&M_rawScales_rawOverWeight));
       init(M_rawScales_rawOverWeight, o);
     } // Fl_Value_Input* o
+    { Fl_Light_Button* o = new Fl_Light_Button(560, 30, 75, 30, "Auto");
+      o->callback((Fl_Callback*)set_auto_mode);
+    } // Fl_Light_Button* o
     o->end();
   } // Fl_Double_Window* o
   return w;
