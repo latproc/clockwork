@@ -1,11 +1,15 @@
 PIDSPEEDCONFIGURATION MACHINE {
   OPTION PERSISTENT true;
   EXPORT RW 32BIT SlowSpeed, FullSpeed, PowerFactor, StoppingDistance, TravelAllowance, tolerance, Kp, Ki, Kd;
+	EXPORT RO 16BIT PowerOffset;
   OPTION SlowSpeed 40;
   OPTION FullSpeed 1000;
   OPTION StoppingDistance 3000;  # distance from the stopping point to begin slowing down
   OPTION TravelAllowance 0;      # amount to travel after the mark before slowing down
   OPTION tolerance 100;          # stopping position tolerance
+	OPTION RampTime 500;
+	OPTION StartupPowerOffsets "0";
+	OPTION PowerOffset 0;
 
 	OPTION Kp 100000;
 	OPTION Ki 0;
@@ -71,7 +75,6 @@ struct PIDData {
 	long *min_update_time;
 	long *stopping_time;
 	long *startup_time;
-	long *min_speed;
 	long *ramp_limit;
 
 	long *max_forward;
@@ -109,6 +112,7 @@ struct PIDData {
 	double filtered_Ep;
 	double last_filtered_Ep;
 	uint64_t last_sample_time;
+	int overshot;
 
 	// keep a record of the power at which movement started
 	long *fwd_start_power; 
@@ -203,7 +207,6 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
 		ok = ok && getInt(scope, "settings.stopping_time", &data->stopping_time);
 		ok = ok && getInt(scope, "settings.startup_time", &data->startup_time);
-		ok = ok && getInt(scope, "settings.MinSpeed", &data->min_speed);
 		ok = ok && getInt(scope, "settings.RampLimit", &data->ramp_limit);
 		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
 		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
@@ -211,8 +214,6 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "Velocity", &data->estimated_speed);
 		ok = ok && getInt(scope, "Position", &data->current_position);
 		ok = ok && getInt(scope, "StopError", &data->stop_error);
-		ok = ok && getInt(scope, "MinForward", &data->fwd_start_power);
-		ok = ok && getInt(scope, "MinReverse", &data->rev_start_power);
 
 		ok = ok && getInt(scope, "output_settings.MaxForward", &data->max_forward);
 		ok = ok && getInt(scope, "output_settings.MaxReverse", &data->max_reverse);
@@ -223,9 +224,11 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "fwd_settings.tolerance", &data->fwd_tolerance);
 		ok = ok && getInt(scope, "fwd_settings.StoppingDistance", &data->fwd_stopping_dist);
 		ok = ok && getInt(scope, "fwd_settings.RampTime", &data->fwd_ramp_time);
+		ok = ok && getInt(scope, "fwd_settings.PowerOffset", &data->fwd_start_power);
 		ok = ok && getInt(scope, "rev_settings.tolerance", &data->rev_tolerance);
 		ok = ok && getInt(scope, "rev_settings.StoppingDistance", &data->rev_stopping_dist);
 		ok = ok && getInt(scope, "rev_settings.RampTime", &data->rev_ramp_time);
+		ok = ok && getInt(scope, "rev_settings.PowerOffset", &data->rev_start_power);
 
 		if ( getInt(scope, "fwd_settings.Kp", &data->Kpf_long) ) {
 			data->use_Kpidf = 1;
@@ -258,6 +261,38 @@ int check_states(void *scope)
 			return PLUGIN_ERROR;
 		}
 
+		/* load the persistent list of recent power offsets */
+		const char *startup_offset_str = getStringValue(scope, "fwd_settings.StartupPowerOffsets");
+		if (startup_offset_str) {
+			double offsets[8];
+			int n = stringToDoubleArray(startup_offset_str, 8, offsets);
+				printf("%s: %d forward startup power offsets found\n", data->conveyor_name, n);
+			int i;
+			for (i=0; i<n; ++i) 
+				addSample(data->fwd_power_offsets, i, offsets[i]);
+			char *tmpstr = doubleArrayToString(length(data->fwd_power_offsets), data->fwd_power_offsets->values);
+			setStringValue(scope,"fwd_settings.StartupPowerOffsets", tmpstr);
+			free(tmpstr);
+			long new_start_power = bufferAverage(data->fwd_power_offsets);
+			if (new_start_power <= 0) new_start_power = 1;
+			setIntValue(scope, "fwd_settings.PowerOffset", new_start_power);
+		}
+		startup_offset_str = getStringValue(scope, "rev_settings.StartupPowerOffsets");
+		if (startup_offset_str) {
+			double offsets[8];
+			int n = stringToDoubleArray(startup_offset_str, 8, offsets);
+			printf("%s: %d reverse startup power offsets found\n", data->conveyor_name, n);
+			int i;
+			for (i=0; i<n; ++i) 
+				addSample(data->rev_power_offsets, i, offsets[i]);
+			char *tmpstr = doubleArrayToString(length(data->rev_power_offsets), data->rev_power_offsets->values);
+			setStringValue(scope,"rev_settings.StartupPowerOffsets", tmpstr);
+			free(tmpstr);
+			long new_start_power = bufferAverage(data->rev_power_offsets);
+			if (new_start_power >= 0) new_start_power = -1;
+			setIntValue(scope, "rev_settings.PowerOffset", new_start_power);
+		}
+
 		data->state = cs_init;
 		data->current_power = 0.0;
 		data->last_poll = 0;
@@ -281,6 +316,7 @@ int check_states(void *scope)
 		data->ramp_start_time = 0;
 		data->last_sample_time = 0;
 		data->ramp_down_start = 0;
+		data->overshot = 0;
 
 		printf("%s plugin initialised ok: update time %ld\n", data->conveyor_name, *data->min_update_time);
 	}
@@ -291,27 +327,32 @@ int check_states(void *scope)
 static void atposition(struct PIDData*data, void *scope) {
 	data->last_Ep = 0;
 	data->total_err = 0;
+	data->overshot = 0;
 }
 
-static void stop(struct PIDData*data, void *scope) {
+static void halt(struct PIDData*data, void *scope) {
 	if (data->debug && *data->debug) printf("%s stop command\n", data->conveyor_name);
-	data->state = cs_stopped;
 	data->current_power = 0.0;
-	*data->set_point = 0;
-	data->stop_marker = 0;
 	data->last_set_point = 0;
 	data->changing_set_point = 0;
-	data->last_stop_position = 0;
 	data->last_Ep = 0;
 	data->total_err = 0;
 	data->ramp_down_start = 0;
+	data->overshot = 0;
+	setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
+}
+static void stop(struct PIDData*data, void *scope) {
+	halt(data, scope);
+	*data->set_point = 0;
+	data->stop_marker = 0;
+	data->last_stop_position = 0;
 	setIntValue(scope, "SetPoint", 0);
+	data->state = cs_stopped;
 	if (!data->state == cs_interlocked) {
 		if (data->debug && *data->debug)
 			printf("%s stopped\n", data->conveyor_name);
 		data->state = cs_stopped;
 	}
-	setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
 }
 
 static int sign(double val) { return (0 < val) - (val < 0); }
@@ -404,7 +445,7 @@ int poll_actions(void *scope) {
 			}
 		}
 	}
-	double dt = (double)(delta_t)/1000000.0; /* 2ms allowance for latency */
+	double dt = (double)(delta_t)/1000000.0; /* dt in secs */
 
 	long fwd_power_offset = *data->fwd_start_power;
 	long rev_power_offset = *data->rev_start_power;
@@ -489,6 +530,14 @@ int poll_actions(void *scope) {
     	return PLUGIN_COMPLETED;
 		}
 
+		/* have we overshot? */
+		if ( ( sign(data->last_position - *data->stop_position) || sign(*data->position - *data->stop_position) )
+					&& sign(data->last_position - *data->stop_position) != sign(*data->position - *data->stop_position) ) {
+			data->overshot = 1;
+			halt(data, scope);
+			if (data->debug && *data->debug) printf("%s overshoot\n", data->conveyor_name);
+		}
+
 		if ( (data->state == cs_stopped || data->state == cs_atposition)  && (new_state == cs_position || new_state == cs_speed)) {
 			data->state = cs_prestart;
 		}
@@ -496,12 +545,13 @@ int poll_actions(void *scope) {
 		/* even in prestart, we need to check whether we are at position and stop if necessary */
 		int close_to_target = 0;
 		if (new_state == cs_position) {
+	
 			/* once we are very close we no longer calculate a moving target */
 			if ( dist_to_stop >= 0 && dist_to_stop < *data->fwd_tolerance) {
 					if (data->debug && *data->debug) printf("%s within tolerance (fwd) speed = %ld pos:%ld stop:%ld\n", 
 						data->conveyor_name, *data->estimated_speed, *data->position, *data->stop_position);
 					close_to_target = 1;
-					if ( fabs(*data->estimated_speed) < 50) {
+					if ( fabs(*data->estimated_speed) < 400) {
 						if (data->debug && *data->debug) printf("%s at position (fwd)\n", data->conveyor_name);
 						data->state = cs_atposition;
 						data->ramp_down_start = 0;
@@ -515,7 +565,7 @@ int poll_actions(void *scope) {
 					if (data->debug) printf("%s within tolerance (rev) speed = %ld pos:%ld stop:%ld\n", 
 						data->conveyor_name, *data->estimated_speed, *data->position, *data->stop_position);
 					close_to_target = 1;
-					if (fabs(*data->estimated_speed) < 50) {
+					if (fabs(*data->estimated_speed) < 400) {
 						if (data->debug && *data->debug) printf("%s at position (rev)\n", data->conveyor_name);
 						data->state = cs_atposition;
 						data->ramp_down_start = 0;
@@ -525,6 +575,7 @@ int poll_actions(void *scope) {
 						goto calculated_power;
 					}
 			}
+			if (close_to_target) { halt(data, scope); new_power = 0; goto calculated_power; }
 		}
 
 
@@ -541,18 +592,19 @@ int poll_actions(void *scope) {
 				data->last_position = *data->position;
 				if (data->current_power>0) {
 					double mean_offset = bufferAverage(data->fwd_power_offsets);
-					if (*data->position - data->last_position > 10 && data->current_power > 0.5 * mean_offset) // overpowered
+					if (*data->position - data->last_position > 6 && data->current_power > 0.5*mean_offset) // overpowered
 						addSample(data->fwd_power_offsets, now_t, 0.5 * mean_offset);
 					else
 						addSample(data->fwd_power_offsets, now_t, data->current_power);
-					long new_start_power = bufferAverage(data->rev_power_offsets);
+					long new_start_power = bufferAverage(data->fwd_power_offsets);
 					if (new_start_power <= 0) new_start_power = 1;
-					setIntValue(scope, "MinForward", new_start_power);
+					setIntValue(scope, "fwd_settings.PowerOffset", new_start_power);
 
 					char *tmpstr = doubleArrayToString(length(data->fwd_power_offsets), data->fwd_power_offsets->values);
-					setStringValue(scope,"ForwardPowerOffsets", tmpstr);
+					setStringValue(scope,"fwd_settings.StartupPowerOffsets", tmpstr);
 					free(tmpstr);
 					data->fwd_start_delay = now_t - data->start_time;
+					if (data->fwd_start_delay > 200000) data->fwd_start_delay = 200000;
 				}
 				fwd_power_offset = *data->fwd_start_power;
 				if (data->debug && *data->debug)
@@ -561,25 +613,26 @@ int poll_actions(void *scope) {
 			}
 
 			/* have we found reverse movement during prestart */
-			if (set_point < 0 && *data->position - data->last_position < -4) { // reverse motion
+			else if (set_point < 0 && *data->position - data->last_position < -4) { // reverse motion
 				if (new_state == cs_position || new_state == cs_speed) data->state = new_state;
 				data->ramp_start_time = now_t;
 				data->last_position = *data->position;
 				if (data->current_power < 0) {
 					double mean_offset = bufferAverage(data->rev_power_offsets);
-					if (*data->position - data->last_position < -10 && data->current_power < 0.5 * mean_offset) // overpowered
+					if (*data->position - data->last_position < -6 && data->current_power < 0.5*mean_offset) // overpowered
 						addSample(data->rev_power_offsets, now_t, 0.5 * mean_offset);
 					else
-						addSample(data->rev_power_offsets, now_t, bufferAverage(data->rev_power_offsets));
+						addSample(data->rev_power_offsets, now_t, data->current_power);
 					long new_start_power = bufferAverage(data->rev_power_offsets);
 					if (new_start_power >= 0) new_start_power = -1;
-					setIntValue(scope, "MinReverse", new_start_power);
+					setIntValue(scope, "rev_settings.PowerOffset", new_start_power);
 					
 					char *tmpstr = doubleArrayToString(length(data->rev_power_offsets), data->rev_power_offsets->values);
-					setStringValue(scope,"ReversePowerOffsets", tmpstr);
+					setStringValue(scope,"rev_settings.StartupPowerOffsets", tmpstr);
 					free(tmpstr);
 
 					data->rev_start_delay = now_t - data->start_time;
+					if (data->rev_start_delay > 200000) data->rev_start_delay = 200000;
 				}
 				rev_power_offset = *data->rev_start_power;
 				if (data->debug && *data->debug)
@@ -591,6 +644,7 @@ int poll_actions(void *scope) {
 				if (data->current_power == 0) {
 					data->start_time = now_t;
 					new_power = (set_point>0) ? *data->fwd_start_power : *data->rev_start_power;
+					if (data->debug && *data->debug) printf("%s initial power : %3.1f\n", data->conveyor_name, new_power);
 					data->last_prestart_change = now_t;
 				}
 				else if (data->current_power > 0) {
@@ -607,7 +661,8 @@ int poll_actions(void *scope) {
 						data->last_prestart_change = now_t;
 					}
 				}
-				printf("%s waiting for movement. time: %ld power: %5.2f\n", 
+				if (data->debug && *data->debug)
+					 printf("%s waiting for movement. time: %ld power: %5.2f\n", 
 						data->conveyor_name, now_t - data->start_time, new_power);
 				goto calculated_power;
 			}
@@ -626,7 +681,7 @@ int poll_actions(void *scope) {
 
 		if (new_state == cs_position || new_state == cs_speed && startup_time < *data->startup_time) {
 				ramp_up_ratio = (double)startup_time / *data->startup_time;
-				if (ramp_up_ratio < 0.1) ramp_up_ratio = 0.1;
+				if (ramp_up_ratio < 0.05) ramp_up_ratio = 0.05;
 				if (data->debug && *data->debug && ramp_up_ratio >0.0 && ramp_up_ratio<=1.0) 
 					printf("%s rampup ratio: %5.3f\n", data->conveyor_name, ramp_up_ratio);
 		}
@@ -635,25 +690,29 @@ int poll_actions(void *scope) {
 			/* adjust the set point to cater for whether we are close to the stop position */
 			double stopping_time = (double)*data->stopping_time / 1000.0; /* secs */
 			
-			/* stopping distance at vel v with an even ramp is s=vt/2
-			   we add 300ms to the time to cater for the delay before the system responds
-			   to changes of input */
-			double ramp_dist = fabs(*data->estimated_speed * stopping_time / 2.0);
+			/* stopping distance at vel v with an even ramp is s=vt/2 */
+			double ramp_dist = fabs(*data->estimated_speed * stopping_time);
 			if ( data->ramp_down_start == 0 && fabs(*data->stop_position - *data->position) < ramp_dist) {
 				data->ramp_down_start = now_t;
+				if (data->debug && *data->debug) 
+					printf("%s ramping down at %ld aiming for %ld over %5.3f\n", data->conveyor_name, 
+						*data->position, *data->stop_position, stopping_time);
 			}
 			if (stopping_time > 0 && data->ramp_down_start) {
-				ramp_down_ratio = (data->ramp_down_start + stopping_time - now_t) / stopping_time;
-				if (ramp_down_ratio < 0.1) ramp_down_ratio = 0.1;
+				ramp_down_ratio = ( ((double)data->ramp_down_start - (double)now_t)/1000000.0 + stopping_time) / stopping_time;
+				//if (ramp_down_ratio < 0) ramp_down_ratio = 0.0;
+				if (ramp_down_ratio <0.05) ramp_down_ratio = 0.05;
 				double scale = log(fabs(ramp_down_ratio/0.6)+0.3)/2 + 0.6; 
-				if (scale < 0.1) scale = 0.1;
+				if (scale <= 0.05) scale = 0.05;
 				if (scale > 1.0) scale = 1.0;
-				set_point *= scale;
+				/* don't allow a zero set point */
+				if (set_point * scale != 0.0) set_point *= scale; else set_point = sign(dist_to_stop);
 			}
 			if (set_point != 0 && sign(set_point) != sign(dist_to_stop)) {
 				set_point = -set_point;
 				if (data->debug && *data->debug) printf("%s fixing direction: %5.3f\n", data->conveyor_name, set_point);
 			}
+			if (data->overshot) set_point = 0;
 			if (data->debug && *data->debug) printf("%s approaching %s, ratio = %5.2f (%ld) set_point: %5.2f\n", data->conveyor_name, 
 					( sign(dist_to_stop) >= 0) ? "fwd" : "rev", ramp_down_ratio, dist_to_stop, set_point);
 		}
@@ -666,12 +725,14 @@ int poll_actions(void *scope) {
 			next_position = data->last_position + set_point;
 		}
 		else if (data->state == cs_position) {
-			if (fabs(dist_to_stop) > fabs(set_point))
+			if (data->overshot)
+				next_position = *data->stop_position;
+			else if (fabs(dist_to_stop) > fabs(set_point) && sign(dist_to_stop) == sign(set_point))
 				next_position = data->last_position + set_point;
 			else 
 				next_position = *data->stop_position;
 
-#if 0
+#if 1
 			if ( fabs(next_position - *data->stop_position) > fabs(dist_to_stop) ) {
 				if (data->debug && *data->debug) printf("%s calculation yields worse position (%ld)", data->conveyor_name, next_position);
 				next_position = *data->stop_position;
@@ -700,10 +761,10 @@ int poll_actions(void *scope) {
 			if (data->total_err > 2000) data->total_err = 2000;
 			else if (data->total_err < -2000) data->total_err = -2000;
 
-			/* add filtereing on the error term changes to limit the effect of noise */
+			/* add filtering on the error term changes to limit the effect of noise */
 			data->last_filtered_Ep = data->filtered_Ep;
 			data->filtered_Ep = 0.8 * Ep + 0.2 * data->last_Ep;
-			double de = data->filtered_Ep - data->last_filtered_Ep; /*set_point - speed; (Ep - data->last_Ep); */
+			double de = (data->filtered_Ep - data->last_filtered_Ep) / dt; /*set_point - speed; (Ep - data->last_Ep); */
 			data->last_Ep = Ep;
 
 			double Dout = 0.0;
@@ -711,8 +772,8 @@ int poll_actions(void *scope) {
 				Dout = (int) (data->Kpf * Ep + data->Kif * data->total_err + data->Kdf * de);
 			else if (next_position < *data->position && data->use_Kpidr) // reverse
 				Dout = (int) (data->Kpr * Ep + data->Kir * data->total_err + data->Kdr * de);
-			else  // at target position (at speed)
-				Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de);
+			//else  // at target position (at speed)
+			//	Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de);
 
 			if (data->debug && *data->debug && fabs(Ep)>5) 
 					printf("%s Set: %5.3f Ep: %5.3f Ierr: %5.3f de/dt: %5.3f\n", data->conveyor_name, 
@@ -773,7 +834,6 @@ done_polling_actions:
 
 %END_PLUGIN
 	EXPORT RW 32BIT Velocity, StopError;
-	EXPORT RO 16BIT MinForward, MinReverse;
 	OPTION SetPoint 0;
 	OPTION StopPosition 0;
 	OPTION StopMarker 0;
@@ -781,10 +841,6 @@ done_polling_actions:
 	OPTION Velocity 0;            # estimated current velocity 
 	OPTION StopError 0;
 	OPTION Position 0;
-	OPTION MinForward 1;
-	OPTION MinReverse -1;
-	OPTION ForwardPowerOffsets "";
-	OPTION ReversePowerOffsets "";
 	
 	# This module uses the restore state to give the machine 
 	# somewhere to go once the driver is no longer interlocked. 
