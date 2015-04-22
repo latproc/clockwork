@@ -385,7 +385,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 1
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -402,12 +402,12 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	uint8_t *pd = domain1_pd;
 	uint8_t *saved_pd = process_data;
 
-/* */
+/*
 	std::cout << "updating domain (size = " << size << ")\n";
 	std::cout << "process: "; display(pd); std::cout << "\n";
 	std::cout << "   mask: "; display(mask); std::cout << "\n";
 	std::cout << "   data: "; display(data); std::cout << "\n";
-/* */
+*/
 	for (unsigned int i=0; i<size; ++i) {
 		if (*mask && *data != *pd){
 /*
@@ -535,7 +535,7 @@ int ECInterface::collectState() {
 		}
 		++pd; ++q; ++pm; if (last_pd)++last_pd;
 	}
-#if 1
+#if 0
 	if (affected_bits) {
 		std::cout << "data: "; display(update_data); 
 		std::cout << "\nmask: "; display(update_mask);

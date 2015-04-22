@@ -158,7 +158,7 @@ static uint8_t *incoming_process_mask = 0;
 static uint32_t incoming_data_size;
 static uint64_t global_clock = 0;
 
-#if 1
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -434,7 +434,7 @@ void ProcessingThread::operator()()
 			if (n) { // io has indicated a change
 				if (machine_is_ready)
 				{
-					std::cout << "got EtherCAT data at byte " << (incoming_data_size-n) << "\n";
+					//std::cout << "got EtherCAT data at byte " << (incoming_data_size-n) << "\n";
 #ifdef KEEPSTATS
 					start = nowMicrosecs();
 #endif
