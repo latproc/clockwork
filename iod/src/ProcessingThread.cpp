@@ -430,11 +430,11 @@ void ProcessingThread::operator()()
 			static unsigned long mp_count = 0;
 			uint8_t *mask_p = incoming_process_mask;
 			int n = incoming_data_size;
-			while (n-- && *mask_p == 0) ++mask_p;
+			while (n && *mask_p == 0) { ++mask_p; --n; }
 			if (n) { // io has indicated a change
 				if (machine_is_ready)
 				{
-				//std::cout << "got EtherCAT data\n";
+					std::cout << "got EtherCAT data at byte " << (incoming_data_size-n) << "\n";
 #ifdef KEEPSTATS
 					start = nowMicrosecs();
 #endif

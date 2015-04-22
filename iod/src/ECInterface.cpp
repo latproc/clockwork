@@ -385,7 +385,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 0
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -402,43 +402,43 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	uint8_t *pd = domain1_pd;
 	uint8_t *saved_pd = process_data;
 
-/*
+/* */
 	std::cout << "updating domain (size = " << size << ")\n";
 	std::cout << "process: "; display(pd); std::cout << "\n";
 	std::cout << "   mask: "; display(mask); std::cout << "\n";
 	std::cout << "   data: "; display(data); std::cout << "\n";
-*/
-    for (unsigned int i=0; i<size; ++i) {
-        if (*mask && *data != *pd){
+/* */
+	for (unsigned int i=0; i<size; ++i) {
+		if (*mask && *data != *pd){
 /*
 			std::cout << "at " << i << " data (" 
 				<< (unsigned int)(*data) << ") different to domain ("
 				<< (unsigned int)(*pd) << ")\n";
 */
-            uint8_t bitmask = 0x01;
+			uint8_t bitmask = 0x01;
 			int count = 0;
-            while (bitmask) {
-                if ( *mask & bitmask ) { // we care about this bit
+			while (bitmask) {
+				if ( *mask & bitmask ) { // we care about this bit
 					uint8_t pdb = *pd & bitmask;
 					uint8_t db = *data & bitmask;
-                    if ( pdb != db ) { // changed
+					if ( pdb != db ) { // changed
 						//std::cout << "bit " << i << ":" << count << " changed to ";
-                        if ( db ) { 
+						if ( db ) { 
 							*pd |= bitmask; 
 							//std::cout << "on";
 						}
-                        else {
+						else {
 							*pd &= (uint8_t)(0xff - bitmask);
 							//std::cout << "off";
 						}
-                    }
-                }
-                bitmask = bitmask << 1;
+					}
+				}
+				bitmask = bitmask << 1;
 				++count;
-            }
-        }
-        ++pd; ++mask; ++data;
-    }
+			}
+		}
+		++pd; ++mask; ++data;
+	}
 }
 
 void ECInterface::receiveState() {
@@ -535,7 +535,7 @@ int ECInterface::collectState() {
 		}
 		++pd; ++q; ++pm; if (last_pd)++last_pd;
 	}
-#if 0
+#if 1
 	if (affected_bits) {
 		std::cout << "data: "; display(update_data); 
 		std::cout << "\nmask: "; display(update_mask);

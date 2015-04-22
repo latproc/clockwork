@@ -295,7 +295,7 @@ void EtherCATThread::operator()() {
 				// so we use a try-catch around the whole process 
 
 				uint8_t stage = 1;
-#if 0
+#if 1
 				bool found_change = false;
 #endif
 				while(true) {
@@ -318,7 +318,7 @@ void EtherCATThread::operator()() {
 							case 3:
 							{
 								zmq::message_t iomsg(size);
-#if 0
+#if 1
 								if (driver_state == s_driver_init) {
 									std::cout << "sending ";
 									display(ECInterface::instance()->getUpdateData());
@@ -329,7 +329,7 @@ void EtherCATThread::operator()() {
 								memcpy(iomsg.data(), (void*)upd_data, size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
-#if 0
+#if 1
 								if (size && last_data ==0) { 
 										last_data = new uint8_t[size];
 										memset(last_data, 0, size);
@@ -360,7 +360,7 @@ void EtherCATThread::operator()() {
 								uint8_t *mask = ECInterface::instance()->getUpdateMask(); 
 								memcpy(iomsg.data(), (void*)mask,size); 
 								sync_sock->send(iomsg);
-#if 0
+#if 1
 								if (found_change) {
 									std::cout << "&"; display(mask); std::cout << "\n";
 								}
@@ -467,7 +467,7 @@ void EtherCATThread::operator()() {
 				}
 	
 				//NB_MSG << "acknowledging receipt of clockwork output\n";
-#if 0
+#if 1
 				if (!default_data) {
 				  	std::cout << "received default data from driver\n";
 						display(cw_data);
@@ -483,7 +483,7 @@ void EtherCATThread::operator()() {
 					else
 						driver_state = s_driver_operational;
 				}
-#if 0
+#if 1
 				else {
 					std::cout << "!"; display(cw_mask); std::cout << "\n";
 					std::cout << "<"; display(cw_data); std::cout << "\n";
