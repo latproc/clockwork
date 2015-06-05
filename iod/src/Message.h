@@ -83,13 +83,13 @@ class Receiver;
 class Transmitter {
 public:
 	Transmitter(CStringHolder name_str) : id(++next_id), _name(name_str.get()), allow_debug(false) {	}
-    void send(Message *m, Receiver *r = NULL, bool expect_reply = false);
-    Transmitter() : id(++next_id) { 
+	virtual ~Transmitter();
+    Transmitter() : id(++next_id) {
         std::stringstream ss;
         ss << id;
         _name = ss.str();
     }
-	virtual ~Transmitter() { }
+	virtual void sendMessageToReceiver(Message *m, Receiver *r = NULL, bool expect_reply = false);
     const std::string &getName() const { return _name; }
 	virtual Receiver *asReceiver() { return 0; }
 	virtual bool debug() { return allow_debug; }

@@ -3,11 +3,16 @@
 #include <set>
 #include <stdlib.h>
 #include <string.h>
+#include <boost/thread.hpp>
 #include "Channel.h"
-#include "MessagingInterface.h"
 #include "MessageLog.h"
 #include "MessageEncoding.h"
 #include "value.h"
+#include "MessagingInterface.h"
+#include "SocketMonitor.h"
+#include "ConnectionManager.h"
+#include "Logger.h"
+
 
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
@@ -18,7 +23,6 @@ State ChannelImplementation::CONNECTED("CONNECTED");
 
 std::map< MachineInstance *, MachineRecord> Channel::pending_items;
 
-
 MachineRef::MachineRef() : refs(1) {
 }
 
@@ -27,24 +31,116 @@ ChannelImplementation::~ChannelImplementation() { }
 
 Channel::Channel(const std::string ch_name, const std::string type)
         : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),
-            name(ch_name), port(0), mif(0), communications_manager(0), throttle_time(0)
+            name(ch_name), port(0), mif(0), communications_manager(0),
+			monit_subs(0), monit_pubs(0),
+			connect_responder(0), disconnect_responder(0),
+			monitor_thread(0),
+			throttle_time(0), connections(0), aborted(false), subscriber_thread(0),
+			cmd_client(0)
 {
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
     }
     (*all)[name] = this;
+	if (::machines.find(ch_name) == ::machines.end())
+		::machines[ch_name] = this;
+	markActive(); // this machine performs state changes in the ::idle() processing
 }
 
 Channel::~Channel() {
-    disableShadows();
-    std::set<MachineInstance*>::iterator iter = this->machines.begin();
-    while (iter != machines.end()) {
+    stop();
+    std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
+    while (iter != channel_machines.end()) {
         MachineInstance *machine = *iter++;
         machine->unpublish();
     }
-    this->machines.erase(machines.begin(), machines.end());
+	::machines.erase(_name);
+    this->channel_machines.clear();
+	busy_machines.erase(this);
+	all_machines.remove(this);
+	pending_state_change.erase(this);
     remove(name);
 }
+
+void Channel::start() {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	NB_MSG << "Channel " << name << " starting from thread "<< tnam << "\n";
+
+	if (isClient()) {
+		startSubscriber();
+	}
+	else {
+		if (definition()->isPublisher())
+			startPublisher();
+		else
+			startServer();
+	}
+	started_ = true;
+}
+
+void Channel::stop() {
+    disableShadows();
+	if (isClient())
+		stopSubscriber();
+	else
+	{
+		stopServer();
+		MachineInstance::disable();
+	}
+	started_ = false;
+}
+
+void Channel::startChannels() {
+	if (!all) return;
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        Channel *chn = (*iter).second; iter++;
+		if (!chn->started()) chn->start();
+	}
+}
+void Channel::stopChannels() {
+    std::map<std::string, Channel*>::iterator iter = all->begin();
+    while (iter != all->end()) {
+        Channel *chn = (*iter).second; iter++;
+		if (!chn->started()) chn->stop();
+	}
+}
+
+
+bool Channel::started() { return started_; }
+
+void Channel::addConnection() {
+	boost::mutex::scoped_lock(update_mutex);
+	++connections;
+	DBG_MSG << getName() << " client connected\n";
+	if (connections == 1) {
+		SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
+		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+		setNeedsCheck();
+		enableShadows();
+	}
+}
+
+void Channel::dropConnection() {
+	boost::mutex::scoped_lock(update_mutex);
+	assert(connections);
+	--connections;
+	DBG_MSG << getName() << " client disconnected\n";
+	if(!connections) {
+		disableShadows();
+		SetStateActionTemplate ssat(CStringHolder("SELF"), "DISCONNECTED" );
+		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+		setNeedsCheck();
+	}
+	assert(connections>=0);
+	if (connections == 0) {
+		NB_MSG << "last connection dropped, removing channel " << _name << "\n";
+		stopServer();
+		delete this;
+	}
+}
+
 
 Channel &Channel::operator=(const Channel &other) {
     assert(false);
@@ -79,7 +175,7 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
         try{
             zmq::socket_t test_bind(*MessagingInterface::getContext(), ZMQ_PULL);
             res = random() % (end-start+1) + start;
-            snprintf(address_buf, 40, "tcp://0.0.0.0:%d", res);
+            snprintf(address_buf, 40, "tcp://*:%d", res);
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
@@ -95,9 +191,16 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
     return res;
 }
 
-ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt) : MachineClass(n), parent(prnt) {
+ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt)
+		: MachineClass(n),parent(prnt), is_publisher(false) {
     if (!all) all = new std::map< std::string, ChannelDefinition* >;
     (*all)[n] = this;
+	states.push_back("DISCONNECTED");
+	states.push_back("CONNECTED");
+	states.push_back("CONNECTING");
+	default_state = State("DISCONNECTED");
+	initial_state = State("DISCONNECTED");
+	disableAutomaticStateChanges();
 }
 
 ChannelDefinition *ChannelDefinition::find(const char *name) {
@@ -106,7 +209,6 @@ ChannelDefinition *ChannelDefinition::find(const char *name) {
     if (found == all->end()) return 0;
     return (*found).second;
 }
-
 Channel *ChannelDefinition::instantiate(unsigned int port) {
     
     Channel *chn = Channel::findByType(name);
@@ -114,26 +216,237 @@ Channel *ChannelDefinition::instantiate(unsigned int port) {
     return chn;
 }
 
+bool ChannelDefinition::isPublisher() const { return is_publisher; }
+void ChannelDefinition::setPublisher(bool which) { is_publisher = which; }
+
+class ChannelConnectMonitor : public EventResponder {
+public:
+	ChannelConnectMonitor(Channel *channel) : chn(channel) {}
+	void operator()(const zmq_event_t &event_, const char* addr_) {
+		chn->addConnection();
+	}
+	Channel *chn;
+};
+class ChannelDisconnectMonitor : public EventResponder {
+public:
+	ChannelDisconnectMonitor(Channel *channel) : chn(channel) {}
+	void operator()(const zmq_event_t &event_, const char* addr_) {
+		chn->dropConnection();
+	}
+	Channel *chn;
+};
+
 void Channel::startPublisher() {
-    assert(!mif);
-    mif = MessagingInterface::create("*", port);
+	NB_MSG << name << " startPublisher\n";
+	assert(definition_->isPublisher());
+	if(!definition_->isPublisher()) return;
+	if (mif) {
+		NB_MSG << "Channel::startPublisher() called when mif is already allocated\n";
+		return;
+	}
+	std::string socknam("inproc://");
+	mif = MessagingInterface::create("*", port);
+	monit_subs = new SocketMonitor(*mif->getSocket(), mif->getURL().c_str());
+
+	connect_responder = new ChannelConnectMonitor(this);
+	disconnect_responder = new ChannelDisconnectMonitor(this);
+	//cmd_socket = &subscription_manager.setup;
+	monit_subs->addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
+	monit_subs->addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
+	monitor_thread = new boost::thread(boost::ref(*monit_subs));
+	mif->start();
+}
+
+void Channel::startServer() {
+	NB_MSG << name << " startServer\n";
+	assert(!definition_->isPublisher());
+	if(definition_->isPublisher()) return;
+	if (mif) {
+		NB_MSG << "Channel::startServer() called when mif is already allocated\n";
+		return;
+	}
+	std::string socknam("inproc://");
+	mif = MessagingInterface::create("*", port, eCHANNEL);
+	monit_subs = new SocketMonitor(*mif->getSocket(), mif->getURL().c_str());
+
+	connect_responder = new ChannelConnectMonitor(this);
+	disconnect_responder = new ChannelDisconnectMonitor(this);
+	monit_subs->addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
+	monit_subs->addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
+	monitor_thread = new boost::thread(boost::ref(*monit_subs));
+	mif->start();
+}
+
+void Channel::stopServer() {
+	if (monitor_thread) {
+		monit_subs->abort();
+		delete monitor_thread;
+		monitor_thread = 0;
+	}
+	if (monit_subs) {
+		if (connect_responder) {
+			monit_subs->removeResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
+			delete connect_responder;
+			connect_responder = 0;
+		}
+		if (disconnect_responder) {
+			monit_subs->removeResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
+			delete disconnect_responder;
+			disconnect_responder = 0;
+		}
+		delete monit_subs;
+		monit_subs = 0;
+	}
+}
+
+bool Channel::isClient() {
+	Value host = getValue("host");
+	return host != SymbolTable::Null;
+}
+
+void Channel::abort() { aborted = true; }
+
+void Channel::operator()() {
+	std::string thread_name(name);
+	thread_name += " subscriber";
+#ifdef __APPLE__
+	pthread_setname_np(thread_name.c_str());
+#else
+	pthread_setname_np(pthread_self(), thread_name.c_str());
+#endif
+
+	Value host = getValue("host");
+	Value port_val = getValue("port");
+	if (host == SymbolTable::Null)
+		host = "localhost";
+	long port = 0;
+	if (!port_val.asInteger(port)) return;
+	//char buf[150];
+	////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
+	std::cout << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
+	communications_manager = new SubscriptionManager(definition()->name.c_str(),
+													 eCHANNEL, host.asString().c_str(),(int)port);
+	NB_MSG << "Channel " << name << " starting a subscriber thread\n";
+
+	struct timeval start;
+	gettimeofday(&start, 0);
+	zmq::socket_t cmd(*MessagingInterface::getContext(), ZMQ_REP);
+	char cmd_socket_name[100];
+	//snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
+	snprintf(cmd_socket_name, 100, "tcp://*:5577");
+	//char *pos = strchr(cmd_socket_name, ':')+1;
+	//while ( (pos = strchr(pos, ':'))  ) *pos = '-';
+	try {
+		cmd.bind(cmd_socket_name);
+		int linger = 0;
+		cmd.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+	}
+	catch(std::exception ex) {
+		assert(false);
+	}
+	NB_MSG << "Channel " << name << " bound to command interface " << cmd_socket_name << "\n";
+	usleep(500);
+	char start_cmd[20];
+	size_t start_len = cmd.recv(start_cmd, 20, ZMQ_NOBLOCK);
+	if (!start_len) { NB_MSG << name << " error getting start message\n"; }
+	cmd.send("ok", 2);
+	try {
+
+		while (!aborted) {
+			zmq::pollitem_t items[] = {
+				{ communications_manager->setup, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+				{ communications_manager->subscriber, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+				{ cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
+			};
+			try {
+				if (!communications_manager->checkConnections(items, 3, cmd)) {
+					usleep(100000);
+					continue;
+				}
+			}
+			catch(zmq::error_t err) {
+				NB_MSG << "Channel " << name << " ZMQ error: " << zmq_strerror(errno) << "\n";
+				continue;
+			}
+
+			if ( !(items[1].revents & ZMQ_POLLIN) || (items[1].revents & ZMQ_POLLERR) )
+				continue;
+			zmq::message_t update;
+			communications_manager->subscriber.recv(&update, ZMQ_NOBLOCK);
+			struct timeval now;
+			gettimeofday(&now, 0);
+			long len = update.size();
+			char *data = (char *)malloc(len+1);
+			memcpy(data, update.data(), len);
+			data[len] = 0;
+			NB_MSG << "Channel " << name << " subscriber received: " << data << "\n";
+			delete data;
+		}
+	}
+	catch (std::exception ex) {
+		NB_MSG << "Channel " << name << " saw exception " << ex.what() << "\n";
+	}
+}
+
+bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
+
+	if (!subscriber_thread) {
+		NB_MSG << "Channel " << name << " sendMessage() sending " << msg << " directly\n";
+		return ::sendMessage(msg, sock, response);
+	}
+	else {
+		NB_MSG << "Channel " << name << " sendMessage() sending " << msg << " through subscription manager thread\n";
+		safeSend(*cmd_client, msg, strlen(msg));
+		char response_buf[100];
+		size_t rlen;
+		safeRecv(*cmd_client, response_buf, 100, true, rlen);
+		response = response_buf;
+	}
+	return true;
 }
 
 void Channel::startSubscriber() {
-    assert(!communications_manager);
-    
-    Value host = getValue("host");
-    Value port_val = getValue("port");
-    if (host == SymbolTable::Null)
-        host = "localhost";
-    long port = 0;
-    if (!port_val.asInteger(port)) port = 5555;
-    //char buf[150];
-    ////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
-    //std::cout << " channel " << _name << " " << port << "\n";
-    communications_manager = new SubscriptionManager(definition()->name.c_str(),
-                              host.asString().c_str(), (int)port);
+	assert(!communications_manager);
 
+	if (definition_->isPublisher()) {
+
+		Value host = getValue("host");
+		Value port_val = getValue("port");
+		if (host == SymbolTable::Null)
+			host = "localhost";
+		long port = 0;
+		if (!port_val.asInteger(port)) return;
+		//char buf[150];
+		////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
+		std::cout << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
+		communications_manager = new SubscriptionManager(definition()->name.c_str(),
+                              eCLOCKWORK, host.asString().c_str(), (int)port);
+	}
+	else {
+		char tnam[100];
+		int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+		NB_MSG << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
+
+		subscriber_thread = new boost::thread(boost::ref(*this));
+		cmd_client = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+		char cmd_socket_name[100];
+		//snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
+		snprintf(cmd_socket_name, 100, "tcp://localhost:5577");
+		//char *pos = pos = strchr(cmd_socket_name, ':')+1;
+		//while ( (pos = strchr(pos, ':'))  ) *pos = '-';
+		NB_MSG << "Channel " << name << " bound to interface " << cmd_socket_name << "\n";
+		cmd_client->connect(cmd_socket_name);
+		cmd_client->send("start",5);
+		char buf[100];
+		size_t buflen = cmd_client->recv(buf, 100);
+		buf[buflen] = 0;
+		NB_MSG << "Channel " << name << " got response to start: " << buf << "\n";
+	}
+}
+
+void Channel::stopSubscriber() {
+	delete communications_manager;
+	communications_manager = 0;
 }
 
 void ChannelDefinition::instantiateInterfaces() {
@@ -152,8 +465,9 @@ void ChannelDefinition::instantiateInterfaces() {
                                                                         instance_name.second.asString().c_str(),
                                                                         MachineInstance::MACHINE_SHADOW);
                     m->setDefinitionLocation("dynamic", 0);
-                    m->setProperties(item.second->properties);
-                    m->setStateMachine(item.second);
+					MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
+                    m->setProperties(mc->properties);
+                    m->setStateMachine(mc);
                     m->setValue("startup_enabled", false);
                     machines[instance_name.first] = m;
                 }
@@ -188,7 +502,8 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
     chn->setupShadows();
     chn->setupFilters();
     //chn->mif = MessagingInterface::create("*", port);
-    chn->enableShadows();
+    //chn->enableShadows();
+	//chn->enable();
     return chn;
 }
 
@@ -372,28 +687,28 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
         
-        if (!chn->machines.count(machine))
+        if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-						if (chn->throttle_time) {
-							//std::cout << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
-							pending_items[machine].properties[key.asString()] = val;
-						}
-						else {
-            	//if (!chn->machines.count(machine)) chn->machines.insert(machine);
-            	if (chn->communications_manager) {
-                std::string response;
-                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
-                sendMessage(cmd, chn->communications_manager->setup,response);
-                //std::cout << "channel " << name << " got response: " << response << "\n";
-								free(cmd);
-            	}
-            	else if (chn->mif) {
-                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
-                chn->mif->send(cmd);
-								free(cmd);
-            	}
-						}
+			if (chn->throttle_time) {
+				//std::cout << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
+				pending_items[machine].properties[key.asString()] = val;
+			}
+			else {
+				//if (!chn->channel_machines(machine)) chn->channel_machines.insert(machine);
+				if (chn->communications_manager) {
+					std::string response;
+					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+					chn->sendMessage(cmd, chn->communications_manager->setup,response);
+					//std::cout << "channel " << name << " got response: " << response << "\n";
+					free(cmd);
+				}
+				else if (chn->mif) {
+					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+					chn->mif->send(cmd);
+					free(cmd);
+				}
+			}
         }
     }
 }
@@ -406,38 +721,38 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
         
-        if (!chn->machines.count(machine))
+        if (!chn->channel_machines.count(machine))
             continue;
 				
-				if (!chn->throttle_time) continue;
+		if (!chn->throttle_time) continue;
 
-				std::map<MachineInstance *, MachineRecord>::iterator found = pending_items.find(machine);
-        if (chn->filtersAllow(machine) && found != pending_items.end() ) {
-						MachineRecord &machine = (*found).second;
-						std::map<std::string, Value>::iterator iter = machine.properties.begin();
-						while (iter != machine.properties.end()) {
-							std::pair<std::string, Value> item = *iter;
-            	if (chn->communications_manager) {
-                std::string response;
-                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
-                sendMessage(cmd, chn->communications_manager->setup,response);
-								free(cmd);
-            	}
-            	else if (chn->mif) {
-                char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
-                chn->mif->send(cmd);
-								free(cmd);
-            	}
-							iter = machine.properties.erase(iter);
-						}
-        }
+		std::map<MachineInstance *, MachineRecord>::iterator found = pending_items.find(machine);
+		if (chn->filtersAllow(machine) && found != pending_items.end() ) {
+			MachineRecord &machine = (*found).second;
+			std::map<std::string, Value>::iterator iter = machine.properties.begin();
+			while (iter != machine.properties.end()) {
+				std::pair<std::string, Value> item = *iter;
+				if (chn->communications_manager) {
+					std::string response;
+					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
+					chn->sendMessage(cmd, chn->communications_manager->setup,response);
+					free(cmd);
+				}
+				else if (chn->mif) {
+					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
+					chn->mif->send(cmd);
+					free(cmd);
+				}
+				iter = machine.properties.erase(iter);
+			}
+		}
     }
 }
 
 bool Channel::matches(MachineInstance *machine, const std::string &name) {
     if (definition()->monitors_names.count(name))
         return true;
-    else if (machines.count(machine))
+    else if (channel_machines.count(machine))
         return true;
     return false; // only test the channel instance if the channel definition matches
 }
@@ -455,7 +770,7 @@ bool Channel::patternMatches(const std::string &machine_name) {
         }
         else {
             MessageLog::instance()->add(rexp->compilation_error);
-            std::cerr << "Channel error: " << name << " " << rexp->compilation_error << "\n";
+            DBG_MSG << "Channel error: " << name << " " << rexp->compilation_error << "\n";
             return false;
         }
     }
@@ -517,16 +832,15 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
 
-        if (!chn->machines.count(machine))
+        if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-            //if (!chn->machines.count(machine)) chn->machines.insert(machine);
             if (chn->communications_manager
                 && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
                 std::string response;
-                char *cmd = MessageEncoding::encodeState(name, new_state); // send command
-                sendMessage(cmd, chn->communications_manager->setup,response);
-                //std::cout << "channel " << name << " got response: " << response << "\n";
+                char *cmdstr = MessageEncoding::encodeState(name, new_state); // send command
+				chn->sendMessage(cmdstr, chn->communications_manager->setup,response);
+                NB_MSG << "channel " << name << " got response: " << response << "\n";
             }
             else if (chn->mif) {
                 char *cmd = MessageEncoding::encodeState(name, new_state); // send command
@@ -549,22 +863,23 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
 
-        if (!chn->machines.count(machine))
+        if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-            //if (!chn->machines.count(machine)) chn->machines.insert(machine);
+            //if (!chn->channel_machines.count(machine)) chn->channel_machines.insert(machine);
             if (chn->communications_manager
                 && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
                 std::string response;
                 char *cmd = MessageEncoding::encodeCommand(command, params); // send command
-                sendMessage(cmd, chn->communications_manager->setup,response);
-                //std::cout << "channel " << name << " got response: " << response << "\n";
-								free(cmd);
+				chn->sendMessage(cmd, chn->communications_manager->setup,response);
+                std::cout << "channel " << name << " got response: " << response << "\n";
+				free(cmd);
             }
             else if (chn->mif) {
                 char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+				NB_MSG << "Channel " << name << " sending " << cmd << "\n";
                 chn->mif->send(cmd);
-								free(cmd);
+				free(cmd);
             }
             else {
                 char buf[150];
@@ -575,6 +890,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
         }
     }
 }
+
 
 void ChannelDefinition::setKey(const char *s) {
     psk = s;
@@ -590,29 +906,29 @@ void ChannelDefinition::addShare(const char *s) {
     shares.insert(s);
 }
 void ChannelImplementation::addMonitor(const char *s) {
-    std::cerr << "add monitor for " << s << "\n";
+    DBG_MSG << "add monitor for " << s << "\n";
     monitors_names.insert(s);
     modified();
 }
 void ChannelImplementation::addIgnorePattern(const char *s) {
-    std::cerr << "add " << s << " to ignore list\n";
+    DBG_MSG << "add " << s << " to ignore list\n";
     ignores_patterns.insert(s);
     modified();
 }
 void ChannelImplementation::removeIgnorePattern(const char *s) {
-    std::cerr << "remove " << s << " from ignore list\n";
+    DBG_MSG << "remove " << s << " from ignore list\n";
     ignores_patterns.erase(s);
     modified();
 }
 void ChannelImplementation::removeMonitor(const char *s) {
-    std::cerr << "remove monitor for " << s;
+    DBG_MSG << "remove monitor for " << s;
 	if (monitors_names.count(s)) {
 	    monitors_names.erase(s);
     	modified();
-		std::cerr << "\n";
+		DBG_MSG << "\n";
 	}
 	else {
-		std::cerr << "...not found\n";
+		DBG_MSG << "...not found\n";
 		std::string pattern = "^";
 		pattern += s;
 		pattern += "$";
@@ -671,7 +987,10 @@ void Channel::enableShadows() {
         const std::pair< std::string, Value> item = *iter++;
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
-        if (ms) ms->enable();
+		if (ms) {
+			channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+			ms->enable();
+		}
     }
 }
 
@@ -703,9 +1022,9 @@ void Channel::setupShadows() {
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
         if (m && !ms) { // this machine is not a shadow.
-            if (!machines.count(m)) {
+            if (!channel_machines.count(m)) {
                 m->publish();
-                machines.insert(m);
+                channel_machines.insert(m);
             }
         }
         else if (m) {
@@ -730,8 +1049,11 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
             if (chn->communications_manager) n += chn->communications_manager->numSocks();
         }
         if (poll_items) delete poll_items;
-        poll_items = new zmq::pollitem_t[n];
+		poll_items = 0;
+        if (n) poll_items = new zmq::pollitem_t[n];
     }
+	if (!poll_items) return 0;
+
     int count = 0;
     zmq::pollitem_t *curr = poll_items;
     std::map<std::string, Channel*>::iterator iter = all->begin();
@@ -760,7 +1082,7 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
             char buf[150];
             snprintf(buf, 150, "Channel error: %s", zmq_strerror(errno));
             MessageLog::instance()->add(buf);
-            std::cerr << buf << "\n";
+            DBG_MSG << buf << "\n";
             break;
         }
     }
@@ -769,6 +1091,7 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
 }
 
 void Channel::handleChannels() {
+	if (!all) return;
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         const std::pair<std::string, Channel *> &item = *iter++;
@@ -782,7 +1105,21 @@ void Channel::setPollItemBase(zmq::pollitem_t *base) {
     poll_items = base;
 }
 
+void Channel::enable() {
+	if (enabled()) {
+		NB_MSG << "Channel " << name << " is already enabled\n";
+	}
+	else {
+		MachineInstance::enable();
+	}
+}
+
+void Channel::disable() {
+}
+
 void Channel::checkCommunications() {
+	if (!communications_manager) return;
+	if (!communications_manager->ready()) return;
     Value *state = current_state.getNameValue();
     bool ok = communications_manager->checkConnections();
     if (!ok) {
@@ -798,7 +1135,7 @@ void Channel::checkCommunications() {
     if ( state->token_id != ChannelImplementation::CONNECTED.getId())
         setState(ChannelImplementation::CONNECTED);
     
-    if ( !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
+    if ( poll_items && !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
         if (message_handler->receiveMessage(communications_manager->subscriber)) {
             //std::cout << "Channel got message: " << message_handler->data << "\n";
 				}
@@ -819,11 +1156,11 @@ void Channel::setupFilters() {
     checked();
     // check if this channl monitors exports and if so, add machines that have exports
     if (definition()->monitors_exports || monitors_exports) {
-        std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
-        while (machines != MachineInstance::end()) {
-            MachineInstance *machine = *machines++;
+        std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
+        while (m_iter != MachineInstance::end()) {
+            MachineInstance *machine = *m_iter++;
             if (! machine->modbus_exports.empty() ) {
-                this->machines.insert(machine);
+                this->channel_machines.insert(machine);
                 machine->publish();
             }
         }
@@ -834,46 +1171,46 @@ void Channel::setupFilters() {
         const std::string &pattern = *iter++;
         rexp_info *rexp = create_pattern(pattern.c_str());
         if (!rexp->compilation_error) {
-            std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
-            while (machines != MachineInstance::end()) {
-                MachineInstance *machine = *machines++;
+            std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
+            while (m_iter != MachineInstance::end()) {
+                MachineInstance *machine = *m_iter++;
                 if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
-                    if (!this->machines.count(machine)) {
+                    if (!this->channel_machines.count(machine)) {
                         machine->publish();
-                        this->machines.insert(machine);
+                        this->channel_machines.insert(machine);
                     }
                 }
             }
         }
         else {
             MessageLog::instance()->add(rexp->compilation_error);
-            std::cerr << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
+            DBG_MSG << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
         }
     }
     iter = definition()->monitors_names.begin();
     while (iter != definition()->monitors_names.end()) {
         const std::string &name = *iter++;
         MachineInstance *machine = MachineInstance::find(name.c_str());
-        if (machine && !this->machines.count(machine)) {
+        if (machine && !this->channel_machines.count(machine)) {
             machine->publish();
-            this->machines.insert(machine);
+            this->channel_machines.insert(machine);
         }
     }
     std::map<std::string, Value>::const_iterator prop_iter = definition()->monitors_properties.begin();
     while (prop_iter != definition()->monitors_properties.end()) {
         const std::pair<std::string, Value> &item = *prop_iter++;
-        std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
+        std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
         //std::cout << "setting up channel: searching for machines where " <<item.first << " == " << item.second << "\n";
-        while (machines != MachineInstance::end()) {
-            MachineInstance *machine = *machines++;
-            if (machine && !this->machines.count(machine)) {
+        while (m_iter != MachineInstance::end()) {
+            MachineInstance *machine = *m_iter++;
+            if (machine && !this->channel_machines.count(machine)) {
                 Value &val = machine->getValue(item.first);
                 // match if the machine has the property and Null was given as the match value
                 //  or if the machine has the property and it matches the provided value
                 if ( val != SymbolTable::Null &&
                         (item.second == SymbolTable::Null || val == item.second) ) {
                     //std::cout << "found match " << machine->getName() <<"\n";
-                    this->machines.insert(machine);
+                    this->channel_machines.insert(machine);
                     machine->publish();
                 }
             }
@@ -889,17 +1226,17 @@ void Channel::setupFilters() {
 		    while (machines != MachineInstance::end()) {
 			    MachineInstance *machine = *machines++;
 			    if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
-				    if (this->machines.count(machine)) {
+				    if (this->channel_machines.count(machine)) {
 					    //std::cout << "unpublished " << machine->getName() << "\n";
 					    machine->unpublish();
-					    this->machines.erase(machine);
+					    this->channel_machines.erase(machine);
 				    }
 			    }
 		    }
 	    }
 	    else {
 		    MessageLog::instance()->add(rexp->compilation_error);
-		    std::cerr << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
+		    DBG_MSG << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
 	    }
     }
 }

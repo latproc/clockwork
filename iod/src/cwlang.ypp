@@ -76,11 +76,12 @@ ChannelDefinition *current_channelclass = 0;
 Channel *current_channel = 0;
 std::list<MachineClass *> all_classes;
 std::list<ChannelDefinition> all_channeldefs;
+//std::list<MachineDetails*>deferred_instantiations;
     
 static MachineInstance *addMachine(const char *name, const char *type, 
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
-                MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
-    machine->setDefinitionLocation(yyfilename, yylineno);
+	MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
+	machine->setDefinitionLocation(yyfilename, yylineno);
 
     if (machines.find(name) == machines.end())
         machines[name] = machine;
@@ -118,7 +119,7 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
-%token CONSTRAINT IGNORE IGNORES THROTTLE
+%token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER
 
 %union {
 	int iVal;
@@ -253,7 +254,9 @@ interface_defn_section
 
 interface_defn_section:
 | OPTION name_list ';'
-| COMMAND name_list ';'
+| COMMAND SYMBOL ';'
+| COMMANDS name_list ';'
+| RECEIVES name_list ';'
 | state_definition ';'
 ;
 
@@ -267,13 +270,6 @@ SYMBOL CHANNEL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
     current_channelclass = new ChannelDefinition($1);
     
-	current_channelclass->states.push_back("DISCONNECTED");
-	current_channelclass->states.push_back("CONNECTED");
-	current_channelclass->states.push_back("CONNECTING");
-	current_channelclass->default_state = State("DISCONNECTED");
-	current_channelclass->initial_state = State("DISCONNECTED");
-	current_channelclass->disableAutomaticStateChanges();
-
     channel_definitions.push_back( current_channelclass );
     current_name_list.clear();
     current_machine_list.clear();
@@ -363,6 +359,7 @@ chn_definition_section:
 }
 | OPTION chn_option_settings ';'
 | THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2); }
+| tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
 ;
 
 machine_list:
@@ -1363,7 +1360,7 @@ SYMBOL SYMBOL parameters
     current_machine->setProperties(properties);
     properties.clear();
 }
-| SYMBOL CONDITION expression
+| SYMBOL CONDITION WHEN expression
 {
     DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
     current_machine = MachineInstanceFactory::create($1, "CONDITION", MachineInstance::MACHINE_TEMPLATE);
@@ -1372,26 +1369,52 @@ SYMBOL SYMBOL parameters
     current_machine->setDefinitionLocation(yyfilename, yylineno);
     // conditions have a stable state of "true" and "false"
     StableState ss;
-    ss.condition.predicate = $3;
+    ss.condition.predicate = $4;
     ss.state_name = "true";
     current_machine->stable_states.push_back(ss);
     current_machineclass->state_names.insert("true");
     properties.clear();
 }
+| SYMBOL CONDITION parameters WHEN expression
+{
+	DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
+	current_machine = MachineInstanceFactory::create($1, "CONDITION", MachineInstance::MACHINE_TEMPLATE);
+	std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(current_machine->parameters));
+	current_parameters.clear();
+	current_machine->setDefinitionLocation(yyfilename, yylineno);
+	// conditions have a stable state of "true" and "false"
+	StableState ss;
+	ss.condition.predicate = $5;
+	ss.state_name = "true";
+	current_machine->stable_states.push_back(ss);
+	current_machineclass->state_names.insert("true");
+	properties.clear();
+}
 ;
 
+/* an instantiation may be of a channel and we cannot construct the machine
+ * until we know.  These items are pushed to a queue for instantiation after all files 
+ * have been processed.
+ */
 instantiation:
-SYMBOL SYMBOL parameters  
+SYMBOL SYMBOL parameters
 {
-    current_machine = MachineInstanceFactory::create($1, $2);
+	//deferred_instantiations.push_back(new MachineDetails($1, $2, current_parameters.end,
+ 	//	__FILE__, __LINE__, properties,
+	//	MachineInstance::MACHINE_INSTANCE));
+	//current_machine = 0;
+	current_machine = MachineInstanceFactory::create($1, $2);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
     current_parameters.clear();
-
-    current_machine->setDefinitionLocation(yyfilename, yylineno);
+	current_machine->setDefinitionLocation(yyfilename, yylineno);
     properties.clear();
 }
 | SYMBOL SYMBOL property_block parameters 
 {
+	//deferred_instantiations.push_back(new MachineDetails($1, $2, current_parameters.end,
+	//__FILE__, __LINE__, properties,
+	//MachineInstance::MACHINE_INSTANCE));
+	//current_machine = 0;
     current_machine = MachineInstanceFactory::create($1, $2);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
     current_parameters.clear();
@@ -1545,7 +1568,7 @@ SYMBOL MODULE parameters ';'
     m->setDefinitionLocation(yyfilename, yylineno);
     properties.clear();
 }
-| SYMBOL CONDITION expression ';'
+| SYMBOL CONDITION parameters WHEN expression ';'
 {
     DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
     MachineInstance *m = addMachine($1, "CONDITION");
@@ -1555,12 +1578,29 @@ SYMBOL MODULE parameters ';'
     m->setDefinitionLocation(yyfilename, yylineno);
     // conditions have a stable state of "true" and "false"
     StableState ss;
-    ss.condition.predicate = $3;
+    ss.condition.predicate = $5;
     ss.state_name = "true";
     current_machineclass->stable_states.push_back(ss);
     current_machineclass->states.push_back("true");// add to states to permit changes to this state
     current_machineclass->state_names.insert("true");
     properties.clear();
+}
+| SYMBOL CONDITION WHEN expression ';'
+{
+	DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
+	MachineInstance *m = addMachine($1, "CONDITION");
+	m->properties = properties;
+	std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+	current_parameters.clear();
+	m->setDefinitionLocation(yyfilename, yylineno);
+	// conditions have a stable state of "true" and "false"
+	StableState ss;
+	ss.condition.predicate = $4;
+	ss.state_name = "true";
+	current_machineclass->stable_states.push_back(ss);
+	current_machineclass->states.push_back("true");// add to states to permit changes to this state
+	current_machineclass->state_names.insert("true");
+	properties.clear();
 }
 ;
 
@@ -1592,12 +1632,23 @@ SYMBOL PROPSEP value
 ;
 
 name_list:
+SYMBOL {
+	DBG_PARSER << " name list: " << $1 << "\n";
+	current_name_list.push_back($1);
+}
+| name_list COMMA SYMBOL
+{
+	DBG_PARSER << ", " << $3;
+	current_name_list.push_back($3);
+}
+;
+state_list:
 transition_state {
     DBG_PARSER << " name list: " << $1 << "\n";
     current_name_list.push_back($1);
 }
 
-| name_list COMMA SYMBOL
+| transition_state COMMA SYMBOL
 {
     DBG_PARSER << ", " << $3;
     current_name_list.push_back($3);
@@ -1618,7 +1669,7 @@ transition ';'
 ;
 
 transition:
-TRANSITION name_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */
+TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << " using " << $6 << "\n";
@@ -1626,7 +1677,7 @@ TRANSITION name_list /* list of source states */ TO transition_state /* destinat
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
@@ -1634,7 +1685,7 @@ TRANSITION name_list /* list of source states */ TO transition_state /* destinat
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO transition_state /* destination state */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */
     USING SYMBOL /* received event */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
@@ -1643,7 +1694,7 @@ TRANSITION name_list /* list of source states */ TO transition_state /* destinat
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO transition_state /* destination state */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */
     ON SYMBOL /* received event */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
@@ -1652,7 +1703,7 @@ TRANSITION name_list /* list of source states */ TO transition_state /* destinat
     }
     current_name_list.clear();
 }
-| TRANSITION name_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "requiring " << *($6) << "\n";

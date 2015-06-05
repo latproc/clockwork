@@ -90,18 +90,22 @@ public:
 
 class StableState : public TriggerOwner {
 public:
-    std::string state_name;
-    Condition condition;
 
-	StableState() : state_name(""), uses_timer(false), timer_val(0), trigger(0), subcondition_handlers(0), owner(0) { }
+	StableState() : state_name(""),
+ 		uses_timer(false), timer_val(0), trigger(0), subcondition_handlers(0),
+		owner(0), name("") { }
 
-	StableState(const char *s, Predicate *p) : state_name(s), condition(p), uses_timer(false), timer_val(0), 
-			trigger(0), subcondition_handlers(0), owner(0) { 
+	StableState(const char *s, Predicate *p) : state_name(s),
+		condition(p), uses_timer(false), timer_val(0),
+			trigger(0), subcondition_handlers(0), owner(0), name(s)
+ 	{
 		uses_timer = p->usesTimer(timer_val); 
 	}
 
 	StableState(const char *s, Predicate *p, Predicate *q) 
-		: state_name(s), condition(p), uses_timer(false), timer_val(0), trigger(0), subcondition_handlers(0), owner(0) { 
+		: state_name(s),
+			condition(p), uses_timer(false), timer_val(0), trigger(0),
+			subcondition_handlers(0), owner(0), name(s) {
 		uses_timer = p->usesTimer(timer_val); 
 	}
     
@@ -111,7 +115,7 @@ public:
         if (!condition.predicate || !other.condition.predicate) return false;
         return condition.predicate->priority < other.condition.predicate->priority;
     };
-    std::ostream &operator<< (std::ostream &out)const { return out << state_name; }
+    std::ostream &operator<< (std::ostream &out)const { return out << name; }
 	StableState& operator=(const StableState* other);
     StableState (const StableState &other);
         
@@ -120,11 +124,14 @@ public:
     void triggerFired(Trigger *trigger);
     void refreshTimer();
 	
+	std::string state_name;
+	Condition condition;
 	bool uses_timer;
 	Value timer_val;
 	Trigger *trigger;
 	std::list<ConditionHandler> *subcondition_handlers;
     MachineInstance *owner;
+	Value name;
 };
 std::ostream &operator<<(std::ostream &out, const StableState &ss);
 
@@ -235,6 +242,7 @@ private:
 	MachineEvent &operator=(const MachineEvent&);
 };
 
+
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
     friend class MachineInstanceFactory;
 public:
@@ -272,6 +280,8 @@ public:
     virtual bool receives(const Message&, Transmitter *t);
 	Action::Status execute(const Message&m, Transmitter *from);
     virtual void handle(const Message&, Transmitter *from, bool send_receipt = false);
+	virtual void sendMessageToReceiver(Message *m, Receiver *r = NULL, bool expect_reply = false);
+
     virtual void idle();
 		//virtual bool hasWork() { return has_work; }
 	void collect(const Package &package);
@@ -291,8 +301,8 @@ public:
     void setStateMachine(MachineClass *machine_class);
     bool stateExists(State &s);
     bool hasState(const std::string &state_name) const;
-    Value *lookupState(const std::string &state_name);
-    Value *lookupState(const Value &) const;
+	Value *lookupState(const std::string &state_name);
+	Value *lookupState(const Value &);
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
     bool setStableState(); // returns true if a state change was made
@@ -368,8 +378,8 @@ public:
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;
 	
-	void enable();
-	void resume();
+	virtual void enable();
+	virtual void resume();
 	void resume(State &state);
     void resumeAll(); // resume all disable sub-machines
 	void disable();
@@ -464,17 +474,17 @@ protected:
 	std::stringstream ss; // saves recreating string stream for temporary use
     uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
 public:
-    Statistic stable_states_stats;
-    Statistic message_handling_stats;
-    void * data; // plugin data
-    uint64_t idle_time; // amount of time to be idle between state polls (microsec)
-    uint64_t next_poll;
-    
-    static Value *polling_delay;
-    Value is_traceable;
-    int published;
-		static SharedCache *shared;
-		Cache *cache;
+	Statistic stable_states_stats;
+	Statistic message_handling_stats;
+	void * data; // plugin data
+	uint64_t idle_time; // amount of time to be idle between state polls (microsec)
+	uint64_t next_poll;
+
+	static Value *polling_delay;
+	Value is_traceable;
+	int published;
+	static SharedCache *shared;
+	Cache *cache;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
@@ -599,5 +609,24 @@ public:
     static MachineInstance *create(MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
     static MachineInstance *create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
 };
+
+// during the parsing process we build a list of
+// things to instantiate but don't actually do it until
+// all files have been loaded.
+
+class MachineDetails {
+	std::string machine_name;
+	std::string machine_class;
+	std::list<Parameter> parameters;
+	std::string source_file;
+	int source_line;
+	SymbolTable properties;
+	MachineInstance::InstanceType instance_type;
+
+	MachineDetails(const char *nam, const char *cls, std::list<Parameter> &params,
+				   const char *sf, int sl, SymbolTable &props, MachineInstance::InstanceType kind);
+	MachineInstance *instantiate();
+};
+
 
 #endif

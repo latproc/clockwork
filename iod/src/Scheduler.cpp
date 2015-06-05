@@ -285,7 +285,7 @@ void Scheduler::idle() {
 	char buf[10];
 	size_t response_len = 0;
 	while (!  safeRecv(sync, buf, 10, true, response_len)) usleep(100);
-	std::cout << "Scheduler started\n";
+	NB_MSG << "Scheduler started\n";
 
 	state = e_waiting;
 	bool is_ready;

@@ -340,9 +340,9 @@ Value &PopListBackValue::operator()(MachineInstance *mi) {
         if (machine_list->parameters[i].machine && !last_result.cached_machine) {
 			if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
             last_result.cached_machine = machine_list->parameters[i].machine;
-            std::string msg("Warning parameter with machine pointer was not completely configured: ");
-            msg += last_result.asString();
-            MessageLog::instance()->add(msg.c_str());
+            //std::string msg("Warning parameter with machine pointer was not completely configured: ");
+            //msg += last_result.asString();
+            //MessageLog::instance()->add(msg.c_str());
         }
         if (remove_from_list){
             machine_list->parameters.pop_back();
@@ -381,14 +381,14 @@ Value &PopListFrontValue::operator()(MachineInstance *mi) {
             if (machine_list->locals[0].machine && !last_result.cached_machine) {
 				if (!machine_list->parameters[0].machine) mi->lookup(machine_list->parameters[0]);
                 last_result.cached_machine = machine_list->locals[0].machine;
-                std::string msg("Warning parameter with machine pointer was not completely configured: ");
-                msg += last_result.asString();
-                MessageLog::instance()->add(msg.c_str());
+                //std::string msg("Warning parameter with machine pointer was not completely configured: ");
+                //msg += last_result.asString();
+                //MessageLog::instance()->add(msg.c_str());
             }
             if (remove_from_list){
                 machine_list->removeLocal(0);
                 machine_list->setNeedsCheck();
-								displayList(machine_list);
+				displayList(machine_list);
             }
         }
     }
@@ -398,15 +398,15 @@ Value &PopListFrontValue::operator()(MachineInstance *mi) {
             if (machine_list->parameters[0].machine && !last_result.cached_machine) {
 				if (!machine_list->parameters[0].machine) mi->lookup(machine_list->parameters[0]);
                 last_result.cached_machine = machine_list->parameters[0].machine;
-                std::string msg("Warning parameter with machine pointer was not completely configured: ");
-                msg += last_result.asString();
-                MessageLog::instance()->add(msg.c_str());
+                //std::string msg("Warning parameter with machine pointer was not completely configured: ");
+                //msg += last_result.asString();
+                //MessageLog::instance()->add(msg.c_str());
             }
             if (remove_from_list){
                 machine_list->parameters.erase(machine_list->parameters.begin());
                 if (machine_list->_type == "LIST") {
                     machine_list->setNeedsCheck();
-										displayList(machine_list);
+					displayList(machine_list);
                 }
             }
         }

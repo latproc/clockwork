@@ -384,9 +384,9 @@ int32_t IOComponent::filter(int32_t val) {
 class InputFilterSettings {
 public:
     bool property_changed;
-    uint32_t noise_tolerance; // filter out changes with +/- this range
+    int32_t noise_tolerance; // filter out changes with +/- this range
     LongBuffer positions;
-    uint32_t last_sent; // this is the value to send unless the read value moves away from the mean
+    int32_t last_sent; // this is the value to send unless the read value moves away from the mean
     uint16_t buffer_len;
     
     InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(16), last_sent(0), buffer_len(16) { }
@@ -401,8 +401,8 @@ int32_t AnalogueInput::filter(int32_t raw) {
         config->property_changed = false;
     }
     config->positions.append(raw);
-    uint32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
-    if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
+    int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
+    if ( abs(mean - config->last_sent) >= config->noise_tolerance) {
         config->last_sent = mean;
     }
     return config->last_sent;

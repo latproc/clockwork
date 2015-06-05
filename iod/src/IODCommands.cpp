@@ -75,61 +75,72 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
    }
 
 bool IODCommandSetStatus::run(std::vector<Value> &params) {
-    if (params.size() == 4) {
-        std::string ds = params[1].asString();
-        Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(ds));
-        if (device) {
-            if (params[3] == "on")
-                device->turnOn();
-            else if (params[3] == "off")
-                device->turnOff();
-            result_str = device->getStateString();
-            return true;
-        }
-        else {
-            MachineInstance *mi = MachineInstance::find(ds.c_str());
-            if (mi) {
-                /* it would be safer to push the requested state change onto the machine's
-                    action list but some machines do not poll their action list because they
-                    do not expect to receive events
-                */
-                if (mi->transitions.size()) {
-				   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), params[3] );
-				   mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
-                }
-                else {
-                    ;
-                    if (!mi->getStateMachine()) {
-                        char buf[150];
-                        snprintf(buf, 150, "Error: machine %s has no state machine", mi->getName().c_str());
-                        MessageLog::instance()->add(buf);
-                        error_str = buf;
-                        return false;
-                    }
-                    State *s = mi->getStateMachine()->findState(params[3].asString().c_str());
-                    if (!s) {
-                        char buf[150];
-                        snprintf(buf, 150, "Error: machine %s has no state called '%s'", mi->getName().c_str(), params[3].asString().c_str());
-                        MessageLog::instance()->add(buf);
-                        error_str = buf;
-                        return false;
-                    }
-                    mi->setState(*s);
-                }
-                return true;
-            }
-        }
-        //  Send reply back to client
-        const char *msg_text = "Not found: ";
-        size_t len = strlen(msg_text) + ds.length();
-        char *text = (char *)malloc(len+1);
-        sprintf(text, "%s%s", msg_text, ds.c_str());
-        error_str = text;
-        free(text);
-        return false;
-    }
-    error_str = "Usage: SET device TO state";
-    return false;
+	std::string ds;
+	std::string state_name;
+    if (params.size() == 4) { // SET machine TO state
+        ds = params[1].asString();
+		state_name = params[3].asString();
+	}
+	else if (params.size() == 3) { // STATE machine state
+		ds = params[1].asString();
+		state_name = params[2].asString();
+	}
+	else {
+		error_str = "Usage: SET device TO state";
+		return false;
+	}
+
+	Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(ds));
+	if (device) {
+		if (state_name == "on")
+			device->turnOn();
+		else if (state_name == "off")
+			device->turnOff();
+		result_str = device->getStateString();
+		return true;
+	}
+	else {
+		MachineInstance *mi = MachineInstance::find(ds.c_str());
+		if (mi) {
+			/* it would be safer to push the requested state change onto the machine's
+				action list but some machines do not poll their action list because they
+				do not expect to receive events
+			*/
+			if (mi->transitions.size()) {
+			   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), state_name );
+			   mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
+			}
+			else {
+				;
+				if (!mi->getStateMachine()) {
+					char buf[150];
+					snprintf(buf, 150, "Error: machine %s has no state machine", mi->getName().c_str());
+					MessageLog::instance()->add(buf);
+					error_str = buf;
+					return false;
+				}
+				State *s = mi->getStateMachine()->findState(state_name.c_str());
+				if (!s) {
+					char buf[150];
+					snprintf(buf, 150, "Error: machine %s has no state called '%s'", mi->getName().c_str(), state_name.c_str());
+					MessageLog::instance()->add(buf);
+					error_str = buf;
+					return false;
+				}
+				mi->setState(*s);
+			}
+			result_str = "OK";
+			return true;
+		}
+	}
+	//  Send reply back to client
+	const char *msg_text = "Not found: ";
+	size_t len = strlen(msg_text) + ds.length();
+	char *text = (char *)malloc(len+1);
+	sprintf(text, "%s%s", msg_text, ds.c_str());
+	error_str = text;
+	free(text);
+	return false;
 }
 
 
@@ -242,7 +253,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                     if (m->getCurrent().is(ClockworkToken::on)) {
                         if (m->receives(Message("turnOff"), 0)) {
                             msg = new Message("turnOff");
-                            m->send(msg, m);
+                            m->sendMessageToReceiver(msg, m);
                         }
                         else {
                             State *s = m->getStateMachine()->findState("off");
@@ -252,7 +263,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                     else if (m->getCurrent().is(ClockworkToken::off) ) {
                         if (m->receives(Message("turnOn"), 0)) {
                             msg = new Message("turnOn");
-                            m->send(msg, m);
+                            m->sendMessageToReceiver(msg, m);
                         }
                         else{
                             State *s = m->getStateMachine()->findState("on");
@@ -608,17 +619,17 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         }
         std::stringstream ss;
 		if (m) {
-			m->send( new Message(strdup(command.c_str())), m, false);
+			m->sendMessageToReceiver( new Message(strdup(command.c_str())), m, false);
             if (m->_type == "LIST") {
                 for (unsigned int i=0; i<m->parameters.size(); ++i) {
                     MachineInstance *entry = m->parameters[i].machine;
-                    if (entry) m->send(new Message(strdup(command.c_str())), entry);
+                    if (entry) m->sendMessageToReceiver(new Message(strdup(command.c_str())), entry);
                 }
             }
             else if (m->_type == "REFERENCE" && m->locals.size()) {
                 for (unsigned int i=0; i<m->locals.size(); ++i) {
                     MachineInstance *entry = m->locals[i].machine;
-                    if (entry) m->send(new Message(strdup(command.c_str())), entry);
+                    if (entry) m->sendMessageToReceiver(new Message(strdup(command.c_str())), entry);
                 }
             }
 			ss << command << " sent to " << m->getName() << std::flush;
@@ -1029,6 +1040,19 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         }
     }
 
+	bool IODCommandChannels::run(std::vector<Value> &params) {
+		std::map< std::string, Channel* > *channels = Channel::channels();
+		if (!channels) {result_str = "No channels"; return true; }
+		
+		std::string result;
+		std::map<std::string, Channel*>::iterator iter = channels->begin();
+		while (iter != channels->end()) {
+			result += (*iter++).first + "\n";
+		}
+		result_str = result;
+		return true;
+	}
+
     bool IODCommandChannel::run(std::vector<Value> &params) {
         if (params.size() >= 2) {
             Value ch_name = params[1];
@@ -1080,13 +1104,15 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                     error_str = MessageEncoding::encodeError("No such channel");
                     return false;
                 }
+				
                 chn = Channel::findByType(ch_name.asString());
                 if (!chn) {
                     int port = Channel::uniquePort();
                     while (true) {
                         try {
                             chn = defn->instantiate(port);
-                            chn->startPublisher();
+							chn->start();
+							chn->enable();
                             break;
                         }
                         catch (zmq::error_t err) {
@@ -1137,7 +1163,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             const std::string &name = message_handlers[ss.str()];
             MachineInstance *m = MachineInstance::find(name.c_str());
             if (m) {
-                m->send(new Message(msg),m);
+                m->sendMessageToReceiver(new Message(msg),m);
                 result_str = "OK";
                 return true;
             }

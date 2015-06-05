@@ -53,17 +53,17 @@ Action::Status SendMessageAction::run() {
         }
         else
             msg_str = message.asString();
-		owner->send(new Message(msg_str.c_str()), target_machine);
+		owner->sendMessageToReceiver(new Message(msg_str.c_str()), target_machine);
         if (target_machine->_type == "LIST") {
             for (unsigned int i=0; i<target_machine->parameters.size(); ++i) {
                 MachineInstance *entry = target_machine->parameters[i].machine;
-                if (entry) owner->send(new Message(msg_str.c_str()), entry);
+                if (entry) owner->sendMessageToReceiver(new Message(msg_str.c_str()), entry);
             }
         }
         else if (target_machine->_type == "REFERENCE" && target_machine->locals.size()) {
             for (unsigned int i=0; i<target_machine->locals.size(); ++i) {
                 MachineInstance *entry = target_machine->locals[i].machine;
-                if (entry) owner->send(new Message(msg_str.c_str()), entry);
+                if (entry) owner->sendMessageToReceiver(new Message(msg_str.c_str()), entry);
             }
         }
 	}

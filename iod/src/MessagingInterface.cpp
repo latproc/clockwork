@@ -51,21 +51,31 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 //    struct timeval now;
 //    gettimeofday(&now, 0);
 //    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
-    
-	response_len = 0;
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+
+	response_len = -1;
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			if (items[0].revents & ZMQ_POLLIN) {
+				NB_MSG << tnam << " safeRecv() collecting data\n";
 				response_len = sock.recv(buf, buflen, 0);
+				if (response_len >= 0 && response_len < buflen) {
+					buf[response_len] = 0;
+					NB_MSG << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n";
+				}
+				else {
+					NB_MSG << tnam << " saveRecv() collected data with length " << response_len << "\n";
+				}
 				if (!response_len && block) continue;
 			}
-			return (response_len == 0) ? false : true;
+			return (response_len <= 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
-			std::cerr << "safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
 				if (block) continue;
 			}
@@ -77,8 +87,11 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 }
 
 void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	while (!MessagingInterface::aborted()) {
 		try {
+			NB_MSG << tnam << " safeSend() sending " << buf << "\n";
 			sock.send(buf, buflen);
 			break;
 		}
@@ -90,15 +103,23 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
-    while (1) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	int retries = 3;
+sendMessage_transmit:
+	--retries;
+	assert(retries);
+	while (1) {
         try {
+			if ( !(*msg) ) { NB_MSG << " Warning: sending empty message"; }
             size_t len = sock.send(msg, strlen(msg));
             if (!len) continue;
+			NB_MSG << "sending: " << msg << " on thread " << tnam << "\n";
             break;
         }
         catch (zmq::error_t e) {
             if (errno == EINTR) continue;
-            std::cerr << "sendMessage: " << zmq_strerror(errno) << "\n";
+            std::cerr << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n";
             return false;
         }
     }
@@ -120,8 +141,15 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
         }
         catch(zmq::error_t e)  {
             if (errno == EINTR) continue;
+			if (zmq_errno() == EFSM) {
+				// send must have failed
+				usleep(50);
+				goto sendMessage_transmit;
+			}
             char err[300];
-            snprintf(err, 300, "error: %s\n", zmq_strerror(errno));
+			const char *fnam = strrchr(__FILE__, '/');
+			if (!fnam) fnam = __FILE__; else fnam++;
+            snprintf(err, 300, "sendMessage error: %s in %s:%d\n", zmq_strerror(errno), fnam, __LINE__);
             std::cerr << err;
             return false;
         }
@@ -143,12 +171,14 @@ MessagingInterface *MessagingInterface::getCurrent() {
 }
  */
 
+
+
 MessagingInterface *MessagingInterface::create(std::string host, int port, Protocol proto) {
     std::stringstream ss;
     ss << host << ":" << port;
     std::string id = ss.str();
     if (interfaces.count(id) == 0) {
-        MessagingInterface *res = new MessagingInterface(host, port, proto);
+        MessagingInterface *res = new MessagingInterface(host, port, MessagingInterface::DEFERRED_START, proto);
         interfaces[id] = res;
         return res;
     }
@@ -156,47 +186,63 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
         return interfaces[id];
 }
 
-MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto) 
-		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false), connection(-1) {
-    owner_thread = pthread_self();
-	if (protocol == eCLOCKWORK || protocol == eZMQ) {
-	    socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
-	    is_publisher = true;
-	    std::stringstream ss;
-	    ss << "tcp://*:" << port;
-	    url = ss.str();
-        socket->bind(url.c_str());
+MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start, Protocol proto)
+		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
+			connection(-1), port(port_), owner_thread(0) {
+		    owner_thread = pthread_self();
+		is_publisher = true;
+		hostname = "*";
+		std::stringstream ss;
+		ss << "tcp://" << hostname << ":" << port;
+		url = ss.str();
+		if (protocol == eCHANNEL)
+			socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
+		else
+			socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
+
+		if (!deferred_start) start();
+}
+
+void MessagingInterface::start() {
+	if (protocol == eCLOCKWORK || protocol == eZMQ|| protocol == eCHANNEL) {
+		owner_thread = pthread_self();
+		if (hostname == "*" || hostname == "*") {
+			socket->bind(url.c_str());
+		}
+		else {
+			connect();
+		}
 	}
 	else {
 		connect();
 	}
 }
 
-MessagingInterface::MessagingInterface(std::string host, int remote_port, Protocol proto) 
+MessagingInterface::MessagingInterface(std::string host, int remote_port, bool deferred_port, Protocol proto)
 		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
             connection(-1), hostname(host), port(remote_port), owner_thread(0) {
-	if (protocol == eCLOCKWORK || protocol == eZMQ) {
-        owner_thread = pthread_self();
-	    if (host == "*") {
-	        socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
-	        is_publisher = true;
-	        std::stringstream ss;
-	        ss << "tcp://*:" << port;
-	        url = ss.str();
-	        socket->bind(url.c_str());
-	    }
-	    else {
-            if (protocol == eCLOCKWORK || protocol == eZMQ)
-                socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
-	        std::stringstream ss;
-	        ss << "tcp://" << host << ":" << port;
-	        url = ss.str();
-	        connect();
-	    }
-	}
-	else {
-		connect();
-	}
+		std::stringstream ss;
+		ss << "tcp://" << host << ":" << port;
+		url = ss.str();
+		if (protocol == eCLOCKWORK || protocol == eZMQ || protocol == eCHANNEL) {
+			if (hostname == "*" || hostname == "0.0.0.0") {
+				if (protocol == eCHANNEL) {
+					is_publisher = true; // TBD channels will provide acks soon
+					socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
+				}
+				else {
+					is_publisher = true;
+					socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
+				}
+			}
+			else
+				socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+		}
+		else {
+			NB_MSG << "Warning: unexpected protocl constructing a messaging interface\n";
+		}
+
+		if (!deferred_port) start();
 }
 
 int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
@@ -233,7 +279,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
 
 
 void MessagingInterface::connect() {
-	if (protocol == eCLOCKWORK || protocol == eZMQ) {
+	if (protocol == eCLOCKWORK || protocol == eZMQ || eCHANNEL) {
         assert( pthread_equal(owner_thread, pthread_self()) );
 	    is_publisher = false;
 	    socket->connect(url.c_str());
@@ -273,7 +319,20 @@ void MessagingInterface::handle(const Message&msg, Transmitter *from, bool needs
 
 
 char *MessagingInterface::send(const char *txt) {
-    //if (owner_thread) assert( pthread_equal(owner_thread, pthread_self()) );
+	if (owner_thread != pthread_self()) {
+		char tnam1[100], tnam2[100];
+		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
+		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
+
+		NB_MSG << "error: message send ("<< txt <<") from a different thread:"
+		<< " owner: " << std::hex << " '" << owner_thread
+		<< " '" << tnam2
+		<< "' current: " << std::hex << " " << pthread_self()
+		<< " '" << tnam1 << "'"
+		<< "\n";
+		//assert( pthread_equal(owner_thread, pthread_self()) );
+		int x = 1;
+	}
 
     if (!is_publisher){
         DBG_MESSAGING << "sending message " << txt << " on " << url << "\n";
@@ -286,15 +345,18 @@ char *MessagingInterface::send(const char *txt) {
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
+	zmq::message_t msg(len);
+	strncpy ((char *) msg.data(), txt, len);
     while (true) {
         try {
-            zmq::message_t msg(len);
-            strncpy ((char *) msg.data(), txt, len);
             socket->send(msg);
             break;
         }
         catch (std::exception e) {
-            if (errno == EINTR || errno == EAGAIN) continue;
+			if (errno == EINTR || errno == EAGAIN) {
+				std::cerr << "MessagingInterface::send " << strerror(errno);
+				continue;
+			}
             if (zmq_errno())
                 std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
@@ -397,7 +459,12 @@ char *MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value
 
 char *MessagingInterface::sendState(std::string cmd, std::string name, std::string state_name)
 {
-    cJSON *msg = cJSON_CreateObject();
+	size_t msglen = name.length() + state_name.length() + 50;
+	char *buf = (char *)malloc(msglen);
+	snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\"]}", name.c_str(), state_name.c_str());
+	return buf;
+/*
+	cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "command", cmd.c_str());
     cJSON *cjParams = cJSON_CreateArray();
     cJSON_AddStringToObject(cjParams, "name", name.c_str());
@@ -407,432 +474,7 @@ char *MessagingInterface::sendState(std::string cmd, std::string name, std::stri
     cJSON_Delete(msg);
     char *response = send(request);
     free (request);
-    return response;
-}
-
-SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disconnected_(true), socket_name(snam), aborted(false) {
-}
-void SocketMonitor::operator()() {
-		char thread_name[100];
-		snprintf(thread_name, 100, "iod skt monitor %s", socket_name);
-#ifdef __APPLE__
-        pthread_setname_np(thread_name);
-#else
-        pthread_setname_np(pthread_self(), thread_name);
-#endif
-
-    while (!aborted) {
-        try {
-            monitor(sock, socket_name);
-        }
-        catch (zmq::error_t io) {
-            std::cerr << "ZMQ error " << errno << ": "<< zmq_strerror(errno) << " in socket monitor\n";
-				if (errno != EAGAIN && errno != EINTR) // monitoring a socket that has been removed. exit and rely on restart code (TBD)
-					exit(2);
-			usleep(10);
-        }
-        catch (std::exception ex) {
-            std::cerr << "unknown exception setting up a socket monitor\n";
-        }
-    }
-}
-
-void SocketMonitor::abort() { aborted = true; }
-
-void SocketMonitor::on_monitor_started() {
-        //DBG_MSG << "monitor started\n";
-}
-void SocketMonitor::on_event_connected(const zmq_event_t &event_, const char* addr_) {
-    //DBG_MSG << "on_event_connected " << addr_ << "\n";
-    disconnected_ = false;
-    std::multimap<int, EventResponder*>::iterator found = responders.find(event_.event);
-    while (found != responders.end()) {
-        std::pair<int, EventResponder *>curr = *found++;
-        if (curr.first != event_.event) break;
-        curr.second->operator()(event_, addr_);
-    }
-}
-void SocketMonitor::on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_connect_delayed " << addr_ << "\n";
-}
-void SocketMonitor::on_event_connect_retried(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_connect_retried " << addr_ << "\n";
-}
-void SocketMonitor::on_event_listening(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_listening " << addr_ << "\n";
-}
-void SocketMonitor::on_event_bind_failed(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_bind_failed " << addr_ << "\n";
-}
-void SocketMonitor::on_event_accepted(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_accepted " << event_.value << " " << addr_ << "\n";
-        disconnected_ = false;
-    }
-void SocketMonitor::on_event_accept_failed(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_accept_failed " << addr_ << "\n";
-}
-void SocketMonitor::on_event_closed(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_closed " << addr_ << "\n";
-}
-void SocketMonitor::on_event_close_failed(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_close_failed " << addr_ << "\n";
-}
-void SocketMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
-        disconnected_ = true;
-    std::multimap<int, EventResponder*>::iterator found = responders.find(event_.event);
-    while (found != responders.end()) {
-        std::pair<int, EventResponder *>curr = *found++;
-        if (curr.first != event_.event) break;
-        curr.second->operator()(event_, addr_);
-    }
-}
-void SocketMonitor::on_event_unknown(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << "on_event_unknown " << addr_ << "\n";
-}
-    
-bool SocketMonitor::disconnected() { return disconnected_;}
-
-void SocketMonitor::addResponder(uint16_t event, EventResponder *responder) {
-    responders.insert(std::pair<int, EventResponder*>(event, responder));
-}
-void SocketMonitor::removeResponder(uint16_t event, EventResponder *responder) {
-    std::multimap<int, EventResponder*>::iterator found = responders.find(event);
-    while (found != responders.end()) {
-        std::pair<int, EventResponder *>curr = *found;
-        if (curr.first != event) break;
-        if (curr.second == responder) found = responders.erase(found); else found++;
-    }
-}
-
-
-SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &s, const char *snam)
-    : SocketMonitor(s, snam) { }
-void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        SocketMonitor::on_event_disconnected(event_, addr_);
-        sock.disconnect(sock_addr.c_str());
-    }
-void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
-
-
-void MachineShadow::setProperty(const std::string prop, Value &val) {
-    properties.add(prop, val, SymbolTable::ST_REPLACE);
-}
-
-Value &MachineShadow::getValue(const char *prop) {
-    return properties.lookup(prop);
-}
-
-void MachineShadow::setState(const std::string new_state) {
-    state = new_state;
-}
-
-ConnectionManager::ConnectionManager() : aborted(false) { }
-
-void ConnectionManager::setProperty(std::string machine_name, std::string prop, Value val) {
-    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
-    MachineShadow *machine = 0;
-    if (found == machines.end())
-        machine = new MachineShadow;
-    else
-        machine = (*found).second;
-    machine->setProperty(prop, val);
-}
-
-void ConnectionManager::setState(std::string machine_name, std::string new_state) {
-    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
-    MachineShadow *machine = 0;
-    if (found == machines.end())
-        machine = new MachineShadow;
-    else
-        machine = (*found).second;
-    machine->setState(new_state);
-}
-
-void ConnectionManager::abort() { aborted = true; }
-
-SubscriptionManager::SubscriptionManager(const char *chname, const char *remote_host, int remote_port) :
-        publisher(0),
-        subscriber(*MessagingInterface::getContext(), ZMQ_SUB),
-        setup(*MessagingInterface::getContext(), ZMQ_REQ),
-        subscriber_port(remote_port),
-        subscriber_host(remote_host),
-        channel_name(chname),
-        monit_subs(subscriber, "inproc://monitor.subs"),
-        monit_pubs(0),
-        monit_setup(0) {
-            monit_setup = new SingleConnectionMonitor(setup, "inproc://monitor.setup");
-            init();
-}
-
-void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
-    if (monit_setup) delete monit_setup;
-    monit_setup = monitor;
-}
-
-void SubscriptionManager::init() {
-    
-    int res;
-    res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
-    assert (res == 0);
-    
-    boost::thread subscriber_monitor(boost::ref(monit_subs));
-    
-    // client
-    boost::thread setup_monitor(boost::ref(*monit_setup));
-    
-    run_status = e_waiting_cmd;
-    setSetupStatus(e_startup);
-}
-
-/*
-void SubscriptionManager::usePublisher() {
-    publisher = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
-    monit_pubs = new SingleConnectionMonitor(*publisher, "inproc://monitor.pubs");
-    int port = Channel::uniquePort();
-    char url[100];
-    snprintf(url, 100, "tcp:// *:%d/", port);
-    publisher->bind(url);
-}
+	return response;
  */
-
-int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
-    items[0].socket = setup; items[0].events = ZMQ_POLLERR | ZMQ_POLLIN; items[0].fd = 0; items[0].revents = 0;
-    items[1].socket = subscriber; items[0].events = ZMQ_POLLERR | ZMQ_POLLIN; items[0].fd = 0; items[0].revents = 0;
-    return 2;
-}
-
-bool SubscriptionManager::requestChannel() {
-    size_t len = 0;
-    if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-        std::cerr << "Requesting channel " << channel_name << "\n";
-        char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
-        len = setup.send(channel_setup, strlen(channel_setup));
-        assert(len);
-        setSetupStatus(SubscriptionManager::e_waiting_setup);
-        return false;
-    }
-    if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
-        char buf[1000];
-        if (!safeRecv(setup, buf, 1000, false, len)) return false;
-        if (len == 0) return false; // no data yet
-        if (len < 1000) buf[len] =0;
-        assert(len);
-        std::cerr << "Got channel " << buf << "\n";
-        setSetupStatus(SubscriptionManager::e_settingup_subscriber);
-        if (len && len<1000) {
-            buf[len] = 0;
-            cJSON *chan = cJSON_Parse(buf);
-            if (chan) {
-                cJSON *port_item = cJSON_GetObjectItem(chan, "port");
-                if (port_item) {
-                    if (port_item->type == cJSON_Number) {
-                        if (port_item->valueNumber.kind == cJSON_Number_int_t)
-                            subscriber_port = (int)port_item->valueint;
-                        else
-                            subscriber_port = ((int)port_item->valuedouble);
-                    }
-                }
-                cJSON *chan_name = cJSON_GetObjectItem(chan, "name");
-                if (chan_name && chan_name->type == cJSON_String) {
-                    current_channel = chan_name->valuestring;
-                }
-            }
-            else {
-                setSetupStatus(SubscriptionManager::e_disconnected);
-                std::cerr << " failed to parse: " << buf << "\n";
-                current_channel = "";
-            }
-            cJSON_Delete(chan);
-        }
-    }
-    if (current_channel == "") return false;
-    return true;
-}
-    
-bool SubscriptionManager::setupConnections() {
-    std::stringstream ss;
-    if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
-        ss << "tcp://" << subscriber_host << ":" << 5555;
-        current_channel = "";
-				try {
-        	setup.connect(ss.str().c_str());
-				}
-				catch(zmq::error_t err) {
-					std::cerr << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
-					return false;
-				}
-        monit_setup->setEndPoint(ss.str().c_str());
-        setSetupStatus(SubscriptionManager::e_waiting_connect);
-        usleep(5000);
-    }
-    if (requestChannel()) {
-        // define the channel
-        ss.clear(); ss.str("");
-        ss << "tcp://" << subscriber_host << ":" << subscriber_port;
-        std::string channel_url = ss.str();
-        DBG_MSG << "connecting to " << channel_url << "\n";
-        monit_subs.setEndPoint(channel_url.c_str());
-        subscriber.connect(channel_url.c_str());
-        setSetupStatus(SubscriptionManager::e_done);
-        return true;
-    }
-    return false;
-}
-
-void SubscriptionManager::setSetupStatus( Status new_status ) {
-    _setup_status = new_status;
-    state_start = microsecs();
-}
-    
-bool SubscriptionManager::checkConnections() {
-    if (monit_setup->disconnected() && monit_subs.disconnected()) {
-        //uint64_t now = microsecs();
-        /*if (setupStatus() == e_waiting_connect && !setup.connected()) {
-            //setup.disconnect(monit_setup->endPoint().c_str());
-            setSetupStatus(e_startup);
-        }
-        else 
-         */
-        if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
-             setSetupStatus(e_startup);
-             setupConnections();
-         }
-        usleep(500000);
-        return false;
-    }
-    if (setupStatus() == e_disconnected || ( !monit_setup->disconnected() && monit_subs.disconnected() ) ) {
-        // clockwork has disconnected
-        setupConnections();
-        usleep(50000);
-        return false;
-    }
-    if (monit_subs.disconnected() || monit_setup->disconnected()) {
-        usleep(50000);
-        return false;
-		}
-    return true;
-}
-    
-bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
-    if (!checkConnections()) return false;
-    int rc = 0;
-    if (monit_subs.disconnected() || monit_setup->disconnected())
-        rc = zmq::poll( &items[num_items-3], num_items-2, 500);
-    else
-        rc = zmq::poll(&items[0], num_items, 500);
-    if (!rc) return true;
-    
-    char buf[1000];
-    size_t msglen = 0;
-    if (run_status == e_waiting_cmd && items[num_items-1].revents & ZMQ_POLLIN) {
-        if (safeRecv(cmd, buf, 1000, false, msglen)) {
-            if (msglen == 1000) msglen--;
-            buf[msglen] = 0;
-            DBG_MSG << "got cmd: " << buf << "\n";
-            if (!monit_setup->disconnected()) setup.send(buf,msglen);
-            run_status = e_waiting_response;
-        }
-    }
-    if (run_status == e_waiting_response && monit_setup->disconnected()) {
-        const char *msg = "disconnected, attempting reconnect";
-        cmd.send(msg, strlen(msg));
-        run_status = e_waiting_cmd;
-    }
-    else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-        if (safeRecv(setup, buf, 1000, false, msglen)) {
-            if (msglen && msglen<1000) {
-                cmd.send(buf, msglen);
-            }
-            else {
-                cmd.send("error", 5);
-            }
-            run_status = e_waiting_cmd;
-        }
-    }
-    return true;
-}
-
-bool CommandManager::setupConnections() {
-    if (setup_status == e_startup) {
-        char url[100];
-        snprintf(url, 100, "tcp://%s:5555", host_name.c_str()); // TBD no fixed port
-        setup->connect(url);
-        monit_setup->setEndPoint(url);
-        setup_status = e_waiting_connect;
-        usleep(5000);
-    }
-    return false;
-}
-
-bool CommandManager::checkConnections() {
-    if (monit_setup->disconnected() ) {
-        setup_status = e_startup;
-        setupConnections();
-        usleep(50000);
-        return false;
-    }
-    if (monit_setup->disconnected())
-        return false;
-    return true;
-}
-
-bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) {
-    int rc = 0;
-    if (monit_setup->disconnected() ) {
-        if (setup_status != e_waiting_connect) {
-            setup_status = e_startup;
-            setupConnections();
-            usleep(50000);
-        }
-        return false;
-    }
-    if ( monit_setup->disconnected() )
-        rc = zmq::poll( &items[1], num_items-1, 500);
-    else
-        rc = zmq::poll(&items[0], num_items, 500);
-    
-    char buf[1000];
-    size_t msglen = 0;
-    if (rc > 0 && run_status == e_waiting_cmd && items[1].revents & ZMQ_POLLIN) {
-        safeRecv(cmd, buf, 1000, false, msglen);
-        if ( msglen ) {
-            buf[msglen] = 0;
-            DBG_MSG << "got cmd: " << buf << "\n";
-            if (!monit_setup->disconnected()) setup->send(buf,msglen);
-            run_status = e_waiting_response;
-        }
-    }
-    if (run_status == e_waiting_response && monit_setup->disconnected()) {
-        const char *msg = "disconnected, attempting reconnect";
-        cmd.send(msg, strlen(msg));
-        run_status = e_waiting_cmd;
-    }
-    else if (rc > 0 && run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-        if (safeRecv(*setup, buf, 1000, false, msglen)) {
-            if (msglen && msglen<1000) {
-                cmd.send(buf, msglen);
-            }
-            else {
-                cmd.send("error", 5);
-            }
-            run_status = e_waiting_cmd;
-        }
-    }
-    return true;
-}
-
-CommandManager::CommandManager(const char *host) : host_name(host), setup(0), monit_setup(0) { 
-	    setup = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
-	    monit_setup = new SingleConnectionMonitor(*setup, "inproc://monitor.setup");
-	    init();
-}
-
-void CommandManager::init() {
-    // client
-    boost::thread setup_monitor(boost::ref(*monit_setup));
-    
-    run_status = e_waiting_cmd;
-    setup_status = e_startup;
 }
 

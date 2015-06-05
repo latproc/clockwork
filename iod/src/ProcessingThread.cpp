@@ -251,8 +251,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 					}
 					catch(zmq::error_t err) {
 						if (zmq_errno() == EINTR) {
-							std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
-							//usleep(50); 
+							NB_MSG << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 							continue;
 						}
 					}
@@ -264,8 +263,10 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 		catch (std::exception ex)
 		{
 			if (errno == EINTR) continue; // TBD watch for infinite loop here
-			std::cerr << "Error " << zmq_strerror(errno)
-				<< " in " << __FILE__ << ":" << __LINE__ << "\n";
+			const char *fnam = strrchr(__FILE__, '/');
+			if (!fnam) fnam = __FILE__; else fnam++;
+			NB_MSG << "Error " << zmq_strerror(errno)
+				<< " in " << fnam << ":" << __LINE__ << "\n";
 			break;
 		}
 	}
@@ -626,14 +627,14 @@ void ProcessingThread::operator()()
 			}
 			//std::cout << "scheduler done " << (end-start) <<"us\n";
 		}
-		/*
+		
 		// poll channels
-		zmq::pollitem_t *poll_items = 0;
-		int active_channels = Channel::pollChannels(poll_items, 20, 0);
-		if (active_channels) {
-		Channel::handleChannels();
-		}
-		*/
+		//zmq::pollitem_t *poll_items = 0;
+		//int active_channels = Channel::pollChannels(poll_items, 20, 0);
+		//if (active_channels) {
+			Channel::handleChannels();
+		//}
+		
 		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
 		{
 #ifdef KEEPSTATS

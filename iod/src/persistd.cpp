@@ -40,6 +40,8 @@
 #include "MessageEncoding.h"
 #include "PersistentStore.h"
 #include "MessagingInterface.h"
+#include "SocketMonitor.h"
+#include "ConnectionManager.h"
 
 
 namespace po = boost::program_options;
@@ -86,9 +88,17 @@ public:
 
 std::set<std::string>ignored_properties;
 
+class ExitMessage {
+public:
+	ExitMessage(const char *msg) :message(msg) {}
+	~ExitMessage() { std::cout << message << "\n"; }
+	std::string message;
+};
+
 bool loadActiveData(PersistentStore &store, const char *initial_settings)
 {
     std::cout << "loading data from clockwork\n";
+	ExitMessage em("load data done");
     cJSON *obj = cJSON_Parse(initial_settings);
     if (!obj) return false;
     int num_entries = cJSON_GetArraySize(obj);
@@ -206,7 +216,7 @@ int main(int argc, const char * argv[]) {
     PersistentStore store("persist.dat");
     //store.load(); // disabled load store since we take it from clockwork now
     
-    SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL");
+    SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCHANNEL);
     SetupConnectMonitor connect_responder;
     cmd_socket = &subscription_manager.setup;
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
@@ -257,6 +267,8 @@ int main(int argc, const char * argv[]) {
                     store.insert(machine_name.asString(), property_name.asString(), value.asString().c_str());
                     store.save();
                 }
+				else
+					std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
             }
             else {
                 std::istringstream iss(data);

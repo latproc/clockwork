@@ -79,7 +79,6 @@ private:
     unsigned int current_step;
     CStringHolder command_name;
     CStringHolder state_name;
-    long timeout;
     Trigger *timeout_trigger;
     bool switch_state;
 };

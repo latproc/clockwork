@@ -4,6 +4,8 @@ project (Latproc)
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 8)
 
+cmake_policy(SET CMP0008 OLD)
+
 set (CMAKE_VERBOSE_MAKEFILE false)
 
 set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
@@ -31,12 +33,16 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/MessageLog.cpp 
     ${CLOCKWORK_DIR}/MessageEncoding.cpp 
     ${CLOCKWORK_DIR}/regular_expressions.cpp 
+	${CLOCKWORK_DIR}/CommandManager.cpp
+	${CLOCKWORK_DIR}/SocketMonitor.cpp
+	${CLOCKWORK_DIR}/ConnectionManager.cpp
     ${CLOCKWORK_DIR}/Logger.cpp
     ${CLOCKWORK_DIR}/anet.c
     ${CLOCKWORK_DIR}/cJSON.c
     ${CLOCKWORK_DIR}/DebugExtra.cpp
     ${CLOCKWORK_DIR}/value.cpp 
     ${CLOCKWORK_DIR}/symboltable.cpp
+    ${CLOCKWORK_DIR}/rate.cpp
     ${CLOCKWORK_DIR}/Message.cpp )
 
 include_directories("/usr/local/include")
@@ -66,13 +72,13 @@ LINK_DIRECTORIES("/opt/local/lib")
 set (FLEX_EXECUTABLE lex)
 set (BISON_EXECUTABLE bison)
 
-set(cw_lex_output ${BUILD_DIR}/cwlang.yy.cpp)
-set(cw_yacc_output ${BUILD_DIR}/cwlang.tab.cpp)
+set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
+set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
    SOURCE ${CLOCKWORK_DIR}/cwlang.lpp
    COMMAND ${FLEX_EXECUTABLE} 
-   ARGS -o${BUILD_DIR}/cwlang.yy.cpp
+   ARGS -o${CMAKE_BINARY_DIR}/cwlang.yy.cpp
 		${CLOCKWORK_DIR}/cwlang.lpp
    TARGET ClockworkParser
    OUTPUTS ${cw_lex_output})
@@ -82,7 +88,7 @@ set(cw_yacc_output ${BUILD_DIR}/cwlang.tab.cpp)
    SOURCE ${CLOCKWORK_DIR}/cwlang.ypp
    COMMAND ${BISON_EXECUTABLE} 
    ARGS -y 
-        -o ${BUILD_DIR}/cwlang.tab.cpp
+        -o ${CMAKE_BINARY_DIR}/cwlang.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cwlang.ypp
    TARGET ClockworkParser
    DEPENDS ${CLOCKWORK_DIR}/cwlang.lpp
@@ -154,7 +160,8 @@ set (Clockwork_SRCS
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-target_link_libraries(cw Clockwork "dl" "zmq" ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
+#target_link_libraries(cw Clockwork "dl" "zmq" ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
+target_link_libraries(cw Clockwork "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
@@ -204,17 +211,17 @@ LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
 add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp ${Clockwork_SRCS})
 #set_target_properties (iod PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
-target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
+target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
-set(iosh_lex_output ${BUILD_DIR}/cmdline.yy.cpp)
-set(iosh_yacc_output ${BUILD_DIR}/cmdline.tab.cpp)
+set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)
+set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
    SOURCE ${CLOCKWORK_DIR}/cmdline.lpp
    COMMAND ${FLEX_EXECUTABLE} 
-   ARGS -o${BUILD_DIR}/cmdline.yy.cpp
+   ARGS -o${CMAKE_BINARY_DIR}/cmdline.yy.cpp
 		${CLOCKWORK_DIR}/cmdline.lpp
    TARGET ClockworkParser
    OUTPUTS ${iosh_lex_output})
@@ -224,7 +231,7 @@ set(iosh_yacc_output ${BUILD_DIR}/cmdline.tab.cpp)
    SOURCE ${CLOCKWORK_DIR}/cmdline.ypp
    COMMAND ${BISON_EXECUTABLE} 
    ARGS -y 
-        -o ${BUILD_DIR}/cmdline.tab.cpp
+        -o ${CMAKE_BINARY_DIR}/cmdline.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cmdline.ypp
    TARGET ClockworkParser
    DEPENDS ${CLOCKWORK_DIR}/cmdline.lpp

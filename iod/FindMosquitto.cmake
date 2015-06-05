@@ -4,7 +4,7 @@ find_path(MOSQUITTO_INCLUDE_DIR
 
 find_library(MOSQUITTO_LIBRARY
              PATHS /usr/local/src/mosquitto/mosquitto-1.4.1/lib
-             NAMES libmosquitto mosquitto)
+             NAMES mosquitto)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(MOSQUITTO DEFAULT_MSG MOSQUITTO_LIBRARY MOSQUITTO_INCLUDE_DIR)

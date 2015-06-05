@@ -57,36 +57,41 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		if (machine->getName() != target.get()) {
 			DBG_M_ACTIONS << owner->getName() << " lookup for " << target.get() << " returned " << machine->getName() << "\n"; 
 		}
-		State value(new_state.sValue.c_str());
-		const Value &deref = owner->getValue(new_state.sValue.c_str());
-		if (deref != SymbolTable::Null) {
-			DBG_M_ACTIONS << *this << " dereferenced " << new_state << " to " << deref << "\n";
-			if (deref.kind != Value::t_symbol && deref.kind != Value::t_string) {
-				std::stringstream ss;
-				ss << owner->fullName() << " state " << deref << " ("<<deref.kind<<")" << " must be a symbol or string" << std::flush;
-				char *msg = strdup(ss.str().c_str());
-				error_str = msg;
-				MessageLog::instance()->add(msg);
-				DBG_M_ACTIONS << error_str << "\n";
-				status = Failed;
-				owner->stop(this);
-				return status; 
+		// the new 'state' may be a symbol that provides the state, it may even be the name of a
+		// VARIABLE or CONSTANT that contains the name. If we have a state that coincides with
+		// new_state, we ignore such subtleties.
+		if (!machine->hasState(new_state.sValue)) {
+			State value(new_state.sValue.c_str());
+			const Value &deref = owner->getValue(new_state.sValue.c_str());
+			if (deref != SymbolTable::Null) {
+				DBG_M_ACTIONS << *this << " dereferenced " << new_state << " to " << deref << "\n";
+				if (deref.kind != Value::t_symbol && deref.kind != Value::t_string) {
+					std::stringstream ss;
+					ss << owner->fullName() << " state " << deref << " ("<<deref.kind<<")" << " must be a symbol or string" << std::flush;
+					char *msg = strdup(ss.str().c_str());
+					error_str = msg;
+					MessageLog::instance()->add(msg);
+					DBG_M_ACTIONS << error_str << "\n";
+					status = Failed;
+					owner->stop(this);
+					return status; 
+				}
+				else if (!machine->hasState(deref.sValue)){
+					std::stringstream ss;
+					ss << machine->fullName();
+					if (machine->getStateMachine()) ss << " of class " << machine->getStateMachine()->name << " ";
+					ss << " does not have a state " << deref.sValue << std::flush;
+					char *msg = strdup(ss.str().c_str());
+					MessageLog::instance()->add(msg);
+					error_str = msg;
+					DBG_M_ACTIONS << error_str << "\n";
+					status = Failed;
+					owner->stop(this);
+					return status;
+				}
+				value = deref.sValue.c_str();
+				DBG_M_ACTIONS << owner->fullName() << " setting state of " << machine->fullName() <<" to dereferenced value " << value << "\n";
 			}
-			else if (!machine->hasState(deref.sValue)){
-				std::stringstream ss;
-				ss << machine->fullName();
-				if (machine->getStateMachine()) ss << " of class " << machine->getStateMachine()->name << " ";
-				ss << " does not have a state " << deref.sValue << std::flush;
-				char *msg = strdup(ss.str().c_str());
-				MessageLog::instance()->add(msg);
-				error_str = msg;
-				DBG_M_ACTIONS << error_str << "\n";
-				status = Failed;
-				owner->stop(this);
-				return status;
-			}
-			value = deref.sValue.c_str();
-			DBG_M_ACTIONS << owner->fullName() << " setting state of " << machine->fullName() <<" to dereferenced value " << value << "\n";
 		}
 		if (machine->io_interface) {
 			std::string txt(machine->io_interface->getStateString());

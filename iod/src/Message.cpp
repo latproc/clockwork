@@ -131,3 +131,9 @@ std::ostream& Package::operator<<(std::ostream &out) const {
 std::ostream &operator<<(std::ostream &out, const Package &package) {
 	return package.operator<<(out);
 }
+
+Transmitter::~Transmitter() { }
+
+
+void Transmitter::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) { assert(false); }
+

@@ -24,7 +24,7 @@ void append_char(int ch);
 
 %%
 
-[A-Za-z][A-Za-z0-9_.]*       { 
+[A-Za-z][A-Za-z0-9_.:]*       {
     yylval.sVal = strdup(yytext);
     return SYMBOL;
 }

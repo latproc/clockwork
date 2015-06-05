@@ -49,7 +49,7 @@ public:
 
 struct IODCommand {
 public:
-    IODCommand( int minp = 0, int maxp = 100)  : done(false), error_str(""), 
+    IODCommand( int minp = 0, int maxp = 100)  : done(false), success(eUnassigned), error_str(""),
 		result_str(""), min_params(minp), max_params(maxp) {}
     virtual ~IODCommand(){ }
     bool done;
@@ -62,6 +62,8 @@ public:
 		done = run(params);
 		return done;
 	}
+	enum CommandResult { eUnassigned, eFailure, e_Success};
+	CommandResult success;
     
 protected:
 	virtual bool run(std::vector<Value> &params) = 0;

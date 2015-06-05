@@ -49,9 +49,11 @@
 #include "value.h"
 #include "cJSON.h"
 #include "options.h"
-#include "Dispatcher.h"
 #include "MessageEncoding.h"
 #include "MessagingInterface.h"
+//#include "SocketMonitor.h"
+#include "ConnectionManager.h"
+#include "CommandManager.h"
 
 class DeviceStatus {
 public:
@@ -131,7 +133,8 @@ std::string escapeNonprintables(const char *buf) {
 class Options {
 
     Options() : is_server(true), port_(10240), host_(0), name_(0), machine_(0), property_(0), pattern_(0), iod_host_(0),
-        serial_port_name_(0), serial_settings_(0), watch_(0), queue_(0), collect_duplicates(false), disconnect_on_timeout(true), cw_publisher(5556),
+        serial_port_name_(0), serial_settings_(0), watch_(0), queue_(0), collect_duplicates(false), disconnect_on_timeout(true),
+			cw_publisher(5556),
                 got_host(false), got_port(true), got_property(false), got_pattern(false), structured_messaging(true),
                 got_queue(false) {
         setIODHost("localhost");
@@ -935,23 +938,21 @@ int main(int argc, const char * argv[])
         cmd.bind(iod_connection);
         usleep(5000);
         
-	      ConnectionManager *connection_manager = 0;
-				try {
-	        if (options.watchProperty()) {
-				connection_manager = new SubscriptionManager(Options::instance()->getChannelName());
-	        }
-	        else {
-	            connection_manager = new CommandManager(options.iodHost());
-	        }
-				}
-				catch(zmq::error_t io) {
-					std::cout << "zmq error: " << zmq_strerror(errno) << "\n";
-				}
-				catch(std::exception ex) {
-					std::cout << " unknown exception: " << zmq_strerror(errno) << "\n";
-				}
-				assert(connection_manager);
-        
+		ConnectionManager *connection_manager = 0;
+		try {
+			if (options.watchProperty())
+				connection_manager = new SubscriptionManager(Options::instance()->getChannelName(), eCHANNEL);
+			else
+				connection_manager = new CommandManager(options.iodHost(), 5555);
+		}
+		catch(zmq::error_t io) {
+			std::cout << "zmq error: " << zmq_strerror(errno) << "\n";
+		}
+		catch(std::exception ex) {
+			std::cout << " unknown exception: " << zmq_strerror(errno) << "\n";
+		}
+		assert(connection_manager);
+
         ConnectionThread connection_thread;
         boost::thread monitor(boost::ref(connection_thread));
 

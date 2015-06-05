@@ -46,8 +46,6 @@
 #include "IODCommand.h"
 #include <modbus/modbus.h>
 #include <bitset>
-#include "MessagingInterface.h"
-#include "MessageEncoding.h"
 #include "cJSON.h"
 
 #include <sys/socket.h>
@@ -55,7 +53,10 @@
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <signal.h>
-
+#include "MessageEncoding.h"
+#include "MessagingInterface.h"
+#include "SocketMonitor.h"
+#include "ConnectionManager.h"
 
 namespace po = boost::program_options;
 
@@ -844,6 +845,7 @@ int main(int argc, const char * argv[])
 		}
 		std::cout << "-------- Starting Command Interface ---------\n" << std::flush;
 		g_iodcmd = MessagingInterface::create(host, cw_out);
+		g_iodcmd->start();
 
 		program_state = s_running;
 		setup_signals();
@@ -865,7 +867,7 @@ int main(int argc, const char * argv[])
 		zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
 		iosh_cmd.bind(local_commands);
 
-		SubscriptionManager subscription_manager("MODBUS_CHANNEL", "localhost", 5555);
+		SubscriptionManager subscription_manager("MODBUS_CHANNEL", eCHANNEL, "localhost", 5555);
 		SetupDisconnectMonitor disconnect_responder;
 		SetupConnectMonitor connect_responder;
 		subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);

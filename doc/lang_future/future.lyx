@@ -1,5 +1,5 @@
-#LyX 2.0 created this file. For more info see http://www.lyx.org/
-\lyxformat 413
+#LyX 2.1 created this file. For more info see http://www.lyx.org/
+\lyxformat 474
 \begin_document
 \begin_header
 \textclass article
@@ -12,13 +12,13 @@
 \font_roman default
 \font_sans default
 \font_typewriter default
+\font_math auto
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
 \font_sf_scale 100
 \font_tt_scale 100
-
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -29,15 +29,24 @@
 \use_hyperref false
 \papersize a4paper
 \use_geometry true
-\use_amsmath 1
-\use_esint 1
-\use_mhchem 1
-\use_mathdots 1
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
 \cite_engine basic
+\cite_engine_type default
+\biblio_style plain
 \use_bibtopic false
 \use_indices false
 \paperorientation portrait
 \suppress_date false
+\justification true
 \use_refstyle 1
 \index Index
 \shortcut idx
@@ -809,6 +818,76 @@ Conditions are not currently implemented but they are intended to operate
  of expressions on WHEN clauses.
  Effectively, a CONDITION is a machine that is true when the expression
  is true and false otherwise.
+\end_layout
+
+\begin_layout Subsection
+Error handling
+\end_layout
+
+\begin_layout Standard
+Clockwork 1.0 introduces exception and error handling
+\end_layout
+
+\begin_layout LyX-Code
+TRY {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+statement-list
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+WHEN TIMER >= timeout {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+ABORT; # unsuccessful completion
+\end_layout
+
+\begin_layout LyX-Code
+RETURN; # successful completion 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+CATCH message {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+LOG 
+\begin_inset Quotes eld
+\end_inset
+
+Error: 
+\begin_inset Quotes eld
+\end_inset
+
+ + message + 
+\begin_inset Quotes eld
+\end_inset
+
+ detected
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout Subsection

@@ -202,12 +202,12 @@ int load_preset_modbus_mappings() {
     return 0; // no error
 }
 
-void semantic_analysis() {
-    char host_name[100];
-    int err = gethostname(host_name, 100);
-    if (err == -1) strcpy(host_name, "localhost");
-    MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
-    settings_class->states.push_back("ready");
+void predefine_special_machines() {
+	char host_name[100];
+	int err = gethostname(host_name, 100);
+	if (err == -1) strcpy(host_name, "localhost");
+	MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
+	settings_class->states.push_back("ready");
 	settings_class->default_state = State("ready");
 	settings_class->initial_state = State("ready");
 	settings_class->disableAutomaticStateChanges();
@@ -216,142 +216,142 @@ void semantic_analysis() {
 	settings_class->properties.add("VERSION", "0.8", SymbolTable::ST_REPLACE);
 	settings_class->properties.add("CYCLE_DELAY", 1000, SymbolTable::ST_REPLACE);
 	settings_class->properties.add("POLLING_DELAY", 1000, SymbolTable::ST_REPLACE);
-    
-    MachineClass *cw_class = new MachineClass("CLOCKWORK");
-    cw_class->states.push_back("ready");
+
+	MachineClass *cw_class = new MachineClass("CLOCKWORK");
+	cw_class->states.push_back("ready");
 	cw_class->default_state = State("ready");
 	cw_class->initial_state = State("ready");
 	cw_class->disableAutomaticStateChanges();
 	cw_class->properties.add("PROTOCOL", "CLOCKWORK", SymbolTable::ST_REPLACE);
 	cw_class->properties.add("HOST", "localhost", SymbolTable::ST_REPLACE);
 	cw_class->properties.add("PORT", 5600, SymbolTable::ST_REPLACE);
-    
-    MachineClass *point_class = new MachineClass("POINT");
-    point_class->parameters.push_back(Parameter("module"));
-    point_class->parameters.push_back(Parameter("offset"));
-    point_class->states.push_back("on");
-    point_class->states.push_back("off");
+
+	MachineClass *point_class = new MachineClass("POINT");
+	point_class->parameters.push_back(Parameter("module"));
+	point_class->parameters.push_back(Parameter("offset"));
+	point_class->states.push_back("on");
+	point_class->states.push_back("off");
 	point_class->default_state = State("off");
 	point_class->initial_state = State("off");
 	point_class->disableAutomaticStateChanges();
 
-    point_class = new MachineClass("STATUS_FLAG");
-    point_class->parameters.push_back(Parameter("module"));
-    point_class->parameters.push_back(Parameter("offset"));
-    point_class->parameters.push_back(Parameter("entry"));
-    point_class->states.push_back("on");
-    point_class->states.push_back("off");
+	point_class = new MachineClass("STATUS_FLAG");
+	point_class->parameters.push_back(Parameter("module"));
+	point_class->parameters.push_back(Parameter("offset"));
+	point_class->parameters.push_back(Parameter("entry"));
+	point_class->states.push_back("on");
+	point_class->states.push_back("off");
 	point_class->default_state = State("off");
 	point_class->initial_state = State("off");
 	point_class->disableAutomaticStateChanges();
-    
-    
-    MachineClass *ain_class = new MachineClass("ANALOGINPUT");
-    ain_class->parameters.push_back(Parameter("module"));
-    ain_class->parameters.push_back(Parameter("offset"));
-    ain_class->parameters.push_back(Parameter("filter_settings"));
-    ain_class->states.push_back("stable");
-    ain_class->states.push_back("unstable");
+
+
+	MachineClass *ain_class = new MachineClass("ANALOGINPUT");
+	ain_class->parameters.push_back(Parameter("module"));
+	ain_class->parameters.push_back(Parameter("offset"));
+	ain_class->parameters.push_back(Parameter("filter_settings"));
+	ain_class->states.push_back("stable");
+	ain_class->states.push_back("unstable");
 	ain_class->default_state = State("stable");
 	ain_class->initial_state = State("stable");
 	ain_class->disableAutomaticStateChanges();
 	ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    
-    MachineClass *cnt_class = new MachineClass("COUNTER");
-    cnt_class->parameters.push_back(Parameter("module"));
-    cnt_class->parameters.push_back(Parameter("offset"));
-    cnt_class->states.push_back("stable");
-    cnt_class->states.push_back("unstable");
-    cnt_class->states.push_back("off");
+
+	MachineClass *cnt_class = new MachineClass("COUNTER");
+	cnt_class->parameters.push_back(Parameter("module"));
+	cnt_class->parameters.push_back(Parameter("offset"));
+	cnt_class->states.push_back("stable");
+	cnt_class->states.push_back("unstable");
+	cnt_class->states.push_back("off");
 	cnt_class->default_state = State("off");
 	cnt_class->initial_state = State("off");
 	cnt_class->disableAutomaticStateChanges();
 	cnt_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    
-    MachineClass *re_class = new MachineClass("RATEESTIMATOR");
-    re_class->parameters.push_back(Parameter("position_input"));
-    re_class->parameters.push_back(Parameter("settings"));
-    re_class->states.push_back("stable");
-    re_class->states.push_back("unstable");
-    re_class->states.push_back("off");
+
+	MachineClass *re_class = new MachineClass("RATEESTIMATOR");
+	re_class->parameters.push_back(Parameter("position_input"));
+	re_class->parameters.push_back(Parameter("settings"));
+	re_class->states.push_back("stable");
+	re_class->states.push_back("unstable");
+	re_class->states.push_back("off");
 	re_class->default_state = State("off");
 	re_class->initial_state = State("off");
 	re_class->disableAutomaticStateChanges();
 	re_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 	re_class->properties.add("position", Value(0), SymbolTable::ST_REPLACE);
-    
-    MachineClass *cr_class = new MachineClass("COUNTERRATE");
-    cr_class->parameters.push_back(Parameter("position_output"));
-    cr_class->parameters.push_back(Parameter("module"));
-    cr_class->parameters.push_back(Parameter("offset"));
-    cr_class->states.push_back("stable");
-    cr_class->states.push_back("unstable");
-    cr_class->states.push_back("off");
+
+	MachineClass *cr_class = new MachineClass("COUNTERRATE");
+	cr_class->parameters.push_back(Parameter("position_output"));
+	cr_class->parameters.push_back(Parameter("module"));
+	cr_class->parameters.push_back(Parameter("offset"));
+	cr_class->states.push_back("stable");
+	cr_class->states.push_back("unstable");
+	cr_class->states.push_back("off");
 	cr_class->default_state = State("off");
 	cr_class->initial_state = State("off");
 	cr_class->disableAutomaticStateChanges();
 	cr_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 	cr_class->properties.add("position", Value(0), SymbolTable::ST_REPLACE);
 
-    MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
-    aout_class->parameters.push_back(Parameter("module"));
-    aout_class->parameters.push_back(Parameter("offset"));
-    aout_class->states.push_back("stable");
-    aout_class->states.push_back("unstable");
+	MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
+	aout_class->parameters.push_back(Parameter("module"));
+	aout_class->parameters.push_back(Parameter("offset"));
+	aout_class->states.push_back("stable");
+	aout_class->states.push_back("unstable");
 	aout_class->default_state = State("stable");
 	aout_class->initial_state = State("stable");
 	aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    
-    MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
-    pid_class->parameters.push_back(Parameter("module"));
-    pid_class->parameters.push_back(Parameter("offset"));
-    pid_class->parameters.push_back(Parameter("settings"));
-    pid_class->parameters.push_back(Parameter("position"));
-    pid_class->parameters.push_back(Parameter("speed"));
-    pid_class->states.push_back("stable");
-    pid_class->states.push_back("unstable");
+
+	MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
+	pid_class->parameters.push_back(Parameter("module"));
+	pid_class->parameters.push_back(Parameter("offset"));
+	pid_class->parameters.push_back(Parameter("settings"));
+	pid_class->parameters.push_back(Parameter("position"));
+	pid_class->parameters.push_back(Parameter("speed"));
+	pid_class->states.push_back("stable");
+	pid_class->states.push_back("unstable");
 	pid_class->default_state = State("stable");
 	pid_class->initial_state = State("stable");
 	pid_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
-    MachineClass *list_class = new MachineClass("LIST");
-    list_class->states.push_back("empty");
-    list_class->states.push_back("nonempty");
+	MachineClass *list_class = new MachineClass("LIST");
+	list_class->states.push_back("empty");
+	list_class->states.push_back("nonempty");
 	list_class->default_state = State("empty");
 	list_class->initial_state = State("empty");
 	//list_class->disableAutomaticStateChanges();
 	list_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    
-    MachineClass *ref_class = new MachineClass("REFERENCE");
-    ref_class->states.push_back("ASSIGNED");
-    ref_class->states.push_back("EMPTY");
+
+	MachineClass *ref_class = new MachineClass("REFERENCE");
+	ref_class->states.push_back("ASSIGNED");
+	ref_class->states.push_back("EMPTY");
 	ref_class->default_state = State("EMPTY");
 	ref_class->initial_state = State("EMPTY");
 	//ref_class->disableAutomaticStateChanges();
-    
-    MachineClass *module_class = new MachineClass("MODULE");
+
+	MachineClass *module_class = new MachineClass("MODULE");
 	module_class->disableAutomaticStateChanges();
 
-    MachineClass *publisher_class = new MachineClass("PUBLISHER");
-    publisher_class->parameters.push_back(Parameter("broker"));
-    publisher_class->parameters.push_back(Parameter("topic"));
-    publisher_class->parameters.push_back(Parameter("message"));
-    
-    MachineClass *subscriber_class = new MachineClass("SUBSCRIBER");
-    subscriber_class->parameters.push_back(Parameter("broker"));
-    subscriber_class->parameters.push_back(Parameter("topic"));
-    subscriber_class->options["message"] = "";
+	MachineClass *publisher_class = new MachineClass("PUBLISHER");
+	publisher_class->parameters.push_back(Parameter("broker"));
+	publisher_class->parameters.push_back(Parameter("topic"));
+	publisher_class->parameters.push_back(Parameter("message"));
 
-    MachineClass *broker_class = new MachineClass("MQTTBROKER");
-    broker_class->parameters.push_back(Parameter("host"));
-    broker_class->parameters.push_back(Parameter("port"));
+	MachineClass *subscriber_class = new MachineClass("SUBSCRIBER");
+	subscriber_class->parameters.push_back(Parameter("broker"));
+	subscriber_class->parameters.push_back(Parameter("topic"));
+	subscriber_class->options["message"] = "";
+
+	MachineClass *broker_class = new MachineClass("MQTTBROKER");
+	broker_class->parameters.push_back(Parameter("host"));
+	broker_class->parameters.push_back(Parameter("port"));
 	broker_class->disableAutomaticStateChanges();
-    
+
 	MachineClass *cond = new MachineClass("CONDITION");
 	cond->states.push_back("true");
 	cond->states.push_back("false");
 	cond->default_state = State("false");
-    
+
 	MachineClass *flag = new MachineClass("FLAG");
 	flag->states.push_back("on");
 	flag->states.push_back("off");
@@ -360,36 +360,41 @@ void semantic_analysis() {
 	flag->disableAutomaticStateChanges();
 	flag->transitions.push_back(Transition(State("off"), State("on"), Message("turnOn")));
 	flag->transitions.push_back(Transition(State("on"), State("off"), Message("turnOff")));
-	
+
 	MachineClass *mc_variable = new MachineClass("VARIABLE");
 	mc_variable->states.push_back("ready");
-    mc_variable->initial_state = State("ready");
+	mc_variable->initial_state = State("ready");
 	mc_variable->disableAutomaticStateChanges();
 	mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
-    mc_variable->options["VALUE"] = "VAL_PARAM1";
-	
+	mc_variable->options["VALUE"] = "VAL_PARAM1";
+
 	MachineClass *mc_constant = new MachineClass("CONSTANT");
 	mc_constant->states.push_back("ready");
-    mc_constant->initial_state = State("ready");
+	mc_constant->initial_state = State("ready");
 	mc_constant->disableAutomaticStateChanges();
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
-    mc_constant->options["VALUE"] = "VAL_PARAM1";
-    
+	mc_constant->options["VALUE"] = "VAL_PARAM1";
+
 	mc_constant->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
-    
-    MachineClass *mc_external = new MachineClass("EXTERNAL");
-    mc_external->options["HOST"] = "localhost";
-    mc_external->options["PORT"] = 5600;
-    mc_external->options["PROTOCOL"] = "ZMQ";
-    
-    MachineInstance*settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
-    machines["SYSTEM"] = settings;
-    settings->setProperties(settings_class->properties);
-    settings->setStateMachine(settings_class);
-    ClockworkInterpreter::instance()->setup(settings);
+
+	MachineClass *mc_external = new MachineClass("EXTERNAL");
+	mc_external->options["HOST"] = "localhost";
+	mc_external->options["PORT"] = 5600;
+	mc_external->options["PROTOCOL"] = "ZMQ";
+
+	MachineInstance*settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
+	machines["SYSTEM"] = settings;
+	settings->setProperties(settings_class->properties);
+	settings->setStateMachine(settings_class);
+
+	ClockworkInterpreter::instance()->setup(settings);
+	settings->setValue("NAME", device_name());
+}
+
+void semantic_analysis() {
 
     std::map<std::string, MachineInstance*> machine_instances;
-    
+
     std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
     while (iter != machines.end()) {
         MachineInstance *m = (*iter).second;
@@ -453,7 +458,7 @@ void semantic_analysis() {
     }
     
     // display all machine instances and link classes to their instances
-    std::cout << "\nDefinitions\n";
+    DBG_PARSER << "\nDefinitions\n";
     std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;
@@ -485,7 +490,11 @@ void semantic_analysis() {
 
         }
         else {
-            std::cout << "Error: no state machine defined for instance " << (*c_iter).first << "\n";
+			std::stringstream ss;
+            ss << "Error: no state machine defined for instance " << (*c_iter).first;
+			error_messages.push_back(ss.str());
+			++num_errors;
+			NB_MSG << ss.str() << "\n";
         }
     }
     
@@ -710,8 +719,7 @@ void semantic_analysis() {
 			}
 		}
 	}
-    settings->setValue("NAME", device_name());
-	
+
 	// reorder the list of machines in reverse order of dependence
 	MachineInstance::sort();
 }
@@ -816,7 +824,8 @@ int loadConfig(std::list<std::string> &files) {
     int modbus_result = load_preset_modbus_mappings();
     if (modbus_result) return modbus_result;
     
-    
+	predefine_special_machines();
+
     /* load configuration from files named on the commandline */
     std::list<std::string>::iterator f_iter = files.begin();
     while (f_iter != files.end())
@@ -870,7 +879,7 @@ int loadConfig(std::list<std::string> &files) {
         return 2;
     }
     
-    semantic_analysis();
+	semantic_analysis();
 	
 	// display errors and warnings
 	BOOST_FOREACH(std::string &error, error_messages) {
@@ -948,6 +957,7 @@ void initialise_machines() {
             || mi->uses_timer
             || mi->mq_interface
             || mi->stable_states.size() > 0
+			|| mi->_type == "CONDITION"
             || mi->_type == "COUNTERRATE"
             || mi->_type == "RATEESTIMATOR"
             || mi->getStateMachine()->plugin
@@ -963,7 +973,7 @@ void initialise_machines() {
         }
     }
     std::cout << num_passive << " passive and " << num_active << " active machines\n";
-    
+
 	// enable all other machines
     
 	bool only_startup = machine_classes.count("STARTUP") > 0;
@@ -978,6 +988,9 @@ void initialise_machines() {
 			DBG_INITIALISATION << m->getName() << " is disabled at startup\n";
 		}
 	}
-    
+
+	// let channels start processing messages
+	Channel::startChannels();
+
 }
 

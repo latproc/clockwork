@@ -71,8 +71,9 @@ MachineInstance::SharedCache *MachineInstance::shared = 0;
 class MachineInstance::Cache {
 public:
 	std::string *full_name;
+	bool reported_error;
 
-  Cache() : full_name(0) { }
+  Cache() : full_name(0), reported_error(false) { }
 };
 
 Parameter::Parameter(Value v) : val(v), machine(0) {
@@ -398,12 +399,6 @@ void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, uns
 	hw_names[name] = addr;
 }
 #endif
-
-void Transmitter::send(Message *m, Receiver *r, bool expect_reply) {
-	DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
-	Package *p = new Package(this, r, m, expect_reply);
-	Dispatcher::instance()->deliver(p);
-}
 
 bool TriggeredAction::active() {
 	std::set<IOComponent*>::iterator iter = trigger_on.begin();
@@ -759,7 +754,7 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value)
         settings->readings.append( val, delta_t);
 
 		int32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
-		if ( abs(mean - settings->last_sent) > abs(settings->noise_tolerance) ) {
+		if ( abs(mean - settings->last_sent) > settings->noise_tolerance ) {
 			settings->last_sent = mean;
 		}
 		settings->position = settings->last_sent;
@@ -1018,7 +1013,9 @@ void MachineInstance::describe(std::ostream &out) {
 			if (p_i.kind == Value::t_symbol) {
 				out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name 
 					<< "), state: "
-					<< (parameters[i].machine ? parameters[i].machine->getCurrent().getName(): "") <<  "\n";
+					<< (parameters[i].machine ? parameters[i].machine->getCurrent().getName(): "")
+					<< (parameters[i].machine && !parameters[i].machine->enabled() ? "DISABLED" : "")
+					<<  "\n";
 			}
 			else {
 				out << "  parameter " << (i+1) << " " << p_i << " (" << parameters[i].real_name << ")\n";
@@ -1036,6 +1033,7 @@ void MachineInstance::describe(std::ostream &out) {
 				out << locals[i].val <<"  Missing machine\n";
 		}
 	}
+	if (published) { out << "  published (" << published << ")\n"; }
 	if (listens.size()) {
 		out << "Listening to: \n";
 		std::set<Transmitter *>::iterator iter = listens.begin();
@@ -1208,7 +1206,16 @@ void MachineInstance::idle() {
 	if (!is_enabled) {
 		return;
 	}
-	if (!is_active) return;
+	if (!is_active) {
+		if (!cache->reported_error) {
+			char buf[100];
+			snprintf(buf, 100, "Error: %s::idle() called but this machine is not active", _name.c_str());
+			MessageLog::instance()->add(buf);
+			DBG_MSG << buf << "\n";
+			cache->reported_error = true;
+		}
+		return;
+	}
 	if (!state_machine) {
 		if (LOGS(DebugExtra::instance()->DEBUG_ACTIONS)) {
 			std::stringstream ss;
@@ -2476,10 +2483,28 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	busy_machines.insert(this);
 }
 
+void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) {
+	MachineShadowInstance *msi = dynamic_cast<MachineShadowInstance*>(this);
+	if (msi) {
+		std::string addressed_message = fullName();
+		addressed_message += ".";
+		addressed_message += m->getText();
+		std::list<Value> *params = new std::list<Value>;
+		params->push_back(addressed_message.c_str());
+		Channel::sendCommand(this, "SEND", params); // empty command parameter list
+	}
+	else {
+		DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
+		Package *p = new Package(this, r, m, expect_reply);
+		Dispatcher::instance()->deliver(p);
+	}
+}
+
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
 	name(class_name), allow_auto_states(true), token_id(0), plugin(0),
 	polling_delay(0)
 {
+	states.push_back("INIT");
 	token_id = Tokeniser::instance()->getTokenId(class_name);
 	all_machine_classes.push_back(this);
 }
@@ -2516,6 +2541,7 @@ State *MachineClass::findState(const char *seek) {
 
 MachineClass *MachineClass::find(const char *name) {
 	int token = Tokeniser::instance()->getTokenId(name);
+	size_t n = all_machine_classes.size();
 	std::list<MachineClass *>::iterator iter = all_machine_classes.begin();
 	while (iter != all_machine_classes.end()) {
 		MachineClass *mc = *iter++;
@@ -2767,14 +2793,8 @@ void MachineInstance::enable() {
 	}
 	if (_type == "LIST") // enabling a list enables the members
 		for (unsigned int i = 0; i<parameters.size(); ++i) {
+			// parameters my be just values but if they are machines they need to be enabled
 			if (parameters[i].machine) parameters[i].machine->enable();
-			else {
-				std::stringstream ss;
-				ss << "No machine found for parameter " << parameters[i].val << " in " << _name;
-				char *msg = strdup(ss.str().c_str());
-				MessageLog::instance()->add(msg);
-				free(msg);
-			}
 		}
 
 	setInitialState();
@@ -2955,15 +2975,17 @@ bool MachineInstance::setStableState() {
 						}
 						DBG_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name 
 							<< " due to condition: " << *s.condition.predicate << "\n";
-						MoveStateActionTemplate temp(_name.c_str(), s.state_name.c_str() );
+						char *sn = strdup(s.state_name.c_str());
+						MoveStateActionTemplate temp(_name.c_str(), sn );
 						state_change = new MoveStateAction(this, temp);
 						Action::Status action_status;
 						if ( (action_status = (*state_change)()) == Action::Failed) {
-							DBG_AUTOSTATES << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
+							DBG_MSG << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
 						}
 						else {
 							DBG_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
 						}
+						free(sn);
 						//if (action_status == Action::Complete || action_status == Action::Failed) {
 						state_change->release();
 						state_change = 0;
@@ -3444,8 +3466,10 @@ bool MachineInstance::setStableState() {
 				// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 
 				// variables may refer to an initialisation value passed in as a parameter. 
-				if (state_machine->token_id == ClockworkToken::VARIABLE
-						|| state_machine->token_id == ClockworkToken::CONSTANT) {
+				if ( state_machine
+					 && (state_machine->token_id == ClockworkToken::VARIABLE
+						|| state_machine->token_id == ClockworkToken::CONSTANT)
+					) {
 					for (unsigned int i=0; i<parameters.size(); ++i) {
 						if (state_machine->parameters[i].val.kind == Value::t_symbol 
 								&& property == state_machine->parameters[i].val.sValue
@@ -3536,11 +3560,14 @@ bool MachineInstance::setStableState() {
 						return s.getNameValue();
 					}
 				}
+				for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+					if (stable_states[ss_idx].state_name == state_name) return &stable_states[ss_idx].name;
+				}
 			}
 			return &SymbolTable::Null;
 		}
 
-		Value *MachineInstance::lookupState(const Value &state_name) const {
+		Value *MachineInstance::lookupState(const Value &state_name) {
 			//is state_name a valid state?
 			if (state_machine) {
 				std::list<State>::iterator iter = state_machine->states.begin();
@@ -3549,6 +3576,9 @@ bool MachineInstance::setStableState() {
 					if (s.getId() == state_name.token_id) {
 						return s.getNameValue();
 					}
+				}
+				for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+					if (stable_states[ss_idx].name == state_name) return &stable_states[ss_idx].name;
 				}
 			}
 			return &SymbolTable::Null;
@@ -3575,7 +3605,7 @@ bool MachineInstance::setStableState() {
 				  if (t.dest)
 				  }*/
 			}
-#if 0
+#if 1
 			else {
 				char buf[100];
 				snprintf(buf,100,"%s does not have a state; %s", fullName().c_str(), state_name.c_str());
@@ -4293,3 +4323,28 @@ bool MachineInstance::setStableState() {
 		void MachineInstance::ignoreError() {
 			error_state = 0;
 		}
+
+MachineDetails::MachineDetails(const char *nam, const char *cls, std::list<Parameter> &params,
+			   const char *sf, int sl, SymbolTable &props, MachineInstance::InstanceType kind)
+: machine_name(nam), machine_class(cls), source_file(sf), source_line(sl),
+instance_type(kind)
+{
+	std::copy(parameters.begin(), parameters.end(),  back_inserter(parameters));
+
+	SymbolTableConstIterator iter = props.begin();
+	while (iter != props.end()) {
+		const std::pair<std::string, Value> &p = *iter;
+		properties.push_back(p);
+		iter++;
+	}
+}
+
+MachineInstance *MachineDetails::instantiate() {
+	MachineInstance *machine = MachineInstanceFactory::create(machine_name.c_str(),
+		machine_class.c_str(), instance_type);
+	machine->setDefinitionLocation(source_file.c_str(), source_line);
+	std::copy(parameters.begin(), parameters.end(),  back_inserter(machine->parameters));
+	machine->setProperties(properties);
+	return machine;
+}
+

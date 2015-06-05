@@ -54,15 +54,26 @@ four VARIABLE 4;
 
 numbers LIST two,four,three,one;
 
+number_list LIST two,four,three,one;
 
 /* A sorting machine to sort its parameter into 
 	numeric order
 */
 Sorter MACHINE input {
-	COMMAND sort { LOG "sorting"; SORT input }
+	COMMAND sort { LOG "sorting"; SORT input BY PROPERTY VALUE }
 }
-sorter Sorter numbers;
+sorter Sorter number_list;
 
+/* A test of what happens when a COPY is done an no values match */
+Copier MACHINE input, output {
+	OPTION VALUE 3;
+	COMMAND copy { 
+		CLEAR output; 
+		COPY ALL FROM input TO output WHERE input.ITEM == VALUE;
+	}
+}
+copied LIST;
+copier Copier number_list, copied;
 
 /* and example of how to use a LIST for FIFO queue operations */
 Queue MACHINE {
@@ -281,4 +292,19 @@ DependancyTest MACHINE items {
 	}
 }
 dependancy_test DependancyTest depts;
+
+
+myf1 FLAG(x:1);
+myf2 FLAG(x:2);
+aa LIST myf1, myf2;
+testcopy MACHINE list {
+    curr LIST;
+	a WHEN ALL curr ARE on;
+	b DEFAULT;
+
+	ENTER a {  z := TAKE FIRST FROM curr; z.a := 7; }
+	ENTER INIT { COPY 1 FROM list TO curr; }
+}
+tc testcopy aa;
+
 

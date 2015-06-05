@@ -21,6 +21,7 @@ blinker Blinker;
 
 AltBlinker MACHINE {
   OPTION DELAY 0;
+  INIT WHEN SELF IS INIT;
   on WHEN SELF IS off AND TIMER >= 1000 || SELF IS on AND TIMER < 1000;
   off DEFAULT;
 
