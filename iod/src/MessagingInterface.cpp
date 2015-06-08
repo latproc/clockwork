@@ -53,26 +53,27 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 //    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
 
-	response_len = -1;
+	response_len = 0;
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			if (items[0].revents & ZMQ_POLLIN) {
-				NB_MSG << tnam << " safeRecv() collecting data\n";
-				response_len = sock.recv(buf, buflen, 0);
-				if (response_len >= 0 && response_len < buflen) {
+				//NB_MSG << tnam << " safeRecv() collecting data\n";
+				response_len = sock.recv(buf, buflen, ZMQ_NOBLOCK);
+				if (response_len > 0 && response_len < buflen) {
 					buf[response_len] = 0;
-					NB_MSG << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n";
+					//NB_MSG << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n";
 				}
 				else {
-					NB_MSG << tnam << " saveRecv() collected data with length " << response_len << "\n";
+					//NB_MSG << tnam << " saveRecv() collected data with length " << response_len << "\n";
 				}
 				if (!response_len && block) continue;
 			}
-			return (response_len <= 0) ? false : true;
+			return (response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
@@ -89,9 +90,10 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
 	while (!MessagingInterface::aborted()) {
 		try {
-			NB_MSG << tnam << " safeSend() sending " << buf << "\n";
+			//NB_MSG << tnam << " safeSend() sending " << buf << "\n";
 			sock.send(buf, buflen);
 			break;
 		}
@@ -105,7 +107,9 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
 	int retries = 3;
+	assert(msg);
 sendMessage_transmit:
 	--retries;
 	assert(retries);
@@ -113,12 +117,18 @@ sendMessage_transmit:
         try {
 			if ( !(*msg) ) { NB_MSG << " Warning: sending empty message"; }
             size_t len = sock.send(msg, strlen(msg));
-            if (!len) continue;
+			if (!len) {
+				if (!len) { NB_MSG << "Warning: zero bytes sent of " << strlen(msg) << "\n"; }
+				continue;
+			}
 			NB_MSG << "sending: " << msg << " on thread " << tnam << "\n";
             break;
         }
         catch (zmq::error_t e) {
-            if (errno == EINTR) continue;
+			if (errno == EINTR) {
+				NB_MSG << "Warning: send was interrupted (EAGAIN)\n";
+				continue;
+			}
             std::cerr << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n";
             return false;
         }
@@ -128,14 +138,20 @@ sendMessage_transmit:
     while (len == 0) {
         try {
             zmq::message_t rcvd;
-            if (sock.recv(&rcvd)) {
+            if (sock.recv(&rcvd), ZMQ_NOBLOCK) {
                 len = rcvd.size();
-                if (!len) continue;
+				if (!len) {
+					zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+					zmq::poll( items, 1, 1);
+					if (items[0].revents & ZMQ_POLLIN) len = rcvd.size();
+				}
+				if (!len)
+					continue;
                 buf = new char[len+1];
                 memcpy(buf, rcvd.data(), len);
                 buf[len] = 0;
                 response = buf;
-                delete buf;
+                delete[] buf;
             }
             break;
         }
@@ -322,7 +338,9 @@ char *MessagingInterface::send(const char *txt) {
 	if (owner_thread != pthread_self()) {
 		char tnam1[100], tnam2[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
+		assert(pgn_rc == 0);
 		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
+		assert(pgn_rc == 0);
 
 		NB_MSG << "error: message send ("<< txt <<") from a different thread:"
 		<< " owner: " << std::hex << " '" << owner_thread
@@ -330,8 +348,6 @@ char *MessagingInterface::send(const char *txt) {
 		<< "' current: " << std::hex << " " << pthread_self()
 		<< " '" << tnam1 << "'"
 		<< "\n";
-		//assert( pthread_equal(owner_thread, pthread_self()) );
-		int x = 1;
 	}
 
     if (!is_publisher){

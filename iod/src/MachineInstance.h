@@ -456,8 +456,8 @@ protected:
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
-	Action::Status setState(State &new_state, bool resume = false);
-    Action::Status setState(const char *new_state, bool resume = false);
+	virtual Action::Status setState(State &new_state, bool resume = false);
+    virtual Action::Status setState(const char *new_state, bool resume = false);
 	bool is_enabled;
 	Value state_timer;
 	MachineInstance *locked;
@@ -485,6 +485,7 @@ public:
 	int published;
 	static SharedCache *shared;
 	Cache *cache;
+	unsigned int action_errors;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);

@@ -71,6 +71,8 @@ private:
 		e_aborted, 
 		e_handling_dispatch
 	} status;
+	zmq::socket_t *dispatch_socket;
+	pthread_t owner_thread;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);

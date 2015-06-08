@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 #include "value.h"
+#include "symboltable.h"
 
 /*
 class IODString {
@@ -49,24 +50,34 @@ public:
 
 struct IODCommand {
 public:
-    IODCommand( int minp = 0, int maxp = 100)  : done(false), success(eUnassigned), error_str(""),
+    IODCommand( int minp = 0, int maxp = 100)  : done(Unassigned), error_str(""),
 		result_str(""), min_params(minp), max_params(maxp) {}
     virtual ~IODCommand(){ }
-    bool done;
 //    const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
 //    const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
     const char *error() { return error_str.c_str(); }
     const char *result() { return result_str.c_str(); }
-    
-	bool operator()(std::vector<Value> &params) {
-		done = run(params);
+
+	enum CommandResult { Failure, Success, Unassigned};
+
+	CommandResult done;
+
+	CommandResult operator()(std::vector<Value> &params) {
+		done = (run(params)) ? Success : Failure;
 		return done;
 	}
-	enum CommandResult { eUnassigned, eFailure, e_Success};
-	CommandResult success;
-    
+	CommandResult operator()() {
+		done = (run(parameters)) ? Success : Failure;
+		return done;
+	}
+	void setParameters(std::vector<Value> &);
+	Value &name() { if (parameters.empty()) return SymbolTable::Null; else return parameters[0]; }
+	size_t numParams() { return parameters.size(); }
+	Value &param(size_t which) { if (which < parameters.size()) return parameters[which]; else return SymbolTable::Null; }
+
 protected:
 	virtual bool run(std::vector<Value> &params) = 0;
+	std::vector<Value> parameters;
 	std::string error_str;
 	std::string result_str;
 	int min_params;

@@ -63,7 +63,7 @@ std::string Scheduler::getStatus() {
 		snprintf(buf, 300, "state: %d, is ready: %d"
 			" items: %ld, now: %ld.%06ld\n"
 			"last notification: %10.6f\nwait time: %10.6f",
-			state, ready(), items.size(), now.tv_sec, now.tv_usec, 
+			state, ready(), items.size(), now.tv_sec, now.tv_usec,
 				(float)notification_sent/1000000.0f, (float)wait_duration/1000000.0f);
 	std::stringstream ss;
 	ss << buf << "\n";
@@ -289,6 +289,7 @@ void Scheduler::idle() {
 
 	state = e_waiting;
 	bool is_ready;
+	uint64_t last_poll = nowMicrosecs();
 	while (state != e_aborted) {
 		next_delay_time = getNextDelay();
 		if (!ready() && state == e_waiting) {
@@ -299,40 +300,31 @@ void Scheduler::idle() {
 			}
 #endif
 			long delay = next_delay_time;
-			bool got_work = false;
 			notification_sent = 0; // checking now, if more items are pushed we will want to know
 			if (items.empty()) {
 				// empty, just wait for someone to add some work
-				if (safeRecv(update_sync, buf, 10, false, response_len, 100)) 
-					got_work = true;
-				//else
-				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+				if (!safeRecv(update_sync, buf, 10, false, response_len, 1000)) {
+					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+				}
 			}
 			else if (delay <= 0) {
-				if (safeRecv(update_sync, buf, 10, false, response_len, 0))
-					got_work = true;
-				//else
-				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+				if (!safeRecv(update_sync, buf, 10, false, response_len, 0)) {
+					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+				}
 			}
 			else if (delay < 1000) {
-				if (safeRecv(update_sync, buf, 10, false, response_len, 0))
-					got_work = true;
-				//else
-				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+				if (!safeRecv(update_sync, buf, 10, false, response_len, 0)) {
+					//std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+				}
 				usleep((unsigned int)delay);
 			}
 			else
-				if (safeRecv(update_sync, buf, 10, false, response_len, delay/1000))
-					got_work = true;
-				//else
-				//	std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-			//if (got_work) state = e_have_work;
-			//state = e_have_work;
+				if (!safeRecv(update_sync, buf, 10, false, response_len, delay/1000)) {
+					//std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
+				}
 		}
-		//if (state == e_have_work) {
 		is_ready = ready();
-		//	state = e_waiting;
-		//}
+		if (!is_ready && state == e_waiting) continue;
 		if ( state == e_waiting && is_ready) {
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
 			safeSend(sync,"sched", 5); // tell clockwork we have something to do

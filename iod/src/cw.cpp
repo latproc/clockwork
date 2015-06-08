@@ -257,7 +257,7 @@ int main (int argc, char const *argv[])
                 }
                 else if (m->_type == "POINT" && m->parameters.size() > 1 && m->parameters[1].val.kind == Value::t_integer) {
                         std::string name = m->parameters[0].real_name;
-                        int bit_position = (int)m->parameters[1].val.iValue;
+                        //int bit_position = (int)m->parameters[1].val.iValue;
                         //std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
                         MachineInstance *module_mi = MachineInstance::find(name.c_str());
                         if (!module_mi) {
@@ -335,7 +335,7 @@ int main (int argc, char const *argv[])
 	Dispatcher::start();
 
 	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(machine, iod_activation);
+	ProcessingThread processMonitor(machine, iod_activation, stateMonitor);
 	boost::thread process(boost::ref(processMonitor));
     
     MQTTInterface::instance()->activate();

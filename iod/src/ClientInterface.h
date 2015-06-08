@@ -52,6 +52,9 @@ public:
 
 private:
     ClientInterfaceInternals *internals;
+
+	IODCommandThread(const IODCommandThread &);
+	IODCommandThread &operator=(const IODCommandThread &);
 };
 
 #endif

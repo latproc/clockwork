@@ -932,7 +932,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	next_poll(0),
 	is_traceable(false),
 	published(0),
-	cache(0)
+	cache(0),
+	action_errors(0)
 {
 	if (!shared) shared = new SharedCache;
 	cache = new Cache;
@@ -973,7 +974,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	idle_time(0),
 	is_traceable(false),
 	published(0),
-	cache(0)
+	cache(0),
+	action_errors(0)
 {
 	if (!shared) shared = new SharedCache;
 	cache = new Cache;
@@ -1094,9 +1096,11 @@ void MachineInstance::describe(std::ostream &out) {
 		}
 	}
 
+	if (action_errors) out << "action errors seen: " << action_errors << "\n";
 	if (!active_actions.empty()) {
 		out << "active actions: (" << active_actions.size() << ")\n";
 		displayActive(out);
+		out << "\n";
 	}
 	if (properties.size()) {
 		out << "properties:\n  ";
@@ -1252,6 +1256,10 @@ void MachineInstance::idle() {
 			return;
 		}
 		Action *last = curr;
+		if (last->getStatus() == Action::Failed) {
+			NB_MSG << "Action " << (*curr) << " failed\n";
+			++action_errors;
+		}
 		curr = executingCommand();
 		if (curr && curr == last) {
 			DBG_M_ACTIONS << "Action " << *curr << " failed to remove itself when complete. doing so manually\n";
@@ -1260,8 +1268,9 @@ void MachineInstance::idle() {
 			curr = executingCommand();
 			assert(curr != last);
 		}
-		else
+		else {
 			last->release();
+		}
 	}
 	// TBD this could be an infinite loop if there is a way for handle() to cause a push
 	while (!mail_queue.empty()){
@@ -1272,7 +1281,6 @@ void MachineInstance::idle() {
 			DBG_M_MESSAGING << _name << " found package " << p << "\n";
 			mail_queue.pop_front();
 			handle(p.message, p.transmitter, p.needs_receipt);
-			//forceIdleCheck();
 		}
 	}
 	if (mail_queue.empty() && active_actions.empty()) has_work = false;
@@ -1494,7 +1502,7 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 
 void MachineInstance::checkPluginStates() {
 	//std::list<uint64_t> stats;
-	uint64_t start_processing = nowMicrosecs();
+	//uint64_t start_processing = nowMicrosecs();
 	std::set<MachineInstance *>::iterator pl_iter = plugin_machines.begin();
 	while (pl_iter != plugin_machines.end())  {
 		MachineInstance *m = *pl_iter++;
@@ -1925,6 +1933,12 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 			std::string txt = _name + "." + current_state.getName() + "_leave";
 			Message msg(txt.c_str());
 			stat = execute(msg, this);
+			if (stat != Action::Complete) {
+				char buf[200];
+				snprintf(buf, 200, "%s %s action failed", _name.c_str(), txt.c_str());
+				MessageLog::instance()->add(buf);
+				NB_MSG << buf;
+			}
 
 			std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 			while (dep_iter != depends.end()) {
@@ -2541,7 +2555,6 @@ State *MachineClass::findState(const char *seek) {
 
 MachineClass *MachineClass::find(const char *name) {
 	int token = Tokeniser::instance()->getTokenId(name);
-	size_t n = all_machine_classes.size();
 	std::list<MachineClass *>::iterator iter = all_machine_classes.begin();
 	while (iter != all_machine_classes.end()) {
 		MachineClass *mc = *iter++;
@@ -2601,7 +2614,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 	note << _name << ':' << id << " stack:\n";
 	const char *delim = "";
 	BOOST_FOREACH(Action *act, active_actions) {
-		note << delim << " " << *act << " (status=" << act->getStatus() << ")";
+		note << delim << " " << *act << " (status:" << act->getStatus() << ") ";
 		delim = "\n";
 	}
 }

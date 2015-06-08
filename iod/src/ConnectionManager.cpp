@@ -75,7 +75,7 @@ void MachineShadow::setState(const std::string new_state) {
     state = new_state;
 }
 
-ConnectionManager::ConnectionManager() : aborted(false) { }
+ConnectionManager::ConnectionManager() : owner_thread(pthread_self()), aborted(false) { }
 
 void ConnectionManager::setProperty(std::string machine_name, std::string prop, Value val) {
     std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
@@ -294,6 +294,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
 	if (!checkConnections()) {
 		return false;
 	}
@@ -301,15 +302,22 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     if (monit_subs.disconnected() || monit_setup->disconnected())
         rc = zmq::poll( &items[2], num_items-2, 500);
     else
-        rc = zmq::poll(&items[0], num_items, 500);
+        rc = zmq::poll(items, num_items, 500);
     if (!rc) return true;
     char buf[1000];
     size_t msglen = 0;
-	if (items[num_items-1].revents & ZMQ_POLLIN) {
-		NB_MSG << tnam << " SubscriptionManager detected command\n";
+	if (items[num_items-1].revents & ZMQ_POLLERR) {
+		NB_MSG << tnam << " SubscriptionManager detected error at index " << (num_items-1) << "\n";
+	}
+	else if (items[num_items-1].revents & ZMQ_POLLIN) {
+		NB_MSG << tnam << " SubscriptionManager detected command at index " << (num_items-1) << "\n";
 	}
     if (run_status == e_waiting_cmd && items[num_items-1].revents & ZMQ_POLLIN) {
-		size_t ll = cmd.recv(buf, 1000);
+		ssize_t ll;
+		do {
+			ll = cmd.recv(buf, 1000, ZMQ_NOBLOCK);
+			usleep(1);
+		} while (ll == 0);
         /*if (safeRecv(cmd, buf, 1000, false, msglen)) {
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
@@ -317,10 +325,8 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
             if (!monit_setup->disconnected()) setup.send(buf,msglen);
             run_status = e_waiting_response;
         }*/
-	} else {
-		int x = 1;
 	}
-    if (run_status == e_waiting_response && monit_setup->disconnected()) {
+	if (run_status == e_waiting_response && monit_setup->disconnected()) {
         const char *msg = "disconnected, attempting reconnect";
         cmd.send(msg, strlen(msg));
         run_status = e_waiting_cmd;

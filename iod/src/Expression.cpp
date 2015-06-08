@@ -561,7 +561,10 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         case opNegate: return ~ rhs;
         case opBitXOr: return lhs ^ rhs;
 		case opAssign:return rhs;
-        case opMatch: return matches(a.val->asString().c_str(), b.val->asString().c_str());
+		case opMatch: {
+			assert(a.val); assert(b.val);
+			return matches(a.val->asString().c_str(), b.val->asString().c_str());
+		}
         case opAny:
         case opCount:
         case opAll:

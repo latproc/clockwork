@@ -47,12 +47,13 @@ std::map<std::string, std::string>message_handlers;
 extern bool program_done;
 
 bool IODCommandGetStatus::run(std::vector<Value> &params) {
-    if (params.size() == 2) {
-		done = false;
-        std::string ds = params[1].asString();
-        IOComponent *device = IOComponent::lookup_device(ds);
-        if (device) {
-			done = true;
+	bool ok = false;
+	if (params.size() == 2) {
+
+		std::string ds = params[1].asString();
+		IOComponent *device = IOComponent::lookup_device(ds);
+		if (device) {
+			ok = true;
 			std::string res = device->getStateString();
 			if (device->address.bitlen>1) {
 				char buf[10];
@@ -62,17 +63,17 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
 			result_str = res;
 		}
 		else {
-    		MachineInstance *machine = MachineInstance::find(params[1].asString().c_str());
-		    if (machine) {
-				done = true;
+			MachineInstance *machine = MachineInstance::find(params[1].asString().c_str());
+			if (machine) {
+				ok = true;
 				result_str = machine->getCurrentStateString();
-    		}
-            else
-               error_str = "Not Found";
+			}
+			else
+				error_str = "Not Found";
 		}
-	 }
-     return done;
-   }
+	}
+	return ok;
+}
 
 bool IODCommandSetStatus::run(std::vector<Value> &params) {
 	std::string ds;
@@ -786,13 +787,12 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         if (res) {
             result_str = res;
             free(res);
-            done = true;
+            return true;
         }
         else {
             error_str = "No System Information available";
-            done = false;
+            return false;
         }
-        return done;
     }
 
 

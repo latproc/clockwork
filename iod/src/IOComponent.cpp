@@ -579,7 +579,7 @@ bool IOComponent::hasUpdates() {
 
 uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 	unsigned int max = IOComponent::getMaxIOOffset();
-	unsigned int min = IOComponent::getMinIOOffset();
+	//unsigned int min = IOComponent::getMinIOOffset();
 	// process data size
 	if (res && len != max+1) { delete res; res = 0; }
 	if (!res) res = new uint8_t[max+1];
@@ -630,7 +630,7 @@ void IOComponent::setDefaultMask(uint8_t *mask){
 
 uint8_t *IOComponent::generateMask(std::list<MachineInstance*> &outputs) {
 	unsigned int max = IOComponent::getMaxIOOffset();
-	unsigned int min = IOComponent::getMinIOOffset();
+	//unsigned int min = IOComponent::getMinIOOffset();
 	// process data size
 	uint8_t *res = new uint8_t[max+1];
 	memset(res, 0, max+1);
@@ -676,7 +676,7 @@ static uint8_t *generateUpdateMask() {
 	if (updatedComponentsOut.empty()) return 0;
 
 	unsigned int max = IOComponent::getMaxIOOffset();
-	unsigned int min = IOComponent::getMinIOOffset();
+	//unsigned int min = IOComponent::getMinIOOffset();
 	uint8_t *res = new uint8_t[max+1];
 	memset(res, 0, max+1);
 	//std::cout << "mask is " << (max+1) << " bytes\n";
@@ -755,7 +755,7 @@ void IOComponent::setupIOMap() {
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
-		bitpos = bitpos % 8;
+		//bitpos = bitpos % 8;
 		if (ioc->address.bitlen>=8) offset += ioc->address.bitlen/8 - 1;
 		if (offset > max_offset) max_offset = offset;
 		if (offset < min_offset) min_offset = offset;
@@ -831,7 +831,7 @@ void IOComponent::markChange() {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
 			else if (address.bitlen == 16) {
-				uint16_t x = pending_value % 65536;
+				uint16_t x; // = pending_value % 65536;
 				toU16(offset, x);
 			}
 			else if (address.bitlen == 32) {
@@ -955,10 +955,9 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 				raw_value = val;
 				int32_t old_val = address.value;
 				int32_t new_val = filter(val);
-				if (hardware_state == s_operational ) { //&& address.value != new_val) {
-					address.value = filter(val);
+				if (hardware_state == s_operational ) {
+					address.value = new_val;
 
-					//if (owners.empty()) std::cout << "owner is not defined\n";
 					if (address.value != old_val) {
 						std::list<MachineInstance*>::iterator owner_iter = owners.begin();
 						owner_iter = owners.begin();

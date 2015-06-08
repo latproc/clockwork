@@ -403,8 +403,8 @@ void semantic_analysis() {
 			ss << "## - Warning: machine table entry " << (*iter).first << " has no machine";
 			error_messages.push_back(ss.str());
 		}
-        
-        machine_instances[m->getName()] = m;
+        else
+			machine_instances[m->getName()] = m;
         iter++;
     }
     
@@ -738,9 +738,9 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 			set_test_only(1);
         else if (strcmp(argv[i], "-l") == 0 && i < argc-1)
             logfilename = argv[++i];
-        else if (strcmp(argv[i], "-s") == 0 && i < argc-1)
+/*        else if (strcmp(argv[i], "-s") == 0 && i < argc-1)
             maxlogsize = strtol(argv[++i], NULL, 10);
-		else if (strcmp(argv[i], "-i") == 0 && i < argc-1) { // initialise from persistent store
+*/		else if (strcmp(argv[i], "-i") == 0 && i < argc-1) { // initialise from persistent store
 			set_persistent_store(argv[++i]);
 		}
 		else if (strcmp(argv[i], "-c") == 0 && i < argc-1) { // debug config file
@@ -802,9 +802,12 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
     {
         int ferr;
         ferr = fflush(stdout);
+		if (ferr == -1) perror("fflush(stdout)");
         ferr = fflush(stderr);
+		if (ferr == -1) perror("fflush(stderr)");
         stdout = freopen(logfilename, "w+", stdout);
         ferr = dup2(1, 2);
+		if (ferr == -1) perror("dup2");
     }
     
 	if (!modbus_map()) set_modbus_map("modbus_mappings.txt");

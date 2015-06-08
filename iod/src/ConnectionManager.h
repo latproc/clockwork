@@ -22,6 +22,7 @@
 #define cwlang_ConnectionManager_h
 
 #include <string>
+#include <pthread.h>
 #include <boost/thread.hpp>
 #include <sstream>
 #include <map>
@@ -90,6 +91,7 @@ public:
 	void abort();
 	bool ready() { return rate_limiter.ready(); }
 protected:
+	pthread_t owner_thread;
 	bool aborted;
 	std::map<std::string, MachineShadow *> machines;
 	RateLimiter rate_limiter;

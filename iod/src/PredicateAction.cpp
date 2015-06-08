@@ -70,6 +70,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
 
 
 Value eval(Predicate *p, MachineInstance *m){
+	if (!p) return SymbolTable::Null;
 	if (p->left_p || p->right_p) { 
 		Value l;
 		Value r;
@@ -120,7 +121,15 @@ Value eval(Predicate *p, MachineInstance *m){
 				DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
 			}
 			else {
-				DBG_PREDICATES << " expr: " << *(p->left_p) << " " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
+				if (p->left_p && p->right_p) {
+					DBG_PREDICATES << " expr: " << *(p->left_p) << " " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
+				}
+				else if (p->left_p) {
+					DBG_PREDICATES << " expr: " << *(p->left_p) << " " << p->op << " returns " << res << "\n";
+				}
+				else if (p->right_p) {
+					DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
+				}
 			}
 		}
 		return res;

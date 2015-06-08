@@ -28,6 +28,23 @@ FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem REQUIRED 
 FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 
+set(HEADER_FILES
+    ${CLOCKWORK_DIR}/MessagingInterface.h
+    ${CLOCKWORK_DIR}/SocketMonitor.h
+    ${CLOCKWORK_DIR}/ConnectionManager.h
+    ${CLOCKWORK_DIR}/MessageLog.h
+    ${CLOCKWORK_DIR}/MessageEncoding.h
+    ${CLOCKWORK_DIR}/regular_expressions.h
+    ${CLOCKWORK_DIR}/Logger.h
+    ${CLOCKWORK_DIR}/anet.h
+    ${CLOCKWORK_DIR}/cJSON.h
+    ${CLOCKWORK_DIR}/DebugExtra.h
+    ${CLOCKWORK_DIR}/value.h
+    ${CLOCKWORK_DIR}/symboltable.h
+    ${CLOCKWORK_DIR}/rate.h
+    ${CLOCKWORK_DIR}/Message.h
+    )
+
 add_library (Clockwork 
     ${CLOCKWORK_DIR}/MessagingInterface.cpp 
     ${CLOCKWORK_DIR}/MessageLog.cpp 
@@ -43,7 +60,9 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/value.cpp 
     ${CLOCKWORK_DIR}/symboltable.cpp
     ${CLOCKWORK_DIR}/rate.cpp
-    ${CLOCKWORK_DIR}/Message.cpp )
+    ${CLOCKWORK_DIR}/Message.cpp 
+	${HEADER_FILES}
+)
 
 include_directories("/usr/local/include")
 include_directories("/opt/local/include")
@@ -105,58 +124,41 @@ SET_SOURCE_FILES_PROPERTIES(${cw_yacc_output} GENERATED)
 # Include binary directory to include lexer.c in parser.c
 INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
 
+set (Clockwork_Headers
+	src/Action.h			src/Expression.h		src/MachineInstance.h		src/SetListEntriesAction.h	src/cJSON.h
+	src/CallMethodAction.h		src/ExpressionAction.h		src/Message.h			src/SetOperationAction.h	src/clockwork.h
+	src/Channel.h			src/FireTriggerAction.h		src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
+	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h		src/ShutdownAction.h		src/cwlang.h
+	src/ClientInterface.h		src/IOComponent.h		src/MessagingInterface.h	src/SimulatedRawInput.h		src/domain.h
+	src/CommandManager.h		src/IODCommand.h		src/ModbusInterface.h		src/SimulatedRawOutput.h	src/dynamic_value.h
+	src/ConnectionManager.h		src/IODCommands.h		src/PatternAction.h		src/SocketMonitor.h		src/ecat_thread.h
+	src/ControlSystemMachine.h	src/IfCommandAction.h		src/PersistentStore.h		src/SortListAction.h		src/filtering.h
+	src/CopyPropertiesAction.h	src/IncludeAction.h		src/Plugin.h			src/State.h			src/hw_config.h
+	src/DebugExtra.h		src/LockAction.h		src/PolledMessageHandler.h	src/Statistic.h			src/options.h
+	src/DisableAction.h		src/LogAction.h			src/PopListAction.h		src/Statistics.h		src/rate.h
+	src/Dispatcher.h		src/Logger.h			src/PredicateAction.h		src/UnlockAction.h		src/regular_expressions.h
+	src/ECInterface.h		src/MQTTDCommand.h		src/ProcessingThread.h		src/WaitAction.h		src/symboltable.h
+	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h		src/anet.h			src/value.h
+	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
+	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
+)
 set (Clockwork_SRCS 
+	${Clockwork_Headers}
 	${cw_yacc_output} ${cw_lex_output}
-	src/cwlang.ypp
-	src/cwlang.lpp
-	src/cmdline.ypp
-	src/cmdline.lpp
-	src/CallMethodAction.cpp
-	src/Channel.cpp
-	src/ClearListAction.cpp
-	src/ClientInterface.cpp
-	src/CopyPropertiesAction.cpp
-	src/DisableAction.cpp
-	src/Dispatcher.cpp
-	src/ECInterface.cpp
-	src/EnableAction.cpp
-	src/ExecuteMessageAction.cpp
-	src/Expression.cpp
-	src/ExpressionAction.cpp
-	src/FireTriggerAction.cpp
-	src/HandleMessageAction.cpp
-	src/IOComponent.cpp
-	src/IODCommands.cpp
-	src/IfCommandAction.cpp
-	src/IncludeAction.cpp
-	src/LockAction.cpp
-	src/LogAction.cpp
-	src/MQTTInterface.cpp
-	src/MachineCommandAction.cpp
-	src/MachineInstance.cpp
-	src/ModbusInterface.cpp
-	src/PatternAction.cpp
-	src/PersistentStore.cpp
-	src/Plugin.cpp
-	src/PolledMessageHandler.cpp
-	src/PopListAction.cpp
-	src/PredicateAction.cpp
-	src/ProcessingThread.cpp
-	src/ResumeAction.cpp
-	src/Scheduler.cpp
-	src/SendMessageAction.cpp
-	src/SetListEntriesAction.cpp
-	src/SetOperationAction.cpp
-	src/SetStateAction.cpp
-	src/ShutdownAction.cpp
-	src/SortListAction.cpp
-	src/State.cpp
-	src/UnlockAction.cpp
-	src/WaitAction.cpp
-	src/clockwork.cpp
-	src/dynamic_value.cpp
-	src/filtering.cpp
-	src/options.cpp
+	src/Action.cpp
+	src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp src/cmdline.lpp src/CallMethodAction.cpp
+	src/Channel.cpp src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
+	src/DisableAction.cpp src/Dispatcher.cpp src/ECInterface.cpp src/EnableAction.cpp
+	src/ExecuteMessageAction.cpp src/Expression.cpp src/ExpressionAction.cpp
+	src/FireTriggerAction.cpp src/HandleMessageAction.cpp src/IOComponent.cpp src/IODCommands.cpp
+	src/IfCommandAction.cpp src/IncludeAction.cpp src/LockAction.cpp src/LogAction.cpp
+	src/MQTTInterface.cpp src/MachineCommandAction.cpp src/MachineInstance.cpp src/ModbusInterface.cpp
+	src/PatternAction.cpp src/PersistentStore.cpp src/Plugin.cpp src/PolledMessageHandler.cpp
+	src/PopListAction.cpp src/PredicateAction.cpp src/ProcessingThread.cpp src/ResumeAction.cpp
+	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp src/SetOperationAction.cpp
+	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
+	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
+	src/filtering.cpp src/options.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )

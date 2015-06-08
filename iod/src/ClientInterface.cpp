@@ -131,21 +131,25 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 	pending_commands.push_back(cmd);
 }
 
-IODCommand *IODCommandThread::getCompletedCommand() {
-	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock(cti->data_mutex);
-
-	IODCommand *cmd = completed_commands.front();
-	completed_commands.pop_front();
-	return cmd;
-}
-
 IODCommand *IODCommandThread::getCommand() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 	boost::mutex::scoped_lock(cti->data_mutex);
 
-	IODCommand *cmd = completed_commands.front();
+	if (pending_commands.empty()) return 0;
+	
+	IODCommand *cmd = pending_commands.front();
 	pending_commands.pop_front();
+	return cmd;
+}
+
+IODCommand *IODCommandThread::getCompletedCommand() {
+	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
+	boost::mutex::scoped_lock(cti->data_mutex);
+
+	if (completed_commands.empty()) return 0;
+
+	IODCommand *cmd = completed_commands.front();
+	completed_commands.pop_front();
 	return cmd;
 }
 
@@ -154,6 +158,10 @@ void IODCommandThread::putCompletedCommand(IODCommand *cmd) {
 	boost::mutex::scoped_lock(cti->data_mutex);
 
 	completed_commands.push_back(cmd);
+}
+
+void IODCommand::setParameters(std::vector<Value> &params) {
+	std::copy(params.begin(), params.end(), back_inserter(parameters));
 }
 
 
@@ -197,19 +205,29 @@ void IODCommandThread::operator()() {
  */
 				size_t acc_len = 0;
 				char acc_buf[10];
-				if (safeRecv(access_req, acc_buf, 10, false, acc_len, -1)) {
+				if (safeRecv(access_req, acc_buf, 10, true, acc_len, -1)) {
                 	status = e_responding;
 					NB_MSG << "e_wait_processing->e_responding\n";
 				}
             }
             if (status == e_responding) {
+				// let the processing thread continue straight away
+				access_req.send("done", 4);
+				// wait for an acknowledgement so the access request is back in the correct state
+				{
+					size_t acc_len = 0;
+					char acc_buf[10];
+					safeRecv(access_req, acc_buf, 10, true, acc_len);
+				}
+
 				CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 				boost::mutex::scoped_lock(cti->data_mutex);
 				IODCommand *command = getCompletedCommand();
-				if (command) {
-					if (command->success) {
+				while (command) {
+					assert(command->done != IODCommand::Unassigned);
+					if (command->done == IODCommand::Success) {
 						const char * cmdres = command->result();
-						//std::cout << " command generated response: " << cmdres << "\n";
+						NB_MSG << " command generated response: " << cmdres << "\n";
 						if (!(*cmdres)) {
 							char buf[100];
 							snprintf(buf, 100, "command generated an empty response");
@@ -225,22 +243,14 @@ void IODCommandThread::operator()() {
 						sendMessage(cti->socket, command->error());
 					}
 					delete command;
+					command = getCompletedCommand();
 				}
-				if (completed_commands.empty()) {
-					access_req.send("done", 4);
-					// wait for an acknowledgement so the access request is back in the correct state
-					{
-						size_t acc_len = 0;
-						char acc_buf[10];
-						safeRecv(access_req, acc_buf, 10, true, acc_len);
-					}
-	                status = e_running;
-					NB_MSG << "e_responding->e_running\n";
-				}
+				status = e_running;
+				NB_MSG << "e_responding->e_running\n";
             }
 			if (status == e_running) {
 				IODCommand *command = 0;
-				std::vector<Value> params(0);
+				std::vector<Value> params;
                 zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int rc = zmq::poll( &items[0], 1, 500);
                 if (!rc) continue;
@@ -388,13 +398,10 @@ NB_MSG << "Client interface received:" << data << "\n";
                 else {
                     command = new IODCommandUnknown;
                 }
+				command->setParameters(params);
                 status = e_wait_processing_start;
 				NB_MSG << "e_running->e_wait_processing_start\n";
-				{
-					CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-					boost::mutex::scoped_lock(cti->data_mutex);
-					pending_commands.push_back(command);
-				}
+				newPendingCommand(command);
 
             cleanup:
                 free(data);

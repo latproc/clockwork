@@ -107,9 +107,9 @@ void checkInputs()
 }
 #endif
 
-	ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator)
+	ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface)
 : machine(m), sequence(0), cycle_delay(1000), status(e_waiting),
-	activate_hardware(activator)
+	activate_hardware(activator), command_interface(cmd_interface)
 {
 }
 
@@ -358,8 +358,7 @@ void ProcessingThread::operator()()
 			machine_is_ready = false;
 
 		uint64_t start, end;
-		//boost::mutex::scoped_lock lock(thread_protection_mutex);
-		start = nowMicrosecs();
+		//start = nowMicrosecs();
 
 		zmq::pollitem_t items[] =
 		{
@@ -516,23 +515,29 @@ void ProcessingThread::operator()()
 						status = e_command_done;
 					}
 					else {
+#ifdef KEEPSTATS
+						uint64_t start_cmd_time = nowMicrosecs();
+						if (start_cmd_time - start_cmd > 60L * 1000000L) {
+							cmd_count = 0;
+							total_cmd_time = 0;
+						}
+						start_cmd = start_cmd_time;
+#endif
 						status = e_handling_cmd;
 					}
 				}
 			}
 		}
-
 		if (status == e_handling_cmd) {
-#ifdef KEEPSTATS
-			uint64_t start_cmd_time = nowMicrosecs();
-			if (start_cmd_time - start_cmd > 60L * 1000000L) {
-				cmd_count = 0;
-				total_cmd_time = 0;
+			IODCommand *command = command_interface.getCommand();
+			while (command) {
+				NB_MSG << "Processing command: " << command->name() << "\n";
+				(*command)();
+				command_interface.putCompletedCommand(command);
+				command = command_interface.getCommand();
 			}
-			start_cmd = start_cmd_time;
-#endif
 			safeSend(resource_mgr,"go", 2);
-			status = e_waiting_cmd;
+			status = e_waiting_cmd; // waiting for the command interface to say it's collected results
 		}
 		if (status == e_command_done) {
 			char buf[10];
@@ -604,7 +609,7 @@ void ProcessingThread::operator()()
 #ifdef KEEPSTATS
 			start = nowMicrosecs();
 #endif
-			safeSend(sched_sync,"continue",3);
+			safeSend(sched_sync,"continue",8);
 			status = e_waiting_sched;
 		}
 		if (status == e_waiting_sched) {

@@ -8,8 +8,10 @@ Blinker MACHINE {
   on STATE;
   off STATE;
 
-  ENTER on { WAIT 1000; SET SELF TO off; }
-  ENTER off { WAIT 1000; SET SELF TO on; }
+  ENTER on { WAIT 1000; SEND turnOff TO SELF; }
+  ENTER off { WAIT 1000; SEND turnOn TO SELF; }
+  off DURING turnOff{}
+  on DURING turnOn{}
 
 }
 blinker Blinker;

@@ -76,6 +76,9 @@ public:
     
     void modified();
     void checked();
+
+	bool monitors() const; // does this channel monitor anything?
+	bool updates() const; // does this channel update anything?
     
     static State DISCONNECTED;
     static State CONNECTING;
@@ -87,6 +90,7 @@ protected:
     std::set<std::string> ignores_patterns;
     std::set<std::string> monitors_names;
     std::map<std::string, Value> monitors_properties;
+	std::map<std::string, Value> updates_names;
     bool monitors_exports;
     uint64_t last_modified; // if the modified time > check time, a full check will be used
     uint64_t last_checked;
@@ -132,7 +136,6 @@ private:
     std::string identifier;
     std::string version;
     std::set<std::string> shares;
-    std::map<std::string, Value> updates_names;
     std::set<std::string> send_messages;
     std::set<std::string> recv_messages;
     std::map<std::string, Value> options;
@@ -171,6 +174,9 @@ public:
 
 	void operator()();
 	void abort();
+
+	virtual Action::Status setState(State &new_state, bool resume = false);
+	virtual Action::Status setState(const char *new_state, bool resume = false);
 
     bool doesMonitor(); // is this channel monitoring any machines?
     bool doesUpdate(); // does this channel update any machines?

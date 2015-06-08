@@ -24,6 +24,7 @@
 #include "IOComponent.h"
 #include "MachineInstance.h"
 #include "Channel.h"
+#include "MessageLog.h"
 
 Action *SendMessageActionTemplate::factory(MachineInstance *mi) { 
   return new SendMessageAction(mi, *this); 
@@ -66,11 +67,15 @@ Action::Status SendMessageAction::run() {
                 if (entry) owner->sendMessageToReceiver(new Message(msg_str.c_str()), entry);
             }
         }
+		status = Action::Complete;
 	}
 	else {
-		NB_MSG << *this << " Error: cannot find target machine " << target << "\n";
+		std::stringstream ss;
+		ss << *this << " Error: cannot find target machine " << target;
+		MessageLog::instance()->add(ss.str().c_str());
+		NB_MSG << ss.str();
+		status = Action::Failed;
 	}
-	status = Action::Complete;
 	owner->stop(this);
 	return status;
 }
@@ -80,6 +85,6 @@ Action::Status SendMessageAction::checkComplete() {
 }
 
 std::ostream &SendMessageAction::operator<<(std::ostream &out) const {
-    return out << "SendMessageAction " << message << " " << target << "\n";
+    return out << owner->getName() << ": SendMessageAction " << message << " TO " << target << "\n";
 }
 		

@@ -1,6 +1,8 @@
 #ifndef __cw_processingthread_h__
 #define __cw_processingthread_h__
 
+#include "ClientInterface.h"
+
 class HardwareActivation {
 	public:
 		virtual ~HardwareActivation() {}
@@ -11,7 +13,7 @@ class ProcessingThread
 {
 public:
     void operator()();
-    ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator);
+    ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface);
     void stop();
     bool checkAndUpdateCycleDelay();
     
@@ -25,7 +27,7 @@ public:
     static const int SCHEDULER_ITEM = 3;
     static const int ECAT_OUT_ITEM = 4;
     
-    enum Status { e_waiting, e_handling_ecat, 
+    enum Status { e_waiting, e_handling_ecat, e_start_handling_commands,
 				e_handling_cmd, e_waiting_cmd, e_command_done, 
 				e_handling_dispatch,
 				e_handling_sched, e_waiting_sched } ;
@@ -43,6 +45,7 @@ private:
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);
 	HardwareActivation &activate_hardware;
+	IODCommandThread &command_interface;
 };
 
 #endif

@@ -102,7 +102,7 @@ public:
     const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
 
 	enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
-    
+
     Status operator()() {
 		if (status == New) status = Running;
 		status = run();
@@ -150,6 +150,8 @@ protected:
 	Action *blocked; // blocked on this action
 	Trigger *trigger;
 };
+
+std::ostream &operator<<(std::ostream &out, Action::Status state);
 
 class IOComponent;
 class TriggeredAction : public Action {

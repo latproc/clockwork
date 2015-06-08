@@ -7,7 +7,6 @@ SAMPLER_CHANNEL CHANNEL {
 	VERSION "0.1.0";
 	MONITORS `.*`;
 	IGNORES `^SYSTEM`;
-	PUBLISHER;
 }
 
 # The standard definition for persistence

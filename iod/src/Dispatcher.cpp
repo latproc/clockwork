@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <list>
+#include <pthread.h>
 #include "Dispatcher.h"
 #include "Message.h"
 #include "MachineInstance.h"
@@ -47,7 +48,8 @@ void DispatchThread::operator()()
 }
 
 Dispatcher::Dispatcher() : socket(0), started(false), dispatch_thread(0), thread_ref(0),
-    sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw)
+    sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
+	dispatch_socket(0), owner_thread(0)
 {
     dispatch_thread = new DispatchThread;
     thread_ref = new boost::thread(boost::ref(*dispatch_thread));
@@ -56,6 +58,7 @@ Dispatcher::Dispatcher() : socket(0), started(false), dispatch_thread(0), thread
 Dispatcher::~Dispatcher()
 {
     if (socket) delete socket;
+	if (dispatch_socket) delete dispatch_socket;
 }
 
 Dispatcher *Dispatcher::instance()
@@ -100,9 +103,26 @@ void Dispatcher::removeReceiver(Receiver*r)
 
 void Dispatcher::deliver(Package *p)
 {
-    zmq::socket_t sender(*MessagingInterface::getContext(), ZMQ_PUSH);
-    sender.connect("inproc://dispatcher");
-    sender.send(&p, sizeof(Package*));
+	if (dispatch_socket == 0) {
+		owner_thread = pthread_self();
+		dispatch_socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
+    	dispatch_socket->connect("inproc://dispatcher");
+	}
+	if (owner_thread != pthread_self()) {
+		char tnam1[100], tnam2[100];
+		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
+		assert(pgn_rc == 0);
+		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
+		assert(pgn_rc == 0);
+
+		NB_MSG << "dispatcher error: message send package ("<< *p <<") from a different thread:"
+		<< " owner: " << std::hex << " '" << owner_thread
+		<< " '" << tnam2
+		<< "' current: " << std::hex << " " << pthread_self()
+		<< " '" << tnam1 << "'"
+		<< "\n";
+	}
+    dispatch_socket->send(&p, sizeof(Package*));
 }
 
 void Dispatcher::deliverZ(Package *p)
