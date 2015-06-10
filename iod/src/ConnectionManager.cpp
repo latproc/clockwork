@@ -123,25 +123,31 @@ std::string copyAlphaNumChars(const char *val, const char *default_name) {
 	return constructAlphaNumericString(0, val, 0, default_name);
 }
 
-SubscriptionManager::SubscriptionManager(const char *chname, Protocol proto, const char *remote_host, int remote_port) :
-	subscriber(*MessagingInterface::getContext(), (proto == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
-	setup(*MessagingInterface::getContext(), ZMQ_REQ),
+SubscriptionManager::SubscriptionManager(const char *chname, Protocol proto,
+										 const char *remote_host, int remote_port) :
 	subscriber_port(remote_port),
 	subscriber_host(remote_host),
 	channel_name(chname), protocol(proto),
-	monit_subs(subscriber, constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str() ),
-	monit_pubs(0),
-	monit_setup(0)
+	monit_subs(subscriber_, constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str() ),
+	monit_pubs(0), monit_setup(0),
+	subscriber_(*MessagingInterface::getContext(), (proto == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
+	setup_(0),
+	_setup_status(e_startup)
 {
-	monit_setup = new SingleConnectionMonitor(setup, constructAlphaNumericString("inproc://", chname, ".setup", "inproc://monitor.setup").c_str() );
+	if (!remote_host) _setup_status = e_not_used; // This is not a client
+	if (isClient()) {
+		setup_ = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+		monit_setup = new SingleConnectionMonitor(*setup_, constructAlphaNumericString("inproc://", chname, ".setup", "inproc://monitor.setup").c_str() );
+	}
 	init();
 }
 
 SubscriptionManager::~SubscriptionManager() {
-	
+	NB_MSG << "warning: SubscriptionManager did not cleanup properly\n";
 }
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
+	assert(isClient());
     if (monit_setup) delete monit_setup;
     monit_setup = monitor;
 }
@@ -149,37 +155,50 @@ void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
 void SubscriptionManager::init() {
 	if (protocol == eCLOCKWORK) { // start the subscriber if necessary
 		int res;
-		res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
+		res = zmq_setsockopt (subscriber_, ZMQ_SUBSCRIBE, "", 0);
 		assert (res == 0);
 	}
     boost::thread subscriber_monitor(boost::ref(monit_subs));
-    
-    // client
-    boost::thread setup_monitor(boost::ref(*monit_setup));
-    
+
+	if (isClient()) {
+		// client
+		boost::thread setup_monitor(boost::ref(*monit_setup));
+	}
+
     run_status = e_waiting_cmd;
     setSetupStatus(e_startup);
 }
 
 int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
-    items[0].socket = setup; items[0].events = ZMQ_POLLERR | ZMQ_POLLIN; items[0].fd = 0; items[0].revents = 0;
-    items[1].socket = subscriber; items[0].events = ZMQ_POLLERR | ZMQ_POLLIN; items[0].fd = 0; items[0].revents = 0;
-    return 2;
+	int idx = 0;
+	if (setup_) {
+    	items[idx].socket = setup();
+		items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
+		items[idx].fd = 0;
+		items[idx].revents = 0;
+		++idx;
+	}
+    items[idx].socket = subscriber();
+	items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
+	items[idx].fd = 0;
+	items[idx].revents = 0;
+    return ++idx;
 }
 
 bool SubscriptionManager::requestChannel() {
     size_t len = 0;
+	assert(isClient());
     if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
         NB_MSG << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
-        len = setup.send(channel_setup, strlen(channel_setup));
+        len = setup().send(channel_setup, strlen(channel_setup));
         assert(len);
         setSetupStatus(SubscriptionManager::e_waiting_setup);
         return false;
     }
     if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
         char buf[1000];
-        if (!safeRecv(setup, buf, 1000, false, len)) return false;
+        if (!safeRecv(setup(), buf, 1000, false, len)) return false;
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
@@ -216,17 +235,18 @@ bool SubscriptionManager::requestChannel() {
 }
     
 bool SubscriptionManager::setupConnections() {
+	assert(isClient());
     std::stringstream ss;
     if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
         ss << "tcp://" << subscriber_host << ":" << 5555;
         current_channel = "";
-				try {
-        	setup.connect(ss.str().c_str());
-				}
-				catch(zmq::error_t err) {
-					NB_MSG << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
-					return false;
-				}
+		try {
+			setup().connect(ss.str().c_str());
+		}
+		catch(zmq::error_t err) {
+			NB_MSG << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
+			return false;
+		}
         monit_setup->setEndPoint(ss.str().c_str());
         setSetupStatus(SubscriptionManager::e_waiting_connect);
         usleep(5000);
@@ -238,7 +258,7 @@ bool SubscriptionManager::setupConnections() {
         std::string channel_url = ss.str();
         DBG_MSG << "connecting to " << channel_url << "\n";
         monit_subs.setEndPoint(channel_url.c_str());
-        subscriber.connect(channel_url.c_str());
+        subscriber().connect(channel_url.c_str());
         setSetupStatus(SubscriptionManager::e_done);
         return true;
     }
@@ -246,19 +266,23 @@ bool SubscriptionManager::setupConnections() {
 }
 
 void SubscriptionManager::setSetupStatus( Status new_status ) {
+	assert(isClient());
     _setup_status = new_status;
     state_start = microsecs();
 }
-    
+
+bool SubscriptionManager::isClient() {
+	return _setup_status != e_not_used;
+}
+
+zmq::socket_t &SubscriptionManager::subscriber() { return subscriber_; }
+zmq::socket_t &SubscriptionManager::setup() { assert(setup_); return *setup_; }
+
 bool SubscriptionManager::checkConnections() {
+	if (!isClient()) {
+		return !monit_subs.disconnected();
+	}
     if (monit_setup->disconnected() && monit_subs.disconnected()) {
-        //uint64_t now = microsecs();
-        /*if (setupStatus() == e_waiting_connect && !setup.connected()) {
-            //setup.disconnect(monit_setup->endPoint().c_str());
-            setSetupStatus(e_startup);
-        }
-        else 
-         */
         if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
              setSetupStatus(e_startup);
              setupConnections();
@@ -283,7 +307,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	assert(false); // shouldn't be used yet
 	if (!checkConnections()) return false;
 	int rc = 0;
-	if (monit_subs.disconnected() || monit_setup->disconnected())
+	if (monit_subs.disconnected() || ( monit_setup && monit_setup->disconnected() ) )
 		rc = zmq::poll( &items[2], num_items-2, 500);
 	else
 		rc = zmq::poll(&items[0], num_items, 500);
@@ -295,55 +319,79 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
+
+
 	if (!checkConnections()) {
 		return false;
 	}
     int rc = 0;
-    if (monit_subs.disconnected() || monit_setup->disconnected())
+    if (isClient() && num_items>2 && (monit_subs.disconnected() || monit_setup->disconnected()) )
         rc = zmq::poll( &items[2], num_items-2, 500);
     else
         rc = zmq::poll(items, num_items, 500);
-    if (!rc) return true;
-    char buf[1000];
+    if (rc == 0) return true; // no sockets have messages
+
+	char buf[1000];
     size_t msglen = 0;
-	if (items[num_items-1].revents & ZMQ_POLLERR) {
-		NB_MSG << tnam << " SubscriptionManager detected error at index " << (num_items-1) << "\n";
+
+	// yuk. the command socket is assumed to be the second-last item in the poll item list.
+	int command_item = num_items - 1;
+	if (items[command_item].revents & ZMQ_POLLERR) {
+		NB_MSG << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
 	}
-	else if (items[num_items-1].revents & ZMQ_POLLIN) {
-		NB_MSG << tnam << " SubscriptionManager detected command at index " << (num_items-1) << "\n";
+	else if (items[command_item].revents & ZMQ_POLLIN) {
+		NB_MSG << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
 	}
-    if (run_status == e_waiting_cmd && items[num_items-1].revents & ZMQ_POLLIN) {
-		ssize_t ll;
-		do {
-			ll = cmd.recv(buf, 1000, ZMQ_NOBLOCK);
-			usleep(1);
-		} while (ll == 0);
-        /*if (safeRecv(cmd, buf, 1000, false, msglen)) {
+
+    if (run_status == e_waiting_cmd && items[command_item].revents & ZMQ_POLLIN) {
+		if (safeRecv(cmd, buf, 1000, false, msglen)) {
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
             DBG_MSG << " got cmd: " << buf << "\n";
-            if (!monit_setup->disconnected()) setup.send(buf,msglen);
-            run_status = e_waiting_response;
-        }*/
-	}
-	if (run_status == e_waiting_response && monit_setup->disconnected()) {
-        const char *msg = "disconnected, attempting reconnect";
-        cmd.send(msg, strlen(msg));
-        run_status = e_waiting_cmd;
-    }
-    else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-		NB_MSG << "incoming response\n";
-        if (safeRecv(setup, buf, 1000, false, msglen)) {
-			NB_MSG << " forwarding response " << buf << "\n";
-            if (msglen && msglen<1000) {
-                cmd.send(buf, msglen);
-            }
-            else {
-                cmd.send("error", 5);
-            }
-            run_status = e_waiting_cmd;
+
+			// if we are a client, pass commands through the setup socket to the other end
+			// of the channel.
+			if (isClient() && monit_setup && !monit_setup->disconnected()) {
+				setup().send(buf,msglen);
+				run_status = e_waiting_response;
+			}
+			else {
+				subscriber().send(buf, msglen);
+				if (protocol == eCLOCKWORK) // require a response
+					run_status = e_waiting_response;
+			}
         }
-    }
+	}
+
+	if (run_status == e_waiting_response && !isClient()) {
+		cmd.send("ack",3);
+		run_status = e_waiting_cmd;
+		return true;
+	}
+	else if (isClient()) {
+		if (run_status == e_waiting_response && monit_setup && monit_setup->disconnected() ) {
+			const char *msg = "disconnected, attempting reconnect";
+			cmd.send(msg, strlen(msg));
+			run_status = e_waiting_cmd;
+		}
+		else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
+			NB_MSG << "incoming response\n";
+			bool got_response =
+				(isClient())
+					? safeRecv(setup(), buf, 1000, false, msglen)
+					: safeRecv(subscriber(), buf, 1000, false, msglen);
+			if (got_response) {
+				NB_MSG << " forwarding response " << buf << "\n";
+				if (msglen && msglen<1000) {
+					cmd.send(buf, msglen);
+				}
+				else {
+					cmd.send("error", 5);
+				}
+				run_status = e_waiting_cmd;
+			}
+		}
+	}
     return true;
 }
 

@@ -218,13 +218,13 @@ int main(int argc, const char * argv[]) {
     
     SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCHANNEL);
     SetupConnectMonitor connect_responder;
-    cmd_socket = &subscription_manager.setup;
+    cmd_socket = &subscription_manager.setup();
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
     
     while (!done) {
         zmq::pollitem_t items[] = {
-            { subscription_manager.setup, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
-            { subscription_manager.subscriber, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+            { subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+            { subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
         };
         if (!subscription_manager.checkConnections()) continue;
         try {
@@ -243,7 +243,7 @@ int main(int argc, const char * argv[]) {
         char data[1000];
         size_t len = 0;
         try {
-            len = subscription_manager.subscriber.recv(data, 1000);
+            len = subscription_manager.subscriber().recv(data, 1000);
             if (!len) continue;
         }
         catch (zmq::error_t e) {

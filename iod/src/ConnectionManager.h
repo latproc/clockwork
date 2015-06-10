@@ -97,13 +97,17 @@ protected:
 	RateLimiter rate_limiter;
 };
 
+/*
+ Subscription Manager - create and maintain a connection to a channel server
+ */
 class SubscriptionManager : public ConnectionManager {
 public:
 	enum RunStatus { e_waiting_cmd, e_waiting_response };
-	enum Status{e_startup, e_disconnected, e_waiting_connect,
+	enum Status{e_not_used, e_startup, e_disconnected, e_waiting_connect,
 		e_settingup_subscriber, e_waiting_subscriber, e_waiting_setup, e_done };
 
-	SubscriptionManager(const char *chname, Protocol proto = eCHANNEL, const char *remote_host = "localhost", int remote_port = 5555);
+	SubscriptionManager(const char *chname, Protocol proto = eCHANNEL,
+						const char *remote_host = "localhost", int remote_port = 5555);
 	virtual ~SubscriptionManager();
 	void setSetupMonitor(SingleConnectionMonitor *monitor);
 	
@@ -119,9 +123,11 @@ public:
 	bool checkConnections(zmq::pollitem_t *items, int num_items);
 	virtual int numSocks() { return 2; }
 	int configurePoll(zmq::pollitem_t *);
-	
-	zmq::socket_t subscriber;
-	zmq::socket_t setup;
+
+	zmq::socket_t &subscriber();
+	zmq::socket_t &setup();
+	bool isClient(); // only clients have a setup socket
+
 	Status setupStatus() const { return _setup_status; }
 	void setSetupStatus( Status new_status );
 	uint64_t state_start;
@@ -135,6 +141,8 @@ public:
 	SingleConnectionMonitor *monit_pubs;
 	SingleConnectionMonitor *monit_setup;
 protected:
+	zmq::socket_t subscriber_;
+	zmq::socket_t *setup_;
 	Status _setup_status;
 };
 

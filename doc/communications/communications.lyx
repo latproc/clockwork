@@ -1172,7 +1172,13 @@ Channel Manager
 
 \begin_layout Standard
 A channel manager includes a subscription manager to monitor each connection.
- Connection close events cause deregistration of machines.
+ The last connection close event on a channel causes deregistration of machines.
+\end_layout
+
+\begin_layout Standard
+Given x CHANNEL { UPDATES m; }, whenever m changes state, i notifies the
+ channel instantiation and a state change is sent to the remote end of the
+ channel.
 \end_layout
 
 \begin_layout Subsection
@@ -1185,9 +1191,90 @@ The CHANNEL command is used to instantate a connection.
  to that channel.
  This works well for subscription channels such as used for persistence
  but is not good for channels that require one-to-one communication such
- as 
+ as when two instances of clockwork are communicating directly.
 \end_layout
 
+\begin_layout Itemize
+When a channel is instantiated by the CHANNEL command at runtime, the clockwork
+ driver is the server of the channel.
+\end_layout
+
+\begin_layout Itemize
+When a channel is instantiated by script, the clockwork driver that instantiates
+ it is the client; the server will be started by subsequent use of the CHANNEL
+ command.
+\end_layout
+
+\begin_layout Itemize
+When a channel MONITORS a machine, the client of that channel uses a Subscriptio
+nManager to listen for state changes.
+\end_layout
+
+\begin_layout Itemize
+When a channel UPDATES a machine, the client sends state changes and the
+ server listens using a SubscriptionManager.
+\end_layout
+
+\begin_layout Itemize
+When a channel SHAREs a machine, both sides setup a subscription manager
+ to listen for changes to the machine
+\end_layout
+
+\begin_layout Itemize
+The server end of a channel sends state changes for monitored machines.
+ It normally does this by directed messages that expect a response upon
+ delivery.
+ If a channel is marked as PUBLISHER, multiple clients may subscribe to
+ the channel and the server sends changes using a `publish/subscribe' model
+ that does not require responses
+\end_layout
+
+\begin_layout Itemize
+When two instances of clockwork setup a channel
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+the server adds the channel definition to the list of known channels
+\end_layout
+
+\begin_layout Itemize
+the client instantiates the channel subscription manager and starts it
+\end_layout
+
+\begin_layout Itemize
+the client subscription manager connects to the server and requests a channel
+\end_layout
+
+\begin_layout Itemize
+the server instantiates the channel and creates a publisher on that channel
+ to communicate with the server.
+ The publisher will generally be on a ØMQ Pair socket but if the channel
+ is marked as 'PUBLISHER', then a Publisher socket is used instead
+\end_layout
+
+\begin_layout Itemize
+the server passes the instantiated channel name to the client
+\end_layout
+
+\begin_layout Itemize
+the client subscriber connects to the instantiated channel
+\end_layout
+
+\begin_layout Itemize
+both client and server communicate over the subscriber socket
+\end_layout
+
+\begin_layout Itemize
+the client currently retains a connection to the 'setup' channel but should
+ not (TBD) use this socket
+\end_layout
+
+\begin_layout Itemize
+the server has no need of the setup socket
+\end_layout
+
+\end_deeper
 \begin_layout Subsection
 Implementation notes
 \end_layout
@@ -1225,6 +1312,10 @@ The IGNORES statement should remove the publisher setting on an instance
 \begin_layout Itemize
 Channels currently share a connection to the standard command channel but
  should have their own separate connection
+\end_layout
+
+\begin_layout Itemize
+Test channels that are marked as publishers but instantiated in clockwork
 \end_layout
 
 \begin_layout Section

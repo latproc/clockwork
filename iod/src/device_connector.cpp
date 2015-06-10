@@ -973,9 +973,9 @@ int main(int argc, const char * argv[])
         if (options.watchProperty()) {
             SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
 						assert(sm);
-            items[idx].socket = sm->setup; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+            items[idx].socket = sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
             subs_index = idx;
-            items[idx].socket = sm->subscriber; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+            items[idx].socket = sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
         }
         else {
             CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
@@ -1025,7 +1025,7 @@ int main(int argc, const char * argv[])
                 try {
                     SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
                     if (sm) {
-                        len = sm->subscriber.recv(data, 1000);
+                        len = sm->subscriber().recv(data, 1000);
                         if (!len) continue;
                         data[len] = 0;
                         std::string cmd;

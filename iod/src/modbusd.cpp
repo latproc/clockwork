@@ -881,8 +881,8 @@ int main(int argc, const char * argv[])
 
 						zmq::pollitem_t items[] =
 						{
-								{ subscription_manager.setup, 0, ZMQ_POLLIN, 0 },
-								{ subscription_manager.subscriber, 0, ZMQ_POLLIN, 0 },
+								{ subscription_manager.setup(), 0, ZMQ_POLLIN, 0 },
+								{ subscription_manager.subscriber(), 0, ZMQ_POLLIN, 0 },
 								{ iosh_cmd, 0, ZMQ_POLLIN, 0 }
 						};
 						try {
@@ -905,7 +905,7 @@ int main(int argc, const char * argv[])
 						if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
 
 						zmq::message_t update;
-						if (!subscription_manager.subscriber.recv(&update)) continue;
+						if (!subscription_manager.subscriber().recv(&update)) continue;
 						long len = update.size();
 						char *data = (char *)malloc(len+1);
 						memcpy(data, update.data(), len);

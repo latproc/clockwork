@@ -537,6 +537,10 @@ public:
     virtual void idle();
     //virtual bool hasWork() { return false; }
 
+	virtual Action::Status setState(State &new_state, bool resume = false);
+	virtual Action::Status setState(const char *new_state, bool resume = false);
+
+
     friend class MachineInstanceFactory;
 };
 

@@ -131,7 +131,7 @@ private:
     static std::map< std::string, ChannelDefinition* > *all;
     std::map<std::string, MachineRef *> interfaces;
     ChannelDefinition *parent;
-	bool is_publisher;
+	bool ignore_response;
     std::string psk; // preshared key
     std::string identifier;
     std::string version;
@@ -202,11 +202,13 @@ public:
     void enableShadows();
     void disableShadows();
     void startPublisher();	// used by shared (publish/subscribe) channels
+	void startClient();	// used by shared (publish/subscribe) channels
     void startSubscriber();
 	void stopSubscriber();
 	void startServer();		// used by one-to-one channels
 	void stopServer();
 	bool isClient(); 	// does this channel connect to another instance of clockwork?
+	zmq::socket_t *createCommandSocket(bool client_endpoint);
 
 	void start(); // begin executing by making connections or serving
 	void stop();
@@ -270,6 +272,7 @@ private:
 	boost::thread *subscriber_thread;
 	bool started_;
 	zmq::socket_t *cmd_client;
+	zmq::socket_t *cmd_server;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);
