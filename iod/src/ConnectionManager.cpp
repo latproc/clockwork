@@ -348,7 +348,6 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
             DBG_MSG << " got cmd: " << buf << "\n";
-
 			// if we are a client, pass commands through the setup socket to the other end
 			// of the channel.
 			if (isClient() && monit_setup && !monit_setup->disconnected()) {

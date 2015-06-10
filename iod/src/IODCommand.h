@@ -48,7 +48,7 @@ public:
 };
 */
 
-struct IODCommand {
+class IODCommand {
 public:
     IODCommand( int minp = 0, int maxp = 100)  : done(Unassigned), error_str(""),
 		result_str(""), min_params(minp), max_params(maxp) {}

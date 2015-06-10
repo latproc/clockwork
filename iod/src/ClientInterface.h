@@ -21,6 +21,8 @@
 #ifndef __ClientInterface_h__
 #define __ClientInterface_h__
 
+class IODCommand;
+
 struct ClientInterfaceInternals { virtual ~ClientInterfaceInternals(); };
     
 struct IODCommandListenerThread {
@@ -32,12 +34,13 @@ struct IODCommandListenerThread {
 //    ClientInterfaceInternals *internals;
 };
 
-struct IODCommand;
+IODCommand *parseCommandString(const char *data);
+
+class IODCommand;
 class IODCommandThread {
 public:
+	static IODCommandThread *instance();
     void operator()();
-    IODCommandThread();
-	~IODCommandThread();
     void stop();
     bool done;
 	static void registerCommand(std::string name, IODCommand *cmd);
@@ -51,7 +54,11 @@ public:
 	std::list<IODCommand *>completed_commands;
 
 private:
-    ClientInterfaceInternals *internals;
+	IODCommandThread();
+	~IODCommandThread();
+
+	static IODCommandThread *instance_;
+	ClientInterfaceInternals *internals;
 
 	IODCommandThread(const IODCommandThread &);
 	IODCommandThread &operator=(const IODCommandThread &);

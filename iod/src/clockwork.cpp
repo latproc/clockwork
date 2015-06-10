@@ -964,6 +964,7 @@ void initialise_machines() {
             || mi->_type == "COUNTERRATE"
             || mi->_type == "RATEESTIMATOR"
             || mi->getStateMachine()->plugin
+			|| mi->isActive() // constructor marked this machine type as active
             ) {
             mi->markActive();
             DBG_INITIALISATION << mi->getName() << " is active\n";

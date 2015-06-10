@@ -12,6 +12,8 @@
 #include "SocketMonitor.h"
 #include "ConnectionManager.h"
 #include "Logger.h"
+#include "ClientInterface.h"
+#include "IODCommand.h"
 
 
 std::map<std::string, Channel*> *Channel::all = 0;
@@ -161,9 +163,9 @@ void Channel::dropConnection() {
 	}
 	assert(connections>=0);
 	if (connections == 0) {
-		NB_MSG << "last connection dropped, removing channel " << _name << "\n";
+		NB_MSG << "last connection dropped, stopping channel " << _name << "\n";
 		stopServer();
-		delete this;
+		//delete this;
 	}
 }
 
@@ -447,6 +449,13 @@ void Channel::operator()() {
 			memcpy(data, update.data(), len);
 			data[len] = 0;
 			NB_MSG << "Channel " << name << " subscriber received: " << data << "\n";
+			{
+				IODCommand *command = parseCommandString(data);
+				if (command) {
+					boost::mutex::scoped_lock(update_mutex);
+					pending_commands.push_back(command);
+				}
+			}
 			free(data);
 		}
 	}
@@ -1265,19 +1274,20 @@ void Channel::disable() {
 void Channel::checkCommunications() {
 	if (!communications_manager) return;
 	if (!communications_manager->ready()) return;
-    Value *state = current_state.getNameValue();
     bool ok = communications_manager->checkConnections();
     if (!ok) {
-        if (communications_manager->monit_setup->disconnected() && state->token_id != ChannelImplementation::DISCONNECTED.getId())
+        if (communications_manager->monit_setup->disconnected()
+			&& current_state.getId() != ChannelImplementation::DISCONNECTED.getId())
             setState(ChannelImplementation::DISCONNECTED);
         else if (!communications_manager->monit_setup->disconnected()) {
-            if (communications_manager->setupStatus() == SubscriptionManager::e_waiting_connect && state->token_id != ChannelImplementation::CONNECTING.getId()) {
+            if (communications_manager->setupStatus() == SubscriptionManager::e_waiting_connect
+				&& current_state.getId() != ChannelImplementation::CONNECTING.getId()) {
                 setState(ChannelImplementation::CONNECTING);
             }
         }
         return;
     }
-    if ( state->token_id != ChannelImplementation::CONNECTED.getId())
+    if ( current_state.getId() != ChannelImplementation::CONNECTED.getId())
         setState(ChannelImplementation::CONNECTED);
     
     if ( poll_items && !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
@@ -1285,6 +1295,33 @@ void Channel::checkCommunications() {
             NB_MSG << "Channel got message: " << message_handler->data << "\n";
 		}
     }
+	{
+		boost::mutex::scoped_lock(update_mutex);
+		std::list<IODCommand*>::iterator iter = pending_commands.begin();
+		while (iter != pending_commands.end()) {
+			IODCommand *command = *iter;
+			assert(command);
+			(*command)();
+			NB_MSG << "Channel " << name << " processed command " << command->param(0) << "\n";
+			iter = pending_commands.erase(iter);
+			completed_commands.push_back(command);
+		}
+	}
+	if (!completed_commands.empty()) {
+		std::string response;
+		NB_MSG << "Channel " << name << " finishing off processed commands\n";
+		std::list<IODCommand*>::iterator iter = completed_commands.begin();
+		while (iter != completed_commands.end()) {
+			IODCommand *cmd = *iter;
+			iter = completed_commands.erase(iter);
+			NB_MSG << "deleting completed command: " << cmd->param(0) << "\n";
+			delete cmd;
+		}
+		//sendMessage("process_commands", *cmd_client, response);
+		NB_MSG << "Channel " << name << " got cmd response " << response << "\n";
+
+		// TBD should this go back to the originator?
+	}
 
 }
 

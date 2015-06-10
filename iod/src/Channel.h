@@ -162,6 +162,7 @@ public:
 	std::map<std::string, Value> properties;
 };
 
+class IODCommand;
 class Channel : public ChannelImplementation, public MachineInstance {
 public:
     typedef std::set< MachineRef* > MachineList;
@@ -242,6 +243,8 @@ public:
 
 private:
 	static std::map<MachineInstance *, MachineRecord> pending_items;
+	std::list<IODCommand *>pending_commands;
+	std::list<IODCommand *>completed_commands;
 
 	void checkCommunications();
     void setPollItemBase(zmq::pollitem_t *);

@@ -326,8 +326,8 @@ int main (int argc, char const *argv[])
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
     
 	std::cout << "-------- Starting Command Interface ---------\n";	
-	IODCommandThread stateMonitor;
-	boost::thread monitor(boost::ref(stateMonitor));
+	IODCommandThread *stateMonitor = IODCommandThread::instance();
+	boost::thread monitor(boost::ref(*stateMonitor));
 
 	// Inform the modbus interface we have started
 	load_debug_config();
@@ -335,7 +335,7 @@ int main (int argc, char const *argv[])
 	Dispatcher::start();
 
 	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(machine, iod_activation, stateMonitor);
+	ProcessingThread processMonitor(machine, iod_activation, *stateMonitor);
 	boost::thread process(boost::ref(processMonitor));
     
     MQTTInterface::instance()->activate();
@@ -383,7 +383,7 @@ int main (int argc, char const *argv[])
     processMonitor.stop();
     kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
     process.join();
-    stateMonitor.stop();
+    stateMonitor->stop();
     monitor.join();
         delete context;
     }

@@ -40,6 +40,13 @@
 #include "MessageLog.h"
 
 extern bool machine_is_ready;
+IODCommandThread *IODCommandThread::instance_;
+
+IODCommandThread *IODCommandThread::instance() {
+	if (!instance_) instance_ = new IODCommandThread;
+	return instance_;
+}
+
 
 struct ListenerThreadInternals : public ClientInterfaceInternals {
     
@@ -164,6 +171,141 @@ void IODCommand::setParameters(std::vector<Value> &params) {
 	std::copy(params.begin(), params.end(), back_inserter(parameters));
 }
 
+IODCommand *parseCommandString(const char *data) {
+	std::list<Value> parts;
+	size_t count = 0;
+	std::string ds;
+	std::vector<Value> params;
+	std::list<Value> *param_list = 0;
+	if (MessageEncoding::getCommand(data, ds, &param_list)) {
+		params.push_back(ds);
+		if (param_list) {
+			std::list<Value>::const_iterator iter = param_list->begin();
+			while (iter != param_list->end()) {
+				const Value &v  = *iter++;
+				params.push_back(v);
+			}
+		}
+		count = params.size();
+	}
+	else {
+		std::istringstream iss(data);
+		std::string tmp;
+		iss >> ds;
+		parts.push_back(ds.c_str());
+		++count;
+		while (iss >> tmp) {
+			parts.push_back(tmp.c_str());
+			++count;
+		}
+		std::copy(parts.begin(), parts.end(), std::back_inserter(params));
+	}
+
+	if (params.empty()) {
+		return 0;
+	}
+	IODCommand *command = 0;
+	ds = params[0].asString();
+	if (count == 1 && ds == "LIST") {
+		command = new IODCommandList;
+	}
+	else if (ds == "GET" && count==2) {
+		command = new IODCommandGetStatus;
+	}
+	else if (ds == "GET" && count==3) {
+		command = new IODCommandGetProperty;
+	}
+	else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
+		command = new IODCommandModbusExport;
+	}
+	else if (ds == "MODBUS" && count == 2 && params[1] == "REFRESH") {
+		command = new IODCommandModbusRefresh;
+	}
+	else if (ds == "MODBUS") {
+		command = new IODCommandModbus;
+	}
+	else if (count == 4 && ds == "SET" && params[2] == "TO") {
+		command =  new IODCommandSetStatus;
+	}
+	else if (count == 3 && ds == "STATE") {
+		command =  new IODCommandSetStatus;
+	}
+	else if (count == 2 && ds == "DEBUG" && params[1] == "SHOW") {
+		command = new IODCommandDebugShow;
+	}
+	else if (count == 3 && ds == "DEBUG") {
+		command = new IODCommandDebug;
+	}
+	else if (count == 2 && ds == "TRACING") {
+		command = new IODCommandTracing;
+	}
+	else if (count == 2 && ds == "TOGGLE") {
+		command = new IODCommandToggle;
+	}
+	else if ( ds == "SEND") {
+		command = new IODCommandSend;
+	}
+	else if (count == 1 && ds == "QUIT") {
+		command = new IODCommandQuit;
+	}
+	else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
+		command = new IODCommandListJSON;
+	}
+	else if (count == 2 && ds == "ENABLE") {
+		command = new IODCommandEnable;
+	}
+	else if (count == 2 && ds == "RESUME") {
+		command = new IODCommandResume;
+	}
+	else if (count == 4 && ds == "RESUME" && params[2] == "AT") {
+		command = new IODCommandResume;
+	}
+	else if (count == 2 && ds == "DISABLE") {
+		command = new IODCommandDisable;
+	}
+	else if ( (count == 2 || count == 3) && ds == "DESCRIBE") {
+		command = new IODCommandDescribe;
+	}
+	else if ( ds == "STATS" ) {
+		command = new IODCommandPerformance;
+	}
+	else if (count >= 2 && ds == "CHANNEL") {
+		command = new IODCommandChannel;
+	}
+	else if (ds == "CHANNELS") {
+		command = new IODCommandChannels();
+	}
+	else if (count > 2 && ds == "DATA") {
+		command = new IODCommandData;
+	}
+	else if (ds == "PROPERTY") {
+		command = new IODCommandProperty(data);
+	}
+	else if (ds == "PERSISTENT") {
+		command = new IODCommandPersistentState;
+	}
+	else if (ds == "HELP") {
+		command = new IODCommandHelp;
+	}
+	else if (ds == "MESSAGES" || (ds == "CLEAR" && count == 2 && params[1] == "MESSAGES") ) {
+		command = new IODCommandShowMessages;
+	}
+	else if (ds == "SCHEDULER") {
+		command = new IODCommandSchedulerState;
+	}
+	else if (ds == "NOTICE") {
+		command = new IODCommandNotice;
+	}
+	else if (ds == "INFO") {
+		command = new IODCommandInfo;
+	}
+	else {
+		command = new IODCommandUnknown;
+	}
+	command->setParameters(params);
+	return command;
+}
+
 
 void IODCommandThread::operator()() {
 #ifdef __APPLE__
@@ -173,9 +315,9 @@ void IODCommandThread::operator()() {
 #endif
 
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-    
+
     std::cout << "------------------ Command Thread Started -----------------\n";
-    
+
     MyMonitor monit(&cti->socket);
     boost::thread cmd_monitor(boost::ref(monit));
     
@@ -249,8 +391,6 @@ void IODCommandThread::operator()() {
 				NB_MSG << "e_responding->e_running\n";
             }
 			if (status == e_running) {
-				IODCommand *command = 0;
-				std::vector<Value> params;
                 zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int rc = zmq::poll( &items[0], 1, 500);
                 if (!rc) continue;
@@ -268,137 +408,11 @@ void IODCommandThread::operator()() {
                 memcpy(data, request.data(), size);
                 data[size] = 0;
 NB_MSG << "Client interface received:" << data << "\n";
-            
-                std::list<Value> parts;
-                size_t count = 0;
-                std::string ds;
-                std::list<Value> *param_list = 0;
-                if (MessageEncoding::getCommand(data, ds, &param_list)) {
-                    params.push_back(ds);
-                    if (param_list) {
-                        std::list<Value>::const_iterator iter = param_list->begin();
-                        while (iter != param_list->end()) {
-                            const Value &v  = *iter++;
-                            params.push_back(v);
-                        }
-                    }
-                    count = params.size();
-                }
-                else {
-                    std::istringstream iss(data);
-										std::string tmp;
-										iss >> ds;
-                    parts.push_back(ds.c_str());
-										++count;
-                    while (iss >> tmp) {
-                        parts.push_back(tmp.c_str());
-                        ++count;
-                    }
-                    std::copy(parts.begin(), parts.end(), std::back_inserter(params));
-                }
-            
-                if (params.empty()) {
-                    sendMessage(cti->socket, "Empty message received\n");
-                    goto cleanup;
-                }
-                ds = params[0].asString();
-                if (count == 1 && ds == "LIST") {
-                    command = new IODCommandList;
-                }
-                else if (ds == "GET" && count==2) {
-                    command = new IODCommandGetStatus;
-                }
-                else if (ds == "GET" && count==3) {
-                    command = new IODCommandGetProperty;
-                }
-                else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
-                    command = new IODCommandModbusExport;
-                }
-                else if (ds == "MODBUS" && count == 2 && params[1] == "REFRESH") {
-                    command = new IODCommandModbusRefresh;
-                }
-                else if (ds == "MODBUS") {
-                    command = new IODCommandModbus;
-                }
-                else if (count == 4 && ds == "SET" && params[2] == "TO") {
-                    command =  new IODCommandSetStatus;
-                }
-				else if (count == 3 && ds == "STATE") {
-					command =  new IODCommandSetStatus;
+				IODCommand *command = parseCommandString(data);
+				if (command == 0) {
+					sendMessage(cti->socket, "Empty message received\n");
+					goto cleanup;
 				}
-                else if (count == 2 && ds == "DEBUG" && params[1] == "SHOW") {
-                    command = new IODCommandDebugShow;
-                }
-                else if (count == 3 && ds == "DEBUG") {
-                    command = new IODCommandDebug;
-                }
-                else if (count == 2 && ds == "TRACING") {
-                    command = new IODCommandTracing;
-                }
-                else if (count == 2 && ds == "TOGGLE") {
-                    command = new IODCommandToggle;
-                }
-                else if ( ds == "SEND") {
-                    command = new IODCommandSend;
-                }
-                else if (count == 1 && ds == "QUIT") {
-                    command = new IODCommandQuit;
-                }
-                else if (count >= 2 && ds == "LIST" && params[1] == "JSON") {
-                    command = new IODCommandListJSON;
-                }
-                else if (count == 2 && ds == "ENABLE") {
-                    command = new IODCommandEnable;
-                }
-                else if (count == 2 && ds == "RESUME") {
-                    command = new IODCommandResume;
-                }
-                else if (count == 4 && ds == "RESUME" && params[2] == "AT") {
-                    command = new IODCommandResume;
-                }
-                else if (count == 2 && ds == "DISABLE") {
-                    command = new IODCommandDisable;
-                }
-                else if ( (count == 2 || count == 3) && ds == "DESCRIBE") {
-                    command = new IODCommandDescribe;
-                }
-                else if ( ds == "STATS" ) {
-                    command = new IODCommandPerformance;
-                }
-                else if (count >= 2 && ds == "CHANNEL") {
-                    command = new IODCommandChannel;
-                }
-				else if (ds == "CHANNELS") {
-					command = new IODCommandChannels();
-				}
-                else if (count > 2 && ds == "DATA") {
-                    command = new IODCommandData;
-                }
-                else if (ds == "PROPERTY") {
-                    command = new IODCommandProperty(data);
-                }
-                else if (ds == "PERSISTENT") {
-                    command = new IODCommandPersistentState;
-                }
-                else if (ds == "HELP") {
-                    command = new IODCommandHelp;
-                }
-                else if (ds == "MESSAGES" || (ds == "CLEAR" && count == 2 && params[1] == "MESSAGES") ) {
-                    command = new IODCommandShowMessages;
-                }
-                else if (ds == "SCHEDULER") {
-                    command = new IODCommandSchedulerState;
-                }
-                else if (ds == "NOTICE") {
-                    command = new IODCommandNotice;
-                }
-                else if (ds == "INFO") {
-                    command = new IODCommandInfo;
-                }
-                else {
-                    command = new IODCommandUnknown;
-                }
-				command->setParameters(params);
                 status = e_wait_processing_start;
 				NB_MSG << "e_running->e_wait_processing_start\n";
 				newPendingCommand(command);
