@@ -79,7 +79,8 @@ public:
 
 	bool monitors() const; // does this channel monitor anything?
 	bool updates() const; // does this channel update anything?
-    
+	bool shares_machines() const; // does this channel share anything?
+
     static State DISCONNECTED;
     static State CONNECTING;
     static State CONNECTED;
@@ -91,6 +92,7 @@ protected:
     std::set<std::string> monitors_names;
     std::map<std::string, Value> monitors_properties;
 	std::map<std::string, Value> updates_names;
+	std::map<std::string, Value> shares_names;
     bool monitors_exports;
     uint64_t last_modified; // if the modified time > check time, a full check will be used
     uint64_t last_checked;
@@ -114,8 +116,9 @@ public:
     void setKey(const char *);
     void setIdent(const char *);
     void setVersion(const char *);
-    void addShare(const char *);
-    void addUpdates(const char *name, const char *interface_name);
+	void addShare(const char *nm, const char *if_nm);
+	void addUpdates(const char *name, const char *interface_name);
+	void addShares(const char *name, const char *interface_name);
     void addSendName(const char *);
     void addReceiveName(const char *);
     void addOptionName(const char *n, Value &v);
@@ -135,7 +138,6 @@ private:
     std::string psk; // preshared key
     std::string identifier;
     std::string version;
-    std::set<std::string> shares;
     std::set<std::string> send_messages;
     std::set<std::string> recv_messages;
     std::map<std::string, Value> options;
@@ -181,6 +183,7 @@ public:
 
     bool doesMonitor(); // is this channel monitoring any machines?
     bool doesUpdate(); // does this channel update any machines?
+	bool doesShare(); // does this channel share any machines?
     const ChannelDefinition *definition() const { return definition_; }
     void setDefinition(const ChannelDefinition *);
     
@@ -209,6 +212,8 @@ public:
 	void startServer();		// used by one-to-one channels
 	void stopServer();
 	bool isClient(); 	// does this channel connect to another instance of clockwork?
+	void syncRemoteStates();
+	void syncInterfaceProperties(MachineInstance *m);
 	zmq::socket_t *createCommandSocket(bool client_endpoint);
 
 	void start(); // begin executing by making connections or serving
@@ -254,7 +259,7 @@ private:
     const ChannelDefinition *definition_;
     std::string identifier;
     std::string version;
-    MachineList shares;
+    MachineList shared_machines;
     MessagingInterface *mif;
     static std::map< std::string, Channel* > *all;
     std::set<MachineInstance*> channel_machines;

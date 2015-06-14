@@ -367,6 +367,10 @@ std::string &MachineInstance::fullName() const {
 	return *cache->full_name;
 }
 
+bool MachineInstance::isShadow() {
+	return false;
+}
+
 void MachineInstance::enqueueAction(Action *a){
 	if (a) {
 		active_actions.push_front(a);
@@ -671,8 +675,8 @@ MachineShadowInstance::MachineShadowInstance(InstanceType instance_type) : Machi
 
 MachineShadowInstance::MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type)
 	: MachineInstance(name, type, instance_type) {
-
-	}
+	shadow_machines.push_back(this);
+}
 
 void MachineShadowInstance::idle() {
 	return;
@@ -2574,6 +2578,17 @@ MachineClass *MachineClass::find(const char *name) {
 	return 0;
 }
 
+void MachineClass::addProperty(const char *p) {
+	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
+	property_names.insert(name);
+}
+
+void MachineClass::addCommand(const char *p) {
+	//NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
+	command_names.insert(name);
+}
+
+
 MachineEvent::MachineEvent(MachineInstance *machine, Message *message) :
 	 mi(machine), msg(message) {}
 
@@ -2583,13 +2598,24 @@ MachineEvent::MachineEvent(MachineInstance *machine, const Message &message) :
 MachineEvent::~MachineEvent() { delete msg; }
 
 MachineInterface::MachineInterface(const char *class_name) : MachineClass(class_name) {
-	assert(all_interfaces.count(class_name) == 0);
+	if (all_interfaces.count(class_name) != 0) {
+		NB_MSG << "interface " << class_name << " is already defined\n";
+	}
 	all_interfaces[class_name] = this;
 }
 
 MachineInterface::~MachineInterface() {
 	all_interfaces.erase(this->name);
 }
+
+void MachineInterface::addProperty(const char *name) {
+	property_names.insert(name);
+}
+
+void MachineInterface::addCommand(const char *name) {
+	command_names.insert(name);
+}
+
 
 
 Action *MachineInstance::executingCommand() {

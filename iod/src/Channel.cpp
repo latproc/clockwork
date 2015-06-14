@@ -14,6 +14,8 @@
 #include "Logger.h"
 #include "ClientInterface.h"
 #include "IODCommand.h"
+#include "IODCommands.h"
+#include "SyncRemoteStatesAction.h"
 
 
 std::map<std::string, Channel*> *Channel::all = 0;
@@ -64,12 +66,100 @@ Channel::~Channel() {
     remove(name);
 }
 
+void Channel::syncInterfaceProperties(MachineInstance *m) {
+	if ( definition()->updates_names.count(m->getName())
+		|| definition()-> shares_names.count(m->getName())) {
+
+		std::map<std::string, Value>::const_iterator found = definition()->updates_names.find(m->getName());
+		if (found == definition()->updates_names.end()) {
+			found = definition()->shares_names.find(m->getName());
+			if (found == definition()->shares_names.end()) return;
+		}
+		const std::pair<std::string, Value>elem = *found;
+		std::string interface_name(elem.second.asString());
+
+		MachineClass *mc = MachineClass::find(interface_name.c_str());
+		if (!mc) {
+			NB_MSG << "Warning: Interface " << interface_name << " is not defined\n";
+			return;
+		}
+		MachineInterface *mi = dynamic_cast<MachineInterface*>(mc);
+		if (mi) {
+			NB_MSG << "sending properties for machine " << m->getName() << "\n";
+			std::set<std::string>::iterator props = mi->property_names.begin();
+			while (props != mi->property_names.end()) {
+				const std::string &s = *props++;
+				Value v = m->getValue(s);
+				if (v != SymbolTable::Null) {
+					char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v);
+					std::string response;
+					// TBD this can take some time. need to remember where we are up to and come back later
+					sendMessage(cmd, *cmd_client, response);
+				}
+				else {
+					NB_MSG << "Note: machine " << m->getName() << " does not have a property "
+						<< s << " corresponding to interface " << interface_name << "\n";
+				}
+			}
+		}
+		else {
+			NB_MSG << "could not find the interface definition for " << m->getName() << "\n";
+		}
+	}
+}
+
+void Channel::syncRemoteStates() {
+	if (definition()->isPublisher())  return; // publishers do not initially send the state of all machines
+	if (isClient()) {
+		std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
+		while (iter != channel_machines.end()) {
+			MachineInstance *m = *iter++;
+			if (!m->isShadow()) {
+				std::string state(m->getCurrentStateString());
+				NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
+				char buf[200];
+				const char *msg = MessageEncoding::encodeState(m->getName(), state);
+				std::string response;
+				// TBD this can take some time. need to remember where we are up to and come back later
+				sendMessage(msg, *cmd_client, response);
+
+				// look at the interface defined for this machine and for each property
+				// on the interface, send the current value
+				syncInterfaceProperties(m);
+			}
+		}
+	}
+	else {
+		std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
+		while (iter != channel_machines.end()) {
+			MachineInstance *m = *iter++;
+			if (!m->isShadow()) {
+				const char *state = m->getCurrentStateString();
+				NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
+				char buf[200];
+				const char *msg = MessageEncoding::encodeState(m->getName(), state);
+				std::string response;
+				if (cmd_client)
+					sendMessage(msg, *cmd_client, response);
+				else
+					sendStateChange(m, state);
+
+				// look at the interface defined for this machine and for each property
+				// on the interface, send the current value
+				syncInterfaceProperties(m);
+			}
+		}
+	}
+}
+
 Action::Status Channel::setState(State &new_state, bool resume) {
 	Action::Status res = MachineInstance::setState(new_state, resume);
 	if (res != Action::Complete) return res;
 	if (new_state.getName() == "CONNECTED") {
 		setNeedsCheck();
 		enableShadows();
+		SyncRemoteStatesActionTemplate srsat;
+		enqueueAction(srsat.factory(this));
 	}
 	else if (new_state.getName() == "DISCONNECTED") {
 		disableShadows();
@@ -84,6 +174,8 @@ Action::Status Channel::setState(const char *new_state, bool resume) {
 	if (strcmp(new_state, "CONNECTED") == 0) {
 		setNeedsCheck();
 		enableShadows();
+		SyncRemoteStatesActionTemplate srsat;
+		enqueueAction(srsat.factory(this));
 	}
 	else if (strcmp(new_state, "DISCONNECTED") == 0) {
 		disableShadows();
@@ -118,7 +210,9 @@ void Channel::stop() {
 		if (definition()->monitors() || monitors()) stopSubscriber();
 	}
 	else {
-		if (definition()->updates() || updates()) stopSubscriber();
+		if (definition()->updates() || updates()
+		|| definition()->shares_machines() || shares_machines())
+			stopSubscriber();
 	}
 	started_ = false;
 }
@@ -149,6 +243,13 @@ void Channel::addConnection() {
 	if (connections == 1) {
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+		if (!isClient()) {
+			// dont' do this for pub/sub channels
+			NB_MSG << "Channel " << name << " should inform client of machine states\n";
+		}
+		else {
+			NB_MSG << "Channel " << name << " should send current state to shadows\n";
+		}
 	}
 }
 
@@ -256,6 +357,10 @@ bool ChannelImplementation::monitors() const {
 
 bool ChannelImplementation::updates() const {
 	return !updates_names.empty();
+}
+
+bool ChannelImplementation::shares_machines() const {
+	return !shares_names.empty();
 }
 
 
@@ -592,6 +697,29 @@ void ChannelDefinition::instantiateInterfaces() {
                 }
             }
         }
+		std::map<std::string, Value>::iterator i_shared = item.second->shares_names.begin();
+		while (i_shared != item.second->shares_names.end()) {
+			const std::pair<std::string, Value> &instance_name = *i_shared++;
+			MachineInstance *found = MachineInstance::find(instance_name.first.c_str());
+			if (!found) { // instantiate a shadow to represent this machine
+				if (item.second) {
+					MachineInstance *m = MachineInstanceFactory::create(instance_name.first.c_str(),
+																		instance_name.second.asString().c_str(),
+																		MachineInstance::MACHINE_SHADOW);
+					m->setDefinitionLocation("dynamic", 0);
+					MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
+					m->setProperties(mc->properties);
+					m->setStateMachine(mc);
+					m->setValue("startup_enabled", false);
+					machines[instance_name.first] = m;
+				}
+				else {
+					char buf[150];
+					snprintf(buf, 150, "Error: no interface named %s", item.first.c_str());
+					MessageLog::instance()->add(buf);
+				}
+			}
+		}
     }
     // channels automatically setup monitoring on machines they update
     // when the channel is instantiated. At startup, however, some machines
@@ -689,7 +817,7 @@ ChannelDefinition *ChannelDefinition::fromJSON(const char *json) {
     else if (item && item->type == cJSON_False)
         defn->monitors_exports = false;
 
-    copyJSONArrayToSet(obj, "shares", defn->shares);
+    copyJSONArrayToMap(obj, "shares", defn->shares_names);
     copyJSONArrayToMap(obj, "updates", defn->updates_names);
     copyJSONArrayToSet(obj, "sends", defn->send_messages);
     copyJSONArrayToSet(obj, "receives", defn->recv_messages);
@@ -732,7 +860,7 @@ char *ChannelDefinition::toJSON() {
         cJSON_AddTrueToObject(obj, "monitors_exports");
     else
         cJSON_AddFalseToObject(obj, "monitors_exports");
-    cJSON_AddItemToObject(obj, "shares", StringSetToJSONArray(this->shares));
+    cJSON_AddItemToObject(obj, "shares", MapToJSONArray(this->shares_names));
     cJSON_AddItemToObject(obj, "updates", MapToJSONArray(this->updates_names, "name","type"));
     cJSON_AddItemToObject(obj, "sends", StringSetToJSONArray(this->send_messages));
     cJSON_AddItemToObject(obj, "receives", StringSetToJSONArray(this->recv_messages));
@@ -896,6 +1024,10 @@ bool Channel::doesUpdate() {
     return definition()->updates_names.empty();
 }
 
+bool Channel::doesShare() {
+	return definition()->shares_names.empty();
+}
+
 bool Channel::doesMonitor() {
     return  monitors_exports || definition()->monitors_exports
         || ! (definition()->monitors_names.empty() && definition()->monitors_patterns.empty() && definition()->monitors_properties.empty()
@@ -946,10 +1078,6 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 	assert(pgn_rc == 0);
 
 	MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(machine);
-	if (ms) {
-		NB_MSG << " send state change ignored on shadow machine " << machine->getName() << "\n";
-		return;
-	}
 
 
 	NB_MSG << "Channel::sendStateChange " << machine->getName() << "->" << new_state << "\n";
@@ -961,7 +1089,15 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
 
-        if (!chn->channel_machines.count(machine))
+		if (ms) {
+			// shadowed machines don't send state changes on channels that update them
+			if (chn->definition()->updates_names.count(machine->getName())) {
+				NB_MSG << " send state change ignored on shadow machine " << machine->getName() << "\n";
+				continue;
+			}
+		}
+
+		if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
 			if (!chn->isClient() && chn->communications_manager) {
@@ -1047,8 +1183,9 @@ void ChannelDefinition::setIdent(const char *s) {
 void ChannelDefinition::setVersion(const char *s) {
     version = s;
 }
-void ChannelDefinition::addShare(const char *s) {
-    shares.insert(s);
+void ChannelDefinition::addShare(const char *nm, const char *if_nm) {
+	shares_names[nm] = if_nm;
+	modified();
 }
 void ChannelImplementation::addMonitor(const char *s) {
     DBG_MSG << "add monitor for " << s << "\n";
@@ -1110,6 +1247,10 @@ void ChannelDefinition::addUpdates(const char *nm, const char *if_nm) {
     updates_names[nm] = if_nm;
     modified();
 }
+void ChannelDefinition::addShares(const char *nm, const char *if_nm) {
+	shares_names[nm] = if_nm;
+	modified();
+}
 void ChannelDefinition::addSendName(const char *s) {
     send_messages.insert(s);
     modified();
@@ -1143,6 +1284,18 @@ void Channel::enableShadows() {
 			enqueueAction(ea.factory(ms));
 		}
     }
+	iter = definition()->shares_names.begin();
+	while (iter != definition()->shares_names.end()) {
+		const std::pair< std::string, Value> item = *iter++;
+		MachineInstance *m = MachineInstance::find(item.first.c_str());
+		MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
+		if (ms) {
+			NB_MSG << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
+			channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+			EnableActionTemplate ea(ms->getName().c_str());
+			enqueueAction(ea.factory(ms));
+		}
+	}
 }
 
 void Channel::disableShadows() {
@@ -1157,6 +1310,16 @@ void Channel::disableShadows() {
 			ms->disable();
 		}
     }
+	iter = definition()->shares_names.begin();
+	while (iter != definition()->shares_names.end()) {
+		const std::pair< std::string, Value> item = *iter++;
+		MachineInstance *m = MachineInstance::find(item.first.c_str());
+		MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
+		if (ms) {
+			NB_MSG << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
+			ms->disable();
+		}
+	}
 }
 
 void Channel::setupShadows() {
@@ -1185,8 +1348,24 @@ void Channel::setupShadows() {
             // this machine is a shadow
         }
     }
-    
-    
+
+	iter = definition()->shares_names.begin();
+	while (iter != definition()->shares_names.end()) {
+		const std::pair< std::string, Value> item = *iter++;
+		MachineInstance *m = MachineInstance::find(item.first.c_str());
+		MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
+		if (m && !ms) { // this machine is not a shadow.
+			if (!channel_machines.count(m)) {
+				m->publish();
+				channel_machines.insert(m);
+			}
+		}
+		else if (m) {
+			// this machine is a shadow
+		}
+	}
+
+
     //- TBD should this only subscribe if channel monitors a machine?
 }
 
@@ -1336,7 +1515,7 @@ void Channel::setupAllShadows() {
 
 void Channel::setupFilters() {
     checked();
-    // check if this channl monitors exports and if so, add machines that have exports
+    // check if this channel monitors exports and if so, add machines that have exports
     if (definition()->monitors_exports || monitors_exports) {
         std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {

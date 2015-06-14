@@ -122,11 +122,16 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 				}
 				State *s = mi->getStateMachine()->findState(state_name.c_str());
 				if (!s) {
-					char buf[150];
-					snprintf(buf, 150, "Error: machine %s has no state called '%s'", mi->getName().c_str(), state_name.c_str());
-					MessageLog::instance()->add(buf);
-					error_str = buf;
-					return false;
+					if (mi->isShadow()) {
+						s = &mi->getStateMachine()->initial_state;
+					}
+					else {
+						char buf[150];
+						snprintf(buf, 150, "Error: machine %s has no state called '%s'", mi->getName().c_str(), state_name.c_str());
+						MessageLog::instance()->add(buf);
+						error_str = buf;
+						return false;
+					}
 				}
 				mi->setState(*s);
 			}

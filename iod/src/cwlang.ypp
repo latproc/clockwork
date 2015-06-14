@@ -253,10 +253,22 @@ interface_defn_section
 ;
 
 interface_defn_section:
-| OPTION name_list ';'
+| OPTION name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list)
+		current_channelclass->addProperty(name.c_str());
+	current_name_list.clear();
+}
 | COMMAND SYMBOL ';'
-| COMMANDS name_list ';'
-| RECEIVES name_list ';'
+| COMMANDS name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list)
+		current_channelclass->addCommand(name.c_str());
+	current_name_list.clear();
+}
+| RECEIVES name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list)
+		current_channelclass->addCommand(name.c_str());
+	current_name_list.clear();
+}
 | state_definition ';'
 ;
 
@@ -309,9 +321,14 @@ chn_definition_section:
   KEY STRINGVAL ';' { current_channelclass->setKey($2); }
 | IDENTIFIER STRINGVAL ';' { current_channelclass->setIdent($2); }
 | VERSION STRINGVAL ';' { current_channelclass->setVersion($2); }
-| SHARES name_list ';'  {
-    BOOST_FOREACH(std::string &name, current_name_list)
-        current_channelclass->addShare(name.c_str());
+| SHARES machine_list ';'  {
+	std::list< std::pair<std::string, char *> >::iterator iter = current_machine_list.begin();
+	while (iter != current_machine_list.end() ) {
+		const std::pair< std::string, char*> &item = *iter++;
+		current_channelclass->addShares(item.first.c_str(), item.second);
+		free(item.second);
+	}
+	current_machine_list.clear();
 }
 | MONITORS name_list ';'    {
     BOOST_FOREACH(std::string &name, current_name_list)

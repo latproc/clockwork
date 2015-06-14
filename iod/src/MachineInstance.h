@@ -186,6 +186,10 @@ public:
 	void disableAutomaticStateChanges();
 	void enableAutomaticStateChanges();
     static MachineClass *find(const char *name);
+
+	virtual void addProperty(const char *name); // used in interfaces to list synced properties
+	virtual void addCommand(const char *name); // used in interfaces to list permitted commands
+
     State default_state;
 	State initial_state;
     std::string name;
@@ -194,6 +198,9 @@ public:
     int token_id;
     Plugin *plugin;
     long polling_delay;
+
+	std::set<std::string> property_names;
+	std::set<std::string> command_names;
 private:
     MachineClass();
     MachineClass(const MachineClass &other);
@@ -204,6 +211,8 @@ public:
     MachineInterface(const char *class_name);
     virtual ~MachineInterface();
     static std::map<std::string, MachineInterface *> all_interfaces;
+	void addProperty(const char *name);
+	void addCommand(const char *name);
 };
 
 /*
@@ -306,6 +315,7 @@ public:
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
     bool setStableState(); // returns true if a state change was made
+	virtual bool isShadow(); // is this machine a shadow instance?
     
     std::string &fullName() const;
     
@@ -535,7 +545,7 @@ public:
     MachineShadowInstance();
     ~MachineShadowInstance();
     virtual void idle();
-    //virtual bool hasWork() { return false; }
+	virtual bool isShadow() { return true; }
 
 	virtual Action::Status setState(State &new_state, bool resume = false);
 	virtual Action::Status setState(const char *new_state, bool resume = false);

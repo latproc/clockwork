@@ -74,7 +74,7 @@ public:
 
 class SymbolTable {
 public: 
-    SymbolTable();
+	SymbolTable();
 	enum ReplaceMode { ST_REPLACE, NO_REPLACE };
 	
     bool add(const char *name, Value val, ReplaceMode replace_mode = ST_REPLACE);
