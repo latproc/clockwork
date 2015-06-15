@@ -3007,7 +3007,7 @@ bool MachineInstance::setStableState() {
 			//			|| (!s.trigger && s.condition(this)) ) {
 			if (!found_match) {
 				if (s.condition(this)) {
-					DBG_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
+					DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
 					if (current_state.getName() != s.state_name) {
 						DBG_M_AUTOSTATES << " changing state\n";
 						changed_state = true;
@@ -3044,7 +3044,7 @@ bool MachineInstance::setStableState() {
 						DBG_AUTOSTATES << " already there\n";
 						// reschedule timer triggers for this state
 						if (s.uses_timer) {
-							DBG_SCHEDULER << "Should retrigger timer for " << s.state_name << "("<<s.timer_val<< ")"<< "\n";
+							DBG_SCHEDULER << _name << " should retrigger timer for " << s.state_name << "("<<s.timer_val<< ")"<< "\n";
 							Value v = getValue(s.timer_val.sValue);
 							if (v.kind == Value::t_integer && v.iValue < next_timer)
 								next_timer = v.iValue;

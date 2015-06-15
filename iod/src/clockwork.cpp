@@ -925,7 +925,7 @@ void initialise_machines() {
                     PersistentStore::PropertyPair node;
 					BOOST_FOREACH(node, list) {
 						long v;
-						DBG_INITIALISATION << name << "initialising " << node.first << " to " << node.second << "\n";
+						DBG_INITIALISATION << name << " initialising " << node.first << " to " << node.second << "\n";
 						if (node.second.asInteger(v))
 							m->setValue(node.first, v);
 						else
