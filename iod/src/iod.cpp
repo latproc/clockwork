@@ -332,7 +332,7 @@ if (num_errors > 0) {
 
 
 	std::cout << "-------- Starting Command Interface ---------\n";
-	IODCommandThread stateMonitor;
+	IODCommandThread &stateMonitor(*IODCommandThread::instance());
 	boost::thread monitor(boost::ref(stateMonitor));
 
 	// Inform the modbus interface we have started
@@ -341,7 +341,7 @@ if (num_errors > 0) {
 	Dispatcher::start();
 
 	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(machine, iod_activation);
+	ProcessingThread processMonitor(machine, iod_activation, stateMonitor);
 	boost::thread process(boost::ref(processMonitor));
 	// do not start a thread, simply run this process directly
 	//processMonitor();
