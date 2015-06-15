@@ -85,7 +85,7 @@ unsigned int IOComponent::min_offset = 1000000L;
 static std::vector<IOComponent*> *indexed_components = 0;
 IOComponent::HardwareState IOComponent::hardware_state = s_hardware_preinit;
 
-//static void display(uint8_t *p, unsigned int count = 0);
+static void display(uint8_t *p, unsigned int count = 0);
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 	uint8_t bitmask = 1<<bitpos;
@@ -160,7 +160,7 @@ std::set<IOComponent*> updatedComponentsIn;
 std::set<IOComponent*> updatedComponentsOut;
 bool IOComponent::updates_sent = false;
 
-#if 0
+#if 1
 static void display(uint8_t *p, unsigned int count) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -193,7 +193,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 
 		assert(data != io_process_data);
 
-#if 0
+#if 1
 	for (size_t ii=0; ii<data_size; ++ii) if (mask[ii]) {
 		std::cout << "IOComponent::processAll()\n";
 		std::cout << "size: " << data_size << "\n";
@@ -242,7 +242,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 						just_added = ioc;
 						//if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; 
 						//else std::cout << "found " << ioc->io_name << "\n";
-#if 0
+#if 1
 						if (ioc && ioc->last_event != e_none) { 
 							// pending locally sourced change on this io
 							std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
@@ -384,9 +384,9 @@ int32_t IOComponent::filter(int32_t val) {
 class InputFilterSettings {
 public:
     bool property_changed;
-    int32_t noise_tolerance; // filter out changes with +/- this range
+    uint32_t noise_tolerance; // filter out changes with +/- this range
     LongBuffer positions;
-    int32_t last_sent; // this is the value to send unless the read value moves away from the mean
+    uint32_t last_sent; // this is the value to send unless the read value moves away from the mean
     uint16_t buffer_len;
     
     InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(16), last_sent(0), buffer_len(16) { }
@@ -401,8 +401,8 @@ int32_t AnalogueInput::filter(int32_t raw) {
         config->property_changed = false;
     }
     config->positions.append(raw);
-    int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
-    if ( abs(mean - config->last_sent) >= config->noise_tolerance) {
+    uint32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
+    if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
         config->last_sent = mean;
     }
     return config->last_sent;
@@ -579,7 +579,7 @@ bool IOComponent::hasUpdates() {
 
 uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 	unsigned int max = IOComponent::getMaxIOOffset();
-	//unsigned int min = IOComponent::getMinIOOffset();
+	unsigned int min = IOComponent::getMinIOOffset();
 	// process data size
 	if (res && len != max+1) { delete res; res = 0; }
 	if (!res) res = new uint8_t[max+1];
@@ -606,7 +606,7 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 
 // copy the provied data to the default data block
 void IOComponent::setDefaultData(uint8_t *data){
-#if 0
+#if 1
 	std::cout << "Setting default data to : \n";
 	display(data);
 	std::cout << "\n";
@@ -618,7 +618,7 @@ void IOComponent::setDefaultData(uint8_t *data){
 
 // copy the provided mask to the default data mask
 void IOComponent::setDefaultMask(uint8_t *mask){
-#if 0
+#if 1
 	std::cout << "Setting default mask to : \n";
 	display(mask);
 	std::cout << "\n";
@@ -630,7 +630,7 @@ void IOComponent::setDefaultMask(uint8_t *mask){
 
 uint8_t *IOComponent::generateMask(std::list<MachineInstance*> &outputs) {
 	unsigned int max = IOComponent::getMaxIOOffset();
-	//unsigned int min = IOComponent::getMinIOOffset();
+	unsigned int min = IOComponent::getMinIOOffset();
 	// process data size
 	uint8_t *res = new uint8_t[max+1];
 	memset(res, 0, max+1);
@@ -676,7 +676,7 @@ static uint8_t *generateUpdateMask() {
 	if (updatedComponentsOut.empty()) return 0;
 
 	unsigned int max = IOComponent::getMaxIOOffset();
-	//unsigned int min = IOComponent::getMinIOOffset();
+	unsigned int min = IOComponent::getMinIOOffset();
 	uint8_t *res = new uint8_t[max+1];
 	memset(res, 0, max+1);
 	//std::cout << "mask is " << (max+1) << " bytes\n";
@@ -732,7 +732,7 @@ IOUpdate *IOComponent::getDefaults() {
 	res->data = getProcessData();
 	res->mask = default_mask;
 
-#if 0
+#if 1
 	std::cout << "preparing to send defaults " << res->size << " bytes\n"; 
 	display(res->data); std::cout << "\n"; 
 	display(res->mask); std::cout << "\n";
@@ -755,7 +755,7 @@ void IOComponent::setupIOMap() {
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
-		//bitpos = bitpos % 8;
+		bitpos = bitpos % 8;
 		if (ioc->address.bitlen>=8) offset += ioc->address.bitlen/8 - 1;
 		if (offset > max_offset) max_offset = offset;
 		if (offset < min_offset) min_offset = offset;
@@ -831,7 +831,7 @@ void IOComponent::markChange() {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
 			else if (address.bitlen == 16) {
-				uint16_t x; // = pending_value % 65536;
+				uint16_t x = pending_value % 65536;
 				toU16(offset, x);
 			}
 			else if (address.bitlen == 32) {
@@ -955,9 +955,10 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 				raw_value = val;
 				int32_t old_val = address.value;
 				int32_t new_val = filter(val);
-				if (hardware_state == s_operational ) {
-					address.value = new_val;
+				if (hardware_state == s_operational ) { //&& address.value != new_val) {
+					address.value = filter(val);
 
+					//if (owners.empty()) std::cout << "owner is not defined\n";
 					if (address.value != old_val) {
 						std::list<MachineInstance*>::iterator owner_iter = owners.begin();
 						owner_iter = owners.begin();
