@@ -216,7 +216,7 @@ int main(int argc, const char * argv[]) {
     PersistentStore store("persist.dat");
     //store.load(); // disabled load store since we take it from clockwork now
     
-    SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCHANNEL);
+    SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCLOCKWORK);
     SetupConnectMonitor connect_responder;
     cmd_socket = &subscription_manager.setup();
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
@@ -267,6 +267,10 @@ int main(int argc, const char * argv[]) {
                     store.insert(machine_name.asString(), property_name.asString(), value.asString().c_str());
                     store.save();
                 }
+				else if (cmd == "STATE") {
+					// channel should be configured to not send state change information, not
+					// currently supported
+				}
 				else
 					std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
             }

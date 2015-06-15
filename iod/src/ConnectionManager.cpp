@@ -46,18 +46,18 @@ SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &s, const char *s
 
 void SingleConnectionMonitor::on_event_accepted(const zmq_event_t &event_, const char* addr_) {
 	SocketMonitor::on_event_accepted(event_, addr_);
-	NB_MSG << socket_name << "Accepted\n";
+	//NB_MSG << socket_name << "Accepted\n";
 }
 
 void SingleConnectionMonitor::on_event_connected(const zmq_event_t &event_, const char* addr_) {
 	SocketMonitor::on_event_connected(event_, addr_);
-	NB_MSG << socket_name << " Connected\n";
+	//NB_MSG << socket_name << " Connected\n";
 }
 
 void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
         SocketMonitor::on_event_disconnected(event_, addr_);
         sock.disconnect(sock_addr.c_str());
-		NB_MSG << socket_name << " Disconnected\n";
+		//NB_MSG << socket_name << " Disconnected\n";
     }
 
 void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
@@ -143,7 +143,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, Protocol proto,
 }
 
 SubscriptionManager::~SubscriptionManager() {
-	NB_MSG << "warning: SubscriptionManager did not cleanup properly\n";
+	//NB_MSG << "warning: SubscriptionManager did not cleanup properly\n";
 }
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
@@ -189,7 +189,7 @@ bool SubscriptionManager::requestChannel() {
     size_t len = 0;
 	assert(isClient());
     if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-        NB_MSG << "Requesting channel " << channel_name << "\n";
+        //NB_MSG << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup().send(channel_setup, strlen(channel_setup));
         assert(len);
@@ -202,7 +202,7 @@ bool SubscriptionManager::requestChannel() {
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
-        NB_MSG << "Got channel " << buf << "\n";
+        //NB_MSG << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
@@ -224,7 +224,7 @@ bool SubscriptionManager::requestChannel() {
             }
             else {
                 setSetupStatus(SubscriptionManager::e_disconnected);
-                NB_MSG << " failed to parse: " << buf << "\n";
+                //NB_MSG << " failed to parse: " << buf << "\n";
                 current_channel = "";
             }
             cJSON_Delete(chan);
@@ -244,7 +244,7 @@ bool SubscriptionManager::setupConnections() {
 			setup().connect(ss.str().c_str());
 		}
 		catch(zmq::error_t err) {
-			NB_MSG << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
+			//NB_MSG << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
 			return false;
 		}
         monit_setup->setEndPoint(ss.str().c_str());
@@ -374,13 +374,13 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			run_status = e_waiting_cmd;
 		}
 		else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-			NB_MSG << "incoming response\n";
+			//NB_MSG << "incoming response\n";
 			bool got_response =
 				(isClient())
 					? safeRecv(setup(), buf, 1000, false, msglen)
 					: safeRecv(subscriber(), buf, 1000, false, msglen);
 			if (got_response) {
-				NB_MSG << " forwarding response " << buf << "\n";
+				//NB_MSG << " forwarding response " << buf << "\n";
 				if (msglen && msglen<1000) {
 					cmd.send(buf, msglen);
 				}

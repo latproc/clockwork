@@ -867,7 +867,7 @@ int main(int argc, const char * argv[])
 		zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
 		iosh_cmd.bind(local_commands);
 
-		SubscriptionManager subscription_manager("MODBUS_CHANNEL", eCHANNEL, "localhost", 5555);
+		SubscriptionManager subscription_manager("MODBUS_CHANNEL", eCLOCKWORK, "localhost", 5555);
 		SetupDisconnectMonitor disconnect_responder;
 		SetupConnectMonitor connect_responder;
 		subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);

@@ -85,7 +85,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 		}
 		MachineInterface *mi = dynamic_cast<MachineInterface*>(mc);
 		if (mi) {
-			NB_MSG << "sending properties for machine " << m->getName() << "\n";
+			//NB_MSG << "sending properties for machine " << m->getName() << "\n";
 			std::set<std::string>::iterator props = mi->property_names.begin();
 			while (props != mi->property_names.end()) {
 				const std::string &s = *props++;
@@ -97,8 +97,8 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 					sendMessage(cmd, *cmd_client, response);
 				}
 				else {
-					NB_MSG << "Note: machine " << m->getName() << " does not have a property "
-						<< s << " corresponding to interface " << interface_name << "\n";
+					//NB_MSG << "Note: machine " << m->getName() << " does not have a property "
+					//	<< s << " corresponding to interface " << interface_name << "\n";
 				}
 			}
 		}
@@ -116,7 +116,7 @@ void Channel::syncRemoteStates() {
 			MachineInstance *m = *iter++;
 			if (!m->isShadow()) {
 				std::string state(m->getCurrentStateString());
-				NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
+				//NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
 				char buf[200];
 				const char *msg = MessageEncoding::encodeState(m->getName(), state);
 				std::string response;
@@ -135,7 +135,7 @@ void Channel::syncRemoteStates() {
 			MachineInstance *m = *iter++;
 			if (!m->isShadow()) {
 				const char *state = m->getCurrentStateString();
-				NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
+				//NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
 				char buf[200];
 				const char *msg = MessageEncoding::encodeState(m->getName(), state);
 				std::string response;
@@ -188,7 +188,7 @@ void Channel::start() {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
-	NB_MSG << "Channel " << name << " starting from thread "<< tnam << "\n";
+	//NB_MSG << "Channel " << name << " starting from thread "<< tnam << "\n";
 
 
 	if (isClient()) {
@@ -243,6 +243,7 @@ void Channel::addConnection() {
 	if (connections == 1) {
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+/*
 		if (!isClient()) {
 			// dont' do this for pub/sub channels
 			NB_MSG << "Channel " << name << " should inform client of machine states\n";
@@ -250,8 +251,9 @@ void Channel::addConnection() {
 		else {
 			NB_MSG << "Channel " << name << " should send current state to shadows\n";
 		}
+ */
 	}
-}
+ }
 
 void Channel::dropConnection() {
 	boost::mutex::scoped_lock(update_mutex);
@@ -264,7 +266,7 @@ void Channel::dropConnection() {
 	}
 	assert(connections>=0);
 	if (connections == 0) {
-		NB_MSG << "last connection dropped, stopping channel " << _name << "\n";
+		//NB_MSG << "last connection dropped, stopping channel " << _name << "\n";
 		stopServer();
 		//delete this;
 	}
@@ -382,7 +384,7 @@ public:
 };
 
 void Channel::startPublisher() {
-	NB_MSG << name << " startPublisher\n";
+	//NB_MSG << name << " startPublisher\n";
 	if (mif) {
 		NB_MSG << "Channel::startPublisher() called when mif is already allocated\n";
 		return;
@@ -401,7 +403,7 @@ void Channel::startPublisher() {
 }
 
 void Channel::startServer() {
-	NB_MSG << name << " startServer\n";
+	//NB_MSG << name << " startServer\n";
 	if (mif) {
 		NB_MSG << "Channel::startServer() called when mif is already allocated\n";
 		return;
@@ -419,7 +421,7 @@ void Channel::startServer() {
 }
 
 void Channel::startClient() {
-	NB_MSG << name << " startClient\n";
+	//NB_MSG << name << " startClient\n";
 	if (mif) {
 		NB_MSG << "Channel::startClient() called when mif is already allocated\n";
 		return;
@@ -501,7 +503,7 @@ void Channel::operator()() {
 		std::cout << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
 		communications_manager = new SubscriptionManager(definition()->name.c_str(),
 														 eCHANNEL, host.asString().c_str(),(int)port);
-		NB_MSG << "Channel " << name << "::operator() subscriber thread initialising\n";
+		//NB_MSG << "Channel " << name << "::operator() subscriber thread initialising\n";
 	}
 	else
 		communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL);
@@ -509,7 +511,7 @@ void Channel::operator()() {
 	cmd_server = createCommandSocket(false);
 	usleep(500);
 	char start_cmd[20];
-	NB_MSG << "channel " << name << " thread waiting for start message\n";
+	//NB_MSG << "channel " << name << " thread waiting for start message\n";
 	size_t start_len = cmd_server->recv(start_cmd, 20);
 	if (!start_len) { NB_MSG << name << " error getting start message\n"; }
 	cmd_server->send("ok", 2);
@@ -553,7 +555,7 @@ void Channel::operator()() {
 			char *data = (char *)malloc(len+1);
 			memcpy(data, update.data(), len);
 			data[len] = 0;
-			NB_MSG << "Channel " << name << " subscriber received: " << data << "\n";
+			//NB_MSG << "Channel " << name << " subscriber received: " << data << "\n";
 			{
 				IODCommand *command = parseCommandString(data);
 				if (command) {
@@ -575,7 +577,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 	assert(pgn_rc == 0);
 
 	if (!subscriber_thread) {
-		NB_MSG << tnam << " Channel " << name << " sendMessage() sending " << msg << " directly\n";
+		//NB_MSG << tnam << " Channel " << name << " sendMessage() sending " << msg << " directly\n";
 		return ::sendMessage(msg, sock, response);
 		/*safeSend(sock, msg, strlen(msg));
 		usleep(10);
@@ -585,7 +587,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 		safeRecv(sock, buf, 200, true, len);*/
 	}
 	else {
-		NB_MSG << "Channel " << name << " sendMessage() sending " << msg << " through subscription manager thread\n";
+		//NB_MSG << "Channel " << name << " sendMessage() sending " << msg << " through subscription manager thread\n";
 		safeSend(*cmd_client, msg, strlen(msg));
 		char response_buf[100];
 		size_t rlen;
@@ -601,10 +603,10 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 	//snprintf(cmd_socket_name, 100, "tcp://localhost:5577");
 	char *pos = pos = strchr(cmd_socket_name, ':')+1;
 	while ( (pos = strchr(pos, ':'))  ) *pos = '-';
-	NB_MSG << "Channel " << name << " bound to command interface " << cmd_socket_name << "\n";
+	//NB_MSG << "Channel " << name << " bound to command interface " << cmd_socket_name << "\n";
 
 	if (client_endpoint) {
-		NB_MSG << "Channel " << name << " bound to interface " << cmd_socket_name << "\n";
+		//NB_MSG << "Channel " << name << " bound to interface " << cmd_socket_name << "\n";
 
 		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
 		sock->connect(cmd_socket_name);
@@ -647,7 +649,7 @@ void Channel::startSubscriber() {
 		char tnam[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 		assert(pgn_rc == 0);
-		NB_MSG << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
+		//NB_MSG << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
 
 		subscriber_thread = new boost::thread(boost::ref(*this));
 
@@ -659,7 +661,7 @@ void Channel::startSubscriber() {
 		char buf[100];
 		size_t buflen = cmd_client->recv(buf, 100);
 		buf[buflen] = 0;
-		NB_MSG << "Channel " << name << " got response to start: " << buf << "\n";
+		//NB_MSG << "Channel " << name << " got response to start: " << buf << "\n";
 	}
 }
 
@@ -1080,7 +1082,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 	MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(machine);
 
 
-	NB_MSG << "Channel::sendStateChange " << machine->getName() << "->" << new_state << "\n";
+	//NB_MSG << "Channel::sendStateChange " << machine->getName() << "->" << new_state << "\n";
 	if (!all) return;
     std::string machine_name = machine->fullName();
 	char *cmdstr = MessageEncoding::encodeState(machine_name, new_state); // send command
@@ -1092,7 +1094,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 		if (ms) {
 			// shadowed machines don't send state changes on channels that update them
 			if (chn->definition()->updates_names.count(machine->getName())) {
-				NB_MSG << " send state change ignored on shadow machine " << machine->getName() << "\n";
+				//NB_MSG << " send state change ignored on shadow machine " << machine->getName() << "\n";
 				continue;
 			}
 		}
@@ -1109,7 +1111,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 				if (!chn->definition()->isPublisher()) {
 					std::string response;
 					chn->sendMessage(cmdstr, chn->communications_manager->setup(),response);
-					NB_MSG << tnam << ": channel " << chn->name << " got response: " << response << "\n";
+					//NB_MSG << tnam << ": channel " << chn->name << " got response: " << response << "\n";
 				}
 				else {
 					safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
@@ -1153,12 +1155,12 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 					chn->sendMessage(cmd, chn->communications_manager->setup(),response);
 				else
 					chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);
-                NB_MSG << tnam << ": channel " << name << " got response: " << response << "\n";
+                //NB_MSG << tnam << ": channel " << name << " got response: " << response << "\n";
 				free(cmd);
             }
             else if (chn->mif) {
                 char *cmd = MessageEncoding::encodeCommand(command, params); // send command
-				NB_MSG << "Channel " << name << " sending " << cmd << "\n";
+				//NB_MSG << "Channel " << name << " sending " << cmd << "\n";
                 chn->mif->send(cmd);
 				free(cmd);
             }
@@ -1278,7 +1280,7 @@ void Channel::enableShadows() {
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			NB_MSG << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
+			//NB_MSG << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
 			channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
 			EnableActionTemplate ea(ms->getName().c_str());
 			enqueueAction(ea.factory(ms));
@@ -1290,7 +1292,7 @@ void Channel::enableShadows() {
 		MachineInstance *m = MachineInstance::find(item.first.c_str());
 		MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			NB_MSG << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
+			//NB_MSG << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
 			channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
 			EnableActionTemplate ea(ms->getName().c_str());
 			enqueueAction(ea.factory(ms));
@@ -1306,7 +1308,7 @@ void Channel::disableShadows() {
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			NB_MSG << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
+			//NB_MSG << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
 			ms->disable();
 		}
     }
@@ -1316,7 +1318,7 @@ void Channel::disableShadows() {
 		MachineInstance *m = MachineInstance::find(item.first.c_str());
 		MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			NB_MSG << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
+			//NB_MSG << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
 			ms->disable();
 		}
 	}
@@ -1471,7 +1473,7 @@ void Channel::checkCommunications() {
     
     if ( poll_items && !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
         if (message_handler->receiveMessage(communications_manager->subscriber())) {
-            NB_MSG << "Channel got message: " << message_handler->data << "\n";
+//            NB_MSG << "Channel got message: " << message_handler->data << "\n";
 		}
     }
 	{
@@ -1481,23 +1483,23 @@ void Channel::checkCommunications() {
 			IODCommand *command = *iter;
 			assert(command);
 			(*command)();
-			NB_MSG << "Channel " << name << " processed command " << command->param(0) << "\n";
+//			NB_MSG << "Channel " << name << " processed command " << command->param(0) << "\n";
 			iter = pending_commands.erase(iter);
 			completed_commands.push_back(command);
 		}
 	}
 	if (!completed_commands.empty()) {
 		std::string response;
-		NB_MSG << "Channel " << name << " finishing off processed commands\n";
+//		NB_MSG << "Channel " << name << " finishing off processed commands\n";
 		std::list<IODCommand*>::iterator iter = completed_commands.begin();
 		while (iter != completed_commands.end()) {
 			IODCommand *cmd = *iter;
 			iter = completed_commands.erase(iter);
-			NB_MSG << "deleting completed command: " << cmd->param(0) << "\n";
+//			NB_MSG << "deleting completed command: " << cmd->param(0) << "\n";
 			delete cmd;
 		}
 		//sendMessage("process_commands", *cmd_client, response);
-		NB_MSG << "Channel " << name << " got cmd response " << response << "\n";
+//		NB_MSG << "Channel " << name << " got cmd response " << response << "\n";
 
 		// TBD should this go back to the originator?
 	}
