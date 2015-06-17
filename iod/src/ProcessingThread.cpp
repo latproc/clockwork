@@ -531,7 +531,6 @@ void ProcessingThread::operator()()
 		if (status == e_handling_cmd) {
 			IODCommand *command = command_interface.getCommand();
 			while (command) {
-				NB_MSG << "Processing command: " << command->name() << "\n";
 				(*command)();
 				command_interface.putCompletedCommand(command);
 				command = command_interface.getCommand();
