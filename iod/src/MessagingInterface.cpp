@@ -137,25 +137,17 @@ sendMessage_transmit:
     size_t len = 0;
     while (len == 0) {
         try {
-            //zmq::message_t rcvd;
-			char rcvbuf[200];
-			len = sock.recv(rcvbuf, 200, ZMQ_NOBLOCK);
-                //len = rcvd.size();
-			if (!len) {
-				zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-				zmq::poll( items, 1, 1);
-				if (items[0].revents & ZMQ_POLLIN) //len = rcvd.size();
-					len = sock.recv(rcvbuf, 200, ZMQ_NOBLOCK);
-			}
-			if (!len)
-				continue;
-			buf = new char[len+1];
-			memcpy(buf, rcvbuf, len);
-			buf[len] = 0;
-			response = buf;
-			delete[] buf;
-
-            break;
+					zmq::message_t rcvd;
+					if (sock.recv(&rcvd)) {
+						len = rcvd.size();
+						if (!len) continue;
+						buf = new char[len+1];
+						memcpy(buf, rcvd.data(), len);
+						buf[len] = 0;
+						response = buf;
+						delete[] buf;
+					}
+					break;
         }
         catch(zmq::error_t e)  {
             if (errno == EINTR) continue;
@@ -206,7 +198,7 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
 
 MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start, Protocol proto)
 		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
-			connection(-1), port(port_), owner_thread(0) {
+			connection(-1), port(port_), owner_thread(0), started_(false) {
 		    owner_thread = pthread_self();
 		is_publisher = true;
 		hostname = "*";
@@ -222,9 +214,11 @@ MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred
 }
 
 void MessagingInterface::start() {
+	if (started_) return;
 	if (protocol == eCLOCKWORK || protocol == eZMQ|| protocol == eCHANNEL) {
 		owner_thread = pthread_self();
 		if (hostname == "*" || hostname == "*") {
+			NB_MSG << "binding " << url << "\n";
 			socket->bind(url.c_str());
 		}
 		else {
@@ -234,11 +228,20 @@ void MessagingInterface::start() {
 	else {
 		connect();
 	}
+	started_ = true;
+}
+
+void MessagingInterface::stop() { 
+	started_ = false;
+}
+
+bool MessagingInterface::started() { 
+	return started_;
 }
 
 MessagingInterface::MessagingInterface(std::string host, int remote_port, bool deferred, Protocol proto)
 		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
-            connection(-1), hostname(host), port(remote_port), owner_thread(0) {
+            connection(-1), hostname(host), port(remote_port), owner_thread(0), started_(false) {
 		std::stringstream ss;
 		ss << "tcp://" << host << ":" << port;
 		url = ss.str();
@@ -259,7 +262,7 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, bool d
 			}
 		}
 		else {
-			NB_MSG << "Warning: unexpected protocl constructing a messaging interface\n";
+			NB_MSG << "Warning: unexpected protocol " << protocol << " constructing a messaging interface\n";
 		}
 
 		if (!deferred) start();

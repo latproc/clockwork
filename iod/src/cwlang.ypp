@@ -1664,8 +1664,7 @@ transition_state {
     DBG_PARSER << " name list: " << $1 << "\n";
     current_name_list.push_back($1);
 }
-
-| transition_state COMMA SYMBOL
+| state_list COMMA SYMBOL
 {
     DBG_PARSER << ", " << $3;
     current_name_list.push_back($3);

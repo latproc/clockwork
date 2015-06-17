@@ -241,6 +241,7 @@ void Dispatcher::idle()
                                     char buf[100];
                                     snprintf(buf, 100, "Error dispatching message,  EXTERNAL configuration: %s not found", mi->parameters[0].val.sValue.c_str());
                                     MessageLog::instance()->add(buf);
+																		NB_MSG << buf << "\n";
                                 }
                                 Value host = remote->properties.lookup("HOST");
                                 Value port_val = remote->properties.lookup("PORT");
@@ -250,16 +251,16 @@ void Dispatcher::idle()
                                 {
                                     if (protocol == "RAW")
                                     {
-                                        MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eRAW);
-										mif->start();
-                                        mif->send_raw(m.getText().c_str());
+                                           MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eRAW);
+                                           if (!mif->started()) mif->start();
+                                           mif->send_raw(m.getText().c_str());
                                     }
                                     else
                                     {
                                         if (protocol == "CLOCKWORK")
                                         {
                                             MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eCLOCKWORK);
-											mif->start();
+                                            if (!mif->started()) mif->start();
                                             mif->send(m);
                                         }
                                         else

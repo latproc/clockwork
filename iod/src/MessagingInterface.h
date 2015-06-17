@@ -51,6 +51,8 @@ public:
 	MessagingInterface(std::string host, int port, bool deferred_start, Protocol proto = eZMQ);
 	~MessagingInterface();
 	void start();
+	void stop();
+	bool started();
 	static zmq::context_t *getContext();
 	static void setContext(zmq::context_t *);
 	static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
@@ -88,6 +90,7 @@ private:
 	int port;
 	pthread_t owner_thread;
 	static bool abort_all;
+	bool started_;
 };
 
 #endif
