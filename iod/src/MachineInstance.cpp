@@ -576,6 +576,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 		found = machines[seek_machine_name];
 		goto cache_local_name;
 	}
+	//NB_MSG << "CACHE MISS: failed to find machine " << seek_machine_name << "\n";
 	//ss << " not found";
 	//	DBG_M_MACHINELOOKUPS << ss << "";
 	return 0;

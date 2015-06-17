@@ -882,6 +882,9 @@ int loadConfig(std::list<std::string> &files) {
         return 2;
     }
     
+    // construct machines that shadow those defined in channels
+    ChannelDefinition::instantiateInterfaces();
+    
 	semantic_analysis();
 	
 	// display errors and warnings
@@ -944,9 +947,6 @@ void initialise_machines() {
             }
         }
     }
-    
-    // construct machines that shadow those defined in channels
-    ChannelDefinition::instantiateInterfaces();
     
     // prepare the list of machines that will be processed at idle time
     m_iter = MachineInstance::begin();

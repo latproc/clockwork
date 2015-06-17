@@ -682,6 +682,7 @@ void ChannelDefinition::instantiateInterfaces() {
             MachineInstance *found = MachineInstance::find(instance_name.first.c_str());
             if (!found) { // instantiate a shadow to represent this machine
                 if (item.second) {
+										NB_MSG << "Instantiating SHADOW " << instance_name.first << " for Channel " << item.second->name << "\n";
                     MachineInstance *m = MachineInstanceFactory::create(instance_name.first.c_str(),
                                                                         instance_name.second.asString().c_str(),
                                                                         MachineInstance::MACHINE_SHADOW);
@@ -691,11 +692,13 @@ void ChannelDefinition::instantiateInterfaces() {
                     m->setStateMachine(mc);
                     m->setValue("startup_enabled", false);
                     machines[instance_name.first] = m;
+                    ::machines[instance_name.first] = m;
                 }
                 else {
                     char buf[150];
                     snprintf(buf, 150, "Error: no interface named %s", item.first.c_str());
                     MessageLog::instance()->add(buf);
+										NB_MSG << buf << "\n";
                 }
             }
         }
@@ -714,6 +717,7 @@ void ChannelDefinition::instantiateInterfaces() {
 					m->setStateMachine(mc);
 					m->setValue("startup_enabled", false);
 					machines[instance_name.first] = m;
+					::machines[instance_name.first] = m;
 				}
 				else {
 					char buf[150];
