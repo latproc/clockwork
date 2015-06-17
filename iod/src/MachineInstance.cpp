@@ -1256,8 +1256,8 @@ void MachineInstance::idle() {
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
 				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
-				NB_MSG << ss.str();
 				MessageLog::instance()->add(ss.str().c_str());
+				NB_MSG << ss.str() << "\n";
 			}
 			else if (res != Action::Complete) {
 				DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
@@ -1944,7 +1944,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 #ifndef DISABLE_LEAVE_FUNCTIONS
 		/* notify everyone we are leaving a state */
 		// TBD use notifyDependents()
-		{
+		if (enabled()) {
 			std::string txt = _name + "." + current_state.getName() + "_leave";
 			Message msg(txt.c_str());
 			stat = execute(msg, this);
@@ -1952,7 +1952,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 				char buf[200];
 				snprintf(buf, 200, "%s %s action failed", _name.c_str(), txt.c_str());
 				MessageLog::instance()->add(buf);
-				NB_MSG << buf;
+				NB_MSG << buf << "\n";
 			}
 
 			std::set<MachineInstance*>::iterator dep_iter = depends.begin();
@@ -2403,7 +2403,7 @@ void MachineInstance::collect(const Package &package) {
 
 Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (!enabled()) {
-#if 0
+#if 1
 		if (from) {
 			DBG_MESSAGING << _name << " dropped message " << m << " from " << from->getName() << " while disabled\n";
 		}
@@ -2633,6 +2633,7 @@ void MachineInstance::start(Action *a) {
 			std::stringstream ss;
 			ss << owner->fullName() << " Failed to start action: " << *a << " already running\n";
 			MessageLog::instance()->add(ss.str().c_str());
+			NB_MSG << ss.str() << "\n";
 			return;
 		}
 	}
@@ -2802,6 +2803,7 @@ void MachineInstance::setInitialState() {
 				char buf[100];
 				snprintf(buf, 100,"Warning: setting initial state on %s to unknown state: %s\n", _name.c_str(), io_interface->getStateString());
 				MessageLog::instance()->add(buf);
+				NB_MSG << buf << "\n";
 			}
 		}
 		else {
@@ -2816,6 +2818,7 @@ void MachineInstance::setInitialState() {
 		char buf[100];
 		snprintf(buf, 100,"Warning: setting initial state on %s when it has no state machine\n", _name.c_str());
 		MessageLog::instance()->add(buf);
+		NB_MSG << buf << "\n";
 	}
 } 
 
@@ -2836,6 +2839,7 @@ void MachineInstance::enable() {
 			ss << "No machine found for " << locals[i].val << " in " << _name;
 			char *msg = strdup(ss.str().c_str());
 			MessageLog::instance()->add(msg);
+			NB_MSG << msg << "\n";
 			free(msg);
 		}
 		else
@@ -2976,6 +2980,7 @@ bool MachineInstance::setStableState() {
 			char buf[200];
 			snprintf(buf, 200,"Warning: %s does not have a state %s to match the hardware\n", _name.c_str(), io_state_name);
 			MessageLog::instance()->add(buf);
+			NB_MSG << buf << "\n";
 		}
 	}
 	else if ( ( !state_machine && _type=="LIST") || (state_machine && state_machine->token_id == ClockworkToken::LIST) ) {
@@ -3357,6 +3362,7 @@ bool MachineInstance::setStableState() {
 					++num_errors;
 					DBG_MSG << ss.str() << "\n";
 					MessageLog::instance()->add(ss.str().c_str());
+					NB_MSG << ss.str() << "\n";
 					return &SymbolTable::Null;
 				}
 			}
@@ -3464,6 +3470,7 @@ bool MachineInstance::setStableState() {
 			char buf[200];
 			snprintf(buf,200,"%s: no such property or machine: %s",fullName().c_str(), property.c_str());
 			MessageLog::instance()->add(buf);
+			NB_MSG << buf << "\n";
 			return &SymbolTable::Null;
 		}
 
@@ -3752,8 +3759,9 @@ bool MachineInstance::setStableState() {
 							properties.add("VALUE", value, SymbolTable::ST_REPLACE);
 						}
 						else {
-							snprintf(buf, 100, "%s: could not set value to %s\n", _name.c_str(), new_value.asString().c_str());
+							snprintf(buf, 100, "%s: could not set value to %s", _name.c_str(), new_value.asString().c_str());
 							MessageLog::instance()->add(buf);
+							NB_MSG << buf << "\n";
 						}
 					}
 					if (published) {
@@ -3876,10 +3884,10 @@ bool MachineInstance::setStableState() {
 								value = mi->getValue("VALUE");
 							}
 							else {
-								std::stringstream ss; ss << "Error: " << full_name <<" has not been initialised\n";
+								std::stringstream ss; ss << "Error: " << full_name <<" has not been initialised";
 								char *msg = strdup(ss.str().c_str());
 								MessageLog::instance()->add(msg);
-								NB_MSG << msg;
+								NB_MSG << msg << "\n";
 								free(msg);
 							}
 						}
@@ -4220,14 +4228,14 @@ bool MachineInstance::setStableState() {
 			int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
 			if (!modbus_addresses.count(index)) {
 				std::stringstream ss;
-				ss << name << " Error: bad modbus address lookup for " << base_addr << "\n";
+				ss << name << " Error: bad modbus address lookup for " << base_addr;
 				MessageLog::instance()->add(ss.str().c_str());
 				return;
 			}
 			std::string item_name = modbus_addresses[index];
 			if (!modbus_exports.count(item_name)) {
 				std::stringstream ss;
-				ss << name << " Error: bad modbus name lookup for " << item_name << "\n";
+				ss << name << " Error: bad modbus name lookup for " << item_name;
 				MessageLog::instance()->add(ss.str().c_str());
 				return;
 			}
@@ -4271,7 +4279,7 @@ bool MachineInstance::setStableState() {
 					// crosscheck - the machine must have been exported read/write
 					if (!properties.exists("export")) {
 						char buf[100];
-						snprintf(buf, 100, "received a modbus update for machine %s but that machine has no export property\n", name.c_str());
+						snprintf(buf, 100, "received a modbus update for machine %s but that machine has no export property", name.c_str());
 						MessageLog::instance()->add(buf);
 					}
 

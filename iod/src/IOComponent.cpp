@@ -85,7 +85,7 @@ unsigned int IOComponent::min_offset = 1000000L;
 static std::vector<IOComponent*> *indexed_components = 0;
 IOComponent::HardwareState IOComponent::hardware_state = s_hardware_preinit;
 
-static void display(uint8_t *p, unsigned int count = 0);
+//static void display(uint8_t *p, unsigned int count = 0);
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 	uint8_t bitmask = 1<<bitpos;
@@ -160,7 +160,7 @@ std::set<IOComponent*> updatedComponentsIn;
 std::set<IOComponent*> updatedComponentsOut;
 bool IOComponent::updates_sent = false;
 
-#if 1
+#if 0
 static void display(uint8_t *p, unsigned int count) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -193,7 +193,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 
 		assert(data != io_process_data);
 
-#if 1
+#if 0
 	for (size_t ii=0; ii<data_size; ++ii) if (mask[ii]) {
 		std::cout << "IOComponent::processAll()\n";
 		std::cout << "size: " << data_size << "\n";
@@ -242,7 +242,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 						just_added = ioc;
 						//if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; 
 						//else std::cout << "found " << ioc->io_name << "\n";
-#if 1
+#if 0
 						if (ioc && ioc->last_event != e_none) { 
 							// pending locally sourced change on this io
 							std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
@@ -606,7 +606,7 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 
 // copy the provied data to the default data block
 void IOComponent::setDefaultData(uint8_t *data){
-#if 1
+#if 0
 	std::cout << "Setting default data to : \n";
 	display(data);
 	std::cout << "\n";
@@ -618,7 +618,7 @@ void IOComponent::setDefaultData(uint8_t *data){
 
 // copy the provided mask to the default data mask
 void IOComponent::setDefaultMask(uint8_t *mask){
-#if 1
+#if 0
 	std::cout << "Setting default mask to : \n";
 	display(mask);
 	std::cout << "\n";
@@ -732,7 +732,7 @@ IOUpdate *IOComponent::getDefaults() {
 	res->data = getProcessData();
 	res->mask = default_mask;
 
-#if 1
+#if 0
 	std::cout << "preparing to send defaults " << res->size << " bytes\n"; 
 	display(res->data); std::cout << "\n"; 
 	display(res->mask); std::cout << "\n";
