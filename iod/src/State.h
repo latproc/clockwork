@@ -25,11 +25,6 @@
 #include <string>
 #include "value.h"
 
-struct StateFunc {
-    virtual ~StateFunc() {}
-	virtual void operator()(){}
-};
-
 class State {
 public:
     State(const char *name);
@@ -45,9 +40,7 @@ public:
     bool is(int tok) { return token_id == tok; }
     Value *getNameValue() { return &name; }
 	int getIntValue() { return val; }
-	StateFunc enter;
-	StateFunc leave;
-    
+
 private:
     std::string text;
     int val;
