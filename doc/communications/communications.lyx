@@ -1235,11 +1235,13 @@ When two instances of clockwork setup a channel
 
 \begin_deeper
 \begin_layout Itemize
-the server adds the channel definition to the list of known channels
+on startup, the server adds the channel definition to the list of known
+ channels
 \end_layout
 
 \begin_layout Itemize
-the client instantiates the channel subscription manager and starts it
+on startup, the client instantiates the channel subscription manager and
+ starts it
 \end_layout
 
 \begin_layout Itemize
@@ -1250,7 +1252,7 @@ the client subscription manager connects to the server and requests a channel
 the server instantiates the channel and creates a publisher on that channel
  to communicate with the server.
  The publisher will generally be on a ØMQ Pair socket but if the channel
- is marked as 'PUBLISHER', then a Publisher socket is used instead
+ is marked as 'PUBLISHER', then a Publisher socket is used instead.
 \end_layout
 
 \begin_layout Itemize

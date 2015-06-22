@@ -61,7 +61,7 @@ std::ostream &operator<<(std::ostream &out, const MachineRef &m);
 
 class ChannelImplementation {
 public:
-    ChannelImplementation() : state(DISCONNECTED), monitors_exports(false) {}
+    ChannelImplementation() : monitors_exports(false) {}
     virtual ~ChannelImplementation();
     void addMonitor(const char *);
     void addIgnorePattern(const char *);
@@ -82,11 +82,13 @@ public:
 	bool shares_machines() const; // does this channel share anything?
 
     static State DISCONNECTED;
-    static State CONNECTING;
-    static State CONNECTED;
-    
+	static State CONNECTING;
+	static State CONNECTED;
+    static State DOWNLOADING;
+	static State UPLOADING;
+	static State ACTIVE;
+
 protected:
-    State state;
     std::set<std::string> monitors_patterns;
     std::set<std::string> ignores_patterns;
     std::set<std::string> monitors_names;
@@ -205,11 +207,10 @@ public:
     void setupShadows();
     void enableShadows();
     void disableShadows();
-    void startPublisher();	// used by shared (publish/subscribe) channels
+	void startServer(Protocol proto = eZMQ);// used by shared (publish/subscribe) and one-to-one channels
 	void startClient();	// used by shared (publish/subscribe) channels
     void startSubscriber();
 	void stopSubscriber();
-	void startServer();		// used by one-to-one channels
 	void stopServer();
 	bool isClient(); 	// does this channel connect to another instance of clockwork?
 	void syncRemoteStates();
@@ -221,6 +222,7 @@ public:
 	bool started();
 	void enable(); // enable messages to pass through the channel
 	void disable();
+	void checkStateChange(); // change state after receiving a done from current state
     
     bool matches(MachineInstance *machine, const std::string &name);
     bool patternMatches(const std::string &machine_name);

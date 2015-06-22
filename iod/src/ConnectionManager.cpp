@@ -134,7 +134,13 @@ SubscriptionManager::SubscriptionManager(const char *chname, Protocol proto,
 	setup_(0),
 	_setup_status(e_startup)
 {
-	if (!remote_host) _setup_status = e_not_used; // This is not a client
+	if (subscriber_host == "*") {
+		_setup_status = e_not_used; // This is not a client
+		assert(protocol == eCHANNEL);
+		char url[100];
+		snprintf(url, 100, "tcp://*:%d", subscriber_port);
+		subscriber_.bind(url);
+	}
 	if (isClient()) {
 		setup_ = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
 		monit_setup = new SingleConnectionMonitor(*setup_, constructAlphaNumericString("inproc://", chname, ".setup", "inproc://monitor.setup").c_str() );
@@ -163,10 +169,9 @@ void SubscriptionManager::init() {
 	if (isClient()) {
 		// client
 		boost::thread setup_monitor(boost::ref(*monit_setup));
+		run_status = e_waiting_cmd;
+		setSetupStatus(e_startup);
 	}
-
-    run_status = e_waiting_cmd;
-    setSetupStatus(e_startup);
 }
 
 int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
@@ -202,7 +207,7 @@ bool SubscriptionManager::requestChannel() {
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
-        //NB_MSG << "Got channel " << buf << "\n";
+        NB_MSG << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
@@ -224,7 +229,7 @@ bool SubscriptionManager::requestChannel() {
             }
             else {
                 setSetupStatus(SubscriptionManager::e_disconnected);
-                //NB_MSG << " failed to parse: " << buf << "\n";
+                NB_MSG << " failed to parse: " << buf << "\n";
                 current_channel = "";
             }
             cJSON_Delete(chan);
@@ -252,11 +257,12 @@ bool SubscriptionManager::setupConnections() {
         usleep(5000);
     }
     if (requestChannel()) {
+		assert(monit_subs.disconnected());
         // define the channel
         ss.clear(); ss.str("");
         ss << "tcp://" << subscriber_host << ":" << subscriber_port;
         std::string channel_url = ss.str();
-        DBG_MSG << "connecting to " << channel_url << "\n";
+        DBG_MSG << " connecting subscriber to " << channel_url << "\n";
         monit_subs.setEndPoint(channel_url.c_str());
         subscriber().connect(channel_url.c_str());
         setSetupStatus(SubscriptionManager::e_done);
@@ -320,7 +326,6 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-
 	if (!checkConnections()) {
 		return false;
 	}
@@ -335,6 +340,10 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     size_t msglen = 0;
 
 	// yuk. the command socket is assumed to be the second-last item in the poll item list.
+
+	// check the command socket to see if a message is coming in from the main thread
+	// if it is we pass the command to the remote using either the subscriber socket
+	// or the setup socket depending on the circumstances.
 	int command_item = num_items - 1;
 	if (items[command_item].revents & ZMQ_POLLERR) {
 		NB_MSG << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
@@ -347,22 +356,34 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		if (safeRecv(cmd, buf, 1000, false, msglen)) {
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
-            DBG_MSG << " got cmd: " << buf << "\n";
+            DBG_MSG << " got cmd: " << buf << " from main thread\n";
 			// if we are a client, pass commands through the setup socket to the other end
 			// of the channel.
 			if (isClient() && monit_setup && !monit_setup->disconnected()) {
-				setup().send(buf,msglen);
-				run_status = e_waiting_response;
+				if (protocol != eCHANNEL) {
+					setup().send(buf,msglen);
+					run_status = e_waiting_response;
+				}
+				else {
+					NB_MSG << " forwarding message to subscriber\n";
+					subscriber().send(buf, msglen);
+					safeSend(cmd, "sent", 4);
+				}
 			}
-			else {
+			else if (!monit_subs.disconnected()) {
+				NB_MSG << " forwarding message "<<buf<<" to subscriber\n";
 				subscriber().send(buf, msglen);
 				if (protocol == eCLOCKWORK) // require a response
 					run_status = e_waiting_response;
+				else {
+					safeSend(cmd, "sent", 4);
+				}
 			}
         }
 	}
 
 	if (run_status == e_waiting_response && !isClient()) {
+		assert(false); // is this ever called?
 		cmd.send("ack",3);
 		run_status = e_waiting_cmd;
 		return true;

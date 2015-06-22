@@ -384,7 +384,6 @@ void ProcessingThread::operator()()
 			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
 			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
 			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
-			//status = e_waiting;
 			//DBG_MSG << "looping\n";
 		}
 #if 0
@@ -419,7 +418,7 @@ void ProcessingThread::operator()()
 		}
 #endif
 
-		/* this loop priorities ethercat processing but if a certain
+		/* this loop prioritises ethercat processing but if a certain
 			number of ethercat cycles have been processed with no 
 			other activities being given time, we git other jobs
 			some time anyway.
@@ -509,9 +508,11 @@ void ProcessingThread::operator()()
 		if (program_done) break;
 		if (status == e_waiting || status == e_waiting_cmd)  {
 			if (items[CMD_ITEM].revents & ZMQ_POLLIN) {
+				NB_MSG << "Processing: incoming data from client\n";
 				size_t len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
 				if (len) {
 					if (status == e_waiting_cmd) {
+						NB_MSG << "Processing: e_waiting_cmd->e_command_done\n";
 						status = e_command_done;
 					}
 					else {
@@ -523,6 +524,7 @@ void ProcessingThread::operator()()
 						}
 						start_cmd = start_cmd_time;
 #endif
+						NB_MSG << "Processing: e_waiting_cmd->e_handling_cmd\n";
 						status = e_handling_cmd;
 					}
 				}
@@ -531,16 +533,19 @@ void ProcessingThread::operator()()
 		if (status == e_handling_cmd) {
 			IODCommand *command = command_interface.getCommand();
 			while (command) {
+				NB_MSG << "Processing: received command: " << command->param(0) << "\0";
 				(*command)();
 				command_interface.putCompletedCommand(command);
 				command = command_interface.getCommand();
 			}
+			NB_MSG << "Processing: e_handling_cmd->e_waiting_cmd\n";
 			safeSend(resource_mgr,"go", 2);
 			status = e_waiting_cmd; // waiting for the command interface to say it's collected results
 		}
 		if (status == e_command_done) {
 			char buf[10];
 			size_t len = 0;
+			NB_MSG << "Processing: sending bye\n";
 			safeSend(resource_mgr,"bye", 3);
 #ifdef KEEPSTATS
 			end = nowMicrosecs();
@@ -549,6 +554,7 @@ void ProcessingThread::operator()()
 			system->setValue("AVG_COMMAND_TIME", total_cmd_time*1000 / ++cmd_count);
 			if (cmd_count>10) { cmd_count = 0; total_cmd_time = 0; }
 #endif
+			NB_MSG << "Processing: e_command_done->e_waiting\n";
 			status = e_waiting;
 		}
 		if (program_done) break;

@@ -171,17 +171,6 @@ void MessagingInterface::setContext(zmq::context_t *ctx) {
     zmq_context = ctx;
     assert(zmq_context);
 }
-/*
-MessagingInterface *MessagingInterface::getCurrent() {
-    if (MessagingInterface::current == 0) {
-        MessagingInterface::current = new MessagingInterface(1, publisher_port());
-        usleep(200000); // give current subscribers time to notice us
-    }
-    return MessagingInterface::current;
-}
- */
-
-
 
 MessagingInterface *MessagingInterface::create(std::string host, int port, Protocol proto) {
     std::stringstream ss;
