@@ -43,12 +43,12 @@
 SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disconnected_(true), socket_name(snam), aborted(false) {
 
 	std::string::const_iterator p = socket_name.begin();
-	std::string monname("inproc://");
+	std::string url("inproc://");
 	while (p != socket_name.end()) {
 		char ch = *p++;
-		if (isalnum(ch))monname += ch;
+		if (isalnum(ch))url += ch;
 	}
-	monitor_socket_name = monname;
+	monitor_socket_name = url;
 }
 void SocketMonitor::operator()() {
 		char thread_name[100];
@@ -65,8 +65,9 @@ void SocketMonitor::operator()() {
         }
         catch (zmq::error_t io) {
             std::cerr << "ZMQ error " << errno << ": "<< zmq_strerror(errno) << " in socket monitor\n";
-				if (errno != EAGAIN && errno != EINTR) // monitoring a socket that has been removed. exit and rely on restart code (TBD)
-					exit(2);
+				//if (errno != EAGAIN && errno != EINTR)
+				// monitoring a socket that has been removed. exit and rely on restart code (TBD)
+				//	exit(2);
 			usleep(10);
         }
         catch (std::exception ex) {
