@@ -254,19 +254,29 @@ interface_defn_section
 
 interface_defn_section:
 | OPTION name_list ';' {
-	BOOST_FOREACH(std::string &name, current_name_list)
-		current_channelclass->addProperty(name.c_str());
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+		current_machineclass->addProperty(name.c_str());
+	}
 	current_name_list.clear();
+}
+| OPTION SYMBOL value ';' {
+	std::string name($2);
+	current_machineclass->options[name] = *$3;
+	NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+	current_machineclass->addProperty(name.c_str());
+	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$3 << "\n";
+	delete $3;
 }
 | COMMAND SYMBOL ';'
 | COMMANDS name_list ';' {
 	BOOST_FOREACH(std::string &name, current_name_list)
-		current_channelclass->addCommand(name.c_str());
+		current_machineclass->addCommand(name.c_str());
 	current_name_list.clear();
 }
 | RECEIVES name_list ';' {
 	BOOST_FOREACH(std::string &name, current_name_list)
-		current_channelclass->addCommand(name.c_str());
+		current_machineclass->addCommand(name.c_str());
 	current_name_list.clear();
 }
 | state_definition ';'

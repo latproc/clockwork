@@ -194,7 +194,7 @@ bool SubscriptionManager::requestChannel() {
     size_t len = 0;
 	assert(isClient());
     if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-        //NB_MSG << "Requesting channel " << channel_name << "\n";
+		std::cout << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup().send(channel_setup, strlen(channel_setup));
         assert(len);
@@ -207,7 +207,7 @@ bool SubscriptionManager::requestChannel() {
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
-        NB_MSG << "Got channel " << buf << "\n";
+		std::cout << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
@@ -249,7 +249,7 @@ bool SubscriptionManager::setupConnections() {
 			setup().connect(ss.str().c_str());
 		}
 		catch(zmq::error_t err) {
-			//NB_MSG << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
+			std::cerr << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
 			return false;
 		}
         monit_setup->setEndPoint(ss.str().c_str());

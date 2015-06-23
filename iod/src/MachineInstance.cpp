@@ -2581,12 +2581,12 @@ MachineClass *MachineClass::find(const char *name) {
 
 void MachineClass::addProperty(const char *p) {
 	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
-	property_names.insert(name);
+	property_names.insert(p);
 }
 
 void MachineClass::addCommand(const char *p) {
 	//NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
-	command_names.insert(name);
+	command_names.insert(p);
 }
 
 
@@ -2608,7 +2608,7 @@ MachineInterface::MachineInterface(const char *class_name) : MachineClass(class_
 MachineInterface::~MachineInterface() {
 	all_interfaces.erase(this->name);
 }
-
+/*
 void MachineInterface::addProperty(const char *name) {
 	property_names.insert(name);
 }
@@ -2616,7 +2616,7 @@ void MachineInterface::addProperty(const char *name) {
 void MachineInterface::addCommand(const char *name) {
 	command_names.insert(name);
 }
-
+*/
 
 
 Action *MachineInstance::executingCommand() {

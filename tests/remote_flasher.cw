@@ -5,7 +5,8 @@
 # FlagInterface has an implicit initial state of INIT.
 
 FlagInterface INTERFACE {
-	OPTION x, y;
+	OPTION x , y;
+	OPTION z 100;
 
     on STATE;
     off STATE;

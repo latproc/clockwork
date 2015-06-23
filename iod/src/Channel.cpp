@@ -88,7 +88,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 		}
 		MachineInterface *mi = dynamic_cast<MachineInterface*>(mc);
 		if (mi) {
-			//NB_MSG << "sending properties for machine " << m->getName() << "\n";
+			NB_MSG << "sending properties for machine " << m->getName() <<":" << mi->name << "\n";
 			std::set<std::string>::iterator props = mi->property_names.begin();
 			while (props != mi->property_names.end()) {
 				const std::string &s = *props++;
@@ -100,8 +100,8 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 					sendMessage(cmd, *cmd_client, response);
 				}
 				else {
-					//NB_MSG << "Note: machine " << m->getName() << " does not have a property "
-					//	<< s << " corresponding to interface " << interface_name << "\n";
+					NB_MSG << "Note: machine " << m->getName() << " does not have a property "
+						<< s << " corresponding to interface " << interface_name << "\n";
 				}
 			}
 		}
@@ -201,29 +201,6 @@ Action::Status Channel::setState(State &new_state, bool resume) {
 Action::Status Channel::setState(const char *new_state_cstr, bool resume) {
 	State new_state(new_state_cstr);
 	return MachineInstance::setState(new_state, resume);
-/*
-	if (res != Action::Complete) return res;
-	if (new_state == ChannelImplementation::CONNECTED) {
-		NB_MSG << name << " CONNECTED\n";
-		setNeedsCheck();
-		enableShadows();
-	}
-	else if (new_state == ChannelImplementation::UPLOADING) {
-		NB_MSG << name << " UPLOADING\n";
-		setNeedsCheck();
-		SyncRemoteStatesActionTemplate srsat;
-		enqueueAction(srsat.factory(this));
-	}
-	else if (new_state == ChannelImplementation::DOWNLOADING) {
-		NB_MSG << name << " DOWNLOADING\n";
-	}
-	else if (new_state == ChannelImplementation::DISCONNECTED) {
-		NB_MSG << name << " DISCONNECTED\n";
-		disableShadows();
-		setNeedsCheck();
-	}
-	return res;
-*/
 }
 
 void Channel::start() {
@@ -282,8 +259,14 @@ void Channel::addConnection() {
 	++connections;
 	DBG_MSG << getName() << " client connected\n";
 	if (connections == 1) {
-		SetStateActionTemplate ssat(CStringHolder("SELF"), "UPLOADING" );
-		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+		if (definition()->isPublisher()) {
+			SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
+			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+		}
+		else {
+			SetStateActionTemplate ssat(CStringHolder("SELF"), "UPLOADING" );
+			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+		}
 	}
  }
 
