@@ -133,7 +133,9 @@ void Channel::syncRemoteStates() {
 				syncInterfaceProperties(m);
 			}
 		}
-		safeSend(*cmd_client, "done", 4);
+		//safeSend(*cmd_client, "done", 4);
+		std::string ack;
+		sendMessage("done", *cmd_client, ack);
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 	}
@@ -143,7 +145,6 @@ void Channel::syncRemoteStates() {
 			MachineInstance *m = *iter++;
 			if (!m->isShadow()) {
 				const char *state = m->getCurrentStateString();
-				//NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
 				char buf[200];
 				const char *msg = MessageEncoding::encodeState(m->getName(), state);
 				std::string response;
@@ -159,8 +160,10 @@ void Channel::syncRemoteStates() {
 		}
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
-		if (cmd_client)
-			safeSend(*cmd_client, "done", 4);
+		if (cmd_client) {
+			std::string ack;
+			sendMessage("done", *cmd_client, ack);
+		}
 		else {
 			assert(false);
 			mif->send("done");
@@ -509,21 +512,26 @@ void Channel::stopServer() {
 // the client and server enter the downloading and uploading states
 // in opposite orders.
 void Channel::checkStateChange() {
+	if (current_state == ChannelImplementation::DISCONNECTED) return;
 	if (isClient()) {
 		if ( current_state == ChannelImplementation::DOWNLOADING)
 			setState(ChannelImplementation::UPLOADING);
 		else if (current_state == ChannelImplementation::UPLOADING)
 			setState(ChannelImplementation::ACTIVE);
-		else
+		else {
+			NB_MSG << "Unexpected channel state " << current_state << " on " << name << "\n";
 			assert(false);
+		}
 	}
 	else {
 		if ( current_state == ChannelImplementation::UPLOADING)
 			setState(ChannelImplementation::DOWNLOADING);
 		else if (current_state == ChannelImplementation::DOWNLOADING)
 			setState(ChannelImplementation::ACTIVE);
-		else
+		else {
+			NB_MSG << "Unexpected channel state " << current_state << " on " << name << "\n";
 			assert(false);
+		}
 	}
 }
 
@@ -580,11 +588,16 @@ void Channel::operator()() {
 		while (!aborted) {
 			// clients have a socket to setup the channel, servers do not need it
 			int num_poll_items = 0;
+			int subscriber_idx = 0;
 			{
-				if (communications_manager->isClient())
+				if (communications_manager->isClient()) {
 					num_poll_items = 3;
-				else
+					subscriber_idx = 1;
+				}
+				else {
 					num_poll_items = 2;
+					subscriber_idx = 0;
+				}
 				items = new zmq::pollitem_t[num_poll_items];
 				int idx = communications_manager->configurePoll(items);
 				assert(idx < num_poll_items);
@@ -604,8 +617,8 @@ void Channel::operator()() {
 				continue;
 			}
 
-			if ( !(items[num_poll_items-2].revents & ZMQ_POLLIN)
-				|| (items[num_poll_items-2].revents & ZMQ_POLLERR) )
+			if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
+				|| (items[subscriber_idx].revents & ZMQ_POLLERR) )
 				continue;
 			zmq::message_t update;
 			communications_manager->subscriber().recv(&update, ZMQ_NOBLOCK);
@@ -653,12 +666,14 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 		safeRecv(sock, buf, 200, true, len);*/
 	}
 	else {
-		//NB_MSG << "Channel " << name << " sendMessage() sending " << msg << " through subscription manager thread\n";
+		NB_MSG << "Channel " << name << " sendMessage() sending " << msg << " through a channel thread\n";
 		safeSend(*cmd_client, msg, strlen(msg));
 		char response_buf[100];
 		size_t rlen;
 		safeRecv(*cmd_client, response_buf, 100, true, rlen);
 		response = response_buf;
+		NB_MSG << "Channel " << name << " sendMessage() got response for " << msg << " from a channel thread\n";
+
 	}
 	return true;
 }
@@ -722,6 +737,14 @@ void Channel::startSubscriber() {
 		char buf[100];
 		size_t buflen = cmd_client->recv(buf, 100);
 		buf[buflen] = 0;
+
+		connect_responder = new ChannelConnectMonitor(this);
+		disconnect_responder = new ChannelDisconnectMonitor(this);
+		if (isClient())
+			communications_manager->monit_subs.addResponder(ZMQ_EVENT_CONNECTED, connect_responder);
+		else
+			communications_manager->monit_subs.addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
+		communications_manager->monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
 		//NB_MSG << "Channel " << name << " got response to start: " << buf << "\n";
 	}
 }
@@ -1139,14 +1162,14 @@ Channel *Channel::findByType(const std::string kind) {
 }
 
 
-	void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
+void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
 	MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(machine);
 
-	//NB_MSG << "Channel::sendStateChange " << machine->getName() << "->" << new_state << "\n";
+	NB_MSG << "Channel::sendStateChange " << machine->getName() << "->" << new_state << "\n";
 	if (!all) return;
     std::string machine_name = machine->fullName();
 	char *cmdstr = MessageEncoding::encodeState(machine_name, new_state); // send command
@@ -1155,6 +1178,7 @@ Channel *Channel::findByType(const std::string kind) {
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
 		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+#if 0
 		if (ms) {
 			// shadowed machines don't send state changes on channels that update them
 			if (chn->definition()->updates_names.count(machine->getName())) {
@@ -1162,6 +1186,7 @@ Channel *Channel::findByType(const std::string kind) {
 				continue;
 			}
 		}
+#endif
 		if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
@@ -1170,7 +1195,11 @@ Channel *Channel::findByType(const std::string kind) {
 				safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
 			}
             else if (chn->communications_manager
-                && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
+                  && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
+
+				//IODCommand *cmd = new IODCommandSendStateChange(machine_name, new_state);
+				//chn->pending_commands.push_back(cmd);
+
 				if (!chn->definition()->isPublisher()) {
 					std::string response;
 					chn->sendMessage(cmdstr, chn->communications_manager->subscriber(),response);//setup()
@@ -1490,6 +1519,7 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
     return rc;
 }
 
+// This method is executed on the main thread
 void Channel::handleChannels() {
 	if (!all) return;
     std::map<std::string, Channel*>::iterator iter = all->begin();
@@ -1517,6 +1547,7 @@ void Channel::enable() {
 void Channel::disable() {
 }
 
+// This method is executed on the main thread
 void Channel::checkCommunications() {
 	if (!communications_manager) return;
 	if (!communications_manager->ready()) return;

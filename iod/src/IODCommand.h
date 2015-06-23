@@ -48,19 +48,29 @@ public:
 };
 */
 
+class SequenceNumber {
+public:
+	int next() { return ++val; }
+	int curr() { return val; }
+	SequenceNumber() : val(0) {}
+private:
+	int val = 0;
+};
+
 class IODCommand {
 public:
-    IODCommand( int minp = 0, int maxp = 100)  : done(Unassigned), error_str(""),
-		result_str(""), min_params(minp), max_params(maxp) {}
+    IODCommand( int minp = 0, int maxp = 100)
+	: done(Unassigned), seqno(sequences.next()),
+		error_str(""), result_str(""), min_params(minp), max_params(maxp) {}
     virtual ~IODCommand(){ }
-//    const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
-//    const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
     const char *error() { return error_str.c_str(); }
     const char *result() { return result_str.c_str(); }
 
 	enum CommandResult { Failure, Success, Unassigned};
+	static SequenceNumber sequences;
 
 	CommandResult done;
+	int seqno;
 
 	CommandResult operator()(std::vector<Value> &params) {
 		done = (run(params)) ? Success : Failure;

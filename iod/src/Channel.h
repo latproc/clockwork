@@ -32,6 +32,7 @@
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
+#include "IODCommand.h"
 
 class Channel;
 class MachineInterface;
@@ -166,6 +167,17 @@ public:
 	std::map<std::string, Value> properties;
 };
 
+class ChannelMessage {
+public:
+	int message_id;
+	std::string text;
+	std::string response_;
+	bool done;
+	ChannelMessage(int msg_id, const char *msg) : message_id(msg_id), text(msg), done(false) { }
+	std::string & response() { return response_; }
+	void setResponse(const char *res) {  response_ = res; done = true; }
+};
+
 class IODCommand;
 class Channel : public ChannelImplementation, public MachineInstance {
 public:
@@ -283,6 +295,9 @@ private:
 	bool started_;
 	zmq::socket_t *cmd_client;
 	zmq::socket_t *cmd_server;
+	SequenceNumber seqno;
+	std::list<ChannelMessage> pending_messages;
+	std::list<ChannelMessage> completed_messages;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

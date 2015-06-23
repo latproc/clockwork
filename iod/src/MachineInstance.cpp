@@ -684,7 +684,7 @@ void MachineShadowInstance::idle() {
 }
 
 Action::Status MachineShadowInstance::setState(State &new_state, bool resume) {
-	NB_MSG << _name << " (shadow) setState(" << new_state << ")\n";
+	NB_MSG << _name << " (shadow) setState("<<current_state<< "->" << new_state << ")\n";
 	return MachineInstance::setState(new_state, resume);
 }
 

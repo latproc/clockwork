@@ -43,6 +43,7 @@ extern Statistics *statistics;
 
 std::map<std::string, std::string>message_handlers;
 
+SequenceNumber IODCommand::sequences;
 
 extern bool program_done;
 

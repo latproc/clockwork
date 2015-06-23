@@ -55,9 +55,9 @@ void SingleConnectionMonitor::on_event_connected(const zmq_event_t &event_, cons
 }
 
 void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        SocketMonitor::on_event_disconnected(event_, addr_);
-        sock.disconnect(sock_addr.c_str());
 		//NB_MSG << socket_name << " Disconnected\n";
+		//sock.disconnect(sock_addr.c_str());
+		SocketMonitor::on_event_disconnected(event_, addr_);
     }
 
 void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
@@ -169,9 +169,9 @@ void SubscriptionManager::init() {
 	if (isClient()) {
 		// client
 		boost::thread setup_monitor(boost::ref(*monit_setup));
-		run_status = e_waiting_cmd;
 		setSetupStatus(e_startup);
 	}
+	run_status = e_waiting_cmd;
 }
 
 int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
@@ -339,7 +339,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	char buf[1000];
     size_t msglen = 0;
 
-	// yuk. the command socket is assumed to be the second-last item in the poll item list.
+	// yuk. the command socket is assumed to be the last item in the poll item list.
 
 	// check the command socket to see if a message is coming in from the main thread
 	// if it is we pass the command to the remote using either the subscriber socket

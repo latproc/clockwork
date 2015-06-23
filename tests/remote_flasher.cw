@@ -1,6 +1,9 @@
 # This is a demonstration of a clockwork channel
 
 # the flasher interface
+# note that no INITIAL state is provided so, like MACHINEs, the
+# FlagInterface has an implicit initial state of INIT.
+
 FlagInterface INTERFACE {
 	OPTION x, y;
 

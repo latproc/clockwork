@@ -1249,10 +1249,20 @@ the client subscription manager connects to the server and requests a channel
 \end_layout
 
 \begin_layout Itemize
-the server instantiates the channel and creates a publisher on that channel
- to communicate with the server.
- The publisher will generally be on a ØMQ Pair socket but if the channel
- is marked as 'PUBLISHER', then a Publisher socket is used instead.
+the server instantiates the channel and creates a thread to communicate
+ with the client.
+\end_layout
+
+\begin_layout Itemize
+The channel thread creates a SubscriptionManager to look after the communication
+ with the client.
+ The manager will generally use a ØMQ Pair socket but if the channel is
+ marked as 'PUBLISHER', then a Publisher socket is used instead.
+\end_layout
+
+\begin_layout Itemize
+The server creates a command socket (Request/Reply) to communicate with
+ the channel server thread
 \end_layout
 
 \begin_layout Itemize
@@ -1277,16 +1287,36 @@ the server has no need of the setup socket
 \end_layout
 
 \end_deeper
+\begin_layout Itemize
+When a command is sent to the channel
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+the command string is parsed and an IODCommand is constructed and pushed
+ onto a pending commands queue
+\end_layout
+
+\begin_layout Itemize
+The processing thread periodically gives the channel time to process pending
+ commands
+\end_layout
+
+\begin_layout Itemize
+
+\end_layout
+
+\end_deeper
 \begin_layout Subsection
 Implementation notes
 \end_layout
 
 \begin_layout Itemize
-A MachineInterface object now subclasses MachineInstance
+A MachineInterface object is now a specialisation of MachineInstance
 \end_layout
 
 \begin_layout Itemize
-A MachineInterface is a representative or `proxy' for a MachineInstance
+A MachineInterface is a representative or `proxy' for another MachineInstance
 \end_layout
 
 \begin_layout Itemize
