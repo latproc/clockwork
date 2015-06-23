@@ -261,7 +261,7 @@ bool SubscriptionManager::setupConnections() {
         // define the channel
         ss.clear(); ss.str("");
         ss << "tcp://" << subscriber_host << ":" << subscriber_port;
-        std::string channel_url = ss.str();
+        channel_url = ss.str();
         DBG_MSG << " connecting subscriber to " << channel_url << "\n";
         monit_subs.setEndPoint(channel_url.c_str());
         subscriber().connect(channel_url.c_str());
@@ -336,7 +336,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
         rc = zmq::poll(items, num_items, 500);
     if (rc == 0) return true; // no sockets have messages
 
-	char buf[1000];
+	char buf[1000]; // TBD BUG this should be allocated dynamically
     size_t msglen = 0;
 
 	// yuk. the command socket is assumed to be the last item in the poll item list.

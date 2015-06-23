@@ -110,6 +110,7 @@ void SocketMonitor::on_event_connected(const zmq_event_t &event_, const char* ad
 	checkResponders(event_, addr_);
 }
 void SocketMonitor::on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
+	disconnected_ = true;
         //DBG_MSG << socket_name << " on_event_connect_delayed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_connect_retried(const zmq_event_t &event_, const char* addr_) {
@@ -130,6 +131,7 @@ void SocketMonitor::on_event_accept_failed(const zmq_event_t &event_, const char
         //DBG_MSG << socket_name<< " on_event_accept_failed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_closed(const zmq_event_t &event_, const char* addr_) {
+	disconnected_ = true;
         //DBG_MSG << socket_name<< " on_event_closed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_close_failed(const zmq_event_t &event_, const char* addr_) {

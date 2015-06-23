@@ -98,7 +98,15 @@ protected:
 };
 
 /*
- Subscription Manager - create and maintain a connection to a channel server
+ Subscription Manager - create and maintain a connection to a remote clockwork driver
+
+ The command socket is used to request a channel and a subscriber is created to 
+ listen for activity from the server. The main thread can communicate with the 
+ server via a request/reply connection to a thread running the subscription manager.
+
+ Commands arriving from the program's main thread
+ are forwarded remote driver through the command socket.
+
  */
 class SubscriptionManager : public ConnectionManager {
 public:
@@ -116,19 +124,20 @@ public:
 	bool requestChannel();
 	
 	bool setupConnections();
-	
-	bool checkConnections();
-	
+	bool checkConnections(); // test whether setup and subscriber channels are connected
+
+	// the following variants poll for activity and handle commands arriving
+	// on the command channel or pass them to the remote party through the subscriber or setup channel
 	bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd);
 	bool checkConnections(zmq::pollitem_t *items, int num_items);
 	virtual int numSocks() { return 2; }
 	int configurePoll(zmq::pollitem_t *);
 
 	zmq::socket_t &subscriber();
-	zmq::socket_t &setup();
+	zmq::socket_t &setup(); // invalid for non-client instances
 	bool isClient(); // only clients have a setup socket
 
-	Status setupStatus() const { return _setup_status; }
+	Status setupStatus() const { return _setup_status; } // always e_not_used for non client instances
 	void setSetupStatus( Status new_status );
 	uint64_t state_start;
 	RunStatus run_status;
@@ -136,12 +145,14 @@ public:
 	std::string current_channel;
 	std::string subscriber_host;
 	std::string channel_name;
+	std::string channel_url;
 	Protocol protocol;
 	SingleConnectionMonitor monit_subs;
 	SingleConnectionMonitor *monit_pubs;
 	SingleConnectionMonitor *monit_setup;
 protected:
 	zmq::socket_t subscriber_;
+	// A server instance will not have a socket for setting up the subscriber
 	zmq::socket_t *setup_;
 	Status _setup_status;
 };

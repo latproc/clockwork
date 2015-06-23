@@ -42,6 +42,10 @@
 #include "ConnectionManager.h"
 #include "CommandManager.h"
 
+/* A command manager maintains a connection to the clockwork driver on its
+   command socket and passes commands arriving from the program's main
+ 	thread to the remote driver through the command socket.
+ */
 bool CommandManager::setupConnections() {
     if (setup_status == e_startup) {
         char url[100];

@@ -136,6 +136,7 @@ void Channel::syncRemoteStates() {
 		//safeSend(*cmd_client, "done", 4);
 		std::string ack;
 		sendMessage("done", *cmd_client, ack);
+		NB_MSG << "channel " << name << " got " << ack << " from server\n";
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 	}
@@ -174,8 +175,10 @@ void Channel::syncRemoteStates() {
 
 Action::Status Channel::setState(State &new_state, bool resume) {
 	Action::Status res = MachineInstance::setState(new_state, resume);
-	if (res != Action::Complete) return res;
-
+	if (res != Action::Complete) {
+		NB_MSG << "Action not complete\n";
+		return res;
+	}
 	if (new_state == ChannelImplementation::CONNECTED) {
 		NB_MSG << name << " CONNECTED\n";
 		setNeedsCheck();
@@ -194,6 +197,20 @@ Action::Status Channel::setState(State &new_state, bool resume) {
 		NB_MSG << name << " DISCONNECTED\n";
 		disableShadows();
 		setNeedsCheck();
+#if 0
+		if (isClient()) {
+			if (monitor_thread && monit_subs) {
+				monit_subs->abort();
+				monitor_thread->join();
+				delete monit_subs;
+				monit_subs = 0;
+				delete monitor_thread;
+				monitor_thread = 0;
+			}
+			if (communications_manager) delete communications_manager;
+			communications_manager = 0;
+		}
+#endif
 	}
 	return res;
 }
@@ -259,13 +276,25 @@ void Channel::addConnection() {
 	++connections;
 	DBG_MSG << getName() << " client connected\n";
 	if (connections == 1) {
-		if (definition()->isPublisher()) {
-			SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
-			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+		if (isClient()){
+			if (definition()->isPublisher()) {
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
+			else {
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
 		}
 		else {
-			SetStateActionTemplate ssat(CStringHolder("SELF"), "UPLOADING" );
-			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			if (definition()->isPublisher()) {
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
+			else {
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "UPLOADING" );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
 		}
 	}
  }
@@ -499,8 +528,10 @@ void Channel::checkStateChange() {
 	if (isClient()) {
 		if ( current_state == ChannelImplementation::DOWNLOADING)
 			setState(ChannelImplementation::UPLOADING);
-		else if (current_state == ChannelImplementation::UPLOADING)
+		else if (current_state == ChannelImplementation::UPLOADING) {
+			NB_MSG << name << " -> ACTIVE\n";
 			setState(ChannelImplementation::ACTIVE);
+		}
 		else {
 			NB_MSG << "Unexpected channel state " << current_state << " on " << name << "\n";
 			assert(false);
@@ -568,7 +599,7 @@ void Channel::operator()() {
 	zmq::pollitem_t *items;
 
 	try {
-		while (!aborted) {
+		while (!aborted && communications_manager) {
 			// clients have a socket to setup the channel, servers do not need it
 			int num_poll_items = 0;
 			int subscriber_idx = 0;
@@ -590,14 +621,33 @@ void Channel::operator()() {
 				items[idx].revents = 0;
 			}
 			try {
-				if (!communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
-					usleep(100000);
+				if (completed_commands.empty() && !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
+					usleep(1000);
 					continue;
 				}
 			}
 			catch(zmq::error_t err) {
 				NB_MSG << "Channel " << name << " ZMQ error: " << zmq_strerror(errno) << "\n";
 				continue;
+			}
+			if (!completed_commands.empty()) {
+				boost::mutex::scoped_lock(update_mutex);
+				std::string response;
+				NB_MSG << "Channel " << name << " finishing off processed commands\n";
+				std::list<IODCommand*>::iterator iter = completed_commands.begin();
+				while (iter != completed_commands.end()) {
+					IODCommand *cmd = *iter;
+					iter = completed_commands.erase(iter);
+					NB_MSG << "deleting completed command: " << cmd->param(0) << "\n";
+					if (cmd->done == IODCommand::Success) {
+						NB_MSG << cmd->param(0) <<" succeeded: " << cmd->result() << "\n";
+					}
+					else {
+						NB_MSG << cmd->param(0) <<" failed: " << cmd->error() << "\n";
+					}
+					delete cmd;
+				}
+				// TBD should this go back to the originator?
 			}
 
 			if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
@@ -1152,7 +1202,6 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 
 	MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(machine);
 
-	NB_MSG << "Channel::sendStateChange " << machine->getName() << "->" << new_state << "\n";
 	if (!all) return;
     std::string machine_name = machine->fullName();
 	char *cmdstr = MessageEncoding::encodeState(machine_name, new_state); // send command
@@ -1173,6 +1222,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 		if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
+			NB_MSG << "Channel " << chn->name << "sendStateChange " << machine->getName() << "->" << new_state << "\n";
 			if (!chn->isClient() && chn->communications_manager) {
 				std::string response;
 				safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
@@ -1577,22 +1627,6 @@ void Channel::checkCommunications() {
 			completed_commands.push_back(command);
 		}
 	}
-	if (!completed_commands.empty()) {
-		std::string response;
-		NB_MSG << "Channel " << name << " finishing off processed commands\n";
-		std::list<IODCommand*>::iterator iter = completed_commands.begin();
-		while (iter != completed_commands.end()) {
-			IODCommand *cmd = *iter;
-			iter = completed_commands.erase(iter);
-			NB_MSG << "deleting completed command: " << cmd->param(0) << "\n";
-			delete cmd;
-		}
-		//sendMessage("process_commands", *cmd_client, response);
-//		NB_MSG << "Channel " << name << " got cmd response " << response << "\n";
-
-		// TBD should this go back to the originator?
-	}
-
 }
 
 void Channel::setupAllShadows() {

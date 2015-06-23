@@ -91,10 +91,10 @@ public:
         monitor(*sock, "inproc://monitor.rep");
     }
     virtual void on_monitor_started() {
-        std::cerr << "command channel monitor started\n";
+        //std::cerr << "command channel monitor started\n";
     }
     virtual void on_event_connected(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "command channel on_event_connected " << addr_ << "\n";
+        //std::cerr << "command channel on_event_connected " << addr_ << "\n";
     }
     virtual void on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
         //std::cerr << "command channel on_event_connect_delayed " << addr_ << "\n";
