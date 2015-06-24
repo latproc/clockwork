@@ -32,7 +32,7 @@ Action *CallMethodActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &CallMethodActionTemplate::operator<<(std::ostream &out) const {
-    return out << "CallMethodActionTemplate " << message.get() << " " << target.get() << "\n";
+    return out << "CallMethodActionTemplate " << message.get() << " on " << target.get() << "\n";
 }
 
 Action::Status CallMethodAction::run() {
@@ -79,6 +79,8 @@ Action::Status CallMethodAction::checkComplete() {
 }
 
 std::ostream &CallMethodAction::operator<<(std::ostream &out) const {
-    return out << "CallMethodAction " << message.get() << " " << target.get() << "\n";
+    return out << "CallMethodAction " << message.get() << " on " << target.get()
+	<< ((trigger && !trigger->fired() ) ? " Waiting for trigger to fire " : (!trigger) ? " no trigger set " : "trigger fired")
+	<< "\n";
 }
 		
