@@ -133,6 +133,8 @@ public:
     const std::string &getKey() { return psk; }
     const std::string &getVersion() { return version; }
 
+		Value getValue(const char *property);
+
 private:
     static std::map< std::string, ChannelDefinition* > *all;
     std::map<std::string, MachineRef *> interfaces;

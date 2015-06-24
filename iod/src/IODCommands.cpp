@@ -1113,12 +1113,24 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 				
                 chn = Channel::findByType(ch_name.asString());
                 if (!chn) {
-                    int port = Channel::uniquePort();
+										std::cout << "no channel found, creating one\n";
+										long port = 0;
+
+										//Value portval = (defn->properties.exists("port")) ? defn->properties.lookup("port") : SymbolTable::Null;
+										Value portval = defn->getValue("port");
+										std::cout << "default port for channel: " << portval << "\n";
+										if (portval == SymbolTable::Null || !portval.asInteger(port)) 
+                    	port = Channel::uniquePort();
+										else {
+											NB_MSG << " using default channel port: " << port << " for channel " << ch_name << "\n";
+										}
                     while (true) {
                         try {
+													  std::cout << "instantiating a channel on port " << port << "\n";
                             chn = defn->instantiate(port);
-							chn->start();
-							chn->enable();
+														assert(chn);
+														chn->start();
+														chn->enable();
                             break;
                         }
                         catch (zmq::error_t err) {

@@ -65,6 +65,7 @@ void SocketMonitor::operator()() {
         }
         catch (zmq::error_t io) {
             std::cerr << "ZMQ error " << errno << ": "<< zmq_strerror(errno) << " in socket monitor\n";
+						if (errno == 88) exit(0);
 				//if (errno != EAGAIN && errno != EINTR)
 				// monitoring a socket that has been removed. exit and rely on restart code (TBD)
 				//	exit(2);

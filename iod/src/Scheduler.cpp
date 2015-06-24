@@ -227,8 +227,8 @@ void Scheduler::add(ScheduledItem*item) {
 	}
 	else {
 		long wait_duration = nowMicrosecs() - last_notification;
-		if (wait_duration >= 1000000L && item->action) 
-			std::cout << "scheduler waiting for a long time for a response: " << wait_duration << "\n";
+		//if (wait_duration >= 1000000L && item->action) 
+		//	std::cout << "scheduler waiting for a long time for a response: " << wait_duration << "\n";
 		//assert (wait_duration < 1000000L);
 	}
 }

@@ -391,6 +391,12 @@ Channel *ChannelDefinition::instantiate(unsigned int port) {
     return chn;
 }
 
+Value ChannelDefinition::getValue(const char *property) {
+	std::map<std::string, Value>::iterator iter = options.find(property);
+	if (iter == options.end()) return SymbolTable::Null;
+	return (*iter).second;
+}
+
 bool ChannelDefinition::isPublisher() const { return ignore_response; }
 void ChannelDefinition::setPublisher(bool which) { ignore_response = which; }
 
@@ -1222,7 +1228,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 		if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-			NB_MSG << "Channel " << chn->name << "sendStateChange " << machine->getName() << "->" << new_state << "\n";
+			//NB_MSG << "Channel " << chn->name << " sendStateChange " << machine->getName() << "->" << new_state << "\n";
 			if (!chn->isClient() && chn->communications_manager) {
 				std::string response;
 				safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
