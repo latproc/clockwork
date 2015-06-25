@@ -2419,34 +2419,6 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		NB_MSG << _name << " error: dropping empty message\n";
 		return Action::Failed;
 	}
-	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
-
-	if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
-		if (!state_machine) return Action::Failed;
-		//std::string state_name = m.getText();
-		//if (state_name.find('_') != std::string::npos)
-		//    state_name = state_name.substr(state_name.find('_'));
-		if(m.getText() == "on_enter" && current_state.getName() != "on") {
-			State *on = state_machine->findState("on");
-			if (on) setState(*on);
-			else {
-				return Action::Failed;
-			}
-		}
-		else if (m.getText() == "off_enter" && current_state.getName() != "off") {
-			State *off = state_machine->findState("off");
-			if (off) setState(*off);
-			else {
-				return Action::Failed;
-			}
-		}
-		else if (m.getText() == "property_change" ) {
-			//std::cout << _name << " value changed to " << io_interface->address.value << "\n";
-			setValue("VALUE", io_interface->address.value);
-		}
-		// a POINT won't have an actions that depend on triggers so it's safe to return now
-		return Action::Complete;
-	}
 
 	std::string event_name(m.getText());
 	if (from && event_name.find('.') == std::string::npos)
@@ -2483,6 +2455,34 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 				}
 			}
 		}
+	}
+	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
+
+	if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
+		if (!state_machine) return Action::Failed;
+		//std::string state_name = m.getText();
+		//if (state_name.find('_') != std::string::npos)
+		//    state_name = state_name.substr(state_name.find('_'));
+		if(m.getText() == "on_enter" && current_state.getName() != "on") {
+			State *on = state_machine->findState("on");
+			if (on) setState(*on);
+			else {
+				return Action::Failed;
+			}
+		}
+		else if (m.getText() == "off_enter" && current_state.getName() != "off") {
+			State *off = state_machine->findState("off");
+			if (off) setState(*off);
+			else {
+				return Action::Failed;
+			}
+		}
+		else if (m.getText() == "property_change" ) {
+			//std::cout << _name << " value changed to " << io_interface->address.value << "\n";
+			setValue("VALUE", io_interface->address.value);
+		}
+		// a POINT won't have an actions that depend on triggers so it's safe to return now
+		return Action::Complete;
 	}
 	// execute the method if there is one
 	DBG_M_MESSAGING << _name<< " executing " << event_name << "\n";
