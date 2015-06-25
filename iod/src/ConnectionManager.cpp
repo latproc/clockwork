@@ -257,15 +257,23 @@ bool SubscriptionManager::setupConnections() {
         usleep(5000);
     }
     if (requestChannel()) {
-		assert(monit_subs.disconnected());
         // define the channel
         ss.clear(); ss.str("");
         ss << "tcp://" << subscriber_host << ":" << subscriber_port;
-        channel_url = ss.str();
-        DBG_MSG << " connecting subscriber to " << channel_url << "\n";
-        monit_subs.setEndPoint(channel_url.c_str());
-        subscriber().connect(channel_url.c_str());
-        setSetupStatus(SubscriptionManager::e_done);
+        std::string url = ss.str();
+				if (!monit_subs.disconnected() && url != channel_url) {
+					// the subscriber hasn't had time to notice loss of connection but
+					// the url is now different.
+					std::cerr << "NOTE: Channel has changed from " << channel_url << " to " << url << " exiting\n";
+					exit(0);
+				}
+				channel_url = url;
+				if (monit_subs.disconnected()) {
+	        DBG_MSG << " connecting subscriber to " << channel_url << "\n";
+	        monit_subs.setEndPoint(channel_url.c_str());
+	        subscriber().connect(channel_url.c_str());
+	        setSetupStatus(SubscriptionManager::e_done);
+				}
         return true;
     }
     return false;
