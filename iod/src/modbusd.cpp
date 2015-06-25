@@ -876,6 +876,7 @@ int main(int argc, const char * argv[])
 
 		try
 		{
+			int exception_count = 0;
 				while (program_state != s_finished)
 				{
 
@@ -888,12 +889,15 @@ int main(int argc, const char * argv[])
 						try {
 								if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
 										usleep(100000);
+										exception_count = 0;
 										continue;
 								}
+			
+								exception_count = 0;
 						}
 						catch (std::exception ex) {
 								std::cout << "polling connections: " << ex.what() << "\n";
-								if (program_state != s_finished) continue;
+								if (++exception_count <= 5 && program_state != s_finished) { usleep(400000); continue; }
 								exit(0);
 						}
 						if (need_refresh) {
