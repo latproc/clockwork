@@ -121,7 +121,7 @@ public:
         //std::cerr << "command channel on_event_close_failed " << addr_ << "\n";
     }
     virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "command channel on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
+        //std::cerr << "command channel on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
     }
     virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_) {
         std::cerr << "command channel on_event_unknown " << addr_ << "\n";
