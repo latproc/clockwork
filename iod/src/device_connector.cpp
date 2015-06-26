@@ -941,7 +941,7 @@ int main(int argc, const char * argv[])
 		ConnectionManager *connection_manager = 0;
 		try {
 			if (options.watchProperty())
-				connection_manager = new SubscriptionManager(Options::instance()->getChannelName(), eCHANNEL);
+				connection_manager = new SubscriptionManager(Options::instance()->getChannelName(), eCLOCKWORK);
 			else
 				connection_manager = new CommandManager(options.iodHost(), 5555);
 		}
