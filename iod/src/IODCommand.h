@@ -54,7 +54,7 @@ public:
 	int curr() { return val; }
 	SequenceNumber() : val(0) {}
 private:
-	int val = 0;
+	int val;
 };
 
 class IODCommand {
