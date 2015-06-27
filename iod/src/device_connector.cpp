@@ -513,7 +513,7 @@ struct MatchFunction {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->machine(), Options::instance()->property(), res.c_str());
                     if (cmd) {
                         std::string response;
-						//std::cout << "sending: " << cmd << "\n";
+												//std::cout << "sending: " << cmd << "\n";
                         if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
@@ -719,6 +719,7 @@ struct ConnectionThread {
                     }
                     else {
                         std::cerr << "buffer full: " << buf << "\n";
+												offset = 0;
                         close(connection);
                         DeviceStatus::instance()->setStatus(DeviceStatus::e_disconnected);
                         updateProperty();
@@ -1011,8 +1012,10 @@ int main(int argc, const char * argv[])
                 if (last_time.tv_sec != last.tv_sec && now.tv_sec > last.tv_sec + 1) {
                     if (dev_stat == DeviceStatus::e_timeout)
                         std::cerr << "Warning: Device timeout\n";
-                    else
+                    else {
                         std::cout << "Warning: connection idle\n";
+												exit(0);
+										}
                     last_time = last;
                 }
             }

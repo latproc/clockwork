@@ -2427,7 +2427,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	// fire the triggers on any suspended commands that might be waiting for them.
 	if (executingCommand()) {
 		// tell any actions that are triggering on this that we have seen the event
-		DBG_MSG << _name << " processing triggers for " << event_name << "\n";
+		DBG_M_MESSAGING << _name << " processing triggers for " << event_name << "\n";
 		std::list<Action*>::iterator iter = active_actions.begin();
 		while (iter != active_actions.end()) {
 			Action *a = *iter++;
@@ -2438,16 +2438,16 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 				if (ssa) {
 					if (!ssa->condition.predicate || ssa->condition(this)) {
 						trigger->fire();
-						DBG_MSG << _name << " trigger on " << *a << " fired\n";
+						DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 					}
 					else
-						DBG_MSG << _name << " trigger message " << trigger->getName()
+						DBG_M_MESSAGING << _name << " trigger message " << trigger->getName()
 							<< " arrived but condition " << *(ssa->condition.predicate) << " failed\n";
 				}
 				// a call method action may be waiting for this message
 				else if ( cma ) {
 					if (cma->getTrigger()) cma->getTrigger()->fire();
-					DBG_MSG << _name << " trigger on " << *a << " fired\n";
+					DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 				}
 				else {
 					NB_MSG << _name << " firing unknown trigger on " << *a << "\n";
