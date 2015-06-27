@@ -1303,6 +1303,10 @@ The processing thread periodically gives the channel time to process pending
 \end_layout
 
 \begin_layout Itemize
+as commands are completed they are posted onto a queue
+\end_layout
+
+\begin_layout Itemize
 
 \end_layout
 

@@ -227,7 +227,7 @@ public:
 	void stopSubscriber();
 	void stopServer();
 	bool isClient(); 	// does this channel connect to another instance of clockwork?
-	void syncRemoteStates();
+	bool syncRemoteStates();
 	void syncInterfaceProperties(MachineInstance *m);
 	zmq::socket_t *createCommandSocket(bool client_endpoint);
 

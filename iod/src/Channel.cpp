@@ -111,10 +111,11 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 	}
 }
 
-void Channel::syncRemoteStates() {
-	NB_MSG << "Channel " << name << " syncRemoteStates\n";
+bool Channel::syncRemoteStates() {
+	NB_MSG << "Channel " << name << " syncRemoteStates " << current_state << "\n";
 	// publishers do not initially send the state of all machines
-	if (definition()->isPublisher())  return;
+	if (definition()->isPublisher()) return false;
+	if (current_state == ChannelImplementation::DISCONNECTED) return false;
 	if (isClient()) {
 		std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
 		while (iter != channel_machines.end()) {
@@ -171,6 +172,7 @@ void Channel::syncRemoteStates() {
 		}
 	}
 	NB_MSG << "Channel " << name << " syncRemoteStatesDone\n";
+	return true;
 }
 
 Action::Status Channel::setState(State &new_state, bool resume) {

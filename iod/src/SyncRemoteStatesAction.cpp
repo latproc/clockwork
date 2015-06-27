@@ -35,12 +35,20 @@ Action *SyncRemoteStatesActionTemplate::factory(MachineInstance *mi)
 Action::Status SyncRemoteStatesAction::execute()
 {
 	owner->start(this);
-	result_str = "OK";
 	status = Running;
 	Channel *chn = dynamic_cast<Channel*>(owner);
 	assert(chn);
-	chn->syncRemoteStates();
-	status = Complete;
+	if (chn->syncRemoteStates()) {
+		status = Complete;
+		result_str = "OK";
+	}
+	else {
+		status = Failed;
+		char buf[150];
+		snprintf(buf, 150, "Sync Remote States on %s failed", chn->getName().c_str());
+		MessageLog::instance()->add(buf);
+		error_str = (const char *)buf; // when assigning to a CStringHolder, statically allocated strings need to be const
+	}
 	owner->stop(this);
 	return status;
 #if 0

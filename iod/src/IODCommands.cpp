@@ -1107,7 +1107,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             else {
                 ChannelDefinition *defn = ChannelDefinition::find(ch_name.asString().c_str());
                 if (!defn) {
-                    error_str = MessageEncoding::encodeError("No such channel");
+					char buf[100];
+					snprintf(buf, 100, "No such channel: %s", ch_name.asString().c_str());
+                    error_str = MessageEncoding::encodeError(buf);
                     return false;
                 }
 				
