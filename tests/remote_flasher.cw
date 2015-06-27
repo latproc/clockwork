@@ -25,6 +25,7 @@ FlagInterface INTERFACE {
 */
 
 FlasherChannel CHANNEL {
+	OPTION port 7720;
     UPDATES flasher FlagInterface;
     UPDATES flag FlagInterface;
 }
