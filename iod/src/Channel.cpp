@@ -534,7 +534,7 @@ void Channel::stopServer() {
 void Channel::checkStateChange() {
 	if (current_state == ChannelImplementation::DISCONNECTED) return;
 	if (isClient()) {
-		if ( current_state == ChannelImplementation::DOWNLOADING)
+		if ( current_state == ChannelImplementation::DOWNLOADING || current_state == ChannelImplementation::CONNECTED )
 			setState(ChannelImplementation::UPLOADING);
 		else if (current_state == ChannelImplementation::UPLOADING) {
 			NB_MSG << name << " -> ACTIVE\n";
@@ -546,7 +546,7 @@ void Channel::checkStateChange() {
 		}
 	}
 	else {
-		if ( current_state == ChannelImplementation::UPLOADING)
+		if ( current_state == ChannelImplementation::UPLOADING || current_state == ChannelImplementation::CONNECTED )
 			setState(ChannelImplementation::DOWNLOADING);
 		else if (current_state == ChannelImplementation::DOWNLOADING)
 			setState(ChannelImplementation::ACTIVE);
