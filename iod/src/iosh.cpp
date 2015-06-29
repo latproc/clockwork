@@ -257,13 +257,16 @@ void initialise_machine_names(char *data) {
 }
 
 void initialise_commands() {
+	commands.push_back("CHANNELS");
     commands.push_back("DESCRIBE");
     commands.push_back("DISABLE");
     commands.push_back("ENABLE");
     commands.push_back("GET");
     commands.push_back("HELP");
+	commands.push_back("INFO");
     commands.push_back("LIST");
     commands.push_back("MESSAGES");
+	commands.push_back("NOTICE");
     commands.push_back("MODBUS");
     commands.push_back("PROPERTY");
     commands.push_back("RESUME");

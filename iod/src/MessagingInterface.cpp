@@ -137,30 +137,33 @@ sendMessage_transmit:
     size_t len = 0;
     while (len == 0) {
         try {
-					zmq::message_t rcvd;
-					if (sock.recv(&rcvd)) {
-						len = rcvd.size();
-						if (!len) continue;
-						buf = new char[len+1];
-						memcpy(buf, rcvd.data(), len);
-						buf[len] = 0;
-						response = buf;
-						delete[] buf;
-					}
-					break;
+			zmq::message_t rcvd;
+			if (sock.recv(&rcvd), 100) {
+				len = rcvd.size();
+				if (!len) continue;
+				buf = new char[len+1];
+				memcpy(buf, rcvd.data(), len);
+				buf[len] = 0;
+				response = buf;
+				delete[] buf;
+			}
+			else {
+				std::cerr << __FILE__ << ":" << __LINE__ << " sendMessage saw no response in 100ms\n";
+			}
+			break;
         }
         catch(zmq::error_t e)  {
             if (errno == EINTR) continue;
+			char err[300];
+			const char *fnam = strrchr(__FILE__, '/');
+			if (!fnam) fnam = __FILE__; else fnam++;
+			snprintf(err, 300, "sendMessage error: %s in %s:%d\n", zmq_strerror(errno), fnam, __LINE__);
+			std::cerr << err;
 			if (zmq_errno() == EFSM) {
 				// send must have failed
 				usleep(50);
 				goto sendMessage_transmit;
 			}
-            char err[300];
-			const char *fnam = strrchr(__FILE__, '/');
-			if (!fnam) fnam = __FILE__; else fnam++;
-            snprintf(err, 300, "sendMessage error: %s in %s:%d\n", zmq_strerror(errno), fnam, __LINE__);
-            std::cerr << err;
             return false;
         }
     }

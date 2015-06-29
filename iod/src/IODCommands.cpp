@@ -1053,7 +1053,8 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		std::string result;
 		std::map<std::string, Channel*>::iterator iter = channels->begin();
 		while (iter != channels->end()) {
-			result += (*iter++).first + "\n";
+			result += (*iter).first + " " + (*iter).second->getCurrentStateString() + "\n";
+			iter++;
 		}
 		result_str = result;
 		return true;

@@ -154,16 +154,14 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings)
 
 
 void CollectPersistentStatus(PersistentStore &store) {
-    std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
     std::string initial_settings;
     do
     {
+		std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
         if (cmd_socket && sendMessage("PERSISTENT STATUS", *cmd_socket, initial_settings)) {
-            //initial_settings = cmd_socket->sendCommand("PERSISTENT", "STATUS");
             if ( strncasecmp(initial_settings.c_str(), "ignored", strlen("ignored")) != 0)
             {
                 if (loadActiveData(store, initial_settings.c_str())) store.save();
-                //free(initial_settings);
                 break;
             }
             else

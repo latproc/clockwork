@@ -1,5 +1,5 @@
-#LyX 2.0 created this file. For more info see http://www.lyx.org/
-\lyxformat 413
+#LyX 2.1 created this file. For more info see http://www.lyx.org/
+\lyxformat 474
 \begin_document
 \begin_header
 \textclass article
@@ -12,13 +12,13 @@
 \font_roman default
 \font_sans default
 \font_typewriter default
+\font_math auto
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
 \font_sf_scale 100
 \font_tt_scale 100
-
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -29,15 +29,24 @@
 \use_hyperref false
 \papersize a4paper
 \use_geometry true
-\use_amsmath 1
-\use_esint 1
-\use_mhchem 1
-\use_mathdots 1
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
 \cite_engine basic
+\cite_engine_type default
+\biblio_style plain
 \use_bibtopic false
 \use_indices false
 \paperorientation portrait
 \suppress_date false
+\justification true
 \use_refstyle 1
 \index Index
 \shortcut idx
@@ -162,6 +171,10 @@ zeromq (http://www.zeromq.org/) - for inter-program messaging
 mqtt (http://mqtt.org)
 \end_layout
 
+\begin_layout Itemize
+cJSON
+\end_layout
+
 \begin_layout Standard
 We developed the software using open source development tools: GNU gcc,
  bison and flex and used Linux and MacOSX workstations.
@@ -217,7 +230,7 @@ pull the latproc project from git
 
 \begin_deeper
 \begin_layout LyX-Code
-git clone git://github.com/latproc/latproc.git latproc
+git clone git://github.com/latproc/clockwork.git
 \end_layout
 
 \end_deeper
@@ -227,17 +240,21 @@ change to the latproc directory and build the interpreter
 
 \begin_deeper
 \begin_layout LyX-Code
-cd latproc/iod
+cd clockwork/iod
 \end_layout
 
 \begin_layout LyX-Code
-make -f Makefile.cw 
+make debug 
 \end_layout
 
 \end_deeper
 \begin_layout Standard
-The `make' process should produce a file latproc/iod/cw that can be copied
- to a convenient location (eg /usr/local/bin)
+The `make' process should produce a build/Debug directory withcommandline
+ programs for cw, iosh, modbusd, device_connector and persistd that can
+ be copied to a convenient location (eg /usr/local/bin).
+ You can also use make install from within the build/Debug directory to
+ copy the files to your clockwork/iod directory that you ran the original
+ make from.
 \end_layout
 
 \begin_layout Subsubsection
@@ -470,8 +487,8 @@ When writing programs for Clockwork, program source can be split between
 
 \begin_layout Itemize
 Program text is freeform, where line breaks, tabs and spaces are all treated
- equally.
- 
+ equally except where they occur within quoted strings or in the case of
+ line breaks where they mark the end of a single-line comment.
 \end_layout
 
 \begin_layout Itemize
@@ -697,6 +714,11 @@ machine_name changes from the on state to off or vice-versa, only usable
 
 \begin_layout Subsection
 persistd
+\end_layout
+
+\begin_layout Standard
+persistd monitors a connection clockwork driver for machines that publicly
+ report their state changes using zmq.
 \end_layout
 
 \begin_layout Subsection
@@ -1117,7 +1139,7 @@ status open
 \end_layout
 
 \begin_layout Plain Layout
-\begin_inset Caption
+\begin_inset Caption Standard
 
 \begin_layout Plain Layout
 LED Light Chaser demonstration displayed in the web page
