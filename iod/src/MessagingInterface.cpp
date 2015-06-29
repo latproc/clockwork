@@ -149,6 +149,7 @@ sendMessage_transmit:
 			}
 			else {
 				std::cerr << __FILE__ << ":" << __LINE__ << " sendMessage saw no response in 100ms\n";
+				continue;
 			}
 			break;
         }
