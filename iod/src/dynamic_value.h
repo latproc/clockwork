@@ -253,6 +253,21 @@ private:
     MachineInstance *machine;
 };
 
+class ExistsValue : public DynamicValue {
+public:
+	ExistsValue(const char *name) : machine_name(name), machine(0) { }
+	virtual ~ExistsValue() { }
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	ExistsValue(const ExistsValue &);
+
+private:
+	ExistsValue(const DynamicValue &);
+	std::string machine_name;
+	MachineInstance *machine;
+};
+
 
 class CastValue : public DynamicValue {
 public:

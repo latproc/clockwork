@@ -60,6 +60,7 @@ ENABLED             return ENABLED;
 ENTER               return ENTER;
 ENTRIES             return ENTRIES;
 EXECUTE				return EXECUTE;
+EXISTS				return EXISTS;
 EXPORT              return EXPORT;
 EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;

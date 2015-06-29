@@ -571,5 +571,23 @@ std::ostream &CastValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const CastValue &val) { return val.operator<<(out); }
 
+ExistsValue::ExistsValue(const ExistsValue &other) {
+	machine_name = other.machine_name;
+	machine = 0;
+}
+DynamicValue *ExistsValue::clone() const { return new ExistsValue(*this); }
+Value &ExistsValue::operator()(MachineInstance *mi) {
+	if (machine == NULL) machine = mi->lookup(machine_name);
+	if (!machine)  {
+		last_result = false;
+		return last_result;
+	}
+	last_result = true;
+	return last_result;
+}
+std::ostream &ExistsValue::operator<<(std::ostream &out ) const {
+	return out << machine_name << " EXISTS ";
+}
+std::ostream &operator<<(std::ostream &out, const ExistsValue &val) { return val.operator<<(out); }
 
 
