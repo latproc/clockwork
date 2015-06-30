@@ -375,6 +375,8 @@ ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt)
 	states.push_back("DISCONNECTED");
 	states.push_back("CONNECTED");
 	states.push_back("CONNECTING");
+	states.push_back("UPLOADING");
+	states.push_back("DOWNLOADING");
 	default_state = State("DISCONNECTED");
 	initial_state = State("DISCONNECTED");
 	disableAutomaticStateChanges();
