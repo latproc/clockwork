@@ -83,6 +83,7 @@ public:
 	bool shares_machines() const; // does this channel share anything?
 
     static State DISCONNECTED;
+	static State WAITSTART;
 	static State CONNECTING;
 	static State CONNECTED;
     static State DOWNLOADING;
@@ -236,7 +237,7 @@ public:
 	bool started();
 	void enable(); // enable messages to pass through the channel
 	void disable();
-	void checkStateChange(); // change state after receiving a done from current state
+	void checkStateChange(std::string event); // change state after receiving a done from current state
     
     bool matches(MachineInstance *machine, const std::string &name);
     bool patternMatches(const std::string &machine_name);

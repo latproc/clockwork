@@ -24,6 +24,7 @@ std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
 State ChannelImplementation::CONNECTING("CONNECTING");
 State ChannelImplementation::DISCONNECTED("DISCONNECTED");
 State ChannelImplementation::DOWNLOADING("DOWNLOADING");
+State ChannelImplementation::WAITSTART("WAITSTART");
 State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
@@ -162,7 +163,8 @@ bool Channel::syncRemoteStates() {
 		}
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
-		if (cmd_client) {
+/*
+ 		if (cmd_client) {
 			std::string ack;
 			sendMessage("done", *cmd_client, ack);
 		}
@@ -170,6 +172,7 @@ bool Channel::syncRemoteStates() {
 			assert(false);
 			mif->send("done");
 		}
+*/
 	}
 	NB_MSG << "Channel " << name << " syncRemoteStatesDone\n";
 	return true;
@@ -184,7 +187,13 @@ Action::Status Channel::setState(State &new_state, bool resume) {
 	if (new_state == ChannelImplementation::CONNECTED) {
 		NB_MSG << name << " CONNECTED\n";
 		setNeedsCheck();
-		enableShadows();
+		if (isClient()) {
+			SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
+			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
+		}
+	}
+	else if (new_state == ChannelImplementation::WAITSTART) {
+		NB_MSG << name << " WAITSTART\n";
 	}
 	else if (new_state == ChannelImplementation::UPLOADING) {
 		NB_MSG << name << " UPLOADING\n";
@@ -194,6 +203,15 @@ Action::Status Channel::setState(State &new_state, bool resume) {
 	}
 	else if (new_state == ChannelImplementation::DOWNLOADING) {
 		NB_MSG << name << " DOWNLOADING\n";
+		std::string ack;
+		if (isClient()) {
+			sendMessage("status", *cmd_client, ack);
+			NB_MSG << "channel " << name << " got ack: " << ack << " to start request\n";
+		}
+		else {
+			sendMessage("done", *cmd_client, ack);
+			NB_MSG << "channel " << name << " got ack: " << ack << " when finished upload\n";
+		}
 	}
 	else if (new_state == ChannelImplementation::DISCONNECTED) {
 		NB_MSG << name << " DISCONNECTED\n";
@@ -294,7 +312,7 @@ void Channel::addConnection() {
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			else {
-				SetStateActionTemplate ssat(CStringHolder("SELF"), "UPLOADING" );
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART" );
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 		}
@@ -375,6 +393,7 @@ ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt)
 	states.push_back("DISCONNECTED");
 	states.push_back("CONNECTED");
 	states.push_back("CONNECTING");
+	states.push_back("WAITSTART");
 	states.push_back("UPLOADING");
 	states.push_back("DOWNLOADING");
 	default_state = State("DISCONNECTED");
@@ -533,10 +552,11 @@ void Channel::stopServer() {
 
 // the client and server enter the downloading and uploading states
 // in opposite orders.
-void Channel::checkStateChange() {
+void Channel::checkStateChange(std::string event) {
+	NB_MSG << "Received " << event << " in " << current_state << " on " << name << "\n";
 	if (current_state == ChannelImplementation::DISCONNECTED) return;
 	if (isClient()) {
-		if ( current_state == ChannelImplementation::DOWNLOADING || current_state == ChannelImplementation::CONNECTED )
+		if ( current_state == ChannelImplementation::DOWNLOADING )
 			setState(ChannelImplementation::UPLOADING);
 		else if (current_state == ChannelImplementation::UPLOADING) {
 			NB_MSG << name << " -> ACTIVE\n";
@@ -548,8 +568,14 @@ void Channel::checkStateChange() {
 		}
 	}
 	else {
-		if ( current_state == ChannelImplementation::UPLOADING || current_state == ChannelImplementation::CONNECTED )
-			setState(ChannelImplementation::DOWNLOADING);
+		// note that the start event may arrive before our switch to waitstart.
+		// we rely on the client resending if necessary
+		if ( current_state == ChannelImplementation::WAITSTART && event == "status" )
+			setState(ChannelImplementation::UPLOADING);
+		else if (current_state == ChannelImplementation::ACTIVE && event == "status")
+			setState(ChannelImplementation::UPLOADING);
+		else if (current_state == ChannelImplementation::UPLOADING)
+			setState(ChannelImplementation::ACTIVE);
 		else if (current_state == ChannelImplementation::DOWNLOADING)
 			setState(ChannelImplementation::ACTIVE);
 		else {
@@ -597,16 +623,19 @@ void Channel::operator()() {
 	else {
 		communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL, "*", port);
 	}
-	setState(ChannelImplementation::CONNECTED);
 
 	cmd_server = createCommandSocket(false);
 	usleep(500);
 	char start_cmd[20];
-	//NB_MSG << "channel " << name << " thread waiting for start message\n";
+	NB_MSG << "channel " << name << " thread waiting for start message\n";
 	size_t start_len = cmd_server->recv(start_cmd, 20);
 	if (!start_len) { NB_MSG << name << " error getting start message\n"; }
 	cmd_server->send("ok", 2);
 	zmq::pollitem_t *items;
+	NB_MSG << "channel " << name << " thread received start message\n";
+
+	//SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
+	//enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 
 	try {
 		while (!aborted && communications_manager) {
@@ -660,6 +689,15 @@ void Channel::operator()() {
 				// TBD should this go back to the originator?
 			}
 
+			if (isClient() && current_state == ChannelImplementation::DOWNLOADING) {
+				long current_time = getTimerVal()->iValue;
+				if (current_time > 1000) {
+					NB_MSG << "channel " << name << " resending status request to server\n";
+					SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
+					enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
+				}
+			}
+
 			if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
 				|| (items[subscriber_idx].revents & ZMQ_POLLERR) )
 				continue;
@@ -674,8 +712,8 @@ void Channel::operator()() {
 			memcpy(data, update.data(), len);
 			data[len] = 0;
 			NB_MSG << "Channel " << name << " subscriber received: " << data << "\n";
-			if (strncmp(data, "done", len) == 0) {
-				checkStateChange();
+			if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
+				checkStateChange(data);
 			}
 			else
 			{

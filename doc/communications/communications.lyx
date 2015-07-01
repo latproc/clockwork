@@ -1306,10 +1306,6 @@ The processing thread periodically gives the channel time to process pending
 as commands are completed they are posted onto a queue
 \end_layout
 
-\begin_layout Itemize
-
-\end_layout
-
 \end_deeper
 \begin_layout Subsection
 Implementation notes
