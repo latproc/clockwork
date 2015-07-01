@@ -60,28 +60,15 @@ std::ostream&Logger::log(Level l){
 	if (!dummy_output) dummy_output = new std::stringstream;
 	
     if(LogState::instance()->includes(l)){
-        time_t now=time(0);
-        struct tm now_tm;
-  	    localtime_r(&now,&now_tm);
 		struct timeval now_tv;
 		gettimeofday(&now_tv,0);
+        struct tm now_tm;
+  	    localtime_r(&now_tv.tv_sec, &now_tm);
 		char buf[50];
         uint32_t msec = now_tv.tv_usec / 1000L;
-		sprintf(buf,"%04d-%02d-%02d %02d:%02d:%02d.%03d ",
+		snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%03d ",
 			now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
 			now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
-       
-#if 0
-        ss<<std::setfill('0')<<(now_tm.tm_year+1900)
-        <<'-'<<std::setw(2)<<(now_tm.tm_mon+1)<<"-"
-        <<std::setw(2)<<(now_tm.tm_mday)<<' '
-        <<std::setw(2)<<now_tm.tm_hour<<':'
-        <<std::setw(2)<<now_tm.tm_min<<':'
-        <<std::setw(2)<<now_tm.tm_sec<<'.'
-        <<std::setw(3)<<(now_tv.tv_usec / 1000)<<' ';
-		header = ss.str();
-		*log_stream << header;
-#endif
 		*log_stream << buf;
         return *log_stream;
     }
