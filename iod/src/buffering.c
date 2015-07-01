@@ -111,22 +111,38 @@ double slope(struct CircularBuffer *buf) {
 
 int failures = 0;
 
+
 void fail(int test) {
 	++failures;
 	printf("test %d failed\n", test);
 }
 
 int main(int argc, const char *argv[]) {
+	double (*sum)(struct CircularBuffer *buf) = bufferSum;
+	double (*average)(struct CircularBuffer *buf) = bufferAverage;
+	
     int tests = 0;
-    struct CircularBuffer *mybuf = createBuffer(4);
+	int test_buffer_size = 4;
+    struct CircularBuffer *mybuf = createBuffer(test_buffer_size);
     int i = 0;
+
     for (i=0; i<10; ++i) addSample(mybuf, i, i);
     ++tests; if (rate(mybuf) != 1.0) { fail(tests); }
+
     for (i=0; i<10; ++i) addSample(mybuf, i, 1.5*i);
     ++tests; if (rate(mybuf) != 1.5) { fail(tests); }
     ++tests; if (slope(mybuf) != 1.5) { fail(tests); }
-	++tests; if (sum(mybuf) / 4 != average(mybuf)) { fail(tests); }
-	++tests; if (sum(mybuf) != (6 + 7 + 8 + 9)*1.5) { fail(tests); }
+	++tests; if (length(mybuf) != test_buffer_size) { fail(tests); }
+	++tests; if (sum(mybuf) / test_buffer_size != average(mybuf)) { fail(tests); }
+	if (test_buffer_size == 4) { /* this test only works if the buffer is of length 4 */
+		++tests; if (sum(mybuf) != (6 + 7 + 8 + 9)*1.5) { fail(tests); }
+	}
+
+	i=0;
+	while (i<test_buffer_size) { addSample(mybuf, i, random()%5000); ++i; }
+	while (i<8) { addSample(mybuf, i, 0); ++i; }
+	++tests; if (bufferAverage(mybuf) != 0.0) {fail(tests);}
+	++tests; if (bufferSum(mybuf) != 0.0) {fail(tests);}
 	printf("tests:\t%d\nfailures:\t%d\n", tests, failures );
 
 	destroyBuffer(mybuf);
