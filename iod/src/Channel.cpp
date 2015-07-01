@@ -294,7 +294,7 @@ bool Channel::started() { return started_; }
 void Channel::addConnection() {
 	boost::mutex::scoped_lock(update_mutex);
 	++connections;
-	DBG_MSG << getName() << " client connected\n";
+	DBG_MSG << getName() << " client number " << connections << " connected in state " << current_state << "\n";
 	if (connections == 1) {
 		if (isClient()){
 			if (definition()->isPublisher()) {
@@ -315,6 +315,15 @@ void Channel::addConnection() {
 				SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART" );
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
+		}
+	}
+	else if (isClient())
+		assert(false);
+	else {
+		if (current_state != ChannelImplementation::WAITSTART) {
+			DBG_MSG << "Channel " << getName() << " waiting for start\n";
+			SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART" );
+			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 		}
 	}
  }
