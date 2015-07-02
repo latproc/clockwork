@@ -1536,6 +1536,7 @@ void Channel::setupShadows() {
     //- TBD should this only subscribe if channel monitors a machine?
 }
 
+#if 0
 // poll channels and return number of descriptors with activity
 // if n is 0 the block of data will be reallocated,
 // otherwise up to n items will be initialised
@@ -1589,6 +1590,7 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
     //if (rc>0) std::cout << rc << " channels with activity\n";
     return rc;
 }
+#endif
 
 // This method is executed on the main thread
 void Channel::handleChannels() {
@@ -1601,10 +1603,11 @@ void Channel::handleChannels() {
     }
 }
 
-
+#if 0
 void Channel::setPollItemBase(zmq::pollitem_t *base) {
     poll_items = base;
 }
+#endif
 
 void Channel::enable() {
 	if (enabled()) {
@@ -1648,11 +1651,13 @@ void Channel::checkCommunications() {
 			setState(ChannelImplementation::UPLOADING);
 	}
 
+#if 0
     if ( poll_items && !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
         if (message_handler->receiveMessage(communications_manager->subscriber())) {
             NB_MSG << "Channel got message: " << message_handler->data << "\n";
 		}
     }
+#endif
 	{
 		boost::mutex::scoped_lock(update_mutex);
 		std::list<IODCommand*>::iterator iter = pending_commands.begin();

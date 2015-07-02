@@ -251,9 +251,9 @@ public:
     // poll channels and return number of descriptors with activity
 	static void startChannels();
 	static void stopChannels();
-    static int pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n = 0);
+    //static int pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n = 0);
     static void handleChannels();
-    void setMessageHandler(MessageHandler *handler)  { message_handler = handler; }
+    //void setMessageHandler(MessageHandler *handler)  { message_handler = handler; }
     zmq::pollitem_t *getPollItems();
 	bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response);
 
@@ -281,7 +281,7 @@ private:
     static std::map< std::string, Channel* > *all;
     std::set<MachineInstance*> channel_machines;
     SubscriptionManager *communications_manager;
-    zmq::pollitem_t *poll_items;
+    //zmq::pollitem_t *poll_items;
     MessageHandler *message_handler;
 	SocketMonitor *monit_subs;
 	SocketMonitor *monit_pubs;

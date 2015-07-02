@@ -6,11 +6,11 @@
 #include <string.h>
 
 class PolledMessageHandler {
-public:
-    
+
     PolledMessageHandler(zmq::socket_t &socket, bool enabled = true);
     ~PolledMessageHandler();
-    
+public:
+
     zmq::socket_t &sock;
     bool enabled;
     
@@ -27,7 +27,7 @@ public:
     static int poll(zmq::pollitem_t *items, int num, long timeout);
 
 private:
-    static zmq::pollitem_t *poll_items;
+    static zmq::pollitem_t *poll_items; // TBD this is not the right way to share poll items...
     static bool changed;
 };
 
