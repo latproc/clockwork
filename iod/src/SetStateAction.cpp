@@ -171,6 +171,12 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				owner->stop(this);
 			else
 				trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
+			if (status == Action::Failed) {
+				char buf[100];
+				snprintf(buf, 100, "%s::setState(%s) Failed\n", machine->getName().c_str(), 
+					value.getName().c_str() );
+				error_str = (const char *)buf;
+			}
 			return status;
 		}
 #if 0

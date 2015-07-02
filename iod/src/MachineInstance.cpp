@@ -2404,13 +2404,17 @@ void MachineInstance::collect(const Package &package) {
 
 Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (!enabled()) {
-#if 1
+#if 0
+		char buf[120];
 		if (from) {
-			DBG_MESSAGING << _name << " dropped message " << m << " from " << from->getName() << " while disabled\n";
+			snprintf(buf, 120, "%s failed to execute %s from %s while disabled",
+				_name.c_str(), m.getText().c_str(), from->getName().c_str() );
 		}
 		else {
-			DBG_MESSAGING << _name << " dropped message " << m << " while disabled\n";
+			snprintf(buf, 120, "%s failed to execute %s while disabled",
+				_name.c_str(), m.getText().c_str());
 		}
+		MessageLog::instance()->add(buf);
 #endif
 		return Action::Failed;
 	}
@@ -2467,6 +2471,9 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			State *on = state_machine->findState("on");
 			if (on) setState(*on);
 			else {
+				char buf[120];
+				snprintf(buf, 120, "%s does not have a state 'on' executing 'on_enter'", _name.c_str());
+				MessageLog::instance()->add(buf);
 				return Action::Failed;
 			}
 		}
@@ -2474,6 +2481,9 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			State *off = state_machine->findState("off");
 			if (off) setState(*off);
 			else {
+				char buf[120];
+				snprintf(buf, 120, "%s does not have a state 'off' executing 'off_enter'", _name.c_str());
+				MessageLog::instance()->add(buf);
 				return Action::Failed;
 			}
 		}
