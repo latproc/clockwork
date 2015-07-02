@@ -43,6 +43,7 @@ public:
 class SocketMonitor : public zmq::monitor_t {
 public:
 	SocketMonitor(zmq::socket_t &s, const char *snam);
+	virtual ~SocketMonitor();
 	void operator()();
 	virtual void on_monitor_started();
 	virtual void on_event_connected(const zmq_event_t &event_, const char* addr_);

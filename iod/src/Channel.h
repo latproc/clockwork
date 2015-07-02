@@ -222,7 +222,7 @@ public:
     void setupShadows();
     void enableShadows();
     void disableShadows();
-	void startServer(Protocol proto = eZMQ);// used by shared (publish/subscribe) and one-to-one channels
+	void startServer(ProtocolType proto = eZMQ);// used by shared (publish/subscribe) and one-to-one channels
 	void startClient();	// used by shared (publish/subscribe) channels
     void startSubscriber();
 	void stopSubscriber();

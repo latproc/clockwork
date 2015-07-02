@@ -123,16 +123,17 @@ std::string copyAlphaNumChars(const char *val, const char *default_name) {
 	return constructAlphaNumericString(0, val, 0, default_name);
 }
 
-SubscriptionManager::SubscriptionManager(const char *chname, Protocol proto,
+SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 										 const char *remote_host, int remote_port) :
-	subscriber_port(remote_port),
-	subscriber_host(remote_host),
-	channel_name(chname), protocol(proto),
-	monit_subs(subscriber_, constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str() ),
-	monit_pubs(0), monit_setup(0),
-	subscriber_(*MessagingInterface::getContext(), (proto == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
-	setup_(0),
-	_setup_status(e_startup)
+		subscriber_port(remote_port),
+		subscriber_host(remote_host),
+		channel_name(chname), protocol(proto),
+		subscriber_(*MessagingInterface::getContext(), (proto == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
+		monit_subs(subscriber_,
+				   constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str() ),
+		monit_pubs(0), monit_setup(0),
+		setup_(0),
+		_setup_status(e_startup), sub_status_(ss_init)
 {
 	if (subscriber_host == "*") {
 		_setup_status = e_not_used; // This is not a client
@@ -144,6 +145,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, Protocol proto,
 	if (isClient()) {
 		setup_ = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
 		monit_setup = new SingleConnectionMonitor(*setup_, constructAlphaNumericString("inproc://", chname, ".setup", "inproc://monitor.setup").c_str() );
+		setSetupStatus(e_startup);
 	}
 	init();
 }
@@ -165,12 +167,7 @@ void SubscriptionManager::init() {
 		assert (res == 0);
 	}
     boost::thread subscriber_monitor(boost::ref(monit_subs));
-
-	if (isClient()) {
-		// client
-		boost::thread setup_monitor(boost::ref(*monit_setup));
-		setSetupStatus(e_startup);
-	}
+	if (isClient()) boost::thread setup_monitor(boost::ref(*monit_setup));
 	run_status = e_waiting_cmd;
 }
 
@@ -261,19 +258,20 @@ bool SubscriptionManager::setupConnections() {
         ss.clear(); ss.str("");
         ss << "tcp://" << subscriber_host << ":" << subscriber_port;
         std::string url = ss.str();
-				if (!monit_subs.disconnected() && url != channel_url) {
-					// the subscriber hasn't had time to notice loss of connection but
-					// the url is now different.
-					std::cerr << "NOTE: Channel has changed from " << channel_url << " to " << url << " exiting\n";
-					exit(0);
-				}
-				channel_url = url;
-				if (monit_subs.disconnected()) {
-	        DBG_MSG << " connecting subscriber to " << channel_url << "\n";
-	        monit_subs.setEndPoint(channel_url.c_str());
-	        subscriber().connect(channel_url.c_str());
-	        setSetupStatus(SubscriptionManager::e_done);
-				}
+		if (!monit_subs.disconnected() && url != channel_url) {
+			// perhaps the subscriber hasn't had time to notice loss of connection but
+			// the url is now different. We can't deal with this situation yet
+			std::cerr << "NOTE: Channel has changed from " << channel_url << " to " << url << " exiting\n";
+			exit(0);
+		}
+		channel_url = url;
+		if ( (sub_status_ == ss_init || sub_status_ == ss_sub) && monit_subs.disconnected()) {
+			DBG_MSG << " connecting subscriber to " << channel_url << "\n";
+			monit_subs.setEndPoint(channel_url.c_str());
+			subscriber().connect(channel_url.c_str());
+			setSetupStatus(SubscriptionManager::e_done); //TBD is this correct? Shouldn't be here
+			sub_status_ =  (protocol == eCLOCKWORK) ? ss_sub : ss_ready;
+		}
         return true;
     }
     return false;

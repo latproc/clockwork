@@ -50,6 +50,10 @@ SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disc
 	}
 	monitor_socket_name = url;
 }
+
+SocketMonitor::~SocketMonitor() {
+}
+
 void SocketMonitor::operator()() {
 		char thread_name[100];
 		snprintf(thread_name, 100, "iod skt monitor %s", socket_name.c_str());
@@ -66,7 +70,7 @@ void SocketMonitor::operator()() {
         }
         catch (zmq::error_t io) {
             NB_MSG << "ZMQ error " << errno << ": "<< zmq_strerror(errno) << " in socket monitor\n";
-						if (errno == 88) exit(0);
+			if (errno == 88) exit(0);
 				//if (errno != EAGAIN && errno != EINTR)
 				// monitoring a socket that has been removed. exit and rely on restart code (TBD)
 				//	exit(2);

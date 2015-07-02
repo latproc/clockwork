@@ -176,7 +176,7 @@ void MessagingInterface::setContext(zmq::context_t *ctx) {
     assert(zmq_context);
 }
 
-MessagingInterface *MessagingInterface::create(std::string host, int port, Protocol proto) {
+MessagingInterface *MessagingInterface::create(std::string host, int port, ProtocolType proto) {
     std::stringstream ss;
     ss << host << ":" << port;
     std::string id = ss.str();
@@ -189,7 +189,7 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
         return interfaces[id];
 }
 
-MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start, Protocol proto)
+MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start, ProtocolType proto)
 		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
 			connection(-1), port(port_), owner_thread(0), started_(false) {
 		    owner_thread = pthread_self();
@@ -232,7 +232,7 @@ bool MessagingInterface::started() {
 	return started_;
 }
 
-MessagingInterface::MessagingInterface(std::string host, int remote_port, bool deferred, Protocol proto)
+MessagingInterface::MessagingInterface(std::string host, int remote_port, bool deferred, ProtocolType proto)
 		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
             connection(-1), hostname(host), port(remote_port), owner_thread(0), started_(false) {
 		std::stringstream ss;

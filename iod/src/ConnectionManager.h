@@ -110,11 +110,26 @@ protected:
  */
 class SubscriptionManager : public ConnectionManager {
 public:
+	// RunStatus tracks the state of the connection between the main thread
+	// and the subscription manager; this connection enables the main thread
+	// to communicate with the remote application
 	enum RunStatus { e_waiting_cmd, e_waiting_response };
-	enum Status{e_not_used, e_startup, e_disconnected, e_waiting_connect,
+
+	// Status tracks the state of the connection between the subscription
+	// manager and the command interface of the remote application
+	enum Status {e_not_used, e_startup, e_disconnected, e_waiting_connect,
 		e_settingup_subscriber, e_waiting_subscriber, e_waiting_setup, e_done };
 
-	SubscriptionManager(const char *chname, Protocol proto = eCHANNEL,
+	// SubStatus tracks the state of the connection between each of the subscription
+	// manager's subscription channel; this is the main data channel for a subscription.
+	// If one end of the channel is a publisher, sending data using a ZMQ PUB socket,
+	// the other end is a subscriber and no protocol is used; the status of the
+	// ends are set to ss_pub or ss_sub.
+	// If the connection is a channel, both ends use a ZMQ PAIR socket and both ends
+	// can arbitrarily send messages.
+	enum SubStatus { ss_pub, ss_sub, ss_init, ss_ready };
+
+	SubscriptionManager(const char *chname, ProtocolType proto = eCHANNEL,
 						const char *remote_host = "localhost", int remote_port = 5555);
 	virtual ~SubscriptionManager();
 	void setSetupMonitor(SingleConnectionMonitor *monitor);
@@ -146,15 +161,18 @@ public:
 	std::string subscriber_host;
 	std::string channel_name;
 	std::string channel_url;
-	Protocol protocol;
+	ProtocolType protocol;
+protected:
+	zmq::socket_t subscriber_;
+public:
 	SingleConnectionMonitor monit_subs;
 	SingleConnectionMonitor *monit_pubs;
 	SingleConnectionMonitor *monit_setup;
 protected:
-	zmq::socket_t subscriber_;
 	// A server instance will not have a socket for setting up the subscriber
 	zmq::socket_t *setup_;
 	Status _setup_status;
+	SubStatus sub_status_;
 };
 
 #endif

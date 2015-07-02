@@ -34,7 +34,7 @@
 
 #include "MessageEncoding.h"
 
-enum Protocol { eCLOCKWORK, eRAW, eZMQ, eCHANNEL };
+enum ProtocolType { eCLOCKWORK, eRAW, eZMQ, eCHANNEL };
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout = -1);
 void safeSend(zmq::socket_t &sock, const char *buf, int buflen);
@@ -47,8 +47,8 @@ public:
 	static const bool DEFERRED_START = true;
 	static const bool IMMEDIATE_START = false;
 
-	MessagingInterface(int num_threads, int port, bool deferred_start, Protocol proto = eZMQ);
-	MessagingInterface(std::string host, int port, bool deferred_start, Protocol proto = eZMQ);
+	MessagingInterface(int num_threads, int port, bool deferred_start, ProtocolType proto = eZMQ);
+	MessagingInterface(std::string host, int port, bool deferred_start, ProtocolType proto = eZMQ);
 	~MessagingInterface();
 	void start();
 	void stop();
@@ -61,7 +61,7 @@ public:
 	bool send_raw(const char *msg);
 	void setCurrent(MessagingInterface *mi) { current = mi; }
 	static MessagingInterface *getCurrent();
-	static MessagingInterface *create(std::string host, int port, Protocol proto = eZMQ);
+	static MessagingInterface *create(std::string host, int port, ProtocolType proto = eZMQ);
 	char *sendCommand(std::string cmd, std::list<Value> *params);
 	char *sendCommand(std::string cmd, Value p1 = SymbolTable::Null,
 					  Value p2 = SymbolTable::Null,
@@ -80,7 +80,7 @@ private:
 	static zmq::context_t *zmq_context;
 	void connect();
 	static MessagingInterface *current;
-	Protocol protocol;
+	ProtocolType protocol;
 	zmq::socket_t *socket;
 	static std::map<std::string, MessagingInterface *>interfaces;
 	bool is_publisher;
