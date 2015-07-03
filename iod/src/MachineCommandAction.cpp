@@ -24,6 +24,8 @@
 #include "IOComponent.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
+#include "AbortAction.h"
+#include "SendMessageAction.h"
 #include <sstream>
 
 void MachineCommandTemplate::setActionTemplates(std::list<ActionTemplate*> &new_actions) {
@@ -41,6 +43,14 @@ MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
     BOOST_FOREACH(ActionTemplate *t, mct->action_templates) {
         //DBG_M_ACTIONS << "copying action " << (*t) << " for machine " << mi->_name << "\n";
         actions.push_back(t->factory(mi));
+
+		// A THROW is implemented as a SendMessage with no destination, followed by an abort
+		// we insert the abort here.
+		SendMessageAction *sma = dynamic_cast<SendMessageAction*>(t);
+		if (sma) {
+			AbortActionTemplate aa;
+			actions.push_back(aa.factory(mi));
+		}
     }
 }
 
@@ -86,7 +96,16 @@ Action::Status MachineCommand::runActions() {
 		setBlocker(a);
 		suspend();
 		DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
+		AbortAction *aa = dynamic_cast<AbortAction*>(a);
 		Action::Status stat = (*a)();
+		if (aa) {
+			current_step = actions.size()-1;
+			if (stat == Failed)
+				error_str = "Aborted";
+			owner->stop(a);
+			status = stat;
+			return stat;
+		}
 		if (stat == Action::Failed) {
 			std::stringstream ss;
 			ss << " action: " << *a <<" running on " << owner->fullName() << " failed to start (" << a->error() << ")\n";

@@ -521,7 +521,7 @@ Value &EnabledValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 std::ostream &EnabledValue::operator<<(std::ostream &out ) const {
-    return out << machine_name << " ENABLED ";
+    return out << machine_name << " ENABLED? ";
 }
 std::ostream &operator<<(std::ostream &out, const EnabledValue &val) { return val.operator<<(out); }
 
@@ -542,7 +542,7 @@ Value &DisabledValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 std::ostream &DisabledValue::operator<<(std::ostream &out ) const {
-    return out << machine_name << " DISABLED ";
+    return out << machine_name << " DISABLED? ";
 }
 std::ostream &operator<<(std::ostream &out, const DisabledValue &val) { return val.operator<<(out); }
 

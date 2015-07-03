@@ -425,9 +425,9 @@ void MachineInstance::triggerFired(Trigger *trig) {
 
 void MachineInstance::checkActions() {
 	num_machines_with_work++;
-	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
 	has_work = true;
 	busy_machines.insert(this);
+	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << busy_machines.size() << "\n";
 }
 
 void MachineInstance::resetTemporaryStringStream() {
@@ -2911,9 +2911,9 @@ void MachineInstance::push(Action *new_action) {
 	DBG_M_ACTIONS << _name << " pushing " << *new_action << "\n";
 	active_actions.push_back(new_action);
 	num_machines_with_work++;
-	DBG_M_ACTIONS << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
 	has_work = true;
 	busy_machines.insert(this);
+	DBG_M_ACTIONS << _name << " ADDED to machines with work " << busy_machines.size() << "\n";
 	return;
 }
 
