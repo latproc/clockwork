@@ -120,6 +120,7 @@ struct Subcondition {
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
+%token THROW CATCH
 
 %union {
 	int iVal;
@@ -950,6 +951,27 @@ LEAVE SYMBOL action
 }
 
 receive_command:
+CATCH SYMBOL action {
+	DBG_PARSER << "catching " << $2 << " for " << current_actions->size() << " actions: ";
+	BOOST_FOREACH(ActionTemplate *at, *current_actions) {
+		DBG_PARSER << *at << ", ";
+	}
+	DBG_PARSER << "\n";
+	if (current_machineclass->receives.count(Message($2)) == 0) {
+		MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+		mc->setActionTemplates(*current_actions);
+		current_actions->clear();
+		current_machineclass->receives[Message(strdup($2))] = mc;
+	}
+	else {
+		std::stringstream ss;
+		ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a RECEIVES/CATCH handler for " << $2;
+		DBG_PARSER << ss.str() << "\n";
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+}
+|
 RECEIVE SYMBOL /* message */ action  {
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
@@ -1136,6 +1158,14 @@ SET SYMBOL TO value  {
 | SEND STRINGVAL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SendMessageActionTemplate($2, $4);
+}
+| THROW SYMBOL /* send a generic message/command */ {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SendMessageActionTemplate($2, 0);
+}
+| THROW STRINGVAL /* send a generic message/command */ {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SendMessageActionTemplate($2, 0);
 }
 | SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);

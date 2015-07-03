@@ -104,7 +104,10 @@ public:
 	enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
 
     Status operator()() {
-		if (status == New) status = Running;
+		if (status == New) {
+			start_time = microsecs();
+			status = Running;
+		}
 		status = run();
 		return status;
 	}
@@ -120,6 +123,7 @@ public:
 	void suspend();
 	void resume();
 	void recover(); // debug TBD
+	void abort();
 
 	bool debug();
 
@@ -149,6 +153,7 @@ protected:
 	Status saved_status; // used when an action is suspended
 	Action *blocked; // blocked on this action
 	Trigger *trigger;
+	uint64_t start_time;
 };
 
 std::ostream &operator<<(std::ostream &out, Action::Status state);

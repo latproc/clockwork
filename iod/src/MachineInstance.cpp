@@ -87,19 +87,6 @@ Parameter::Parameter(const Parameter &orig) {
 	val = orig.val; machine = orig.machine; properties = orig.properties;
 }
 
-bool Action::debug() {
-	return owner && owner->debug();
-}
-
-void Action::release() { 
-	--refs;
-	if (refs < 0) {
-		NB_MSG << "detected potential double delete of " << *this << "\n";
-	}
-	if (refs == 0)
-		delete this;
-}
-
 Transition::Transition(State s, State d, Message t, Predicate *p) : source(s), dest(d), trigger(t), condition(0) {
 	if (p) {
 		condition = new Condition(p);
@@ -1866,6 +1853,7 @@ bool MachineInstance::stateExists(State &seek) {
  * commands in the transition table are public and can be sent by anyone
  */
 bool MachineInstance::receives(const Message&m, Transmitter *from) {
+	if (!enabled()) return false;
 	// passive machines do not receive messages
 	//if (!is_active) return false;
 	// all active machines receive messages from themselves
@@ -1917,6 +1905,13 @@ void MachineInstance::forceStableStateCheck() {
 
 Action::Status MachineInstance::setState(State &new_state, bool resume) {
 
+	if (!hasState(new_state)) {
+		char buf[150];
+		snprintf(buf, 150, "Error: unknown state: '%s' on %s", new_state.getName().c_str(), _name.c_str());
+		MessageLog::instance()->add(buf);
+		DBG_MSG << buf << "\n";
+		return Action::Failed;
+	}
 	Action::Status stat = Action::Complete;
 	// update the Modbus interface for self 
 	if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
@@ -2702,37 +2697,6 @@ void MachineInstance::stop(Action *a) {
 	setNeedsCheck();
 }
 
-void Action::suspend() {
-	if (status == Suspended) return;
-	if (status != Running) {
-		DBG_M_ACTIONS << owner->getName() << " suspend called when action is in state " << status << "\n";
-	}
-	saved_status = status;
-	status = Suspended;
-}
-
-void Action::resume() {
-	//assert(status == Suspended);
-	status = saved_status;
-	DBG_M_ACTIONS << "resumed: (status: " << status << ") " << *this << "\n";
-	if (status == Suspended) status = Running;
-	owner->setNeedsCheck();
-}
-
-void Action::recover() {
-	DBG_M_ACTIONS << "Action failed to remove itself after completing: " << *this << "\n";
-	assert(status == Complete || status == Failed);
-	owner->stop(this);
-}
-static std::stringstream *shared_ss = 0;
-void Action::toString(char *buf, int buffer_size) {
-	if (!shared_ss) shared_ss = new std::stringstream;
-	shared_ss->clear();
-	shared_ss->str("");
-	*shared_ss << *this;
-	snprintf(buf, buffer_size, "%s", shared_ss->str().c_str());
-}
-
 void MachineInstance::clearAllActions() {
 	while (!active_actions.empty()) {
 		Action *a = active_actions.front();
@@ -3146,1252 +3110,1250 @@ bool MachineInstance::setStableState() {
 	return changed_state;
 	}
 
-		void MachineInstance::setStateMachine(MachineClass *machine_class) {
-			//if (state_machine) return;
-			state_machine = machine_class;
-			DBG_PARSER << _name << " is of class " << machine_class->name << "\n";
-			if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states
-					&& (machine_class->stable_states.size() || machine_class->name == "LIST" || machine_class->name == "REFERENCE"
-						|| (machine_class->plugin && machine_class->plugin->state_check)) )
-				automatic_machines.push_back(this);
-			BOOST_FOREACH(StableState &s, machine_class->stable_states) {
-				stable_states.push_back(s);
-				stable_states[stable_states.size()-1].setOwner(this); //
+void MachineInstance::setStateMachine(MachineClass *machine_class) {
+	//if (state_machine) return;
+	state_machine = machine_class;
+	DBG_PARSER << _name << " is of class " << machine_class->name << "\n";
+	if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states
+			&& (machine_class->stable_states.size() || machine_class->name == "LIST" || machine_class->name == "REFERENCE"
+				|| (machine_class->plugin && machine_class->plugin->state_check)) )
+		automatic_machines.push_back(this);
+	BOOST_FOREACH(StableState &s, machine_class->stable_states) {
+		stable_states.push_back(s);
+		stable_states[stable_states.size()-1].setOwner(this); //
+	}
+	std::pair<Message, MachineCommandTemplate*>handler;
+	BOOST_FOREACH(handler, machine_class->receives) {
+		//DBG_M_INITIALISATION << "setting receive handler for " << handler.first << "\n";
+		MachineCommand *mc = new MachineCommand(this, handler.second);
+		//mc->retain();
+		receives_functions[handler.first] = mc;
+	}
+	// Warning: enter_functions are not used. TBD
+	BOOST_FOREACH(handler, machine_class->enter_functions) {
+		MachineCommand *mc = new MachineCommand(this, handler.second);
+		mc->retain();
+		enter_functions[handler.first] = mc;
+	}
+	std::pair<std::string, MachineCommandTemplate*> node;
+	BOOST_FOREACH(node, state_machine->commands) {
+		MachineCommand *mc = new MachineCommand(this, node.second);
+		mc->retain();
+		commands[node.first] = mc;
+	}
+	std::pair<std::string,Value> option;
+	BOOST_FOREACH(option, machine_class->options) {
+		DBG_INITIALISATION << _name << " initialising property " << option.first << " (" << option.second << ")\n";
+		if (option.second.kind == Value::t_symbol) {
+			Value v = getValue(option.second.sValue);
+			if (v != SymbolTable::Null) 
+				properties.add(option.first, v, SymbolTable::NO_REPLACE);
+			else
+				properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
+		}
+		else {
+			properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
+		}
+		if (option.first == "POLLING_DELAY") {
+			long pd;
+			if (option.second.asInteger(pd)) idle_time = pd;
+		}
+	}
+	properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
+	if (locals.size() == 0) {
+		BOOST_FOREACH(Parameter p, state_machine->locals) {
+			DBG_MSG << "cloning machine '" << p.val.sValue << "'\n";
+			Parameter newp(p.val.sValue.c_str());
+			if (!p.machine) {
+				DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter " << p.val.sValue << "\n";
 			}
-			std::pair<Message, MachineCommandTemplate*>handler;
-			BOOST_FOREACH(handler, machine_class->receives) {
-				//DBG_M_INITIALISATION << "setting receive handler for " << handler.first << "\n";
-				MachineCommand *mc = new MachineCommand(this, handler.second);
-				//mc->retain();
-				receives_functions[handler.first] = mc;
-			}
-			// Warning: enter_functions are not used. TBD
-			BOOST_FOREACH(handler, machine_class->enter_functions) {
-				MachineCommand *mc = new MachineCommand(this, handler.second);
-				mc->retain();
-				enter_functions[handler.first] = mc;
-			}
-			std::pair<std::string, MachineCommandTemplate*> node;
-			BOOST_FOREACH(node, state_machine->commands) {
-				MachineCommand *mc = new MachineCommand(this, node.second);
-				mc->retain();
-				commands[node.first] = mc;
-			}
-			std::pair<std::string,Value> option;
-			BOOST_FOREACH(option, machine_class->options) {
-				DBG_INITIALISATION << _name << " initialising property " << option.first << " (" << option.second << ")\n";
-				if (option.second.kind == Value::t_symbol) {
-					Value v = getValue(option.second.sValue);
-					if (v != SymbolTable::Null) 
-						properties.add(option.first, v, SymbolTable::NO_REPLACE);
-					else
-						properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
-				}
-				else {
-					properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
-				}
-				if (option.first == "POLLING_DELAY") {
-					long pd;
-					if (option.second.asInteger(pd)) idle_time = pd;
-				}
-			}
-			properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
-			if (locals.size() == 0) {
-				BOOST_FOREACH(Parameter p, state_machine->locals) {
-					DBG_MSG << "cloning machine '" << p.val.sValue << "'\n";
-					Parameter newp(p.val.sValue.c_str());
-					if (!p.machine) {
-						DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter " << p.val.sValue << "\n";
-					}
-					else {
-						newp.machine = MachineInstanceFactory::create(p.val.sValue.c_str(), p.machine->_type.c_str());
-						newp.machine->setProperties(p.machine->properties);
-						newp.machine->setDefinitionLocation(p.machine->definition_file.c_str(), p.machine->definition_line);
-						listenTo(newp.machine);
-						newp.machine->addDependancy(this);
-						std::map<std::string, MachineClass*>::iterator c_iter = machine_classes.find(newp.machine->_type);
-						if (c_iter == machine_classes.end()) 
-							DBG_M_INITIALISATION <<"Warning: class " << newp.machine->_type << " not found\n"
-								;
-						else if ((*c_iter).second) {
-							newp.machine->owner = this;
-							MachineClass *newsm = (*c_iter).second;
-							newp.machine->setStateMachine(newsm);
-							if (newsm->parameters.size() != p.machine->parameters.size()) {
-								// LISTS can have any number of parameters
-								// POINTs and ANALOGINPUTs can have 2 or three parameters
-								if (newsm->name == "LIST") {
-									DBG_PARSER << "List has " << p.machine->parameters.size() << " parameters\n";
-									p.machine->setNeedsCheck();
-								}
-								if (newsm->name == "LIST"
-										|| ( (newsm->name == "POINT" || newsm->name == "ANALOGINPUT" || newsm->name == "COUNTER")
-											&& newsm->parameters.size() >= 2 && newsm->parameters.size() <=3 )
-										|| ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 3 || newsm->parameters.size() == 1) )
-								   ) {
-								}
-								else {
-									resetTemporaryStringStream();
-									ss << "## - Error: Machine " << newsm->name << " requires " 
-										<< newsm->parameters.size()
-										<< " parameters but instance " << _name << "." << newp.machine->getName() << " has " << p.machine->parameters.size();
-									error_messages.push_back(ss.str());
-									++num_errors;
-								}
-							}
-							if (p.machine->parameters.size()) {
-								std::copy(p.machine->parameters.begin(), p.machine->parameters.end(), back_inserter(newp.machine->parameters));
-								DBG_M_INITIALISATION << "copied " << p.machine->parameters.size() << " parameters. local has " << p.machine->parameters.size() << "parameters\n";
-							}
-							if (p.machine->stable_states.size()) {
-								DBG_M_INITIALISATION << " restoring stable states for " << newp.val << "...before: " << newp.machine->stable_states.size();
-								newp.machine->stable_states.clear();
-								BOOST_FOREACH(StableState &s, p.machine->stable_states) {
-									newp.machine->stable_states.push_back(s);
-									newp.machine->stable_states[newp.machine->stable_states.size()-1].setOwner(this); //
-								}
-								std::copy(p.machine->stable_states.begin(), p.machine->stable_states.end(), back_inserter(newp.machine->stable_states));
-								DBG_M_INITIALISATION << " after: " << newp.machine->stable_states.size() << "\n";
-							}
+			else {
+				newp.machine = MachineInstanceFactory::create(p.val.sValue.c_str(), p.machine->_type.c_str());
+				newp.machine->setProperties(p.machine->properties);
+				newp.machine->setDefinitionLocation(p.machine->definition_file.c_str(), p.machine->definition_line);
+				listenTo(newp.machine);
+				newp.machine->addDependancy(this);
+				std::map<std::string, MachineClass*>::iterator c_iter = machine_classes.find(newp.machine->_type);
+				if (c_iter == machine_classes.end()) 
+					DBG_M_INITIALISATION <<"Warning: class " << newp.machine->_type << " not found\n"
+						;
+				else if ((*c_iter).second) {
+					newp.machine->owner = this;
+					MachineClass *newsm = (*c_iter).second;
+					newp.machine->setStateMachine(newsm);
+					if (newsm->parameters.size() != p.machine->parameters.size()) {
+						// LISTS can have any number of parameters
+						// POINTs and ANALOGINPUTs can have 2 or three parameters
+						if (newsm->name == "LIST") {
+							DBG_PARSER << "List has " << p.machine->parameters.size() << " parameters\n";
+							p.machine->setNeedsCheck();
+						}
+						if (newsm->name == "LIST"
+								|| ( (newsm->name == "POINT" || newsm->name == "ANALOGINPUT" || newsm->name == "COUNTER")
+									&& newsm->parameters.size() >= 2 && newsm->parameters.size() <=3 )
+								|| ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 3 || newsm->parameters.size() == 1) )
+						   ) {
+						}
+						else {
+							resetTemporaryStringStream();
+							ss << "## - Error: Machine " << newsm->name << " requires " 
+								<< newsm->parameters.size()
+								<< " parameters but instance " << _name << "." << newp.machine->getName() << " has " << p.machine->parameters.size();
+							error_messages.push_back(ss.str());
+							++num_errors;
 						}
 					}
-					locals.push_back(newp);
-				}
-			}
-			// a list has many parameters but the list class does not.
-			// nevertheless, the parameters and dependencies still need to be setup.
-			if (state_machine->token_id == ClockworkToken::LIST) {
-				for (unsigned int i=0; i<parameters.size(); ++i) {
-					parameters[i].real_name = parameters[i].val.sValue;
-					MachineInstance *m = lookup(parameters[i].real_name);
-					if(m) {
-						DBG_M_INITIALISATION << " found " << m->getName() << "\n";
-						m->addDependancy(this);
-						listenTo(m);
+					if (p.machine->parameters.size()) {
+						std::copy(p.machine->parameters.begin(), p.machine->parameters.end(), back_inserter(newp.machine->parameters));
+						DBG_M_INITIALISATION << "copied " << p.machine->parameters.size() << " parameters. local has " << p.machine->parameters.size() << "parameters\n";
 					}
-					parameters[i].machine = m;
-					setNeedsCheck();
-					fixListState(*this);
+					if (p.machine->stable_states.size()) {
+						DBG_M_INITIALISATION << " restoring stable states for " << newp.val << "...before: " << newp.machine->stable_states.size();
+						newp.machine->stable_states.clear();
+						BOOST_FOREACH(StableState &s, p.machine->stable_states) {
+							newp.machine->stable_states.push_back(s);
+							newp.machine->stable_states[newp.machine->stable_states.size()-1].setOwner(this); //
+						}
+						std::copy(p.machine->stable_states.begin(), p.machine->stable_states.end(), back_inserter(newp.machine->stable_states));
+						DBG_M_INITIALISATION << " after: " << newp.machine->stable_states.size() << "\n";
+					}
 				}
 			}
-			// TBD check the parameter types
-			size_t num_class_params = state_machine->parameters.size();
+			locals.push_back(newp);
+		}
+	}
+	// a list has many parameters but the list class does not.
+	// nevertheless, the parameters and dependencies still need to be setup.
+	if (state_machine->token_id == ClockworkToken::LIST) {
+		for (unsigned int i=0; i<parameters.size(); ++i) {
+			parameters[i].real_name = parameters[i].val.sValue;
+			MachineInstance *m = lookup(parameters[i].real_name);
+			if(m) {
+				DBG_M_INITIALISATION << " found " << m->getName() << "\n";
+				m->addDependancy(this);
+				listenTo(m);
+			}
+			parameters[i].machine = m;
+			setNeedsCheck();
+			fixListState(*this);
+		}
+	}
+	// TBD check the parameter types
+	size_t num_class_params = state_machine->parameters.size();
+	for (unsigned int i=0; i<parameters.size(); ++i) {
+		if (i<num_class_params) {
+			if (parameters[i].val.kind == Value::t_symbol) {
+				parameters[i].real_name = parameters[i].val.sValue;
+				parameters[i].val = state_machine->parameters[i].val.sValue.c_str();
+				MachineInstance *m = lookup(parameters[i].real_name);
+				DBG_M_INITIALISATION << _name << " is looking up " << parameters[i].real_name << " for param " << i << "\n";
+				if(m) { 
+					DBG_M_INITIALISATION << " found " << m->getName() << "\n"; 
+					m->addDependancy(this);
+					listenTo(m);
+				}
+				parameters[i].machine = m;
+			}
+			else {
+				DBG_M_MSG << "Parameter " << i << " (" << parameters[i].val << ") with real name " <<  state_machine->parameters[i].val << "\n";
+			}
+			// fix the properties for the machine passed as a parameter
+			// the statemachine may nominate a default property that isn't 
+			// provided by the actual parameter. here we find these situations
+			// and set the default
+			if (parameters[i].machine && !state_machine->parameters[i].properties.empty()) {
+				SymbolTableConstIterator st_iter = state_machine->parameters[i].properties.begin();
+				while(st_iter != state_machine->parameters[i].properties.end()) {
+					std::pair<std::string, Value> prop = *st_iter++;
+					if (!parameters[i].machine->properties.exists(prop.first.c_str())) {
+						DBG_M_INITIALISATION << "copying default property " << prop.first << " on parameter " << i ;
+						DBG_M_INITIALISATION << " to object" << *(parameters[i].machine) <<"\n";
+						parameters[i].machine->properties.add(prop.first, prop.second, SymbolTable::NO_REPLACE);
+					}
+					else {
+						DBG_M_INITIALISATION << "default property " << prop.first << " overridden by value " ;
+						DBG_M_INITIALISATION << parameters[i].machine->properties.lookup(prop.first.c_str()) << "\n";
+					}
+				}
+			}
+		}
+	}
+	// copy transitions to support transtions on receipt of events from other machines
+	BOOST_FOREACH(Transition &transition, state_machine->transitions) {
+		transitions.push_back(transition);
+
+		// copy this transition with the real name of the machine for the trigger
+		std::string machine = transition.trigger.getText();
+		if (machine.find('.') != std::string::npos) {
+			machine.erase((machine.find('.')));
+			// if this is a parameter, copy the transition to use the real name
+			for (unsigned int i = 0; i < state_machine->parameters.size(); ++i) {
+				if (parameters[i].val == machine) {
+					std::string evt = transition.trigger.getText();
+					evt = evt.substr(evt.find('.')+1);
+					std::string trigger = parameters[i].real_name + "." + evt;
+					transitions.push_back(Transition(transition.source, transition.dest,Message(trigger.c_str())));
+				}
+			}
+		}
+	}
+
+	setupModbusInterface();
+}
+
+std::ostream &operator<<(std::ostream &out, const Action &a) {
+	return a.operator<<(out);
+}
+
+
+Trigger *MachineInstance::setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix = "_enter") {
+	std::string trigger_name = machine_name;
+	trigger_name += ".";
+	trigger_name += message;
+	trigger_name += suffix;
+	DBG_M_MESSAGING << _name << " is waiting for message " << trigger_name << " from " << machine_name << "\n";
+	return new Trigger(trigger_name);
+}
+
+Value *MachineInstance::resolve(std::string property) {
+	if (property.find('.') != std::string::npos) {
+		// property is on another machine
+		std::string name = property;
+		name.erase(name.find('.'));
+		std::string prop = property.substr(property.find('.')+1 );
+		MachineInstance *other = lookup(name);
+		if (other) {
+			return other->resolve(prop);
+		}
+		else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
+			// permit references items to be not always available so that these can be
+			// added and removed as the program executes
+			return &SymbolTable::Null;
+		}
+		else {
+			resetTemporaryStringStream();
+			ss << fullName() << " could not find machine named " << name << " for property " << property;
+			error_messages.push_back(ss.str());
+			++num_errors;
+			DBG_MSG << ss.str() << "\n";
+			MessageLog::instance()->add(ss.str().c_str());
+			NB_MSG << ss.str() << "\n";
+			return &SymbolTable::Null;
+		}
+	}
+	else {
+		// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
+		Value *res = 0;
+		Value property_val(property); // tokenise the property
+		// variables may refer to an initialisation value passed in as a parameter.
+		if (state_machine->token_id == ClockworkToken::VARIABLE
+				|| state_machine->token_id == ClockworkToken::CONSTANT) {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
-				if (i<num_class_params) {
-					if (parameters[i].val.kind == Value::t_symbol) {
-						parameters[i].real_name = parameters[i].val.sValue;
-						parameters[i].val = state_machine->parameters[i].val.sValue.c_str();
-						MachineInstance *m = lookup(parameters[i].real_name);
-						DBG_M_INITIALISATION << _name << " is looking up " << parameters[i].real_name << " for param " << i << "\n";
-						if(m) { 
-							DBG_M_INITIALISATION << " found " << m->getName() << "\n"; 
-							m->addDependancy(this);
-							listenTo(m);
-						}
-						parameters[i].machine = m;
-					}
-					else {
-						DBG_M_MSG << "Parameter " << i << " (" << parameters[i].val << ") with real name " <<  state_machine->parameters[i].val << "\n";
-					}
-					// fix the properties for the machine passed as a parameter
-					// the statemachine may nominate a default property that isn't 
-					// provided by the actual parameter. here we find these situations
-					// and set the default
-					if (parameters[i].machine && !state_machine->parameters[i].properties.empty()) {
-						SymbolTableConstIterator st_iter = state_machine->parameters[i].properties.begin();
-						while(st_iter != state_machine->parameters[i].properties.end()) {
-							std::pair<std::string, Value> prop = *st_iter++;
-							if (!parameters[i].machine->properties.exists(prop.first.c_str())) {
-								DBG_M_INITIALISATION << "copying default property " << prop.first << " on parameter " << i ;
-								DBG_M_INITIALISATION << " to object" << *(parameters[i].machine) <<"\n";
-								parameters[i].machine->properties.add(prop.first, prop.second, SymbolTable::NO_REPLACE);
-							}
-							else {
-								DBG_M_INITIALISATION << "default property " << prop.first << " overridden by value " ;
-								DBG_M_INITIALISATION << parameters[i].machine->properties.lookup(prop.first.c_str()) << "\n";
-							}
-						}
-					}
+				if (state_machine->parameters[i].val.kind == Value::t_symbol
+						&& property == state_machine->parameters[i].val.sValue
+				   ) {
+					DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
+					return &parameters[i].val;
 				}
 			}
-			// copy transitions to support transtions on receipt of events from other machines
-			BOOST_FOREACH(Transition &transition, state_machine->transitions) {
-				transitions.push_back(transition);
-
-				// copy this transition with the real name of the machine for the trigger
-				std::string machine = transition.trigger.getText();
-				if (machine.find('.') != std::string::npos) {
-					machine.erase((machine.find('.')));
-					// if this is a parameter, copy the transition to use the real name
-					for (unsigned int i = 0; i < state_machine->parameters.size(); ++i) {
-						if (parameters[i].val == machine) {
-							std::string evt = transition.trigger.getText();
-							evt = evt.substr(evt.find('.')+1);
-							std::string trigger = parameters[i].real_name + "." + evt;
-							transitions.push_back(Transition(transition.source, transition.dest,Message(trigger.c_str())));
-						}
-					}
-				}
-			}
-
-			setupModbusInterface();
 		}
-
-		std::ostream &operator<<(std::ostream &out, const Action &a) {
-			return a.operator<<(out);
+		// use the global value if its name is mentioned in this machine's list of globals
+		if (!state_machine) {
+			resetTemporaryStringStream();
+			ss << _name << " could not find a machine definition: " << _type;
+			DBG_PROPERTIES << ss.str() << "\n";
+			error_messages.push_back(ss.str());
+			MessageLog::instance()->add(ss.str().c_str());
+			++num_errors;
+			return &SymbolTable::Null;
 		}
-
-
-		Trigger *MachineInstance::setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix = "_enter") {
-			std::string trigger_name = machine_name;
-			trigger_name += ".";
-			trigger_name += message;
-			trigger_name += suffix;
-			DBG_M_MESSAGING << _name << " is waiting for message " << trigger_name << " from " << machine_name << "\n";
-			return new Trigger(trigger_name);
-		}
-
-		Value *MachineInstance::resolve(std::string property) {
-			if (property.find('.') != std::string::npos) {
-				// property is on another machine
-				std::string name = property;
-				name.erase(name.find('.'));
-				std::string prop = property.substr(property.find('.')+1 );
-				MachineInstance *other = lookup(name);
-				if (other) {
-					return other->resolve(prop);
-				}
-				else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
-					// permit references items to be not always available so that these can be
-					// added and removed as the program executes
-					return &SymbolTable::Null;
+		else if (state_machine->global_references.count(property)) {
+			MachineInstance *m = state_machine->global_references[property];
+			if (m) {
+				Value *global_property_val = &m->properties.lookup("VALUE");
+				if (*global_property_val == SymbolTable::Null) {
+					DBG_M_PROPERTIES << _name << " using current state from global " << m->fullName() << "\n";
+					return &m->current_state_val;
 				}
 				else {
-					resetTemporaryStringStream();
-					ss << fullName() << " could not find machine named " << name << " for property " << property;
-					error_messages.push_back(ss.str());
-					++num_errors;
-					DBG_MSG << ss.str() << "\n";
-					MessageLog::instance()->add(ss.str().c_str());
-					NB_MSG << ss.str() << "\n";
-					return &SymbolTable::Null;
+					DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from global " << m->fullName() << "\n";
+					return global_property_val;
 				}
 			}
 			else {
-				// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
-				Value *res = 0;
-				Value property_val(property); // tokenise the property
-				// variables may refer to an initialisation value passed in as a parameter.
-				if (state_machine->token_id == ClockworkToken::VARIABLE
-						|| state_machine->token_id == ClockworkToken::CONSTANT) {
-					for (unsigned int i=0; i<parameters.size(); ++i) {
-						if (state_machine->parameters[i].val.kind == Value::t_symbol
-								&& property == state_machine->parameters[i].val.sValue
-						   ) {
-							DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
-							return &parameters[i].val;
-						}
-					}
-				}
-				// use the global value if its name is mentioned in this machine's list of globals
-				if (!state_machine) {
-					resetTemporaryStringStream();
-					ss << _name << " could not find a machine definition: " << _type;
-					DBG_PROPERTIES << ss.str() << "\n";
-					error_messages.push_back(ss.str());
-					MessageLog::instance()->add(ss.str().c_str());
-					++num_errors;
-					return &SymbolTable::Null;
-				}
-				else if (state_machine->global_references.count(property)) {
-					MachineInstance *m = state_machine->global_references[property];
-					if (m) {
-						Value *global_property_val = &m->properties.lookup("VALUE");
-						if (*global_property_val == SymbolTable::Null) {
-							DBG_M_PROPERTIES << _name << " using current state from global " << m->fullName() << "\n";
-							return &m->current_state_val;
-						}
-						else {
-							DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from global " << m->fullName() << "\n";
-							return global_property_val;
-						}
-					}
-					else {
-						resetTemporaryStringStream();
-						ss << fullName() << " failed to find the machine for global: " << property;
-						DBG_PROPERTIES << ss.str() << "\n";
-						error_messages.push_back(ss.str());
-						MessageLog::instance()->add(ss.str().c_str());
-						++num_errors;
-					}
-				}
-				DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
-				if (property_val.token_id == ClockworkToken::TIMER) {
-					// we do not use the precalculated timer here since this may be being accessed
-					// within an action handler of a nother machine and will not have been updated
-					// since the last evaluation of stable states.
-					state_timer.dynamicValue()->operator()(this);
-					DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
-					return &state_timer;
-				}
-				else if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
-					return res;
-				}
-				else if (SymbolTable::isKeyword(property_val)) {
-					return &SymbolTable::getKeyValue(property.c_str());
-				}
-				else {
-					Value *res = &properties.lookup(property.c_str());
-					if (*res == SymbolTable::Null) {
-						if (state_machine) {
-							Value *class_property = &state_machine->properties.lookup(property.c_str());
-							if (class_property == &SymbolTable::Null) {
-								DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
-								if (globals.exists(property.c_str()))
-									return &globals.lookup(property.c_str());
-							}
-						}
-					}
-					else {
-						DBG_M_PROPERTIES << "found property " << property << " " << res->asString() << "\n";
-						return res;
-					}
-				}
-
-				// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
-				MachineInstance *m = lookup(property);
-				if (m) {
-					if ( m->state_machine && (m->state_machine->token_id == ClockworkToken::VARIABLE
-								|| m->state_machine->token_id == ClockworkToken::CONSTANT) ) {
-						return &m->properties.lookup("VALUE");
-					}
-					else if (m->getStateMachine()) {
-
-						if (m->getStateMachine()->token_id == ClockworkToken::VARIABLE || m->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
-							return &m->properties.lookup("VALUE");
-						}
-						else if (m->getStateMachine()->token_id == ClockworkToken::LIST || m->getStateMachine()->token_id == ClockworkToken::REFERENCE) {
-							return m->getCurrent().getNameValue();
-						}
-					}
-					//return new Value(new MachineValue(m, property));
-					return &m->current_value_holder;
-				}
+				resetTemporaryStringStream();
+				ss << fullName() << " failed to find the machine for global: " << property;
+				DBG_PROPERTIES << ss.str() << "\n";
+				error_messages.push_back(ss.str());
+				MessageLog::instance()->add(ss.str().c_str());
+				++num_errors;
 			}
-			char buf[200];
-			snprintf(buf,200,"%s: no such property or machine: %s",fullName().c_str(), property.c_str());
-			MessageLog::instance()->add(buf);
-			NB_MSG << buf << "\n";
-			return &SymbolTable::Null;
 		}
-
-		Value *MachineInstance::getValuePtr(Value &property) {
-			if (property.cached_value) return property.cached_value;
-			assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
-			Value &res = getValue(property.sValue);
-			property.cached_value = &res;
-			return property.cached_value;
+		DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
+		if (property_val.token_id == ClockworkToken::TIMER) {
+			// we do not use the precalculated timer here since this may be being accessed
+			// within an action handler of a nother machine and will not have been updated
+			// since the last evaluation of stable states.
+			state_timer.dynamicValue()->operator()(this);
+			DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			return &state_timer;
 		}
-
-		Value &MachineInstance::getValue(Value &property) {
-			if (property.cached_value) return *property.cached_value;
-			assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
-			Value &res = getValue(property.sValue);
-			property.cached_value = &res;
+		else if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
 			return res;
 		}
-
-		Value &MachineInstance::getValue(std::string property) {
-			if (property.find('.') != std::string::npos) {
-				// property is on another machine
-				std::string name = property;
-				name.erase(name.find('.'));
-				std::string prop = property.substr(property.find('.')+1 );
-				MachineInstance *other = lookup(name);
-				if (other) {
-					Value &v = other->getValue(prop);
-					DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
-					return v;
-				}
-				else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
-					// permit references items to be not always available so that these can be
-					// added and removed as the program executes
-					return SymbolTable::Null;
-				}
-				else {
-					resetTemporaryStringStream();
-					ss << "could not find machine named " << name << " for property " << property;
-					error_messages.push_back(ss.str());
-					++num_errors;
-					DBG_MSG << ss.str() << "\n";
-					MessageLog::instance()->add(ss.str().c_str());
-					return SymbolTable::Null;
+		else if (SymbolTable::isKeyword(property_val)) {
+			return &SymbolTable::getKeyValue(property.c_str());
+		}
+		else {
+			Value *res = &properties.lookup(property.c_str());
+			if (*res == SymbolTable::Null) {
+				if (state_machine) {
+					Value *class_property = &state_machine->properties.lookup(property.c_str());
+					if (class_property == &SymbolTable::Null) {
+						DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+						if (globals.exists(property.c_str()))
+							return &globals.lookup(property.c_str());
+					}
 				}
 			}
 			else {
-				Value property_val(property); // use this to avoid string comparisions on property
-
-				// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
-
-				// variables may refer to an initialisation value passed in as a parameter. 
-				if ( state_machine
-					 && (state_machine->token_id == ClockworkToken::VARIABLE
-						|| state_machine->token_id == ClockworkToken::CONSTANT)
-					) {
-					for (unsigned int i=0; i<parameters.size(); ++i) {
-						if (state_machine->parameters[i].val.kind == Value::t_symbol 
-								&& property == state_machine->parameters[i].val.sValue
-
-						   ) {
-							DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
-							return parameters[i].val;
-						}
-					}
-				}
-				// use the global value if its name is mentioned in this machine's list of globals
-				if (!state_machine) {
-					resetTemporaryStringStream();
-					ss << _name << " could not find a machine definition: " << _type;
-					DBG_PROPERTIES << ss.str() << "\n";
-					error_messages.push_back(ss.str());
-					++num_errors;
-				}
-				else if (state_machine->global_references.count(property)) {
-					MachineInstance *m = state_machine->global_references[property];
-					if (m) {
-						DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from " << m->getName() << "\n";
-						return m->getValue("VALUE");
-					}
-					else {
-						resetTemporaryStringStream();
-						ss << fullName() << " failed to find the machine for global: " << property;
-						DBG_PROPERTIES << ss.str() << "\n";
-						error_messages.push_back(ss.str());
-						MessageLog::instance()->add(ss.str().c_str());
-						++num_errors;
-					}
-				}
-				DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
-				if (property_val.token_id == ClockworkToken::TIMER) {
-					// we do not use the precalculated timer here since this may be being accessed
-					// within an action handler of a nother machine and will not have been updated
-					// since the last evaluation of stable states.
-					getTimerVal();
-					DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
-					return state_timer;
-				}
-				else if (SymbolTable::isKeyword(property.c_str())) {
-					return SymbolTable::getKeyValue(property.c_str());
-				}
-				else {
-					Value &x = properties.lookup(property.c_str());
-					if (x == SymbolTable::Null) {
-						if (state_machine) {
-							if (!state_machine->properties.exists(property.c_str())) {
-								DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
-								if (globals.exists(property.c_str()))
-									return globals.lookup(property.c_str());
-							}
-							else {
-								DBG_M_PROPERTIES << "using property " << property << "from class\n";
-								return state_machine->properties.lookup(property.c_str()); 
-							}
-						}
-					}
-					else {
-						DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
-						return x;
-					}
-				}
-
-				// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
-				MachineInstance *m = lookup(property);
-				if (m) {
-					if (m->state_machine->token_id == ClockworkToken::VARIABLE
-							|| m->state_machine->token_id == ClockworkToken::CONSTANT)
-						return m->getValue("VALUE");
-					else
-						return *m->getCurrentStateVal();
-				}
-
+				DBG_M_PROPERTIES << "found property " << property << " " << res->asString() << "\n";
+				return res;
 			}
+		}
+
+		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
+		MachineInstance *m = lookup(property);
+		if (m) {
+			if ( m->state_machine && (m->state_machine->token_id == ClockworkToken::VARIABLE
+						|| m->state_machine->token_id == ClockworkToken::CONSTANT) ) {
+				return &m->properties.lookup("VALUE");
+			}
+			else if (m->getStateMachine()) {
+
+				if (m->getStateMachine()->token_id == ClockworkToken::VARIABLE || m->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
+					return &m->properties.lookup("VALUE");
+				}
+				else if (m->getStateMachine()->token_id == ClockworkToken::LIST || m->getStateMachine()->token_id == ClockworkToken::REFERENCE) {
+					return m->getCurrent().getNameValue();
+				}
+			}
+			//return new Value(new MachineValue(m, property));
+			return &m->current_value_holder;
+		}
+	}
+	char buf[200];
+	snprintf(buf,200,"%s: no such property or machine: %s",fullName().c_str(), property.c_str());
+	MessageLog::instance()->add(buf);
+	NB_MSG << buf << "\n";
+	return &SymbolTable::Null;
+}
+
+Value *MachineInstance::getValuePtr(Value &property) {
+	if (property.cached_value) return property.cached_value;
+	assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
+	Value &res = getValue(property.sValue);
+	property.cached_value = &res;
+	return property.cached_value;
+}
+
+Value &MachineInstance::getValue(Value &property) {
+	if (property.cached_value) return *property.cached_value;
+	assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
+	Value &res = getValue(property.sValue);
+	property.cached_value = &res;
+	return res;
+}
+
+Value &MachineInstance::getValue(std::string property) {
+	if (property.find('.') != std::string::npos) {
+		// property is on another machine
+		std::string name = property;
+		name.erase(name.find('.'));
+		std::string prop = property.substr(property.find('.')+1 );
+		MachineInstance *other = lookup(name);
+		if (other) {
+			Value &v = other->getValue(prop);
+			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
+			return v;
+		}
+		else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
+			// permit references items to be not always available so that these can be
+			// added and removed as the program executes
 			return SymbolTable::Null;
 		}
-
-		Value *MachineInstance::lookupState(const std::string &state_name) {
-			//is state_name a valid state?
-			if (state_machine) {
-				std::list<State>::iterator iter = state_machine->states.begin();
-				while (iter != state_machine->states.end()) {
-					State &s = *iter++;
-					if (s.getName() == state_name) {
-						return s.getNameValue();
-					}
-				}
-				for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-					if (stable_states[ss_idx].state_name == state_name) return &stable_states[ss_idx].name;
-				}
-			}
-			return &SymbolTable::Null;
+		else {
+			resetTemporaryStringStream();
+			ss << "could not find machine named " << name << " for property " << property;
+			error_messages.push_back(ss.str());
+			++num_errors;
+			DBG_MSG << ss.str() << "\n";
+			MessageLog::instance()->add(ss.str().c_str());
+			return SymbolTable::Null;
 		}
+	}
+	else {
+		Value property_val(property); // use this to avoid string comparisions on property
 
-		Value *MachineInstance::lookupState(const Value &state_name) {
-			//is state_name a valid state?
-			if (state_machine) {
-				std::list<State>::iterator iter = state_machine->states.begin();
-				while (iter != state_machine->states.end()) {
-					State &s = *iter++;
-					if (s.getId() == state_name.token_id) {
-						return s.getNameValue();
-					}
-				}
-				for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-					if (stable_states[ss_idx].name == state_name) return &stable_states[ss_idx].name;
+		// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
+
+		// variables may refer to an initialisation value passed in as a parameter. 
+		if ( state_machine
+			 && (state_machine->token_id == ClockworkToken::VARIABLE
+				|| state_machine->token_id == ClockworkToken::CONSTANT)
+			) {
+			for (unsigned int i=0; i<parameters.size(); ++i) {
+				if (state_machine->parameters[i].val.kind == Value::t_symbol 
+						&& property == state_machine->parameters[i].val.sValue
+
+				   ) {
+					DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
+					return parameters[i].val;
 				}
 			}
-			return &SymbolTable::Null;
 		}
-
-		bool MachineInstance::hasState(const std::string &state_name) const {
-			//is state_name a valid state?
-			if (state_machine) {
-				//        bool x = state_machine->state_names.count(state_name) != 0;
-
-				std::list<State>::const_iterator iter = state_machine->states.begin();
-				while (iter != state_machine->states.end()) {
-					const State &s = *iter++;
-					if (s.getName() == state_name) {
-						return true;
-					}
-				}
-				for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-					if (stable_states[ss_idx].state_name == state_name) return true;
-				}
-				/*std::list<Transition>::const_iterator trans_i = transitions.begin();
-				  while (trans_i != transitions.end()) {
-				  const Transition &t = *trans_i++;
-				  if (t.dest)
-				  }*/
+		// use the global value if its name is mentioned in this machine's list of globals
+		if (!state_machine) {
+			resetTemporaryStringStream();
+			ss << _name << " could not find a machine definition: " << _type;
+			DBG_PROPERTIES << ss.str() << "\n";
+			error_messages.push_back(ss.str());
+			++num_errors;
+		}
+		else if (state_machine->global_references.count(property)) {
+			MachineInstance *m = state_machine->global_references[property];
+			if (m) {
+				DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from " << m->getName() << "\n";
+				return m->getValue("VALUE");
 			}
-#if 1
 			else {
-				char buf[100];
-				snprintf(buf,100,"%s does not have a state; %s", fullName().c_str(), state_name.c_str());
-				MessageLog::instance()->add(buf);
+				resetTemporaryStringStream();
+				ss << fullName() << " failed to find the machine for global: " << property;
+				DBG_PROPERTIES << ss.str() << "\n";
+				error_messages.push_back(ss.str());
+				MessageLog::instance()->add(ss.str().c_str());
+				++num_errors;
 			}
-#endif
-			return false;
 		}
-
-		void MachineInstance::setValue(const std::string &property, Value new_value) {
-			//forceStableStateCheck();
-			//forceIdleCheck();
-			DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
-			if (property.find('.') != std::string::npos) {
-				// property is on another machine
-				std::string name = property;
-				name.erase(name.find('.'));
-				std::string prop = property.substr(property.find('.')+1 );
-				MachineInstance *other = lookup(name);
-				if (other) {
-					if (prop.length()) {
-						DBG_M_PROPERTIES << *other << " setting property " << prop << " to " << new_value << "\n";
-						other->setValue(prop, new_value);
+		DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
+		if (property_val.token_id == ClockworkToken::TIMER) {
+			// we do not use the precalculated timer here since this may be being accessed
+			// within an action handler of a nother machine and will not have been updated
+			// since the last evaluation of stable states.
+			getTimerVal();
+			DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			return state_timer;
+		}
+		else if (SymbolTable::isKeyword(property.c_str())) {
+			return SymbolTable::getKeyValue(property.c_str());
+		}
+		else {
+			Value &x = properties.lookup(property.c_str());
+			if (x == SymbolTable::Null) {
+				if (state_machine) {
+					if (!state_machine->properties.exists(property.c_str())) {
+						DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+						if (globals.exists(property.c_str()))
+							return globals.lookup(property.c_str());
 					}
 					else {
-						DBG_MSG << _name << " bad request to set property " << property << "\n";
+						DBG_M_PROPERTIES << "using property " << property << "from class\n";
+						return state_machine->properties.lookup(property.c_str()); 
 					}
-				}
-				else {
-					DBG_PROPERTIES << "could not find machine named " << name << " for property " << property << "\n";
 				}
 			}
 			else {
-				Value property_val(property); // use this value in comparisons for performance
+				DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
+				return x;
+			}
+		}
 
-				if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
-					long new_delay = 0;
-					if (new_value.asInteger(new_delay)) idle_time = new_delay;
-					if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
-						*MachineInstance::polling_delay = new_delay;
-					}
-				}
-				else if (property_val.token_id == ClockworkToken::TRACEABLE) {
-					if (new_value == "TRUE") is_traceable = true;
-					if (new_value == "FALSE") is_traceable = false;
-				}
+		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
+		MachineInstance *m = lookup(property);
+		if (m) {
+			if (m->state_machine->token_id == ClockworkToken::VARIABLE
+					|| m->state_machine->token_id == ClockworkToken::CONSTANT)
+				return m->getValue("VALUE");
+			else
+				return *m->getCurrentStateVal();
+		}
 
-				// often variables are named in the GLOBAL list, if we find the property in that list
-				// we try to change ask that machine to set its VALUE.
-				if (state_machine->global_references.count(property)) {
-					MachineInstance *global_machine = state_machine->global_references[property];
-					if (global_machine && global_machine->state_machine->token_id != ClockworkToken::CONSTANT)
-						global_machine->setValue("VALUE", new_value);
+	}
+	return SymbolTable::Null;
+}
+
+Value *MachineInstance::lookupState(const std::string &state_name) {
+	//is state_name a valid state?
+	if (state_machine) {
+		std::list<State>::iterator iter = state_machine->states.begin();
+		while (iter != state_machine->states.end()) {
+			State &s = *iter++;
+			if (s.getName() == state_name) {
+				return s.getNameValue();
+			}
+		}
+		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+			if (stable_states[ss_idx].state_name == state_name) return &stable_states[ss_idx].name;
+		}
+	}
+	return &SymbolTable::Null;
+}
+
+Value *MachineInstance::lookupState(const Value &state_name) {
+	//is state_name a valid state?
+	if (state_machine) {
+		std::list<State>::iterator iter = state_machine->states.begin();
+		while (iter != state_machine->states.end()) {
+			State &s = *iter++;
+			if (s.getId() == state_name.token_id) {
+				return s.getNameValue();
+			}
+		}
+		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+			if (stable_states[ss_idx].name == state_name) return &stable_states[ss_idx].name;
+		}
+	}
+	return &SymbolTable::Null;
+}
+
+bool MachineInstance::hasState(const State &test) const {
+	if (state_machine) {
+		std::list<State>::const_iterator iter = state_machine->states.begin();
+		while (iter != state_machine->states.end()) {
+			const State &s = *iter++;
+			if (s == test) {
+				return true;
+			}
+		}
+		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+			if (stable_states[ss_idx].state_name == test.getName()) return true;
+		}
+	}
+	else {
+		char buf[100];
+		snprintf(buf,100,"warning: %s does not have a state; %s", fullName().c_str(), test.getName().c_str());
+		MessageLog::instance()->add(buf);
+	}
+	return false;
+}
+
+bool MachineInstance::hasState(const std::string &state_name) const {
+	//is state_name a valid state?
+	State s(state_name.c_str());
+	return hasState(s);
+}
+
+void MachineInstance::setValue(const std::string &property, Value new_value) {
+	//forceStableStateCheck();
+	//forceIdleCheck();
+	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
+	if (property.find('.') != std::string::npos) {
+		// property is on another machine
+		std::string name = property;
+		name.erase(name.find('.'));
+		std::string prop = property.substr(property.find('.')+1 );
+		MachineInstance *other = lookup(name);
+		if (other) {
+			if (prop.length()) {
+				DBG_M_PROPERTIES << *other << " setting property " << prop << " to " << new_value << "\n";
+				other->setValue(prop, new_value);
+			}
+			else {
+				DBG_MSG << _name << " bad request to set property " << property << "\n";
+			}
+		}
+		else {
+			DBG_PROPERTIES << "could not find machine named " << name << " for property " << property << "\n";
+		}
+	}
+	else {
+		Value property_val(property); // use this value in comparisons for performance
+
+		if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
+			long new_delay = 0;
+			if (new_value.asInteger(new_delay)) idle_time = new_delay;
+			if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
+				*MachineInstance::polling_delay = new_delay;
+			}
+		}
+		else if (property_val.token_id == ClockworkToken::TRACEABLE) {
+			if (new_value == "TRUE") is_traceable = true;
+			if (new_value == "FALSE") is_traceable = false;
+		}
+
+		// often variables are named in the GLOBAL list, if we find the property in that list
+		// we try to change ask that machine to set its VALUE.
+		if (state_machine->global_references.count(property)) {
+			MachineInstance *global_machine = state_machine->global_references[property];
+			if (global_machine && global_machine->state_machine->token_id != ClockworkToken::CONSTANT)
+				global_machine->setValue("VALUE", new_value);
+			return;
+		}
+		// try the current instance ofthe machine, then the machine class and finally the global symbols
+		DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
+		Value &prev_value = properties.lookup(property.c_str());
+
+		if (prev_value == SymbolTable::Null && property_val.token_id != ClockworkToken::tokVALUE && property != _name) {
+			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
+			MachineInstance *global_machine = lookup(property);
+			if (global_machine) {
+				if ( global_machine->state_machine->token_id != ClockworkToken::CONSTANT ) {
+					global_machine->setValue("VALUE", new_value);
 					return;
 				}
-				// try the current instance ofthe machine, then the machine class and finally the global symbols
-				DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
-				Value &prev_value = properties.lookup(property.c_str());
+				NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
+				return;
+			}
+		}
 
-				if (prev_value == SymbolTable::Null && property_val.token_id != ClockworkToken::tokVALUE && property != _name) {
-					// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
-					MachineInstance *global_machine = lookup(property);
-					if (global_machine) {
-						if ( global_machine->state_machine->token_id != ClockworkToken::CONSTANT ) {
-							global_machine->setValue("VALUE", new_value);
-							return;
-						}
-						NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
-						return;
-					}
-				}
+		if (state_machine->token_id == ClockworkToken::PUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+		{
+			std::string old_val(properties.lookup(property.c_str()).asString());
+			mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
+		}
 
-				if (state_machine->token_id == ClockworkToken::PUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+		if (new_value.kind == Value::t_integer && state_machine && state_machine->plugin && state_machine->plugin->filter) {
+			new_value.iValue = state_machine->plugin->filter(this, new_value.iValue);
+		}
+		bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
+		if (changed ){
+			setNeedsCheck();
+			properties.add(property, new_value, SymbolTable::ST_REPLACE);
+			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
+				char buf[100];
+				errno = 0;
+				long value =0; // TBD deal with sign
+				if (new_value.asInteger(value))
 				{
-					std::string old_val(properties.lookup(property.c_str()).asString());
-					mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
+					//snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
+					io_interface->setValue( (uint32_t)value);
+					properties.add("VALUE", value, SymbolTable::ST_REPLACE);
 				}
+				else {
+					snprintf(buf, 100, "%s: could not set value to %s", _name.c_str(), new_value.asString().c_str());
+					MessageLog::instance()->add(buf);
+					NB_MSG << buf << "\n";
+				}
+			}
+			if (published) {
+				Channel::sendPropertyChange(this, property.c_str(), new_value);
+			}
+			// update modbus with the new value
+			DBG_M_MODBUS << " building modbus name for property " << property << " on " << _name << "\n";
+			std::string property_name;
+			if (owner) {
+				property_name = owner->getName();
+				property_name += ".";
+			}
+			property_name += _name;
+			if (property_val.token_id != ClockworkToken::tokVALUE) {
+				property_name += ".";
+				property_name += property;
+			}
 
-				if (new_value.kind == Value::t_integer && state_machine && state_machine->plugin && state_machine->plugin->filter) {
-					new_value.iValue = state_machine->plugin->filter(this, new_value.iValue);
+			if (published && modbus_exports.count(property_name)){
+				ModbusAddress ma = modbus_exports[property_name];
+				if (property_val.token_id == ClockworkToken::tokVALUE) {
+					DBG_M_MODBUS << property_name << " modbus address " << ma << "\n";
 				}
-				bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
-				if (changed ){
-					setNeedsCheck();
-					properties.add(property, new_value, SymbolTable::ST_REPLACE);
-					if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
-						char buf[100];
-						errno = 0;
-						long value =0; // TBD deal with sign
-						if (new_value.asInteger(value))
-						{
-							//snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
-							io_interface->setValue( (uint32_t)value);
-							properties.add("VALUE", value, SymbolTable::ST_REPLACE);
-						}
-						else {
-							snprintf(buf, 100, "%s: could not set value to %s", _name.c_str(), new_value.asString().c_str());
-							MessageLog::instance()->add(buf);
-							NB_MSG << buf << "\n";
-						}
-					}
-					if (published) {
-						Channel::sendPropertyChange(this, property.c_str(), new_value);
-					}
-					// update modbus with the new value
-					DBG_M_MODBUS << " building modbus name for property " << property << " on " << _name << "\n";
-					std::string property_name;
-					if (owner) {
-						property_name = owner->getName();
-						property_name += ".";
-					}
-					property_name += _name;
-					if (property_val.token_id != ClockworkToken::tokVALUE) {
-						property_name += ".";
-						property_name += property;
-					}
-
-					if (published && modbus_exports.count(property_name)){
-						ModbusAddress ma = modbus_exports[property_name];
-						if (property_val.token_id == ClockworkToken::tokVALUE) {
-							DBG_M_MODBUS << property_name << " modbus address " << ma << "\n";
-						}
-						switch(ma.getGroup()) {
-							case ModbusAddress::none:
-								DBG_M_MODBUS << property_name << " export type is 'none'\n";
-								break;
-							case ModbusAddress::discrete:
-							case ModbusAddress::coil:
-							case ModbusAddress::input_register:
-							case ModbusAddress::holding_register: {
-												      if (new_value.kind == Value::t_integer) {
-													      long intVal;
-													      if (ma.length() == 1 || ma.length() == 2) {
-														      if (new_value.asInteger(intVal)) {
-															      ma.update(this, (int)intVal);
-														      }
-														      else {
-															      DBG_M_MODBUS << property_name << " does not have an integer value\n";
-														      }
-													      }
-												      }
-												      else if (new_value.kind == Value::t_string || new_value.kind == Value::t_symbol){
-													      ma.update(this, new_value.sValue);
-												      }
-												      else {
-													      DBG_M_MODBUS << "unable to export " << property_name << "\n";
-												      }
-											      }
-											      break;
-							case ModbusAddress::string: {
-											    ma.update(this, new_value.asString());
-										    }
-						}
-					}
-					else
-						DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
+				switch(ma.getGroup()) {
+					case ModbusAddress::none:
+						DBG_M_MODBUS << property_name << " export type is 'none'\n";
+						break;
+					case ModbusAddress::discrete:
+					case ModbusAddress::coil:
+					case ModbusAddress::input_register:
+					case ModbusAddress::holding_register: {
+											  if (new_value.kind == Value::t_integer) {
+												  long intVal;
+												  if (ma.length() == 1 || ma.length() == 2) {
+													  if (new_value.asInteger(intVal)) {
+														  ma.update(this, (int)intVal);
+													  }
+													  else {
+														  DBG_M_MODBUS << property_name << " does not have an integer value\n";
+													  }
+												  }
+											  }
+											  else if (new_value.kind == Value::t_string || new_value.kind == Value::t_symbol){
+												  ma.update(this, new_value.sValue);
+											  }
+											  else {
+												  DBG_M_MODBUS << "unable to export " << property_name << "\n";
+											  }
+										  }
+										  break;
+					case ModbusAddress::string: {
+										ma.update(this, new_value.asString());
+									}
 				}
-				// only tell dependent machines to recheck predicates if the property
-				// actually changes value
-				if (changed) {
-					DBG_M_PROPERTIES << "telling dependent machines about the change\n";
-					setNeedsCheck();
-					notifyDependents();
+			}
+			else
+				DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
+		}
+		// only tell dependent machines to recheck predicates if the property
+		// actually changes value
+		if (changed) {
+			DBG_M_PROPERTIES << "telling dependent machines about the change\n";
+			setNeedsCheck();
+			notifyDependents();
 #if 0
-					std::set<MachineInstance *>::iterator d_iter = depends.begin();
-					while (d_iter != depends.end()) {
-						MachineInstance *dep = *d_iter++;
-						dep->setNeedsCheck(); // make sure dependant machines update when a property changes
-						//Message *msg = new Message("property_change");
-						//send(msg, dep);
-					}
+			std::set<MachineInstance *>::iterator d_iter = depends.begin();
+			while (d_iter != depends.end()) {
+				MachineInstance *dep = *d_iter++;
+				dep->setNeedsCheck(); // make sure dependant machines update when a property changes
+				//Message *msg = new Message("property_change");
+				//send(msg, dep);
+			}
 #endif
-				}
-			}
 		}
+	}
+}
 
-		void MachineInstance::refreshModbus(cJSON *json_array) {
+void MachineInstance::refreshModbus(cJSON *json_array) {
 
-			std::map<int, std::string>::iterator iter = modbus_addresses.begin();
-			while (iter != modbus_addresses.end()) {
-				std::string full_name = (*iter).second;
-				std::string short_name(full_name);
-				if (short_name.rfind('.') != std::string::npos) {
-					short_name = short_name.substr(short_name.rfind('.')+1);
+	std::map<int, std::string>::iterator iter = modbus_addresses.begin();
+	while (iter != modbus_addresses.end()) {
+		std::string full_name = (*iter).second;
+		std::string short_name(full_name);
+		if (short_name.rfind('.') != std::string::npos) {
+			short_name = short_name.substr(short_name.rfind('.')+1);
+		}
+		int addr = (*iter).first & 0xffff;
+		int group = (*iter).first >> 16;
+		ModbusAddress info = modbus_exports[(*iter).second];
+		if ((int)info.getGroup() != group) {
+			NB_MSG << full_name << " index ("<<group<<"," <<addr<<")" << (*iter).first << " should be " << (*iter).second << "\n";
+		}
+		if ((int)info.getAddress() != addr) {
+			NB_MSG << full_name << " index ("<<group<<"," <<addr<<")" << (*iter).first << " should be " << (*iter).second << "\n";
+		}
+		int length = info.length();
+		Value value(0);
+		switch(info.getSource()) {
+			case ModbusAddress::machine:
+				if (_type == "VARIABLE" || _type=="CONSTANT") {
+					value = properties.lookup("VALUE");
 				}
-				int addr = (*iter).first & 0xffff;
-				int group = (*iter).first >> 16;
-				ModbusAddress info = modbus_exports[(*iter).second];
-				if ((int)info.getGroup() != group) {
-					NB_MSG << full_name << " index ("<<group<<"," <<addr<<")" << (*iter).first << " should be " << (*iter).second << "\n";
-				}
-				if ((int)info.getAddress() != addr) {
-					NB_MSG << full_name << " index ("<<group<<"," <<addr<<")" << (*iter).first << " should be " << (*iter).second << "\n";
-				}
-				int length = info.length();
-				Value value(0);
-				switch(info.getSource()) {
-					case ModbusAddress::machine:
-						if (_type == "VARIABLE" || _type=="CONSTANT") {
-							value = properties.lookup("VALUE");
-						}
-						else if (current_state.getName() == "on")
-							value = 1;
-						else 
-							value = 0;
-						break;
-					case ModbusAddress::state:
-						value =  (_name + "." + current_state.getName() == (*iter).second) ? 1 : 0;
-						break;
-					case ModbusAddress::command:
-						value = 0;
-						break;
-					case ModbusAddress::property:
-						if (properties.exists( short_name.c_str() ))
-							value = properties.lookup( short_name.c_str() );
-						else {
-							MachineInstance *mi = lookup( (*iter).second );
-							if (mi && (mi->_type == "VARIABLE" || mi->_type == "CONSTANT") ) {
-								value = mi->getValue("VALUE");
-							}
-							else {
-								std::stringstream ss; ss << "Error: " << full_name <<" has not been initialised";
-								char *msg = strdup(ss.str().c_str());
-								MessageLog::instance()->add(msg);
-								NB_MSG << msg << "\n";
-								free(msg);
-							}
-						}
-						break;
-					case ModbusAddress::unknown:
-						value = "UNKNOWN";
-				}
-				cJSON *item = cJSON_CreateArray();
-				cJSON_AddItemToArray(item, cJSON_CreateNumber(group));
-				cJSON_AddItemToArray(item, cJSON_CreateNumber(addr));
-				if (owner) {
-					std::string name(owner->getName());
-					name += ".";
-					name += full_name;
-					size_t found = name.rfind(".");
-					if (group == 0 && found != std::string::npos) {
-						name.replace(found, 1, ".cmd_");
-					}
-					cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
-				}
+				else if (current_state.getName() == "on")
+					value = 1;
+				else 
+					value = 0;
+				break;
+			case ModbusAddress::state:
+				value =  (_name + "." + current_state.getName() == (*iter).second) ? 1 : 0;
+				break;
+			case ModbusAddress::command:
+				value = 0;
+				break;
+			case ModbusAddress::property:
+				if (properties.exists( short_name.c_str() ))
+					value = properties.lookup( short_name.c_str() );
 				else {
-					std::string name(full_name);
-					size_t found = name.rfind(".");
-					if (group == 0 && found != std::string::npos) {
-						name.replace(found, 1, ".cmd_");
+					MachineInstance *mi = lookup( (*iter).second );
+					if (mi && (mi->_type == "VARIABLE" || mi->_type == "CONSTANT") ) {
+						value = mi->getValue("VALUE");
 					}
-					cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
-					//out << group << " " << addr << " " << full_name << " " << length << " " << value <<"\n";
-				}
-				cJSON_AddItemToArray(item, cJSON_CreateNumber(length));
-				if (value.kind == Value::t_string || value.kind == Value::t_symbol)
-					cJSON_AddItemToArray(item, cJSON_CreateString(value.sValue.c_str()));
-				else
-					cJSON_AddItemToArray(item, cJSON_CreateNumber(value.iValue));
-				cJSON_AddItemToArray(json_array, item);
-				iter++;
-			}
-		}
-		void MachineInstance::exportModbusMapping(std::ostream &out) {
-
-			std::map<int, std::string>::iterator iter = modbus_addresses.begin();
-			while (iter != modbus_addresses.end()) {
-				int addr = (*iter).first & 0xffff;
-				int group = (*iter).first >> 16;
-				ModbusAddress info = modbus_exports[(*iter).second];
-				//assert((int)info.getGroup() == group);
-				//assert(info.getAddress() == addr);
-				const char *data_type;
-				switch(ModbusAddress::toGroup(group)) {
-					case ModbusAddress::discrete: data_type = "Discrete"; break;
-					case ModbusAddress::coil: data_type = "Discrete"; break;
-					case ModbusAddress::input_register: 
-					case ModbusAddress::holding_register:  
-								  if (info.length() == 1)
-									  data_type = "Signed_int_16";
-								  else if (info.length() == 2)
-									  data_type = "Signed_int_32";
-								  else
-									  data_type = "Ascii_String";
-								  break;
-					default: data_type = "Unknown";
-				}
-				if (owner)
-					out << group << ":" << std::setfill('0') << std::setw(5) << addr
-						<< "\t" << owner->getName() << "." << ((group==0) ? "cmd_": "") << (*iter).second
-						<< "\t" << data_type
-						<< "\t" << info.length()
-						<< "\n";
-				else {
-					std::string name((*iter).second);
-					size_t found = name.rfind(".");
-					if (group == 0 && found != std::string::npos) {
-						name.replace(found, 1, ".cmd_");
+					else {
+						std::stringstream ss; ss << "Error: " << full_name <<" has not been initialised";
+						char *msg = strdup(ss.str().c_str());
+						MessageLog::instance()->add(msg);
+						NB_MSG << msg << "\n";
+						free(msg);
 					}
-					out << group << ":" << std::setfill('0') << std::setw(5) << addr
-						<< "\t" << name
-						<< "\t" << data_type
-						<< "\t" << info.length()
-						<< "\n";
 				}
-				iter++;
-			}
-
+				break;
+			case ModbusAddress::unknown:
+				value = "UNKNOWN";
 		}
-
-		// Modbus
-
-
-		ModbusAddress MachineInstance::addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, 
-				ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name) {
-			if (ModbusAddress::preset_modbus_mapping.count(full_name) != 0) {
-				ModbusAddressDetails info = ModbusAddress::preset_modbus_mapping[full_name];
-				DBG_MODBUS << _name << " " << name << " has predefined address: " << info.group<<":"<<std::setfill('0')<<std::setw(5)<<info.address << "\n";
-				ModbusAddress addr(ModbusAddress::toGroup(info.group), info.address, info.len, owner, src, full_name);
-				modbus_exports[name] = addr;
-				return addr;
+		cJSON *item = cJSON_CreateArray();
+		cJSON_AddItemToArray(item, cJSON_CreateNumber(group));
+		cJSON_AddItemToArray(item, cJSON_CreateNumber(addr));
+		if (owner) {
+			std::string name(owner->getName());
+			name += ".";
+			name += full_name;
+			size_t found = name.rfind(".");
+			if (group == 0 && found != std::string::npos) {
+				name.replace(found, 1, ".cmd_");
 			}
-			else {
-				ModbusAddress addr = ModbusAddress::alloc(g, n, this, src, full_name);
-				DBG_MODBUS << _name << " " << name << " allocated new address " << addr << "\n";
-				modbus_exports[name] = addr;
-				return addr;
-			}
+			cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
 		}
-
-		void MachineInstance::setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, int size) {
-			std::string full_name;
-			if (owner) full_name = owner->getName() + ".";
-			std::string name;
-			if (_name != property_name) name = _name + ".";
-			name += property_name;
-			switch(grp) {
-				case ModbusAddress::discrete:
-					addModbusExport(name, ModbusAddress::discrete, size, this, ModbusAddress::property, full_name+name); 
-					break;
-				case ModbusAddress::coil:
-					addModbusExport(name, ModbusAddress::coil, size, this, ModbusAddress::property, full_name+name); 
-					break;
-				case ModbusAddress::input_register:
-					addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name); 
-					break;
-				case ModbusAddress::holding_register:
-					addModbusExport(name, ModbusAddress::holding_register, size, this, ModbusAddress::property, full_name+name);
-					break;
-				case ModbusAddress::string:
-					addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name);
-					break;
-				default: ;
+		else {
+			std::string name(full_name);
+			size_t found = name.rfind(".");
+			if (group == 0 && found != std::string::npos) {
+				name.replace(found, 1, ".cmd_");
 			}
+			cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
+			//out << group << " " << addr << " " << full_name << " " << length << " " << value <<"\n";
 		}
+		cJSON_AddItemToArray(item, cJSON_CreateNumber(length));
+		if (value.kind == Value::t_string || value.kind == Value::t_symbol)
+			cJSON_AddItemToArray(item, cJSON_CreateString(value.sValue.c_str()));
+		else
+			cJSON_AddItemToArray(item, cJSON_CreateNumber(value.iValue));
+		cJSON_AddItemToArray(json_array, item);
+		iter++;
+	}
+}
+void MachineInstance::exportModbusMapping(std::ostream &out) {
 
-		void MachineInstance::setupModbusInterface() {
+	std::map<int, std::string>::iterator iter = modbus_addresses.begin();
+	while (iter != modbus_addresses.end()) {
+		int addr = (*iter).first & 0xffff;
+		int group = (*iter).first >> 16;
+		ModbusAddress info = modbus_exports[(*iter).second];
+		//assert((int)info.getGroup() == group);
+		//assert(info.getAddress() == addr);
+		const char *data_type;
+		switch(ModbusAddress::toGroup(group)) {
+			case ModbusAddress::discrete: data_type = "Discrete"; break;
+			case ModbusAddress::coil: data_type = "Discrete"; break;
+			case ModbusAddress::input_register: 
+			case ModbusAddress::holding_register:  
+						  if (info.length() == 1)
+							  data_type = "Signed_int_16";
+						  else if (info.length() == 2)
+							  data_type = "Signed_int_32";
+						  else
+							  data_type = "Ascii_String";
+						  break;
+			default: data_type = "Unknown";
+		}
+		if (owner)
+			out << group << ":" << std::setfill('0') << std::setw(5) << addr
+				<< "\t" << owner->getName() << "." << ((group==0) ? "cmd_": "") << (*iter).second
+				<< "\t" << data_type
+				<< "\t" << info.length()
+				<< "\n";
+		else {
+			std::string name((*iter).second);
+			size_t found = name.rfind(".");
+			if (group == 0 && found != std::string::npos) {
+				name.replace(found, 1, ".cmd_");
+			}
+			out << group << ":" << std::setfill('0') << std::setw(5) << addr
+				<< "\t" << name
+				<< "\t" << data_type
+				<< "\t" << info.length()
+				<< "\n";
+		}
+		iter++;
+	}
 
-			if (modbus_addresses.size() != 0) return; // already done
-			DBG_MODBUS << fullName() << " setting up modbus\n";
-			std::string full_name = fullName();
+}
 
-			bool self_discrete = false;
-			bool self_coil = false;
-			bool self_reg = false;
-			bool self_rwreg = false;
-			long str_length = 0;
+// Modbus
 
-			// workout the export type for this machine
-			ExportType export_type = none;
 
-			bool exported = properties.exists("export");
-			if (exported) {
-				Value export_type_val = properties.lookup("export");
-				if (export_type_val != "false") {
-					if (_type == "POINT") {
-						Value &type = properties.lookup("type");
-						if (type != SymbolTable::Null) {
-							if (type == "Input") {
-								self_discrete = true; 
-								export_type=discrete;
-							}
-							else if (type == "Output") {
-								if (export_type_val=="rw") {
-									self_coil = true;
-									export_type=coil;
-								}
-								else {
-									self_discrete = true;
-									export_type=coil;
-								}
-							}
-							else if (type=="AnalogueInput") {
-								self_reg = true;
-								export_type=reg;
-							}
-							else if (type=="AnalogueOutput") {
-								// default to readonly export
-								if (export_type_val=="rw") {
-									self_rwreg = true;
-									export_type=rw_reg;
-								}
-								else {
-									self_reg = true;
-									export_type=reg;
-								}
-							}
-						}
+ModbusAddress MachineInstance::addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, 
+		ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name) {
+	if (ModbusAddress::preset_modbus_mapping.count(full_name) != 0) {
+		ModbusAddressDetails info = ModbusAddress::preset_modbus_mapping[full_name];
+		DBG_MODBUS << _name << " " << name << " has predefined address: " << info.group<<":"<<std::setfill('0')<<std::setw(5)<<info.address << "\n";
+		ModbusAddress addr(ModbusAddress::toGroup(info.group), info.address, info.len, owner, src, full_name);
+		modbus_exports[name] = addr;
+		return addr;
+	}
+	else {
+		ModbusAddress addr = ModbusAddress::alloc(g, n, this, src, full_name);
+		DBG_MODBUS << _name << " " << name << " allocated new address " << addr << "\n";
+		modbus_exports[name] = addr;
+		return addr;
+	}
+}
+
+void MachineInstance::setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, int size) {
+	std::string full_name;
+	if (owner) full_name = owner->getName() + ".";
+	std::string name;
+	if (_name != property_name) name = _name + ".";
+	name += property_name;
+	switch(grp) {
+		case ModbusAddress::discrete:
+			addModbusExport(name, ModbusAddress::discrete, size, this, ModbusAddress::property, full_name+name); 
+			break;
+		case ModbusAddress::coil:
+			addModbusExport(name, ModbusAddress::coil, size, this, ModbusAddress::property, full_name+name); 
+			break;
+		case ModbusAddress::input_register:
+			addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name); 
+			break;
+		case ModbusAddress::holding_register:
+			addModbusExport(name, ModbusAddress::holding_register, size, this, ModbusAddress::property, full_name+name);
+			break;
+		case ModbusAddress::string:
+			addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name);
+			break;
+		default: ;
+	}
+}
+
+void MachineInstance::setupModbusInterface() {
+
+	if (modbus_addresses.size() != 0) return; // already done
+	DBG_MODBUS << fullName() << " setting up modbus\n";
+	std::string full_name = fullName();
+
+	bool self_discrete = false;
+	bool self_coil = false;
+	bool self_reg = false;
+	bool self_rwreg = false;
+	long str_length = 0;
+
+	// workout the export type for this machine
+	ExportType export_type = none;
+
+	bool exported = properties.exists("export");
+	if (exported) {
+		Value export_type_val = properties.lookup("export");
+		if (export_type_val != "false") {
+			if (_type == "POINT") {
+				Value &type = properties.lookup("type");
+				if (type != SymbolTable::Null) {
+					if (type == "Input") {
+						self_discrete = true; 
+						export_type=discrete;
 					}
-					else
+					else if (type == "Output") {
 						if (export_type_val=="rw") {
 							self_coil = true;
 							export_type=coil;
 						}
-						else if (export_type_val=="reg") {
-							self_reg = true;
-							export_type=reg;
+						else {
+							self_discrete = true;
+							export_type=coil;
 						}
-						else if (export_type_val=="rw_reg") {
+					}
+					else if (type=="AnalogueInput") {
+						self_reg = true;
+						export_type=reg;
+					}
+					else if (type=="AnalogueOutput") {
+						// default to readonly export
+						if (export_type_val=="rw") {
 							self_rwreg = true;
 							export_type=rw_reg;
 						}
-						else if (export_type_val=="reg32") {
-							self_reg = true;
-							export_type=reg32;
-						}
-						else if (export_type_val=="rw_reg32") {
-							self_rwreg = true;
-							export_type=rw_reg32;
-						}
-						else if (export_type_val=="str") {
-							Value &export_size = properties.lookup("strlen");
-							self_reg = true; 
-							export_type=str;
-							export_size.asInteger(str_length);
-						}
-						else if (export_type_val=="rw_str") {
-							Value &export_size = properties.lookup("strlen");
-							self_rwreg = true;
-							export_type=str;
-							export_size.asInteger(str_length);
-						}
 						else {
-							self_discrete = true;
-							export_type=discrete;
+							self_reg = true;
+							export_type=reg;
 						}
-				}
-			}
-			if (_type != "VARIABLE" && _type != "CONSTANT") {// export property refers to VALUE export type, not the machine
-				modbus_exported = export_type;		
-			}
-
-			// register the individual properties 
-
-			if (_type != "VARIABLE" && _type != "CONSTANT") {
-				// exporting 'self' (either 'on' state or 'VALUE' property depending on export type)
-				if (self_coil) {
-					modbus_address = addModbusExport(_name, ModbusAddress::coil, 1, this, ModbusAddress::machine, full_name);
-				}
-				else if (self_discrete) {
-					modbus_address = addModbusExport(_name, ModbusAddress::discrete, 1, this, ModbusAddress::machine, full_name);
-					//addModbusExportname(_name].setName(full_name);
-				}
-				else if (self_reg) {
-					int len = 1;
-					if (export_type == reg) {
-						len = 1;
 					}
-					else if (export_type == reg32) {
-						len = 2;
-					}
-					else if (export_type == str && str_length == 0) {
-						len=80;
-					}
-					modbus_address = addModbusExport(_name, ModbusAddress::input_register, len, this, ModbusAddress::machine, full_name);
-					//modbus_exports[_name].setName(full_name);
-				}
-				else if (self_rwreg) {
-					int len = 1;
-					if (export_type == rw_reg32) {
-						len = 2;
-					}
-					else if (export_type == str && str_length == 0) {
-						len=80;
-					}
-					addModbusExport(_name, ModbusAddress::holding_register, len, this, ModbusAddress::machine, full_name);
-					//modbus_exports[name(_name].setName(full_name);
 				}
 			}
-
-			// exported states
-			BOOST_FOREACH(std::string s, state_machine->state_exports) {
-				std::string name = _name + "." + s;
-				addModbusExport(name, ModbusAddress::discrete, 1, this, ModbusAddress::state, full_name+"."+s);
-				//modbus_exports[name(name].setName(full_name+"."+s);
-			}
-
-			// exported commands
-			BOOST_FOREACH(std::string s, state_machine->command_exports) {
-				std::string name = _name + "." + s;
-				addModbusExport(name, ModbusAddress::coil, 1, this, ModbusAddress::command, full_name+"."+s);
-				//addModbusExportname(name].setName(full_name+"."+s);
-			}
-
-			if (_type == "VARIABLE" || _type == "CONSTANT") {
-				std::string property_name(_name);
-				switch(export_type) {
-					case none: break;
-					case discrete:
-						   setupModbusPropertyExports(property_name, ModbusAddress::discrete, 1);
-						   break;
-					case coil:
-						   setupModbusPropertyExports(property_name, ModbusAddress::coil, 1);
-						   break;
-					case reg:
-						   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 1);
-						   break;
-					case rw_reg:
-						   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 1);
-						   break;
-					case reg32:
-						   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 2);
-						   break;
-					case rw_reg32:
-						   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 2);
-						   break;
-					case str:
-						   if (self_reg)
-							   setupModbusPropertyExports(property_name, ModbusAddress::input_register, (int)str_length);
-						   else
-							   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, (int)str_length);
-						   break;
+			else
+				if (export_type_val=="rw") {
+					self_coil = true;
+					export_type=coil;
 				}
-			}
-
-			BOOST_FOREACH(ModbusAddressTemplate mat, state_machine->exports) {
-				//if (export_type == none) continue;
-				setupModbusPropertyExports(mat.property_name, mat.kind, mat.size);
-			}
-
-			assert(modbus_addresses.size() == 0);
-			std::map<std::string, ModbusAddress >::iterator iter = modbus_exports.begin();
-			while (iter != modbus_exports.end()) {
-				const ModbusAddress &ma = (*iter).second;
-				int index = ((int)ma.getGroup() << 16) + ma.getAddress();
-				if ( modbus_addresses.count(index) != 0) {
-					NB_MSG << _name << " " << (*iter).first << " address " << ma << " already recorded as " << modbus_addresses[index] << "\n";
+				else if (export_type_val=="reg") {
+					self_reg = true;
+					export_type=reg;
 				}
-				assert(modbus_addresses.count(index) == 0);
-				modbus_addresses[index] = (*iter).first;
-				iter++;
-			}
-			if (modbus_addresses.size() != modbus_exports.size()){
-				NB_MSG << _name << " modbus export inconsistent. addresses: " << modbus_addresses.size() << " indexes " << modbus_exports.size() << "\n";
-			}
-			assert(modbus_addresses.size() == modbus_exports.size());
-
-		}
-
-		void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, const char *new_value) {
-			std::string name = fullName();
-			DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
-			int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
-			if (!modbus_addresses.count(index)) {
-				std::stringstream ss;
-				ss << name << " Error: bad modbus address lookup for " << base_addr;
-				MessageLog::instance()->add(ss.str().c_str());
-				return;
-			}
-			std::string item_name = modbus_addresses[index];
-			if (!modbus_exports.count(item_name)) {
-				std::stringstream ss;
-				ss << name << " Error: bad modbus name lookup for " << item_name;
-				MessageLog::instance()->add(ss.str().c_str());
-				return;
-			}
-			ModbusAddress addr = modbus_exports[item_name];
-			DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";
-
-			if (addr.getGroup() == ModbusAddress::holding_register) {
-				DBG_MODBUS << name << " holding register update\n";
-				std::string property_name = modbus_addresses[index];
-				DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
-				if (property_name == _name)
-					setValue("VALUE", new_value);
-				else
-					setValue(property_name, new_value);
-			}
-			else {
-				NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
-			}
-
-		}
-
-		void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, int new_value) {
-			std::string name(fullName());
-			DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
-			int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
-			if (!modbus_addresses.count(index)) {
-				NB_MSG << name << " Error: bad modbus address lookup for " << base_addr << "\n";
-				return;
-			}
-			const std::string &item_name = modbus_addresses[index];
-			if (!modbus_exports.count(item_name)) {
-				NB_MSG << name << " Error: bad modbus name lookup for " << item_name << "\n";
-				return;
-			}
-			ModbusAddress addr = modbus_exports[item_name];
-			DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";	
-
-			if (addr.getGroup() == ModbusAddress::coil || addr.getGroup() == ModbusAddress::discrete){
-
-				if (addr.getSource() == ModbusAddress::machine) {
-					// crosscheck - the machine must have been exported read/write
-					if (!properties.exists("export")) {
-						char buf[100];
-						snprintf(buf, 100, "received a modbus update for machine %s but that machine has no export property", name.c_str());
-						MessageLog::instance()->add(buf);
-					}
-
-					DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
-					if (new_value) {
-						SetStateActionTemplate ssat(CStringHolder("SELF"), "on" );
-						enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
-					}
-					else {
-						SetStateActionTemplate ssat(CStringHolder("SELF"), "off" );
-						enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
-					}
-					return;
+				else if (export_type_val=="rw_reg") {
+					self_rwreg = true;
+					export_type=rw_reg;
 				}
-				else if (addr.getSource() == ModbusAddress::command) {
-					if (new_value) {
-						std::string &cmd_name = modbus_addresses[index];
-						DBG_MODBUS << _name << " executing command " << cmd_name << "\n";
-						// execute this command once all other actions are complete
-						handle(Message(cmd_name.c_str()), this, true); // fire the trigger when the command is done
-					}
-					return;
+				else if (export_type_val=="reg32") {
+					self_reg = true;
+					export_type=reg32;
 				}
-				else if (addr.getSource() == ModbusAddress::property) {
-					std::string property_name = modbus_addresses[index];
-					DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
-					if (name == _name)
-						setValue("VALUE", new_value);
-					else
-						setValue(property_name, new_value);
+				else if (export_type_val=="rw_reg32") {
+					self_rwreg = true;
+					export_type=rw_reg32;
 				}
-				else
-					DBG_MODBUS << _name << " received update for out-of-range coil" << offset << "\n";
-
-			}
-			else if (addr.getGroup() == ModbusAddress::holding_register) {
-				DBG_MODBUS << name << " holding register update\n";
-				std::string property_name = modbus_addresses[index];
-				DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
-				if (property_name == _name)
-					setValue("VALUE", new_value);
-				else
-					setValue(property_name, new_value);
-			}
-			else {
-				NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
-			}
-		}
-
-		int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {
-			int pos = (addr.getGroup() << 16) + addr.getAddress() + offset;
-			if (!modbus_addresses.count(pos)) {
-				DBG_M_MODBUS << _name << " unknown modbus address offset requested " << offset << "\n";
-				return 0;
-			}
-			// self
-			std::string devname = modbus_addresses[pos];
-			DBG_M_MODBUS << _name << " found device " << devname << " matching address " << addr.getGroup() << ":" << addr.getAddress()  + offset << "\n";
-			if (devname == _name && addr.getAddress() == 0) {
-				if (_type != "VARIABLE" && _type != "CONSTANT") {
-					if (current_state.getName() == "on")
-						return 1;
-					else
-						return 0;
+				else if (export_type_val=="str") {
+					Value &export_size = properties.lookup("strlen");
+					self_reg = true; 
+					export_type=str;
+					export_size.asInteger(str_length);
+				}
+				else if (export_type_val=="rw_str") {
+					Value &export_size = properties.lookup("strlen");
+					self_rwreg = true;
+					export_type=str;
+					export_size.asInteger(str_length);
 				}
 				else {
-					const Value &v = getValue("VALUE");
-					long intVal;
-					if (v.asInteger(intVal))
-						return (int)intVal;
-					else
-						return 0;
+					self_discrete = true;
+					export_type=discrete;
 				}
+		}
+	}
+	if (_type != "VARIABLE" && _type != "CONSTANT") {// export property refers to VALUE export type, not the machine
+		modbus_exported = export_type;		
+	}
+
+	// register the individual properties 
+
+	if (_type != "VARIABLE" && _type != "CONSTANT") {
+		// exporting 'self' (either 'on' state or 'VALUE' property depending on export type)
+		if (self_coil) {
+			modbus_address = addModbusExport(_name, ModbusAddress::coil, 1, this, ModbusAddress::machine, full_name);
+		}
+		else if (self_discrete) {
+			modbus_address = addModbusExport(_name, ModbusAddress::discrete, 1, this, ModbusAddress::machine, full_name);
+			//addModbusExportname(_name].setName(full_name);
+		}
+		else if (self_reg) {
+			int len = 1;
+			if (export_type == reg) {
+				len = 1;
 			}
-			return 0;
+			else if (export_type == reg32) {
+				len = 2;
+			}
+			else if (export_type == str && str_length == 0) {
+				len=80;
+			}
+			modbus_address = addModbusExport(_name, ModbusAddress::input_register, len, this, ModbusAddress::machine, full_name);
+			//modbus_exports[_name].setName(full_name);
 		}
+		else if (self_rwreg) {
+			int len = 1;
+			if (export_type == rw_reg32) {
+				len = 2;
+			}
+			else if (export_type == str && str_length == 0) {
+				len=80;
+			}
+			addModbusExport(_name, ModbusAddress::holding_register, len, this, ModbusAddress::machine, full_name);
+			//modbus_exports[name(_name].setName(full_name);
+		}
+	}
+
+	// exported states
+	BOOST_FOREACH(std::string s, state_machine->state_exports) {
+		std::string name = _name + "." + s;
+		addModbusExport(name, ModbusAddress::discrete, 1, this, ModbusAddress::state, full_name+"."+s);
+		//modbus_exports[name(name].setName(full_name+"."+s);
+	}
+
+	// exported commands
+	BOOST_FOREACH(std::string s, state_machine->command_exports) {
+		std::string name = _name + "." + s;
+		addModbusExport(name, ModbusAddress::coil, 1, this, ModbusAddress::command, full_name+"."+s);
+		//addModbusExportname(name].setName(full_name+"."+s);
+	}
+
+	if (_type == "VARIABLE" || _type == "CONSTANT") {
+		std::string property_name(_name);
+		switch(export_type) {
+			case none: break;
+			case discrete:
+				   setupModbusPropertyExports(property_name, ModbusAddress::discrete, 1);
+				   break;
+			case coil:
+				   setupModbusPropertyExports(property_name, ModbusAddress::coil, 1);
+				   break;
+			case reg:
+				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 1);
+				   break;
+			case rw_reg:
+				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 1);
+				   break;
+			case reg32:
+				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 2);
+				   break;
+			case rw_reg32:
+				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 2);
+				   break;
+			case str:
+				   if (self_reg)
+					   setupModbusPropertyExports(property_name, ModbusAddress::input_register, (int)str_length);
+				   else
+					   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, (int)str_length);
+				   break;
+		}
+	}
+
+	BOOST_FOREACH(ModbusAddressTemplate mat, state_machine->exports) {
+		//if (export_type == none) continue;
+		setupModbusPropertyExports(mat.property_name, mat.kind, mat.size);
+	}
+
+	assert(modbus_addresses.size() == 0);
+	std::map<std::string, ModbusAddress >::iterator iter = modbus_exports.begin();
+	while (iter != modbus_exports.end()) {
+		const ModbusAddress &ma = (*iter).second;
+		int index = ((int)ma.getGroup() << 16) + ma.getAddress();
+		if ( modbus_addresses.count(index) != 0) {
+			NB_MSG << _name << " " << (*iter).first << " address " << ma << " already recorded as " << modbus_addresses[index] << "\n";
+		}
+		assert(modbus_addresses.count(index) == 0);
+		modbus_addresses[index] = (*iter).first;
+		iter++;
+	}
+	if (modbus_addresses.size() != modbus_exports.size()){
+		NB_MSG << _name << " modbus export inconsistent. addresses: " << modbus_addresses.size() << " indexes " << modbus_exports.size() << "\n";
+	}
+	assert(modbus_addresses.size() == modbus_exports.size());
+
+}
+
+void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, const char *new_value) {
+	std::string name = fullName();
+	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
+	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
+	if (!modbus_addresses.count(index)) {
+		std::stringstream ss;
+		ss << name << " Error: bad modbus address lookup for " << base_addr;
+		MessageLog::instance()->add(ss.str().c_str());
+		return;
+	}
+	std::string item_name = modbus_addresses[index];
+	if (!modbus_exports.count(item_name)) {
+		std::stringstream ss;
+		ss << name << " Error: bad modbus name lookup for " << item_name;
+		MessageLog::instance()->add(ss.str().c_str());
+		return;
+	}
+	ModbusAddress addr = modbus_exports[item_name];
+	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";
+
+	if (addr.getGroup() == ModbusAddress::holding_register) {
+		DBG_MODBUS << name << " holding register update\n";
+		std::string property_name = modbus_addresses[index];
+		DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+		if (property_name == _name)
+			setValue("VALUE", new_value);
+		else
+			setValue(property_name, new_value);
+	}
+	else {
+		NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
+	}
+
+}
+
+void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, int new_value) {
+	std::string name(fullName());
+	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
+	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
+	if (!modbus_addresses.count(index)) {
+		NB_MSG << name << " Error: bad modbus address lookup for " << base_addr << "\n";
+		return;
+	}
+	const std::string &item_name = modbus_addresses[index];
+	if (!modbus_exports.count(item_name)) {
+		NB_MSG << name << " Error: bad modbus name lookup for " << item_name << "\n";
+		return;
+	}
+	ModbusAddress addr = modbus_exports[item_name];
+	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";	
+
+	if (addr.getGroup() == ModbusAddress::coil || addr.getGroup() == ModbusAddress::discrete){
+
+		if (addr.getSource() == ModbusAddress::machine) {
+			// crosscheck - the machine must have been exported read/write
+			if (!properties.exists("export")) {
+				char buf[100];
+				snprintf(buf, 100, "received a modbus update for machine %s but that machine has no export property", name.c_str());
+				MessageLog::instance()->add(buf);
+			}
+
+			DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
+			if (new_value) {
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "on" );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
+			else {
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "off" );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
+			return;
+		}
+		else if (addr.getSource() == ModbusAddress::command) {
+			if (new_value) {
+				std::string &cmd_name = modbus_addresses[index];
+				DBG_MODBUS << _name << " executing command " << cmd_name << "\n";
+				// execute this command once all other actions are complete
+				handle(Message(cmd_name.c_str()), this, true); // fire the trigger when the command is done
+			}
+			return;
+		}
+		else if (addr.getSource() == ModbusAddress::property) {
+			std::string property_name = modbus_addresses[index];
+			DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+			if (name == _name)
+				setValue("VALUE", new_value);
+			else
+				setValue(property_name, new_value);
+		}
+		else
+			DBG_MODBUS << _name << " received update for out-of-range coil" << offset << "\n";
+
+	}
+	else if (addr.getGroup() == ModbusAddress::holding_register) {
+		DBG_MODBUS << name << " holding register update\n";
+		std::string property_name = modbus_addresses[index];
+		DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+		if (property_name == _name)
+			setValue("VALUE", new_value);
+		else
+			setValue(property_name, new_value);
+	}
+	else {
+		NB_MSG << name << " unexpected modbus group for write operation " << addr << "\n";
+	}
+}
+
+int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {
+	int pos = (addr.getGroup() << 16) + addr.getAddress() + offset;
+	if (!modbus_addresses.count(pos)) {
+		DBG_M_MODBUS << _name << " unknown modbus address offset requested " << offset << "\n";
+		return 0;
+	}
+	// self
+	std::string devname = modbus_addresses[pos];
+	DBG_M_MODBUS << _name << " found device " << devname << " matching address " << addr.getGroup() << ":" << addr.getAddress()  + offset << "\n";
+	if (devname == _name && addr.getAddress() == 0) {
+		if (_type != "VARIABLE" && _type != "CONSTANT") {
+			if (current_state.getName() == "on")
+				return 1;
+			else
+				return 0;
+		}
+		else {
+			const Value &v = getValue("VALUE");
+			long intVal;
+			if (v.asInteger(intVal))
+				return (int)intVal;
+			else
+				return 0;
+		}
+	}
+	return 0;
+}
 
 
 
-		// Error states (not used yet)
-		bool MachineInstance::inError() { 
-			return error_state != 0; 
-		}
+// Error states (not used yet)
+bool MachineInstance::inError() { 
+	return error_state != 0; 
+}
 
-		void MachineInstance::setError(int val) { 
-			if (error_state) return;
-			error_state = val; 
-			if (val) { 
-				saved_state = current_state;
-				State *err = state_machine->findState("ERROR");
-				assert(err);
-				setState(*err);
-			} 
-		}
-		void MachineInstance::resetError() {
-			error_state = 0; 
-			if (state_machine) setState(state_machine->initial_state); 
-		}
-		void MachineInstance::ignoreError() {
-			error_state = 0;
-		}
+void MachineInstance::setError(int val) { 
+	if (error_state) return;
+	error_state = val; 
+	if (val) { 
+		saved_state = current_state;
+		State *err = state_machine->findState("ERROR");
+		assert(err);
+		setState(*err);
+	} 
+}
+
+void MachineInstance::resetError() {
+	error_state = 0; 
+	if (state_machine) setState(state_machine->initial_state); 
+}
+
+void MachineInstance::ignoreError() {
+	error_state = 0;
+}
 
 MachineDetails::MachineDetails(const char *nam, const char *cls, std::list<Parameter> &params,
 			   const char *sf, int sl, SymbolTable &props, MachineInstance::InstanceType kind)

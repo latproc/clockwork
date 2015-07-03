@@ -309,6 +309,7 @@ public:
     
     void setStateMachine(MachineClass *machine_class);
     bool stateExists(State &s);
+	bool hasState(const State &s) const;
     bool hasState(const std::string &state_name) const;
 	Value *lookupState(const std::string &state_name);
 	Value *lookupState(const Value &);

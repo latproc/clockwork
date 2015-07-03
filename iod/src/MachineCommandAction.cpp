@@ -76,6 +76,10 @@ std::ostream &MachineCommand::operator<<(std::ostream &out)const {
 	return out;
 }
 
+Action::Status MachineCommand::checkAction(Action *a, Action::Status stat) {
+	return stat;
+}
+
 Action::Status MachineCommand::runActions() {
     while (current_step < actions.size()) {
         Action *a = actions[current_step]->retain();
@@ -83,24 +87,23 @@ Action::Status MachineCommand::runActions() {
 		suspend();
 		DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
 		Action::Status stat = (*a)();
-        if (stat == Action::Failed) {
-            std::stringstream ss;
-            ss << " action: " << *a <<" running on " << owner->fullName() << " failed to start (" << a->error() << ")\n";
-            char *err_msg = strdup(ss.str().c_str());
-            MessageLog::instance()->add(err_msg);
+		if (stat == Action::Failed) {
+			std::stringstream ss;
+			ss << " action: " << *a <<" running on " << owner->fullName() << " failed to start (" << a->error() << ")\n";
+			char *err_msg = strdup(ss.str().c_str());
+			MessageLog::instance()->add(err_msg);
 			error_str = err_msg;
-            return Failed; // action failed to start
-        }
-        if (stat == Action::NeedsRetry) {
-            //NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
-            owner->stop(a);
-            status = Running;
-            return status; // action failed to start
-        }
-        if (!a->complete()) {
+		}
+		if (stat == Action::NeedsRetry) {
+			//NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
+			owner->stop(a);
+			status = Running;
+			return status; // action failed to start
+		}
+		if (!a->complete()) {
 			DBG_M_ACTIONS << "leaving action: " << *a << " to run for a while\n";
-            return stat; // currently running at curent_step
-        }
+			return stat; // currently running at curent_step
+		}
 		Action *x = owner->executingCommand();
 		if (x==a) {
 			DBG_M_ACTIONS << "action didn't remove itself " << *a << "\n";

@@ -93,6 +93,7 @@ public:
     const std::string &getName() const { return _name; }
 	virtual Receiver *asReceiver() { return 0; }
 	virtual bool debug() { return allow_debug; }
+	virtual bool enabled() const { return true; }
 protected:
     long id;
     static long next_id;

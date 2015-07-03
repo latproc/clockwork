@@ -890,6 +890,85 @@ Error:
 }
 \end_layout
 
+\begin_layout Standard
+In addition, certain statements add ON ERROR and ON TIMEOUT clauses that
+ can be used separately ot together.
+\end_layout
+
+\begin_layout LyX-Code
+SET machine TO state ON ERROR { ...
+ }
+\end_layout
+
+\begin_layout LyX-Code
+CALL handler ON machine ON ERROR { ...
+ }
+\end_layout
+
+\begin_layout LyX-Code
+SET machine TO state ON TIMEOUT n { ...
+ }
+\end_layout
+
+\begin_layout LyX-Code
+CALL handler ON machine ON TIMEOUT n { ...
+ }
+\end_layout
+
+\begin_layout Standard
+Errors may be generic, as above, where the one error handler will handle
+ all errors from the statement or my be specific where the error is generated
+ with the handler and caught in the ON ERROR.
+ In the following example, the handler may return different application
+ specific errors and the CALL of the handler can deal with each error with
+ a specific block.
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND handler { IF ...
+ ERROR error1; ...
+ ELSE...
+ ERROR error2; ...
+ }
+\end_layout
+
+\begin_layout LyX-Code
+CALL handler ON machine ON ERROR error1 { ....
+ } ON ERROR error2 { ...
+ }
+\end_layout
+
+\begin_layout Standard
+If necessary a handler can THROW a message and another part of the machine
+ can CATCH it
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND handler { ...; THROW error_name; ...
+ }
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+CATCH error_name { ...
+ }
+\end_layout
+
+\begin_layout Standard
+Note that statements after a THROW are not executed and the handler is deemed
+ to have failed.
+ An ON ERROR will catch a THROWn error but it will also be caught by matching
+ CATCHers.
+ The special name ALL can be used with a CATCH to catch every THROWn message:
+\end_layout
+
+\begin_layout LyX-Code
+CATCH ALL { num_errors := num_errors + 1 }
+\end_layout
+
 \begin_layout Subsection
 Support of parallel execution
 \end_layout

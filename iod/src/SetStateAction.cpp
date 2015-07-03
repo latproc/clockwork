@@ -91,6 +91,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				}
 				value = deref.sValue.c_str();
 				DBG_M_ACTIONS << owner->fullName() << " setting state of " << machine->fullName() <<" to dereferenced value " << value << "\n";
+				new_state = value.getName();
 			}
 		}
 		if (machine->io_interface) {
@@ -118,7 +119,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 //				|| machine->stateExists(value)
 //			) 
 		{
-			if (machine->getCurrent().getName() == value.getName()) {
+			if (machine->getCurrent() == value) {
 				DBG_M_ACTIONS << machine->getName() << " is already " << value << " skipping " << *this << "\n";
 				status = Complete;
 				owner->stop(this);

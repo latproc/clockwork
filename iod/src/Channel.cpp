@@ -405,6 +405,7 @@ ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt)
 	states.push_back("WAITSTART");
 	states.push_back("UPLOADING");
 	states.push_back("DOWNLOADING");
+	states.push_back("ACTIVE");
 	default_state = State("DISCONNECTED");
 	initial_state = State("DISCONNECTED");
 	disableAutomaticStateChanges();

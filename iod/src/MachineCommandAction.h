@@ -66,7 +66,8 @@ public:
     MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct);
     ~MachineCommand();
     void addAction(Action *a, ActionParameterList *params);
-    Status runActions();
+	Status checkAction(Action *a, Status stat);
+	Status runActions();
     Status run();
     Status checkComplete();
     void reset();
