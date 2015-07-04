@@ -225,10 +225,11 @@ void StableState::triggerFired(Trigger *trig) {
 	if (owner) owner->setNeedsCheck();
 }
 
-
+#if 0
+// TBD This method isn't used in the current code
 void StableState::refreshTimer() {
 	// prepare a new trigger. note: very short timers will still be scheduled
-	trigger = new Trigger("Timer");
+	trigger = new Trigger("SSRefreshTimer");
 	long trigger_time;
 
 	// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
@@ -253,7 +254,7 @@ void StableState::refreshTimer() {
 	DBG_SCHEDULER << owner->getName() << " Scheduling timer for " << timer_val*1000 << "us\n";
 	Scheduler::instance()->add(new ScheduledItem(trigger_time*1000, new FireTriggerAction(owner, trigger)));
 }
-
+#endif
 std::map<std::string, MachineInstance*> machines;
 std::map<std::string, MachineClass*> machine_classes;
 
@@ -836,7 +837,7 @@ void RateEstimatorInstance::idle() {
 		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
 			setValue("VALUE", pos);
 		if (pos != settings->last_pos || settings->velocity) {
-			Trigger *trigger = new Trigger("Timer");
+			Trigger *trigger = new Trigger("RateEstimatorTimer");
 			Scheduler::instance()->add(
 				new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
 			trigger->release();
@@ -2046,7 +2047,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 				DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
 				// prepare a new trigger. note: very short timers will still be scheduled
 				// TBD move this outside of the loop and only apply it for the earliest timer
-				s.trigger = new Trigger("Timer");
+				s.trigger = new Trigger("SSTimer");
 				Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, s.trigger)));
 			}
 			if (s.subcondition_handlers) 
@@ -2110,7 +2111,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 							if (timer_val < LONG_MAX) {
 								ch.timer_val = timer_val;
 								DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
-								ch.trigger = new Trigger("Timer");
+								ch.trigger = new Trigger("SubconditionTimer");
 								Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
 							}
 

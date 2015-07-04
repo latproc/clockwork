@@ -66,7 +66,7 @@ Action::Status WaitAction::run() {
 	else {
 		status = Running;
         if (trigger) trigger->release();
-		trigger = new Trigger("Timer");
+		trigger = new Trigger("WaitTimer");
 		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, trigger)));
 		assert(!trigger->fired());
         if (use_property) wait_time = -1; // next time, find the property value again
