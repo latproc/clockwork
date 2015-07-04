@@ -13,6 +13,7 @@ SAMPLER_CHANNEL CHANNEL {
 # The standard definition for persistence
 PERSISTENCE_CHANNEL CHANNEL {
 	OPTION host "localhost";
+	OPTION port 7901;
 	MONITORS PERSISTENT == "true";
 	PUBLISHER;
 }
@@ -20,6 +21,7 @@ PERSISTENCE_CHANNEL CHANNEL {
 # The standard modbus channel
 MODBUS_CHANNEL CHANNEL {
     OPTION HOST "localhost";
+	OPTION port 7902;
     MONITORS MACHINES WITH EXPORTS;
 	PUBLISHER;
 }

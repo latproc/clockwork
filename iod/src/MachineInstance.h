@@ -338,7 +338,7 @@ public:
 	void push(Action *new_action);
 	Action *findHandler(Message&msg, Transmitter *t, bool response_required = false);
     void enqueueAction(Action *a);
-
+	void enqueue(const Package &package);
 	State &getCurrent() { return current_state; }
 	const char *getCurrentStateString() { return current_state.getName().c_str(); }
 	

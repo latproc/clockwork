@@ -155,6 +155,7 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings)
 
 void CollectPersistentStatus(PersistentStore &store) {
     std::string initial_settings;
+	int tries = 3;
     do
     {
 		std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
@@ -170,6 +171,10 @@ void CollectPersistentStatus(PersistentStore &store) {
         else {
             sleep(1);
         }
+		if (--tries <= 0) {
+			NB_MSG << "failed to collect status, exiting to reconnect\n";
+			exit(0);
+		}
     }
     while (!done);
 }

@@ -25,7 +25,10 @@ DelayedSwitch MACHINE {
     off DEFAULT;
     on_requested STATE;
     
-	ENTER on { THROW TurningOn; SET SELF TO x; }
+	ENTER on { 
+		LOG "Throwing event 'TurningOn'";
+		THROW TurningOn; SET SELF TO x; 
+	}
     on_requested DURING turnOn {  }
     COMMAND turnOff { 
 		SET SELF TO off; 

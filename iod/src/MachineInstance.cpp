@@ -369,6 +369,11 @@ void MachineInstance::enqueueAction(Action *a){
 	busy_machines.insert(this);
 }
 
+void MachineInstance::enqueue(const Package &package) {
+	Receiver::enqueue(package);
+	setNeedsCheck();
+}
+
 bool MachineInstance::workToDo() { 
 	return !pending_events.empty() || !busy_machines.empty() || !pending_state_change.empty()
 				|| num_machines_with_work + total_machines_needing_check > 0; 

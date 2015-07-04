@@ -265,13 +265,19 @@ bool SubscriptionManager::setupConnections() {
 			exit(0);
 		}
 		channel_url = url;
-		if ( (sub_status_ == ss_init || sub_status_ == ss_sub) && monit_subs.disconnected()) {
+		if ( sub_status_ == ss_init && monit_subs.disconnected()) {
 			DBG_MSG << " connecting subscriber to " << channel_url << "\n";
 			monit_subs.setEndPoint(channel_url.c_str());
 			subscriber().connect(channel_url.c_str());
 			setSetupStatus(SubscriptionManager::e_done); //TBD is this correct? Shouldn't be here
 			sub_status_ =  (protocol == eCLOCKWORK) ? ss_sub : ss_ready;
 		}
+		//else if ( sub_status_ == ss_sub && monit_subs.disconnected()) {
+		//	DBG_MSG << " restarting to reconnect channel " << channel_url << "\n";
+		//	exit(0);
+		//}
+		else
+			int x = 1;
         return true;
     }
     return false;

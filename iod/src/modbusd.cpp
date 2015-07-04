@@ -756,22 +756,23 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
 }
 
 void CollectModbusStatus() {
-		std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
-		char *initial_settings = 0;
-		do
-		{
-				active_addresses.clear();
-				initialised_address.clear();
-				initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
-				if (initial_settings && strncasecmp(initial_settings, "ignored", strlen("ignored")) != 0)
-				{
-						loadData(initial_settings);
-						free(initial_settings);
-				}
-				else
-						sleep(2);
-		}
-		while (!initial_settings);
+	int tries = 3;
+	std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
+	char *initial_settings = 0;
+	do
+	{
+			active_addresses.clear();
+			initialised_address.clear();
+			initial_settings = g_iodcmd->sendCommand("MODBUS", "REFRESH");
+			if (initial_settings && strncasecmp(initial_settings, "ignored", strlen("ignored")) != 0)
+			{
+					loadData(initial_settings);
+					free(initial_settings);
+			}
+			else
+					sleep(2);
+	}
+	while (!initial_settings && --tries > 0);
 }
 
 ModbusServerThread *modbus_interface_thread = 0;

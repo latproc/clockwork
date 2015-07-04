@@ -129,7 +129,11 @@ sendMessage_transmit:
 				NB_MSG << "Warning: send was interrupted (EAGAIN)\n";
 				continue;
 			}
-            std::cerr << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n";
+            NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n";
+			if (errno == EFSM) {
+				// no way to recover from an FSM error at this point
+				NB_MSG << "exiting\n";
+			}
             return false;
         }
     }
