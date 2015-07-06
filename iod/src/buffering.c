@@ -14,7 +14,8 @@ struct CircularBuffer *createBuffer(int size)
     buf->back = -1;
     buf->values = (double*)malloc( sizeof(double) * size);
     buf->times = (uint64_t*)malloc( sizeof(long) * size);
-        return buf;
+	buf->total = 0;
+    return buf;
 }
 
 void destroyBuffer(struct CircularBuffer *buf) {
@@ -63,11 +64,22 @@ double rateDebug(struct CircularBuffer *buf) {
 
 double bufferAverage(struct CircularBuffer *buf) {
 	int n = length(buf);
-	return (n==0) ? n : buf->total / n;
+	return (n==0) ? n : bufferSum(buf) / n;
+}
+
+double getBufferValue(struct CircularBuffer *buf, int n) {
+	return buf->values[ (buf->front + buf->bufsize - n) % buf->bufsize];
 }
 
 double bufferSum(struct CircularBuffer *buf) {
 	return buf->total;
+	int i = length(buf);
+	double tot = 0.0;
+	while (i) {
+		i--;
+		tot = tot + getBufferValue(buf, i);
+	}
+	return tot;
 }
 
 int size(struct CircularBuffer *buf) {
@@ -77,10 +89,6 @@ int size(struct CircularBuffer *buf) {
 int length(struct CircularBuffer *buf) {
     if (buf->front == -1) return 0;
     return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
-}
-
-double getBufferValue(struct CircularBuffer *buf, int n) {
-	return buf->values[ (buf->front + buf->bufsize - n) % buf->bufsize];
 }
 
 double getTime(struct CircularBuffer *buf, int n) {
@@ -138,20 +146,33 @@ int main(int argc, const char *argv[]) {
 		++tests; if (sum(mybuf) != (6 + 7 + 8 + 9)*1.5) { fail(tests); }
 	}
 
+	/// negative numbers
+	destroyBuffer(mybuf);
+    mybuf = createBuffer(test_buffer_size);
+	long ave = average(mybuf);
+	printf("%ld\n",ave);
+	addSample(mybuf,10000,1);
+	printf("%ld\n",ave);
+	addSample(mybuf,10040,-20);
+	printf("%ld\n",ave);
+    for (i=0; i<10; ++i) addSample(mybuf, i, -1.5*i);
+    ++tests; if (rate(mybuf) != -1.5) { fail(tests); printf("unexpected rate: %lf\n", rate(mybuf)); }
+
 	i=0;
 	while (i<test_buffer_size) { addSample(mybuf, i, random()%5000); ++i; }
 	while (i<8) { addSample(mybuf, i, 0); ++i; }
-	++tests; if (bufferAverage(mybuf) != 0.0) {fail(tests);}
-	++tests; if (bufferSum(mybuf) != 0.0) {fail(tests);}
+	++tests; if (bufferAverage(mybuf) != 0.0) {fail(tests); printf("unexpected average: %lf\n", average(mybuf));}
+	++tests; if (bufferSum(mybuf) != 0.0) {fail(tests); printf("unexpected sum: %lf\n", bufferSum(mybuf));}
 	printf("tests:\t%d\nfailures:\t%d\n", tests, failures );
 
 	destroyBuffer(mybuf);
 
+	return 0;
 	/* 
 		generate a sign curve and calculate the slope using
 		the rate() and slope() functions for comparison purposes
 	*/
-    mybuf = createBuffer(3);
+    mybuf = createBuffer(4);
 	for (i=0; i<70; i++) {
 		double x = i/4.0;
 		double y = sin( x );
