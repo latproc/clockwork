@@ -186,6 +186,7 @@ Action::Status Channel::setState(State &new_state, bool resume) {
 	}
 	if (new_state == ChannelImplementation::CONNECTED) {
 		DBG_MSG << name << " CONNECTED\n";
+		enableShadows();
 		setNeedsCheck();
 		if (isClient()) {
 			SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
@@ -194,6 +195,7 @@ Action::Status Channel::setState(State &new_state, bool resume) {
 	}
 	else if (new_state == ChannelImplementation::WAITSTART) {
 		DBG_MSG << name << " WAITSTART\n";
+		enableShadows();
 	}
 	else if (new_state == ChannelImplementation::UPLOADING) {
 		DBG_MSG << name << " UPLOADING\n";
@@ -302,6 +304,8 @@ void Channel::addConnection() {
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			else {
+				SetStateActionTemplate ssat_connected(CStringHolder("SELF"), "CONNECTED" );
+				enqueueAction(ssat_connected.factory(this)); // execute this state change once all other actions are complete
 				SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
@@ -893,7 +897,7 @@ void ChannelDefinition::instantiateInterfaces() {
 Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
     assert(defn);
     char channel_name[100];
-    snprintf(channel_name, 100, "%s:%d", defn->name.c_str(), port);
+    snprintf(channel_name, 100, "%s_%d", defn->name.c_str(), port);
     Channel *chn = new Channel(channel_name, defn->name);
 
     chn->setPort(port);

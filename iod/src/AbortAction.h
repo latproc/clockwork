@@ -29,7 +29,7 @@ class MachineInstance;
 // Abort is a special action that is used within a Command list to stop further execution
 
 struct AbortActionTemplate : public ActionTemplate {
-	AbortActionTemplate(bool failed = true) { }
+	AbortActionTemplate(bool failed = true) : abort_fail(failed) { }
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
        return out << "Abort(failure=" << abort_fail <<") action template\n";

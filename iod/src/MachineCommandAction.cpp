@@ -45,9 +45,9 @@ MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
         actions.push_back(t->factory(mi));
 
 		// A THROW is implemented as a SendMessage with no destination, followed by an abort
-		// we insert the abort here.
+		// we insert the abort here if necessary.
 		SendMessageAction *sma = dynamic_cast<SendMessageAction*>(t);
-		if (sma) {
+		if (sma && sma->target == SymbolTable::Null) {
 			AbortActionTemplate aa;
 			actions.push_back(aa.factory(mi));
 		}

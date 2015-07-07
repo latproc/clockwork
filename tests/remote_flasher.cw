@@ -33,3 +33,12 @@ FlasherChannel CHANNEL {
 # The FlasherChannel updates two machines that happen to both
 # use the same interface but note that the machines themselves
 # can be instantiated at either end of the channel
+
+
+channels LIST PERSISTENCE_CHANNEL_7901;
+ChannelCheck MACHINE connections {
+  on WHEN ALL connections ARE ACTIVE;
+  off DEFAULT;
+}
+connection_check ChannelCheck channels;
+
