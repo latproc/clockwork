@@ -86,10 +86,12 @@ struct PIDData {
 	long *fwd_tolerance;
 	long *fwd_stopping_dist;
 	long *fwd_ramp_time;
+	long *fwd_stopping_time;
 
 	long *rev_tolerance;
 	long *rev_stopping_dist;
 	long *rev_ramp_time;
+	long *rev_stopping_time;
 
 	/* statistics/debug */
 	long *stop_error;
@@ -225,10 +227,13 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "fwd_settings.StoppingDistance", &data->fwd_stopping_dist);
 		ok = ok && getInt(scope, "fwd_settings.RampTime", &data->fwd_ramp_time);
 		ok = ok && getInt(scope, "fwd_settings.PowerOffset", &data->fwd_start_power);
+		ok = ok && getInt(scope, "fwd_settings.stopping_time", &data->fwd_stopping_time);
+
 		ok = ok && getInt(scope, "rev_settings.tolerance", &data->rev_tolerance);
 		ok = ok && getInt(scope, "rev_settings.StoppingDistance", &data->rev_stopping_dist);
 		ok = ok && getInt(scope, "rev_settings.RampTime", &data->rev_ramp_time);
 		ok = ok && getInt(scope, "rev_settings.PowerOffset", &data->rev_start_power);
+		ok = ok && getInt(scope, "rev_settings.stopping_time", &data->rev_stopping_time);
 
 		if ( getInt(scope, "fwd_settings.Kp", &data->Kpf_long) ) {
 			data->use_Kpidf = 1;
@@ -686,12 +691,24 @@ int poll_actions(void *scope) {
 					printf("%s rampup ratio: %5.3f\n", data->conveyor_name, ramp_up_ratio);
 		}
 
+		// calculate ramp-down adjustments
 		if (new_state == cs_position) {
 			/* adjust the set point to cater for whether we are close to the stop position */
-			double stopping_time = (double)*data->stopping_time / 1000.0; /* secs */
+			double stopping_time = (double) *data->stopping_time / 1000.0;
+			if (*data->stop_position >= *data->position && data->fwd_stopping_time) {
+				if (data->debug && *data->debug) printf("using forward stopping time\n");
+				stopping_time = *data->fwd_stopping_time / 1000.0;
+			}
+			else if (*data->stop_position < *data->position && data->rev_stopping_time) {
+				if (data->debug && *data->debug) printf("using reverse stopping time\n");
+				stopping_time = *data->rev_stopping_time / 1000.0;
+			}
+		
 			
 			/* stopping distance at vel v with an even ramp is s=vt/2 */
 			double ramp_dist = fabs(*data->estimated_speed * stopping_time);
+			if (data->debug && *data->debug) 
+				printf("stopping_time: %8.3lf, ramp_dist: %8.3lf\n", stopping_time, ramp_dist);
 			if ( data->ramp_down_start == 0 && fabs(*data->stop_position - *data->position) < ramp_dist) {
 				data->ramp_down_start = now_t;
 				if (data->debug && *data->debug) 
@@ -713,7 +730,8 @@ int poll_actions(void *scope) {
 				if (data->debug && *data->debug) printf("%s fixing direction: %5.3f\n", data->conveyor_name, set_point);
 			}
 			if (data->overshot) set_point = 0;
-			if (data->debug && *data->debug) printf("%s approaching %s, ratio = %5.2f (%ld) set_point: %5.2f\n", data->conveyor_name, 
+			if (data->debug && *data->debug) 
+				printf("%s approaching %s, ratio = %5.2f (%ld) set_point: %5.2f\n", data->conveyor_name, 
 					( sign(dist_to_stop) >= 0) ? "fwd" : "rev", ramp_down_ratio, dist_to_stop, set_point);
 		}
 		// if no ramp down was applied but we are within the ramp up time, apply the ramp up
@@ -722,6 +740,8 @@ int poll_actions(void *scope) {
 
 	
 		if (data->state == cs_speed) {
+			if (data->debug && *data->debug) 
+					printf("%s (speed) next position (%ld)", data->conveyor_name, next_position);
 			next_position = data->last_position + set_point;
 		}
 		else if (data->state == cs_position) {
@@ -729,13 +749,48 @@ int poll_actions(void *scope) {
 				next_position = *data->stop_position;
 			else if (fabs(dist_to_stop) > fabs(set_point) && sign(dist_to_stop) == sign(set_point))
 				next_position = data->last_position + set_point;
-			else 
-				next_position = *data->stop_position;
+			else if (sign(dist_to_stop) == sign(set_point) ) {
 
-#if 1
+
+				next_position = data->last_position + set_point;
+				if (sign( *data->stop_position - next_position) != sign( *data->stop_position - data->last_position) ) {
+					double d1 = fabs(*data->stop_position - next_position);
+					double d2 = fabs(*data->stop_position - data->last_position);
+					if (d1 > d2) {
+						double ratio = d2/d1;
+						next_position = *data->stop_position + set_point * ratio;
+					}
+				}
+
+#if 0
+				//next_position = *data->stop_position;
+				if (ramp_down_ratio<0.05) {
+					next_position = *data->stop_position;
+					printf("adjust next_position to be the stop position\n");
+				}
+				else if (ramp_down_ratio <1.0) {
+					//if (data->debug && *data->debug) 
+					printf("adjusting positional error by %lf%%\n", ramp_down_ratio);
+					double ratio = ramp_down_ratio;
+					if (ratio<0.15) ratio = 0.15;
+					next_position = (next_position - data->last_position) * ramp_down_ratio;
+				}
+#endif
+			}
+
+#if 0
+			// check if continuing at this speed is likely to take us past the stop position
+			// adjust our required position if necessary
 			if ( fabs(next_position - *data->stop_position) > fabs(dist_to_stop) ) {
-				if (data->debug && *data->debug) printf("%s calculation yields worse position (%ld)", data->conveyor_name, next_position);
-				next_position = *data->stop_position;
+				if (data->debug && *data->debug) 
+					printf("%s calculation yields worse position (%ld)", data->conveyor_name, next_position);
+				if (ramp_down_ratio<0.05)
+					next_position = *data->stop_position;
+				else if (ramp_down_ratio <1.0) {
+					if (data->debug && *data->debug) 
+						printf("adjusting positional error by %lf%%\n", ramp_down_ratio);
+					next_position = (next_position - data->last_position) * ramp_down_ratio;
+				}
 			}
 #endif
 		}
