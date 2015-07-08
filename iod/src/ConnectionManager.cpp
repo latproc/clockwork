@@ -318,6 +318,9 @@ bool SubscriptionManager::checkConnections() {
         usleep(50000);
         return false;
 	}
+	if (monit_setup && !monit_setup->disconnected())
+		setSetupStatus(SubscriptionManager::e_done);
+
     return true;
 }
 
