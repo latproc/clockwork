@@ -61,6 +61,10 @@ enum State {
 
 struct PIDData {
 	enum State state;
+#ifdef USE_MEASURED_PERIOD
+	struct CircularBuffer *psamples;
+  long *grab_period;
+#endif
 	struct CircularBuffer *samples;
 	struct CircularBuffer *fwd_power_offsets;
 	struct CircularBuffer *rev_power_offsets;
@@ -199,9 +203,13 @@ int check_states(void *scope)
 			if (!data->conveyor_name) data->conveyor_name = strdup("UNKNOWN CONVEYOR");
 		}
 
+		data->psamples = createBuffer(5);
 		data->samples = createBuffer(3);
 		data->fwd_power_offsets = createBuffer(8);
 		data->rev_power_offsets = createBuffer(8);
+#ifdef USE_MEASURED_PERIOD
+		ok = ok && getInt(scope, "IA_GrabConveyorPeriod.VALUE", &data->grab_period);
+#endif
 		ok = ok && getInt(scope, "SetPoint", &data->set_point);
 		ok = ok && getInt(scope, "StopMarker", &data->mark_position);
 		ok = ok && getInt(scope, "StopPosition", &data->stop_position);
@@ -392,7 +400,18 @@ int poll_actions(void *scope) {
 /*	if (data->debug && *data->debug)
 		speed = 1000000 * rateDebug(data->samples); 
 	else
-*/		speed = 1000000 * rate(data->samples); 
+*/
+	speed = 1000000 * rate(data->samples);
+
+#ifdef USE_MEASURED_PERIOD
+  long pspeed = 0;
+	addSample(data->psamples, now_t, *data->grab_period); 
+	long pp = bufferAverage(data->psamples);
+  if (data->grab_period && pp) 
+	  pspeed = 4000 * 10000 / pp;
+	else 
+		pspeed = 0;
+#endif
 	setIntValue(scope, "Velocity", speed);
 	setIntValue(scope, "Position", *data->position);
 	/*if (data->debug && *data->debug) printf("%s estimated speed: %ld\n", data->conveyor_name, speed);*/
@@ -740,9 +759,9 @@ int poll_actions(void *scope) {
 
 	
 		if (data->state == cs_speed) {
+			next_position = data->last_position + set_point;
 			if (data->debug && *data->debug) 
 					printf("%s (speed) next position (%ld)", data->conveyor_name, next_position);
-			next_position = data->last_position + set_point;
 		}
 		else if (data->state == cs_position) {
 			if (data->overshot)
@@ -800,6 +819,7 @@ int poll_actions(void *scope) {
 			next_position = *data->position;
 		}
 
+		//double Ep = next_position - data->last_position - (*data->position - data->last_position) / dt;
 		double Ep = next_position - *data->position;
 		
 /*
@@ -896,7 +916,8 @@ done_polling_actions:
 	OPTION Velocity 0;            # estimated current velocity 
 	OPTION StopError 0;
 	OPTION Position 0;
-	
+
+
 	# This module uses the restore state to give the machine 
 	# somewhere to go once the driver is no longer interlocked. 
 	# Since we are not using stable states for stopped, seeking etc we 
