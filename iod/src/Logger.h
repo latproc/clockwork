@@ -75,6 +75,7 @@ public:
     void setLevel(std::string level_name);
     std::ostream&log(Level l);
     void setOutputStream(std::ostream *out) { log_stream = out; }
+	static void getTimeString(char *buf, size_t buf_size);
 private:
 	Logger();
 	static Logger *logger_instance;

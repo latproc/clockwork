@@ -3,6 +3,7 @@
 #include <sstream>
 #include <functional>
 #include <algorithm>
+#include "Logger.h"
 
 unsigned int MessageLog::max_memory = 1024*1024;
 MessageLog * MessageLog::instance_ = 0;
@@ -18,8 +19,13 @@ MessageLog *MessageLog::instance() {
 }
 
 void MessageLog::add(const char *text) {
-    boost::mutex::scoped_lock lock(mutex_);
-    size_t extra = strlen(text) + 1 + sizeof(LogEntry);
+	size_t len = 50 + strlen(text);
+	char buf[len];
+	Logger::getTimeString(buf, 50);
+
+	boost::mutex::scoped_lock lock(mutex_);
+	strncat(buf, text, 50);
+    size_t extra = strlen(buf) + 1 + sizeof(LogEntry);
     std::list<LogEntry*>::iterator iter = entries.begin();
     while (iter != entries.end()  && current_memory + extra > max_memory) {
         LogEntry *e = *iter;
@@ -27,7 +33,7 @@ void MessageLog::add(const char *text) {
         iter = entries.erase(iter);
         delete e;
     }
-    entries.push_back(new LogEntry(text));
+    entries.push_back(new LogEntry(buf));
     current_memory += extra;
 }
 
