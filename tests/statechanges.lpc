@@ -27,11 +27,13 @@ DelayedSwitch MACHINE {
     
 	ENTER on { 
 		LOG "Throwing event 'TurningOn'";
-		THROW TurningOn; SET SELF TO x; 
+		THROW TurningOn; 
+		SET SELF TO x; 
 	}
     on_requested DURING turnOn {  }
     COMMAND turnOff { 
-		SET SELF TO off; 
+		NewState := "off";
+		SET SELF TO NewState; 
 		LOG "turned off";
 		RETURN;
 		LOG "Should not see this";

@@ -24,7 +24,7 @@ void MessageLog::add(const char *text) {
 	Logger::getTimeString(buf, 50);
 
 	boost::mutex::scoped_lock lock(mutex_);
-	strncat(buf, text, 50);
+	strncat(buf, text,  len);
     size_t extra = strlen(buf) + 1 + sizeof(LogEntry);
     std::list<LogEntry*>::iterator iter = entries.begin();
     while (iter != entries.end()  && current_memory + extra > max_memory) {
