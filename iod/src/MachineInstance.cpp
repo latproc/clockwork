@@ -1912,11 +1912,16 @@ void MachineInstance::forceStableStateCheck() {
 Action::Status MachineInstance::setState(State &new_state, bool resume) {
 
 	if (!hasState(new_state)) {
-		char buf[150];
-		snprintf(buf, 150, "Error: unknown state: '%s' on %s", new_state.getName().c_str(), _name.c_str());
-		MessageLog::instance()->add(buf);
-		DBG_MSG << buf << "\n";
-		return Action::Failed;
+		Value &s = getValue(new_state.getName().c_str());
+		State propertyState(s.asString().c_str());
+		if (!hasState(propertyState)) {
+			char buf[150];
+			snprintf(buf, 150, "Error: unknown state: '%s' on %s", new_state.getName().c_str(), _name.c_str());
+			MessageLog::instance()->add(buf);
+			DBG_MSG << buf << "\n";
+			return Action::Failed;
+		}
+		return setState(propertyState);
 	}
 	Action::Status stat = Action::Complete;
 	// update the Modbus interface for self 
