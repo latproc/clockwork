@@ -408,19 +408,36 @@ bool IODCommandResume::run(std::vector<Value> &params) {
          */
 	}
 
-    bool IODCommandList::run(std::vector<Value> &params) {
-        std::ostringstream ss;
-        std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
-        while (iter != machines.end()) {
-            MachineInstance *m = (*iter).second;
-            ss << (m->getName()) << " " << m->_type;
-            if (m->_type == "POINT") ss << " " << m->properties.lookup("tab");
-            ss << "\n";
-            iter++;
-        }
-        result_str = ss.str();
-        return true;
-    }
+bool IODCommandList::run(std::vector<Value> &params) {
+	std::ostringstream ss;
+	std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
+	while (iter != machines.end()) {
+		MachineInstance *m = (*iter).second;
+		ss << (m->getName()) << " " << m->_type;
+		if (m->_type == "POINT") ss << " " << m->properties.lookup("tab");
+		ss << "\n";
+		iter++;
+	}
+	result_str = ss.str();
+	return true;
+}
+
+bool IODCommandFind::run(std::vector<Value> &params) {
+	std::ostringstream ss;
+	std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
+	while (iter != machines.end()) {
+		MachineInstance *m = (*iter).second;
+		if (m->getName().find(params[1].asString()) != std::string::npos) {
+			ss << (m->getName()) << " " << m->_type << "\n";
+		}
+		else if (m->getStateMachine() && m->getStateMachine()->name.find(params[1].asString()) != std::string::npos) {
+			ss << (m->getName()) << " " << m->_type << "\n";
+		}
+		iter++;
+	}
+	result_str = ss.str();
+	return true;
+}
 
 std::set<std::string> IODCommandListJSON::no_display;
 

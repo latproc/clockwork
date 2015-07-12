@@ -261,6 +261,7 @@ void initialise_commands() {
     commands.push_back("DESCRIBE");
     commands.push_back("DISABLE");
     commands.push_back("ENABLE");
+	commands.push_back("FIND");
     commands.push_back("GET");
     commands.push_back("HELP");
 	commands.push_back("INFO");

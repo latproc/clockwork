@@ -162,4 +162,9 @@ struct IODCommandNotice : public IODCommand {
 };
 
 
+struct IODCommandFind : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
+
 #endif

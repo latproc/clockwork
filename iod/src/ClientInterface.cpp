@@ -293,6 +293,9 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "SCHEDULER") {
 		command = new IODCommandSchedulerState;
 	}
+	else if (count == 2 && ds == "FIND") {
+		command = new IODCommandFind;
+	}
 	else if (ds == "NOTICE") {
 		command = new IODCommandNotice;
 	}
