@@ -56,6 +56,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 	assert(pgn_rc == 0);
 
 	response_len = 0;
+	int retries = 5;
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
@@ -77,6 +78,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 		}
 		catch (zmq::error_t e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			if (--retries == 0) { exit(EXIT_FAILURE); }
 			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
 				if (block) continue;
 			}
@@ -91,6 +93,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
+	int retries = 5;
 	while (!MessagingInterface::aborted()) {
 		try {
 			//NB_MSG << tnam << " safeSend() sending " << buf << "\n";
@@ -98,7 +101,15 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 			break;
 		}
 		catch (zmq::error_t) {
-			if (zmq_errno() == EINTR) continue;
+			if (zmq_errno() == EINTR) {
+				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				if (--retries == 0) { std::cerr << "exiting\n"; exit(EXIT_FAILURE); }
+				usleep(10);
+				continue;
+			} else {
+				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				usleep(10);
+			}
 			throw;
 		}
 	}
