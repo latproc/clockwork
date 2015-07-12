@@ -276,8 +276,6 @@ bool SubscriptionManager::setupConnections() {
 		//	DBG_MSG << " restarting to reconnect channel " << channel_url << "\n";
 		//	exit(0);
 		//}
-		else
-			int x = 1;
         return true;
     }
     return false;
