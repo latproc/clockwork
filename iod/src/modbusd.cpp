@@ -907,7 +907,10 @@ int main(int argc, const char * argv[])
 								std::cout << "resuming modbus\n";
 								modbus_interface.resume();
 						}
-						if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+						if ( !(items[1].revents & ZMQ_POLLIN) ) {
+							usleep(50);
+							continue;
+						}
 
 						zmq::message_t update;
 						if (!subscription_manager.subscriber().recv(&update)) continue;
