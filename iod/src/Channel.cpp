@@ -626,7 +626,7 @@ void Channel::operator()() {
 	size_t start_len = cmd_server->recv(start_cmd, 20);
 	if (!start_len) { NB_MSG << name << " error getting start message\n"; }
 	cmd_server->send("ok", 2);
-	zmq::pollitem_t *items;
+	zmq::pollitem_t *items = 0;
 	DBG_MSG << "channel " << name << " thread received start message\n";
 
 	//SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
@@ -646,6 +646,7 @@ void Channel::operator()() {
 					num_poll_items = 2;
 					subscriber_idx = 0;
 				}
+				if (items) delete items;
 				items = new zmq::pollitem_t[num_poll_items];
 				int idx = communications_manager->configurePoll(items);
 				assert(idx < num_poll_items);

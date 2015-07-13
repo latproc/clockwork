@@ -123,7 +123,6 @@ SymbolTable::SymbolTable() {
         reserved->insert("PERSISTENT");
         reserved->insert("tab");
         reserved->insert("STATE");
-        reserved->insert("PERSISTENT");
     }
 }
 

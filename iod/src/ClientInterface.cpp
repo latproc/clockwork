@@ -185,6 +185,8 @@ IODCommand *parseCommandString(const char *data) {
 				const Value &v  = *iter++;
 				params.push_back(v);
 			}
+			param_list->clear();
+			delete param_list;
 		}
 		count = params.size();
 	}

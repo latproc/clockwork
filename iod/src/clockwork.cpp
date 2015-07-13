@@ -375,8 +375,6 @@ void predefine_special_machines() {
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
 	mc_constant->options["VALUE"] = "VAL_PARAM1";
 
-	mc_constant->properties.add("PERSISTENT", Value("true", Value::t_string), SymbolTable::ST_REPLACE);
-
 	MachineClass *mc_external = new MachineClass("EXTERNAL");
 	mc_external->options["HOST"] = "localhost";
 	mc_external->options["PORT"] = 5600;
