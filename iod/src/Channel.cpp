@@ -758,7 +758,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 	char cmd_socket_name[100];
 	snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
-	char *pos = pos = strchr(cmd_socket_name, ':')+1;
+	char *pos = strchr(cmd_socket_name, ':')+1;
 	while ( (pos = strchr(pos, ':'))  ) *pos = '-';
 
 	if (client_endpoint) {
