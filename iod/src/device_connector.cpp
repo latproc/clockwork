@@ -55,6 +55,8 @@
 #include "ConnectionManager.h"
 #include "CommandManager.h"
 
+bool debug = false;
+
 class DeviceStatus {
 public:
     enum State {e_unknown, e_disconnected, e_connected, e_up, e_failed, e_timeout };
@@ -466,7 +468,7 @@ struct MatchFunction {
     static MatchFunction *instance() { if (!instance_) instance_ = new MatchFunction; return instance_; }
     static int match_func(const char *match, int index, void *data)
     {
-        //std::cout << "match: " << index << " " << match << "\n";
+        if (debug)std::cout << "match: " << index << " " << match << "\n";
         if (data && index == 0) {
             size_t *n = (size_t*)data;
             *n += strlen(match);
@@ -489,7 +491,7 @@ struct MatchFunction {
                         if (msg) {
                             if (!instance_) { MatchFunction::instance(); usleep(50); }
                             std::string response;
-							//std::cout << "sending: " << msg << "\n";
+							if(debug)std::cout << "sending: " << msg << "\n";
                             if (sendMessage(msg, MatchFunction::instance()->iod_interface, response)) {
                                 last_message = msg;
                                 last_send.tv_sec = now.tv_sec;
@@ -513,7 +515,7 @@ struct MatchFunction {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->machine(), Options::instance()->property(), res.c_str());
                     if (cmd) {
                         std::string response;
-												//std::cout << "sending: " << cmd << "\n";
+										if(debug)std::cout << "sending: " << cmd << "\n";
                         if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
@@ -698,20 +700,20 @@ struct ConnectionThread {
                         offset = 0;
                         each_match(Options::instance()->regexpInfo(), buf, &offset, &MatchFunction::match_func, 0);
                         size_t len = strlen(buf);
-#if 0
-                        std::cout << "buf: ";
-                        for (int i=0; i<=len; ++i) {
-                            std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)buf[i] << " ";
-                        }
-                        std::cout << "\n";
-                        std::cout << "     ";
-                        
-                        for (int i=0; i<offset; ++i) {
-                            std::cout << std::hex << "   ";
-                        }
-                        std::cout << "^\n";
-						std::cout << "offset: " << offset << "\n";
-#endif
+												if (debug) {
+	                        std::cout << "buf: ";
+	                        for (int i=0; i<=len; ++i) {
+	                            std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)buf[i] << " ";
+	                        }
+	                        std::cout << "\n";
+	                        std::cout << "     ";
+	                        
+	                        for (int i=0; i<offset; ++i) {
+	                            std::cout << std::hex << "   ";
+	                        }
+	                        std::cout << "^\n";
+													std::cout << "offset: " << offset << "\n";
+												}
                         if (offset)  {
                             memmove(buf, buf+offset, len+1-offset);
                         }
@@ -833,17 +835,24 @@ static void finish(int sig)
     done = true;
 }
 
+static void toggle_debug(int sig)
+{
+	debug = !debug;
+}
+
 bool setup_signals()
 {
-    struct sigaction sa;
-    sa.sa_handler = finish;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) {
-				done = true;
-        return false;
-    }
-    return true;
+	struct sigaction sa;
+	sa.sa_handler = finish;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) { done = true; return false; }
+
+	sa.sa_handler = toggle_debug;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if (sigaction(SIGUSR1, &sa, 0) ) { done = true; return false; }
+	return true;
 }
 
 class PropertyStatus {
@@ -1039,7 +1048,7 @@ int main(int argc, const char * argv[])
                             prop = prop + "." + params->at(1).asString();
                             if (prop == options.watchProperty()) {
                                 connection_thread.send(params->at(2).asString().c_str());
-                                std::cout << "sending: " << params->at(2).asString().c_str() << "\n";
+                                if (debug)std::cout << "sending: " << params->at(2).asString().c_str() << "\n";
 
                             }
                         }
