@@ -68,6 +68,7 @@ const char *local_commands = "inproc://local_cmds";
 enum ProgramState { s_initialising, s_running, s_finished } program_state = s_initialising;
 
 int debug = 0;
+int saved_debug = 0;
 
 const int MemSize = 65536;
 const int COILS 	= 1;
@@ -263,7 +264,7 @@ struct ModbusServerThread
 								modbus_mapping = modbus_mapping_new(10000, 10000, 10000, 10000);
 								modbus_state = ms_paused;
 						}
-						if (modbus_state == ms_paused) { usleep(100000); continue; }
+						if (modbus_state == ms_paused) { std::cout << "modbus paused\n"; usleep(100000); continue; }
 						if (modbus_state == ms_starting || modbus_state == ms_resuming) {
 								std::cout << "starting modbus_tcp_listen\n";
 								socket = modbus_tcp_listen(modbus_context, 3);
@@ -292,7 +293,7 @@ struct ModbusServerThread
 								usleep(100);
 								continue; // TBD
 						}
-						if (nfds == 0) continue;
+						if (nfds == 0) { if (debug) std::cout << "idle\n"; continue; }
 						for (int conn = 0; conn <= max_fd; ++conn)
 						{
 								if (!FD_ISSET(conn, &activity)) continue;
@@ -485,7 +486,7 @@ struct ModbusServerThread
 														int num_regs = query_backup[function_code_offset+5];
 														if (DEBUG_VERBOSE_TOPLC)
 																if (DEBUG_BASIC) std::cout << timestamp << " connection " << conn
-																		<< " num regs: " << num_regs << " got register " << addr << "\n";
+																		<< " code: " << fc << " num regs: " << num_regs << " got register " << addr << "\n";
 												}
 												else if (fc == 15 || fc == 16)
 												{
@@ -705,7 +706,17 @@ static void finish(int sig)
 		sa.sa_flags = 0;
 		sigaction(SIGTERM, &sa, 0);
 		sigaction(SIGINT, &sa, 0);
+		sigaction(SIGUSR1, &sa, 0);
 		program_state = s_finished;
+}
+
+static void toggle_debug(int sig)
+{
+	if (debug && debug != saved_debug) saved_debug = debug;
+	if (debug) debug = 0; else {
+		if (saved_debug==0) saved_debug = NOTLIB ^ VERBOSE_TOPLC;
+		debug = saved_debug;
+	}
 }
 
 bool setup_signals()
@@ -714,10 +725,11 @@ bool setup_signals()
 		sa.sa_handler = finish;
 		sigemptyset(&sa.sa_mask);
 		sa.sa_flags = 0;
-		if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0))
-		{
-				return false;
-		}
+		if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) { return false; }
+		sa.sa_handler = toggle_debug;
+		sigemptyset(&sa.sa_mask);
+		sa.sa_flags = 0;
+		if (sigaction(SIGUSR1, &sa, 0) ) { return false; }
 		return true;
 }
 
@@ -920,14 +932,13 @@ int main(int argc, const char * argv[])
 						data[len] = 0;
 						if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
 
-						size_t count = 0;
 						std::vector<Value> params(0);
-						count = parseIncomingMessage(data, params);
+						size_t count = parseIncomingMessage(data, params);
 						std::string cmd(params[0].asString());
 						free(data);
 						data = 0;
 
-						if (cmd == "UPDATE")
+						if (cmd == "UPDATE" && count>= 6)
 						{
 								int group, addr, len;
 								std::string name;
