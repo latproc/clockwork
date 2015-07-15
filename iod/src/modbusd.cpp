@@ -245,27 +245,32 @@ struct ModbusServerThread
 	{
 		std::cout << "------------------ Modbus Server Thread Started -----------------\n" << std::flush;
 
+		int function_code_offset = 0; //modbus_get_header_length(modbus_context);
 
-		if ( LogState::instance()->includes(DebugExtra::instance()->DEBUG_MODBUS) )
-			modbus_set_debug(modbus_context, TRUE);
-
-		int function_code_offset = modbus_get_header_length(modbus_context);
-
+		int paused_counter = 0;
 		while (modbus_state != ms_finished)
 		{
 			if (modbus_state == ms_pausing) {
 				std::cout << "pausing modbus: cleaning old..\n";
-				if (modbus_mapping) modbus_mapping_free(modbus_mapping);
+				//if (modbus_mapping) modbus_mapping_free(modbus_mapping);
 				if (modbus_context) modbus_free(modbus_context);
 				modbus_context = 0;
 
-				std::cout << "pausing modbus: making new..\n";
-				modbus_context = modbus_new_tcp("0.0.0.0", 1502);
-				modbus_mapping = modbus_mapping_new(10000, 10000, 10000, 10000);
 				modbus_state = ms_paused;
+				paused_counter = 0;
 			}
-			if (modbus_state == ms_paused) { std::cout << "modbus paused\n"; usleep(100000); continue; }
+			if (modbus_state == ms_paused) { if (debug) std::cout << "modbus paused\n"; usleep(100000); continue; }
+			else paused_counter = 0;
 			if (modbus_state == ms_starting || modbus_state == ms_resuming) {
+				if (!modbus_context) modbus_context = modbus_new_tcp("0.0.0.0", 1502);
+
+				function_code_offset = modbus_get_header_length(modbus_context);
+
+				if ( LogState::instance()->includes(DebugExtra::instance()->DEBUG_MODBUS) )
+					modbus_set_debug(modbus_context, TRUE);
+				else
+					modbus_set_debug(modbus_context, FALSE);
+
 				std::cout << "starting modbus_tcp_listen\n";
 				socket = modbus_tcp_listen(modbus_context, 3);
 				std::cout << "finished modbus_tcp_listen " << socket << "\n";
@@ -585,6 +590,8 @@ struct ModbusServerThread
 		shutdown(socket, SHUT_RDWR);
 		close(socket);
 		std::cout << "closed listening socket\n";
+		modbus_free(modbus_context);
+		modbus_context = 0;
 
 		std::list<int>::iterator iter = connection_list.begin();
 		while (iter != connection_list.end()) {
@@ -865,13 +872,7 @@ int main(int argc, const char * argv[])
 
 	std::cout << "-------- Starting Modbus Interface ---------\n" << std::flush;
 
-
-	modbus_context = modbus_new_tcp("0.0.0.0", 1502);
-	if (!modbus_context)
-	{
-		std::cerr << "Error creating a libmodbus TCP interface\n";
-		return 1;
-	}
+	bool modbus_started = false;
 	ModbusServerThread modbus_interface;
 	modbus_interface_thread = &modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
@@ -917,6 +918,16 @@ int main(int argc, const char * argv[])
 				CollectModbusStatus();
 				need_refresh = false;
 				std::cout << "resuming modbus\n";
+#if 0
+				if (!modbus_context) {
+					modbus_context = modbus_new_tcp("0.0.0.0", 1502);
+					if (!modbus_context)
+					{
+						std::cerr << "Error creating a libmodbus TCP interface\n";
+						return 1;
+					}
+				}
+#endif
 				modbus_interface.resume();
 			}
 			if ( !(items[1].revents & ZMQ_POLLIN) ) {
