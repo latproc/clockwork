@@ -2430,6 +2430,8 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		return Action::Failed;
 	}
 
+	setNeedsCheck();
+
 	std::string event_name(m.getText());
 	if (from && event_name.find('.') == std::string::npos)
 		event_name = from->getName() + "." + m.getText();
