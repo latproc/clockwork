@@ -37,7 +37,9 @@ std::map<int, Fl_Widget *> inputs;
 
 bool auto_mode = false;
 
+/* Clockwork interface */
 
+/* Send a message using ZMQ */
 void sendMessage(zmq::socket_t &socket, const char *message) {
     const char *msg = (message) ? message : "";
     size_t len = strlen(msg);
@@ -107,6 +109,8 @@ public:
 
 };
 
+/* Modbus interface */
+
 class ModbusClientThread{
 
 public:
@@ -120,11 +124,14 @@ public:
 
 	bool finished;
 	bool connected;
+	
+	std::string host;
+	int port;
 
-	ModbusClientThread(const char *host, int port) : ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
+	ModbusClientThread(const char *hostname, int portnum) : ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
 			tab_rq_registers(0), tab_rw_rq_registers(0), 
-			tab_rp_registers(0), finished(false), connected(false) {
-    ctx = modbus_new_tcp(host, port);
+			tab_rp_registers(0), finished(false), connected(false), host(hostname), port(portnum) {
+    ctx = modbus_new_tcp(host.c_str(), port);
 
 	/* Save original timeout */
 	unsigned int sec, usec;
@@ -184,6 +191,7 @@ public:
 void operator()() {
 	while (!finished) {
 		if (!connected) {
+			if (!ctx) ctx = modbus_new_tcp(host.c_str(), port);
 		    if (modbus_connect(ctx) == -1) {
 		        fprintf(stderr, "Connection failed: %s\n",
 		                modbus_strerror(errno));
