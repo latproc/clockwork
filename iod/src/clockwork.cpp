@@ -961,7 +961,7 @@ void initialise_machines() {
 			|| mi->_type == "CONDITION"
             || mi->_type == "COUNTERRATE"
             || mi->_type == "RATEESTIMATOR"
-            || mi->getStateMachine()->plugin
+            || (mi->getStateMachine() && mi->getStateMachine()->plugin )
 			|| mi->isActive() // constructor marked this machine type as active
             ) {
             mi->markActive();

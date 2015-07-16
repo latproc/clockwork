@@ -544,7 +544,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 		goto cache_local_name;
 	}
 	else if (seek_machine_name == "OWNER" ) {
-		if (owner) found = owner;
+		if (owner) found = owner; else found = this;
 		goto cache_local_name;
 	}
 	for (unsigned int i=0; i<locals.size(); ++i) {
@@ -3345,7 +3345,7 @@ Value *MachineInstance::resolve(std::string property) {
 		}
 		else {
 			resetTemporaryStringStream();
-			ss << fullName() << " could not find machine named " << name << " for property " << property;
+			ss << fullName() << " resolve() could not find machine named " << name << " for property " << property;
 			error_messages.push_back(ss.str());
 			++num_errors;
 			DBG_MSG << ss.str() << "\n";
@@ -3497,7 +3497,7 @@ Value &MachineInstance::getValue(std::string property) {
 		}
 		else {
 			resetTemporaryStringStream();
-			ss << "could not find machine named " << name << " for property " << property;
+			ss << " getValue() could not find machine named " << name << " for property " << property;
 			error_messages.push_back(ss.str());
 			++num_errors;
 			DBG_MSG << ss.str() << "\n";
@@ -3672,11 +3672,18 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				other->setValue(prop, new_value);
 			}
 			else {
-				DBG_MSG << _name << " bad request to set property " << property << "\n";
+				char buf[100];
+				snprintf(buf, 100, "%s bad request to set property %s", _name.c_str(), property.c_str() );
+				MessageLog::instance()->add(buf);
+				DBG_MSG << buf << "\n";
 			}
 		}
 		else {
-			DBG_PROPERTIES << "could not find machine named " << name << " for property " << property << "\n";
+			char buf[100];
+			snprintf(buf, 150, "%s  setValue() could not find machine named %s for property %s",
+					 _name.c_str(), name.c_str(), property.c_str() );
+			MessageLog::instance()->add(buf);
+			DBG_PROPERTIES << buf << "\n";
 		}
 	}
 	else {
