@@ -121,7 +121,7 @@ void insert(int group, int addr, const char *value, size_t len)
 	char buf[20];
 	snprintf(buf, 19, "%d.%d", group, addr);
 	std::string addr_str(buf);
-	if (len % 2 != 0) len++;// pad
+	//if (len % 2 != 0) len++;// pad
 	uint16_t *dest = 0;
 	//	int str_len = strlen(value);
 
@@ -131,7 +131,8 @@ void insert(int group, int addr, const char *value, size_t len)
 		dest = &modbus_mapping->tab_registers[addr];
 
 	uint8_t *p = (uint8_t *)value;
-	if (DEBUG_STRINGS) std::cout << "string length: " << (int)(*p) << "\n";
+	if (DEBUG_STRINGS) std::cout << "string length: " << len
+		<< "\n";
 	uint8_t *q = (uint8_t*)dest;
 	unsigned int i=0;
 	for (i=0; i<len/2; ++i)
@@ -144,6 +145,9 @@ void insert(int group, int addr, const char *value, size_t len)
 		//		if (i<str_len) *q++ = *p++; else *q++ = 0;
 		//		if (i+1<str_len) p++;
 	}
+	// if the length was odd we will not have copied the terminating null
+	if (len % 2)
+		*q = 0;
 }
 void insert(int group, int addr, int value, size_t len)
 {
@@ -298,7 +302,7 @@ struct ModbusServerThread
 				usleep(100);
 				continue; // TBD
 			}
-			if (nfds == 0) { if (debug) std::cout << "idle\n"; continue; }
+			if (nfds == 0) { if (debug) std::cout << "idle\n"; usleep(50000); continue; }
 			for (int conn = 0; conn <= max_fd; ++conn)
 			{
 				if (!FD_ISSET(conn, &activity)) continue;
@@ -689,8 +693,10 @@ void loadData(const char *initial_settings)
 					Value value = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
 					if (DEBUG_BASIC)
 						std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
-					if (value.kind == Value::t_string)
-						insert((int)group.iValue, (int)addr.iValue-1, value.asString().c_str(), strlen(value.asString().c_str()));
+					if (value.kind == Value::t_string) {
+						std::string valstr = value.asString();
+						insert((int)group.iValue, (int)addr.iValue-1, valstr.c_str(), valstr.length()+1); // note copying null
+					}
 					else
 						insert((int)group.iValue, (int)addr.iValue-1, (int)value.iValue, len.iValue);
 				}
@@ -966,8 +972,10 @@ int main(int argc, const char * argv[])
 				len = (int)params[4].iValue;
 
 				if (debug) std::cout << "IOD: " << group << " " << addr << " " << name << " " << len << " " << params[5] <<  "\n";
-				if (params[5].kind == Value::t_string)
-					insert(group, addr-1, params[5].asString().c_str(), strlen(params[5].asString().c_str()));
+				if (params[5].kind == Value::t_string) {
+					std::string valstr = params[5].asString();
+					insert(group, addr-1, valstr.c_str(), valstr.length()+1);
+				}
 				else
 					insert(group, addr-1, (int)params[5].iValue, len);
 			}
@@ -995,9 +1003,9 @@ int main(int argc, const char * argv[])
 	catch (std::exception& e)
 	{
 		if (zmq_errno())
-			std::cerr << zmq_strerror(zmq_errno()) << "\n";
+			std::cerr << "ZMQ Error: " << zmq_strerror(zmq_errno()) << "\n";
 		else
-			std::cerr << e.what() << "\n";
+			std::cerr <<  "Exception : " <<  e.what() << "\n";
 		return 1;
 	}
 	catch (...)
