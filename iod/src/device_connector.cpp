@@ -1008,7 +1008,7 @@ int main(int argc, const char * argv[])
                 if (zmq_errno())
                     std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
                 else
-                    std::cerr << e.what() << "\n";
+                    std::cerr << "exception when checking connections: " << e.what() << "\n";
             }
 
             

@@ -328,9 +328,9 @@ int main(int argc, const char * argv[])
    }
     catch(std::exception& e) {
         if (zmq_errno())
-            std::cerr << zmq_strerror(zmq_errno()) << "\n";
+            std::cerr << "ZMQ error: " << zmq_strerror(zmq_errno()) << "\n";
         else
-            std::cerr << e.what() << "\n";
+            std::cerr << "Exception raised: " << e.what() << "\n";
         cleanup();
         return 1;
     }

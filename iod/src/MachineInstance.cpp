@@ -3876,6 +3876,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 					}
 					else {
 						std::stringstream ss; ss << "Error: " << full_name <<" has not been initialised";
+						mi = lookup( (*iter).second );
 						char *msg = strdup(ss.str().c_str());
 						MessageLog::instance()->add(msg);
 						NB_MSG << msg << "\n";
