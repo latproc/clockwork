@@ -15,6 +15,8 @@ RawScales MACHINE {
 	OPTION rawUnderWeight 0;
 	OPTION rawOverWeight 0;
 	OPTION rawSteady 0;
+	OPTION message "test message";
+	EXPORT READWRITE STRING 40 message;
 	EXPORT RW 16BIT rawWeight, rawDecWeight, rawSteady, rawUnderWeight, rawOverWeight;
 
 }

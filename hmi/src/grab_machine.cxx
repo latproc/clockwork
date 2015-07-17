@@ -157,9 +157,10 @@ public:
 
 void operator()() {
 	while (!finished) {
+		if (!ctx) { usleep(10000); continue; }
 		int rc = modbus_read_registers(ctx, 1075, 1, tab_rp_registers+1075);
 		if (rc == -1) {
-			fprintf(stderr, "%s\n", modbus_strerror(errno));
+			fprintf(stderr, "modbus_read_registers %s\n", modbus_strerror(errno));
 		}
 		if (tab_rp_registers[1075] != tab_rw_rq_registers[1075]) {
 			printf("requested page: %d, current %d\n", tab_rp_registers[1075], tab_rw_rq_registers[1075]);
@@ -171,7 +172,7 @@ void operator()() {
 			Fl::unlock();
 			rc = modbus_write_register(ctx, 1074, tab_rw_rq_registers[1074]);
 			if (rc == -1) {
-				fprintf(stderr, "%s\n", modbus_strerror(errno));
+				fprintf(stderr, "modbus_write_registers %s\n", modbus_strerror(errno));
 			}
 		}
 		usleep(100000);
@@ -234,7 +235,7 @@ void change_screen(Fl_Widget *w, void *data) {
 		screen_num->value(buf);
 		int rc = modbus_write_register(mb->ctx, 1074, mb->tab_rw_rq_registers[1074]);
 		if (rc == -1) {
-			fprintf(stderr, "%s\n", modbus_strerror(errno));
+			fprintf(stderr, "modbus error: %s\n", modbus_strerror(errno));
 		}
 	}
 }
