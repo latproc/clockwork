@@ -267,7 +267,7 @@ int main(int argc, const char * argv[]) {
                     Value machine_name = *iter++;
                     Value property_name = *iter++;
                     Value value = *iter++;
-                    store.insert(machine_name.asString(), property_name.asString(), value.asString().c_str());
+                    store.insert(machine_name.asString(), property_name.asString(), value);
                     store.save();
                 }
 				else if (cmd == "STATE") {

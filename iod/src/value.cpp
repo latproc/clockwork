@@ -783,7 +783,9 @@ bool Value::asInteger(long &x) const {
 		char *p;
 		const char *v = sValue.c_str();
 		x = strtol(v, &p, 0);
-		if (*p == 0 || p != v ) return true;
+		if (*p == 0) return true;
+		if (p != v )
+			return false;
 		return false;
 	}
 	else if (kind == t_bool) {

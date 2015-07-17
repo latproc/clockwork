@@ -2243,7 +2243,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		DBG_M_MESSAGING << "received message " << m << " from " << from->getName() << "\n";
 	}
 	if (from == this || m.getText() == short_name) {
-		DBG_M_MESSAGING << _name << " checking transitions (" << transitions.size() << "\n";
+		DBG_M_MESSAGING << _name << " checking transitions (" << transitions.size() << ")\n";
 		std::list<Transition>::const_iterator iter = transitions.begin();
 		while (iter != transitions.end()) {
 			const Transition &t = *iter++;

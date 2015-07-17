@@ -11,6 +11,7 @@
 #include <fstream>
 #include "value.h"
 #include "PersistentStore.h"
+#include "regular_expressions.h"
 
 
 void PersistentStore::insert(std::string machine, std::string key, Value value) {
@@ -79,16 +80,48 @@ void PersistentStore::split(std::string &name, std::string& prop) const {
 
 std::ostream &PersistentStore::operator<<(std::ostream &out) const {
 	std::pair<std::string, std::map<std::string, Value> >prop;
+	int result = 1;
+	const char *symbol_pattern = "^[\"]{0,1}[A-Za-z][A-Za-z0-9_.]*[\"]{0,1}$";
+	const char *number_pattern = "^[-]{0,1}[0-9]+$";
+	rexp_info *sym_info = create_pattern(symbol_pattern);
+	if (sym_info->compilation_result != 0) {
+		fprintf(stderr, "failed to compile regexp /%s/\n", symbol_pattern);
+		release_pattern(sym_info);
+		sym_info = 0;
+	}
+	rexp_info *num_info = create_pattern(number_pattern);
+	if (num_info->compilation_result != 0) {
+		fprintf(stderr, "failed to compile regexp /%s/\n", number_pattern);
+		release_pattern(num_info);
+		num_info = 0;
+	}
 	BOOST_FOREACH(prop, init_values) {
 		std::map<std::string, Value> &entries(prop.second);
 		PersistentStore::PropertyPair entry;
 		BOOST_FOREACH(entry, entries) {
-			if (entry.second.kind == Value::t_string)
+			if (entry.second.kind == Value::t_string) {
+				//std::cout << prop.first << " " << entry.first << " " << entry.second.quoted() << " string\n";
 				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
-			else if (entry.second.kind == Value::t_symbol && entry.second.sValue.find(" ") != std::string::npos)
-				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
-			else 
+			}
+			else if (entry.second.kind == Value::t_bool
+					 || entry.second.kind == Value::t_integer ) {
+				//std::cout << prop.first << " " << entry.first << " " << entry.second << " bool/int\n";
 				out << prop.first << " " << entry.first << " " << entry.second << "\n";
+			}
+/*			else if (entry.second.kind == Value::t_symbol && entry.second.sValue.find(" ") != std::string::npos)
+				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
+*/			else if (sym_info && execute_pattern(sym_info, entry.second.asString().c_str()) == 0) {
+				//std::cout << prop.first << " " << entry.first << " " << entry.second.quoted() << " symbol pattern\n";
+				out << prop.first << " " << entry.first << " " << entry.second << "\n";
+			}
+			else if (num_info && execute_pattern(num_info, entry.second.asString().c_str()) == 0) {
+				//std::cout << prop.first << " " << entry.first << " " << entry.second.quoted() << " number pattern\n";
+				out << prop.first << " " << entry.first << " " << entry.second << "\n";
+			}
+			else {
+				//std::cout << prop.first << " " << entry.first << " " << entry.second  << " string (pattern)\n";
+				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
+			}
 		}
 	}
 	return out;
