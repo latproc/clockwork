@@ -60,6 +60,7 @@ int execute_pattern(rexp_info *info, const char *string)
 	int res = 0;
 	if (info->compilation_result == 0)
 	 	res = regexec(&info->regex, string, info->regex.re_nsub+1, info->matches, 0);
+	if (res) assert(res == REG_NOMATCH);
     return res;
 }
 
@@ -89,6 +90,7 @@ int find_matches(rexp_info *info, std::vector<std::string> &variables, const cha
             if (so != -1 && eo != -1) {
                 memcpy(match_buf, string+so, eo - so);
                 match_buf[eo-so] = 0;
+				std::cout << "pushing: '" << match_buf << "\n";
 				variables.push_back(match_buf);
             }
         }
@@ -218,6 +220,11 @@ int is_integer(const char *string)
 	return matches(string, "^[-]{0,1}[0-9]+$");
 }
 
+int is_symbol(const char *string)
+{
+	return matches(string, "[A-Za-z][A-Za-z0-9_.]*");
+}
+
 #ifdef TESTING
 
 
@@ -257,7 +264,7 @@ void display_matches(rexp_info *info, std::vector<std::string> &symbols)
          the respective subexpression matched */
     int i;
     const char *match = NULL;
-    for (i=0; i<= info->regex.re_nsub; i++)
+    for (i=0; i< symbols.size(); i++)
     {
 		std::cout << std::setw(3) << i << ": " << symbols[i]<< "\n";
     }
@@ -280,9 +287,9 @@ void display_matches(rexp_info *info, std::vector<std::string> &symbols)
 
 */
 
-int my_match_func(const char *match, void *data)
+int my_match_func(const char *match, int idx, void *data)
 {
-    printf("match: %s\n", match);
+    printf("idx: %d, match: %s\n", idx, match);
 	return 0;
 }
 
