@@ -248,6 +248,18 @@ RECEIVES command_name, \SpecialChar \ldots{}
 KEEPALIVE ping_time ';'
 \end_layout
 
+\begin_layout LyX-Code
+PUBLISHER;
+\end_layout
+
+\begin_layout LyX-Code
+REPORTS STATE_CHANGES ',' PROPERTY_CHANGES ';'
+\end_layout
+
+\begin_layout LyX-Code
+IGNORES '`' pattern '`' ';'
+\end_layout
+
 \end_deeper
 \begin_layout LyX-Code
 }
@@ -344,6 +356,30 @@ FUNCTION provides the name of a function that can be called by the client.
  This is intended to be used by other instances of clockwork that use the
  CALL syntax to send a message and subsequently block until the remote system
  has completed execution of the handler.
+\end_layout
+
+\begin_layout Description
+PUBLISHER indicates the channel should use a publish/subscribe model to
+ send changes.
+ These channels do not automatically send the current state and property
+ values when the client connects
+\end_layout
+
+\begin_layout Description
+MODBUS indicates the channel should send modbus UPDATE commands for the
+ modbus daemon
+\end_layout
+
+\begin_layout Description
+REPORTS provides a list of change-types that are reported on this channel,
+ legal values are STATE_CHANGES and PROPERTY_CHANGES
+\end_layout
+
+\begin_layout Description
+IGNORES indicates the channel should ignore changes on the machines matching
+ the pattern.
+ IGNORES can also be used with STATE_CHANGES or PROPERTY_CHANGES to reverse
+ the effect of a REPORTS.
 \end_layout
 
 \begin_layout Standard
@@ -1717,6 +1753,23 @@ OFF tells modbusd to stop emitting debug information
 UPDATE 
 \end_layout
 
+\begin_layout Standard
+The modbus connection requires the client (eg panel) to send a MODBUS command
+ that identifies the group, address and value of a chanaged modbus property.
+ When clockwork has a change to report to modbus it sends an UPDATE 
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"MODBUS","params":[{"type":"INTEGER","value":0},{"type":"INTEGER","va
+lue":1000},{"type":"INTEGER","value":1}]}
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"UPDATE","params":[{"type":"INTEGER","value":0},{"type":"INTEGER","va
+lue":1000},{"type":"STRING","value":"F_GrabPanelGoodComms"},{"type":"INTEGER","v
+alue":1},{"type":"INTEGER","value":1}]}
+\end_layout
+
 \begin_layout Subsection
 Persistence channel
 \end_layout
@@ -1765,6 +1818,15 @@ value <depends on type>
 \end_deeper
 \begin_layout LyX-Code
 ]
+\end_layout
+
+\begin_layout Standard
+A property command example is as follows
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"PROPERTY","params":[{"type":"NAME","value":"IA_GrabIndexFreq"},{"typ
+e":"NAME","value":"position"},{"type":"INTEGER","value":3464}]}
 \end_layout
 
 \begin_layout Subsection

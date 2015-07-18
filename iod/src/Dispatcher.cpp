@@ -154,7 +154,7 @@ void Dispatcher::idle()
 	// we get to this point. Note that this thread will then 
 	// block until it gets a sync-start from the driver.
     started = true;
-	std::cout << "Dispatcher started\n";
+	DBG_INITIALISATION << "Dispatcher started\n";
 	
 	char buf[11];
 	size_t response_len = 0;

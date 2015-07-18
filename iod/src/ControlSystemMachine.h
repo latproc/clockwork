@@ -24,9 +24,7 @@
 
 class ControlSystemMachine : IOComponent {
 public:
-    ControlSystemMachine() : state(s_unknown) {
-        std::cout << "ControlSystem version 0.5.1\n";
-    }
+	ControlSystemMachine();
 
     /* states */
     bool ready() const { return state == s_operational; }

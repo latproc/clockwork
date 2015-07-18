@@ -1013,8 +1013,10 @@ void simple_deltat(std::ostream &out, uint64_t dt) {
 }
 
 void MachineInstance::describe(std::ostream &out) {
-	out << "---------------\n" << _name << ": " << current_state.getName() << " " << (enabled() ? "" : "DISABLED") <<  "\n"
-		<< "  Class: " << _type << " instantiated at: " << definition_file << " line:" << definition_line << "\n";
+	out << "---------------\n" << _name << ": " << current_state.getName() << " "
+		<< (enabled() ? "" : " DISABLED") <<  "\n"
+		<< "  Class: " << _type << " instantiated at: " << definition_file
+		<< " line:" << definition_line << "\n";
 	if (locked) {
 		out << "Locked by: " << locked->getName() << "\n";
 	}

@@ -149,12 +149,12 @@ int main (int argc, char const *argv[])
 
 
 	Logger::instance()->setLevel(Logger::Debug);
-	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
+	load_debug_config();
 
 	std::list<std::string> source_files;
 	int load_result = loadOptions(argc, argv, source_files);
 	if (load_result) return load_result;
-	load_debug_config();
 
 	IODCommandListJSON::no_display.insert("tab");
 	IODCommandListJSON::no_display.insert("type");
@@ -224,8 +224,8 @@ int main (int argc, char const *argv[])
 	{
         {
             size_t remaining = machines.size();
-            std::cout << remaining << " Machines\n";
-            std::cout << "Initialising MQTT\n";
+            DBG_PARSER << remaining << " Machines\n";
+            DBG_INITIALISATION << "Initialising MQTT\n";
             
             // find and process all MQTT Modules as they are required before POINTS that use them
             std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
@@ -322,10 +322,10 @@ int main (int argc, char const *argv[])
 	zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
 	sim_io.bind("inproc://ethercat_sync");
     
-	std::cout << "-------- Starting Scheduler ---------\n";
+	DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
     
-	std::cout << "-------- Starting Command Interface ---------\n";	
+	DBG_INITIALISATION << "-------- Starting Command Interface ---------\n";
 	IODCommandThread *stateMonitor = IODCommandThread::instance();
 	boost::thread monitor(boost::ref(*stateMonitor));
 

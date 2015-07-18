@@ -270,10 +270,6 @@ int main(int argc, const char * argv[]) {
                     store.insert(machine_name.asString(), property_name.asString(), value);
                     store.save();
                 }
-				else if (cmd == "STATE") {
-					// channel should be configured to not send state change information, not
-					// currently supported
-				}
 				else
 					std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
             }

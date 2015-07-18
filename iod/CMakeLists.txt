@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 2.6)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
-set (Latproc_VERSION_MINOR 8)
+set (Latproc_VERSION_MINOR 9.1)
 
 cmake_policy(SET CMP0008 OLD)
 
@@ -141,7 +141,7 @@ set (Clockwork_Headers
 	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h		src/anet.h			src/value.h
 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
-	src/SyncRemoteStatesAction.h src/MachineCommandList.h
+	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
 )
 set (Clockwork_SRCS 
 	${Clockwork_Headers}
@@ -159,7 +159,8 @@ set (Clockwork_SRCS
 	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp src/SetOperationAction.cpp
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
-	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
+	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp 
+	src/ControlSystemMachine.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )

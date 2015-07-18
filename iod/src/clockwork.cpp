@@ -120,7 +120,7 @@ int load_preset_modbus_mappings() {
 	// load preset modbus mappings
 	std::ifstream modbus_mappings_file(modbus_map());
 	if (!modbus_mappings_file) {
-		std::cout << "No preset modbus mapping\n";
+		DBG_INITIALISATION << "No preset modbus mapping file found\n";
 	}
 	else {
 		char buf[200];

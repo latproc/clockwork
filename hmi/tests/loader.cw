@@ -22,3 +22,14 @@ RawScales MACHINE {
 }
 M_rawScales RawScales;
 
+BaleCounter MACHINE bale_present {
+	OPTION count 0;
+	OPTION PERSISTENT "true";
+	
+	Ready WHEN bale_present IS on;
+	Idle DEFAULT;
+
+	TRANSITION Ready TO Idle USING Count;
+	COMMAND Count { count := count + 1; }
+}
+bale_counter BaleCounter I_BaleOnLoader;

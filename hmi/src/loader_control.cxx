@@ -147,8 +147,8 @@ public:
     modbus_set_debug(ctx, FALSE);
 
     if (modbus_connect(ctx) == -1) {
-        fprintf(stderr, "Connection failed: %s\n",
-                modbus_strerror(errno));
+        fprintf(stderr, "Connection failed: %s (%d)\n",
+                modbus_strerror(errno), errno);
         modbus_free(ctx);
 		ctx = 0;
     }
@@ -189,18 +189,22 @@ public:
 }
 
 void operator()() {
+	int error_count = 0;
 	while (!finished) {
 		if (!connected) {
 			if (!ctx) ctx = modbus_new_tcp(host.c_str(), port);
 		    if (modbus_connect(ctx) == -1) {
-		        fprintf(stderr, "Connection failed: %s\n",
-		                modbus_strerror(errno));
+				++error_count;
+		        fprintf(stderr, "Connection failed: %s (%d)\n",
+                modbus_strerror(errno), errno);
 		        modbus_free(ctx);
 				ctx = 0;
-				usleep(1000000);
+				if (error_count > 5) exit(1);
+				usleep(200000);
 				continue;
 		    }
 			else connected = true;
+			error_count = 0;
 		}
 		std::map<int, Fl_Widget*>::iterator iter = active_addresses.begin();
 		while (iter != active_addresses.end()) {

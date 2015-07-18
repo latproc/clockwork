@@ -54,6 +54,8 @@
 //#include "SocketMonitor.h"
 #include "ConnectionManager.h"
 #include "CommandManager.h"
+#include "Logger.h"
+#include "DebugExtra.h"
 
 bool debug = false;
 
@@ -557,7 +559,7 @@ struct ConnectionThread {
             
             if (Options::instance()->server()) {
                 listener = anetTcpServer(msg_buffer, Options::instance()->port(), Options::instance()->host());
-                if (listener == -1) {
+                if (listener == ANET_ERR) {
                     std::cerr << msg_buffer << " attempting to listen on port " << Options::instance()->port() << "...aborting\n";
                     DeviceStatus::instance()->setStatus(DeviceStatus::e_failed);
                     updateProperty();
@@ -1019,12 +1021,13 @@ int main(int argc, const char * argv[])
                 struct timeval last;
                 connection_thread.get_last_message(msg, last);
                 if (last_time.tv_sec != last.tv_sec && now.tv_sec > last.tv_sec + 1) {
-                    if (dev_stat == DeviceStatus::e_timeout)
-                        std::cerr << "Warning: Device timeout\n";
+					if (dev_stat == DeviceStatus::e_timeout) {
+						DBG_MSG << "Warning: Device timeout\n";
+					}
                     else {
-                        std::cout << "Warning: connection idle\n";
-												exit(0);
-										}
+                        DBG_MSG << "Warning: connection idle\n";
+						exit(0);
+					}
                     last_time = last;
                 }
             }

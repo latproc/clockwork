@@ -74,7 +74,7 @@ public:
     void removeMonitorPattern(const char *);
     void removeMonitorProperty(const char *, Value &);
     void removeMonitorExports();
-    
+
     void modified();
     void checked();
 
@@ -108,6 +108,12 @@ private:
 
 class ChannelDefinition : public ChannelImplementation, public MachineClass {
 public:
+	enum Feature { ReportStateChanges, ReportPropertyChanges, ReportModbusUpdates };
+
+	void addFeature(Feature f);
+	void removeFeature(Feature f);
+	bool hasFeature(Feature f) const;
+
     ChannelDefinition(const char *name, ChannelDefinition *parent = 0);
     Channel *instantiate(unsigned int port);
     static void instantiateInterfaces();
@@ -134,11 +140,12 @@ public:
     const std::string &getKey() { return psk; }
     const std::string &getVersion() { return version; }
 
-		Value getValue(const char *property);
+	Value getValue(const char *property);
 
 private:
     static std::map< std::string, ChannelDefinition* > *all;
     std::map<std::string, MachineRef *> interfaces;
+	std::set<Feature> features;
     ChannelDefinition *parent;
 	bool ignore_response;
     std::string psk; // preshared key

@@ -71,6 +71,7 @@ Channel::~Channel() {
 }
 
 void Channel::syncInterfaceProperties(MachineInstance *m) {
+	if (!definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) return;
 	if ( definition()->updates_names.count(m->getName())
 		|| definition()-> shares_names.count(m->getName())) {
 
@@ -118,18 +119,25 @@ bool Channel::syncRemoteStates() {
 	if (definition()->isPublisher()) return false;
 	if (current_state == ChannelImplementation::DISCONNECTED) return false;
 	if (isClient()) {
-		std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
-		while (iter != channel_machines.end()) {
-			MachineInstance *m = *iter++;
-			if (!m->isShadow()) {
-				std::string state(m->getCurrentStateString());
-				//NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
-				char buf[200];
-				const char *msg = MessageEncoding::encodeState(m->getName(), state);
-				std::string response;
-				// TBD this can take some time. need to remember where we are up to and come back later
-				sendMessage(msg, *cmd_client, response);
-
+		if (definition()->hasFeature(ChannelDefinition::ReportStateChanges)) {
+			std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
+			while (iter != channel_machines.end()) {
+				MachineInstance *m = *iter++;
+				if (!m->isShadow()) {
+					std::string state(m->getCurrentStateString());
+					//NB_MSG << "Machine " << m->getName() << " current state: " << state << "\n";
+					char buf[200];
+					const char *msg = MessageEncoding::encodeState(m->getName(), state);
+					std::string response;
+					// TBD this can take some time. need to remember where we are up to and come back later
+					sendMessage(msg, *cmd_client, response);
+				}
+			}
+		}
+		if (definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) {
+			std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
+			while (iter != channel_machines.end()) {
+				MachineInstance *m = *iter++;
 				// look at the interface defined for this machine and for each property
 				// on the interface, send the current value
 				syncInterfaceProperties(m);
@@ -143,19 +151,26 @@ bool Channel::syncRemoteStates() {
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 	}
 	else {
-		std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
-		while (iter != channel_machines.end()) {
-			MachineInstance *m = *iter++;
-			if (!m->isShadow()) {
-				const char *state = m->getCurrentStateString();
-				char buf[200];
-				const char *msg = MessageEncoding::encodeState(m->getName(), state);
-				std::string response;
-				if (cmd_client)
-					sendMessage(msg, *cmd_client, response);
-				else
-					sendStateChange(m, state);
-
+		if (definition()->hasFeature(ChannelDefinition::ReportStateChanges)) {
+			std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
+			while (iter != channel_machines.end()) {
+				MachineInstance *m = *iter++;
+				if (!m->isShadow()) {
+					const char *state = m->getCurrentStateString();
+					char buf[200];
+					const char *msg = MessageEncoding::encodeState(m->getName(), state);
+					std::string response;
+					if (cmd_client)
+						sendMessage(msg, *cmd_client, response);
+					else
+						sendStateChange(m, state);
+				}
+			}
+		}
+		if (definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) {
+			std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
+			while (iter != channel_machines.end()) {
+				MachineInstance *m = *iter++;
 				// look at the interface defined for this machine and for each property
 				// on the interface, send the current value
 				syncInterfaceProperties(m);
@@ -412,7 +427,21 @@ ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt)
 	states.push_back("ACTIVE");
 	default_state = State("DISCONNECTED");
 	initial_state = State("DISCONNECTED");
+	features.insert(ReportPropertyChanges);
+	features.insert(ReportStateChanges);
 	disableAutomaticStateChanges();
+}
+
+void ChannelDefinition::addFeature(Feature f) {
+	features.insert(f);
+}
+
+void ChannelDefinition::removeFeature(Feature f) {
+	features.erase(f);
+}
+
+bool ChannelDefinition::hasFeature(Feature f) const {
+	return features.count(f) != 0;
 }
 
 ChannelDefinition *ChannelDefinition::find(const char *name) {
@@ -1090,7 +1119,8 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-        
+		if (!chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) continue;
+
         if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
@@ -1127,7 +1157,8 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-        
+		if (!chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) continue;
+
         if (!chn->channel_machines.count(machine))
             continue;
 				
@@ -1254,6 +1285,8 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
 		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+		if (!chn->definition()->hasFeature(ChannelDefinition::ReportStateChanges)) continue;
+		
 #if 0
 		if (ms) {
 			// shadowed machines don't send state changes on channels that update them
@@ -1311,6 +1344,8 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
+		if (command == "UPDATE" && !chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates))
+			continue;
 
         if (!chn->channel_machines.count(machine))
             continue;
@@ -1365,7 +1400,7 @@ void ChannelImplementation::addMonitor(const char *s) {
 }
 void ChannelImplementation::addIgnorePattern(const char *s) {
     DBG_MSG << "add " << s << " to ignore list\n";
-    ignores_patterns.insert(s);
+	ignores_patterns.insert(s);
     modified();
 }
 void ChannelImplementation::removeIgnorePattern(const char *s) {

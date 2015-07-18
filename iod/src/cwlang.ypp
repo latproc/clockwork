@@ -77,6 +77,8 @@ ChannelDefinition *current_channelclass = 0;
 Channel *current_channel = 0;
 std::list<MachineClass *> all_classes;
 std::list<ChannelDefinition> all_channeldefs;
+ChannelDefinition::Feature current_feature;
+std::set<ChannelDefinition::Feature> *current_features = 0;
 //std::list<MachineDetails*>deferred_instantiations;
     
 static MachineInstance *addMachine(const char *name, const char *type, 
@@ -122,6 +124,7 @@ struct Subcondition {
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR TIMEOUT
+%token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 
 %union {
 	int iVal;
@@ -349,6 +352,14 @@ chn_definition_section:
 | IGNORES PATTERN ';'  {
     current_channelclass->addIgnorePattern($2);
 }
+| IGNORES feature_list ';' {
+	if (current_features) {
+		BOOST_FOREACH(ChannelDefinition::Feature f, *current_features )
+			current_channelclass->removeFeature(f);
+		delete current_features;
+		current_features = 0;
+	}
+}
 | MONITORS PATTERN ';'  {
     current_channelclass->addMonitorPattern($2);
 }
@@ -386,9 +397,19 @@ chn_definition_section:
     BOOST_FOREACH(std::string &name, current_name_list)
         current_channelclass->addReceiveName(name.c_str());
 }
+| REPORTS feature_list ';' {
+	if (current_features) {
+		BOOST_FOREACH(ChannelDefinition::Feature f, *current_features )
+			current_channelclass->removeFeature(f);
+		delete current_features;
+		current_features = 0;
+	}
+}
+
 | OPTION chn_option_settings ';'
 | THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2); }
 | tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
+| MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
 ;
 
 machine_list:
@@ -1700,6 +1721,22 @@ SYMBOL PROPSEP value
     DBG_PARSER << "property: " << $1 << " = 0\n";
     properties.add($1, 0);
 }
+;
+
+feature_list:
+feature_list_item {
+	if (!current_features) current_features = new std::set<ChannelDefinition::Feature>();
+	current_features->insert(current_feature);
+}
+| feature_list COMMA feature_list_item {
+	if (!current_features) current_features = new std::set<ChannelDefinition::Feature>();
+	current_features->insert(current_feature);
+}
+;
+
+feature_list_item:
+STATE_CHANGES { current_feature = ChannelDefinition::ReportStateChanges; }
+| PROPERTY_CHANGES { current_feature = ChannelDefinition::ReportPropertyChanges; }
 ;
 
 name_list:
