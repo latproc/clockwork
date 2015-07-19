@@ -102,43 +102,43 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 		return true;
 	}
 	else {
+		/* TBD Note: this command does not support setting a machine state to a property value */
 		MachineInstance *mi = MachineInstance::find(ds.c_str());
 		if (mi) {
-			/* it would be safer to push the requested state change onto the machine's
-				action list but some machines do not poll their action list because they
-				do not expect to receive events
-			*/
-			if (mi->transitions.size()) {
-			   SetStateActionTemplate ssat(CStringHolder(strdup(ds.c_str())), state_name );
-			   mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
+			if (!mi->getStateMachine()) {
+				char buf[150];
+				snprintf(buf, 150, "Error: machine %s has no state machine", mi->getName().c_str());
+				MessageLog::instance()->add(buf);
+				error_str = buf;
+				return false;
 			}
-			else {
-				;
-				if (!mi->getStateMachine()) {
+			State *s = mi->getStateMachine()->findState(state_name.c_str());
+			if (!s) {
+				if (mi->isShadow()) {
+					// shadow machines are intended to move to their initial state if the requested state is unknown
+					s = &mi->getStateMachine()->initial_state;
+				}
+				else {
 					char buf[150];
-					snprintf(buf, 150, "Error: machine %s has no state machine", mi->getName().c_str());
+					snprintf(buf, 150, "Error: machine %s has no state called '%s'", mi->getName().c_str(), state_name.c_str());
 					MessageLog::instance()->add(buf);
 					error_str = buf;
 					return false;
 				}
-				State *s = mi->getStateMachine()->findState(state_name.c_str());
-				if (!s) {
-					if (mi->isShadow()) {
-						s = &mi->getStateMachine()->initial_state;
-					}
-					else {
-						char buf[150];
-						snprintf(buf, 150, "Error: machine %s has no state called '%s'", mi->getName().c_str(), state_name.c_str());
-						MessageLog::instance()->add(buf);
-						error_str = buf;
-						return false;
-					}
-				}
-				mi->setState(*s);
 			}
-			result_str = "OK";
-			return true;
 		}
+		/* it would be safer to push the requested state change onto the machine's
+			action list but some machines do not poll their action list because they
+			do not expect to receive events
+		*/
+		if (mi->isActive()) {
+			SetStateActionTemplate ssat("SELF", state_name );
+			mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
+		}
+		else
+			mi->setState(state_name.c_str());
+		result_str = "OK";
+		return true;
 	}
 	//  Send reply back to client
 	const char *msg_text = "Not found: ";
@@ -264,7 +264,14 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                         }
                         else {
                             State *s = m->getStateMachine()->findState("off");
-                            if (s) m->setState(*s);
+							if (s) {
+								if (!m->isActive()) m->setState(*s);
+								else {
+									// execute this state change once all other actions are complete
+									SetStateActionTemplate ssat("SELF", "off" );
+									m->enqueueAction(ssat.factory(m));
+								}
+							}
                         }
                     }
                     else if (m->getCurrent().is(ClockworkToken::off) ) {
@@ -274,7 +281,14 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                         }
                         else{
                             State *s = m->getStateMachine()->findState("on");
-                            if (s) m->setState(*s);
+							if (s) {
+								if (!m->isActive()) m->setState(*s);
+								else {
+									// execute this state change once all other actions are complete
+									SetStateActionTemplate ssat("SELF", "on" );
+									m->enqueueAction(ssat.factory(m));
+								}
+							}
                         }
                     }
                     result_str = "OK";

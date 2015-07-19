@@ -1,6 +1,6 @@
 Test MACHINE {
 	OPTION count 0;
-	even FLAG(tab:Tests);
+	even ActiveFlag(tab:Tests);
 	odd FLAG(tab:Tests);
     #b WHEN count %5 == 0;
 	a WHEN count > 0,
@@ -15,3 +15,12 @@ Test MACHINE {
 
 }
 test Test(tab:Tests);
+flag FLAG(tab:Tests);
+
+ActiveFlag MACHINE {
+	on WHEN SELF IS on;
+	off DEFAULT;
+	on DURING turnOn {}
+	off DURING turnOff {}
+}
+aflag ActiveFlag;

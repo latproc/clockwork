@@ -149,11 +149,21 @@ bool ConditionHandler::check(MachineInstance *machine) {
 		else {
 			if (condition(machine)) {
 				State *on = flag->state_machine->findState("on");
-				flag->setState(*on);
+				if (!flag->isActive()) flag->setState(*on);
+				else {
+					// execute this state change once all other actions are complete
+					SetStateActionTemplate ssat("SELF", "on" );
+					flag->enqueueAction(ssat.factory(flag));
+				}
 			}
 			else {
 				State *off = flag->state_machine->findState("off");
-				flag->setState(*off);
+				if (!flag->isActive()) flag->setState(*off);
+				else {
+					// execute this state change once all other actions are complete
+					SetStateActionTemplate ssat("SELF", "off" );
+					flag->enqueueAction(ssat.factory(flag));
+				}
 			}
 		}
 	}

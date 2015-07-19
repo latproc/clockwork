@@ -1302,7 +1302,7 @@ In the above example, the keyword `SELF' refers to the current state of
  statement causes the state to change to the named state.
 \end_layout
 
-\begin_layout Standard
+\begin_layout Subsubsection
 Stable States
 \end_layout
 
@@ -1571,6 +1571,37 @@ TRANSITION c TO a ON next REQUIRES c_finished IS on;
 \end_deeper
 \begin_layout LyX-Code
 } 
+\end_layout
+
+\begin_layout Subsection
+State Transitions
+\end_layout
+
+\begin_layout Standard
+When a machine changes state, several stages occur: 
+\end_layout
+
+\begin_layout Enumerate
+if the machine has a leave action it is started
+\end_layout
+
+\begin_layout Enumerate
+if the machine has dependecies those machines are told that the machine
+ is leaving a state
+\end_layout
+
+\begin_layout Enumerate
+when the leave action is completed the current state of the machine is changed
+\end_layout
+
+\begin_layout Enumerate
+once the machine state has changed the enter action for the state is started
+ if there is one
+\end_layout
+
+\begin_layout Enumerate
+if the machine has dependencies those machines are told the machine is entering
+ a state
 \end_layout
 
 \begin_layout Subsection
