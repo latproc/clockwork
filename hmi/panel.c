@@ -89,7 +89,7 @@ int main(void)
 
     if (modbus_connect(ctx) == -1) {
         fprintf(stderr, "Connection failed: %s\n",
-                modbus_strerror(errno));
+        modbus_strerror(errno));
         modbus_free(ctx);
         return -1;
     }

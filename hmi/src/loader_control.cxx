@@ -112,9 +112,18 @@ public:
 /* Modbus interface */
 
 class ModbusClientThread{
+private:
+    modbus_t *ctx;
+	boost::mutex update_mutex;
 
 public:
-    modbus_t *ctx;
+	modbus_t *getContext() {
+		update_mutex.lock();
+		return ctx;
+	}
+	void releaseContext() {
+		update_mutex.unlock();
+	}
     uint8_t *tab_rq_bits;
     uint8_t *tab_rp_bits;
     uint8_t *tab_ro_bits;
@@ -131,6 +140,7 @@ public:
 	ModbusClientThread(const char *hostname, int portnum) : ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
 			tab_rq_registers(0), tab_rw_rq_registers(0), 
 			tab_rp_registers(0), finished(false), connected(false), host(hostname), port(portnum) {
+	boost::mutex::scoped_lock(update_mutex);
     ctx = modbus_new_tcp(host.c_str(), port);
 
 	/* Save original timeout */
@@ -183,15 +193,43 @@ public:
     free(tab_rq_registers);
     free(tab_rp_registers);
     free(tab_rw_rq_registers);
+	if (ctx) {
+	    modbus_close(ctx);
+	    modbus_free(ctx);
+	}
+}
 
-    modbus_close(ctx);
-    modbus_free(ctx);
+void close_connection() {
+	boost::mutex::scoped_lock(update_mutex);
+	assert(ctx);
+	modbus_flush(ctx);
+	modbus_close(ctx);
+	connected = false;
+	ctx = 0;
+}
+
+bool check_error(const char *msg, int entry, int *retry) {
+	if (errno == EAGAIN || errno == EINTR) {
+		fprintf(stderr, "%s %s (%d), entry %d retrying %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		usleep(100);
+		return true;
+	}
+	else {
+		fprintf(stderr, "%s %s (%d), entry %d reconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		if (--(*retry) == 0) {
+			close_connection();
+			return false;
+		}
+		usleep(1000);
+	}
+	return true;
 }
 
 void operator()() {
 	int error_count = 0;
 	while (!finished) {
 		if (!connected) {
+			boost::mutex::scoped_lock(update_mutex);
 			if (!ctx) ctx = modbus_new_tcp(host.c_str(), port);
 		    if (modbus_connect(ctx) == -1) {
 				++error_count;
@@ -208,20 +246,12 @@ void operator()() {
 		}
 		std::map<int, Fl_Widget*>::iterator iter = active_addresses.begin();
 		while (iter != active_addresses.end()) {
+			boost::mutex::scoped_lock(update_mutex);
 			const std::pair<int, Fl_Widget*> item = *iter++;
 			int rc = -1;
 			int retry = 5;
 			while ( (rc = modbus_read_bits(ctx, item.first, 1, tab_rp_bits+item.first) == -1) ) {
-				fprintf(stderr, "%s (%d), retrying %d\n", modbus_strerror(errno), errno, retry);
-				if (--retry == 0) {
-					modbus_flush(ctx);
-					modbus_close(ctx);
-					connected = false;
-					break;
-				}
-				usleep(1000);
-				if (errno == EAGAIN || errno == EINTR) continue; 
-				usleep(10000);
+				if (check_error("modbus_read_bits", item.first, &retry)) continue; else break;
 			}
 			if (!connected) goto modbus_loop_end;
 			
@@ -238,21 +268,14 @@ void operator()() {
 		if (!connected) goto modbus_loop_end;
 		iter = ro_bits.begin();
 		while (iter != ro_bits.end()) {
+			boost::mutex::scoped_lock(update_mutex);
 			const std::pair<int, Fl_Widget*> item = *iter++;
 			int rc = -1;
 			int retry = 5;
 			uint8_t res; 
+			assert(ctx != 0);
 			while ( ( rc = modbus_read_input_bits(ctx, item.first, 1, &res)  == -1) ) {
-				fprintf(stderr, "%s (%d), retrying %d\n", modbus_strerror(errno), errno, retry);
-				if (--retry == 0) {
-					modbus_flush(ctx);
-					modbus_close(ctx);
-					connected = false;
-					break;
-				}
-				usleep(1000);
-				if (errno == EAGAIN || errno == EINTR) continue; 
-				usleep(10000);
+				if (check_error("modbus_read_input_bits", item.first, &retry)) continue; else break;
 			}
 			if (!connected) goto modbus_loop_end;
 			if (res != tab_ro_bits[item.first]) {
@@ -267,21 +290,13 @@ void operator()() {
 		}
 		iter = inputs.begin();
 		while (iter != inputs.end()) {
+			boost::mutex::scoped_lock(update_mutex);
 			const std::pair<int, Fl_Widget*> item = *iter++;
 			int rc = -1;
 			int retry = 5;
 			uint16_t res; 
 			while ( ( rc = modbus_read_registers(ctx, item.first, 1, &res)  == -1) ) {
-				fprintf(stderr, "%s (%d), retrying %d\n", modbus_strerror(errno), errno, retry);
-				if (--retry == 0) {
-					modbus_flush(ctx);
-					modbus_close(ctx);
-					connected = false;
-					break;
-				}
-				usleep(1000);
-				if (errno == EAGAIN || errno == EINTR) continue; 
-				usleep(10000);
+				if (check_error("modbus_read_registers", item.first, &retry)) continue; else break;
 			}
 			if (!connected) goto modbus_loop_end;
 			if (res != tab_rw_rq_registers[item.first]) {
@@ -322,11 +337,20 @@ void press(Fl_Widget *w, void *data) {
 		else
 			mb->tab_rq_bits[*addr] = 1;
 	}
-    int rc = modbus_write_bit(mb->ctx, *addr, mb->tab_rq_bits[*addr]);
-    if (rc != 1) {
-        printf("ERROR modbus_write_bit (%d)\n", rc);
-        printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[0]);
-    } 
+	{
+		modbus_t *ctx = mb->getContext();
+		int rc = 0;
+	    while ( (rc = modbus_write_bit(ctx, *addr, mb->tab_rq_bits[*addr]) ) == -1) {
+	        printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[0]);
+			fprintf(stderr, "%s %s (%d), entry\n", "modbus_write_bit", modbus_strerror(errno), errno);
+			if (errno == EAGAIN || errno == EINTR) continue; else break;
+		}
+	    if (rc != 1) {
+	        printf("ERROR modbus_write_bit (%d)\n", rc);
+	        printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[0]);
+	    }
+		mb->releaseContext();
+	} 
 }
 
 void press(Fl_Light_Button*w, void*v) {
@@ -339,51 +363,64 @@ void set_auto_mode(Fl_Light_Button*w, void*v) {
 }
 
 void save(Fl_Value_Input*in, void*data) {
-	int *addr = (int*)data;
-	double v = in->value();
-	std::cout << "reg: " << *addr << " has value " << v  << "\n";
-	long val = v + 0.5;
-	mb->tab_rw_rq_registers[*addr] = val;
-    int rc = modbus_write_register(mb->ctx, *addr, mb->tab_rw_rq_registers[*addr]);
-    if (rc != 1) {
-        printf("ERROR modbus_write_register (%d)\n", rc);
-        printf("Address = %d, value = %d\n", *addr, mb->tab_rw_rq_registers[*addr]);
-    } 
+	{
+		modbus_t *ctx = mb->getContext();
+		int *addr = (int*)data;
+		double v = in->value();
+		std::cout << "reg: " << *addr << " has value " << v  << "\n";
+		long val = v + 0.5;
+		mb->tab_rw_rq_registers[*addr] = val;
+	    int rc = modbus_write_register(ctx, *addr, mb->tab_rw_rq_registers[*addr]);
+	    if (rc != 1) {
+	        printf("ERROR modbus_write_register (%d)\n", rc);
+	        printf("Address = %d, value = %d\n", *addr, mb->tab_rw_rq_registers[*addr]);
+	    } 
+		mb->releaseContext();
+	}
 }
 
 void init(int addr, Fl_Value_Input*w) {
-	inputs[addr] = w;
-	int rc = modbus_read_registers(mb->ctx, addr, 1, mb->tab_rp_registers+addr);
-	if (rc == -1) {
-		fprintf(stderr, "%s\n", modbus_strerror(errno));
+	{
+		modbus_t *ctx = mb->getContext();
+	
+		inputs[addr] = w;
+		int rc = modbus_read_registers(ctx, addr, 1, mb->tab_rp_registers+addr);
+		if (rc == -1) {
+			fprintf(stderr, "%s\n", modbus_strerror(errno));
+		}
+		if (mb->tab_rp_registers[addr] != mb->tab_rw_rq_registers[addr]) 
+			mb->tab_rw_rq_registers[addr] = mb->tab_rp_registers[addr];
+		std::cout << "reg 4:" << addr << " is " << mb->tab_rw_rq_registers[addr] << "\n";
+		w->value(mb->tab_rw_rq_registers[addr]);
+		mb->releaseContext();
 	}
-	if (mb->tab_rp_registers[addr] != mb->tab_rw_rq_registers[addr]) 
-		mb->tab_rw_rq_registers[addr] = mb->tab_rp_registers[addr];
-	std::cout << "reg 4:" << addr << " is " << mb->tab_rw_rq_registers[addr] << "\n";
-	w->value(mb->tab_rw_rq_registers[addr]);
 }
 
 void init(int addr, Fl_Widget *w, bool is_input) {
-	int rc = 0;
-	if (is_input) {
-		active_addresses[addr] = w;
-		rc = modbus_read_bits(mb->ctx, addr, 1, mb->tab_rp_bits+addr);
+	{
+		modbus_t *ctx = mb->getContext();
+		int rc = 0;
+		if (is_input) {
+			active_addresses[addr] = w;
+			rc = modbus_read_bits(ctx, addr, 1, mb->tab_rp_bits+addr);
+		}
+		else {
+			ro_bits[addr] = w;
+			rc = modbus_read_input_bits(ctx, addr, 1, mb->tab_ro_bits+addr);
+		}
+		if (rc == -1) {
+			fprintf(stderr, "%s\n", modbus_strerror(errno));
+		}
+		if (is_input)
+			std::cout << "bit 0:" << addr << " is " << (int)mb->tab_rp_bits[addr] << "\n";
+		else
+			std::cout << "bit 1:" << addr << " is " << (int)mb->tab_ro_bits[addr] << "\n";
+		Fl_Light_Button *btn = dynamic_cast<Fl_Light_Button*>(w);
+		if (btn) btn->value(mb->tab_rp_bits[addr]);
+		Fl_Box *box = dynamic_cast<Fl_Box*>(w);
+		if (box) { if (mb->tab_ro_bits[addr]) box->activate(); else box->deactivate(); }
+		mb->releaseContext();
 	}
-	else {
-		ro_bits[addr] = w;
-		rc = modbus_read_input_bits(mb->ctx, addr, 1, mb->tab_ro_bits+addr);
-	}
-	if (rc == -1) {
-		fprintf(stderr, "%s\n", modbus_strerror(errno));
-	}
-	if (is_input)
-		std::cout << "bit 0:" << addr << " is " << (int)mb->tab_rp_bits[addr] << "\n";
-	else
-		std::cout << "bit 1:" << addr << " is " << (int)mb->tab_ro_bits[addr] << "\n";
-	Fl_Light_Button *btn = dynamic_cast<Fl_Light_Button*>(w);
-	if (btn) btn->value(mb->tab_rp_bits[addr]);
-	Fl_Box *box = dynamic_cast<Fl_Box*>(w);
-	if (box) { if (mb->tab_ro_bits[addr]) box->activate(); else box->deactivate(); }
 }
 
 
@@ -412,9 +449,13 @@ int main(int argc, char **argv) {
 
 	usleep(1000);
 
-	int rc = modbus_write_register(mb->ctx, M_rawScales_rawUnderWeight, 110);
-	rc = modbus_write_register(mb->ctx, M_rawScales_rawOverWeight, 200);
-	rc = modbus_write_register(mb->ctx, M_rawScales_rawSteady, 77);
+	{
+		modbus_t *ctx = mb->getContext();
+		int rc = modbus_write_register(ctx, M_rawScales_rawUnderWeight, 110);
+		rc = modbus_write_register(ctx, M_rawScales_rawOverWeight, 200);
+		rc = modbus_write_register(ctx, M_rawScales_rawSteady, 77);
+		mb->releaseContext();
+	}
 
 	Fl_Window *window  = gui.make_window();
 	window->show(1, argv);
