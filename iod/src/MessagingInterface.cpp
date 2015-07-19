@@ -150,10 +150,11 @@ sendMessage_transmit:
     }
     char *buf = 0;
     size_t len = 0;
+	uint64_t start_time = microsecs();
     while (len == 0) {
         try {
 			zmq::message_t rcvd;
-			if (sock.recv(&rcvd), 100) {
+			if (sock.recv(&rcvd), ZMQ_DONTWAIT) {
 				len = rcvd.size();
 				if (!len) continue;
 				buf = new char[len+1];
@@ -163,8 +164,16 @@ sendMessage_transmit:
 				delete[] buf;
 			}
 			else {
-				std::cerr << __FILE__ << ":" << __LINE__ << " sendMessage saw no response in 100ms\n";
-				continue;
+				if (errno == EAGAIN) {
+					uint64_t now = microsecs();
+					if (now - start_time > 100000) {
+						std::cerr << __FILE__ << ":" << __LINE__ << " sendMessage saw no response in 100ms\n";
+						return false;
+					}
+					else
+						usleep(500);
+					continue;
+				}
 			}
 			break;
         }
