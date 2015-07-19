@@ -897,6 +897,7 @@ int main(int argc, const char * argv[])
 	try
 	{
 		int exception_count = 0;
+		int error_count = 0;
 		while (program_state != s_finished)
 		{
 
@@ -942,7 +943,16 @@ int main(int argc, const char * argv[])
 			}
 
 			zmq::message_t update;
-			if (!subscription_manager.subscriber().recv(&update)) continue;
+			if (!subscription_manager.subscriber().recv(&update)) {
+				if (errno == EAGAIN) { usleep(50); continue; }
+				if (errno == EFSM) exit(1);
+				if (errno == ENOTSOCK) exit(1);
+				std::cerr << "subscriber recv: " << zmq_strerror(zmq_errno()) << "\n";
+				if (++error_count > 5) exit(1);
+				continue;
+			}
+			error_count = 0;
+
 			long len = update.size();
 			char *data = (char *)malloc(len+1);
 			memcpy(data, update.data(), len);
