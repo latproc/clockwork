@@ -112,7 +112,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 				error_str = buf;
 				return false;
 			}
-			State *s = mi->getStateMachine()->findState(state_name.c_str());
+			const State *s = mi->getStateMachine()->findState(state_name.c_str());
 			if (!s) {
 				if (mi->isShadow()) {
 					// shadow machines are intended to move to their initial state if the requested state is unknown
@@ -263,7 +263,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                             m->sendMessageToReceiver(msg, m);
                         }
                         else {
-                            State *s = m->getStateMachine()->findState("off");
+                            const State *s = m->getStateMachine()->findState("off");
 							if (s) {
 								if (!m->isActive()) m->setState(*s);
 								else {
@@ -280,7 +280,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                             m->sendMessageToReceiver(msg, m);
                         }
                         else{
-                            State *s = m->getStateMachine()->findState("on");
+                            const State *s = m->getStateMachine()->findState("on");
 							if (s) {
 								if (!m->isActive()) m->setState(*s);
 								else {

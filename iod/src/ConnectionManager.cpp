@@ -77,26 +77,6 @@ void MachineShadow::setState(const std::string new_state) {
 
 ConnectionManager::ConnectionManager() : owner_thread(pthread_self()), aborted(false) { }
 
-void ConnectionManager::setProperty(std::string machine_name, std::string prop, Value val) {
-    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
-    MachineShadow *machine = 0;
-    if (found == machines.end())
-        machine = new MachineShadow;
-    else
-        machine = (*found).second;
-    machine->setProperty(prop, val);
-}
-
-void ConnectionManager::setState(std::string machine_name, std::string new_state) {
-    std::map<std::string, MachineShadow*>::iterator found = machines.find(machine_name);
-    MachineShadow *machine = 0;
-    if (found == machines.end())
-        machine = new MachineShadow;
-    else
-        machine = (*found).second;
-    machine->setState(new_state);
-}
-
 void ConnectionManager::abort() { aborted = true; }
 
 std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix, const char *default_name) {

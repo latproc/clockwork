@@ -75,7 +75,7 @@ Action::Status ResumeAction::run() {
             if (resume_state.length() == 0)
                 machine->resume();
             else {
-                State *s = machine->getStateMachine()->findState(resume_state.c_str());
+                const State *s = machine->getStateMachine()->findState(resume_state.c_str());
                 if (!s) {
                     char buf[150];
                     snprintf(buf, 150, "resuming a machine %s that has no state machine", machine->getName().c_str());

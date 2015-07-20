@@ -193,7 +193,7 @@ bool Channel::syncRemoteStates() {
 	return true;
 }
 
-Action::Status Channel::setState(State &new_state, bool resume) {
+Action::Status Channel::setState(const State &new_state, bool resume) {
 	Action::Status res = MachineInstance::setState(new_state, resume);
 	if (res != Action::Complete) {
 		NB_MSG << "Action " << *this << " not complete\n";

@@ -181,8 +181,9 @@ public:
     static std::map<std::string, MachineClass> machine_classes;
     void defaultState(State state);
 	bool isStableState(State &state);
-    State *findState(const char *name);
-    virtual ~MachineClass() { all_machine_classes.remove(this); }
+    const State *findState(const char *name) const;
+	const State *findState(const State &seek) const;
+	virtual ~MachineClass() { all_machine_classes.remove(this); }
 	void disableAutomaticStateChanges();
 	void enableAutomaticStateChanges();
     static MachineClass *find(const char *name);
@@ -377,7 +378,7 @@ public:
     static void addActiveMachine(MachineInstance* m) { active_machines.push_back(m); }
     void markActive();
     void markPassive();
-		void markPlugin();
+	void markPlugin();
     
 	MachineClass *getStateMachine() const { return state_machine; }
 	void setInitialState();
@@ -391,7 +392,7 @@ public:
 	
 	virtual void enable();
 	virtual void resume();
-	void resume(State &state);
+	void resume(const State &state);
     void resumeAll(); // resume all disable sub-machines
 	void disable();
 	inline bool enabled() const { return is_enabled; }
@@ -467,7 +468,7 @@ protected:
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
-	virtual Action::Status setState(State &new_state, bool resume = false);
+	virtual Action::Status setState(const State &new_state, bool resume = false);
     virtual Action::Status setState(const char *new_state, bool resume = false);
 	bool is_enabled;
 	Value state_timer;
@@ -548,7 +549,7 @@ public:
     virtual void idle();
 	virtual bool isShadow() { return true; }
 
-	virtual Action::Status setState(State &new_state, bool resume = false);
+	virtual Action::Status setState(const State &new_state, bool resume = false);
 	virtual Action::Status setState(const char *new_state, bool resume = false);
 
 

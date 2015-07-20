@@ -85,8 +85,6 @@ public:
 	virtual bool checkConnections() =0;
 	virtual bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) =0;
 	
-	void setProperty(std::string machine, std::string prop, Value val);
-	void setState(std::string machine, std::string new_state);
 	virtual int numSocks() =0;
 	void abort();
 	bool ready() { return rate_limiter.ready(); }

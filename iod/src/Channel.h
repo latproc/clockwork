@@ -202,7 +202,7 @@ public:
 	void operator()();
 	void abort();
 
-	virtual Action::Status setState(State &new_state, bool resume = false);
+	virtual Action::Status setState(const State &new_state, bool resume = false);
 	virtual Action::Status setState(const char *new_state, bool resume = false);
 
     bool doesMonitor(); // is this channel monitoring any machines?

@@ -148,7 +148,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
 			std::cerr << machine->getName() << " error: flag " << flag_name << " not found\n";
 		else {
 			if (condition(machine)) {
-				State *on = flag->state_machine->findState("on");
+				const State *on = flag->state_machine->findState("on");
 				if (!flag->isActive()) flag->setState(*on);
 				else {
 					// execute this state change once all other actions are complete
@@ -157,7 +157,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
 				}
 			}
 			else {
-				State *off = flag->state_machine->findState("off");
+				const State *off = flag->state_machine->findState("off");
 				if (!flag->isActive()) flag->setState(*off);
 				else {
 					// execute this state change once all other actions are complete
@@ -686,7 +686,7 @@ void MachineShadowInstance::idle() {
 	return;
 }
 
-Action::Status MachineShadowInstance::setState(State &new_state, bool resume) {
+Action::Status MachineShadowInstance::setState(const State &new_state, bool resume) {
 	NB_MSG << _name << " (shadow) setState("<<current_state<< "->" << new_state << ")\n";
 	return MachineInstance::setState(new_state, resume);
 }
@@ -1906,7 +1906,7 @@ Action::Status MachineInstance::setState(const char *sn, bool resume) {
 		DBG_MSG << buf << "\n";
 		return Action::Failed;
 	}
-	State *s = state_machine->findState(sn);
+	const State *s = state_machine->findState(sn);
 	if (!s) {
 		snprintf(buf, 150, "Error: setting state to unknown value: '%s' on %s", sn, _name.c_str());
 		MessageLog::instance()->add(buf);
@@ -1921,7 +1921,7 @@ void MachineInstance::forceStableStateCheck() {
 	total_machines_needing_check++; 
 }
 
-Action::Status MachineInstance::setState(State &new_state, bool resume) {
+Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 
 	if (!hasState(new_state)) {
 		Value &s = getValue(new_state.getName().c_str());
@@ -1936,10 +1936,19 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 		return setState(propertyState);
 	}
 	Action::Status stat = Action::Complete;
+
+#if 0
+	// TBD Why do we send the modbus state change here. This should not be done
+	// until later, if the state actually changes
+
 	// update the Modbus interface for self 
 	if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
-		if (!modbus_exports.count(_name))
-			DBG_M_MSG << _name << " Error: modbus export info not found\n";
+		if (!modbus_exports.count(_name)) {
+			char buf[100];
+			snprintf(buf, 100, "%s Internal Error: modbus export info not found", getName().c_str());
+			MessageLog::instance()->add(buf);
+			NB_MSG << buf << "\n";
+		}
 		else {
 			ModbusAddress ma = modbus_exports[_name];
 			if (ma.getSource() == ModbusAddress::machine && ( ma.getGroup() != ModbusAddress::none) ) {
@@ -1947,7 +1956,7 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 					DBG_MODBUS << _name << " machine came on; triggering a modbus message\n";
 					ma.update(this, 1);
 				}
-				else if (current_state.getName() == "on") {
+				else if (current_state.getName() == "off") {
 					DBG_MODBUS << _name << " machine went off; triggering a modbus message\n";
 					ma.update(this, 0);
 				}		
@@ -1957,19 +1966,23 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 			}
 		}
 	}
+#endif
+
 	if (resume || current_state != new_state) {
 		std::string last = current_state.getName();
 
 #ifndef DISABLE_LEAVE_FUNCTIONS
 		/* notify everyone we are leaving a state */
 		// TBD use notifyDependents()
-		if (enabled()) {
+
+		/* do not send a leave message for the state if the state is not changing (ie in resume) */
+		if (enabled() && current_state != new_state) {
 			std::string txt = _name + "." + current_state.getName() + "_leave";
 			Message msg(txt.c_str());
 			stat = execute(msg, this);
-			if (stat != Action::Complete) {
+			if (stat == Action::Failed || (!isActive() && stat != Action::Complete) ) {
 				char buf[200];
-				snprintf(buf, 200, "%s %s action failed", _name.c_str(), txt.c_str());
+				snprintf(buf, 200, "%s %s leave action did not complete (%s)", _name.c_str(), txt.c_str(), actionStatusName(stat));
 				MessageLog::instance()->add(buf);
 				NB_MSG << buf << "\n";
 			}
@@ -1989,11 +2002,15 @@ Action::Status MachineInstance::setState(State &new_state, bool resume) {
 					if (act->getStatus() == Action::Suspended) act->resume();
 					DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
 				}
-				//TBD execute the message on the dependant machine
-				dep->execute(msg, this);
-				//if (dep->_type == "LIST") {
-				dep->setNeedsCheck();
-				//}
+
+				// execute the message on the dependant machine or queue it for later processing
+				if (!dep->isActive())
+					dep->execute(msg, this);
+				else {
+					Package *p = new Package(this, dep, msg, false);
+					Dispatcher::instance()->deliver(p);
+				}
+				//dep->setNeedsCheck();
 			}
 		}
 #endif
@@ -2210,6 +2227,18 @@ void MachineInstance::notifyDependents(Message &msg){
 		if (!dep->is_active && !dep->io_interface) continue;
 		DBG_M_MESSAGING << _name << " should tell " << dep->getName() 
 			<< " it is " << current_state.getName() << " using " << msg << "\n";
+
+
+		if (dep->receives(msg, this)) {
+			if (!dep->isActive())
+				dep->execute(msg, this);
+			else {
+				Package *p = new Package(this, dep, msg, false);
+				Dispatcher::instance()->deliver(p);
+			}
+		}
+
+#if 0
 		Action *act = dep->executingCommand();
 		if (act) {
 			if (act->getStatus() == Action::Suspended) act->resume();
@@ -2220,6 +2249,7 @@ void MachineInstance::notifyDependents(Message &msg){
 		if (dep->receives(msg, this)) dep->execute(msg, this);
 		dep->setNeedsCheck();
 //		if (dep->state_machine->token_id == ClockworkToken::LIST ) dep->notifyDependents();
+#endif
 	}
 }
 
@@ -2450,6 +2480,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 
 	// fire the triggers on any suspended commands that might be waiting for them.
 	if (executingCommand()) {
+		assert(isActive());
 		// tell any actions that are triggering on this that we have seen the event
 		DBG_M_MESSAGING << _name << " processing triggers for " << event_name << "\n";
 		std::list<Action*>::iterator iter = active_actions.begin();
@@ -2483,12 +2514,15 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	DBG_M_MESSAGING << _name << " executing message " << m.getText()  << " from " << ( (from) ? from->getName(): "unknown" ) << "\n";
 
 	if ( (io_interface && from == io_interface) || (mq_interface && from == mq_interface) ) {
+		// for machines that are connected to hardware on/off transitions occur when the
+		// machine receives an on/off_enter message from the hardware interface
+		// Similarly, properties are updated in response to 'property_change' message from
+		// the hardware interface
+
 		if (!state_machine) return Action::Failed;
-		//std::string state_name = m.getText();
-		//if (state_name.find('_') != std::string::npos)
-		//    state_name = state_name.substr(state_name.find('_'));
+
 		if(m.getText() == "on_enter" && current_state.getName() != "on") {
-			State *on = state_machine->findState("on");
+			const State *on = state_machine->findState("on");
 			if (on) setState(*on);
 			else {
 				char buf[120];
@@ -2498,7 +2532,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			}
 		}
 		else if (m.getText() == "off_enter" && current_state.getName() != "off") {
-			State *off = state_machine->findState("off");
+			const State *off = state_machine->findState("off");
 			if (off) setState(*off);
 			else {
 				char buf[120];
@@ -2590,14 +2624,26 @@ bool MachineClass::isStableState(State &state) {
 	return false;
 }
 
-State *MachineClass::findState(const char *seek) {
-	std::list<State>::iterator iter = states.begin();
+const State *MachineClass::findState(const char *seek) const {
+	std::list<State>::const_iterator iter = states.begin();
 	while (iter != states.end()) {
-		State &s = *iter++;
+		const State &s = *iter++;
 		if (s.getName() == seek) return &s;
 	}
 	return 0;
 }
+
+const State *MachineClass::findState(const State &seek) const {
+	std::list<State>::const_iterator iter = states.begin();
+	while (iter != states.end()) {
+		const State &s = *iter++;
+		if (s == seek) {
+			return &s;
+		}
+	}
+	return 0;
+}
+
 
 MachineClass *MachineClass::find(const char *name) {
 	int token = Tokeniser::instance()->getTokenId(name);
@@ -2782,7 +2828,7 @@ void MachineInstance::resume() {
 }
 
 void fixListState(MachineInstance &list) {
-	State *s = 0;
+	const State *s = 0;
 	if (list.parameters.empty())
 		s = list.getStateMachine()->findState("empty");
 	else
@@ -2797,7 +2843,7 @@ void MachineInstance::setInitialState() {
 	}
 	if (state_machine) {
 		if (io_interface) {
-			State *s = state_machine->findState(io_interface->getStateString());
+			const State *s = state_machine->findState(io_interface->getStateString());
 			if (s) setState(*s);
 			else {
 				char buf[100];
@@ -2903,7 +2949,7 @@ void MachineInstance::disable() {
 	}
 }
 
-void MachineInstance::resume(State &s) {
+void MachineInstance::resume(const State &s) {
 	if (!is_enabled) {		
 		// fix status
 		clearAllActions();
@@ -2974,7 +3020,7 @@ bool MachineInstance::setStableState() {
 
 	if (io_interface) {
 		const char *io_state_name = io_interface->getStateString();
-		State *s = state_machine->findState(io_state_name);
+		const State *s = state_machine->findState(io_state_name);
 		if (s) setState(*s);
 		else {
 			char buf[200];
@@ -2990,12 +3036,12 @@ bool MachineInstance::setStableState() {
 	else if (( !state_machine && _type=="REFERENCE") || (state_machine && state_machine->token_id == ClockworkToken::REFERENCE) ) {
 		//DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
 		if (locals.size()) {
-			State *s = state_machine->findState("ASSIGNED");
+			const State *s = state_machine->findState("ASSIGNED");
 			assert(s);
 			setState(*s);
 		}
 		else{
-			State *s = state_machine->findState("EMPTY");
+			const State *s = state_machine->findState("EMPTY");
 			assert(s);
 			setState(*s);
 		}
@@ -3112,7 +3158,7 @@ bool MachineInstance::setStableState() {
 					if (ch.command_name == "FLAG" ) {
 						MachineInstance *flag = lookup(ch.flag_name);
 						if (flag) {
-							State *s = flag->state_machine->findState("off");
+							const State *s = flag->state_machine->findState("off");
 							flag->setState(*s);
 						}
 						else
@@ -3643,15 +3689,17 @@ Value *MachineInstance::lookupState(const Value &state_name) {
 
 bool MachineInstance::hasState(const State &test) const {
 	if (state_machine) {
-		std::list<State>::const_iterator iter = state_machine->states.begin();
-		while (iter != state_machine->states.end()) {
-			const State &s = *iter++;
-			if (s == test) {
+		const State *s = state_machine->findState(test);
+		if (s) return true;
+
+		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+			if (stable_states[ss_idx].state_name == test.getName()) {
+				// TBD remove this code
+				//all stable states should have been registered in the machines state table
+				// this test is to verify that
+				assert(false);
 				return true;
 			}
-		}
-		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-			if (stable_states[ss_idx].state_name == test.getName()) return true;
 		}
 	}
 	else {
@@ -4373,7 +4421,7 @@ void MachineInstance::setError(int val) {
 	error_state = val; 
 	if (val) { 
 		saved_state = current_state;
-		State *err = state_machine->findState("ERROR");
+		const State *err = state_machine->findState("ERROR");
 		assert(err);
 		setState(*err);
 	} 
