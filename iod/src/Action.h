@@ -157,6 +157,7 @@ protected:
 };
 
 std::ostream &operator<<(std::ostream &out, Action::Status state);
+const char *actionStatusName(Action::Status state);
 
 class IOComponent;
 class TriggeredAction : public Action {
