@@ -168,7 +168,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				//DBG_M_ACTIONS << "SetStateAction didn't find a transition for " << machine->getCurrent() << " to " << value << "; manually setting\n";
 			}
 			status = machine->setState( value );
-			if (status != Action::Running && status != Suspended) 
+			if (status == Complete || status == Failed)
 				owner->stop(this);
 			else
 				trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
