@@ -648,7 +648,25 @@ void Channel::operator()() {
 		communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL, "*", port);
 	}
 
-	cmd_server = createCommandSocket(false);
+	{
+		int retry = 4;
+		while (cmd_server == 0)  {
+			try {
+				cmd_server = createCommandSocket(false);
+				if (!cmd_server) {
+					NB_MSG << "failed to create internal channel command listener socket\n";
+					if (--retry == 0) { assert(false); exit(2); }
+					usleep(10);
+				}
+			}
+			catch(zmq::error_t err) {
+				NB_MSG << "Channel " << name << " ZMQ error: " << zmq_strerror(errno)
+					<< " trying to create internal channel command listener socket\n";
+				if (--retry == 0) { assert(false); exit(2); }
+				usleep(10);
+			}
+		}
+	}
 	usleep(500);
 	char start_cmd[20];
 	DBG_MSG << "channel " << name << " thread waiting for start message\n";
@@ -787,12 +805,15 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 	char cmd_socket_name[100];
 	snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
+	std::cout << "using " << cmd_socket_name 
+		<< " for the " << ( (client_endpoint) ? "client " : "server ") << " command socked\n";
 	char *pos = strchr(cmd_socket_name, ':')+1;
 	while ( (pos = strchr(pos, ':'))  ) *pos = '-';
 
 	if (client_endpoint) {
 		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
 		sock->connect(cmd_socket_name);
+		NB_MSG << name << " connected channel command client\n";
 		return sock;
 	}
 	else {
@@ -801,6 +822,7 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 			sock->bind(cmd_socket_name);
 			int linger = 0;
 			sock->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+			NB_MSG << name << " bound channel command client\n";
 			return sock;
 		}
 		catch(std::exception ex) {
@@ -839,9 +861,12 @@ void Channel::startSubscriber() {
 		cmd_client = createCommandSocket(true);
 
 		// start the subcriber thread
+		NB_MSG << name << " sending command start message\n";
 		cmd_client->send("start",5);
 		char buf[100];
+		NB_MSG << name << " sent command start message\n";
 		size_t buflen = cmd_client->recv(buf, 100);
+		NB_MSG << name << " command start message acknowledged\n";
 		buf[buflen] = 0;
 
 		connect_responder = new ChannelConnectMonitor(this);
