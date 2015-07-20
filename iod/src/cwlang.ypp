@@ -86,10 +86,14 @@ static MachineInstance *addMachine(const char *name, const char *type,
 	MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
 	machine->setDefinitionLocation(yyfilename, yylineno);
 
-    if (machines.find(name) == machines.end())
+		std::map<std::string, MachineInstance *>::iterator found = machines.find(name);
+    if (found == machines.end())
         machines[name] = machine;
     else {
-        NB_MSG << std::setw(5) << yylineno << " " << "Error: machine " << name << " already defined\n";
+				MachineInstance *orig = (*found).second;
+        NB_MSG << yyfilename << ":" << std::setw(5) << yylineno << " " 
+					<< "Error: machine " << name << " already defined "
+					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
     }
 
     return machine;
@@ -551,10 +555,14 @@ machine_instantiation:
 instantiation ';'
 {
     DBG_PARSER << std::setw(5) << yylineno << " " << "Instance of a machine:" << *current_machine << "\n";
-    if (machines.find(current_machine->getName()) == machines.end())
+		std::map<std::string, MachineInstance *>::iterator found = machines.find(current_machine->getName());
+    if (found == machines.end())
         machines[current_machine->getName()] = current_machine;
     else {
-        NB_MSG << std::setw(5) << yylineno << " " << "Error: machine " << current_machine->getName() << " already defined\n";
+				MachineInstance *orig = (*found).second;
+        NB_MSG << yyfilename << ":" << yylineno 
+					<< " " << "Error: machine " << current_machine->getName() << " already defined "
+					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
     }
     current_machine = NULL;
 }
@@ -569,7 +577,7 @@ local_instantiation ';'
     BOOST_FOREACH(Parameter &p, current_locals) {
         if (p.val.kind == Value::t_symbol && p.val.sValue == current_machine->getName()) {
             std::stringstream ss;
-            ss << "## - Error: " << yyfilename << ":" << std::setw(5) << yylineno 
+            ss << "## - Error: " << yyfilename << ":" << yylineno 
                 << " local machine " << current_machine->getName() << " already defined";
             error_messages.push_back(ss.str());
             NB_MSG << ss.str() << "\n";

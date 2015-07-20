@@ -1,16 +1,19 @@
 PIDSPEEDCONFIGURATION MACHINE {
-  OPTION PERSISTENT true;
-  EXPORT RW 32BIT SlowSpeed, FullSpeed, PowerFactor, StoppingDistance, TravelAllowance, tolerance, Kp, Ki, Kd;
+	OPTION PERSISTENT true;
+	EXPORT RW 32BIT SlowSpeed, FullSpeed, StoppingTime, StoppingDistance, Tolerance, Kp, Ki, Kd;
 	EXPORT RO 16BIT PowerOffset;
-  OPTION SlowSpeed 40;
-  OPTION FullSpeed 1000;
-  OPTION StoppingDistance 3000;  # distance from the stopping point to begin slowing down
-  OPTION TravelAllowance 0;      # amount to travel after the mark before slowing down
-  OPTION tolerance 100;          # stopping position tolerance
-	OPTION RampTime 500;
-	OPTION StartupPowerOffsets "0";
-	OPTION PowerOffset 0;
+	OPTION SlowSpeed 40;
+	OPTION FullSpeed 1000;
 
+# settings that are specific to forward/reverse directions and are not provided in PIDCONFIGURATION
+	OPTION Tolerance 100;          # stopping position tolerance
+	OPTION RampTime 500;
+	OPTION StartupPowerOffsets "0"; a list of recent power offsets, averaged to provide PowerOffset
+	OPTION PowerOffset 0;	# the current power offset used when starting movement in this direction
+	OPTION StoppingDistance 3000;  # distance from the stopping point to begin slowing down
+
+# settings that override values given in PIDCONFIGURATION 
+	OPTION StoppingTime 300;  # 300ms stopping time
 	OPTION Kp 100000;
 	OPTION Ki 0;
 	OPTION Kd 0;
@@ -19,15 +22,13 @@ PIDSPEEDCONFIGURATION MACHINE {
 
 PIDCONFIGURATION MACHINE {
 	OPTION PERSISTENT true;
-	EXPORT RW 32BIT min_update_time, StartTimeout, startup_time, stopping_time, Kp, Ki, Kd;
+	EXPORT RW 32BIT MinUpdateTime, StartupTime, StoppingTime, Kp, Ki, Kd;
 
-	OPTION min_update_time 20; # minimum time between normal control updates
-	OPTION StartTimeout 500;	 # conveyor start timeout
-	OPTION inverted false;     # do not invert power
-	OPTION startup_time 500;   # 500ms startup ramp time
-	OPTION stopping_time 300;  # 300ms stopping time
-	OPTION MinSpeed 1000; 
-	OPTION RampLimit 1000;		# maximum increase in control power per cycle
+	OPTION MinUpdateTime 20; # minimum time between normal control updates
+	OPTION StartupTime 500;   # 500ms startup ramp time used for both forward and reverse unless overriden in PIDSPEEDCONFIGURATION
+	OPTION StoppingTime 300;  # 300ms stopping time used if the forward/reverse values are not given
+	OPTION Inverted false;     # do not invert power
+	OPTION RampLimit 1000;		# maximum change in control power per cycle
 
 	OPTION Kp 1000000;
 	OPTION Ki 0;
@@ -203,7 +204,9 @@ int check_states(void *scope)
 			if (!data->conveyor_name) data->conveyor_name = strdup("UNKNOWN CONVEYOR");
 		}
 
+#ifdef USE_MEASURED_PERIOD
 		data->psamples = createBuffer(5);
+#endif
 		data->samples = createBuffer(3);
 		data->fwd_power_offsets = createBuffer(8);
 		data->rev_power_offsets = createBuffer(8);
@@ -214,16 +217,17 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "StopMarker", &data->mark_position);
 		ok = ok && getInt(scope, "StopPosition", &data->stop_position);
 		ok = ok && getInt(scope, "pos.VALUE", &data->position);
-		ok = ok && getInt(scope, "settings.min_update_time", &data->min_update_time);
-		ok = ok && getInt(scope, "settings.stopping_time", &data->stopping_time);
-		ok = ok && getInt(scope, "settings.startup_time", &data->startup_time);
+		ok = ok && getInt(scope, "Velocity", &data->estimated_speed);
+		ok = ok && getInt(scope, "Position", &data->current_position);
+		ok = ok && getInt(scope, "StopError", &data->stop_error);
+
+		ok = ok && getInt(scope, "settings.MinUpdateTime", &data->min_update_time);
+		ok = ok && getInt(scope, "settings.StoppingTime", &data->stopping_time);
+		ok = ok && getInt(scope, "settings.StartupTime", &data->startup_time);
 		ok = ok && getInt(scope, "settings.RampLimit", &data->ramp_limit);
 		ok = ok && getInt(scope, "settings.Kp", &data->Kp_long);
 		ok = ok && getInt(scope, "settings.Ki", &data->Ki_long);
 		ok = ok && getInt(scope, "settings.Kd", &data->Kd_long);
-		ok = ok && getInt(scope, "Velocity", &data->estimated_speed);
-		ok = ok && getInt(scope, "Position", &data->current_position);
-		ok = ok && getInt(scope, "StopError", &data->stop_error);
 
 		ok = ok && getInt(scope, "output_settings.MaxForward", &data->max_forward);
 		ok = ok && getInt(scope, "output_settings.MaxReverse", &data->max_reverse);
@@ -231,17 +235,17 @@ int check_states(void *scope)
 		ok = ok && getInt(scope, "output_settings.MinForward", &data->min_forward);
 		ok = ok && getInt(scope, "output_settings.MinReverse", &data->min_reverse);
 
-		ok = ok && getInt(scope, "fwd_settings.tolerance", &data->fwd_tolerance);
+		ok = ok && getInt(scope, "fwd_settings.Tolerance", &data->fwd_tolerance);
 		ok = ok && getInt(scope, "fwd_settings.StoppingDistance", &data->fwd_stopping_dist);
 		ok = ok && getInt(scope, "fwd_settings.RampTime", &data->fwd_ramp_time);
 		ok = ok && getInt(scope, "fwd_settings.PowerOffset", &data->fwd_start_power);
-		ok = ok && getInt(scope, "fwd_settings.stopping_time", &data->fwd_stopping_time);
+		ok = ok && getInt(scope, "fwd_settings.StoppingTime", &data->fwd_stopping_time);
 
-		ok = ok && getInt(scope, "rev_settings.tolerance", &data->rev_tolerance);
+		ok = ok && getInt(scope, "rev_settings.Tolerance", &data->rev_tolerance);
 		ok = ok && getInt(scope, "rev_settings.StoppingDistance", &data->rev_stopping_dist);
 		ok = ok && getInt(scope, "rev_settings.RampTime", &data->rev_ramp_time);
 		ok = ok && getInt(scope, "rev_settings.PowerOffset", &data->rev_start_power);
-		ok = ok && getInt(scope, "rev_settings.stopping_time", &data->rev_stopping_time);
+		ok = ok && getInt(scope, "rev_settings.StoppingTime", &data->rev_stopping_time);
 
 		if ( getInt(scope, "fwd_settings.Kp", &data->Kpf_long) ) {
 			data->use_Kpidf = 1;
@@ -258,7 +262,7 @@ int check_states(void *scope)
 		if (!getInt(scope, "DEBUG", &data->debug) ) data->debug = &data->default_debug;
 		
 	  {
-			char *invert = getStringValue(scope, "settings.inverted");
+			char *invert = getStringValue(scope, "settings.Inverted");
 			if (invert && strcmp(invert,"true") == 0) {
 				data->inverted = 1; 
 				if (data->debug) printf("inverted output");
