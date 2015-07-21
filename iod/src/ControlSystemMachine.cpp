@@ -22,7 +22,11 @@
 #include "IOComponent.h"
 #include "ControlSystemMachine.h"
 #include "LatprocConfig.h"
+#include "zmq.h"
 
 ControlSystemMachine::ControlSystemMachine() : state(s_unknown) {
 	std::cout << "ControlSystem version " << Latproc_VERSION_MAJOR << "." << Latproc_VERSION_MINOR << "\n";
+	int major, minor, patch;
+	zmq_version (&major, &minor, &patch); 
+	std::cout << "ZMQ version " << major << "." << minor << "." << patch << "\n";
 }

@@ -822,7 +822,7 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 			sock->bind(cmd_socket_name);
 			int linger = 0;
 			sock->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-			NB_MSG << name << " bound channel command client\n";
+			NB_MSG << name << " bound channel command server\n";
 			return sock;
 		}
 		catch(std::exception ex) {
