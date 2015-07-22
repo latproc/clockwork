@@ -1555,7 +1555,7 @@ PLUGIN STRINGVAL ';' {
 		ss << current_machineclass->name << ": " << dlerror() << "\n";
 		MessageLog::instance()->add(ss.str().c_str());
     	error_messages.push_back(ss.str());
-		std::cout << ss.str() << "\n";
+		NB_MSG << ss.str() << "\n";
 	}
 }
 ;

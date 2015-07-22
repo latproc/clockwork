@@ -135,7 +135,7 @@ int load_preset_modbus_mappings() {
 		while (modbus_mappings_file.getline(buf, 200,'\n')) {
 			++lineno;
 			std::stringstream line(buf);
-			//std::cout << buf << "\n";
+			//NB_MSG << buf << "\n";
 			std::string group_addr, group, addr, name, type;
             int length = 1;
 			line >> group_addr ;
@@ -146,7 +146,7 @@ int load_preset_modbus_mappings() {
                 if (!(line >> length) )
                     generate_length = true;
 				group.erase(pos);
-				//std::cout << "$$$$$$$$$$$$ " << group << " " << name << "\n";
+				//NB_MSG << "$$$$$$$$$$$$ " << group << " " << name << "\n";
 				addr = group_addr;
 				addr = group_addr.substr(pos+1);
 				std::string lookup_name(name);
@@ -154,7 +154,7 @@ int load_preset_modbus_mappings() {
 					size_t pos = lookup_name.rfind("cmd_");
 					if (pos != std::string::npos) {
 						lookup_name = lookup_name.replace(pos,4,"");
-						//std::cout << "fixed name " << name << " to " << lookup_name << "\n";
+						//NB_MSG << "fixed name " << name << " to " << lookup_name << "\n";
 						name = lookup_name;
 					}
 				}
@@ -408,7 +408,7 @@ void semantic_analysis() {
     
     // display machine classes and build a map of names to classes
     // also move the DEFAULT stable state to the end
-    //std::cout << "\nMachine Classes\n";
+    //NB_MSG << "\nMachine Classes\n";
     //std::ostream_iterator<Parameter> out(std::cout, ", ");
     BOOST_FOREACH(MachineClass*mc, MachineClass::all_machine_classes) {
         //std::cout << mc->name << " (";
@@ -811,7 +811,7 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 	if (!modbus_map()) set_modbus_map("modbus_mappings.txt");
 	if (!debug_config()) set_debug_config("iod.conf");
 	
-    std::cout << (argc-1) << " arguments\n";
+    NB_MSG << (argc-1) << " arguments\n";
 	return 0;
 }
 
@@ -838,7 +838,7 @@ int loadConfig(std::list<std::string> &files) {
             yyin = fopen(filename, "r");
             if (yyin)
             {
-                std::cout << "\nProcessing file: " << filename << "\n";
+                NB_MSG << "\nProcessing file: " << filename << "\n";
                 yylineno = 1;
                 yycharno = 1;
                 yyfilename = filename;
@@ -856,7 +856,7 @@ int loadConfig(std::list<std::string> &files) {
         else if (strlen(filename) == 1) /* '-' means stdin */
         {
             opened_file = 1;
-            std::cout << "\nProcessing stdin\n";
+            NB_MSG << "\nProcessing stdin\n";
 			yyfilename = "stdin";
             yyin = stdin;
             yylineno = 1;
@@ -896,7 +896,7 @@ int loadConfig(std::list<std::string> &files) {
         return 2;
     }
     
-	std::cout << " Configuration loaded. " << MachineInstance::countAutomaticMachines() << " automatic machines\n";
+	NB_MSG << " Configuration loaded. " << MachineInstance::countAutomaticMachines() << " automatic machines\n";
 	//MachineInstance::displayAutomaticMachines();
     return 0;
 }
@@ -974,7 +974,7 @@ void initialise_machines() {
             ++num_passive;
         }
     }
-    std::cout << num_passive << " passive and " << num_active << " active machines\n";
+    NB_MSG << num_passive << " passive and " << num_active << " active machines\n";
 
 	// enable all other machines
     

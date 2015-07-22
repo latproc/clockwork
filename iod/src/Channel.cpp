@@ -402,7 +402,7 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-            //std::cout << "found available port " << res << "\n";
+            //NB_MSG << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
@@ -639,7 +639,7 @@ void Channel::operator()() {
 		if (!port_val.asInteger(port)) return;
 		//char buf[150];
 		////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
-		std::cout << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
+		NB_MSG << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
 		communications_manager = new SubscriptionManager(definition()->name.c_str(),
 														 eCHANNEL, host.asString().c_str(),(int)port);
 		//DBG_MSG << "Channel " << name << "::operator() subscriber thread initialising\n";
@@ -805,7 +805,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 	char cmd_socket_name[100];
 	snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
-	std::cout << "using " << cmd_socket_name 
+	NB_MSG << "using " << cmd_socket_name
 		<< " for the " << ( (client_endpoint) ? "client " : "server ") << " command socked\n";
 	char *pos = strchr(cmd_socket_name, ':')+1;
 	while ( (pos = strchr(pos, ':'))  ) *pos = '-';
@@ -845,7 +845,7 @@ void Channel::startSubscriber() {
 		if (!port_val.asInteger(port)) return;
 		//char buf[150];
 		////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
-		std::cout << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
+		NB_MSG << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
 		communications_manager = new SubscriptionManager(definition()->name.c_str(),
                               eCLOCKWORK, host.asString().c_str(), (int)port);
 	}
@@ -959,7 +959,7 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
     chn->setDefinition(defn);
 	chn->setDefinitionLocation("dynamic", 0);
     chn->setStateMachine(defn);
-		if (defn->getThrottleTime()) std::cout << " channel " << channel_name << " is throttled (" << defn->getThrottleTime() << ")\n";
+		if (defn->getThrottleTime()) NB_MSG << " channel " << channel_name << " is throttled (" << defn->getThrottleTime() << ")\n";
 		chn->setThrottleTime(defn->getThrottleTime());
     if (defn->monitors_exports) chn->monitors_exports = true;
     chn->modified();
@@ -1150,7 +1150,7 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
             continue;
         if (chn->filtersAllow(machine)) {
 			if (chn->throttle_time) {
-				//std::cout << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
+				//NB_MSG << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
 				pending_items[machine].properties[key.asString()] = val;
 			}
 			else {
@@ -1162,7 +1162,7 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
 						chn->sendMessage(cmd, chn->communications_manager->subscriber(),response); //setup()
 					else
 						chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);
-					//std::cout << "channel " << name << " got response: " << response << "\n";
+					//NB_MSG << "channel " << name << " got response: " << response << "\n";
 					free(cmd);
 				}
 				else if (chn->mif) {
@@ -1653,7 +1653,7 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
             break;
         }
     }
-    //if (rc>0) std::cout << rc << " channels with activity\n";
+    //if (rc>0) NB_MSG << rc << " channels with activity\n";
     return rc;
 }
 #endif
@@ -1795,7 +1795,7 @@ void Channel::setupFilters() {
     while (prop_iter != definition()->monitors_properties.end()) {
         const std::pair<std::string, Value> &item = *prop_iter++;
         std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
-        //std::cout << "setting up channel: searching for machines where " <<item.first << " == " << item.second << "\n";
+        //NB_MSG << "setting up channel: searching for machines where " <<item.first << " == " << item.second << "\n";
         while (m_iter != MachineInstance::end()) {
             MachineInstance *machine = *m_iter++;
             if (machine && !this->channel_machines.count(machine)) {
@@ -1804,7 +1804,7 @@ void Channel::setupFilters() {
                 //  or if the machine has the property and it matches the provided value
                 if ( val != SymbolTable::Null &&
                         (item.second == SymbolTable::Null || val == item.second) ) {
-                    //std::cout << "found match " << machine->getName() <<"\n";
+                    //NB_MSG << "found match " << machine->getName() <<"\n";
                     this->channel_machines.insert(machine);
                     machine->publish();
                 }
@@ -1822,7 +1822,7 @@ void Channel::setupFilters() {
 			    MachineInstance *machine = *machines++;
 			    if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
 				    if (this->channel_machines.count(machine)) {
-					    //std::cout << "unpublished " << machine->getName() << "\n";
+					    //NB_MSG << "unpublished " << machine->getName() << "\n";
 					    machine->unpublish();
 					    this->channel_machines.erase(machine);
 				    }

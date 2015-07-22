@@ -321,7 +321,7 @@ void IODCommandThread::operator()() {
 
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 
-    std::cout << "------------------ Command Thread Started -----------------\n";
+    NB_MSG << "------------------ Command Thread Started -----------------\n";
 
     MyMonitor monit(&cti->socket);
     boost::thread cmd_monitor(boost::ref(monit));
@@ -430,7 +430,7 @@ void IODCommandThread::operator()() {
             // when processing is stopped, we expect to get an exception on this interface
             // otherwise, we fail since something strange has happened
             if (!done) {
-                if (errno) std::cout << "error during client communication: " << strerror(errno) << "\n" << std::flush;
+                if (errno) NB_MSG << "error during client communication: " << strerror(errno) << "\n" << std::flush;
                 if (zmq_errno())
                     std::cerr << "zmq message: " << zmq_strerror(zmq_errno()) << "\n" << std::flush;
                 else

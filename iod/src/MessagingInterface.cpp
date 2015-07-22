@@ -278,8 +278,9 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, bool d
 				socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
 			}
 		}
-		else {
-			NB_MSG << "Warning: unexpected protocol " << protocol << " constructing a messaging interface\n";
+		else if (protocol != eRAW) {
+			NB_MSG << "Warning: unexpected protocol " << protocol << " constructing a messaging interface on "
+					<< url << "\n";
 		}
 
 		if (!deferred) start();

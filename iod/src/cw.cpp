@@ -364,7 +364,7 @@ int main (int argc, char const *argv[])
         if (delay <= 1000) delay = 1000;
         if (delay-delta > 50){
             delay = delay-delta-50                                                           ;
-            //std::cout << "waiting: " << delay << "\n";
+            //NB_MSG << "waiting: " << delay << "\n";
             struct timespec sleep_time;
             sleep_time.tv_sec = delay / 1000000;
             sleep_time.tv_nsec = (delay * 1000) % 1000000000L;

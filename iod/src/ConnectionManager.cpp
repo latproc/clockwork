@@ -171,7 +171,7 @@ bool SubscriptionManager::requestChannel() {
     size_t len = 0;
 	assert(isClient());
     if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-		std::cout << "Requesting channel " << channel_name << "\n";
+		NB_MSG << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup().send(channel_setup, strlen(channel_setup));
         assert(len);
@@ -184,7 +184,7 @@ bool SubscriptionManager::requestChannel() {
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
-		std::cout << "Got channel " << buf << "\n";
+		NB_MSG << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;

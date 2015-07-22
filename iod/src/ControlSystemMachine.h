@@ -71,7 +71,7 @@ protected:
 
     void enter_connected() {
         state = s_connected;
-        std::cout << "Control System is connected\n "; }
+		std::cout << "Control System is connected\n "; }
     void enter_disconnected() {
         state = s_disconnected;
         std::cout << "Control System is disconnected\n ";
