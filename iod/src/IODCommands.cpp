@@ -126,19 +126,19 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 					return false;
 				}
 			}
+			/* it would be safer to push the requested state change onto the machine's
+				action list but some machines do not poll their action list because they
+				do not expect to receive events
+			*/
+			if (mi->isActive()) {
+				SetStateActionTemplate ssat("SELF", state_name );
+				mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
+			}
+			else
+				mi->setState(state_name.c_str());
+			result_str = "OK";
+			return true;
 		}
-		/* it would be safer to push the requested state change onto the machine's
-			action list but some machines do not poll their action list because they
-			do not expect to receive events
-		*/
-		if (mi->isActive()) {
-			SetStateActionTemplate ssat("SELF", state_name );
-			mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
-		}
-		else
-			mi->setState(state_name.c_str());
-		result_str = "OK";
-		return true;
 	}
 	//  Send reply back to client
 	const char *msg_text = "Not found: ";

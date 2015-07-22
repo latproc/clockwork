@@ -37,5 +37,7 @@ DebugExtra::DebugExtra()
 	DEBUG_INITIALISATION	= LogState::instance()->define("DEBUG_INITIALISATION");
 	DEBUG_MODBUS			= LogState::instance()->define("DEBUG_MODBUS");
 	DEBUG_DISPATCHER		= LogState::instance()->define("DEBUG_DISPATCHER");
+	DEBUG_CHANNELS			= LogState::instance()->define("DEBUG_CHANNELS");
+
 }
 

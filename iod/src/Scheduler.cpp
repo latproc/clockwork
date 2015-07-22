@@ -61,7 +61,7 @@ std::string Scheduler::getStatus() {
 		snprintf(buf, 300, "busy");
 	else
 		snprintf(buf, 300, "state: %d, is ready: %d"
-			" items: %ld, now: %ld.%06ld\n"
+			" items: %ld, now: %ld.%06d\n"
 			"last notification: %10.6f\nwait time: %10.6f",
 			state, ready(), items.size(), now.tv_sec, now.tv_usec,
 				(float)notification_sent/1000000.0f, (float)wait_duration/1000000.0f);
