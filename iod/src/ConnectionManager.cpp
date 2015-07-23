@@ -46,16 +46,16 @@ SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &s, const char *s
 
 void SingleConnectionMonitor::on_event_accepted(const zmq_event_t &event_, const char* addr_) {
 	SocketMonitor::on_event_accepted(event_, addr_);
-	//NB_MSG << socket_name << "Accepted\n";
+	//DBG_CHANNELS << socket_name << "Accepted\n";
 }
 
 void SingleConnectionMonitor::on_event_connected(const zmq_event_t &event_, const char* addr_) {
 	SocketMonitor::on_event_connected(event_, addr_);
-	//NB_MSG << socket_name << " Connected\n";
+	//DBG_CHANNELS << socket_name << " Connected\n";
 }
 
 void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-		//NB_MSG << socket_name << " Disconnected\n";
+		//DBG_CHANNELS << socket_name << " Disconnected\n";
 		//sock.disconnect(sock_addr.c_str());
 		SocketMonitor::on_event_disconnected(event_, addr_);
     }
@@ -131,7 +131,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 }
 
 SubscriptionManager::~SubscriptionManager() {
-	//NB_MSG << "warning: SubscriptionManager did not cleanup properly\n";
+	//DBG_CHANNELS << "warning: SubscriptionManager did not cleanup properly\n";
 }
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
@@ -171,7 +171,7 @@ bool SubscriptionManager::requestChannel() {
     size_t len = 0;
 	assert(isClient());
     if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-		NB_MSG << "Requesting channel " << channel_name << "\n";
+		DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
         len = setup().send(channel_setup, strlen(channel_setup));
         assert(len);
@@ -184,7 +184,7 @@ bool SubscriptionManager::requestChannel() {
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);
-		NB_MSG << "Got channel " << buf << "\n";
+		DBG_CHANNELS << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
@@ -206,7 +206,7 @@ bool SubscriptionManager::requestChannel() {
             }
             else {
                 setSetupStatus(SubscriptionManager::e_disconnected);
-                NB_MSG << " failed to parse: " << buf << "\n";
+                DBG_CHANNELS << " failed to parse: " << buf << "\n";
                 current_channel = "";
             }
             cJSON_Delete(chan);
@@ -246,14 +246,14 @@ bool SubscriptionManager::setupConnections() {
 		}
 		channel_url = url;
 		if ( sub_status_ == ss_init && monit_subs.disconnected()) {
-			DBG_MSG << " connecting subscriber to " << channel_url << "\n";
+			DBG_CHANNELS << " connecting subscriber to " << channel_url << "\n";
 			monit_subs.setEndPoint(channel_url.c_str());
 			subscriber().connect(channel_url.c_str());
 			setSetupStatus(SubscriptionManager::e_done); //TBD is this correct? Shouldn't be here
 			sub_status_ =  (protocol == eCLOCKWORK) ? ss_sub : ss_ready;
 		}
 		//else if ( sub_status_ == ss_sub && monit_subs.disconnected()) {
-		//	DBG_MSG << " restarting to reconnect channel " << channel_url << "\n";
+		//	DBG_CHANNELS << " restarting to reconnect channel " << channel_url << "\n";
 		//	exit(0);
 		//}
         return true;
@@ -339,17 +339,17 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	// or the setup socket depending on the circumstances.
 	int command_item = num_items - 1;
 	if (items[command_item].revents & ZMQ_POLLERR) {
-		NB_MSG << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
+		DBG_CHANNELS << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
 	}
 	else if (items[command_item].revents & ZMQ_POLLIN) {
-		NB_MSG << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
+		DBG_CHANNELS << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
 	}
 
     if (run_status == e_waiting_cmd && items[command_item].revents & ZMQ_POLLIN) {
 		if (safeRecv(cmd, buf, 1000, false, msglen)) {
             if (msglen == 1000) msglen--;
             buf[msglen] = 0;
-            DBG_MSG << " got cmd: " << buf << " from main thread\n";
+            DBG_CHANNELS << " got cmd: " << buf << " from main thread\n";
 			// if we are a client, pass commands through the setup socket to the other end
 			// of the channel.
 			if (isClient() && monit_setup && !monit_setup->disconnected()) {
@@ -358,13 +358,13 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 					run_status = e_waiting_response;
 				}
 				else {
-					NB_MSG << " forwarding message to subscriber\n";
+					DBG_CHANNELS << " forwarding message to subscriber\n";
 					subscriber().send(buf, msglen);
 					safeSend(cmd, "sent", 4);
 				}
 			}
 			else if (!monit_subs.disconnected()) {
-				NB_MSG << " forwarding message "<<buf<<" to subscriber\n";
+				DBG_CHANNELS << " forwarding message "<<buf<<" to subscriber\n";
 				subscriber().send(buf, msglen);
 				if (protocol == eCLOCKWORK) // require a response
 					run_status = e_waiting_response;
@@ -388,13 +388,13 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			run_status = e_waiting_cmd;
 		}
 		else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-			//NB_MSG << "incoming response\n";
+			//DBG_CHANNELS << "incoming response\n";
 			bool got_response =
 				(isClient())
 					? safeRecv(setup(), buf, 1000, false, msglen)
 					: safeRecv(subscriber(), buf, 1000, false, msglen);
 			if (got_response) {
-				//NB_MSG << " forwarding response " << buf << "\n";
+				//DBG_CHANNELS << " forwarding response " << buf << "\n";
 				if (msglen && msglen<1000) {
 					cmd.send(buf, msglen);
 				}
