@@ -3862,9 +3862,9 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				{
 					//snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
 					if (io_interface->address.is_signed)
-						io_interface->setValue( (uint32_t)(value & 0xffffffff));
-					else
 						io_interface->setValue( (int32_t)(value & 0xffffffff));
+					else
+						io_interface->setValue( (uint32_t)(value & 0xffffffff));
 					properties.add("VALUE", value, SymbolTable::ST_REPLACE);
 				}
 				else {
