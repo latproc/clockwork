@@ -276,7 +276,7 @@ public:
 	void dropConnection();
 
 private:
-	static std::map<MachineInstance *, MachineRecord *> throttled_items;
+	std::map<MachineInstance *, MachineRecord *> throttled_items;
 	std::list<IODCommand *>pending_commands;
 	std::list<IODCommand *>completed_commands;
 

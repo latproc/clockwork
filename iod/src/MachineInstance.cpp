@@ -74,7 +74,7 @@ public:
 	std::string *modbus_name;
 	bool reported_error;
 
-  Cache() : full_name(0), reported_error(false) { }
+  Cache() : full_name(0), modbus_name(0), reported_error(false) { }
 };
 
 Parameter::Parameter(Value v) : val(v), machine(0) {
@@ -3735,6 +3735,8 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
+NB_MSG << _name << " Sending modbus update " << property_name  << " " << new_value << "\n";
+
 	ModbusAddress ma = modbus_exports[property_name];
 	switch(ma.getGroup()) {
 		case ModbusAddress::none:
@@ -3823,7 +3825,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 			return;
 		}
 		// try the current instance ofthe machine, then the machine class and finally the global symbols
-		DBG_M_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
+		DBG_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
 		Value &prev_value = properties.lookup(property.c_str());
 
 		if (prev_value == SymbolTable::Null && property_val.token_id != ClockworkToken::tokVALUE && property != _name) {
@@ -3877,9 +3879,14 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 
 				// update modbus with the new value
 				if (modbus_exports.count(property_name)){
+					NB_MSG << property_name << " sendModbusUpdate\n";
 					Channel::sendModbusUpdate(this, property_name, new_value);
 				}
+//				else
+//					{ NB_MSG << property_name << " is not exported\n"; }
 			}
+//				else
+//					{ NB_MSG << property_name << " is not published\n"; }
 		}
 		// only tell dependent machines to recheck predicates if the property
 		// actually changes value

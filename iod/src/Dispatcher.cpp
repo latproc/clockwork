@@ -120,7 +120,7 @@ void Dispatcher::deliver(Package *p)
 		<< " '" << tnam2
 		<< "' current: " << std::hex << " " << pthread_self()
 		<< " '" << tnam1 << "'"
-		<< "\n";
+		<< std::dec << "\n";
 	}
     dispatch_socket->send(&p, sizeof(Package*));
 }

@@ -83,7 +83,12 @@ void initialiseOutputs() {
 			long i_val = 0;
 			if (val.asInteger(i_val)) {
 				m->setValue("VALUE", i_val);
-				if (m->io_interface) m->io_interface->setValue(i_val);
+				if (m->io_interface) {
+					if (m->io_interface->address.is_signed)
+						m->io_interface->setValue( (int32_t) (i_val & 0xfffffffff)  );
+					else
+						m->io_interface->setValue( (uint32_t) (i_val & 0xfffffffff)  );
+				}
 				else { std::cout << " warning: " << m->getName() << " is not connected to hardware\n"; }
 			}
 		}

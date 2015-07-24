@@ -30,8 +30,6 @@ State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
 
-std::map< MachineInstance *, MachineRecord*> Channel::throttled_items;
-
 MachineRef::MachineRef() : refs(1) {
 }
 
@@ -1176,9 +1174,9 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
         if (chn->filtersAllow(machine)) {
 			if (chn->throttle_time) {
 				//DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
-				if (!throttled_items[machine])
-					throttled_items[machine] = new MachineRecord(machine);
-				throttled_items[machine]->properties.at(key.asString()) = val;
+				if (!chn->throttled_items[machine])
+					chn->throttled_items[machine] = new MachineRecord(machine);
+				chn->throttled_items[machine]->properties.at(key.asString()) = val;
 			}
 			else {
 				chn->sendPropertyChangeMessage(machine->getName(), key, val);
@@ -1246,8 +1244,8 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
 				
 		if (!chn->throttle_time) continue;
 
-		std::map<MachineInstance *, MachineRecord*>::iterator found = throttled_items.find(machine);
-		if (chn->filtersAllow(machine) && found != throttled_items.end() ) {
+		std::map<MachineInstance *, MachineRecord*>::iterator found = chn->throttled_items.find(machine);
+		if (chn->filtersAllow(machine) && found != chn->throttled_items.end() ) {
 			MachineRecord *mr = (*found).second;
 			std::map<std::string, Value>::iterator iter = mr->properties.begin();
 			while (iter != mr->properties.end()) {
@@ -1259,7 +1257,7 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
 					machine->sendModbusUpdate(item.first, item.second);
 				iter = mr->properties.erase(iter);
 			}
-			found = throttled_items.erase(found);
+			found = chn->throttled_items.erase(found);
 			delete mr;
 		}
     }
@@ -1366,14 +1364,14 @@ void Channel::sendModbusUpdate(MachineInstance *machine, const std::string &prop
 
 		if (chn->throttle_time) {
 			DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << property_name << "\n";
-			if (!throttled_items[machine])
-				throttled_items[machine] = new MachineRecord(machine);
-			throttled_items[machine]->properties[property_name] = new_value;
+			if (!chn->throttled_items[machine])
+				chn->throttled_items[machine] = new MachineRecord(machine);
+			chn->throttled_items[machine]->properties[property_name] = new_value;
 		}
 		else {
 			machine->sendModbusUpdate(property_name, new_value);
 		}
-		return; // since modbus channels are publishers we only need to send once
+		//return; // since modbus channels are publishers we only need to send once
 	}
 }
 
