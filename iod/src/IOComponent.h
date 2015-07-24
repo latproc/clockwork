@@ -39,12 +39,15 @@ struct IOAddress {
 	int32_t value;
 	unsigned int bitlen;
 	unsigned int entry_position;
-	IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos, unsigned int len=1) 
-		: module_position(module_pos), io_offset(offs), io_bitpos(bitp), value(0), bitlen(len),entry_position(entry_pos) { }
+	bool is_signed;
+	IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos, unsigned int len=1, bool signed_value = false)
+		: module_position(module_pos), io_offset(offs), io_bitpos(bitp), value(0),
+			bitlen(len),entry_position(entry_pos), is_signed(signed_value) { }
 	IOAddress(const IOAddress &other) 
 		: module_position(other.module_position), io_offset(other.io_offset), io_bitpos(other.io_bitpos), value(other.value), 
-		bitlen(other.bitlen), entry_position(other.entry_position), description(other.description) { }
-	IOAddress() : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0) {}
+		bitlen(other.bitlen), entry_position(other.entry_position),
+ 		is_signed(other.is_signed), description(other.description) { }
+	IOAddress() : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0), is_signed(false) {}
 	std::string description;
 };
 
@@ -73,7 +76,7 @@ public:
 	static Iterator begin() { return processing_queue.begin(); }
 	static Iterator end() { return processing_queue.end(); }
 	static IOAddress add_io_entry(const char *name, unsigned int module_pos, 
-		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1);
+		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
 	static void processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data, 
@@ -118,6 +121,7 @@ public:
 	bool isOff();
 	int32_t value() { if (address.bitlen == 1) { if (isOn()) return 1; else return 0; } else return address.value; }
 	void setValue(uint32_t new_value);
+	void setValue(int32_t new_value);
 	virtual const char *type() { return "IOComponent"; }
 	std::ostream &operator<<(std::ostream &out) const;
 	IOAddress address;

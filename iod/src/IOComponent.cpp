@@ -318,13 +318,14 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 
 IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos, 
 		unsigned int io_offset, unsigned int bit_offset, 
-		unsigned int entry_pos, unsigned int bit_len){
+		unsigned int entry_pos, unsigned int bit_len, bool signed_value){
 	IOAddress addr(module_pos, io_offset, bit_offset, entry_pos, bit_len);
 	addr.module_position = module_pos;
 	addr.io_offset = io_offset;
 	addr.io_bitpos = bit_offset;
     addr.entry_position = entry_pos;
 	addr.description = name;
+	addr.is_signed = signed_value;
   char buf[80];
   snprintf(buf, 80, "io:%s_%d", name, module_pos);
 	if (io_names.find(std::string(buf)) != io_names.end())  {
@@ -1026,16 +1027,28 @@ void Output::turnOff() {
 	gettimeofday(&last, 0);
 	last_event = e_off;
 	updatedComponentsOut.insert(this);
-  updates_sent = false;
+	updates_sent = false;
 	++outputs_waiting;
 	markChange();
 }
 
 void IOComponent::setValue(uint32_t new_value) {
+	assert(!address.is_signed);
 	pending_value = new_value;
 	gettimeofday(&last, 0);
 	last_event = e_change;
-  updates_sent = false;
+	updates_sent = false;
+	updatedComponentsOut.insert(this);
+	++outputs_waiting;
+	markChange();
+}
+
+void IOComponent::setValue(int32_t new_value) {
+	assert(address.is_signed);
+	pending_value = new_value;
+	gettimeofday(&last, 0);
+	last_event = e_change;
+	updates_sent = false;
 	updatedComponentsOut.insert(this);
 	++outputs_waiting;
 	markChange();
