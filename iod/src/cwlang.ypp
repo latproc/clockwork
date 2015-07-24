@@ -411,7 +411,7 @@ chn_definition_section:
 }
 
 | OPTION chn_option_settings ';'
-| THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2); }
+| THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2 * 1000); }
 | tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
 | MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
 ;
