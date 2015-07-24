@@ -30,9 +30,12 @@ State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
 
-std::map< MachineInstance *, MachineRecord> Channel::pending_items;
+std::map< MachineInstance *, MachineRecord*> Channel::throttled_items;
 
 MachineRef::MachineRef() : refs(1) {
+}
+
+MachineRecord::MachineRecord(MachineInstance *m) : machine(m), last_sent(0) {
 }
 
 ChannelImplementation::~ChannelImplementation() { }
@@ -1141,6 +1144,25 @@ void Channel::setDefinition(const ChannelDefinition *def) {
     definition_ = def;
 }
 
+void Channel::sendPropertyChangeMessage(const std::string &name, const Value &key, const Value &val) {
+	if (communications_manager) {
+		std::string response;
+		char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+		if (isClient())
+				sendMessage(cmd, communications_manager->subscriber(),response); //setup()
+			else
+				sendMessage(cmd, communications_manager->subscriber(),response);
+			//DBG_CHANNELS << "channel " << name << " got response: " << response << "\n";
+			free(cmd);
+	}
+	else if (mif) {
+		char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
+		mif->send(cmd);
+		free(cmd);
+	}
+}
+
+
 void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val) {
     if (!all) return;
     std::string name = machine->fullName();
@@ -1154,28 +1176,58 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
         if (chn->filtersAllow(machine)) {
 			if (chn->throttle_time) {
 				//DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
-				pending_items[machine].properties[key.asString()] = val;
+				if (!throttled_items[machine])
+					throttled_items[machine] = new MachineRecord(machine);
+				throttled_items[machine]->properties.at(key.asString()) = val;
 			}
 			else {
-				//if (!chn->channel_machines(machine)) chn->channel_machines.insert(machine);
-				if (chn->communications_manager) {
-					std::string response;
-					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
-					if (chn->isClient())
-						chn->sendMessage(cmd, chn->communications_manager->subscriber(),response); //setup()
-					else
-						chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);
-					//DBG_CHANNELS << "channel " << name << " got response: " << response << "\n";
-					free(cmd);
-				}
-				else if (chn->mif) {
-					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
-					chn->mif->send(cmd);
-					free(cmd);
-				}
+				chn->sendPropertyChangeMessage(machine->getName(), key, val);
 			}
         }
     }
+}
+
+// step through the list of properties that have been throttled on this channel
+// and send the property change and/or the modbus update depending on channel features
+void Channel::sendThrottledUpdates() {
+	bool do_modbus = definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
+	bool do_properties = definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
+	last_throttled_send = nowMicrosecs();
+	std::map<MachineInstance *, MachineRecord*>::iterator iter = throttled_items.begin();
+	while (iter != throttled_items.end()) {
+		std::pair<MachineInstance *, MachineRecord*> item = *iter;
+		if (do_properties || do_modbus){
+			if (do_properties) {
+				std::map<std::string, Value> *props = &item.second->properties;
+				std::map<std::string, Value>::iterator props_iter = props->begin();
+				while (props_iter != props->end()) {
+					std::pair<std::string, Value> prop = *props_iter;
+					Value key(prop.first);
+					sendPropertyChangeMessage(item.second->machine->getName(), key, prop.second);
+					if (!do_modbus)
+						props_iter = props->erase(props_iter);
+					else props_iter++;
+				}
+			}
+			if (do_modbus) {
+				std::map<std::string, Value> *props = &item.second->properties;
+				std::map<std::string, Value>::iterator props_iter = props->begin();
+				while (props_iter != props->end()) {
+					std::pair<std::string, Value> prop = *props_iter;
+					MachineRecord *m = item.second;
+					if (m && m->machine)
+						m->machine->sendModbusUpdate(prop.first, prop.second);
+					else
+						assert(false);
+					props_iter = props->erase(props_iter);
+				}
+			}
+		}
+		else
+			assert(false); // should not be here if we aren't doing properties or modbus messages
+		delete item.second;
+		iter = throttled_items.erase(iter);
+	}
 }
 
 // send the property changes that have been recorded for this machine
@@ -1185,35 +1237,30 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		if (!chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) continue;
+		bool do_modbus = chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
+		bool do_properties = chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
+		if (!do_modbus && !do_properties) continue;
 
         if (!chn->channel_machines.count(machine))
             continue;
 				
 		if (!chn->throttle_time) continue;
 
-		std::map<MachineInstance *, MachineRecord>::iterator found = pending_items.find(machine);
-		if (chn->filtersAllow(machine) && found != pending_items.end() ) {
-			MachineRecord &machine = (*found).second;
-			std::map<std::string, Value>::iterator iter = machine.properties.begin();
-			while (iter != machine.properties.end()) {
+		std::map<MachineInstance *, MachineRecord*>::iterator found = throttled_items.find(machine);
+		if (chn->filtersAllow(machine) && found != throttled_items.end() ) {
+			MachineRecord *mr = (*found).second;
+			std::map<std::string, Value>::iterator iter = mr->properties.begin();
+			while (iter != mr->properties.end()) {
 				std::pair<std::string, Value> item = *iter;
-				if (chn->communications_manager) {
-					std::string response;
-					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
-					if (chn->isClient())
-						chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);//setup()
-					else
-						chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);
-					free(cmd);
-				}
-				else if (chn->mif) {
-					char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, item.first, item.second); // send command
-					chn->mif->send(cmd);
-					free(cmd);
-				}
-				iter = machine.properties.erase(iter);
+				Value key(item.first);
+				if (do_properties)
+					chn->sendPropertyChangeMessage(machine->getName(), key, item.second);
+				if (do_modbus)
+					machine->sendModbusUpdate(item.first, item.second);
+				iter = mr->properties.erase(iter);
 			}
+			found = throttled_items.erase(found);
+			delete mr;
 		}
     }
 }
@@ -1297,6 +1344,38 @@ Channel *Channel::findByType(const std::string kind) {
     return 0;
 }
 
+bool Channel::throttledItemsReady(uint64_t now_usecs) const {
+	return !throttled_items.empty() && now_usecs - last_throttled_send >= throttle_time;
+}
+
+void Channel::sendModbusUpdate(MachineInstance *machine, const std::string &property_name, const Value &new_value) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+
+	if (!all) return;
+	std::map<std::string, Channel*>::iterator iter = all->begin();
+	while (iter != all->end()) {
+		Channel *chn = (*iter).second; iter++;
+		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+		if (!chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates)) continue;
+
+		//TBD change modbus channels to send data using a guaranteed delivery method
+		//currently modbus channels publish data to all connected channels.
+		//
+
+		if (chn->throttle_time) {
+			DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << property_name << "\n";
+			if (!throttled_items[machine])
+				throttled_items[machine] = new MachineRecord(machine);
+			throttled_items[machine]->properties[property_name] = new_value;
+		}
+		else {
+			machine->sendModbusUpdate(property_name, new_value);
+		}
+		return; // since modbus channels are publishers we only need to send once
+	}
+}
 
 void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 	char tnam[100];
@@ -1664,11 +1743,15 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
 // This method is executed on the main thread
 void Channel::handleChannels() {
 	if (!all) return;
+	uint64_t now = nowMicrosecs();
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         const std::pair<std::string, Channel *> &item = *iter++;
         Channel *chn = item.second;
         chn->checkCommunications();
+		if (chn->throttledItemsReady(now)) {
+			chn->sendThrottledUpdates();
+		}
     }
 }
 

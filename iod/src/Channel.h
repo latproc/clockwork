@@ -135,7 +135,7 @@ public:
 
 	void setThrottleTime(unsigned int t) { throttle_time = t; }
 	unsigned int getThrottleTime() { return throttle_time; }
-    
+
     const std::string &getIdent() { return identifier; }
     const std::string &getKey() { return psk; }
     const std::string &getVersion() { return version; }
@@ -175,6 +175,10 @@ public:
 	MachineInstance *machine;
 	uint64_t last_sent;
 	std::map<std::string, Value> properties;
+	MachineRecord(MachineInstance *m);
+private:
+	MachineRecord(const MachineRecord &other);
+	MachineRecord &operator=(const MachineRecord &other);
 };
 
 class ChannelMessage {
@@ -220,6 +224,7 @@ public:
     static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
     static void sendStateChange(MachineInstance *machine, std::string new_state);
+	static void sendModbusUpdate(MachineInstance *machine, const std::string &property_name, const Value &new_value);
 	static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value>*params);
     static void setupAllShadows();
     static Channel *findByType(const std::string kind);
@@ -271,12 +276,16 @@ public:
 	void dropConnection();
 
 private:
-	static std::map<MachineInstance *, MachineRecord> pending_items;
+	static std::map<MachineInstance *, MachineRecord *> throttled_items;
 	std::list<IODCommand *>pending_commands;
 	std::list<IODCommand *>completed_commands;
 
 	void checkCommunications();
     void setPollItemBase(zmq::pollitem_t *);
+
+	bool throttledItemsReady(uint64_t now_usecs) const;
+	void sendThrottledUpdates();
+	void sendPropertyChangeMessage(const std::string &name, const Value &key, const Value &val);
 
     std::string name;
     unsigned int port;
@@ -308,6 +317,7 @@ private:
 	SequenceNumber seqno;
 	std::list<ChannelMessage> pending_messages;
 	std::list<ChannelMessage> completed_messages;
+	uint64_t last_throttled_send;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

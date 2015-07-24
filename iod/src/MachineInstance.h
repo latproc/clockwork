@@ -320,7 +320,7 @@ public:
 	virtual bool isShadow(); // is this machine a shadow instance?
     
     std::string &fullName() const;
-    
+	std::string modbusName(const std::string &property, const Value & property_val);
     std::string _type;
     std::vector<Parameter> parameters;    
     std::vector<Parameter> locals;    
@@ -405,6 +405,7 @@ public:
     MachineInstance *locker() const { return locked; }
 	
 	// basic modbus interface
+	void sendModbusUpdate(const std::string &property_name, const Value &new_value);
 	ModbusAddress addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name);
 	std::map<std::string, ModbusAddress >modbus_exports;
 	std::map<int, std::string>modbus_addresses;

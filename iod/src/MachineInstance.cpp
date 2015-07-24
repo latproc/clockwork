@@ -71,6 +71,7 @@ MachineInstance::SharedCache *MachineInstance::shared = 0;
 class MachineInstance::Cache {
 public:
 	std::string *full_name;
+	std::string *modbus_name;
 	bool reported_error;
 
   Cache() : full_name(0), reported_error(false) { }
@@ -365,6 +366,24 @@ std::string &MachineInstance::fullName() const {
 	return *cache->full_name;
 }
 
+std::string MachineInstance::modbusName(const std::string &property, const Value & property_val) {
+	std::string res;
+	if (cache->modbus_name) res = *cache->modbus_name;
+	else {
+		if (owner) {
+			res = owner->getName();
+			res += ".";
+		}
+		res += _name;
+		cache->modbus_name = new std::string(res);
+	}
+	if (property_val.token_id != ClockworkToken::tokVALUE) {
+		res += ".";
+		res += property;
+	}
+	return res;
+}
+
 bool MachineInstance::isShadow() {
 	return false;
 }
@@ -431,12 +450,6 @@ void MachineInstance::triggerFired(Trigger *trig) {
 		Channel::sendPropertyChanges(this);
 	}
 	setNeedsCheck();
-/*
-	num_machines_with_work++;
-	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << num_machines_with_work << "\n";
-	has_work = true;
-	busy_machines.insert(this);
-*/
 }
 
 void MachineInstance::checkActions() {
@@ -2928,7 +2941,12 @@ void MachineInstance::disable() {
 			long i_val = 0;
 			if (val.asInteger(i_val)) {
 				setValue("VALUE", i_val);
-				if (io_interface) io_interface->setValue((uint32_t)i_val);
+				if (io_interface) {
+					if (io_interface->address.is_signed)
+						io_interface->setValue((int32_t)(i_val & 0xffffffff));
+					else
+						io_interface->setValue((uint32_t)(i_val & 0xffffffff));
+				}
 			}
 		}
 	}
@@ -3716,6 +3734,41 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 	return hasState(s);
 }
 
+void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
+	ModbusAddress ma = modbus_exports[property_name];
+	switch(ma.getGroup()) {
+		case ModbusAddress::none:
+			DBG_M_MODBUS << property_name << " export type is 'none'\n";
+			break;
+		case ModbusAddress::discrete:
+		case ModbusAddress::coil:
+		case ModbusAddress::input_register:
+		case ModbusAddress::holding_register: {
+			if (new_value.kind == Value::t_integer) {
+				long intVal;
+				if (ma.length() == 1 || ma.length() == 2) {
+					if (new_value.asInteger(intVal)) {
+						ma.update(this, (int)intVal);
+					}
+					else {
+						DBG_M_MODBUS << property_name << " does not have an integer value\n";
+					}
+				}
+			}
+			else if (new_value.kind == Value::t_string || new_value.kind == Value::t_symbol){
+				ma.update(this, new_value.sValue);
+			}
+			else {
+				DBG_M_MODBUS << "unable to export " << property_name << "\n";
+			}
+		}
+			break;
+		case ModbusAddress::string: {
+			ma.update(this, new_value.asString());
+		}
+	}
+}
+
 void MachineInstance::setValue(const std::string &property, Value new_value) {
 	//forceStableStateCheck();
 	//forceIdleCheck();
@@ -3806,7 +3859,10 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 				if (new_value.asInteger(value))
 				{
 					//snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
-					io_interface->setValue( (uint32_t)value);
+					if (io_interface->address.is_signed)
+						io_interface->setValue( (uint32_t)(value & 0xffffffff));
+					else
+						io_interface->setValue( (int32_t)(value & 0xffffffff));
 					properties.add("VALUE", value, SymbolTable::ST_REPLACE);
 				}
 				else {
@@ -3815,61 +3871,15 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 					NB_MSG << buf << "\n";
 				}
 			}
+			std::string property_name(modbusName(property, property_val));
 			if (published) {
 				Channel::sendPropertyChange(this, property.c_str(), new_value);
-			}
-			// update modbus with the new value
-			DBG_M_MODBUS << " building modbus name for property " << property << " on " << _name << "\n";
-			std::string property_name;
-			if (owner) {
-				property_name = owner->getName();
-				property_name += ".";
-			}
-			property_name += _name;
-			if (property_val.token_id != ClockworkToken::tokVALUE) {
-				property_name += ".";
-				property_name += property;
-			}
 
-			if (published && modbus_exports.count(property_name)){
-				ModbusAddress ma = modbus_exports[property_name];
-				if (property_val.token_id == ClockworkToken::tokVALUE) {
-					DBG_M_MODBUS << property_name << " modbus address " << ma << "\n";
-				}
-				switch(ma.getGroup()) {
-					case ModbusAddress::none:
-						DBG_M_MODBUS << property_name << " export type is 'none'\n";
-						break;
-					case ModbusAddress::discrete:
-					case ModbusAddress::coil:
-					case ModbusAddress::input_register:
-					case ModbusAddress::holding_register: {
-											  if (new_value.kind == Value::t_integer) {
-												  long intVal;
-												  if (ma.length() == 1 || ma.length() == 2) {
-													  if (new_value.asInteger(intVal)) {
-														  ma.update(this, (int)intVal);
-													  }
-													  else {
-														  DBG_M_MODBUS << property_name << " does not have an integer value\n";
-													  }
-												  }
-											  }
-											  else if (new_value.kind == Value::t_string || new_value.kind == Value::t_symbol){
-												  ma.update(this, new_value.sValue);
-											  }
-											  else {
-												  DBG_M_MODBUS << "unable to export " << property_name << "\n";
-											  }
-										  }
-										  break;
-					case ModbusAddress::string: {
-										ma.update(this, new_value.asString());
-									}
+				// update modbus with the new value
+				if (modbus_exports.count(property_name)){
+					Channel::sendModbusUpdate(this, property_name, new_value);
 				}
 			}
-			else
-				DBG_M_MODBUS << _name << " " << property_name << " is not exported\n";
 		}
 		// only tell dependent machines to recheck predicates if the property
 		// actually changes value
@@ -3877,15 +3887,6 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 			DBG_M_PROPERTIES << "telling dependent machines about the change\n";
 			setNeedsCheck();
 			notifyDependents();
-#if 0
-			std::set<MachineInstance *>::iterator d_iter = depends.begin();
-			while (d_iter != depends.end()) {
-				MachineInstance *dep = *d_iter++;
-				dep->setNeedsCheck(); // make sure dependant machines update when a property changes
-				//Message *msg = new Message("property_change");
-				//send(msg, dep);
-			}
-#endif
 		}
 	}
 }
