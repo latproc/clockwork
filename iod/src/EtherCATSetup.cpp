@@ -252,6 +252,7 @@ void generateIOComponentModules()
 						m->io_interface = o;
 						o->addDependent(m);
 						o->addOwner(m);
+						o->setupProperties(m);
 					}
 				}
 				else

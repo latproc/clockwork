@@ -348,6 +348,9 @@ void IOComponent::add_subscriber(const char *name, const char *topic) {
 //    subs[name] = mqt;
 }
 
+void IOComponent::setupProperties(MachineInstance *m) {
+}
+
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
 	out << (io_clock-read_time) << " [" << address.description<<" "
@@ -389,8 +392,9 @@ public:
     LongBuffer positions;
     int32_t last_sent; // this is the value to send unless the read value moves away from the mean
     uint16_t buffer_len;
+		long *tolerance;
     
-    InputFilterSettings() :property_changed(true), noise_tolerance(1), positions(16), last_sent(0), buffer_len(16) { }
+    InputFilterSettings() :property_changed(true), noise_tolerance(4), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
 };
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
@@ -398,6 +402,8 @@ AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
 	direction_ = DirInput;
 }
 int32_t AnalogueInput::filter(int32_t raw) {
+		if (config->tolerance == 0) {
+		}
     if (config->property_changed) {
         config->property_changed = false;
     }
