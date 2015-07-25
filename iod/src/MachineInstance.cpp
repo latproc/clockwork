@@ -3702,7 +3702,7 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
-NB_MSG << _name << " Sending modbus update " << property_name  << " " << new_value << "\n";
+//NB_MSG << _name << " Sending modbus update " << property_name  << " " << new_value << "\n";
 
 	ModbusAddress ma = modbus_exports[property_name];
 	switch(ma.getGroup()) {

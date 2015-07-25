@@ -1471,7 +1471,6 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
 				//DBG_CHANNELS << "Channel " << name << " sending " << cmd << "\n";
 				chn->mif->send(cmd);
-NB_MSG << cmd << "\n";
 				free(cmd);
 			}
 			else {
