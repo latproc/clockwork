@@ -392,7 +392,7 @@ public:
     LongBuffer positions;
     int32_t last_sent; // this is the value to send unless the read value moves away from the mean
     uint16_t buffer_len;
-		long *tolerance;
+	long *tolerance;
     
     InputFilterSettings() :property_changed(true), noise_tolerance(4), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
 };
@@ -401,6 +401,15 @@ AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
 	config = new InputFilterSettings();
 	direction_ = DirInput;
 }
+
+void AnalogueInput::setupProperties(MachineInstance *m) {
+	Value &v = m->getValue("tolerance");
+	if (v.kind == Value::t_integer) {
+		config->tolerance = &v.iValue;
+		config->noise_tolerance = *config->tolerance;
+	}
+}
+
 int32_t AnalogueInput::filter(int32_t raw) {
 		if (config->tolerance == 0) {
 		}
@@ -409,6 +418,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
     }
     config->positions.append(raw);
     int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
+	if (config->tolerance) config->noise_tolerance = *config->tolerance;
     if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
         config->last_sent = mean;
     }

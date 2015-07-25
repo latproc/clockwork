@@ -3854,6 +3854,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 		if (changed ){
 			setNeedsCheck();
 			properties.add(property, new_value, SymbolTable::ST_REPLACE);
+			if ( io_interface ) io_interface->setupProperties(this);
 			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
 				char buf[100];
 				errno = 0;

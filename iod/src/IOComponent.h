@@ -137,7 +137,7 @@ public:
 	void addOwner(MachineInstance *m) { owners.push_back(m); }
 	bool ownersEnabled()const;
 	
-	void setupProperties(MachineInstance *m); // link properties in the component to the MachineInstance properties
+	virtual void setupProperties(MachineInstance *m); // link properties in the component to the MachineInstance properties
     
     virtual int32_t filter(int32_t);
 
@@ -203,6 +203,7 @@ class AnalogueInput : public IOComponent {
 public:
 	AnalogueInput(IOAddress addr);
 	virtual const char *type() { return "AnalogueInput"; }
+	void setupProperties(MachineInstance *m); // link properties in the component to the MachineInstance properties
     virtual int32_t filter(int32_t raw);
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
