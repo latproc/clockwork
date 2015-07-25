@@ -146,6 +146,7 @@ void insert(int group, int addr, const char *value, size_t len)
 		//		if (i+1<str_len) p++;
 	}
 	// if the length was odd we will not have copied the terminating null
+	*q++ = 0;
 	if (len % 2)
 		*q = 0;
 }

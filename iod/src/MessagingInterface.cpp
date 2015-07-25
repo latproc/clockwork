@@ -371,7 +371,7 @@ char *MessagingInterface::send(const char *txt) {
 		<< " '" << tnam2
 		<< "' current: " << std::hex << " " << pthread_self()
 		<< " '" << tnam1 << "'"
-		<< "\n";
+		<< std::dec << "\n";
 	}
 
     if (!is_publisher){

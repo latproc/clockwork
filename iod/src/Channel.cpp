@@ -1445,42 +1445,43 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 	assert(pgn_rc == 0);
 
 	if (!all) return;
-    std::string name = machine->fullName();
-    std::map<std::string, Channel*>::iterator iter = all->begin();
-    while (iter != all->end()) {
-        Channel *chn = (*iter).second; iter++;
+	std::string name = machine->fullName();
+	std::map<std::string, Channel*>::iterator iter = all->begin();
+	while (iter != all->end()) {
+		Channel *chn = (*iter).second; iter++;
 		if (command == "UPDATE" && !chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates))
 			continue;
 
-        if (!chn->channel_machines.count(machine))
-            continue;
-        if (chn->filtersAllow(machine)) {
-            //if (!chn->channel_machines.count(machine)) chn->channel_machines.insert(machine);
-            if (chn->communications_manager
-                && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
-                std::string response;
-                char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+		if (!chn->channel_machines.count(machine))
+			continue;
+		if (chn->filtersAllow(machine)) {
+			//if (!chn->channel_machines.count(machine)) chn->channel_machines.insert(machine);
+			if (chn->communications_manager
+					&& chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
+				std::string response;
+				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
 				if (chn->isClient())
 					chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);//setup()
 				else
 					chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);
-                //DBG_CHANNELS << tnam << ": channel " << name << " got response: " << response << "\n";
+				//DBG_CHANNELS << tnam << ": channel " << name << " got response: " << response << "\n";
 				free(cmd);
-            }
-            else if (chn->mif) {
-                char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+			}
+			else if (chn->mif) {
+				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
 				//DBG_CHANNELS << "Channel " << name << " sending " << cmd << "\n";
-                chn->mif->send(cmd);
+				chn->mif->send(cmd);
+NB_MSG << cmd << "\n";
 				free(cmd);
-            }
-            else {
-                char buf[150];
-                snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
-                machine->getName().c_str());
-                MessageLog::instance()->add(buf);
-            }
-        }
-    }
+			}
+			else {
+				char buf[150];
+				snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
+						machine->getName().c_str());
+				MessageLog::instance()->add(buf);
+			}
+		}
+	}
 }
 
 
