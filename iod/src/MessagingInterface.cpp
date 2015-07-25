@@ -45,6 +45,39 @@ std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 bool MessagingInterface::abort_all = false;
 
 
+uint64_t nowMicrosecs() {
+	struct timeval now;
+	gettimeofday(&now, 0);
+	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
+}
+
+uint64_t nowMicrosecs(const struct timeval &now) {
+	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
+}
+
+int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then) {
+	//   uint64_t t = (now->tv_sec - then->tv_sec);
+	//   t = t * 1000000 + (now->tv_usec - then->tv_usec);
+	//	return t;
+	uint64_t now_t = now->tv_sec * 1000000L + now->tv_usec;
+	uint64_t then_t = then->tv_sec * 1000000L + then->tv_usec;
+	int64_t t = now_t - then_t;
+	return t;
+}
+
+int64_t get_diff_in_microsecs(uint64_t now_t, const struct timeval *then) {
+	uint64_t then_t = then->tv_sec * 1000000L + then->tv_usec;
+	int64_t t = now_t - then_t;
+	return t;
+}
+
+int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
+	uint64_t now_t = now->tv_sec * 1000000L + now->tv_usec;
+	int64_t t = now_t - then_t;
+	return t;
+}
+
+
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
@@ -115,19 +148,20 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 	}
 }
 
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 	int retries = 3;
 	assert(msg);
+	uint64_t start_time = microsecs();
 sendMessage_transmit:
 	--retries;
 	assert(retries);
 	while (1) {
         try {
 			if ( !(*msg) ) { NB_MSG << " Warning: sending empty message"; }
-            size_t len = sock.send(msg, strlen(msg));
+            size_t len = sock.send(msg, strlen(msg), ZMQ_NOBLOCK);
 			if (!len) {
 				if (!len) { NB_MSG << "Warning: zero bytes sent of " << strlen(msg) << "\n"; }
 				continue;
@@ -138,6 +172,8 @@ sendMessage_transmit:
         catch (zmq::error_t e) {
 			if (errno == EINTR) {
 				NB_MSG << "Warning: send was interrupted (EAGAIN)\n";
+				usleep(50);
+				if (nowMicrosecs() - start_time > timeout_us ) return false;
 				continue;
 			}
             NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n";
@@ -150,7 +186,7 @@ sendMessage_transmit:
     }
     char *buf = 0;
     size_t len = 0;
-	uint64_t start_time = microsecs();
+	start_time = microsecs();
     while (len == 0) {
         try {
 			zmq::message_t rcvd;
@@ -170,8 +206,9 @@ sendMessage_transmit:
 						std::cerr << __FILE__ << ":" << __LINE__ << " sendMessage saw no response in 100ms\n";
 						return false;
 					}
-					else
+					else {
 						usleep(500);
+					}
 					continue;
 				}
 			}

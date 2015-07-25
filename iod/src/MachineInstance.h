@@ -42,12 +42,6 @@
 
 extern SymbolTable globals;
 
-uint64_t nowMicrosecs();
-uint64_t nowMicrosecs(const struct timeval &now);
-int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then);
-int64_t get_diff_in_microsecs(uint64_t now, const struct timeval *then);
-int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then);
-
 class MachineInstance;
 class MachineClass;
 
