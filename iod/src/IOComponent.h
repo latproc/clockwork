@@ -136,6 +136,8 @@ public:
 
 	void addOwner(MachineInstance *m) { owners.push_back(m); }
 	bool ownersEnabled()const;
+	
+	void setupProperties(MachineInstance *m); // link properties in the component to the MachineInstance properties
     
     virtual int32_t filter(int32_t);
 
