@@ -98,7 +98,7 @@ public:
 bool loadActiveData(PersistentStore &store, const char *initial_settings)
 {
     std::cout << "loading data from clockwork\n";
-	ExitMessage em("load data done");
+		ExitMessage em("load data done");
     cJSON *obj = cJSON_Parse(initial_settings);
     if (!obj) return false;
     int num_entries = cJSON_GetArraySize(obj);
@@ -246,7 +246,7 @@ int main(int argc, const char * argv[]) {
         char data[1000];
         size_t len = 0;
         try {
-            len = subscription_manager.subscriber().recv(data, 1000);
+            len = subscription_manager.subscriber().recv(data, 1000, ZMQ_DONTWAIT);
             if (!len) continue;
         }
         catch (zmq::error_t e) {
