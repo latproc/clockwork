@@ -76,12 +76,6 @@ bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
 //#define USE_SIGNALLER 1
 #endif
 
-static uint64_t nowMicrosecs() {
-	struct timeval now;
-	gettimeofday(&now, 0);
-	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
-}
-
 static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 	bool received = false;
 	while (true) { 
