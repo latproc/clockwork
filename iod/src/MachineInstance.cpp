@@ -3735,7 +3735,7 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
-NB_MSG << _name << " Sending modbus update " << property_name  << " " << new_value << "\n";
+//NB_MSG << _name << " Sending modbus update " << property_name  << " " << new_value << "\n";
 
 	ModbusAddress ma = modbus_exports[property_name];
 	switch(ma.getGroup()) {
@@ -3879,7 +3879,6 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 
 				// update modbus with the new value
 				if (modbus_exports.count(property_name)){
-					NB_MSG << property_name << " sendModbusUpdate\n";
 					Channel::sendModbusUpdate(this, property_name, new_value);
 				}
 //				else

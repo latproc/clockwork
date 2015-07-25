@@ -270,8 +270,8 @@ int main(int argc, const char * argv[]) {
                     store.insert(machine_name.asString(), property_name.asString(), value);
                     store.save();
                 }
-				else
-					std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
+						else
+							std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
             }
             else {
                 std::istringstream iss(data);
@@ -282,6 +282,7 @@ int main(int argc, const char * argv[]) {
                 store.insert(machine_name, property, value.c_str());
                 store.save();
             }
+						if (param_list) { delete param_list; param_list = 0; }
         }
         catch(std::exception e) {
             std::cerr << "exception " <<e.what() << "processing: " << data << "\n";
