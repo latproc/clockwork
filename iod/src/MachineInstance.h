@@ -412,6 +412,7 @@ public:
 	void exportModbusMapping(std::ostream &out);
 	bool isModbusExported() { return modbus_exported != none; }
 	bool needsThrottle();
+	void setNeedsThrottle(bool which);
     
     bool isTraceable() { return is_traceable.bValue; }
 	

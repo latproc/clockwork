@@ -316,6 +316,7 @@ void generateIOComponentModules()
 							m->io_interface = in;
 							in->addDependent(m);
 							in->addOwner(m);
+							m->setNeedsThrottle(true);
 						}
 					}
 				}

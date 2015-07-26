@@ -389,6 +389,10 @@ bool MachineInstance::isShadow() {
 	return false;
 }
 
+void MachineInstance::setNeedsThrottle(bool which) {
+	cache->needs_throttle = which;
+}
+
 bool MachineInstance::needsThrottle() {
 	return cache->needs_throttle;
 }

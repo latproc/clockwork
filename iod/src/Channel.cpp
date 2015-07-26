@@ -1172,7 +1172,7 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
         if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
-			if (chn->throttle_time) {
+			if (chn->throttle_time && machine->needsThrottle()) {
 				//DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
 				if (!chn->throttled_items[machine])
 					chn->throttled_items[machine] = new MachineRecord(machine);
@@ -1362,7 +1362,7 @@ void Channel::sendModbusUpdate(MachineInstance *machine, const std::string &prop
 		//currently modbus channels publish data to all connected channels.
 		//
 
-		if (chn->throttle_time) {
+		if (chn->throttle_time && machine->needsThrottle()) {
 			DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << property_name << "\n";
 			if (!chn->throttled_items[machine])
 				chn->throttled_items[machine] = new MachineRecord(machine);
