@@ -24,3 +24,10 @@ ActiveFlag MACHINE {
 	off DURING turnOff {}
 }
 aflag ActiveFlag;
+
+FlagFollower MACHINE master {
+	on WHEN master IS on;
+	off WHEN master IS off;
+	unknown DEFAULT;
+}
+ff FlagFollower aflag;

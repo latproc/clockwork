@@ -1908,7 +1908,10 @@ DEFAULT a stable state that is evaluated last and that always matches
 \end_layout
 
 \begin_layout Description
-DISABLE
+DISABLE is used to make a machine unable to respond to requests to change
+ state or process commands.
+ Properties of a disabled machine can still be changed.
+ The machine stays in the state it was is when it was disabled/ 
 \end_layout
 
 \begin_layout Description
@@ -1927,7 +1930,11 @@ ELSE marks the beginning of the code that is executed when the IF condition
 \end_layout
 
 \begin_layout Description
-ENABLE
+ENABLE makes a machine able to respond to requests and changes state.
+ The machine enters its initial state and executes the initial state entry
+ method.
+ The leave event to the previous state is also executed and the message
+ is sent to dependent machines.
 \end_layout
 
 \begin_layout Description

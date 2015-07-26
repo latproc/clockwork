@@ -411,6 +411,7 @@ public:
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value);
 	void exportModbusMapping(std::ostream &out);
 	bool isModbusExported() { return modbus_exported != none; }
+	bool needsThrottle();
     
     bool isTraceable() { return is_traceable.bValue; }
 	

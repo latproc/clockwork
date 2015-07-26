@@ -9,7 +9,7 @@ FlagInterface INTERFACE {
 	OPTION z 100;
 
     on STATE;
-    off STATE;
+    off INITIAL;
     
     COMMAND turnOn;
     COMMAND turnOff;

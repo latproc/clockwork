@@ -73,8 +73,9 @@ public:
 	std::string *full_name;
 	std::string *modbus_name;
 	bool reported_error;
+	bool needs_throttle;
 
-  Cache() : full_name(0), modbus_name(0), reported_error(false) { }
+  Cache() : full_name(0), modbus_name(0), reported_error(false), needs_throttle(false) { }
 };
 
 Parameter::Parameter(Value v) : val(v), machine(0) {
@@ -386,6 +387,10 @@ std::string MachineInstance::modbusName(const std::string &property, const Value
 
 bool MachineInstance::isShadow() {
 	return false;
+}
+
+bool MachineInstance::needsThrottle() {
+	return cache->needs_throttle;
 }
 
 void MachineInstance::enqueueAction(Action *a){
@@ -1589,16 +1594,6 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 				DBG_AUTOSTATES  << m->getName() << " not checked\n";
 			}
 		}
-		// else if ( m->enabled() && m->executingCommand() == NULL
-		//     && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) 
-		//	&& m->next_poll > start_processing ) {
-		//std::cout << m->getName() << " skipping stable state check due to throttling\n";
-		//}
-		//   else if ( m->enabled() && m->executingCommand() != NULL
-		//       && (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) ) {
-		//	std::cout << m->getName() << " skipped stable state tests due to active actions\n";
-		//	m->displayActive(std::cout);
-		//}
 		count--;
 		if (count<=0) {
 			struct timeval now;
@@ -2900,6 +2895,7 @@ void MachineInstance::disable() {
 	if (io_interface) {
 		io_interface->turnOff();
 	}
+	if (isShadow()) setInitialState();
 	
 	Value &val = properties.lookup("default");
 	if (val != SymbolTable::Null) {
