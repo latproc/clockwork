@@ -156,9 +156,15 @@ bool IODCommandEnable::run(std::vector<Value> &params) {
 	if (params.size() == 2) {
 		DBG_MSG << "enabling " << params[1] << "\n";
 		MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
-		if (m && !m->enabled()) m->enable();
-		result_str = "OK";
-		return true;
+		if (m && !m->enabled()) {
+			m->enable();
+			result_str = "OK";
+			return true;
+		}
+		else {
+			error_str = "Could not find machine";
+			return false;
+		}
 	}
 	error_str = "Failed to find machine";
 	return false;
@@ -189,9 +195,15 @@ bool IODCommandResume::run(std::vector<Value> &params) {
         if (params.size() == 2) {
 			DBG_MSG << "disabling " << params[1] << "\n";
 			MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
-			if (m && m->enabled()) m->disable();
-			result_str = "OK";
-			return true;
+			if (m && m->enabled()) {
+				m->disable();
+				result_str = "OK";
+				return true;
+			}
+			else {
+				error_str = "Could not find machine";
+				return false;
+			}
 		}
 		error_str = "Failed to find machine";
 		return false;

@@ -21,6 +21,7 @@
 #include "EnableAction.h"
 #include "MachineInstance.h"
 #include "Logger.h"
+#include "MessageLog.h"
 
 EnableActionTemplate::EnableActionTemplate(const std::string &name, const char *property, const Value *val)
 : machine_name(name), property_name(0), property_value(0) {
@@ -59,8 +60,15 @@ Action::Status EnableAction::run() {
 	machine = owner->lookup(machine_name);
 	if (machine) {
 		machine->enable();
+		status = Complete;
 	}
-	status = Complete;
+	else {
+		char buf[100];
+		snprintf(buf, 100, "EnableAction Error: cannot find %s from %s", machine_name.c_str(), owner->getName().c_str());
+		MessageLog::instance()->add(buf);
+		error_str = (const char*)buf;
+		status = Failed;
+	}
 	if (status == Complete || status == Failed) {
 		owner->stop(this);
 	}
