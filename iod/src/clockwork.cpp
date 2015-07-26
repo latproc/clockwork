@@ -958,7 +958,8 @@ void initialise_machines() {
             || mi->uses_timer
             || mi->mq_interface
             || mi->stable_states.size() > 0
-			|| mi->_type == "CONDITION"
+						|| mi->_type == "LIST"
+						|| mi->_type == "CONDITION"
             || mi->_type == "COUNTERRATE"
             || mi->_type == "RATEESTIMATOR"
             || (mi->getStateMachine() && mi->getStateMachine()->plugin )
