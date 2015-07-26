@@ -1128,10 +1128,10 @@ void MachineInstance::describe(std::ostream &out) {
 
 	if (!mail_queue.empty()) {
 		out << "queued messages: " << mail_queue.size() << "\n";
-		std::list<Package*>::iterator evt_iter = pending_events.begin();
-		while (evt_iter != pending_events.end()) {
-			Package *pkg = *evt_iter++;
-			out << *pkg << "\n";
+		std::list<Package>::iterator evt_iter = mail_queue.begin();
+		while (evt_iter != mail_queue.end()) {
+			const Package &pkg = *evt_iter++;
+			out << pkg << "\n";
 		}
 	}
 
