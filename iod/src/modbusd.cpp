@@ -224,6 +224,15 @@ int getInt(uint8_t *p)
 	return x;
 }
 
+uint32_t getInt32(uint8_t *p)
+{
+	uint32_t x = *p++;
+	x = (x<<8) + *p++;
+	x = (x<<8) + *p++;
+	x = (x<<8) + *p;
+	return x;
+}
+
 void display(uint8_t *p, int len)
 {
 	while (len--) printf("%02x",*p++);
@@ -240,7 +249,9 @@ std::ostream &timestamp(std::ostream &out)
 	return out << (t / 1000) ;
 }
 
+std::string getIODSyncCommand(int group, int addr, bool new_value);
 std::string getIODSyncCommand(int group, int addr, int new_value);
+std::string getIODSyncCommand(int group, int addr, unsigned int new_value);
 
 
 struct ModbusServerThread
@@ -405,7 +416,7 @@ struct ModbusServerThread
 												|| (!val && modbus_mapping->tab_bits[addr] ) )
 										{
 											if (DEBUG_BASIC) std::cout << "setting iod address " << addr+1 << " to " << ( (val) ? 1 : 0) << "\n";
-											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, (val) ? 1 : 0) );
+											iod_sync_commands.push_back( getIODSyncCommand(0, addr+1, (val) ? true : false) );
 											initialised_address[addr_str] = true;
 										}
 									}
@@ -428,9 +439,16 @@ struct ModbusServerThread
 
 								if (active_addresses.find(addr_str) != active_addresses.end())
 								{
-									uint16_t val = 0;
-									val = getInt(data);
-									data += 2;
+									int val = 0;
+									//if (num_words == 1) {
+										val = getInt(data);
+										data += 2;
+									/*}
+									else if (num_words == 2) {
+										val = getInt32(data);
+										data += 4;
+									}
+									*/
 									if (!initialised_address[addr_str] || val != modbus_mapping->tab_registers[addr])
 									{
 										if (debug & DEBUG_LIB)
@@ -625,7 +643,30 @@ MessagingInterface *g_iodcmd;
 char *sendIOD(int group, int addr, int new_value);
 char *sendIODMessage(const std::string &s);
 
+std::string getIODSyncCommand(int group, int addr, bool which)
+{
+	int new_value = (which) ? 1 : 0;
+	char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
+	sendIODMessage(msg);
+
+	if (DEBUG_BASIC) std::cout << "IOD command: " << msg << "\n";
+	std::string s(msg);
+	free(msg);
+	return s;
+}
+
 std::string getIODSyncCommand(int group, int addr, int new_value)
+{
+	char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
+	sendIODMessage(msg);
+
+	if (DEBUG_BASIC) std::cout << "IOD command: " << msg << "\n";
+	std::string s(msg);
+	free(msg);
+	return s;
+}
+
+std::string getIODSyncCommand(int group, int addr, unsigned int new_value)
 {
 	char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
 	sendIODMessage(msg);
@@ -737,11 +778,7 @@ static void toggle_debug(int sig)
 
 static void toggle_debug_all(int sig)
 {
-	if (debug && debug != saved_debug) saved_debug = debug;
-	if (debug) debug = 0; else {
-		if (saved_debug==0) saved_debug = DEBUG_ALL;
-		debug = saved_debug;
-	}
+	if (debug) debug = 0; else debug = DEBUG_ALL; 
 }
 
 bool setup_signals()
