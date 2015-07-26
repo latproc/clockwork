@@ -433,7 +433,8 @@ struct ModbusServerThread
 									data += 2;
 									if (!initialised_address[addr_str] || val != modbus_mapping->tab_registers[addr])
 									{
-										if (DEBUG_BASIC) std::cout << " Updating register " << addr
+										if (debug & DEBUG_LIB)
+											std::cout << " Updating register " << addr
 											<< " to " << val << " from connection " << conn << "\n";
 										iod_sync_commands.push_back( getIODSyncCommand(4, addr+1, val) );
 										initialised_address[addr_str] = true;
@@ -459,7 +460,7 @@ struct ModbusServerThread
 							snprintf(buf, 19, "%d.%d", 1, addr);
 							std::string addr_str(buf);
 							if (active_addresses.find(addr_str) != active_addresses.end() )
-								if (DEBUG_BASIC) {
+								if (debug & DEBUG_LIB) {
 									std::cout << timestamp << " connection " << conn << " read " << num_coils << " discrete " << addr
 										<< " (";
 									for (int bitn=0; bitn<num_coils; ++bitn)
@@ -721,6 +722,7 @@ static void finish(int sig)
 	sigaction(SIGTERM, &sa, 0);
 	sigaction(SIGINT, &sa, 0);
 	sigaction(SIGUSR1, &sa, 0);
+	sigaction(SIGUSR2, &sa, 0);
 	program_state = s_finished;
 }
 
@@ -729,6 +731,15 @@ static void toggle_debug(int sig)
 	if (debug && debug != saved_debug) saved_debug = debug;
 	if (debug) debug = 0; else {
 		if (saved_debug==0) saved_debug = NOTLIB ^ VERBOSE_TOPLC;
+		debug = saved_debug;
+	}
+}
+
+static void toggle_debug_all(int sig)
+{
+	if (debug && debug != saved_debug) saved_debug = debug;
+	if (debug) debug = 0; else {
+		if (saved_debug==0) saved_debug = DEBUG_ALL;
 		debug = saved_debug;
 	}
 }
@@ -744,6 +755,10 @@ bool setup_signals()
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	if (sigaction(SIGUSR1, &sa, 0) ) { return false; }
+	sa.sa_handler = toggle_debug_all;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if (sigaction(SIGUSR2, &sa, 0) ) { return false; }
 	return true;
 }
 

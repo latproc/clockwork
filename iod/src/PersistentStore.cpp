@@ -124,6 +124,9 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
 			}
 		}
 	}
+	
+	if (num_info) release_pattern(num_info);
+	if (sym_info) release_pattern(sym_info);
 	return out;
 }
 

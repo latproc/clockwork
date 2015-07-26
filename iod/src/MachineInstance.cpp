@@ -389,6 +389,10 @@ bool MachineInstance::isShadow() {
 	return false;
 }
 
+void MachineInstance::setNeedsThrottle(bool which) {
+	cache->needs_throttle = which;
+}
+
 bool MachineInstance::needsThrottle() {
 	return cache->needs_throttle;
 }
@@ -2563,9 +2567,11 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 		Channel::sendCommand(this, "SEND", params); // empty command parameter list
 	}
 	else {
-		DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
-		Package *p = new Package(this, r, m, expect_reply);
-		Dispatcher::instance()->deliver(p);
+		if (r->enabled() || expect_reply) { // allow the call to hang here, this will change when throw works TBD
+			DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
+			Package *p = new Package(this, r, m, expect_reply);
+			Dispatcher::instance()->deliver(p);
+		}
 	}
 }
 
