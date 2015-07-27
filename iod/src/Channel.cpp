@@ -1455,16 +1455,12 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 		if (!chn->channel_machines.count(machine))
 			continue;
 		if (chn->filtersAllow(machine)) {
-			//if (!chn->channel_machines.count(machine)) chn->channel_machines.insert(machine);
-			if (chn->communications_manager
-					&& chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
+			if ( (!chn->isClient() && chn->communications_manager)
+					 || ( chn->isClient() && chn->communications_manager
+						&& chn->communications_manager->setupStatus() == SubscriptionManager::e_done) ) {
 				std::string response;
 				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
-				if (chn->isClient())
-					chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);//setup()
-				else
-					chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);
-				//DBG_CHANNELS << tnam << ": channel " << name << " got response: " << response << "\n";
+				chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);//setup()
 				free(cmd);
 			}
 			else if (chn->mif) {
@@ -1773,6 +1769,12 @@ void Channel::disable() {
 
 // This method is executed on the main thread
 void Channel::checkCommunications() {
+#if 0
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+	DBG_CHANNELS << "Channel " << name << " checkCommunications on thread "<< tnam << "\n";
+#endif
 	if (!communications_manager) return;
 	if (!communications_manager->ready()) return;
     bool ok = communications_manager->checkConnections();
