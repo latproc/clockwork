@@ -2459,7 +2459,6 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 
 	// fire the triggers on any suspended commands that might be waiting for them.
 	if (executingCommand()) {
-		assert(isActive());
 		// tell any actions that are triggering on this that we have seen the event
 		DBG_M_MESSAGING << _name << " processing triggers for " << event_name << "\n";
 		std::list<Action*>::iterator iter = active_actions.begin();
@@ -3763,7 +3762,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 			}
 		}
 		else {
-			char buf[100];
+			char buf[150];
 			snprintf(buf, 150, "%s  setValue() could not find machine named %s for property %s",
 					 _name.c_str(), name.c_str(), property.c_str() );
 			MessageLog::instance()->add(buf);
