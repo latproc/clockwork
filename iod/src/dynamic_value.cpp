@@ -345,9 +345,11 @@ Value &PopListBackValue::operator()(MachineInstance *mi) {
             //MessageLog::instance()->add(msg.c_str());
         }
         if (remove_from_list){
+			machine_list->removeDependancy(machine_list->parameters[0].machine);
+			machine_list->stopListening(machine_list->parameters[0].machine);
             machine_list->parameters.pop_back();
             machine_list->setNeedsCheck();
-						displayList(machine_list);
+			displayList(machine_list);
         }
     }
     return last_result;
@@ -403,6 +405,8 @@ Value &PopListFrontValue::operator()(MachineInstance *mi) {
                 //MessageLog::instance()->add(msg.c_str());
             }
             if (remove_from_list){
+				machine_list->removeDependancy(machine_list->parameters[0].machine);
+				machine_list->stopListening(machine_list->parameters[0].machine);
                 machine_list->parameters.erase(machine_list->parameters.begin());
                 if (machine_list->_type == "LIST") {
                     machine_list->setNeedsCheck();
@@ -460,7 +464,7 @@ Value &ItemAtPosValue::operator()(MachineInstance *mi) {
                 machine_list->parameters.erase(machine_list->parameters.begin()+idx);
                 if (machine_list->_type == "LIST") {
                     machine_list->setNeedsCheck();
-										displayList(machine_list);
+					displayList(machine_list);
                 }
             }
             return last_result;
