@@ -696,15 +696,18 @@ DynamicValue *MachineTimerValue::clone() const {
 }
 
 MachineShadowInstance::MachineShadowInstance(InstanceType instance_type) : MachineInstance(instance_type) {
+	markActive();
 	shadow_machines.push_back(this);
 }
 
 MachineShadowInstance::MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type)
 	: MachineInstance(name, type, instance_type) {
+	markActive();
 	shadow_machines.push_back(this);
 }
 
 void MachineShadowInstance::idle() {
+	MachineInstance::idle();
 	return;
 }
 
@@ -1047,6 +1050,8 @@ void simple_deltat(std::ostream &out, uint64_t dt) {
 void MachineInstance::describe(std::ostream &out) {
 	out << "---------------\n" << _name << ": " << current_state.getName() << " "
 		<< (enabled() ? "" : " DISABLED") <<  "\n"
+		<< (isShadow() ? " SHADOW" : "") <<  "\n"
+		<< (isActive() ? "" : " NOT ACTIVE") <<  "\n"
 		<< "  Class: " << _type << " instantiated at: " << definition_file
 		<< " line:" << definition_line << "\n";
 	if (locked) {
@@ -1059,7 +1064,7 @@ void MachineInstance::describe(std::ostream &out) {
 				out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name 
 					<< "), state: "
 					<< (parameters[i].machine ? parameters[i].machine->getCurrent().getName(): "")
-					<< (parameters[i].machine && !parameters[i].machine->enabled() ? "DISABLED" : "")
+					<< (parameters[i].machine && !parameters[i].machine->enabled() ? " DISABLED" : "")
 					<<  "\n";
 			}
 			else {
@@ -2556,20 +2561,33 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 }
 
 void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) {
-	MachineShadowInstance *msi = dynamic_cast<MachineShadowInstance*>(this);
+	MachineShadowInstance *msi = dynamic_cast<MachineShadowInstance*>(r);
 	if (msi) {
-		std::string addressed_message = fullName();
+		DBG_MSG << _name << " sending message " << *m << " to shadow " << r->getName() << "\n";
+		std::string addressed_message = r->getName();
 		addressed_message += ".";
 		addressed_message += m->getText();
 		std::list<Value> *params = new std::list<Value>;
 		params->push_back(addressed_message.c_str());
-		Channel::sendCommand(this, "SEND", params); // empty command parameter list
+		MachineInstance *receiver = dynamic_cast<MachineInstance*>(r);
+		if (receiver)
+			Channel::sendCommand(receiver, "SEND", params); // empty command parameter list
+		else {
+			char buf[150];
+			snprintf(buf, 150, "Channel is unable to send to non machine instance");
+			MessageLog::instance()->add(buf);
+			DBG_MSG << buf << "\n";
+		}
 	}
 	else {
+		//DBG_MSG << _name << " sending message " << *m << " to " << r->getName() << "\n";
 		if (r->enabled() || expect_reply) { // allow the call to hang here, this will change when throw works TBD
 			DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
 			Package *p = new Package(this, r, m, expect_reply);
 			Dispatcher::instance()->deliver(p);
+		}
+		else {
+			DBG_MSG << _name << " sending " << *m << " to " << r->getName() << " failed because the target is not enabled\n";
 		}
 	}
 }
@@ -3541,7 +3559,7 @@ Value &MachineInstance::getValue(std::string property) {
 		}
 		else {
 			resetTemporaryStringStream();
-			ss << " getValue() could not find machine named " << name << " for property " << property;
+			ss << _name << " getValue() could not find machine named " << name << " for property " << property;
 			error_messages.push_back(ss.str());
 			++num_errors;
 			DBG_MSG << ss.str() << "\n";
