@@ -53,7 +53,7 @@ bool CommandManager::setupConnections() {
         setup->connect(url);
         monit_setup->setEndPoint(url);
         setup_status = e_waiting_connect;
-        usleep(5000);
+        //usleep(5000);
     }
     return false;
 }
@@ -62,7 +62,7 @@ bool CommandManager::checkConnections() {
     if (monit_setup->disconnected() ) {
         setup_status = e_startup;
         setupConnections();
-        usleep(50000);
+        //usleep(50000);
         return false;
     }
     if (monit_setup->disconnected())
@@ -76,14 +76,14 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
         if (setup_status != e_waiting_connect) {
             setup_status = e_startup;
             setupConnections();
-            usleep(50000);
+            //usleep(50000);
         }
         return false;
     }
     if ( monit_setup->disconnected() )
-        rc = zmq::poll( &items[1], num_items-1, 500);
+        rc = zmq::poll( &items[1], num_items-1, 0);
     else
-        rc = zmq::poll(&items[0], num_items, 500);
+        rc = zmq::poll(&items[0], num_items, 0);
     
     char buf[1000];
     size_t msglen = 0;
