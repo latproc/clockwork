@@ -962,7 +962,8 @@ int main(int argc, const char * argv[])
 			};
 			try {
 				if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
-					usleep(100000);
+					if (debug) std::cout << "no connection to iod\n";
+					usleep(1000000);
 					exception_count = 0;
 					continue;
 				}
@@ -996,7 +997,7 @@ int main(int argc, const char * argv[])
 			}
 
 			zmq::message_t update;
-			if (!subscription_manager.subscriber().recv(&update)) {
+			if (!subscription_manager.subscriber().recv(&update, ZMQ_DONTWAIT)) {
 				if (errno == EAGAIN) { usleep(50); continue; }
 				if (errno == EFSM) exit(1);
 				if (errno == ENOTSOCK) exit(1);

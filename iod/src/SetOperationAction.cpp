@@ -245,6 +245,13 @@ Action::Status IntersectSetOperation::doOperation() {
                         break;
                     }
                 }
+								else if (property_name.length()) {
+									Value &v1 = a.cached_machine->getValue(property_name);
+									Value &v2 = b.cached_machine->getValue(property_name);
+									if (v1 != SymbolTable::Null && v1 == v2) {
+										dest_machine->addParameter(a, a.cached_machine);
+									}
+								}
                 else if (a == b) dest_machine->addParameter(a);
             }
         }

@@ -590,7 +590,7 @@ void Channel::checkStateChange(std::string event) {
 		}
 		else {
 			DBG_CHANNELS << "Unexpected channel state " << current_state << " on " << name << "\n";
-			assert(false);
+			//assert(false);
 		}
 	}
 	else {
@@ -606,7 +606,7 @@ void Channel::checkStateChange(std::string event) {
 			setState(ChannelImplementation::ACTIVE);
 		else {
 			DBG_CHANNELS << "Unexpected channel state " << current_state << " on " << name << "\n";
-			assert(false);
+			//assert(false);
 		}
 	}
 }
@@ -1443,6 +1443,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
+	DBG_CHANNELS << " sending " << command << " to channels that monitor " << machine->getName() << "\n";
 
 	if (!all) return;
 	std::string name = machine->fullName();
@@ -1460,21 +1461,26 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 						&& chn->communications_manager->setupStatus() == SubscriptionManager::e_done) ) {
 				std::string response;
 				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+				DBG_CHANNELS << "Channel " << chn->name << " sending " << cmd << "\n";
 				chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);//setup()
 				free(cmd);
 			}
 			else if (chn->mif) {
 				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
-				//DBG_CHANNELS << "Channel " << name << " sending " << cmd << "\n";
+				DBG_CHANNELS << "Channel " << name << " sending " << cmd << "\n";
 				chn->mif->send(cmd);
 				free(cmd);
 			}
 			else {
 				char buf[150];
-				snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
-						machine->getName().c_str());
+				snprintf(buf, 150, "Warning: machine %s should send %s but the channel is not connected",
+						machine->getName().c_str(), command.c_str() );
 				MessageLog::instance()->add(buf);
+				NB_MSG << buf << "\n";
 			}
+		}
+		else {
+			DBG_CHANNELS << "message on channel " << chn->name << " skipped as it does not match filters\n";
 		}
 	}
 }
