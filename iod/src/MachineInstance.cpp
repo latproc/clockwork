@@ -2091,11 +2091,7 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 							while (iter != timer_clauses.end()) {
 								Predicate *node = *iter++;
 								Value &tv = node->getTimerValue();
-								/*MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(&tv);
-								if (!mtv)
-									int x=1;
-								mtv->operator()();
-								*/if (tv == SymbolTable::Null) continue;
+								if (tv == SymbolTable::Null) continue;
 								if (tv.kind == Value::t_symbol || tv.kind == Value::t_string) {
 									Value v = getValue(tv.sValue);
 									if (v.kind != Value::t_integer) {
@@ -2133,26 +2129,6 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 								Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
 							}
 
-							/*
-							   if (ch.timer_val.kind == Value::t_symbol) {
-							   Value v = getValue(ch.timer_val.sValue);
-							   if (v.kind != Value::t_integer) {
-							   DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
-							   continue;
-							   }
-							   else
-							   timer_val = v.iValue;
-							   }
-							   else if (ch.timer_val.kind == Value::t_integer)
-							   timer_val = ch.timer_val.iValue;
-							   else {
-							   DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
-							   continue;
-							   }
-							   DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
-							   ch.trigger = new Trigger("Timer");
-							   Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
-							 */
 						}
 					}
 					else if (ch.command_name == "FLAG") {
@@ -2466,6 +2442,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 			Action *a = *iter++;
 			Trigger *trigger = a->getTrigger();
 			if (trigger && trigger->matches(m.getText())) {
+				SetStateAction *msa = dynamic_cast<MoveStateAction*>(a);
 				SetStateAction *ssa = dynamic_cast<SetStateAction*>(a);
 				CallMethodAction *cma = dynamic_cast<CallMethodAction*>(a);
 				if (ssa) {
@@ -2476,6 +2453,15 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 					else
 						DBG_M_MESSAGING << _name << " trigger message " << trigger->getName()
 							<< " arrived but condition " << *(ssa->condition.predicate) << " failed\n";
+				}
+				else if (msa) {
+					if (!msa->condition.predicate || msa->condition(this)) {
+						trigger->fire();
+						DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
+					}
+					else
+						DBG_M_MESSAGING << _name << " trigger message " << trigger->getName()
+						<< " arrived but condition " << *(ssa->condition.predicate) << " failed\n";
 				}
 				// a call method action may be waiting for this message
 				else if ( cma ) {
@@ -2731,6 +2717,7 @@ void MachineInstance::stop(Action *a) {
 			if (found)
 				std::cerr << "Warning: action " << *a << " was queued twice\n";
 			iter = active_actions.erase(iter);
+			DBG_ACTIONS << "removed action " << *a << "\n";
 			a->release();
 			found = true;
 			continue;
