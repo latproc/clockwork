@@ -91,7 +91,10 @@ Action::Status WaitAction::checkComplete() {
 }
 
 std::ostream &WaitAction::operator<<(std::ostream &out) const {
-    return out << "WaitAction " << wait_time;
+	if (wait_time == -1)
+		return out << "WAIT " << property_name;
+	else
+		return out << "WAIT " << wait_time;
 }
 
 
