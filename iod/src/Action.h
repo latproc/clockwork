@@ -156,8 +156,8 @@ protected:
 	uint64_t start_time;
 };
 
-std::ostream &operator<<(std::ostream &out, Action::Status state);
-const char *actionStatusName(Action::Status state);
+std::ostream &operator<<(std::ostream &out, const Action::Status &state);
+const char *actionStatusName(const Action::Status &state);
 
 class IOComponent;
 class TriggeredAction : public Action {

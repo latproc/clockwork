@@ -5,18 +5,19 @@
 #include "Action.h"
 #include "MachineInstance.h"
 
-const char *actionStatusName(Action::Status state) {
+const char *actionStatusName(const Action::Status &state) {
 	switch(state) {
 		case Action::New: return "New";
 		case Action::Running: return "Running";
-		case Action::Complete: return "Failed";
+		case Action::Failed: return "Failed";
+		case Action::Complete: return "Complete";
 		case Action::Suspended: return "Suspended";
 		case Action::NeedsRetry: return "NeedsRetry";
 		default: return "Unknown";
 	}
 }
 
-std::ostream &operator<<(std::ostream &out, Action::Status state) {
+std::ostream &operator<<(std::ostream &out, const Action::Status &state) {
 
 	return out << actionStatusName(state);
 }
