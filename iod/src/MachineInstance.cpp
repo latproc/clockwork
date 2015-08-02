@@ -696,13 +696,11 @@ DynamicValue *MachineTimerValue::clone() const {
 }
 
 MachineShadowInstance::MachineShadowInstance(InstanceType instance_type) : MachineInstance(instance_type) {
-	markActive();
 	shadow_machines.push_back(this);
 }
 
 MachineShadowInstance::MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type)
 	: MachineInstance(name, type, instance_type) {
-	markActive();
 	shadow_machines.push_back(this);
 }
 
