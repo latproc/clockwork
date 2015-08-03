@@ -5,6 +5,22 @@
 #include "Action.h"
 #include "MachineInstance.h"
 
+Trigger::~Trigger() {
+	//NB_MSG << "Removing trigger " << name << "\n";
+}
+Trigger* Trigger::retain() {
+	++refs;
+	//if (refs == 0) { NB_MSG << "Trigger reference count is 0 after increment\n"; }
+	return this;
+}
+Trigger *Trigger::release() {
+	assert(refs>0);
+	if (--refs == 0)
+		delete this;
+	return 0;
+}
+
+
 const char *actionStatusName(const Action::Status &state) {
 	switch(state) {
 		case Action::New: return "New";
@@ -20,6 +36,19 @@ const char *actionStatusName(const Action::Status &state) {
 std::ostream &operator<<(std::ostream &out, const Action::Status &state) {
 
 	return out << actionStatusName(state);
+}
+
+Action::~Action(){
+	//NB_MSG << "Removing action " << *this << "\n";
+	if (trigger) {
+	/*
+
+		if (!trigger->fired()) {
+			NB_MSG << "Trigger " << trigger->getName() << " on " << owner->getName() << " has not fired\n";
+		}
+	*/
+		trigger->release();
+	}
 }
 
 
@@ -52,6 +81,15 @@ void Action::resume() {
 	DBG_M_ACTIONS << "resumed: (status: " << status << ") " << *this << "\n";
 	if (status == Suspended) status = Running;
 	owner->setNeedsCheck();
+}
+
+Action::Status Action::operator()() {
+	if (status == New) {
+		start_time = microsecs();
+		status = Running;
+	}
+	status = run();
+	return status;
 }
 
 void Action::recover() {

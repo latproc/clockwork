@@ -59,10 +59,10 @@ public:
         // note: refs does not change
 		return *this;
 	}
-	virtual ~Trigger() {}
-    Trigger*retain() { ++refs; return this; }
-    virtual void release() { if (--refs == 0) delete this; }
-    
+	virtual ~Trigger();
+	Trigger*retain();
+	virtual Trigger *release();
+	
     void setOwner(TriggerOwner *new_owner) { owner = new_owner; }
 	bool enabled() const { return is_active; }
 	bool fired() const { return seen; }
@@ -92,9 +92,9 @@ class Action {
 public:
     Action(MachineInstance *m = 0)
         : refs(1), owner(m), error_str(""), result_str(""), status(New),
-            saved_status(Running), blocked(0), trigger(0) {}
-    virtual ~Action(){ if (trigger) trigger->release(); }
-    
+            saved_status(Running), blocked(0), trigger(0), started_(false) {}
+	virtual ~Action();
+
     Action*retain() { ++refs; return this; }
     virtual void release();
     
@@ -103,14 +103,7 @@ public:
 
 	enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
 
-    Status operator()() {
-		if (status == New) {
-			start_time = microsecs();
-			status = Running;
-		}
-		status = run();
-		return status;
-	}
+	Status operator()();
     bool complete() {
 		if(status == Running || status == Suspended) status = checkComplete();
 		return (status == Complete || status == Failed);
@@ -138,6 +131,9 @@ public:
     
 
 	MachineInstance *getOwner() { return owner; }
+	bool started() { return started_; }
+	void start() { started_ = true; }
+	void stop() { started_ = false; }
     
     virtual void toString(char *buf, int buffer_size);
     virtual std::ostream & operator<<(std::ostream &out) const { return out << "(Action)"; }
@@ -154,6 +150,7 @@ protected:
 	Action *blocked; // blocked on this action
 	Trigger *trigger;
 	uint64_t start_time;
+	bool started_;
 };
 
 std::ostream &operator<<(std::ostream &out, const Action::Status &state);
