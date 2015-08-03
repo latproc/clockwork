@@ -81,9 +81,9 @@ public:
 		return done;
 	}
 	void setParameters(std::vector<Value> &);
-	Value &name() { if (parameters.empty()) return SymbolTable::Null; else return parameters[0]; }
+	const Value &name() { if (parameters.empty()) return SymbolTable::Null; else return parameters[0]; }
 	size_t numParams() { return parameters.size(); }
-	Value &param(size_t which) { if (which < parameters.size()) return parameters[which]; else return SymbolTable::Null; }
+	const Value &param(size_t which) { if (which < parameters.size()) return parameters[which]; else return SymbolTable::Null; }
 
 protected:
 	virtual bool run(std::vector<Value> &params) = 0;

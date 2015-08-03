@@ -147,7 +147,7 @@ int main (int argc, char const *argv[])
 	Scheduler::instance();
 	ControlSystemMachine machine;
 
-
+	set_debug_config("iod.conf");
 	Logger::instance()->setLevel(Logger::Debug);
 	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
 	load_debug_config();
@@ -358,7 +358,7 @@ int main (int argc, char const *argv[])
         int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
 					+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
         // use the clockwork interpreter's current cycle delay
-        Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+        const Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
         assert(cycle_delay_v);
         int64_t delay = cycle_delay_v->iValue;
         if (delay <= 1000) delay = 1000;

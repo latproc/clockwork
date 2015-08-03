@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <iterator>
+#include "value.h"
 #include "symboltable.h"
 #include <numeric>
 #include <functional>
@@ -29,10 +30,11 @@
 #include <utility>
 #include "DebugExtra.h"
 
-Value SymbolTable::Null;
-Value SymbolTable::True(true);
-Value SymbolTable::False(false);
-Value SymbolTable::Zero(0);
+const Value SymbolTable::Null;
+const Value SymbolTable::True(true);
+const Value SymbolTable::False(false);
+const Value SymbolTable::Zero(0);
+Value NullValue;
 
 bool SymbolTable::initialised = false;
 SymbolTable *SymbolTable::keywords = 0;
@@ -161,10 +163,10 @@ bool SymbolTable::isKeyword(const char *name)
     return keywords->exists(name);
 }
 
-Value &SymbolTable::getKeyValue(const char *name) {
+const Value &SymbolTable::getKeyValue(const char *name) {
     if (!name) return Null;
     if (keywords->exists(name)) {
-        Value &res = keywords->lookup(name);
+        Value &res = keywords->find(name);
         if (strcmp("NOW", name) == 0) {
             struct timeval now;
             gettimeofday(&now,0);
@@ -276,9 +278,19 @@ bool SymbolTable::exists(int tok) {
     return stok.find(tok) != stok.end();
 }
 
-Value &SymbolTable::lookup(const char *name) {
+Value &SymbolTable::find(const char *name) {
+	if (this != keywords) {
+		Value &res = keywords->find(name);
+		if (res != SymbolTable::Null) return res;
+	}
+	SymbolTableIterator iter = st.find(name);
+	if (iter != st.end()) return (*iter).second;
+	return NullValue;
+}
+
+const Value &SymbolTable::lookup(const char *name) {
     if (this != keywords) {
-        Value &res = keywords->lookup(name);
+        const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) return res;
     }
     SymbolTableIterator iter = st.find(name);
@@ -286,9 +298,9 @@ Value &SymbolTable::lookup(const char *name) {
     return SymbolTable::Null;
 }
 
-Value &SymbolTable::lookup(Value &name) {
+const Value &SymbolTable::lookup(Value &name) {
     if (this != keywords) {
-        Value &res = keywords->lookup(name);
+        const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) return res;
     }
     TokenTableIterator iter = stok.find(name.token_id);

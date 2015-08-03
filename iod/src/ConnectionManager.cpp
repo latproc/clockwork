@@ -67,7 +67,7 @@ void MachineShadow::setProperty(const std::string prop, Value &val) {
     properties.add(prop, val, SymbolTable::ST_REPLACE);
 }
 
-Value &MachineShadow::getValue(const char *prop) {
+const Value &MachineShadow::getValue(const char *prop) {
     return properties.lookup(prop);
 }
 
@@ -180,7 +180,7 @@ bool SubscriptionManager::requestChannel() {
     }
     if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
         char buf[1000];
-        if (!safeRecv(setup(), buf, 1000, false, len)) return false;
+        if (!safeRecv(setup(), buf, 1000, false, len, 2)) return false; // attempt a connection but do not wait very long before giving up
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
         assert(len);

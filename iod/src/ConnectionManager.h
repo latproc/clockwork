@@ -73,7 +73,7 @@ class MachineShadow {
 	std::string state;
 public:
 	void setProperty(const std::string, Value &val);
-	Value &getValue(const char *prop);
+	const Value &getValue(const char *prop);
 	void setState(const std::string);
 };
 

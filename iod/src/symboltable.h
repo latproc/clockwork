@@ -80,8 +80,9 @@ public:
     bool add(const char *name, Value val, ReplaceMode replace_mode = ST_REPLACE);
     bool add(const std::string name, Value val, ReplaceMode replace_mode = ST_REPLACE);
     void add(const SymbolTable &orig, ReplaceMode replace_mode = ST_REPLACE); // load symbols optionally with replacement
-    Value &lookup(Value &name);
-    Value &lookup(const char *name);
+    const Value &lookup(Value &name);
+    const Value &lookup(const char *name);
+	Value &find(const char *name);
 	size_t count(const char *name) { return st.count(name); }
     bool exists(const char *name);
     bool exists(int token_id);
@@ -100,12 +101,12 @@ public:
     
     static bool isKeyword(const Value &name);
     static bool isKeyword(const char *name);
-    static Value &getKeyValue(const char *name);
+    static const Value &getKeyValue(const char *name);
     
-	static Value Null;
-	static Value True;
-	static Value False;
-	static Value Zero;
+	static const Value Null;
+	static const Value True;
+	static const Value False;
+	static const Value Zero;
 private:
     std::map<std::string, Value>st;
     std::map<int, Value>stok;

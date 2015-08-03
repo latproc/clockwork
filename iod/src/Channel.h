@@ -67,12 +67,12 @@ public:
     void addMonitor(const char *);
     void addIgnorePattern(const char *);
     void addMonitorPattern(const char *);
-    void addMonitorProperty(const char *,Value &);
+    void addMonitorProperty(const char *,const Value &);
     void addMonitorExports();
     void removeMonitor(const char *);
     void removeIgnorePattern(const char *);
     void removeMonitorPattern(const char *);
-    void removeMonitorProperty(const char *, Value &);
+    void removeMonitorProperty(const char *, const Value &);
     void removeMonitorExports();
 
     void modified();
@@ -275,6 +275,11 @@ public:
 	void addConnection();
 	void dropConnection();
 
+	void newPendingCommand(IODCommand *cmd);
+	IODCommand *getCommand();
+	void putCompletedCommand(IODCommand *cmd);
+	IODCommand *getCompletedCommand();
+
 private:
 	std::map<MachineInstance *, MachineRecord *> throttled_items;
 	std::list<IODCommand *>pending_commands;
@@ -307,7 +312,8 @@ private:
 
 	unsigned int throttle_time;
 	boost::mutex update_mutex;
-
+	boost::mutex iod_cmd_mutex;
+	
 	int connections;
 	bool aborted;
 	boost::thread *subscriber_thread;
@@ -318,6 +324,7 @@ private:
 	std::list<ChannelMessage> pending_messages;
 	std::list<ChannelMessage> completed_messages;
 	uint64_t last_throttled_send;
+
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

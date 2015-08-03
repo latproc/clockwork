@@ -52,7 +52,7 @@ EnableAction::EnableAction() {
 }
 
 std::ostream &EnableAction::operator<<(std::ostream &out) const {
-	return out << "Enable Action " << machine_name << "\n";
+	return out << "Enable Action " << machine_name;
 }
 
 Action::Status EnableAction::run() {

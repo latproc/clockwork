@@ -190,7 +190,7 @@ void ConditionHandler::reset() {
 		//NB_MSG << "clearing trigger on subcondition of state " << s.state_name << "\n";
 		if (trigger->enabled())
 			trigger->disable();
-		trigger->release();
+		trigger = trigger->release();
 	}
 	trigger = 0;
 	triggered = false;
@@ -213,7 +213,7 @@ StableState::~StableState() {
 	if (trigger) {
 		if (trigger->enabled()) {
 			trigger->disable();
-			trigger->release();
+			trigger = trigger->release();
 		}
 	}
 	if (subcondition_handlers) {
@@ -356,6 +356,10 @@ void MachineInstance::setNeedsCheck() {
 }
 
 std::string &MachineInstance::fullName() const {
+	if (!cache) {
+		int x = 1;
+	}
+
 	if (cache->full_name) return *cache->full_name;
 	std::string res = _name;
 	MachineInstance *o = owner;
@@ -398,9 +402,8 @@ bool MachineInstance::needsThrottle() {
 }
 
 void MachineInstance::enqueueAction(Action *a){
-	if (a) {
-		active_actions.push_front(a);
-	}
+	assert(a);
+	active_actions.push_front(a);
 	num_machines_with_work++;
 	DBG_ACTIONS << _name << " New Action queued: " << *a << "\n";
 	has_work = true;
@@ -858,7 +861,7 @@ void RateEstimatorInstance::idle() {
 		}
         MachineInstance::idle();
 
-		Value & pos_v = pos_m->getValue("VALUE");
+		const Value & pos_v = pos_m->getValue("VALUE");
 		assert(pos_v.kind == Value::t_integer);
 		assert(pos_v != SymbolTable::Null);
 		long pos = pos_v.iValue;
@@ -878,7 +881,7 @@ void RateEstimatorInstance::idle() {
 			Trigger *trigger = new Trigger("RateEstimatorTimer");
 			Scheduler::instance()->add(
 				new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
-			trigger->release();
+			trigger = trigger->release();
 		}
 		settings->last_pos = pos;
 	}
@@ -1283,7 +1286,8 @@ void MachineInstance::idle() {
 	while (curr) {
 		curr->retain();
 		if (curr->getStatus() == Action::New || curr->getStatus() == Action::NeedsRetry) {
-			stop(curr); // avoid double queueing
+			//stop(curr); // avoid double queueing
+			start(curr);
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
 				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
@@ -1303,7 +1307,7 @@ void MachineInstance::idle() {
 		}
 		Action *last = curr;
 		if (last->getStatus() == Action::Failed) {
-			NB_MSG << "Action " << (*curr) << " failed\n";
+			DBG_ACTIONS << "Action " << (*curr) << " failed\n";
 			++action_errors;
 		}
 		curr = executingCommand();
@@ -1906,7 +1910,7 @@ void MachineInstance::forceStableStateCheck() {
 Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 
 	if (!hasState(new_state)) {
-		Value &s = getValue(new_state.getName().c_str());
+		const Value &s = getValue(new_state.getName().c_str());
 		State propertyState(s.asString().c_str());
 		if (!hasState(propertyState)) {
 			char buf[150];
@@ -2039,8 +2043,7 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 						DBG_M_SCHEDULER << _name << " disabling " << s.trigger->getName() << "\n";
 						s.trigger->disable();
 					}
-					s.trigger->release();
-					s.trigger = 0;
+					s.trigger = s.trigger->release();
 				}
 				s.condition.predicate->clearTimerEvents(this);
 
@@ -2093,7 +2096,7 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 							timer_val = LONG_MAX;
 							while (iter != timer_clauses.end()) {
 								Predicate *node = *iter++;
-								Value &tv = node->getTimerValue();
+								const Value &tv = node->getTimerValue();
 								if (tv == SymbolTable::Null) continue;
 								if (tv.kind == Value::t_symbol || tv.kind == Value::t_string) {
 									Value v = getValue(tv.sValue);
@@ -2389,6 +2392,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 	return NULL;
 }
 
+/*
 void MachineInstance::collect(const Package &package) {
 	if (package.transmitter) {
 		if (!receives(package.message, package.transmitter)) return;
@@ -2407,6 +2411,7 @@ void MachineInstance::collect(const Package &package) {
 		active_actions.push_back(hma);
 	}
 }
+ */
 
 Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 	if (!enabled()) {
@@ -2683,27 +2688,49 @@ Action *MachineInstance::executingCommand() {
 }
 
 void MachineInstance::start(Action *a) {
+	if (a->started()) return;
+	a->start();
+#if 0
 	if (!active_actions.empty()) {
 		Action *b = executingCommand();
 		if (b && b->isBlocked() && b->blocker() != a) {
 			DBG_M_ACTIONS << "WARNING: "<<_name << " is executing command " <<*b <<" when starting " << *a << "\n";
 		}
 		if (b == a) {
+			DBG_MSG << "Actions:\n";
+			BOOST_FOREACH(Action *action, active_actions) {
+				DBG_MSG << *action << "\n";
+			}
+
 			std::stringstream ss;
-			ss << owner->fullName() << " Failed to start action: " << *a << " already running\n";
+			ss << fullName() << " Failed to start action: " << *a << " (" << a->getStatus() << ") already running";
 			MessageLog::instance()->add(ss.str().c_str());
 			NB_MSG << ss.str() << "\n";
 			return;
 		}
 	}
-	DBG_M_ACTIONS << _name << " pushing (state: " << a->getStatus() << ")" << *a << "\n";
+#endif
+	DBG_M_ACTIONS << _name << " pushing " << *a << "\n";
 	if (tracing() && isTraceable()) {
 		resetTemporaryStringStream();
 		ss << "starting action: " << *a;
 		setValue("TRACE", ss.str());
 	}
-	//    DBG_MSG << "STARTING: " << *a << "\n";
-	active_actions.push_back(a->retain());
+	DBG_ACTIONS << _name << " STARTING: " << *a << "\n";
+
+	int i=0;
+	size_t imax = active_actions.size()-1;
+#if 0
+	BOOST_FOREACH(Action *action, active_actions) {
+		if (a == action && i!= imax) {
+			NB_MSG << *a << " already queued at position " << i << " of " << active_actions.size() << "\n";
+			break;
+		}
+		++i;
+	}
+#endif
+	if (a!=executingCommand())
+		active_actions.push_back(a->retain());
 }
 
 void MachineInstance::displayActive(std::ostream &note) {
@@ -2711,7 +2738,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 	note << _name << ':' << id << " stack:\n";
 	const char *delim = "";
 	BOOST_FOREACH(Action *act, active_actions) {
-		note << delim << " " << *act << " (status:" << act->getStatus() << ") ";
+		note << delim << " " << *act;
 		delim = "\n";
 	}
 }
@@ -2724,7 +2751,10 @@ void MachineInstance::stop(Action *a) {
 	//	}
 	//	active_actions.pop_back();
 	//    a->release();
-
+	if (!a->started()){
+		DBG_MSG << _name << " warning: action " << *a << " was stopped but not yet started\n";
+	}
+	a->stop();
 	bool found = false;
 	std::list<Action*>::iterator iter = active_actions.begin();
 	while (iter != active_actions.end()) {
@@ -2905,7 +2935,7 @@ void MachineInstance::disable() {
 	}
 	if (isShadow()) setInitialState();
 	
-	Value &val = properties.lookup("default");
+	const Value &val = properties.lookup("default");
 	if (val != SymbolTable::Null) {
 		if (val.kind == Value::t_integer) {
 			std::cout << "Initialising value for " << _name << " to " << val << "\n";
@@ -2968,11 +2998,17 @@ void MachineInstance::push(Action *new_action) {
 		active_actions.back()->suspend();
 		active_actions.back()->setBlocker(new_action);
 	}
-	DBG_M_ACTIONS << _name << " pushing " << *new_action << "\n";
+	DBG_ACTIONS << _name << " pushing " << *new_action << "\n";
 	active_actions.push_back(new_action);
+	new_action->start();
 	num_machines_with_work++;
 	has_work = true;
 	busy_machines.insert(this);
+	if (tracing() && isTraceable()) {
+		resetTemporaryStringStream();
+		ss << "starting action: " << *new_action;
+		setValue("TRACE", ss.str());
+	}
 	DBG_M_ACTIONS << _name << " ADDED to machines with work " << busy_machines.size() << "\n";
 	return;
 }
@@ -3048,6 +3084,7 @@ bool MachineInstance::setStableState() {
 			if (!found_match) {
 				if (s.condition(this)) {
 					DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
+					bool x = s.condition(this);
 					if (current_state.getName() != s.state_name) {
 						DBG_M_AUTOSTATES << " changing state\n";
 						changed_state = true;
@@ -3375,7 +3412,7 @@ Trigger *MachineInstance::setupTrigger(const std::string &machine_name, const st
 	return new Trigger(trigger_name);
 }
 
-Value *MachineInstance::resolve(std::string property) {
+const Value *MachineInstance::resolve(std::string property) {
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine
 		std::string name = property;
@@ -3403,7 +3440,7 @@ Value *MachineInstance::resolve(std::string property) {
 	}
 	else {
 		// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
-		Value *res = 0;
+		const Value *res = 0;
 		Value property_val(property); // tokenise the property
 		// variables may refer to an initialisation value passed in as a parameter.
 		if (state_machine->token_id == ClockworkToken::VARIABLE
@@ -3430,7 +3467,7 @@ Value *MachineInstance::resolve(std::string property) {
 		else if (state_machine->global_references.count(property)) {
 			MachineInstance *m = state_machine->global_references[property];
 			if (m) {
-				Value *global_property_val = &m->properties.lookup("VALUE");
+				const Value *global_property_val = &m->properties.lookup("VALUE");
 				if (*global_property_val == SymbolTable::Null) {
 					DBG_M_PROPERTIES << _name << " using current state from global " << m->fullName() << "\n";
 					return &m->current_state_val;
@@ -3465,10 +3502,10 @@ Value *MachineInstance::resolve(std::string property) {
 			return &SymbolTable::getKeyValue(property.c_str());
 		}
 		else {
-			Value *res = &properties.lookup(property.c_str());
+			const Value *res = &properties.lookup(property.c_str());
 			if (*res == SymbolTable::Null) {
 				if (state_machine) {
-					Value *class_property = &state_machine->properties.lookup(property.c_str());
+					const Value *class_property = &state_machine->properties.lookup(property.c_str());
 					if (class_property == &SymbolTable::Null) {
 						DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
 						if (globals.exists(property.c_str()))
@@ -3509,23 +3546,34 @@ Value *MachineInstance::resolve(std::string property) {
 	return &SymbolTable::Null;
 }
 
-Value *MachineInstance::getValuePtr(Value &property) {
+const Value *MachineInstance::getValuePtr(Value &property) {
 	if (property.cached_value) return property.cached_value;
 	assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
-	Value &res = getValue(property.sValue);
-	property.cached_value = &res;
-	return property.cached_value;
+	Value *res = getMutableValue(property.sValue.c_str());
+	if (res) {
+		property.cached_value = res;
+		return res;
+	}
+	return &SymbolTable::Null;
 }
 
-Value &MachineInstance::getValue(Value &property) {
+const Value &MachineInstance::getValue(Value &property) {
 	if (property.cached_value) return *property.cached_value;
 	assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
-	Value &res = getValue(property.sValue);
-	property.cached_value = &res;
-	return res;
+	Value *res = getMutableValue(property.sValue.c_str());
+	if (res) {
+		property.cached_value = res;
+		return *res;
+	}
+	return SymbolTable::Null;
 }
 
-Value &MachineInstance::getValue(std::string property) {
+const Value &MachineInstance::getValue(const char *property_name) {
+	std::string property(property_name);
+	return getValue(property);
+}
+
+const Value &MachineInstance::getValue(const std::string &property) {
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine
 		std::string name = property;
@@ -3533,7 +3581,7 @@ Value &MachineInstance::getValue(std::string property) {
 		std::string prop = property.substr(property.find('.')+1 );
 		MachineInstance *other = lookup(name);
 		if (other) {
-			Value &v = other->getValue(prop);
+			const Value &v = other->getValue(prop);
 			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
 			return v;
 		}
@@ -3557,16 +3605,16 @@ Value &MachineInstance::getValue(std::string property) {
 
 		// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 
-		// variables may refer to an initialisation value passed in as a parameter. 
+		// variables may refer to an initialisation value passed in as a parameter.
 		if ( state_machine
-			 && (state_machine->token_id == ClockworkToken::VARIABLE
+			&& (state_machine->token_id == ClockworkToken::VARIABLE
 				|| state_machine->token_id == ClockworkToken::CONSTANT)
 			) {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
-				if (state_machine->parameters[i].val.kind == Value::t_symbol 
-						&& property == state_machine->parameters[i].val.sValue
+				if (state_machine->parameters[i].val.kind == Value::t_symbol
+					&& property == state_machine->parameters[i].val.sValue
 
-				   ) {
+					) {
 					DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
 					return parameters[i].val;
 				}
@@ -3608,7 +3656,7 @@ Value &MachineInstance::getValue(std::string property) {
 			return SymbolTable::getKeyValue(property.c_str());
 		}
 		else {
-			Value &x = properties.lookup(property.c_str());
+			const Value &x = properties.lookup(property.c_str());
 			if (x == SymbolTable::Null) {
 				if (state_machine) {
 					if (!state_machine->properties.exists(property.c_str())) {
@@ -3618,7 +3666,7 @@ Value &MachineInstance::getValue(std::string property) {
 					}
 					else {
 						DBG_M_PROPERTIES << "using property " << property << "from class\n";
-						return state_machine->properties.lookup(property.c_str()); 
+						return state_machine->properties.lookup(property.c_str());
 					}
 				}
 			}
@@ -3632,7 +3680,7 @@ Value &MachineInstance::getValue(std::string property) {
 		MachineInstance *m = lookup(property);
 		if (m) {
 			if (m->state_machine->token_id == ClockworkToken::VARIABLE
-					|| m->state_machine->token_id == ClockworkToken::CONSTANT)
+				|| m->state_machine->token_id == ClockworkToken::CONSTANT)
 				return m->getValue("VALUE");
 			else
 				return *m->getCurrentStateVal();
@@ -3642,7 +3690,119 @@ Value &MachineInstance::getValue(std::string property) {
 	return SymbolTable::Null;
 }
 
-Value *MachineInstance::lookupState(const std::string &state_name) {
+Value *MachineInstance::getMutableValue(const char *property_name) {
+	std::string property(property_name);
+	if (property.find('.') != std::string::npos) {
+		// property is on another machine
+		std::string name = property;
+		name.erase(name.find('.'));
+		std::string prop = property.substr(property.find('.')+1 );
+		MachineInstance *other = lookup(name);
+		if (other) {
+			Value *v = other->getMutableValue(prop.c_str());
+			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << *v << "\n";
+			return v;
+		}
+		else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
+			// permit references items to be not always available so that these can be
+			// added and removed as the program executes
+			return 0;
+		}
+		else {
+			resetTemporaryStringStream();
+			ss << _name << " getValue() could not find machine named " << name << " for property " << property;
+			error_messages.push_back(ss.str());
+			++num_errors;
+			DBG_MSG << ss.str() << "\n";
+			MessageLog::instance()->add(ss.str().c_str());
+			return 0;
+		}
+	}
+	else {
+		Value property_val(property); // use this to avoid string comparisions on property
+
+		// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
+
+		// variables may refer to an initialisation value passed in as a parameter. 
+		if ( state_machine
+			 && (state_machine->token_id == ClockworkToken::VARIABLE
+				|| state_machine->token_id == ClockworkToken::CONSTANT)
+			) {
+			for (unsigned int i=0; i<parameters.size(); ++i) {
+				if (state_machine->parameters[i].val.kind == Value::t_symbol 
+						&& property == state_machine->parameters[i].val.sValue
+
+				   ) {
+					DBG_M_PREDICATES << _name << " found parameter " << i << " to resolve " << property << "\n";
+					return &parameters[i].val;
+				}
+			}
+		}
+		// use the global value if its name is mentioned in this machine's list of globals
+		if (!state_machine) {
+			resetTemporaryStringStream();
+			ss << _name << " could not find a machine definition: " << _type;
+			DBG_PROPERTIES << ss.str() << "\n";
+			error_messages.push_back(ss.str());
+			++num_errors;
+		}
+		else if (state_machine->global_references.count(property)) {
+			MachineInstance *m = state_machine->global_references[property];
+			if (m) {
+				DBG_M_PROPERTIES << _name << " using value property " << m->getValue("VALUE") << " from " << m->getName() << "\n";
+				return m->getMutableValue("VALUE");
+			}
+			else {
+				resetTemporaryStringStream();
+				ss << fullName() << " failed to find the machine for global: " << property;
+				DBG_PROPERTIES << ss.str() << "\n";
+				error_messages.push_back(ss.str());
+				MessageLog::instance()->add(ss.str().c_str());
+				++num_errors;
+			}
+		}
+		DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
+		if (property_val.token_id == ClockworkToken::TIMER) {
+			assert(false);
+		}
+		else if (SymbolTable::isKeyword(property.c_str())) {
+			assert(false);
+		}
+		else {
+			Value &x = properties.find(property.c_str());
+			if (x == SymbolTable::Null) {
+				if (state_machine) {
+					if (!state_machine->properties.exists(property.c_str())) {
+						DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+						if (globals.exists(property.c_str()))
+							return &globals.find(property.c_str());
+					}
+					else {
+						assert(false);
+					}
+				}
+			}
+			else {
+				DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
+				return &x;
+			}
+		}
+
+		// finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
+		MachineInstance *m = lookup(property);
+		if (m) {
+			if (m->state_machine->token_id == ClockworkToken::VARIABLE
+					|| m->state_machine->token_id == ClockworkToken::CONSTANT)
+				return m->getMutableValue("VALUE");
+			else
+				return m->getCurrentStateVal();
+		}
+
+	}
+	return 0;
+}
+
+const Value *MachineInstance::lookupState(const std::string &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
 		std::list<State>::iterator iter = state_machine->states.begin();
@@ -3659,7 +3819,7 @@ Value *MachineInstance::lookupState(const std::string &state_name) {
 	return &SymbolTable::Null;
 }
 
-Value *MachineInstance::lookupState(const Value &state_name) {
+const Value *MachineInstance::lookupState(const Value &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
 		std::list<State>::iterator iter = state_machine->states.begin();
@@ -3797,7 +3957,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 		}
 		// try the current instance ofthe machine, then the machine class and finally the global symbols
 		DBG_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
-		Value &prev_value = properties.lookup(property.c_str());
+		const Value &prev_value = properties.lookup(property.c_str());
 
 		if (prev_value == SymbolTable::Null && property_val.token_id != ClockworkToken::tokVALUE && property != _name) {
 			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
@@ -4070,7 +4230,7 @@ void MachineInstance::setupModbusInterface() {
 		Value export_type_val = properties.lookup("export");
 		if (export_type_val != "false") {
 			if (_type == "POINT") {
-				Value &type = properties.lookup("type");
+				const Value &type = properties.lookup("type");
 				if (type != SymbolTable::Null) {
 					if (type == "Input") {
 						self_discrete = true; 
@@ -4125,13 +4285,13 @@ void MachineInstance::setupModbusInterface() {
 					export_type=rw_reg32;
 				}
 				else if (export_type_val=="str") {
-					Value &export_size = properties.lookup("strlen");
+					const Value &export_size = properties.lookup("strlen");
 					self_reg = true; 
 					export_type=str;
 					export_size.asInteger(str_length);
 				}
 				else if (export_type_val=="rw_str") {
-					Value &export_size = properties.lookup("strlen");
+					const Value &export_size = properties.lookup("strlen");
 					self_rwreg = true;
 					export_type=str;
 					export_size.asInteger(str_length);

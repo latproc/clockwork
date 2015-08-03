@@ -38,7 +38,7 @@ public:
     void setup(MachineInstance *new_settings);
     MachineInstance *settings();
     
-    Value *cycle_delay;
+    const Value *cycle_delay;
     Value *default_poll_delay;
 private:
     ClockworkInterpreter();

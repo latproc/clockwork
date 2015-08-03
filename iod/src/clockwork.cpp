@@ -73,7 +73,7 @@ ClockworkInterpreter* ClockworkInterpreter::instance() {
 void ClockworkInterpreter::setup(MachineInstance *new_settings) {
     _settings = new_settings;
     cycle_delay = &ClockworkInterpreter::instance()->settings()->getValue("CYCLE_DELAY");
-    default_poll_delay = &ClockworkInterpreter::instance()->settings()->getValue("POLLING_DELAY");
+    default_poll_delay = ClockworkInterpreter::instance()->settings()->getMutableValue("POLLING_DELAY");
     
     MachineInstance::polling_delay = default_poll_delay;
 }

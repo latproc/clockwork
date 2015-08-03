@@ -22,7 +22,7 @@ DynamicValue *DynamicValue::clone() const {
     return new DynamicValue(*this);
 }
 
-Value &DynamicValue::operator()() {
+const Value &DynamicValue::operator()() {
     return SymbolTable::False;
 }
 
@@ -31,7 +31,7 @@ void DynamicValue::flushCache() {
     last_process_time = 0;
 }
 
-Value &DynamicValue::operator()(MachineInstance *m) {
+const Value &DynamicValue::operator()(MachineInstance *m) {
     setScope(m);
     return operator()();
 }
@@ -122,7 +122,7 @@ AnyInValue::AnyInValue(const AnyInValue &other) {
 Value &AnyInValue::operator()(MachineInstance *mi) {
 	
 	if (state_property == 0)
-		state_property = & mi->getValue(state);
+		state_property = mi->getMutableValue(state.c_str());
 
 	if (machine_list == NULL)
 		machine_list = mi->lookup(machine_list_name);
@@ -167,7 +167,7 @@ AllInValue::AllInValue(const AllInValue &other) {
 }
 Value &AllInValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
-		state_property = & mi->getValue(state);
+		state_property = mi->getMutableValue(state.c_str());
 	if (machine_list == NULL) {
 		machine_list = mi->lookup(machine_list_name);
 	}
@@ -189,7 +189,7 @@ Value &AllInValue::operator()(MachineInstance *mi) {
 	if (machine_list->parameters.size() == 0) {  last_result = false; return last_result; }
 
 	std::string state_val = state;
-	if (state_property != & SymbolTable::Null)
+	if (state_property && state_property != & SymbolTable::Null)
 		state_val = state_property->asString();
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
@@ -213,7 +213,7 @@ CountValue::CountValue(const CountValue &other) {
 
 Value &CountValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
-		state_property = & mi->getValue(state);
+		state_property = mi->getMutableValue(state.c_str());
 	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for COUNT "<<state<<" test\n";

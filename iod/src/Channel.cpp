@@ -807,7 +807,7 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 	char cmd_socket_name[100];
 	snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
 	DBG_CHANNELS << "using " << cmd_socket_name
-		<< " for the " << ( (client_endpoint) ? "client " : "server ") << " command socked\n";
+		<< " for the " << ( (client_endpoint) ? "client " : "server ") << "command socket\n";
 	char *pos = strchr(cmd_socket_name, ':')+1;
 	while ( (pos = strchr(pos, ':'))  ) *pos = '-';
 
@@ -1534,11 +1534,11 @@ void ChannelImplementation::addMonitorPattern(const char *s) {
     monitors_patterns.insert(s);
     modified();
 }
-void ChannelImplementation::addMonitorProperty(const char *key,Value &val) {
+void ChannelImplementation::addMonitorProperty(const char *key, const Value &val) {
     monitors_properties[key] = val;
     modified();
 }
-void ChannelImplementation::removeMonitorProperty(const char *key,Value &val) {
+void ChannelImplementation::removeMonitorProperty(const char *key, const Value &val) {
     monitors_properties.erase(key);
     modified();
     //TBD Bug here, we should be using a set< pair<string, Value> >, not a map
@@ -1740,6 +1740,39 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
 }
 #endif
 
+void Channel::newPendingCommand(IODCommand *cmd) {
+	boost::mutex::scoped_lock(iod_cmd_mutex);
+
+	pending_commands.push_back(cmd);
+}
+
+IODCommand *Channel::getCommand() {
+	boost::mutex::scoped_lock(iod_cmd_mutex);
+
+	if (pending_commands.empty()) return 0;
+
+	IODCommand *cmd = pending_commands.front();
+	pending_commands.pop_front();
+	return cmd;
+}
+
+IODCommand *Channel::getCompletedCommand() {
+	boost::mutex::scoped_lock(iod_cmd_mutex);
+
+	if (completed_commands.empty()) return 0;
+
+	IODCommand *cmd = completed_commands.front();
+	completed_commands.pop_front();
+	return cmd;
+}
+
+void Channel::putCompletedCommand(IODCommand *cmd) {
+	boost::mutex::scoped_lock(iod_cmd_mutex);
+
+	completed_commands.push_back(cmd);
+}
+
+
 // This method is executed on the main thread
 void Channel::handleChannels() {
 	if (!all) return;
@@ -1751,6 +1784,13 @@ void Channel::handleChannels() {
         chn->checkCommunications();
 		if (chn->throttledItemsReady(now)) {
 			chn->sendThrottledUpdates();
+		}
+		IODCommand *command = chn->getCommand();
+		while (command) {
+			DBG_CHANNELS << "Processing: received command: " << command->param(0) << " on channel " << chn->name << "\n";
+			(*command)();
+			chn->putCompletedCommand(command);
+			command = chn->getCommand();
 		}
     }
 }
@@ -1891,7 +1931,7 @@ void Channel::setupFilters() {
         while (m_iter != MachineInstance::end()) {
             MachineInstance *machine = *m_iter++;
             if (machine && !this->channel_machines.count(machine)) {
-                Value &val = machine->getValue(item.first);
+                const Value &val = machine->getValue(item.first);
                 // match if the machine has the property and Null was given as the match value
                 //  or if the machine has the property and it matches the provided value
                 if ( val != SymbolTable::Null &&

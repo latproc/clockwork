@@ -33,14 +33,16 @@ enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
 struct ExprNode {
-    ExprNode(Value *a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
-    ExprNode(Value a, const Value *name = NULL) :tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
+    ExprNode(const Value *a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
+    ExprNode(const Value &a, const Value *name = NULL) :tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
+	ExprNode(Value *a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
+	ExprNode(Value &a, const Value *name = NULL) :tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
 	ExprNode(bool a, const Value *name = NULL) : tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
     ExprNode(PredicateOperator o) : val(0), node(0), op(o), kind(t_op) { }
     ExprNode(const ExprNode &other) : tmpval(other.tmpval), val(other.val), node(other.node), op(other.op), kind(other.kind) { if (other.val == &other.tmpval) val = &tmpval; }
     ~ExprNode();
     Value tmpval;
-    Value *val;
+    const Value *val;
     const Value *node;
     PredicateOperator op;
     enum { t_int, t_op } kind;
@@ -68,7 +70,7 @@ struct Predicate {
     Value entry;
 	MachineInstance *mi;
     Value *dyn_value;
-	Value *cached_entry;
+	const Value *cached_entry;
     const Value *last_calculation; // for dynamic values, retains the last value for display only
 	bool error() { return lookup_error; }
 	const std::string &errorString() { return error_str; }
@@ -98,7 +100,7 @@ struct Predicate {
     ~Predicate();
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);
-    Value &getTimerValue();
+    const Value &getTimerValue();
     std::ostream &operator <<(std::ostream &out) const;
     Value evaluate(MachineInstance *m);
     void flushCache();

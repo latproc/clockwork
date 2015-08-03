@@ -296,18 +296,20 @@ public:
     MachineInstance *lookup(Value &val);
     MachineInstance *lookup(const char *);
     MachineInstance *lookup(const std::string &name);
-    Value &getValue(std::string property); // provides the current value of an object accessible in the scope of this machine
-    Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
-    Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
+	Value *getMutableValue(const char *prop);
+	const Value &getValue(const char *prop); // provides the current value of an object accessible in the scope of this machine
+    const Value &getValue(const std::string &property); // provides the current value of an object accessible in the scope of this machine
+    const Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
+    const Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
     virtual void setValue(const std::string &property, Value new_value);
-    Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
+    const Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
     
     void setStateMachine(MachineClass *machine_class);
     bool stateExists(State &s);
 	bool hasState(const State &s) const;
     bool hasState(const std::string &state_name) const;
-	Value *lookupState(const std::string &state_name);
-	Value *lookupState(const Value &);
+	const Value *lookupState(const std::string &state_name);
+	const Value *lookupState(const Value &);
     void listenTo(MachineInstance *m);
     void stopListening(MachineInstance *m);
     bool setStableState(); // returns true if a state change was made

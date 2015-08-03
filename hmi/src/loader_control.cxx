@@ -427,8 +427,8 @@ void init(int addr, Fl_Widget *w, bool is_input) {
 int main(int argc, char **argv) {
 	context = new zmq::context_t;
 	
-	const char *hostname = "127.0.0.1";
-	int portnum = 1502;
+	const char *hostname = "10.1.1.3";
+	int portnum = 502;
 	
 	int arg = 1;
 	while (arg<argc) {

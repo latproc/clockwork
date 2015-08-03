@@ -127,7 +127,7 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
     }
 }
 
-Value &Predicate::getTimerValue() {
+const Value &Predicate::getTimerValue() {
     if (left_p->entry.kind == Value::t_symbol
         && (left_p->entry.token_id == ClockworkToken::TIMER || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
         return right_p->entry;
@@ -226,7 +226,7 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
 		DBG_SCHEDULER << "Scheduling item for " << t << "\n";
         Trigger *trigger = new Trigger("Timer");
         Scheduler::instance()->add(new ScheduledItem( t, new FireTriggerAction(target, trigger)));
-        trigger->release();
+        trigger = trigger->release();
     }
     else if (scheduled_time > 0) {
 		struct timeval now;
@@ -415,7 +415,7 @@ private:
     bool *to_clear;
 };
 
-Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
 	Value *v = &p->entry;
 	p->clearError();
 	if (v->kind == Value::t_symbol) {
@@ -502,7 +502,7 @@ Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool reeval
 	return v;
 }
 
-Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
     if (reevaluate) {
         p->flushCache();
     }
@@ -633,7 +633,7 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         stack.push(p->op);
 	}
     else {
-        Value *result = resolve(p, m, left, reevaluate);
+        const Value *result = resolve(p, m, left, reevaluate);
 		//std::cout << "prep: resolved " << *result << "\n";
         if (*result == SymbolTable::Null) {
             return false; //result = &p->entry;

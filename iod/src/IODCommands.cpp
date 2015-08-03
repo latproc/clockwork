@@ -355,7 +355,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 				error_str = "Error: usage is GET machine property";
 				return false;
 			}
-			Value &v = m->getValue(params[2].asString());
+			const Value &v = m->getValue(params[2].asString());
 			if (v == SymbolTable::Null) {
 				error_str = "Error: property not found";
 				return false;

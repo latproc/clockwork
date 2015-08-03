@@ -63,7 +63,7 @@ MachineCommand::~MachineCommand() {
 	}
     if (timeout_trigger) {
         timeout_trigger->disable();
-        timeout_trigger->release();
+        timeout_trigger = timeout_trigger->release();
     }
 }
 
@@ -114,7 +114,7 @@ Action::Status MachineCommand::runActions() {
 			error_str = err_msg;
 		}
 		if (stat == Action::NeedsRetry) {
-			//NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
+			NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
 			owner->stop(a);
 			status = Running;
 			return status; // action failed to start
@@ -133,6 +133,7 @@ Action::Status MachineCommand::runActions() {
 		if (owner->executingCommand() && owner->executingCommand() != this) {
             std::stringstream ss;
             ss << "ERROR: command executing (" << *owner->executingCommand() <<") is not " << *this;
+			owner->displayActive(ss);
             char *err_msg = strdup(ss.str().c_str());
             MessageLog::instance()->add(err_msg);
 			DBG_M_ACTIONS << err_msg << "\n";

@@ -29,7 +29,8 @@ FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t)
     }
 
 FireTriggerAction::~FireTriggerAction() {
-   trigger->release();
+	//DBG_ACTIONS << "Removing " << *this << "\n";
+	trigger->release();
 }
 
 Action::Status FireTriggerAction::run() { 
@@ -47,7 +48,8 @@ Action::Status FireTriggerAction::run() {
 }
 
 Action::Status FireTriggerAction::checkComplete() {
-	return Complete;
+	status = Complete;
+	return status;
 }
 
 std::ostream& FireTriggerAction::operator<<(std::ostream &out) const {

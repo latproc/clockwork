@@ -32,8 +32,8 @@ class DynamicValue {
 public:
     DynamicValue() :scope(0), refs(0), last_process_time(0){ }
     virtual ~DynamicValue()  {}
-    virtual Value &operator()(MachineInstance *scope); // uses the provided machine's scope
-    virtual Value &operator()(); // uses the current scope for evaluation
+    virtual const Value &operator()(MachineInstance *scope); // uses the provided machine's scope
+    virtual const Value &operator()(); // uses the current scope for evaluation
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     Value *lastResult() { return &last_result; }

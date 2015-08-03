@@ -375,7 +375,7 @@ chn_definition_section:
     delete $6;
 }
 | MONITORS MACHINES WITH PROPERTY SYMBOL ';'  {
-    current_channelclass->addMonitorProperty($5, SymbolTable::Null);
+	current_channelclass->addMonitorProperty($5, SymbolTable::Null);
 }
 | MONITORS MACHINES WITH EXPORTS ';'  {
     current_channelclass->addMonitorExports();
@@ -624,7 +624,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     properties = property_stack.back();
     property_stack.pop_back();
     if (properties.exists("TIMEOUT")) {
-        Value &t = properties.lookup("TIMEOUT");
+        const Value &t = properties.lookup("TIMEOUT");
         long timeout;
         if (t.asInteger(timeout)) {
             mc->timeout = timeout;
