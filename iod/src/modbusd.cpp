@@ -129,7 +129,10 @@ void insert(int group, int addr, const char *value, size_t len)
 		dest = &modbus_mapping->tab_input_registers[addr];
 	else if (group == 4)
 		dest = &modbus_mapping->tab_registers[addr];
-
+	if (!dest) {
+		std::cerr << "no entry for " << addr << " in group 3 or 4\n";
+		return;
+	}
 	uint8_t *p = (uint8_t *)value;
 	if (DEBUG_STRINGS) std::cout << "string length: " << len
 		<< "\n";
