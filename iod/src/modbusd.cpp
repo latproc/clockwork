@@ -317,7 +317,7 @@ struct ModbusServerThread
 				usleep(100);
 				continue; // TBD
 			}
-			if (nfds == 0) { if (debug) std::cout << "idle\n"; usleep(50000); continue; }
+			if (nfds == 0) { /*if (debug) std::cout << "idle\n"; */ usleep(1000); continue; }
 			for (int conn = 0; conn <= max_fd; ++conn)
 			{
 				if (!FD_ISSET(conn, &activity)) continue;
