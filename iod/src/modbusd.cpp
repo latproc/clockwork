@@ -542,7 +542,10 @@ struct ModbusServerThread
 							{
 								std::string cmd = *iter++;
 								std::string response;
-								sendMessage(cmd.c_str(), cmd_interface, response);
+								uint64_t cmd_timeout = 250;
+								if (!sendMessage(cmd.c_str(), cmd_interface, response, 150) ) {
+									std::cerr << "Message send of " << cmd << " failed\n";
+								}
 								//char *res = sendIODMessage(cmd);
 								//if (res) free(res);
 							}
@@ -554,7 +557,10 @@ struct ModbusServerThread
 							{
 								std::string cmd( getIODSyncCommand(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0) );
 								std::string response;
-								sendMessage(cmd.c_str(), cmd_interface, response);
+								uint64_t cmd_timeout = 250;
+								if (!sendMessage(cmd.c_str(), cmd_interface, response, cmd_timeout)) {
+									std::cerr << "Message send of " << cmd << " failed\n";
+								}
 								//char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
 								//if (res) free(res);
 								if (DEBUG_BASIC)
