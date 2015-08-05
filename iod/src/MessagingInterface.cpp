@@ -190,7 +190,7 @@ sendMessage_transmit:
     while (len == 0) {
         try {
 			zmq::message_t rcvd;
-			if (sock.recv(&rcvd), ZMQ_DONTWAIT) {
+			if (sock.recv(&rcvd, ZMQ_DONTWAIT) ) {
 				len = rcvd.size();
 				if (!len) continue;
 				buf = new char[len+1];
