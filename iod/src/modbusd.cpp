@@ -278,7 +278,7 @@ struct ModbusServerThread
 				modbus_state = ms_paused;
 				paused_counter = 0;
 			}
-			if (modbus_state == ms_paused) { if (debug) std::cout << "modbus paused\n"; usleep(100000); continue; }
+			if (modbus_state == ms_paused) { /*if (debug) std::cout << "modbus paused\n";*/ usleep(100000); continue; }
 			else paused_counter = 0;
 			if (modbus_state == ms_starting || modbus_state == ms_resuming) {
 				if (!modbus_context) modbus_context = modbus_new_tcp("0.0.0.0", 1502);
