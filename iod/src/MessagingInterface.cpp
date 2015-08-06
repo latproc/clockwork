@@ -97,8 +97,8 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			if (!n && block) continue;
 			if (items[0].revents & ZMQ_POLLIN) {
 				//NB_MSG << tnam << " safeRecv() collecting data\n";
-				response_len = sock.recv(buf, buflen, ZMQ_NOBLOCK);
-				if (response_len > 0 && response_len < buflen) {
+				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
+				if (response_len > 0 && response_len < (unsigned int)buflen) {
 					buf[response_len] = 0;
 					//NB_MSG << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n";
 				}
@@ -157,42 +157,56 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, ui
 	uint64_t start_time = microsecs();
 sendMessage_transmit:
 	--retries;
-	assert(retries);
 	while (1) {
-        try {
-			if ( !(*msg) ) { NB_MSG << " Warning: sending empty message"; }
-            size_t len = sock.send(msg, strlen(msg), ZMQ_NOBLOCK);
+		if (timeout_us && microsecs() - start_time > timeout_us) return false; // unable to send
+		try {
+			if ( !(*msg) ) {  // don't send zero length messages
+				MessageLog::instance()->add(" Warning: skipped sending empty message"); 
+				return false; 
+			}
+			size_t len = sock.send(msg, strlen(msg));
 			if (!len) {
-				if (!len) { NB_MSG << "Warning: zero bytes sent of " << strlen(msg) << "\n"; }
-				continue;
-			}
-			NB_MSG << "sending: " << msg << " on thread " << tnam << "\n";
-            break;
-        }
-        catch (zmq::error_t e) {
-			if (errno == EINTR) {
-				NB_MSG << "Warning: send was interrupted (EAGAIN)\n";
 				usleep(50);
-				if (nowMicrosecs() - start_time > timeout_us ) return false;
 				continue;
 			}
-            NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n";
+			break;
+		}
+		catch (zmq::error_t e) {
+			if (errno == EINTR) {
+				NB_MSG << "Warning: send was interrupted (EINTR)\n" << std::flush;
+				usleep(50);
+				continue;
+			}
+			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
 			if (errno == EFSM) {
 				// no way to recover from an FSM error at this point
 				NB_MSG << "exiting\n";
 			}
-            return false;
-        }
-    }
-    char *buf = 0;
-    size_t len = 0;
+			return false;
+		}
+	}
+	char *buf = 0;
+	size_t len = 0;
 	start_time = microsecs();
-    while (len == 0) {
-        try {
+	uint64_t warn_at = 100000;
+	while (len == 0) {
+		uint64_t now = microsecs();
+		if (timeout_us && now - start_time > timeout_us) return false; // unable to send
+		if (now - start_time > warn_at) {
+			char tnam[100];
+			int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+			assert(pgn_rc == 0);
+			char buf[150];
+			snprintf(buf, 150, "warning: send message on thread %s taken %ld ms so far\n", tnam, now-start_time);
+			MessageLog::instance()->add(buf);
+			NB_MSG << buf << "\n" << std::flush;
+			warn_at += 100000;
+		}
+		try {
 			zmq::message_t rcvd;
 			if (sock.recv(&rcvd, ZMQ_DONTWAIT) ) {
 				len = rcvd.size();
-				if (!len) continue;
+				if (!len) { usleep(50); continue; }
 				buf = new char[len+1];
 				memcpy(buf, rcvd.data(), len);
 				buf[len] = 0;
@@ -200,22 +214,12 @@ sendMessage_transmit:
 				delete[] buf;
 			}
 			else {
-				if (errno == EAGAIN) {
-					uint64_t now = microsecs();
-					if (now - start_time > 100000) {
-						std::cerr << __FILE__ << ":" << __LINE__ << " sendMessage saw no response in 100ms\n";
-						return false;
-					}
-					else {
-						usleep(500);
-					}
-					continue;
-				}
+				usleep(100);
+				continue;
 			}
 			break;
-        }
-        catch(zmq::error_t e)  {
-            if (errno == EINTR) continue;
+		}
+		catch(zmq::error_t e)  {
 			char err[300];
 			const char *fnam = strrchr(__FILE__, '/');
 			if (!fnam) fnam = __FILE__; else fnam++;
@@ -224,12 +228,16 @@ sendMessage_transmit:
 			if (zmq_errno() == EFSM) {
 				// send must have failed
 				usleep(50);
+				const char *errmsg = "sendMessage FSM error, resending message";
+				MessageLog::instance()->add(errmsg);
+				NB_MSG << errmsg << "\n" << std::flush;
 				goto sendMessage_transmit;
 			}
-            return false;
-        }
-    }
-    return true;
+			if (errno == EINTR) continue;
+			return false;
+		}
+	}
+	return true;
 }
 
 void MessagingInterface::setContext(zmq::context_t *ctx) {
