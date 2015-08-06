@@ -288,9 +288,9 @@ int main(int argc, char const *argv[])
 		return load_result;
 	}
 
-	Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
+	const Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
 	long delay = 1000;
-	if (cycle_delay_v) cycle_delay_v->iValue = delay;
+	if (cycle_delay_v) delay = cycle_delay_v->iValue;
 	ECInterface::FREQUENCY=1000000 / delay;
 
 #ifndef EC_SIMULATOR
