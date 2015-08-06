@@ -54,6 +54,7 @@ char *send_command(std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
+	std::cout << " sending: " << msg << "\n";
 	sendMessage(*psocket, msg);
 	size_t size = strlen(msg);
 	free(msg);
@@ -171,7 +172,17 @@ void displayChanges(std::set<ModbusMonitor*> &changes, uint8_t *buffer_addr) {
 			ModbusMonitor *mm = *iter++;
 			// note: the monitor address is in the global range grp<<16 + offset
 			// this method is only using the addresses in the local range
-			mm->set(buffer_addr + ( (mm->address() & 0xffff)) );
+			uint8_t *val = buffer_addr + ( (mm->address() & 0xffff));
+			mm->set( val );
+			
+			if ( (mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
+				std::list<Value> cmd;
+				cmd.push_back("SET");
+				cmd.push_back(mm->name().c_str());
+				cmd.push_back("TO");
+				if (*val) cmd.push_back("on"); else cmd.push_back("off");
+				process_command(cmd);
+			}
 		}
 	}
 }
@@ -184,7 +195,26 @@ void displayChanges(std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr) {
 			ModbusMonitor *mm = *iter++;
 			// note: the monitor address is in the global range grp<<16 + offset
 			// this method is only using the addresses in the local range
+			uint16_t *val = buffer_addr + ( (mm->address() & 0xffff));
 			mm->set(buffer_addr + ( (mm->address() & 0xffff)) );
+			if (mm->length()==1) {
+				std::list<Value> cmd;
+				cmd.push_back("PROPERTY");
+				char buf[100];
+				snprintf(buf, 100, "%s", mm->name().c_str());
+				char *p = strrchr(buf, '.');
+				if (p) {
+					*p++ = 0;
+					cmd.push_back(buf);
+					cmd.push_back(p);
+				}
+				else {
+					cmd.push_back(buf);
+					cmd.push_back("VALUE");
+				}
+				cmd.push_back(*val);
+				process_command(cmd);
+			}
 		}
 	}
 }
@@ -328,13 +358,6 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 			const std::pair<int, UserData*> item = *iter++;
 			if (item.first < min) min = item.first;
 			if (item.first > max) max = item.first;
-/*			
-			if (tab_rp_bits[item.first] != tab_rq_bits[item.first]) {
-				tab_rq_bits[item.first] = tab_rp_bits[item.first];
-				
-				std::cout << grp << ":" << (item.first+1) << "->" << (int)tab_rp_bits[item.first] << "\n";
-			}
-*/
 		}
 	}
 	int rc = -1;
@@ -399,32 +422,6 @@ void operator()() {
 			error_count = 0;
 		}
 
-/*
-		std::map<int, UserData*>::iterator iter = active_addresses.begin();
-		int min =100000;
-		int max = 0;
-		
-		while (iter != active_addresses.end()) {
-			boost::mutex::scoped_lock(update_mutex);
-			const std::pair<int, UserData*> item = *iter++;
-			int rc = -1;
-			int retry = 5;
-			if (item.first < min) min = item.first;
-			if (item.first > max) max = item.first;
-			while ( (rc = modbus_read_bits(ctx, item.first, 1, tab_rp_bits+item.first) == -1) ) {
-				if (check_error("modbus_read_bits", item.first, &retry)) continue; else break;
-			}
-			if (!connected) goto modbus_loop_end;
-			
-			if (tab_rp_bits[item.first] != tab_rq_bits[item.first]) {
-				tab_rq_bits[item.first] = tab_rp_bits[item.first];
-				
-				std::cout << "0:" << (item.first+1) << "->" << (int)tab_rp_bits[item.first] << "\n";
-			}
-		}
-		if (min<max) bits_monitor.check(max-min+1, tab_rp_bits+min);
-		if (!connected) goto modbus_loop_end;
-*/
 		if (!collect_updates(bits_monitor, 0, tab_rp_bits, active_addresses, "modbus_read_bits", modbus_read_bits)) 
 			goto modbus_loop_end;
 		if (!collect_updates(robits_monitor, 1, tab_ro_bits, ro_bits, "modbus_read_input_bits", modbus_read_input_bits)) 
@@ -437,84 +434,6 @@ void operator()() {
 			std::cout << "group 4 failure\n";
 			goto modbus_loop_end;
 		}
-/*
-		min =100000;
-		max = 0;
-		iter = ro_bits.begin();
-		while (iter != ro_bits.end()) {
-			boost::mutex::scoped_lock(update_mutex);
-			const std::pair<int, UserData*> item = *iter++;
-			int rc = -1;
-			int retry = 5;
-			uint8_t res; 
-			assert(ctx != 0);
-			if (item.first < min) min = item.first;
-			if (item.first > max) max = item.first;
-			while ( ( rc = modbus_read_input_bits(ctx, item.first, 1, &res)  == -1) ) {
-				if (check_error("modbus_read_input_bits", item.first, &retry)) continue; else break;
-			}
-			if (!connected) goto modbus_loop_end;
-			if (res != tab_ro_bits[item.first]) {
-				tab_ro_bits[item.first] = res;
-				std::cout << "1:" << (item.first+1) << "->" << (int)tab_ro_bits[item.first] << "\n";				
-			}
-		}
-		if (min<max)
-			robits_monitor.check(max-min+1, tab_ro_bits+min);
-	{
-		std::map<int, UserData*>::iterator iter = inputs.begin();
-		int min =100000;
-		int max = 0;
-		iter = inputs.begin();
-		while (iter != inputs.end()) {
-			boost::mutex::scoped_lock(update_mutex);
-			const std::pair<int, UserData*> item = *iter;
-			iter++;
-			int rc = -1;
-			int retry = 5;
-			uint16_t res; 
-			if (item.first < min) min = item.first;
-			if (item.first > max) max = item.first;
-			while ( ( rc = modbus_read_registers(ctx, item.first, 1, &res)  == -1) ) {
-				if (check_error("modbus_read_registers", item.first, &retry)) continue; else break;
-			}
-			if (!connected) goto modbus_loop_end;
-			if (res != tab_rw_rq_registers[item.first]) {
-				tab_rw_rq_registers[item.first] = res;
-				std::cout << "4:" << (item.first+1) << "->" << tab_rw_rq_registers[item.first] << "\n";
-			}
-		}
-		if (min<max) {
-			std::set<ModbusMonitor*>changes;
-			regs_monitor.check((max-min+1)*2, (uint8_t*)(tab_rw_rq_registers+min), min, changes);
-		}
-
-		min =100000;
-		max = 0;
-		iter = inputs.begin();
-		while (iter != inputs.end()) {
-			boost::mutex::scoped_lock(update_mutex);
-			const std::pair<int, UserData*> item = *iter++;
-			int rc = -1;
-			int retry = 5;
-			uint16_t res; 
-			if (item.first < min) min = item.first;
-			if (item.first > max) max = item.first;
-			while ( ( rc = modbus_read_registers(ctx, item.first, 1, &res)  == -1) ) {
-				if (check_error("modbus_read_registers", item.first, &retry)) continue; else break;
-			}
-			if (!connected) goto modbus_loop_end;
-			if (res != tab_rq_registers[item.first]) {
-				tab_rq_registers[item.first] = res;
-				std::cout << "3:" << (item.first+1) << "->" << tab_rq_registers[item.first] << "\n";
-			}
-		}
-		if (min<max) {
-			std::set<ModbusMonitor*> changes;
-			regs_monitor.check((max-min+1)*2, (uint8_t*)(tab_rw_rq_registers+min), min, changes);
-		}
-	}
-*/
 		
 modbus_loop_end:	
 		usleep(100000);
@@ -533,6 +452,9 @@ void usage(const char *prog) {
 using namespace std;
 int main(int argc, char *argv[]) {
 	context = new zmq::context_t;
+
+	ClockworkClientThread cw_client;
+	boost::thread monitor_cw(boost::ref(cw_client));
 	
 	const char *hostname = "127.0.0.1"; //"10.1.1.3";
 	int portnum = 1502; //502;

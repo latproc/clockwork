@@ -98,7 +98,7 @@ public:
 		socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 		psocket = &socket;
 
-		socket.connect("tcp://localhost:5555");
+		socket.connect("tcp://localhost:10001");
 		
 		while (!finished) {
 			usleep(500000);	
