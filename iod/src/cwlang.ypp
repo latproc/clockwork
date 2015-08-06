@@ -129,6 +129,7 @@ struct Subcondition {
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
+%token LINKED
 
 %union {
 	int iVal;
@@ -376,6 +377,9 @@ chn_definition_section:
 }
 | MONITORS MACHINES WITH PROPERTY SYMBOL ';'  {
 	current_channelclass->addMonitorProperty($5, SymbolTable::Null);
+}
+| MONITORS MACHINES LINKED TO SYMBOL ';'  {
+	current_channelclass->addMonitorLinkedTo($5);
 }
 | MONITORS MACHINES WITH EXPORTS ';'  {
     current_channelclass->addMonitorExports();

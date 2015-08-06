@@ -81,6 +81,7 @@ ITEM                return ITEM;
 ITEMS               return ITEMS;
 IDENTIFIER          return IDENTIFIER;
 LEAVE               return LEAVE;
+LINKED				return LINKED;
 IF					return IF_;
 IN                  return IN;
 INITIAL             return INITSTATE;

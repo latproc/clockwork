@@ -69,7 +69,8 @@ public:
     void addMonitorPattern(const char *);
     void addMonitorProperty(const char *,const Value &);
     void addMonitorExports();
-    void removeMonitor(const char *);
+	void addMonitorLinkedTo(const char *);
+	void removeMonitor(const char *);
     void removeIgnorePattern(const char *);
     void removeMonitorPattern(const char *);
     void removeMonitorProperty(const char *, const Value &);
@@ -94,6 +95,7 @@ protected:
     std::set<std::string> monitors_patterns;
     std::set<std::string> ignores_patterns;
     std::set<std::string> monitors_names;
+	std::set<std::string> monitor_linked;
     std::map<std::string, Value> monitors_properties;
 	std::map<std::string, Value> updates_names;
 	std::map<std::string, Value> shares_names;

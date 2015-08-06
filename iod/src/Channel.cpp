@@ -1552,6 +1552,10 @@ void ChannelImplementation::removeMonitorExports() {
     modified();
 }
 
+void ChannelImplementation::addMonitorLinkedTo(const char *machine_name) {
+	monitor_linked.insert(machine_name);
+}
+
 void ChannelImplementation::removeMonitorPattern(const char *s) {
     monitors_patterns.erase(s);
     modified();
@@ -1892,7 +1896,29 @@ void Channel::setupFilters() {
             }
         }
     }
-        
+
+	if (definition()->monitor_linked.size()) {
+		std::set<std::string>::const_iterator iter = definition()->monitor_linked.begin();
+		while (iter != definition()->monitor_linked.end()) {
+			const std::string &machine_name = *iter++;
+			MachineInstance *master = MachineInstance::find(machine_name.c_str());
+			if (!master) {
+				char buf[150];
+				snprintf(buf, 150, "Channel %s cannot find master machine %s", name.c_str(), machine_name.c_str());
+				MessageLog::instance()->add(buf);
+				DBG_CHANNELS << buf << "\n";
+			}
+			std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
+			while (m_iter != MachineInstance::end()) {
+				MachineInstance *machine = *m_iter++;
+				if (machine && machine->listens.count(master) && !this->channel_machines.count(machine)) {
+					machine->publish();
+					this->channel_machines.insert(machine);
+				}
+			}
+		}
+	}
+
     std::set<std::string>::iterator iter = definition()->monitors_patterns.begin();
     while (iter != definition()->monitors_patterns.end()) {
         const std::string &pattern = *iter++;
