@@ -11,4 +11,4 @@
 4:01003	M_rawScales.rawSteady	Signed_int_16	1
 4:01004	M_rawScales.rawUnderWeight	Signed_int_16	1
 4:01005	M_rawScales.rawOverWeight	Signed_int_16	1
-4:01007	M_rawScales.message	Ascii_String	40
+4:01010	M_rawScales.message	Ascii_String	40

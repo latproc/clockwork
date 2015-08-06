@@ -214,12 +214,14 @@ bool check_error(const char *msg, int entry, int *retry) {
 		usleep(100);
 		return true;
 	}
+	else if (errno == EBADF || errno == ECONNRESET || errno == EPIPE) {
+		fprintf(stderr, "%s %s (%d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		close_connection();
+	}
 	else {
-		fprintf(stderr, "%s %s (%d), entry %d reconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
-		if (--(*retry) == 0) {
-			close_connection();
-			return false;
-		}
+		fprintf(stderr, "%s %s (%d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		close_connection();
+		return false;
 		usleep(1000);
 	}
 	return true;
@@ -323,15 +325,18 @@ ModbusClientThread *mb = 0;
 
 void press(Fl_Widget *w, void *data) {
 	int *addr= (int*)data;
+	printf("pressed btn with address %d\n", *addr);
 	Fl_Check_Button *btn = dynamic_cast<Fl_Check_Button*>(w);
 	if (btn) {
 		int val = btn->value();
+	    printf("Address = %d, value = %d\n", *addr, val);
 		mb->tab_rq_bits[*addr] = val;
 	}
 	else {
 		Fl_Light_Button *btn = dynamic_cast<Fl_Light_Button*>(w);
 		if (btn) {
 			int val = btn->value();
+		    printf("Address = %d, value = %d\n", *addr, val);
 			mb->tab_rq_bits[*addr] = val;
 		}
 		else
@@ -341,13 +346,13 @@ void press(Fl_Widget *w, void *data) {
 		modbus_t *ctx = mb->getContext();
 		int rc = 0;
 	    while ( (rc = modbus_write_bit(ctx, *addr, mb->tab_rq_bits[*addr]) ) == -1) {
-	        printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[0]);
+	        printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[*addr]);
 			fprintf(stderr, "%s %s (%d), entry\n", "modbus_write_bit", modbus_strerror(errno), errno);
 			if (errno == EAGAIN || errno == EINTR) continue; else break;
 		}
 	    if (rc != 1) {
 	        printf("ERROR modbus_write_bit (%d)\n", rc);
-	        printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[0]);
+	        printf("Address = %d, value = %d\n", *addr, mb->tab_rq_bits[*addr]);
 	    }
 		mb->releaseContext();
 	} 
@@ -382,7 +387,6 @@ void save(Fl_Value_Input*in, void*data) {
 void init(int addr, Fl_Value_Input*w) {
 	{
 		modbus_t *ctx = mb->getContext();
-	
 		inputs[addr] = w;
 		int rc = modbus_read_registers(ctx, addr, 1, mb->tab_rp_registers+addr);
 		if (rc == -1) {
@@ -427,8 +431,10 @@ void init(int addr, Fl_Widget *w, bool is_input) {
 int main(int argc, char **argv) {
 	context = new zmq::context_t;
 	
-	const char *hostname = "10.1.1.3";
-	int portnum = 502;
+	//const char *hostname = "10.1.1.3";
+	//int portnum = 502;
+	const char *hostname = "127.0.0.1";
+	int portnum = 1502;
 	
 	int arg = 1;
 	while (arg<argc) {
@@ -451,9 +457,9 @@ int main(int argc, char **argv) {
 
 	{
 		modbus_t *ctx = mb->getContext();
-		int rc = modbus_write_register(ctx, M_rawScales_rawUnderWeight, 110);
+		int rc = modbus_write_register(ctx, M_rawScales_rawSteady, 77);
+		rc = modbus_write_register(ctx, M_rawScales_rawUnderWeight, 110);
 		rc = modbus_write_register(ctx, M_rawScales_rawOverWeight, 200);
-		rc = modbus_write_register(ctx, M_rawScales_rawSteady, 77);
 		mb->releaseContext();
 	}
 
