@@ -56,8 +56,10 @@
 #include "CommandManager.h"
 #include "Logger.h"
 #include "DebugExtra.h"
+#include <pthread.h>
 
 bool debug = false;
+const char *program_name = "device_connector";
 
 class DeviceStatus {
 public:
@@ -554,6 +556,16 @@ MatchFunction *MatchFunction::instance_;
 struct ConnectionThread {
     
     void operator()() {
+
+		char thread_name_buf[100];
+		snprintf(thread_name_buf, 100, "%s tcp connection", program_name);
+
+#ifdef __APPLE__
+		pthread_setname_np(thread_name_buf);
+#else
+		pthread_setname_np(pthread_self(), thread_name_buf);
+#endif
+		
         try {
             gettimeofday(&last_active, 0);
             
@@ -868,6 +880,7 @@ int main(int argc, const char * argv[])
 {
     zmq::context_t context;
     MessagingInterface::setContext(&context);
+	program_name = argv[0];
     
     last_send.tv_sec = 0;
     last_send.tv_usec = 0;
