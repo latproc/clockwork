@@ -75,7 +75,7 @@ void initialiseOutputs() {
 	std::list<MachineInstance *>::iterator iter = output_points.begin();
 	while (iter != output_points.end()) {
 		MachineInstance *m = *iter++;
-		Value &val = m->properties.lookup("default");
+		const Value &val = m->properties.lookup("default");
 		if (val == SymbolTable::Null) continue;
 		default_outputs.push_back(m);
 		if (val.kind == Value::t_integer || m->_type == "ANALOGOUTPUT") {
@@ -168,7 +168,7 @@ void generateIOComponentModules()
 					continue;
 				}
 				if (m->_type == "ANALOGOUTPUT") {
-					Value &default_value = m->properties.lookup("default");
+					const Value &default_value = m->properties.lookup("default");
 					if (default_value == SymbolTable::Null) {
 						snprintf(error_buf, error_buf_size, 
 							"Machine %s must specify a default value", m->getName().c_str());
