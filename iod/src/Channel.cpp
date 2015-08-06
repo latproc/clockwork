@@ -1173,10 +1173,10 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
             continue;
         if (chn->filtersAllow(machine)) {
 			if (chn->throttle_time && machine->needsThrottle()) {
-				//DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
+				DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
 				if (!chn->throttled_items[machine])
 					chn->throttled_items[machine] = new MachineRecord(machine);
-				chn->throttled_items[machine]->properties.at(key.asString()) = val;
+				chn->throttled_items[machine]->properties[key.asString()] = val;
 			}
 			else {
 				chn->sendPropertyChangeMessage(machine->getName(), key, val);

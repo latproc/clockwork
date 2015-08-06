@@ -123,6 +123,12 @@ Value &AnyInValue::operator()(MachineInstance *mi) {
 	
 	if (state_property == 0)
 		state_property = mi->getMutableValue(state.c_str());
+	if (state_property == 0) {
+			char buf[150];
+			snprintf(buf, 150, "%s cannot find state %s", mi->getName().c_str(), state.c_str() );
+			MessageLog::instance()->add(buf);
+			NB_MSG << buf << "\n";
+		}
 
 	if (machine_list == NULL)
 		machine_list = mi->lookup(machine_list_name);
@@ -143,7 +149,7 @@ Value &AnyInValue::operator()(MachineInstance *mi) {
     
 	last_process_time = currentTime();
 	std::string state_val = state;
-	if (state_property != & SymbolTable::Null)
+	if (state_property && state_property != & SymbolTable::Null)
 		state_val = state_property->asString();
     for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
