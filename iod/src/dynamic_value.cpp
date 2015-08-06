@@ -122,7 +122,7 @@ AnyInValue::AnyInValue(const AnyInValue &other) {
 Value &AnyInValue::operator()(MachineInstance *mi) {
 	
 	if (state_property == 0)
-		state_property = mi->getMutableValue(state.c_str());
+		state_property = &mi->getValue(state.c_str());
 	if (state_property == 0) {
 			char buf[150];
 			snprintf(buf, 150, "%s cannot find state %s", mi->getName().c_str(), state.c_str() );
@@ -173,7 +173,7 @@ AllInValue::AllInValue(const AllInValue &other) {
 }
 Value &AllInValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
-		state_property = mi->getMutableValue(state.c_str());
+		state_property = &mi->getValue(state.c_str());
 	if (machine_list == NULL) {
 		machine_list = mi->lookup(machine_list_name);
 	}
@@ -219,7 +219,7 @@ CountValue::CountValue(const CountValue &other) {
 
 Value &CountValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
-		state_property = mi->getMutableValue(state.c_str());
+		state_property = &mi->getValue(state.c_str());
 	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for COUNT "<<state<<" test\n";

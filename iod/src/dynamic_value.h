@@ -36,7 +36,7 @@ public:
     virtual const Value &operator()(); // uses the current scope for evaluation
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
-    Value *lastResult() { return &last_result; }
+    const Value *lastResult() { return &last_result; }
     void setScope(MachineInstance *m) { scope = m; }
     MachineInstance *getScope() { return scope; }
     static DynamicValue *ref(DynamicValue*dv) { if (!dv) return 0; else dv->refs++; return dv; }
@@ -84,7 +84,7 @@ private:
     std::string state;
     std::string machine_list_name;
     MachineInstance *machine_list;
-	Value *state_property;
+	const Value *state_property;
 };
 
 class AllInValue : public DynamicValue {
@@ -101,7 +101,7 @@ private:
     std::string state;
     std::string machine_list_name;
     MachineInstance *machine_list;
-	Value *state_property;
+	const Value *state_property;
 };
 
 
@@ -119,7 +119,7 @@ private:
     std::string state;
     std::string machine_list_name;
     MachineInstance *machine_list;
-	Value *state_property;
+	const Value *state_property;
 };
 
 class IncludesValue : public DynamicValue {
