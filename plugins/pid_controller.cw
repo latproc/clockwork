@@ -84,39 +84,39 @@ struct PIDData {
 	struct CircularBuffer *rev_power_offsets;
 
 	/**** clockwork interface ***/
-	long *set_point;
-	long *stop_position;
-	long *mark_position;
-	long *position;
+	const long *set_point;
+	const long *stop_position;
+	const long *mark_position;
+	const long *position;
 
 	/* ramp settings */
-	long *min_update_time;
-	long *stopping_time;
-	long *startup_time;
-	long *ramp_limit;
+	const long *min_update_time;
+	const long *stopping_time;
+	const long *startup_time;
+	const long *ramp_limit;
 
-	long *max_forward;
-	long *max_reverse;
-	long *zero_pos;
-	long *min_forward;
-	long *min_reverse;
+	const long *max_forward;
+	const long *max_reverse;
+	const long *zero_pos;
+	const long *min_forward;
+	const long *min_reverse;
 
-	long *fwd_tolerance;
-	long *fwd_stopping_dist;
-	long *fwd_ramp_time;
-	long *fwd_stopping_time;
+	const long *fwd_tolerance;
+	const long *fwd_stopping_dist;
+	const long *fwd_ramp_time;
+	const long *fwd_stopping_time;
 
-	long *rev_tolerance;
-	long *rev_stopping_dist;
-	long *rev_ramp_time;
-	long *rev_stopping_time;
+	const long *rev_tolerance;
+	const long *rev_stopping_dist;
+	const long *rev_ramp_time;
+	const long *rev_stopping_time;
 
 	/* statistics/debug */
-	long *stop_error;
-	long *estimated_speed;
-	long *current_position;
+	const long *stop_error;
+	const long *estimated_speed;
+	const long *current_position;
 
-	/* internal values for ramping */
+	/* internal values for rampiconst ng */
 	double current_power;
 	uint64_t ramp_start_time;
 	uint64_t last_poll;
@@ -135,8 +135,8 @@ struct PIDData {
 	int overshot;
 
 	// keep a record of the power at which movement started
-	long *fwd_start_power; 
-	long *rev_start_power;
+	const long *fwd_start_power; 
+	const long *rev_start_power;
 	// keep a record of how long it took to see movement
 	uint64_t start_time;
 	uint64_t fwd_start_delay; 
@@ -151,17 +151,17 @@ struct PIDData {
 
 	/* stop/start control */
 	long stop_marker;
-	long *debug;
+	const long *debug;
 
-	long *Kp_long;
-	long *Ki_long;
-	long *Kd_long;
+	const long *Kp_long;
+	const long *Ki_long;
+	const long *Kd_long;
 
 	double Kp;
 	double Ki;
 	double Kd;
 
-	long *Kpf_long, *Kif_long, *Kdf_long, *Kpr_long, *Kir_long, *Kdr_long;
+	const long *Kpf_long, *Kif_long, *Kdf_long, *Kpr_long, *Kir_long, *Kdr_long;
 	double Kpf, Kif, Kdf, Kpr, Kir, Kdr;
   int use_Kpidf;
   int use_Kpidr;
@@ -169,7 +169,7 @@ struct PIDData {
 	double total_err;
 };
 
-int getInt(void *scope, const char *name, long **addr) {
+int getInt(void *scope, const char *name, const long **addr) {
 	struct PIDData *data = (struct PIDData*)getInstanceData(scope);
 	if (!getIntValue(scope, name, addr)) {
 		char buf[100];
@@ -373,7 +373,7 @@ static void halt(struct PIDData*data, void *scope) {
 }
 static void stop(struct PIDData*data, void *scope) {
 	halt(data, scope);
-	*data->set_point = 0;
+	//*data->set_point = 0;
 	data->stop_marker = 0;
 	data->last_stop_position = 0;
 	setIntValue(scope, "SetPoint", 0);
@@ -471,7 +471,7 @@ int poll_actions(void *scope) {
 	}
 	
 	/* check if we need to ramp to a new set_point when we are already moving */
-	if ( fabs(*data->estimated_speed) > 10 ) {
+	if ( labs(*data->estimated_speed) > 10 ) {
 
 		if (!data->changing_set_point) {
 			if ( *data->set_point != data->last_set_point) {
@@ -535,7 +535,7 @@ int poll_actions(void *scope) {
 			data->last_position = *data->position;
 			data->start_position = data->last_position;
 		}
-		if ( abs(*data->position - data->last_position) > 10000 ) { /* protection against wraparound */
+		if ( labs(*data->position - data->last_position) > 10000 ) { /* protection against wraparound */
 			data->last_position = *data->position;
 			return PLUGIN_COMPLETED;
 		}
@@ -608,7 +608,7 @@ int poll_actions(void *scope) {
 					if (data->debug && *data->debug) printf("%s within tolerance (fwd) speed = %ld pos:%ld stop:%ld\n", 
 						data->conveyor_name, *data->estimated_speed, *data->position, *data->stop_position);
 					close_to_target = 1;
-					if ( fabs(*data->estimated_speed) < 400) {
+					if ( labs(*data->estimated_speed) < 400) {
 						if (data->debug && *data->debug) printf("%s at position (fwd)\n", data->conveyor_name);
 						data->state = cs_atposition;
 						data->ramp_down_start = 0;
@@ -622,7 +622,7 @@ int poll_actions(void *scope) {
 					if (data->debug) printf("%s within tolerance (rev) speed = %ld pos:%ld stop:%ld\n", 
 						data->conveyor_name, *data->estimated_speed, *data->position, *data->stop_position);
 					close_to_target = 1;
-					if (fabs(*data->estimated_speed) < 400) {
+					if (labs(*data->estimated_speed) < 400) {
 						if (data->debug && *data->debug) printf("%s at position (rev)\n", data->conveyor_name);
 						data->state = cs_atposition;
 						data->ramp_down_start = 0;
@@ -738,7 +738,7 @@ int poll_actions(void *scope) {
 		double ramp_up_ratio = 1.0;
 		long startup_time = (now_t - data->ramp_start_time + 500)/1000;
 
-		if (new_state == cs_position || new_state == cs_speed && startup_time < *data->startup_time) {
+		if ( (new_state == cs_position || new_state == cs_speed) && startup_time < *data->startup_time) {
 				ramp_up_ratio = (double)startup_time / *data->startup_time;
 				if (ramp_up_ratio < 0.05) ramp_up_ratio = 0.05;
 				if (data->debug && *data->debug && ramp_up_ratio >0.0 && ramp_up_ratio<=1.0) 
@@ -766,8 +766,8 @@ int poll_actions(void *scope) {
 			double ramp_dist = fabs(*data->estimated_speed * stopping_time);
 			if (data->debug && *data->debug) 
 				printf("stopping_time: %8.3lf, ramp_dist: %8.3lf\n", stopping_time, ramp_dist);
-			if (fabs(*data->stop_position - *data->position) < ramp_dist * ramp_down_ratio) {
-				if ( data->ramp_down_start == 0 && fabs(*data->stop_position - *data->position) < ramp_dist) {
+			if (labs(*data->stop_position - *data->position) < ramp_dist * ramp_down_ratio) {
+				if ( data->ramp_down_start == 0 && labs(*data->stop_position - *data->position) < ramp_dist) {
 					data->ramp_down_start = now_t;
 					if (data->debug && *data->debug) 
 						printf("%s ramping down at %ld aiming for %ld over %5.3f\n", data->conveyor_name, 
@@ -806,15 +806,15 @@ int poll_actions(void *scope) {
 		else if (data->state == cs_position) {
 			if (data->overshot)
 				next_position = *data->stop_position;
-			else if (fabs(dist_to_stop) > fabs(set_point) && sign(dist_to_stop) == sign(set_point))
+			else if (labs(dist_to_stop) > fabs(set_point) && sign(dist_to_stop) == sign(set_point))
 				next_position = data->last_position + set_point;
 			else if (sign(dist_to_stop) == sign(set_point) ) {
 
 
 				next_position = data->last_position + set_point;
 				if (sign( *data->stop_position - next_position) != sign( *data->stop_position - data->last_position) ) {
-					double d1 = fabs(*data->stop_position - next_position);
-					double d2 = fabs(*data->stop_position - data->last_position);
+					double d1 = labs(*data->stop_position - next_position);
+					double d2 = labs(*data->stop_position - data->last_position);
 					if (d1 > d2) {
 						double ratio = d2/d1;
 						set_point *= ratio;
