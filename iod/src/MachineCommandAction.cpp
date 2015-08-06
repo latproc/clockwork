@@ -130,6 +130,7 @@ Action::Status MachineCommand::runActions() {
 		}
 //		x = owner->executingCommand();
 //		if (x==a) { DBG_M_ACTIONS << "stop doesn't work\n"; exit(2); }
+#if 0
 		if (owner->executingCommand() && owner->executingCommand() != this) {
             std::stringstream ss;
             ss << "ERROR: command executing (" << *owner->executingCommand() <<") is not " << *this;
@@ -139,6 +140,7 @@ Action::Status MachineCommand::runActions() {
 			DBG_M_ACTIONS << err_msg << "\n";
             free(err_msg);
         }
+#endif
 		setBlocker(0);
         ++current_step;
         DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
