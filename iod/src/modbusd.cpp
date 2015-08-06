@@ -1029,7 +1029,7 @@ int main(int argc, const char * argv[])
 			char *data = (char *)malloc(len+1);
 			memcpy(data, update.data(), len);
 			data[len] = 0;
-			if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
+			if (DEBUG_BASIC) std::cout << "received: "<<data<<" from clockwork\n";
 
 			std::vector<Value> params(0);
 			size_t count = parseIncomingMessage(data, params);
