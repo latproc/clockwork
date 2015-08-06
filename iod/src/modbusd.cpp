@@ -282,8 +282,9 @@ struct ModbusServerThread
 				if (++paused_counter>warn_at) {
 					std::cout << "modbus paused\n" << std::flush;
 					warn_at += 10;
-					usleep(100000); continue; 
+					usleep(100000); 
 				}
+				continue; 
 			}
 			else { paused_counter = 0; warn_at = 10; }
 			if (modbus_state == ms_starting || modbus_state == ms_resuming) {
