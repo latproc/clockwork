@@ -91,6 +91,8 @@ public:
 	static State UPLOADING;
 	static State ACTIVE;
 
+	bool monitorsLinked() const { return !monitor_linked.empty(); }
+
 protected:
     std::set<std::string> monitors_patterns;
     std::set<std::string> ignores_patterns;
@@ -218,6 +220,7 @@ public:
     void setDefinition(const ChannelDefinition *);
     
     const std::string &getName() const { return name; }
+	const std::set<MachineInstance*> &channelMachines() const { return channel_machines; }
     
     static std::map< std::string, Channel* > *channels() { return all; }
     static Channel *create(unsigned int port, ChannelDefinition *defn);

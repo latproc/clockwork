@@ -1089,19 +1089,58 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         }
     }
 
-	bool IODCommandChannels::run(std::vector<Value> &params) {
-		std::map< std::string, Channel* > *channels = Channel::channels();
-		if (!channels) {result_str = "No channels"; return true; }
-		
-		std::string result;
-		std::map<std::string, Channel*>::iterator iter = channels->begin();
-		while (iter != channels->end()) {
-			result += (*iter).first + " " + (*iter).second->getCurrentStateString() + "\n";
-			iter++;
-		}
-		result_str = result;
-		return true;
+bool IODCommandChannels::run(std::vector<Value> &params) {
+	std::map< std::string, Channel* > *channels = Channel::channels();
+	if (!channels) {result_str = "No channels"; return true; }
+	
+	std::string result;
+	std::map<std::string, Channel*>::iterator iter = channels->begin();
+	while (iter != channels->end()) {
+		result += (*iter).first + " " + (*iter).second->getCurrentStateString() + "\n";
+		iter++;
 	}
+	result_str = result;
+	return true;
+}
+
+bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
+	std::map< std::string, Channel* > *channels = Channel::channels();
+	if (!channels) {result_str = "[]"; return true; }
+
+	Channel *chn = 0;
+	try {
+		chn = channels->at(params[1].asString());
+	}
+	catch (std::exception ex){
+		error_str = "No such channel";
+		return false;
+	}
+
+	cJSON *result = cJSON_CreateArray();
+
+	// TBD this only supports modbus master channels at this point
+	if (chn->definition()->monitorsLinked()) {
+		std::set<MachineInstance *>::const_iterator iter = chn->channelMachines().begin();
+		while (iter != chn->channelMachines().end()) {
+			MachineInstance *m = *iter++;
+			cJSON *obj = cJSON_CreateObject();
+			cJSON_AddStringToObject(obj, "name", m->getName().c_str());
+			cJSON_AddStringToObject(obj, "address", m->parameters[1].val.asString().c_str());
+			long val;
+			if (m->parameters.size()>2 && m->parameters[2].val.asInteger(val))
+				cJSON_AddNumberToObject(obj, "length", val);
+			else
+				cJSON_AddNumberToObject(obj, "length", 1);
+			cJSON_AddStringToObject(obj, "type", m->_type.c_str());
+			cJSON_AddItemToArray(result, obj);
+		}
+	}
+	char *r_str = cJSON_PrintUnformatted(result);
+	result_str = r_str;
+	free(r_str);
+	cJSON_Delete(result);
+	return true;
+};
 
     bool IODCommandChannel::run(std::vector<Value> &params) {
         if (params.size() >= 2) {

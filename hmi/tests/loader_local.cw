@@ -1,14 +1,14 @@
 
 PLC MODBUSMODULE(host:"localhost", port:1502);
-I_BaleOnLoader INPUTBIT PLC;
-I_BaleAtLoaderPos INPUTBIT PLC;
-I_LoaderUp INPUTBIT PLC;
-I_LoaderBlockOn INPUTBIT PLC;
-I_PanelBlockIgnore INPUTBIT PLC;
-I_X33BlockIgnore INPUTBIT PLC;
+I_BaleOnLoader INPUTBIT PLC, "X1";
+I_BaleAtLoaderPos INPUTBIT PLC, "X2";
+I_LoaderUp INPUTBIT PLC, "X3";
+I_LoaderBlockOn INPUTBIT PLC, "X4";
+I_PanelBlockIgnore INPUTBIT PLC, "X5";
+I_X33BlockIgnore INPUTBIT PLC, "X6";
 
-O_LoaderBlock OUTPUTBIT PLC;
-M_WeightAvailable OUTPUTBIT PLC;
+O_LoaderBlock OUTPUTBIT PLC, "Y1";
+M_WeightAvailable OUTPUTBIT PLC, "Y2";
 
 RawScales MACHINE {
 	OPTION rawWeight 0;

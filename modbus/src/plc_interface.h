@@ -35,6 +35,7 @@ public:
 	std::map<std::string, PLCMapping> mappings;
 	
 	bool load(const char *fname);
+	std::pair<int, int> decode(const char *address);
 };
 
 #endif

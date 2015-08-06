@@ -277,6 +277,9 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "CHANNELS") {
 		command = new IODCommandChannels();
 	}
+	else if (ds == "REFRESH" && count == 2) {
+		command = new IODCommandChannelRefresh();
+	}
 	else if (count > 2 && ds == "DATA") {
 		command = new IODCommandData;
 	}

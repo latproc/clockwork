@@ -136,6 +136,10 @@ struct IODCommandPersistentState : public IODCommand {
     bool run(std::vector<Value> &params);
 };
 
+struct IODCommandChannelRefresh : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 struct IODCommandSchedulerState : public IODCommand {
     bool run(std::vector<Value> &params);
 };

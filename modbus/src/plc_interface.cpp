@@ -52,6 +52,36 @@ bool PLCInterface::load(const char *fname) {
 	return true;
 }
 
+std::pair<int, int> PLCInterface::decode(const char *address) {
+	try {
+		char code[10];
+		int idx = 0;
+		const char *addr_str = address;
+		while (*addr_str) {
+			if (isalpha(*addr_str)) {
+				if (idx<10) { code[idx] = (idx==9) ? 0 : *addr_str;} 
+				++addr_str;
+				++idx;
+			}
+			else break;
+		}
+		int addr;
+		char *rest = 0;
+		addr = strtol(addr_str, &rest, 8);
+		if (errno == -1) {std::cerr << "argument error: " << address << " is invalid\n"; }
+		else {
+			PLCMapping mapping = mappings.at(code);
+			mapping.address() += addr;
+			std::cout << address << " -> " << mapping.group() << " " << mapping.address() << "\n";
+			return std::make_pair(mapping.group(), mapping.address());
+		}
+	}
+	catch (std::exception ex) {
+		std::cerr << "No entry: " << address << "\n";
+	}
+	return std::make_pair(-1, -1);
+}
+
 
 unsigned int fromOctal(const char *s) {
 	unsigned int x;

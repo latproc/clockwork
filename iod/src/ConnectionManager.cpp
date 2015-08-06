@@ -107,13 +107,13 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 										 const char *remote_host, int remote_port) :
 		subscriber_port(remote_port),
 		subscriber_host(remote_host),
-		channel_name(chname), protocol(proto),
+		channel_name(chname), protocol(proto), setup_port(5555), 
 		subscriber_(*MessagingInterface::getContext(), (proto == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
 		monit_subs(subscriber_,
 				   constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str() ),
 		monit_pubs(0), monit_setup(0),
 		setup_(0),
-		_setup_status(e_startup), sub_status_(ss_init), setup_port(5555)
+		_setup_status(e_startup), sub_status_(ss_init)
 {
 	if (subscriber_host == "*") {
 		_setup_status = e_not_used; // This is not a client

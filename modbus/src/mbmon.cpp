@@ -12,6 +12,7 @@
 #include <zmq.hpp>
 #include <value.h>
 #include <MessageEncoding.h>
+#include "cJSON.h"
 
 zmq::context_t *context;
 zmq::socket_t *psocket = 0;
@@ -80,21 +81,20 @@ void process_command(std::list<Value> &params) {
 class ClockworkClientThread {
 
 public:
-	ClockworkClientThread(): finished(false) { }
-	void operator()() {
-	
-		zmq::socket_t socket (*context, ZMQ_REQ);
+	ClockworkClientThread(): finished(false) { 
 		int linger = 0; // do not wait at socket close time
-		socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-		psocket = &socket;
 
-		socket.connect("tcp://localhost:5555");
-		
+		socket = new zmq::socket_t(*context, ZMQ_REQ);
+		socket->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+		psocket = socket;
+		socket->connect("tcp://localhost:5555");
+	}
+	void operator()() {
 		while (!finished) {
 			usleep(500000);	
 		}
 	}
-
+	zmq::socket_t *socket;
 	bool finished;
 
 };
@@ -360,6 +360,7 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 			if (item.first > max) max = item.first;
 		}
 	}
+	if (min>max) return true; // nothing active in this group
 	int rc = -1;
 	int retry = 5;
 	int offset = min;
@@ -451,15 +452,12 @@ void usage(const char *prog) {
 
 using namespace std;
 int main(int argc, char *argv[]) {
-	context = new zmq::context_t;
 
-	ClockworkClientThread cw_client;
-	boost::thread monitor_cw(boost::ref(cw_client));
-	
 	const char *hostname = "127.0.0.1"; //"10.1.1.3";
 	int portnum = 1502; //502;
 	const char *config_filename = "modbus_mappings.txt";
-	
+	const char *channel_name = "PLC_MONITOR";
+
 	int arg = 1;
 	while (arg<argc) {
 		if ( strcmp(argv[arg], "-h") == 0 && arg+1 < argc) hostname = argv[++arg];
@@ -471,6 +469,9 @@ int main(int argc, char *argv[]) {
 		else if ( strcmp(argv[arg], "-c") == 0 && arg+1 < argc) {
 			config_filename = argv[++arg];
 		}
+		else if ( strcmp(argv[arg], "--channel") == 0 && arg+1 < argc) {
+			channel_name = argv[++arg];
+		}
 		else if ( strcmp(argv[arg], "-v") == 0) {
 			options.verbose = true;
 		}
@@ -479,18 +480,96 @@ int main(int argc, char *argv[]) {
 		++arg;
 	}
 
+
 	PLCInterface plc;
 	if (!plc.load("koyo.conf")) {
-		cerr << "Failed to load plc mapping configuration\n";
+		std::cerr << "Failed to load plc mapping configuration\n";
 		exit(1);
 	}
-	
+
+	context = new zmq::context_t;
+
+	ClockworkClientThread cw_client;
+	boost::thread monitor_cw(boost::ref(cw_client));
+
 	MonitorConfiguration mc;
+	/*
 	if (!mc.load(config_filename)) {
 		cerr << "Failed to load modbus mappings to be monitored\n";
 		exit(1);
 	}
+	*/
+	{
+	std::list<Value>cmd;
+	cmd.push_back("CHANNEL");
+	cmd.push_back(channel_name);
+	char *response = send_command(cmd);
+	std::cout << response << "\n";
+	cJSON *obj = cJSON_Parse(response);
+	free(response);
 	
+	std::string chn_instance_name;
+	if (obj) {
+		cJSON *name_js = cJSON_GetObjectItem(obj, "name");
+		chn_instance_name = name_js->valuestring;
+		cJSON_Delete(obj);
+		obj = 0;
+	}
+	std::cout << chn_instance_name << "\n";
+	
+	cmd.clear();
+	cmd.push_back("REFRESH");
+	cmd.push_back(chn_instance_name.c_str());
+	response = send_command(cmd);
+	std::cout << response << "\n";
+	obj = cJSON_Parse(response);
+	
+	
+	if (obj) {
+		if (obj->type != cJSON_Array) {
+			std::cout << "error. clock response is not an array";
+			char *item = cJSON_Print(obj);
+			std::cout << item << "\n";
+		}
+		cJSON *item = obj->child;
+		while (item) {
+			cJSON *name_js = cJSON_GetObjectItem(item, "name");
+			cJSON *addr_js = cJSON_GetObjectItem(item, "address");
+			cJSON *length_js = cJSON_GetObjectItem(item, "length");
+			cJSON *type_js = cJSON_GetObjectItem(item, "type");
+			
+			std::string name;
+			if (name_js && name_js->type == cJSON_String) {
+				name = name_js->valuestring;
+			}
+			int length = length_js->valueint;
+			std::string type;
+			if (type_js && type_js->type == cJSON_String) {
+				type = type_js->valuestring;
+			}
+			int group = 1;
+			if (type == "INPUTBIT") group = 1;
+			else if (type == "OUTPUTBIT") group = 0;
+			else if (type == "INPUTREGISTER") group = 3;
+			else if (type == "OUTPUTREGISTER") group = 4;
+
+			int addr = 0;
+			std::string addr_str;
+			if (addr_js && addr_js->type == cJSON_String) {
+				addr_str = addr_js->valuestring;
+				std::pair<int, int> plc_addr = plc.decode(addr_str.c_str());
+				addr = plc_addr.second;
+			}
+
+			ModbusMonitor mm(name, group, addr, length);
+			std::cout << mm << "\n";
+			mc.monitors.insert(std::make_pair(name, mm) );
+			item = item->next;
+		}
+
+	}
+	}
+
 	//for (int i=0; i<10; ++i) { active_addresses[i] = 0; ro_bits[i] = 0; }
 	std::map<std::string, ModbusMonitor>::const_iterator iter = mc.monitors.begin();
 	while (iter != mc.monitors.end()) {
