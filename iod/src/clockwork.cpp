@@ -509,9 +509,15 @@ void semantic_analysis() {
             if (mi->getStateMachine()->name == "LIST") {
                 DBG_PARSER << "List has " << mi->parameters.size() << " parameters\n";
             }
-            else if ((mi->getStateMachine()->name == "POINT"
+            else if (( (mi->getStateMachine()->name == "POINT"
+						|| mi->getStateMachine()->name == "INPUTBIT"
+						|| mi->getStateMachine()->name == "OUTPUTBIT"
+						|| mi->getStateMachine()->name == "INPUTREGISTER"
+						|| mi->getStateMachine()->name == "OUTPUTREGISTER"
+						)
                       && mi->getStateMachine()->parameters.size() >= 2
-                      && mi->getStateMachine()->parameters.size() <= 3)
+                      && mi->getStateMachine()->parameters.size() <= 3
+					  )
                 || (mi->getStateMachine()->name == "COUNTERRATE"
                     && (mi->getStateMachine()->parameters.size() == 3
                     || mi->getStateMachine()->parameters.size() == 1 ) )

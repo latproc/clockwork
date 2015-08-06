@@ -3286,10 +3286,19 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 							p.machine->setNeedsCheck();
 						}
 						if (newsm->name == "LIST"
-								|| ( (newsm->name == "POINT" || newsm->name == "ANALOGINPUT" || newsm->name == "COUNTER")
-									&& newsm->parameters.size() >= 2 && newsm->parameters.size() <=3 )
-								|| ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 3 || newsm->parameters.size() == 1) )
-						   ) {
+								|| ( (newsm->name == "POINT"
+									  || newsm->name == "ANALOGINPUT"
+									  || newsm->name == "COUNTER"
+									  || newsm->name == "INPUTBIT"
+									  || newsm->name == "OUTPUTBIT"
+									  || newsm->name == "INPUTREGISTER"
+									  || newsm->name == "OUTPUTREGISTER"
+									  )
+								&& newsm->parameters.size() >= 2 && newsm->parameters.size() <=3 )
+								|| ( newsm->name == "COUNTERRATE" && (newsm->parameters.size() == 3 || newsm->parameters.size() == 1)
+								)
+						   )
+						{
 						}
 						else {
 							resetTemporaryStringStream();
