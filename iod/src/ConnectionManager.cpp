@@ -113,7 +113,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 				   constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str() ),
 		monit_pubs(0), monit_setup(0),
 		setup_(0),
-		_setup_status(e_startup), sub_status_(ss_init)
+		_setup_status(e_startup), sub_status_(ss_init), setup_port(5555)
 {
 	if (subscriber_host == "*") {
 		_setup_status = e_not_used; // This is not a client
@@ -215,18 +215,23 @@ bool SubscriptionManager::requestChannel() {
     if (current_channel == "") return false;
     return true;
 }
+
+void SubscriptionManager::configureSetupConnection(const char *host, int port) {
+	setup_host = host; // TBD this has to be the same as the subscriber host
+	setup_port = port;
+}
     
 bool SubscriptionManager::setupConnections() {
 	assert(isClient());
     std::stringstream ss;
     if (setupStatus() == SubscriptionManager::e_startup || setupStatus() == SubscriptionManager::e_disconnected) {
-        ss << "tcp://" << subscriber_host << ":" << 5555;
+        ss << "tcp://" << subscriber_host << ":" << setup_port;
         current_channel = "";
 		try {
 			setup().connect(ss.str().c_str());
 		}
 		catch(zmq::error_t err) {
-			std::cerr << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << "\n";
+			std::cerr << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << " url: " << ss.str() << "\n";
 			return false;
 		}
         monit_setup->setEndPoint(ss.str().c_str());

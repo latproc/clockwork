@@ -889,13 +889,15 @@ int main(int argc, const char * argv[])
 	struct timeval now;
 	gettimeofday(&now, 0);
 	start_t = now.tv_sec*1000000 + now.tv_usec;
+	int cw_port;
+	std::string hostname;
 
 	po::options_description desc("Allowed options");
 	desc.add_options()
 		("help", "produce help message")
 		("debug",po::value<int>(&debug)->default_value(0), "set debug level")
-		("host", "remote host (localhost)")
-		("cwout", "clockwork outgoing port (5555)")
+		("host", po::value<std::string>(&hostname)->default_value("localhost"),"remote host (localhost)")
+		("cwout",po::value<int>(&cw_port)->default_value(5555), "clockwork outgoing port (5555)")
 		("cwin", "clockwork incoming port (deprecated)")
 		;
 	po::variables_map vm;
@@ -907,7 +909,7 @@ int main(int argc, const char * argv[])
 		return 1;
 	}
 	int cw_out = 5555;
-	std::string host("localhost");
+	std::string host("127.0.0.1");
 	// backward compatibility
 	if (argc > 2 && strcmp(argv[1],"-p") == 0)
 	{
@@ -932,6 +934,7 @@ int main(int argc, const char * argv[])
 		return 1;
 	}
 	std::cout << "-------- Starting Command Interface ---------\n" << std::flush;
+	std::cout << "connecting to clockwork on " << host << ":" << cw_out << "\n";
 	g_iodcmd = MessagingInterface::create(host, cw_out);
 	g_iodcmd->start();
 
@@ -950,6 +953,7 @@ int main(int argc, const char * argv[])
 	iosh_cmd.bind(local_commands);
 
 	SubscriptionManager subscription_manager("MODBUS_CHANNEL", eCLOCKWORK, "localhost", 5555);
+	subscription_manager.configureSetupConnection(host.c_str(), cw_out);
 	SetupDisconnectMonitor disconnect_responder;
 	SetupConnectMonitor connect_responder;
 	subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);

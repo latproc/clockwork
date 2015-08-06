@@ -135,6 +135,8 @@ public:
 	void init();
 	
 	bool requestChannel();
+
+	void configureSetupConnection(const char *host, int port);
 	
 	bool setupConnections();
 	bool checkConnections(); // test whether setup and subscriber channels are connected
@@ -160,6 +162,8 @@ public:
 	std::string channel_name;
 	std::string channel_url;
 	ProtocolType protocol;
+	std::string setup_host;
+	int setup_port;
 protected:
 	zmq::socket_t subscriber_;
 public:
