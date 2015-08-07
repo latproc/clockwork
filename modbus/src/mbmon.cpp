@@ -138,7 +138,7 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 		}
 	}
 	if (size) {
-		if (initial_read) {
+		if (options.verbose && initial_read) {
 			std::cout << name << " initial read. size: " << size << "\n";
 			displayAscii(upd_data, buflen);
 			std::cout << "\n";
@@ -157,7 +157,7 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 		// check changes and build a set of changed monitors
 		if (!initial_read && memcmp( cmp_data, last_data, size * sizeof(T)) != 0) {
 				//std::cout << " "; display(dbg_mask); std::cout << "\n";
-				std::cout << "\n->\n"; displayAscii(upd_data, buflen); std::cout << "\n";
+				if (options.verbose) { std::cout << "\n->\n"; displayAscii(upd_data, buflen); std::cout << "\n"; }
 		}
 		memcpy(last_data, cmp_data, size * sizeof(T));
 		initial_read = false;
