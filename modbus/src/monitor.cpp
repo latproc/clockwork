@@ -21,14 +21,11 @@ ModbusValue::ModbusValue(unsigned int len) : length(len) {
 
 void ModbusValueBit::set(uint8_t *data) {
 	// libmodbus  uses a byte to store each bit
-	std::cout << "value: "; if (length>2) displayAscii(data, length); else display(data, length); std::cout << "\n";
 	uint8_t *p = val;
 	for (int i = 0; i<length; ++i) *p++ = *data++;
 }
 
 void ModbusValueBit::set(uint16_t *data) {
-	std::cout << "set value: "; if (length>2) displayAscii(data, length); 
-	else display((uint8_t*)data, length*sizeof(*data)); std::cout << "\n";
 	uint8_t *p = val;
 	
 	int i = 0;
@@ -40,7 +37,6 @@ void ModbusValueBit::set(uint16_t *data) {
 }
 
 void ModbusValueWord::set(uint8_t *data) {
-	std::cout << "value: "; if (length>2) displayAscii(data, length); else display(data, length); std::cout << "\n";
 	uint16_t x = 0;
 	for (int i = 0; i<length; ++i) {
 		x = *data++;
@@ -50,8 +46,6 @@ void ModbusValueWord::set(uint8_t *data) {
 }
 
 void ModbusValueWord::set(uint16_t *data) {
-	std::cout << "value: "; if (length>2) displayAscii(data, length); 
-	else display((uint8_t*)data, length*sizeof(*data)); std::cout << "\n";
 	uint16_t *p = val;
 	for (int i = 0; i<length; ++i) *p++ = *data++;
 }
@@ -76,11 +70,6 @@ ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int 
 		value = new ModbusValueWord(len_);
 	else
 		throw std::exception();
-	unsigned int adr = (group_ <<16) + address_;
-	for (int i=0; i<len_; ++i) {
-		//std::cout << "adding address: " << (adr+i) << " for " << *this << "\n";
-		addresses[adr+i] = this;
-	}
 }
 
 ModbusMonitor::ModbusMonitor(const ModbusMonitor &other)
@@ -88,11 +77,11 @@ ModbusMonitor::ModbusMonitor(const ModbusMonitor &other)
 {
 	if (group_==0 || group_==1) {
 		value = new ModbusValueBit(len_);
-		set( other.value->getBitData() );
+		set( other.value->getBitData(), false );
 	}
 	else if (group_==3 || group_==4) {
 		value = new ModbusValueWord(len_);
-		set( other.value->getWordData() );
+		set( other.value->getWordData(), false );
 	}
 	else {
 		throw std::exception();
@@ -114,6 +103,7 @@ ModbusMonitor *ModbusMonitor::lookupAddress(unsigned int adr) {
 		return mm;
 	}
 	catch (std::exception ex) {
+		std::cout << "no device for address " << adr << "\n";
 		return 0;
 	}
 }
@@ -122,13 +112,17 @@ ModbusMonitor *ModbusMonitor::lookup(unsigned int grp, unsigned int adr) {
 	return lookupAddress( (grp<<16)+adr );
 }
 
-void ModbusMonitor::set(uint8_t *new_value) {
-	std::cout << " setting " << *this << "\n";
+void ModbusMonitor::set(uint8_t *new_value, bool display_value) {
+	/*if (length>2) displayAscii(data, length); else*/ 
+	if (display_value) { display(new_value, value->length); std::cout << "\n"; }
+	//std::cout << " setting " << *this << "\n";
 	if (this->value == 0) throw std::exception();
 	this->value->set(new_value);
 }
-void ModbusMonitor::set(uint16_t *new_value) { 
-	std::cout << " setting " << *this << "\n";
+void ModbusMonitor::set(uint16_t *new_value, bool display_value) { 
+	/*if (length>2) displayAscii(data, length); else*/ 
+	if (display_value) { display((uint8_t *)new_value, value->length * sizeof(uint16_t)); std::cout << "\n"; }
+	//std::cout << " setting " << *this << "\n";
 	if (value == 0) throw std::exception();
 	value->set(new_value);
 }		
@@ -149,10 +143,28 @@ bool MonitorConfiguration::load(const char *fname) {
 			address = strtol(code.c_str()+2, &rest, 10);
 			ModbusMonitor *m = new ModbusMonitor(name, group, address, len);
 			monitors.insert(make_pair(name, *m));
+			delete m;
 		}
 		else if (!in.eof()) return false;
 	}
+	
 	return true;
 }
 
+
+void ModbusMonitor::add() {
+	unsigned int adr = (group_ <<16) + address_;
+	for (int i=0; i<len_; ++i) {
+		//std::cout << "adding address: " << (adr+i) << " for " << *this << "\n";
+		addresses[adr+i] = this;
+	}
+}
+/*
+void ModbusMonitor::showAddresses() {
+	std::map<unsigned int, ModbusMonitor*>::iterator iter = ModbusMonitor::addresses.begin();
+	while (iter != ModbusMonitor::addresses.end()) {
+		std::cout << *(*iter++).second << "\n";
+	}
+}
+*/
 

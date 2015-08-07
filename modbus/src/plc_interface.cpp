@@ -71,9 +71,9 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
 		if (errno == -1) {std::cerr << "argument error: " << address << " is invalid\n"; }
 		else {
 			PLCMapping mapping = mappings.at(code);
-			mapping.address() += addr;
-			std::cout << address << " -> " << mapping.group() << " " << mapping.address() << "\n";
-			return std::make_pair(mapping.group(), mapping.address());
+			int address_offset = mapping.address() + addr;
+			//std::cout << address << " -> " << mapping.group() << " " << address_offset << "\n";
+			return std::make_pair(mapping.group(), address_offset);
 		}
 	}
 	catch (std::exception ex) {

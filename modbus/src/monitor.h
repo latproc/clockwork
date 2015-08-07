@@ -101,11 +101,13 @@ class ModbusMonitor {
 		unsigned int &length() { return len_; }
 		const unsigned int &length() const { return len_; }
 		
-		void set(uint8_t *new_value);
-		void set(uint16_t *new_value);		
+		void set(uint8_t *new_value, bool display = true);
+		void set(uint16_t *new_value, bool display = true);		
 		
 		static ModbusMonitor *lookupAddress(unsigned int adr);
 		static ModbusMonitor *lookup(unsigned int group, unsigned int adr);
+		
+		void add();
 	    
 	private:
 		std::string name_;
@@ -113,7 +115,10 @@ class ModbusMonitor {
 		unsigned int address_;
 		unsigned int len_;
 		ModbusValue *value;
+	protected:
 		static std::map<unsigned int, ModbusMonitor*>addresses;
+		
+		friend class MonitorConfiguration;
 	};
 
 std::ostream &operator<<(std::ostream &out, const ModbusMonitor &m);
