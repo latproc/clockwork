@@ -1014,6 +1014,7 @@ int main(int argc, const char * argv[])
         while (!done)
         {
             struct timeval now;
+						usleep(50);
             gettimeofday(&now, 0);
 
             try {
@@ -1077,6 +1078,7 @@ int main(int argc, const char * argv[])
                 }
                 data[len] = 0;
             }
+						else usleep(500);
         }
 
         connection_thread.stop();

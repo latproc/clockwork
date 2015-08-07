@@ -134,8 +134,7 @@ void insert(int group, int addr, const char *value, size_t len)
 		return;
 	}
 	uint8_t *p = (uint8_t *)value;
-	if (DEBUG_STRINGS) std::cout << "string length: " << len
-		<< "\n";
+	if (DEBUG_STRINGS) std::cout << "string length: " << len << "\n";
 	uint8_t *q = (uint8_t*)dest;
 	unsigned int i=0;
 	for (i=0; i<len/2; ++i)
@@ -267,10 +266,11 @@ struct ModbusServerThread
 		int function_code_offset = 0; //modbus_get_header_length(modbus_context);
 
 		int paused_counter = 0;
+		int warn_at = 10;
 		while (modbus_state != ms_finished)
 		{
 			if (modbus_state == ms_pausing) {
-				std::cout << "pausing modbus: cleaning old..\n";
+				std::cout << "pausing modbus: cleaning old..\n" << std::flush;
 				//if (modbus_mapping) modbus_mapping_free(modbus_mapping);
 				if (modbus_context) modbus_free(modbus_context);
 				modbus_context = 0;
@@ -278,8 +278,15 @@ struct ModbusServerThread
 				modbus_state = ms_paused;
 				paused_counter = 0;
 			}
-			if (modbus_state == ms_paused) { /*if (debug) std::cout << "modbus paused\n";*/ usleep(100000); continue; }
-			else paused_counter = 0;
+			if (modbus_state == ms_paused) { 
+				if (++paused_counter>warn_at) {
+					std::cout << "modbus paused\n" << std::flush;
+					warn_at += 10;
+					usleep(100000); 
+				}
+				continue; 
+			}
+			else { paused_counter = 0; warn_at = 10; }
 			if (modbus_state == ms_starting || modbus_state == ms_resuming) {
 				if (!modbus_context) modbus_context = modbus_new_tcp("0.0.0.0", 1502);
 
@@ -290,9 +297,9 @@ struct ModbusServerThread
 				else
 					modbus_set_debug(modbus_context, FALSE);
 
-				std::cout << "starting modbus_tcp_listen\n";
+				std::cout << "starting modbus_tcp_listen\n" << std::flush;
 				socket = modbus_tcp_listen(modbus_context, 3);
-				std::cout << "finished modbus_tcp_listen " << socket << "\n";
+				std::cout << "finished modbus_tcp_listen " << socket << "\n" << std::flush;
 				if (socket == -1) {
 					perror("modbus listen");
 					continue;
@@ -323,7 +330,7 @@ struct ModbusServerThread
 				if (!FD_ISSET(conn, &activity)) continue;
 				if (conn == socket)   // new connection
 				{
-					std::cout << "new modbus connection on socket " << socket << "\n";
+					std::cout << "new modbus connection on socket " << socket << "\n" << std::flush;
 					struct sockaddr_in panel_in;
 					socklen_t addr_size = sizeof(panel_in);
 
@@ -349,7 +356,7 @@ struct ModbusServerThread
 						}
 						FD_SET(panel_fd, &connections);
 						if (panel_fd > max_fd) max_fd = panel_fd;;
-						std::cout << timestamp << " new connection: " << panel_fd << "\n";
+						std::cout << timestamp << " new connection: " << panel_fd << "\n" << std::flush;
 					}
 				}
 				else
@@ -584,7 +591,6 @@ struct ModbusServerThread
 						{
 							if (DEBUG_BASIC)
 								std::cout << timestamp << " Error: " << modbus_strerror(errno) << "\n";
-
 						}
 					}
 					else
@@ -1024,7 +1030,7 @@ int main(int argc, const char * argv[])
 			char *data = (char *)malloc(len+1);
 			memcpy(data, update.data(), len);
 			data[len] = 0;
-			if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
+			if (DEBUG_BASIC) std::cout << "received: "<<data<<" from clockwork\n";
 
 			std::vector<Value> params(0);
 			size_t count = parseIncomingMessage(data, params);

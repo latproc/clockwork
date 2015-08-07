@@ -32,7 +32,7 @@ void ModbusValueBit::set(uint16_t *data) {
 	uint8_t *p = val;
 	
 	int i = 0;
-	while (i<length) {
+	while (i++<length) {
 		uint16_t x = *data++;
 		*p++ = (x & 0xff00) >> 8;
 		*p++ = x * 0x00ff;
