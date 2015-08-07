@@ -1,0 +1,143 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0303 
+header_name {.h} 
+code_name {.cxx}
+decl {\#include "core_config.h"} {private local
+} 
+
+class CoreLoader {open
+} {
+  Function {make_window()} {open
+  } {
+    Fl_Window {} {open selected
+      xywh {148 184 903 489} type Double visible
+    } {
+      Fl_Light_Button {} {
+        label I_CoreLoaderAtPos
+        user_data {&I_CoreLoaderAtPos}
+        callback press
+        xywh {40 305 205 40} align 340
+        code0 {init(I_CoreLoaderAtPos, o);}
+      }
+      Fl_Light_Button {} {
+        label O_CoreLoaderUpBlock
+        user_data {&O_CoreLoaderUpBlock}
+        callback press
+        xywh {40 345 205 40}
+        code0 {init(O_CoreLoaderUpBlock, o);}
+      }
+      Fl_Light_Button {} {
+        label O_CoreLoaderUp
+        user_data {&O_CoreLoaderUp}
+        callback press
+        xywh {40 385 205 40}
+        code0 {init(O_CoreLoaderUp, o);}
+      }
+      Fl_Light_Button {} {
+        label I_FeederBalePresent
+        user_data {&I_FeederBalePresent}
+        callback press
+        xywh {310 304 205 40}
+        code0 {init(I_FeederBalePresent, o);}
+      }
+      Fl_Light_Button {} {
+        label I_InsertBalePresent
+        user_data {&I_InsertBalePresent}
+        callback press
+        xywh {310 344 205 40}
+        code0 {init(I_InsertBalePresent, o);}
+      }
+      Fl_Light_Button {} {
+        label O_InsertForward
+        user_data {&O_InsertForward}
+        callback press
+        xywh {310 385 205 40}
+        code0 {init(O_InsertForward, o);}
+      }
+      Fl_Value_Input {} {
+        label V_CoreKeepAlive
+        user_data {&V_CoreKeepAlive}
+        callback save
+        xywh {230 50 115 35}
+        code0 {init(V_CoreKeepAlive, o);}
+      }
+      Fl_Value_Input {} {
+        label V_CoreScalesLiveWeight
+        user_data {&V_CoreScalesLiveWeight}
+        callback save
+        xywh {230 100 115 35}
+        code0 {init(V_CoreScalesLiveWeight, o);}
+      }
+      Fl_Value_Input {} {
+        label V_CoreScalesCapturedWeight
+        user_data {&V_CoreScalesCapturedWeight}
+        callback save
+        xywh {230 150 115 40}
+        code0 {init(V_CoreScalesCapturedWeight, o);}
+      }
+      Fl_Value_Input {} {
+        label V_GrabBaleGateFolioSize
+        user_data {&V_GrabBaleGateFolioSize}
+        callback save
+        xywh {650 50 115 35}
+        code0 {init(V_GrabBaleGateFolioSize, o);}
+      }
+      Fl_Value_Input {} {
+        label V_GrabBaleGateBaleNo
+        user_data {&V_GrabBaleGateBaleNo}
+        callback save
+        xywh {650 100 115 40}
+        code0 {init(V_GrabBaleGateBaleNo, o);}
+      }
+      Fl_Light_Button {} {
+        label F_CoreScalesSteady
+        user_data {&F_CoreScalesSteady}
+        callback press
+        xywh {40 225 205 40} align 340
+        code0 {init(F_CoreScalesSteady, o);}
+      }
+      Fl_Light_Button {} {
+        label I_CoreLoaderBalePresent
+        user_data {&I_CoreLoaderBalePresent}
+        callback press
+        xywh {40 265 205 40}
+        code0 {init(I_CoreLoaderBalePresent, o);}
+      }
+      Fl_Light_Button {} {
+        label I_GrabBalePresent
+        user_data {&I_GrabBalePresent}
+        callback press
+        xywh {310 220 205 40}
+        code0 {init(I_GrabBalePresent, o);}
+      }
+      Fl_Light_Button {} {
+        label I_CutterBalePresent
+        user_data {&I_CutterBalePresent}
+        callback press
+        xywh {310 260 205 40}
+        code0 {init(I_CutterBalePresent, o);}
+      }
+      Fl_Light_Button {} {
+        label O_GrabBaleGateBlock
+        user_data {&O_GrabBaleGateBlock}
+        callback press
+        xywh {580 305 205 40}
+        code0 {init(O_GrabBaleGateBlock, o);}
+      }
+      Fl_Light_Button {} {
+        label I_GrabBaleAtBaleGate
+        user_data {&I_GrabBaleAtBaleGate}
+        callback press
+        xywh {580 221 205 40}
+        code0 {init(I_GrabBaleAtBaleGate, o);}
+      }
+      Fl_Light_Button {} {
+        label O_GrabBaleGateUp
+        user_data {&O_GrabBaleGateUp}
+        callback press
+        xywh {580 261 205 40}
+        code0 {init(O_GrabBaleGateUp, o);}
+      }
+    }
+  }
+} 

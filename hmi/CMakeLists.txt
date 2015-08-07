@@ -7,6 +7,7 @@ set (HMI_VERSION_MINOR 8)
 set (CMAKE_CXX_FLAGS "-g -Wall --std=gnu++0x")
 
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/../iod/src)
+set (MBMASTER_DIR ${PROJECT_SOURCE_DIR}/../modbus/src)
 
 configure_file (
   "${PROJECT_SOURCE_DIR}/HMIConfig.h.in"
@@ -27,6 +28,9 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/options.cpp
     ${CLOCKWORK_DIR}/Message.cpp )
 
+add_library (MBMaster
+	${MBMASTER_DIR}/plc_interface.cpp
+	)
 
 FIND_PACKAGE(Boost COMPONENTS system thread REQUIRED )
 FIND_PACKAGE(FLTK REQUIRED)
@@ -39,6 +43,7 @@ include_directories("/opt/local/include")
 include_directories("${PROJECT_SOURCE_DIR}/")
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${CLOCKWORK_DIR}")
+include_directories("${MBMASTER_DIR}")
 
 
 LINK_DIRECTORIES("/usr/local/lib")
@@ -64,4 +69,11 @@ TARGET_LINK_LIBRARIES(loader_control ${FLTK_LIBRARIES})
 TARGET_LINK_LIBRARIES(loader_control ${OPENGL_LIBRARIES})
 TARGET_LINK_LIBRARIES(loader_control ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(loader_control ${CMAKE_DL_LIBS})
+
+add_executable (core_panel src/core_panel.cxx src/core_loader.cxx)
+target_link_libraries(core_panel Clockwork MBMaster "zmq" ${Boost_LIBRARIES})
+TARGET_LINK_LIBRARIES(core_panel ${FLTK_LIBRARIES})
+TARGET_LINK_LIBRARIES(core_panel ${OPENGL_LIBRARIES})
+TARGET_LINK_LIBRARIES(core_panel ${MODBUS_LIBRARIES})
+TARGET_LINK_LIBRARIES(core_panel ${CMAKE_DL_LIBS})
 
