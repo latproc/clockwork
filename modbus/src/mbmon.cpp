@@ -599,7 +599,8 @@ int main(int argc, char *argv[]) {
 			if (addr_js && addr_js->type == cJSON_String) {
 				addr_str = addr_js->valuestring;
 				std::pair<int, int> plc_addr = plc.decode(addr_str.c_str());
-				addr = plc_addr.second;
+				if (plc_addr.first >= 0) group = plc_addr.first;
+				if (plc_addr.second >= 0) addr = plc_addr.second;
 			}
 			ModbusMonitor *mm = new ModbusMonitor(name, group, addr, length, format);
 			mc.monitors.insert(std::make_pair(name, *mm) );
