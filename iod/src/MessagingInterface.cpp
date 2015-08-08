@@ -430,26 +430,27 @@ char *MessagingInterface::send(const char *txt) {
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
-	zmq::message_t msg(len);
-	strncpy ((char *) msg.data(), txt, len);
+    zmq::message_t msg(len);
+    strncpy ((char *) msg.data(), txt, len);
     while (true) {
-        try {
-            socket->send(msg);
-            break;
-        }
-        catch (std::exception e) {
-			if (errno == EINTR || errno == EAGAIN) {
-				std::cerr << "MessagingInterface::send " << strerror(errno);
-				continue;
-			}
-            if (zmq_errno())
-                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-            else
-                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
-            socket->disconnect(url.c_str());
-            usleep(50000);
-            connect();
-        }
+	    try {
+		    socket->send(msg);
+		    break;
+	    }
+	    catch (std::exception e) {
+		    if (errno == EINTR || errno == EAGAIN) {
+			    std::cerr << "MessagingInterface::send " << strerror(errno);
+			    usleep(50);
+			    continue;
+		    }
+		    if (zmq_errno())
+			    std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+		    else
+			    std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+		    socket->disconnect(url.c_str());
+		    usleep(50000);
+		    connect();
+	    }
     }
     if (!is_publisher) {
         while (true) {
@@ -458,7 +459,7 @@ char *MessagingInterface::send(const char *txt) {
                 zmq::poll( &items[0], 1, 500);
                 if (items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
-                    if (socket->recv(&reply)) {
+                    if (socket->recv(&reply, ZMQ_DONTWAIT)) {
                         len = reply.size();
                         char *data = (char *)malloc(len+1);
                         memcpy(data, reply.data(), len);
@@ -466,6 +467,10 @@ char *MessagingInterface::send(const char *txt) {
                         std::cerr << url << ": " << data << "\n";
                         return data;
                     }
+		    else {
+			usleep(50);
+			continue;
+		    }
                 }
                 else if (items[0].revents & ZMQ_POLLERR) {
                     std::cerr << "MessagingInterface::send: error during recv\n";
@@ -484,6 +489,7 @@ char *MessagingInterface::send(const char *txt) {
                     std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
                 else
                     std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
+		usleep(50);
             }
         }
     }
