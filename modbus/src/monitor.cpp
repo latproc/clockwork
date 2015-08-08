@@ -55,22 +55,31 @@ void ModbusValueWord::set(uint8_t *data) {
 
 void ModbusValueWord::set(uint16_t *data) {
 	uint16_t *p = val;
+	long res = 0;
 	if (format() == "BCD") {
+		*p = 0;
 		for (int i = length; i>0; ) {
+			long tmp = 0;
 			--i;
 			uint16_t x = data[i];
-			uint16_t y = ((x & 0xff)*10) + (x>>8);
-			*p++ = y;
+			tmp = ((0xf0 & x)>>4) * 10 + (0x0f & x);
+			tmp = tmp * 100 + ( ((0xf000 & x)>>12) * 10 + ((0x0f00 & x)>>8) );
+			res = res * 10000 + tmp;
 		}	
 	}
 	else {
 		for (int i = length; i>0; ) {
 			--i;
-			uint16_t x = data[i];
-			uint16_t y = ((x & 0xff)<<8) + (x>>8);
-			*p++ = y;
-		}	
+			uint16_t x = ((data[i] & 0xff) << 8) + (data[i] >> 8) ;
+			res = (res << 16) + x;
+		}
 	}
+	if (length == 1)
+		*val = (uint16_t)res;
+	else if (length == 2) 
+		memcpy(val, &res, 4);
+	else 
+		memcpy(val, data, length * 2);
 }
 
 ModbusValueWord::ModbusValueWord(unsigned int len) : ModbusValue(len), val(0) {

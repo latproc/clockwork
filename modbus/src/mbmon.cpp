@@ -120,6 +120,7 @@ public:
 	BufferMonitor(const char *buffer_name) : name(buffer_name), last_data(0), cmp_data(0), dbg_mask(0), buflen(0), max_read_len(0), initial_read(true) {}
 	void check(size_t size, T *upd_data, unsigned int base_address,std::set<ModbusMonitor*> &changes);
 	void setMaskBits(int start, int num);
+	void refresh() { initial_read = true;}
 };
 
 template <class T>void BufferMonitor<T>::setMaskBits(int start, int num) {
@@ -158,7 +159,7 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 		// note: masks are not currently used but we retain this functionality for future
 		for (size_t ii=0; ii<size; ++ii) {
 			ModbusMonitor *mm;
-			if (*q != *p) { 
+			if (initial_read || *q != *p) { 
 				if (options.verbose) std::cout << "change at " << (base_address + (q-cmp_data) ) << "\n";
 				mm = ModbusMonitor::lookupAddress(base_address + (q-cmp_data) ); 
 				if (mm) { changes.insert(mm); if (options.verbose) std::cout << "found change " << mm->name() << "\n"; }
@@ -228,12 +229,22 @@ void displayChanges(std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr) {
 			if (mm->length()==1) {
 				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff));
 				std::cout << mm->name() << " "; mm->set( val );
-				cmd.push_back(*val);
+				long res = *val;
+				//int mul = (mm->value->format() == "BCD") ? 10 : 16;				
+				//res = (*val & 0xff) * mul + ( (*val >> 8) )
+				std::cout << " " << res << "\n";
+				cmd.push_back( res );
 			}
 			else if (mm->length() == 2) {
 				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
 				std::cout << mm->name() << " "; mm->set( val );
-				cmd.push_back( (uint32_t*)val);
+				long res = *( (uint32_t*)val );
+				//int mul = (mm->value->format() == "BCD") ? 10 : 16;				
+				//res = (*val & 0xff) * mul + ( (*val >> 8) )
+				//val++;
+				//res = res << 16 + ( (*val & 0xff) * mul + ( (*val >> 8) ) );
+				std::cout << " " << res << "\n"; 
+				cmd.push_back( res );
 			}
 			else {
 				cmd.push_back(0); // TBC
@@ -272,6 +283,13 @@ public:
 	BufferMonitor<uint8_t> robits_monitor;
 	BufferMonitor<uint16_t> regs_monitor;
 	BufferMonitor<uint16_t> holdings_monitor;
+	
+	void refresh() {
+		bits_monitor.refresh();
+		robits_monitor.refresh();
+		regs_monitor.refresh();
+		holdings_monitor.refresh();
+	}
 
 	ModbusClientThread(const char *hostname, int portnum) :  
 			ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
@@ -387,6 +405,7 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 		}
 	}
 	if (min>max) return true; // nothing active in this group
+	max += 2;
 	int rc = -1;
 	int retry = 5;
 	int offset = min;
@@ -399,14 +418,14 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 	while ( offset <= max) {
 		// look for the next active address before sending a request
 		int count = 0;
-		while (offset <= max && ModbusMonitor::lookupAddress( (grp<<16) + offset) == 0) {
+		while (offset < max && ModbusMonitor::lookupAddress( (grp<<16) + offset) == 0) {
 			offset++; ++count;
 		}
 		if (offset > max) break;
 		if (offset+len > max) len = max - offset + 1;
-		if (count && options.verbose) {
-			std::cout << "skipping " << count << " scanning from address " << offset << "\n";
-		}
+		//if (count && options.verbose) {
+			//std::cout << "skipping " << count << " scanning from address " << offset << "\n";
+		//}
 		//if (options.verbose) std::cout << "group " << grp << " read range " << offset << " to " << offset+len-1 << "\n";
 		while ( (rc = read_fn(ctx, offset, len, dest+offset)) == -1 ) {
 			if (rc == -1 && errno == EMBMDATA) { 
