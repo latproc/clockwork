@@ -814,7 +814,8 @@ struct ConnectionThread {
 //            sent = iod_interface.setProperty(Options::instance()->name(),
 //                                            "status", stringFromDeviceStatus(DeviceStatus::instance()->current()));
             if (!sent) {
-                std::cerr << "Failed to set status property " << Options::instance()->name() << ".status\n";
+                std::cerr << "Failed to set status property " << Options::instance()->name() << ".status\n"
+				<< " response: " << response << "\n";
             }
             if (response == "Unknown device") {
                 std::cout << "invalid clockwork device name " << Options::instance()->name() << "\n";
