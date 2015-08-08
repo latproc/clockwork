@@ -30,8 +30,6 @@ add_library (Clockwork
 
 
 FIND_PACKAGE(Boost COMPONENTS system thread REQUIRED )
-FIND_PACKAGE(FLTK REQUIRED)
-FIND_PACKAGE(OpenGL REQUIRED)
 FIND_PACKAGE(MODBUS REQUIRED)
 
 include_directories("/usr/local/include")
@@ -47,8 +45,6 @@ LINK_DIRECTORIES("/opt/local/lib")
 
 add_executable (address src/address.cpp src/plc_interface.cpp)
 target_link_libraries(address ${Boost_LIBRARIES})
-TARGET_LINK_LIBRARIES(address ${FLTK_LIBRARIES})
-TARGET_LINK_LIBRARIES(address ${OPENGL_LIBRARIES})
 TARGET_LINK_LIBRARIES(address ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(address ${CMAKE_DL_LIBS})
 
@@ -57,7 +53,5 @@ add_executable (mbmon src/mbmon.cpp src/plc_interface.cpp src/monitor.cpp)
 target_link_libraries(mbmon ${Boost_LIBRARIES})
 TARGET_LINK_LIBRARIES(mbmon "zmq")
 TARGET_LINK_LIBRARIES(mbmon Clockwork)
-TARGET_LINK_LIBRARIES(mbmon ${FLTK_LIBRARIES})
-TARGET_LINK_LIBRARIES(mbmon ${OPENGL_LIBRARIES})
 TARGET_LINK_LIBRARIES(mbmon ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(mbmon ${CMAKE_DL_LIBS})
