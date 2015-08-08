@@ -19,6 +19,10 @@ ModbusValue::ModbusValue(unsigned int len) : length(len) {
 	
 }
 
+ModbusValue::ModbusValue(unsigned int len, const std::string &format) : length(len), format_(format) {
+	
+}
+
 void ModbusValueBit::set(uint8_t *data) {
 	// libmodbus  uses a byte to store each bit
 	uint8_t *p = val;
@@ -36,6 +40,10 @@ void ModbusValueBit::set(uint16_t *data) {
 	}
 }
 
+uint8_t *ModbusValueBit::getBitData() { return val; }
+
+uint16_t *ModbusValueBit::getWordData() { return 0; }
+
 void ModbusValueWord::set(uint8_t *data) {
 	uint16_t x = 0;
 	for (int i = 0; i<length; ++i) {
@@ -47,8 +55,32 @@ void ModbusValueWord::set(uint8_t *data) {
 
 void ModbusValueWord::set(uint16_t *data) {
 	uint16_t *p = val;
-	for (int i = 0; i<length; ++i) *p++ = *data++;
+	if (format() == "BCD") {
+		for (int i = length; i>0; ) {
+			--i;
+			uint16_t x = data[i];
+			uint16_t y = ((x & 0xff)*10) + (x>>8);
+			*p++ = y;
+		}	
+	}
+	else {
+		for (int i = length; i>0; ) {
+			--i;
+			uint16_t x = data[i];
+			uint16_t y = ((x & 0xff)<<8) + (x>>8);
+			*p++ = y;
+		}	
+	}
 }
+
+ModbusValueWord::ModbusValueWord(unsigned int len) : ModbusValue(len), val(0) {
+	val = new uint16_t[len];
+}
+
+ModbusValueWord::ModbusValueWord(unsigned int len, const std::string &form) : ModbusValue(len, form), val(0) {
+	val = new uint16_t[len]; 
+}
+
 
 std::ostream &ModbusMonitor::operator<<(std::ostream &out) const {
 	return out << name_ << " " << group_  << ":"
@@ -61,13 +93,13 @@ std::ostream &operator<<(std::ostream &out, const ModbusMonitor &m) {
 }
 
 
-ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len)
+ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format)
 : name_(name), group_(group),address_(address), len_(len), value(0)
 {
 	if (group_==0 || group_==1)
 		value = new ModbusValueBit(len_);
 	else if (group_==3 || group_==4)
-		value = new ModbusValueWord(len_);
+		value = new ModbusValueWord(len_, format);
 	else
 		throw std::exception();
 }
@@ -103,7 +135,7 @@ ModbusMonitor *ModbusMonitor::lookupAddress(unsigned int adr) {
 		return mm;
 	}
 	catch (std::exception ex) {
-		std::cout << "no device for address " << adr << "\n";
+		//std::cout << "no device for address " << adr << "\n";
 		return 0;
 	}
 }
@@ -139,9 +171,13 @@ bool MonitorConfiguration::load(const char *fname) {
 		in >> code >> name >> kind >> len;
 		if (in.good()) {
 			group = code[0] - '0';
+			std::string format;
+			if (group == 1 || group == 0) format = "BIT";
+			else if (group == 3 || group == 4) format = "SignedInt";
+			else format = "WORD";
 			char *rest = 0;
 			address = strtol(code.c_str()+2, &rest, 10);
-			ModbusMonitor *m = new ModbusMonitor(name, group, address, len);
+			ModbusMonitor *m = new ModbusMonitor(name, group, address, len, format);
 			monitors.insert(make_pair(name, *m));
 			delete m;
 		}
@@ -167,4 +203,54 @@ void ModbusMonitor::showAddresses() {
 	}
 }
 */
+
+
+void MonitorConfiguration::createSimulator(const char *filename) {
+	std::ofstream simfile(filename);
+	if (simfile.good()) {
+		std::map<std::string, ModbusMonitor>::iterator iter = monitors.begin();
+		while (iter != monitors.end()) {
+			const ModbusMonitor &mm = (*iter++).second;
+			simfile << mm.name();
+			if (mm.group() == 1) simfile << " FLAG(export:ro);";
+			else if (mm.group() == 0) simfile << " FLAG(export:rw); ";
+			else if (mm.group() == 3)  {
+				if (mm.length() == 1)
+					simfile << " VARIABLE(export:reg) 0;";
+				else if (mm.length() == 2)
+					simfile << " VARIABLE(export:reg32) 0;";
+				else
+					simfile << " VARIABLE(export:str, strlen:" << mm.length() << ") 0;";
+			}
+			else if (mm.group() == 4) {
+				if (mm.length() == 1)
+					simfile << " VARIABLE(export:rw_reg) 0;";
+				else if (mm.length() == 2)
+					simfile << " VARIABLE(export:rw_reg32) 0;";
+				else
+					simfile << " VARIABLE(export:rw_str, strlen:" << mm.length() << ") 0;";
+			}
+			simfile << "\n";
+		}
+	}
+	std::string modbus_fname(filename);
+	modbus_fname += ".modbus";
+	std::ofstream mbfile(modbus_fname);
+	if (mbfile.good()) {
+		std::map<std::string, ModbusMonitor>::iterator iter = monitors.begin();
+		while (iter != monitors.end()) {
+			const ModbusMonitor &mm = (*iter++).second;
+			mbfile << mm.group() << ":" << mm.address()+1 << "\t" << mm.name() << "\t";
+			if (mm.group() == 1 || mm.group() == 0) mbfile << "Discrete\t1\n";
+			else if (mm.group() == 3 || mm.group() == 4) {
+				if (mm.length() == 1) mbfile << "Signed_int_16";
+				else if (mm.length() == 2) mbfile << "Signed_int_32";
+				else mbfile << "Ascii_String";
+				mbfile << "\t" << mm.length() << "\n";
+			}
+		}
+	}
+}
+
+
 

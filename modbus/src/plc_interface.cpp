@@ -56,6 +56,7 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
 	try {
 		char code[10];
 		int idx = 0;
+		memset(code, 0, 10);
 		const char *addr_str = address;
 		while (*addr_str) {
 			if (isalpha(*addr_str)) {
@@ -63,7 +64,9 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
 				++addr_str;
 				++idx;
 			}
-			else break;
+			else {
+				break;
+			}
 		}
 		int addr;
 		char *rest = 0;

@@ -36,7 +36,7 @@ const char *O_CoreLoaderUp = "Y6";
 
 const char *I_GrabBalePresent = "X4";
 const char *I_CutterBalePresent = "X5";
-const char *I_FeederBalePresent = "X4";
+const char *I_FeederBalePresent = "X14";
 const char *I_InsertBalePresent = "X15"; 
 const char *O_InsertForward = "Y0";
 
@@ -57,6 +57,7 @@ struct UpdateMessage {
 std::map<int, Fl_Widget *> active_addresses;
 std::map<int, Fl_Widget *> ro_bits;
 std::map<int, Fl_Widget *> inputs;
+std::map<int, Fl_Widget *> holdings;
 
 bool auto_mode = false;
 
@@ -88,6 +89,7 @@ char *send_command(std::list<Value> &params) {
     params.pop_front();
     std::string cmd = cmd_val.asString();
     char *msg = MessageEncoding::encodeCommand(cmd, &params);
+	std::cout << msg << "\n";
     sendMessage(*psocket, msg);
     size_t size = strlen(msg);
     free(msg);
@@ -238,14 +240,16 @@ bool check_error(const char *msg, int entry, int *retry) {
 		return true;
 	}
 	else if (errno == EBADF || errno == ECONNRESET || errno == EPIPE) {
-		fprintf(stderr, "%s %s (%d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		fprintf(stderr, "%s %s (%d), entry %d disconnecting\n", msg, modbus_strerror(errno), errno, entry);
 		close_connection();
+	}
+	else if (errno == 112345691) {
+		fprintf(stderr, "%s %s location: %d\n", msg, modbus_strerror(errno), entry);
 	}
 	else {
 		fprintf(stderr, "%s %s (%d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
 		close_connection();
 		return false;
-		usleep(1000);
 	}
 	return true;
 }
@@ -269,25 +273,24 @@ void operator()() {
 			else connected = true;
 			error_count = 0;
 		}
+		usleep(10000);
+		std::cout << "." << std::flush;
 		std::map<int, Fl_Widget*>::iterator iter = active_addresses.begin();
 		while (iter != active_addresses.end()) {
 			boost::mutex::scoped_lock(update_mutex);
 			const std::pair<int, Fl_Widget*> item = *iter++;
 			int rc = -1;
 			int retry = 5;
-			while ( (rc = modbus_read_bits(ctx, item.first, 1, tab_rp_bits+item.first) == -1) ) {
-				if (check_error("modbus_read_bits", item.first, &retry)) continue; else break;
-			}
+			rc = modbus_read_bits(ctx, item.first, 1, tab_rp_bits+item.first);
+			if (rc == -1) check_error("modbus_read_bits", item.first, &retry);
 			if (!connected) goto modbus_loop_end;
 			
 			if (tab_rp_bits[item.first] != tab_rq_bits[item.first]) {
 				tab_rq_bits[item.first] = tab_rp_bits[item.first];
-				
+				std::cout << "queueing new update discrete\n";
 				Fl::lock();
-				
 				Fl::awake((void *)new UpdateMessage(item.first, item.second, tab_rp_bits[item.first]) );
-				Fl::unlock();
-				
+				Fl::unlock();	
 			}
 		}
 		if (!connected) goto modbus_loop_end;
@@ -299,18 +302,16 @@ void operator()() {
 			int retry = 5;
 			uint8_t res; 
 			assert(ctx != 0);
-			while ( ( rc = modbus_read_input_bits(ctx, item.first, 1, &res)  == -1) ) {
-				if (check_error("modbus_read_input_bits", item.first, &retry)) continue; else break;
-			}
+			rc = modbus_read_input_bits(ctx, item.first, 1, &res);
+			if (rc == -1) check_error("modbus_read_input_bits", item.first, &retry);
 			if (!connected) goto modbus_loop_end;
 			if (res != tab_ro_bits[item.first]) {
 				tab_ro_bits[item.first] = res;
+				std::cout << "queueing new update coil\n";
 				
-				Fl::lock();
-				
+				Fl::lock();	
 				Fl::awake((void *)new UpdateMessage(item.first, item.second, res) );
-				Fl::unlock();
-				
+				Fl::unlock();	
 			}
 		}
 		iter = inputs.begin();
@@ -320,12 +321,12 @@ void operator()() {
 			int rc = -1;
 			int retry = 5;
 			uint16_t res; 
-			while ( ( rc = modbus_read_registers(ctx, item.first, 1, &res)  == -1) ) {
-				if (check_error("modbus_read_registers", item.first, &retry)) continue; else break;
-			}
+			rc = modbus_read_input_registers(ctx, item.first, 1, &res);
+			if (rc == -1) check_error("modbus_read_input_registers", item.first, &retry);
 			if (!connected) goto modbus_loop_end;
-			if (res != tab_rw_rq_registers[item.first]) {
-				tab_rw_rq_registers[item.first] = res;
+			if (res != tab_rq_registers[item.first]) {
+				std::cout << "queueing new update register\n";
+				tab_rq_registers[item.first] = res;
 				
 				Fl::lock();
 				
@@ -333,6 +334,29 @@ void operator()() {
 				Fl::unlock();
 				
 			}
+		}
+
+		iter = holdings.begin();
+		while (iter != holdings.end()) {
+			boost::mutex::scoped_lock(update_mutex);
+			const std::pair<int, Fl_Widget*> item = *iter++;
+			int rc = -1;
+			int retry = 5;
+			uint16_t res; 
+			rc = modbus_read_registers(ctx, item.first, 1, &res);
+			if (rc == -1) check_error("modbus_read_registers", item.first, &retry);
+			if (!connected) goto modbus_loop_end;
+			if (res != tab_rq_registers[item.first]) {
+				std::cout << "queueing new update holding register\n";
+				tab_rq_registers[item.first] = res;
+				
+				Fl::lock();
+				
+				Fl::awake((void *)new UpdateMessage(item.first, item.second, res) );
+				Fl::unlock();
+				
+			}
+
 		}
 
 		
@@ -345,12 +369,29 @@ modbus_loop_end:
 
 ModbusClientThread *mb = 0;
 
-
 void press(Fl_Widget *w, void *data) {
-	std::pair<int, int>mbadr = plc->decode( (const char *)data );
+	Fl_Light_Button *btn = dynamic_cast<Fl_Light_Button*>(w);
+	if (btn) {
+		int val = btn->value();
+		printf("%s value %d\n", w->label(), val);
+
+		std::list<Value>cmd;
+		cmd.push_back("SET");
+		cmd.push_back(w->label());
+		cmd.push_back("TO");
+		cmd.push_back( (val) ? "on" : "off");
+		process_command(cmd);
+	}
+}
+
+void press2(Fl_Widget *w, void *data) {
+	std::pair<int, int>mbadr = plc->decode( *((const char **)data) );
+	if (mbadr.second == -1) {
+		fprintf(stderr, "%s could not be decoded\n", data);
+	}
 	//int group = mbadr.first;
 	int addr= mbadr.second;
-	printf("pressed btn with address %d\n", addr);
+	printf("pressed %s btn with address %d\n", w->label(), addr);
 	Fl_Check_Button *btn = dynamic_cast<Fl_Check_Button*>(w);
 	if (btn) {
 		int val = btn->value();
@@ -393,7 +434,20 @@ void set_auto_mode(Fl_Light_Button*w, void*v) {
 }
 
 void save(Fl_Value_Input*in, void*data) {
-	std::pair<int, int>mbadr = plc->decode( (const char *)data );
+	
+	int val = in->value();
+	printf("%s value %d\n", in->label(), val);
+
+	std::list<Value>cmd;
+	cmd.push_back("PROPERTY");
+	cmd.push_back(in->label());
+	cmd.push_back("VALUE");
+	cmd.push_back( val);
+	process_command(cmd);
+}
+
+void save2(Fl_Value_Input*in, void*data) {
+	std::pair<int, int>mbadr = plc->decode( *((const char **)data) );
 	//int group = mbadr.first;
 	int addr= mbadr.second;
 	{
@@ -513,9 +567,8 @@ int main(int argc, char **argv) {
 
 	while (Fl::wait() > 0) {
 		if (void *msg = Fl::thread_message()) {
-			std::cerr << " got message\n";
 			UpdateMessage *um = (UpdateMessage*)(msg);
-			std::cout << um->address << "\n";
+			std::cerr << " got message " << um->address << "\n";
 			{
 				Fl_Light_Button *btn = dynamic_cast<Fl_Light_Button*>(um->widget);
 				if (btn) btn->value(um->value);
@@ -536,7 +589,7 @@ int main(int argc, char **argv) {
 		//  screen_num->value(buf);
 		}
 		keep_alive++;
-		{
+		if (false){
 			modbus_t *ctx = mb->getContext();
 			modbus_write_register(ctx, V_CoreKeepAliveAddr, keep_alive);
 			mb->releaseContext();

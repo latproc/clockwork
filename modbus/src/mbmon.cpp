@@ -208,29 +208,37 @@ void displayChanges(std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr) {
 		std::set<ModbusMonitor*>::iterator iter = changes.begin();
 		while (iter != changes.end()) {
 			ModbusMonitor *mm = *iter++;
+			std::list<Value> cmd;
+			cmd.push_back("PROPERTY");
+			char buf[100];
+			snprintf(buf, 100, "%s", mm->name().c_str());
+			char *p = strrchr(buf, '.');
+			if (p) {
+				*p++ = 0;
+				cmd.push_back(buf);
+				cmd.push_back(p);
+			}
+			else {
+				cmd.push_back(buf);
+				cmd.push_back("VALUE");
+			}
 			// note: the monitor address is in the global range grp<<16 + offset
 			// this method is only using the addresses in the local range
-			uint16_t *val = buffer_addr + ( (mm->address() & 0xffff));
-			std::cout << mm->name() << " "; mm->set( val );
 			//mm->set(buffer_addr + ( (mm->address() & 0xffff)) );
 			if (mm->length()==1) {
-				std::list<Value> cmd;
-				cmd.push_back("PROPERTY");
-				char buf[100];
-				snprintf(buf, 100, "%s", mm->name().c_str());
-				char *p = strrchr(buf, '.');
-				if (p) {
-					*p++ = 0;
-					cmd.push_back(buf);
-					cmd.push_back(p);
-				}
-				else {
-					cmd.push_back(buf);
-					cmd.push_back("VALUE");
-				}
+				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff));
+				std::cout << mm->name() << " "; mm->set( val );
 				cmd.push_back(*val);
-				process_command(cmd);
 			}
+			else if (mm->length() == 2) {
+				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
+				std::cout << mm->name() << " "; mm->set( val );
+				cmd.push_back( (uint32_t*)val);
+			}
+			else {
+				cmd.push_back(0); // TBC
+			}
+			process_command(cmd);
 		}
 	}
 }
@@ -463,8 +471,11 @@ modbus_loop_end:
 ModbusClientThread *mb = 0;
 
 void usage(const char *prog) {
-	std::cout << prog << " [-h hostname] [ -p port]\n\n"
-		<< "defaults to -h localhost -p 1502\n"; 
+	std::cout << prog << " [-h hostname] [ -p port] [ -c modbus_config ] [ --channel channel_name ] \n\n"
+		<< "defaults to -h localhost -p 1502 --channel PLC_MONITOR\n"; 
+	std::cout << "\n";
+	std::cout << "only one of the modbus_config or the channel_name should be supplied.\n";
+	std::cout << "\nother optional parameters:\n\n\t-s\tsimfile\t to create a clockwork configuration for simulation\n";
 }
 
 using namespace std;
@@ -474,6 +485,7 @@ int main(int argc, char *argv[]) {
 	int portnum = 1502; //502;
 	const char *config_filename = "modbus_mappings.txt";
 	const char *channel_name = "PLC_MONITOR";
+	const char *sim_name = 0;
 
 	int arg = 1;
 	while (arg<argc) {
@@ -488,6 +500,9 @@ int main(int argc, char *argv[]) {
 		}
 		else if ( strcmp(argv[arg], "--channel") == 0 && arg+1 < argc) {
 			channel_name = argv[++arg];
+		}
+		else if ( strcmp(argv[arg], "-s") == 0 && arg+1 < argc) {
+			sim_name = argv[++arg];
 		}
 		else if ( strcmp(argv[arg], "-v") == 0) {
 			options.verbose = true;
@@ -554,6 +569,7 @@ int main(int argc, char *argv[]) {
 			cJSON *addr_js = cJSON_GetObjectItem(item, "address");
 			cJSON *length_js = cJSON_GetObjectItem(item, "length");
 			cJSON *type_js = cJSON_GetObjectItem(item, "type");
+			cJSON *format_js = cJSON_GetObjectItem(item, "format");
 			
 			std::string name;
 			if (name_js && name_js->type == cJSON_String) {
@@ -569,6 +585,14 @@ int main(int argc, char *argv[]) {
 			else if (type == "OUTPUTBIT") group = 0;
 			else if (type == "INPUTREGISTER") group = 3;
 			else if (type == "OUTPUTREGISTER") group = 4;
+			
+			std::string format;
+			if (format_js && type_js->type == cJSON_String) {
+				format = format_js->valuestring;
+			}
+			else if (group == 1 || group == 0) format = "BIT";
+			else if (group == 3 || group == 4) format = "SignedInt";
+			else format = "WORD";
 
 			int addr = 0;
 			std::string addr_str;
@@ -577,7 +601,7 @@ int main(int argc, char *argv[]) {
 				std::pair<int, int> plc_addr = plc.decode(addr_str.c_str());
 				addr = plc_addr.second;
 			}
-			ModbusMonitor *mm = new ModbusMonitor(name, group, addr, length);
+			ModbusMonitor *mm = new ModbusMonitor(name, group, addr, length, format);
 			mc.monitors.insert(std::make_pair(name, *mm) );
 
 			mm->add();
@@ -585,6 +609,10 @@ int main(int argc, char *argv[]) {
 		}
 
 	}
+	}
+	if (sim_name) {
+		mc.createSimulator(sim_name);
+		exit(0);
 	}
 
 	//for (int i=0; i<10; ++i) { active_addresses[i] = 0; ro_bits[i] = 0; }
