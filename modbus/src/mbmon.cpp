@@ -499,6 +499,11 @@ void usage(const char *prog) {
 
 using namespace std;
 int main(int argc, char *argv[]) {
+	
+	std::cout << "Modbus version (compile time): " << LIBMODBUS_VERSION_STRING << " ";
+	std::cout << "(linked): " 
+			<< libmodbus_version_major << "." 
+			<< libmodbus_version_minor << "." << libmodbus_version_micro << "\n";
 
 	const char *hostname = "127.0.0.1"; //"10.1.1.3";
 	int portnum = 1502; //502;
