@@ -1923,36 +1923,6 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 	}
 	Action::Status stat = Action::Complete;
 
-#if 0
-	// TBD Why do we send the modbus state change here. This should not be done
-	// until later, if the state actually changes
-
-	// update the Modbus interface for self 
-	if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
-		if (!modbus_exports.count(_name)) {
-			char buf[100];
-			snprintf(buf, 100, "%s Internal Error: modbus export info not found", getName().c_str());
-			MessageLog::instance()->add(buf);
-			NB_MSG << buf << "\n";
-		}
-		else {
-			ModbusAddress ma = modbus_exports[_name];
-			if (ma.getSource() == ModbusAddress::machine && ( ma.getGroup() != ModbusAddress::none) ) {
-				if (new_state.getName() == "on") { // just turned on
-					DBG_MODBUS << _name << " machine came on; triggering a modbus message\n";
-					ma.update(this, 1);
-				}
-				else if (current_state.getName() == "off") {
-					DBG_MODBUS << _name << " machine went off; triggering a modbus message\n";
-					ma.update(this, 0);
-				}		
-			}
-			else {
-				DBG_M_MSG << _name << ": exported: " << modbus_exported << " (" << ma << ") but address is of type 'none'\n";
-			}
-		}
-	}
-#endif
 
 	if (resume || current_state != new_state) {
 		std::string last = current_state.getName();
@@ -1997,6 +1967,36 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 					Dispatcher::instance()->deliver(p);
 				}
 				//dep->setNeedsCheck();
+			}
+		}
+#endif
+#if 1
+		// TBD Why do we send the modbus state change here. This should not be done
+		// until later, if the state actually changes
+
+		// update the Modbus interface for self
+		if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
+			if (!modbus_exports.count(_name)) {
+				char buf[100];
+				snprintf(buf, 100, "%s Internal Error: modbus export info not found", getName().c_str());
+				MessageLog::instance()->add(buf);
+				NB_MSG << buf << "\n";
+			}
+			else {
+				ModbusAddress ma = modbus_exports[_name];
+				if (ma.getSource() == ModbusAddress::machine && ( ma.getGroup() != ModbusAddress::none) ) {
+					if (new_state.getName() == "on") { // just turned on
+						DBG_MODBUS << _name << " machine came on; triggering a modbus message\n";
+						ma.update(this, 1);
+					}
+					else if (current_state.getName() == "on") {
+						DBG_MODBUS << _name << " machine went off; triggering a modbus message\n";
+						ma.update(this, 0);
+					}
+				}
+				else {
+					DBG_M_MSG << _name << ": exported: " << modbus_exported << " (" << ma << ") but address is of type 'none'\n";
+				}
 			}
 		}
 #endif

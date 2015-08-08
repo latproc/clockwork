@@ -113,23 +113,63 @@ PLC MODBUSMODULE(host:localhost, port:1502)
 \end_layout
 
 \begin_layout LyX-Code
-MotorPower OUTPUTBIT(COIL:Y0, Type:BIT, Size:1) PLC;
+MotorPower OUTPUTBIT PLC, 
+\begin_inset Quotes eld
+\end_inset
+
+Y0
+\begin_inset Quotes erd
+\end_inset
+
+;
 \end_layout
 
 \begin_layout LyX-Code
-PowerAvailable INPUTBIT(INPUT:X0, Type:BIT, Size:1) PLC;
+PowerAvailable INPUTBIT PLC, 
+\begin_inset Quotes eld
+\end_inset
+
+X0
+\begin_inset Quotes erd
+\end_inset
+
+;
 \end_layout
 
 \begin_layout LyX-Code
-MotorOn INPUTBIT(INPUT:X1, Type:BIT, Size:1) PLC;
+MotorOn INPUTBIT PLC, 
+\begin_inset Quotes eld
+\end_inset
+
+X1
+\begin_inset Quotes erd
+\end_inset
+
+;
 \end_layout
 
 \begin_layout LyX-Code
-IndexPosition INPUTREGISTER(REGISTER:V0, Type:SignedInt, Size:1) PLC;
+IndexPosition INPUTREGISTER PLC,
+\begin_inset Quotes erd
+\end_inset
+
+V0
+\begin_inset Quotes erd
+\end_inset
+
+;
 \end_layout
 
 \begin_layout LyX-Code
-CycleCount OUTPUTREGISTER(HOLDING:W0, Type:SignedInt, Size:2) PLC;
+CycleCount OUTPUTREGISTER PLC,
+\begin_inset Quotes erd
+\end_inset
+
+V100
+\begin_inset Quotes erd
+\end_inset
+
+, 2;
 \end_layout
 
 \begin_layout Standard
@@ -142,7 +182,7 @@ PLCChannel CHANNEL {
 
 \begin_deeper
 \begin_layout LyX-Code
-MONITORS MACHINES WITH PROPERTY PLC;
+MONITORS MACHINES LINKED TO PLC;
 \end_layout
 
 \begin_layout LyX-Code
@@ -654,7 +694,7 @@ GY
 \begin_inset Text
 
 \begin_layout Plain Layout
-1
+0
 \end_layout
 
 \end_inset
@@ -701,7 +741,7 @@ Y
 \begin_inset Text
 
 \begin_layout Plain Layout
-2049
+2048
 \end_layout
 
 \end_inset
@@ -748,7 +788,7 @@ C
 \begin_inset Text
 
 \begin_layout Plain Layout
-3073
+3072
 \end_layout
 
 \end_inset
@@ -795,7 +835,7 @@ S
 \begin_inset Text
 
 \begin_layout Plain Layout
-5121
+5120
 \end_layout
 
 \end_inset
@@ -842,7 +882,7 @@ T
 \begin_inset Text
 
 \begin_layout Plain Layout
-6145
+6144
 \end_layout
 
 \end_inset
@@ -889,7 +929,7 @@ CT
 \begin_inset Text
 
 \begin_layout Plain Layout
-6401
+6400
 \end_layout
 
 \end_inset
@@ -1077,7 +1117,7 @@ V
 \begin_inset Text
 
 \begin_layout Plain Layout
-1
+0
 \end_layout
 
 \end_inset
@@ -1124,7 +1164,7 @@ W
 \begin_inset Text
 
 \begin_layout Plain Layout
-1
+0
 \end_layout
 
 \end_inset

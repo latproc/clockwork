@@ -55,7 +55,7 @@ char *send_command(std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
-	std::cout << " sending: " << msg << "\n";
+	if (options.verbose) std::cout << " sending: " << msg << "\n";
 	sendMessage(*psocket, msg);
 	size_t size = strlen(msg);
 	free(msg);
@@ -73,7 +73,7 @@ char *send_command(std::list<Value> &params) {
 void process_command(std::list<Value> &params) {
 	char * data = send_command(params);
 	if (data) {
-		std::cout << data << "\n";
+		if (options.verbose) std::cout << data << "\n";
 		free(data);
 	}
 }
@@ -119,7 +119,19 @@ public:
 	
 	BufferMonitor(const char *buffer_name) : name(buffer_name), last_data(0), cmp_data(0), dbg_mask(0), buflen(0), max_read_len(0), initial_read(true) {}
 	void check(size_t size, T *upd_data, unsigned int base_address,std::set<ModbusMonitor*> &changes);
+	void setMaskBits(int start, int num);
+	void refresh() { initial_read = true;}
 };
+
+template <class T>void BufferMonitor<T>::setMaskBits(int start, int num) {
+	if (!dbg_mask) return;
+	//std::cout << "masking: " << start << " to " << (start+num-1) << "\n";
+	int i = start;
+	while (i<start+num && i+start < buflen) {
+		dbg_mask[i] = 0xff;
+	}
+}
+
 
 template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned int base_address, std::set<ModbusMonitor*> &changes) {
 	if (size != buflen) {
@@ -138,26 +150,30 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 		}
 	}
 	if (size) {
-		if (initial_read) {
-			std::cout << name << " initial read. size: " << size << "\n";
+		if (options.verbose && initial_read) {
+			//std::cout << name << " initial read. size: " << size << "\n";
 			displayAscii(upd_data, buflen);
 			std::cout << "\n";
 		}
-		T *p = upd_data, *q = cmp_data, *msk = dbg_mask;
+		T *p = upd_data, *q = cmp_data; //, *msk = dbg_mask;
 		// note: masks are not currently used but we retain this functionality for future
 		for (size_t ii=0; ii<size; ++ii) {
 			ModbusMonitor *mm;
-			if (*q != *p) { 
+			if (initial_read || *q != *p) { 
+				if (options.verbose) std::cout << "change at " << (base_address + (q-cmp_data) ) << "\n";
 				mm = ModbusMonitor::lookupAddress(base_address + (q-cmp_data) ); 
-				if (mm) changes.insert(mm);
+				if (mm) { changes.insert(mm); if (options.verbose) std::cout << "found change " << mm->name() << "\n"; }
 			}
-			*q++ = *p++ & *msk++;
+			*q++ = *p++; // & *msk++;
 		}
 		
 		// check changes and build a set of changed monitors
 		if (!initial_read && memcmp( cmp_data, last_data, size * sizeof(T)) != 0) {
-				//std::cout << " "; display(dbg_mask); std::cout << "\n";
-				std::cout << "\n->\n"; displayAscii(upd_data, buflen); std::cout << "\n";
+				
+				if (options.verbose) { 
+					std::cout << "\n"; display(upd_data, buflen); std::cout << "\n";
+					//std::cout << " "; display(dbg_mask, buflen); std::cout << "\n";
+					}
 		}
 		memcpy(last_data, cmp_data, size * sizeof(T));
 		initial_read = false;
@@ -166,14 +182,14 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 
 void displayChanges(std::set<ModbusMonitor*> &changes, uint8_t *buffer_addr) {
 	if (changes.size()) {
-		std::cout << changes.size() << " changes\n";
+		if (options.verbose) std::cout << changes.size() << " changes\n";
 		std::set<ModbusMonitor*>::iterator iter = changes.begin();
 		while (iter != changes.end()) {
 			ModbusMonitor *mm = *iter++;
 			// note: the monitor address is in the global range grp<<16 + offset
 			// this method is only using the addresses in the local range
 			uint8_t *val = buffer_addr + ( (mm->address() & 0xffff));
-			mm->set( val );
+			std::cout << mm->name() << " "; mm->set( val );
 			
 			if ( (mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
 				std::list<Value> cmd;
@@ -189,32 +205,51 @@ void displayChanges(std::set<ModbusMonitor*> &changes, uint8_t *buffer_addr) {
 
 void displayChanges(std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr) {
 	if (changes.size()) {
-		std::cout << changes.size() << " changes\n";
+		if (options.verbose) std::cout << changes.size() << " changes\n";
 		std::set<ModbusMonitor*>::iterator iter = changes.begin();
 		while (iter != changes.end()) {
 			ModbusMonitor *mm = *iter++;
+			std::list<Value> cmd;
+			cmd.push_back("PROPERTY");
+			char buf[100];
+			snprintf(buf, 100, "%s", mm->name().c_str());
+			char *p = strrchr(buf, '.');
+			if (p) {
+				*p++ = 0;
+				cmd.push_back(buf);
+				cmd.push_back(p);
+			}
+			else {
+				cmd.push_back(buf);
+				cmd.push_back("VALUE");
+			}
 			// note: the monitor address is in the global range grp<<16 + offset
 			// this method is only using the addresses in the local range
-			uint16_t *val = buffer_addr + ( (mm->address() & 0xffff));
-			mm->set(buffer_addr + ( (mm->address() & 0xffff)) );
+			//mm->set(buffer_addr + ( (mm->address() & 0xffff)) );
 			if (mm->length()==1) {
-				std::list<Value> cmd;
-				cmd.push_back("PROPERTY");
-				char buf[100];
-				snprintf(buf, 100, "%s", mm->name().c_str());
-				char *p = strrchr(buf, '.');
-				if (p) {
-					*p++ = 0;
-					cmd.push_back(buf);
-					cmd.push_back(p);
-				}
-				else {
-					cmd.push_back(buf);
-					cmd.push_back("VALUE");
-				}
-				cmd.push_back(*val);
-				process_command(cmd);
+				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff));
+				std::cout << mm->name() << " "; mm->set( val );
+				long res = *val;
+				//int mul = (mm->value->format() == "BCD") ? 10 : 16;				
+				//res = (*val & 0xff) * mul + ( (*val >> 8) )
+				std::cout << " " << res << "\n";
+				cmd.push_back( res );
 			}
+			else if (mm->length() == 2) {
+				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
+				std::cout << mm->name() << " "; mm->set( val );
+				long res = *( (uint32_t*)val );
+				//int mul = (mm->value->format() == "BCD") ? 10 : 16;				
+				//res = (*val & 0xff) * mul + ( (*val >> 8) )
+				//val++;
+				//res = res << 16 + ( (*val & 0xff) * mul + ( (*val >> 8) ) );
+				std::cout << " " << res << "\n"; 
+				cmd.push_back( res );
+			}
+			else {
+				cmd.push_back(0); // TBC
+			}
+			process_command(cmd);
 		}
 	}
 }
@@ -248,6 +283,13 @@ public:
 	BufferMonitor<uint8_t> robits_monitor;
 	BufferMonitor<uint16_t> regs_monitor;
 	BufferMonitor<uint16_t> holdings_monitor;
+	
+	void refresh() {
+		bits_monitor.refresh();
+		robits_monitor.refresh();
+		regs_monitor.refresh();
+		holdings_monitor.refresh();
+	}
 
 	ModbusClientThread(const char *hostname, int portnum) :  
 			ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
@@ -264,13 +306,15 @@ public:
 	int rc = modbus_get_byte_timeout(ctx, &sec, &usec);
 	if (rc == -1) perror("modbus_get_byte_timeout");
 	else {
-		std::cout << "original timeout: " << sec << "." << std::setw(3) << std::setfill('0') << (usec/1000) << "\n";
+		if (options.verbose) std::cout << "original timeout: " << sec << "." << std::setw(3) << std::setfill('0') << (usec/1000) << "\n";
 		sec *=2;
 		usec *= 8; 
 		while (usec >= 1000000) { usec -= 1000000; sec++; }
 		rc = modbus_set_byte_timeout(ctx, sec, usec);
 		if (rc == -1) perror("modbus_set_byte_timeout");
-		else std::cout << "new timeout: " << sec << "." << std::setw(3) << std::setfill('0') << (usec/1000) << "\n";
+		else 
+			if (options.verbose) 
+				std::cout << "new timeout: " << sec << "." << std::setw(3) << std::setfill('0') << (usec/1000) << "\n";
 
 	}
     modbus_set_debug(ctx, FALSE);
@@ -361,26 +405,28 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 		}
 	}
 	if (min>max) return true; // nothing active in this group
+	max += 2;
 	int rc = -1;
 	int retry = 5;
 	int offset = min;
 	int len = bm.max_read_len;
 	if (len == 0) 
 		len = max-min+1;
-	if (len > 16)
-		len = 16;
-	if (options.verbose) std::cout << "collecting group " << grp << " start: " << min << " length: " << len << "\n";
+	//if (len > 16)
+	//	len = 16;
+	//if (options.verbose) std::cout << "collecting group " << grp << " start: " << min << " length: " << len << "\n";
 	while ( offset <= max) {
 		// look for the next active address before sending a request
 		int count = 0;
-		while (offset <= max && ModbusMonitor::lookupAddress( (grp<<16) + offset) == 0) {
+		while (offset < max && ModbusMonitor::lookupAddress( (grp<<16) + offset) == 0) {
 			offset++; ++count;
 		}
 		if (offset > max) break;
 		if (offset+len > max) len = max - offset + 1;
-		if (count && options.verbose) {
-			std::cout << "skipping " << count << " scanning from address " << offset << "\n";
-		}
+		//if (count && options.verbose) {
+			//std::cout << "skipping " << count << " scanning from address " << offset << "\n";
+		//}
+		//if (options.verbose) std::cout << "group " << grp << " read range " << offset << " to " << offset+len-1 << "\n";
 		while ( (rc = read_fn(ctx, offset, len, dest+offset)) == -1 ) {
 			if (rc == -1 && errno == EMBMDATA) { 
 				len /= 2; if (len == 0) len = 1; bm.max_read_len = len;
@@ -392,7 +438,6 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 				continue;
 			}
 		}
-		if (options.verbose) std::cout << "group " << grp << " read range " << offset << " to " << offset+len-1 << "\n";
 		offset += len;
 	}
 	if (!connected) { std::cerr << "Lost connection\n"; return false; }
@@ -422,18 +467,17 @@ void operator()() {
 			else if (ctx) connected = true;
 			error_count = 0;
 		}
-
-		if (!collect_updates(bits_monitor, 0, tab_rp_bits, active_addresses, "modbus_read_bits", modbus_read_bits)) 
-			goto modbus_loop_end;
-		if (!collect_updates(robits_monitor, 1, tab_ro_bits, ro_bits, "modbus_read_input_bits", modbus_read_input_bits)) 
-			goto modbus_loop_end;
-		if (!collect_updates(regs_monitor, 3, tab_rq_registers, inputs, "modbus_read_input registers", modbus_read_input_registers)) { 
-			std::cout << "group 3 failure\n";
-			goto modbus_loop_end;
-		}
-		if (!collect_updates(holdings_monitor, 4, tab_rw_rq_registers, inputs, "modbus_read_registers", modbus_read_registers)) {
-			std::cout << "group 4 failure\n";
-			goto modbus_loop_end;
+		else {
+			if (!collect_updates(bits_monitor, 0, tab_rp_bits, active_addresses, "modbus_read_bits", modbus_read_bits)) 
+				goto modbus_loop_end;
+			if (!collect_updates(robits_monitor, 1, tab_ro_bits, ro_bits, "modbus_read_input_bits", modbus_read_input_bits)) 
+				goto modbus_loop_end;
+			if (!collect_updates(regs_monitor, 3, tab_rq_registers, inputs, "modbus_read_input registers", modbus_read_input_registers)) { 
+				goto modbus_loop_end;
+			}
+			/*if (!collect_updates(holdings_monitor, 4, tab_rw_rq_registers, inputs, "modbus_read_registers", modbus_read_registers)) {
+				goto modbus_loop_end;
+			}*/
 		}
 		
 modbus_loop_end:	
@@ -446,17 +490,26 @@ modbus_loop_end:
 ModbusClientThread *mb = 0;
 
 void usage(const char *prog) {
-	std::cout << prog << " [-h hostname] [ -p port]\n\n"
-		<< "defaults to -h localhost -p 1502\n"; 
+	std::cout << prog << " [-h hostname] [ -p port] [ -c modbus_config ] [ --channel channel_name ] \n\n"
+		<< "defaults to -h localhost -p 1502 --channel PLC_MONITOR\n"; 
+	std::cout << "\n";
+	std::cout << "only one of the modbus_config or the channel_name should be supplied.\n";
+	std::cout << "\nother optional parameters:\n\n\t-s\tsimfile\t to create a clockwork configuration for simulation\n";
 }
 
 using namespace std;
 int main(int argc, char *argv[]) {
+	
+	std::cout << "Modbus version (compile time): " << LIBMODBUS_VERSION_STRING << " ";
+	std::cout << "(linked): " 
+			<< libmodbus_version_major << "." 
+			<< libmodbus_version_minor << "." << libmodbus_version_micro << "\n";
 
 	const char *hostname = "127.0.0.1"; //"10.1.1.3";
 	int portnum = 1502; //502;
 	const char *config_filename = "modbus_mappings.txt";
 	const char *channel_name = "PLC_MONITOR";
+	const char *sim_name = 0;
 
 	int arg = 1;
 	while (arg<argc) {
@@ -471,6 +524,9 @@ int main(int argc, char *argv[]) {
 		}
 		else if ( strcmp(argv[arg], "--channel") == 0 && arg+1 < argc) {
 			channel_name = argv[++arg];
+		}
+		else if ( strcmp(argv[arg], "-s") == 0 && arg+1 < argc) {
+			sim_name = argv[++arg];
 		}
 		else if ( strcmp(argv[arg], "-v") == 0) {
 			options.verbose = true;
@@ -504,7 +560,7 @@ int main(int argc, char *argv[]) {
 	cmd.push_back("CHANNEL");
 	cmd.push_back(channel_name);
 	char *response = send_command(cmd);
-	std::cout << response << "\n";
+	if (options.verbose) std::cout << response << "\n";
 	cJSON *obj = cJSON_Parse(response);
 	free(response);
 	
@@ -521,7 +577,7 @@ int main(int argc, char *argv[]) {
 	cmd.push_back("REFRESH");
 	cmd.push_back(chn_instance_name.c_str());
 	response = send_command(cmd);
-	std::cout << response << "\n";
+	if (options.verbose) std::cout << response << "\n";
 	obj = cJSON_Parse(response);
 	
 	
@@ -537,6 +593,7 @@ int main(int argc, char *argv[]) {
 			cJSON *addr_js = cJSON_GetObjectItem(item, "address");
 			cJSON *length_js = cJSON_GetObjectItem(item, "length");
 			cJSON *type_js = cJSON_GetObjectItem(item, "type");
+			cJSON *format_js = cJSON_GetObjectItem(item, "format");
 			
 			std::string name;
 			if (name_js && name_js->type == cJSON_String) {
@@ -552,22 +609,35 @@ int main(int argc, char *argv[]) {
 			else if (type == "OUTPUTBIT") group = 0;
 			else if (type == "INPUTREGISTER") group = 3;
 			else if (type == "OUTPUTREGISTER") group = 4;
+			
+			std::string format;
+			if (format_js && type_js->type == cJSON_String) {
+				format = format_js->valuestring;
+			}
+			else if (group == 1 || group == 0) format = "BIT";
+			else if (group == 3 || group == 4) format = "SignedInt";
+			else format = "WORD";
 
 			int addr = 0;
 			std::string addr_str;
 			if (addr_js && addr_js->type == cJSON_String) {
 				addr_str = addr_js->valuestring;
 				std::pair<int, int> plc_addr = plc.decode(addr_str.c_str());
-				addr = plc_addr.second;
+				if (plc_addr.first >= 0) group = plc_addr.first;
+				if (plc_addr.second >= 0) addr = plc_addr.second;
 			}
+			ModbusMonitor *mm = new ModbusMonitor(name, group, addr, length, format);
+			mc.monitors.insert(std::make_pair(name, *mm) );
 
-			ModbusMonitor mm(name, group, addr, length);
-			std::cout << mm << "\n";
-			mc.monitors.insert(std::make_pair(name, mm) );
+			mm->add();
 			item = item->next;
 		}
 
 	}
+	}
+	if (sim_name) {
+		mc.createSimulator(sim_name);
+		exit(0);
 	}
 
 	//for (int i=0; i<10; ++i) { active_addresses[i] = 0; ro_bits[i] = 0; }

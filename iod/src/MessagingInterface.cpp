@@ -158,10 +158,14 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, ui
 sendMessage_transmit:
 	--retries;
 	while (1) {
-		if (timeout_us && microsecs() - start_time > timeout_us) return false; // unable to send
+		if (timeout_us && microsecs() - start_time > timeout_us) {
+			response = "timeout";
+			return false; // unable to send
+		}
 		try {
 			if ( !(*msg) ) {  // don't send zero length messages
-				MessageLog::instance()->add(" Warning: skipped sending empty message"); 
+				MessageLog::instance()->add(" Warning: skipped sending empty message");
+				response = "Discarding empty message";
 				return false; 
 			}
 			size_t len = sock.send(msg, strlen(msg));
@@ -182,6 +186,9 @@ sendMessage_transmit:
 				// no way to recover from an FSM error at this point
 				NB_MSG << "exiting\n";
 			}
+			char buf[100];
+			snprintf(buf, 100, "Error %s (%d) sending message", zmq_strerror(zmq_errno()));
+			response = buf;
 			return false;
 		}
 	}
@@ -191,7 +198,10 @@ sendMessage_transmit:
 	uint64_t warn_at = 100000;
 	while (len == 0) {
 		uint64_t now = microsecs();
-		if (timeout_us && now - start_time > timeout_us) return false; // unable to send
+		if (timeout_us && now - start_time > timeout_us) {
+			response = "receive timeout\n";
+			return false; // unable to send
+		}
 		if (now - start_time > warn_at) {
 			char tnam[100];
 			int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
@@ -234,6 +244,7 @@ sendMessage_transmit:
 				goto sendMessage_transmit;
 			}
 			if (errno == EINTR) continue;
+			response = err;
 			return false;
 		}
 	}

@@ -40,12 +40,15 @@ class  ModbusValue {
 public:
 	virtual ~ModbusValue();
 	ModbusValue(unsigned int len);
+	ModbusValue(unsigned int len, const std::string &format);
 	virtual void set(uint8_t *data) = 0;
 	virtual void set(uint16_t *data) = 0;
 	virtual uint8_t *getBitData() = 0;
 	virtual uint16_t *getWordData() = 0;
+	virtual const std::string &format() const { return format_; }
 
 	unsigned int length;
+	std::string format_;
 private:
 	ModbusValue(const ModbusValue &other);
 	ModbusValue &operator=(const ModbusValue &other);
@@ -55,11 +58,12 @@ class ModbusValueBit : public ModbusValue {
 public:
 	uint8_t *val;
 	ModbusValueBit(unsigned int len) :ModbusValue(len), val(0) { val = new uint8_t[len]; }
+	ModbusValueBit(unsigned int len, const std::string &format) :ModbusValue(len, format), val(0) { val = new uint8_t[len]; }
 	~ModbusValueBit() { delete[] val; }
 	virtual void set(uint8_t *data);
 	virtual void set(uint16_t *data);
-	virtual uint8_t *getBitData() { return val; };
-	virtual uint16_t *getWordData() { return 0; }
+	virtual uint8_t *getBitData();
+	virtual uint16_t *getWordData();
 	
 private:
 	ModbusValueBit(const ModbusValueBit &other);
@@ -69,12 +73,14 @@ private:
 class ModbusValueWord : public ModbusValue{
 public:
 	uint16_t *val;
-	ModbusValueWord(unsigned int len) : ModbusValue(len), val(0) { val = new uint16_t[len]; }
+	ModbusValueWord(unsigned int len);
+	ModbusValueWord(unsigned int len, const std::string &form);
 	~ModbusValueWord() { delete[] val; }
 	virtual void set(uint8_t *data);
 	virtual void set(uint16_t *data);
 	virtual uint8_t *getBitData() { return 0; };
 	virtual uint16_t *getWordData() { return val; }
+
 	private:
 		ModbusValueWord(const ModbusValueWord &other);
 		ModbusValueWord &operator=(const ModbusValueWord &other);
@@ -83,7 +89,7 @@ public:
 
 class ModbusMonitor {
 	public:
-	    ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len);
+	    ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format);
 	    ModbusMonitor(const ModbusMonitor &orig);
 	    ModbusMonitor &operator=(const ModbusMonitor &other);
 	    std::ostream &operator<<(std::ostream &out) const;
@@ -101,19 +107,23 @@ class ModbusMonitor {
 		unsigned int &length() { return len_; }
 		const unsigned int &length() const { return len_; }
 		
-		void set(uint8_t *new_value);
-		void set(uint16_t *new_value);		
+		void set(uint8_t *new_value, bool display = true);
+		void set(uint16_t *new_value, bool display = true);		
 		
 		static ModbusMonitor *lookupAddress(unsigned int adr);
 		static ModbusMonitor *lookup(unsigned int group, unsigned int adr);
-	    
+		
+		void add();
 	private:
 		std::string name_;
 		unsigned int group_;
 		unsigned int address_;
 		unsigned int len_;
 		ModbusValue *value;
+	protected:
 		static std::map<unsigned int, ModbusMonitor*>addresses;
+		
+		friend class MonitorConfiguration;
 	};
 
 std::ostream &operator<<(std::ostream &out, const ModbusMonitor &m);
@@ -122,6 +132,7 @@ class MonitorConfiguration {
 public:
 	std::map<std::string, ModbusMonitor> monitors;
 	bool load(const char *fname);
+	void createSimulator(const char *filename);	    
 };
 
 

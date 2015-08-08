@@ -1132,6 +1132,10 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 			else
 				cJSON_AddNumberToObject(obj, "length", 1);
 			cJSON_AddStringToObject(obj, "type", m->_type.c_str());
+			const Value &format = m->getValue("format");
+			if (format != SymbolTable::Null) {
+				cJSON_AddStringToObject(obj, "format", format.asString().c_str() );
+			}
 			cJSON_AddItemToArray(result, obj);
 		}
 	}

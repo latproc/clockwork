@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <string.h>
 #include "plc_interface.h"
 
 
@@ -56,6 +57,7 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
 	try {
 		char code[10];
 		int idx = 0;
+		memset(code, 0, 10);
 		const char *addr_str = address;
 		while (*addr_str) {
 			if (isalpha(*addr_str)) {
@@ -63,7 +65,9 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
 				++addr_str;
 				++idx;
 			}
-			else break;
+			else {
+				break;
+			}
 		}
 		int addr;
 		char *rest = 0;
@@ -71,9 +75,9 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
 		if (errno == -1) {std::cerr << "argument error: " << address << " is invalid\n"; }
 		else {
 			PLCMapping mapping = mappings.at(code);
-			mapping.address() += addr;
-			std::cout << address << " -> " << mapping.group() << " " << mapping.address() << "\n";
-			return std::make_pair(mapping.group(), mapping.address());
+			int address_offset = mapping.address() + addr;
+			//std::cout << address << " -> " << mapping.group() << " " << address_offset << "\n";
+			return std::make_pair(mapping.group(), address_offset);
 		}
 	}
 	catch (std::exception ex) {

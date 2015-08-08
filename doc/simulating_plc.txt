@@ -1,0 +1,80 @@
+Instructions on how to create a clockwork simulation 
+of a group of plcs and use it to test another clockwork
+program.
+
+Note: A simulation is already created in 
+
+
+0. Setup
+
+CWDIR=/opt/latproc/
+PROJECT_ROOT=/Users/martin/projects/latproc/wooltech/plc2bps/tag
+
+* build clockwork
+* run make in the clockwork modbus directory to generate mbmon
+* build the tools in the clockwork hmi directory
+
+* copy the koyo.conf file to your working directory
+
+NOTE: step 1 has already been done for the 3G35-8C26 program
+
+1. Create a clockwork simulation program
+
+1a - define a channel that includes all the plcs that are to be simulated
+
+cat >/tmp/channels.lpc
+PLC_CHANNEL CHANNEL {
+	OPTION host "localhost";
+	OPTION port 7701;
+	MONITORS MACHINES LINKED TO CORE_MASTER;
+	MONITORS MACHINES LINKED TO GRAB_MASTER;
+	MONITORS MACHINES LINKED TO GRAB_CUTTER;
+	PUBLISHER;
+}
+
+
+1b - run clockwork on the test program and add the above channel
+
+"$CWDIR"/iod/cw \
+"$CWDIR"/tests/stdchannels.cw \
+"$CWDIR"/tests/modbus_master.cw \
+"$PROJECT_ROOT"/3G35-8C26/config.lpc 
+/tmp/channels.lpc
+
+1c - generate the clockwork simulation
+
+$CWDIR/modbus/build/mbmon -s /tmp/plc_sim.lpc
+
+1d - review the generated files  /tmp/plc_sim.lpc and /tmp/plc_sim.lpc.modbus
+
+1e - cleanup: kill the cw program started at 1b.
+
+2. run the clockwork plc simulation
+
+2a - clockwork
+
+note: use a different port so that it does not interfere with the project file under test
+
+cd /tmp
+"$CWDIR"/iod/cw -m /tmp/plc_sim.lpc.modbus -cp 10001 \
+    "$CWDIR"/tests/stdchannels.cw /tmp/plc_sim.lpc
+    
+2b. run modbusd
+
+"$CWDIR"/iod/modbusd --cwout=10001
+
+2c. - run the panel
+
+"$CWDIR"/hmi/build/core_panel
+
+3. run your test program
+
+3a - clockwork 
+
+"$CWDIR"/iod/cw ...
+
+3b - modbus connector for each plc in your program
+
+"$CWDIR"/modbus/build/mbmon --channel my_channel
+
+
