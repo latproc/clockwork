@@ -58,7 +58,7 @@
 #include "DebugExtra.h"
 #include <pthread.h>
 
-bool debug = true;
+bool debug = false;
 const char *program_name = "device_connector";
 
 class DeviceStatus {
@@ -495,7 +495,7 @@ struct MatchFunction {
                         if (msg) {
                             if (!instance_) { MatchFunction::instance(); usleep(50); }
                             std::string response;
-							if(debug)std::cout << "sending: " << msg << "\n";
+							if(debug)std::cout << "sending: " << msg << "\n" << std::flush;
                             if (sendMessage(msg, MatchFunction::instance()->iod_interface, response)) {
                                 last_message = msg;
                                 last_send.tv_sec = now.tv_sec;
@@ -519,7 +519,7 @@ struct MatchFunction {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->machine(), Options::instance()->property(), res.c_str());
                     if (cmd) {
                         std::string response;
-										if(debug)std::cout << "sending: " << cmd << "\n";
+										if(debug)std::cout << "sending: " << cmd << "\n" << std::flush;
                         if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
@@ -816,10 +816,10 @@ struct ConnectionThread {
 //                                            "status", stringFromDeviceStatus(DeviceStatus::instance()->current()));
             if (!sent) {
                 std::cerr << "Failed to set status property " << Options::instance()->name() << ".status\n"
-				<< " response: " << response << "\n";
+				<< " response: " << response << "\n" << std::flush;
             }
             if (response == "Unknown device") {
-                std::cout << "invalid clockwork device name " << Options::instance()->name() << "\n";
+                std::cout << "invalid clockwork device name " << Options::instance()->name() << "\n"<< std::flush;
             }
         }
     }
@@ -946,7 +946,7 @@ int main(int argc, const char * argv[])
 				options.setChannelName(argv[++i]);
 			}
             else {
-                std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
+                std::cerr << "Warning: parameter " << argv[i] << " not understood\n"<<std::flush;
             }
         }
         if (!options.valid()) {
@@ -957,7 +957,7 @@ int main(int argc, const char * argv[])
         struct timeval last_time;
         gettimeofday(&last_time, 0);
         if (!setup_signals()) {
-            std::cerr << "Error setting up signals " << strerror(errno) << "\n";
+            std::cerr << "Error setting up signals " << strerror(errno) << "\n"<<std::flush;
         }
         
         
@@ -973,7 +973,7 @@ int main(int argc, const char * argv[])
 				connection_manager = new CommandManager(options.iodHost(), 5555);
 		}
 		catch(zmq::error_t io) {
-			std::cout << "zmq error: " << zmq_strerror(errno) << "\n";
+			std::cout << "zmq error: " << zmq_strerror(errno) << "\n"<<std::flush;
 		}
 		catch(std::exception ex) {
 			std::cout << " unknown exception: " << zmq_strerror(errno) << "\n";
@@ -1030,6 +1030,7 @@ int main(int argc, const char * argv[])
             }
 
             
+#if 0
             // TBD once the connection is open, check that data has been received within the last second
             DeviceStatus::State dev_stat = DeviceStatus::instance()->current();
             if (dev_stat == DeviceStatus::e_up || dev_stat == DeviceStatus::e_connected || dev_stat == DeviceStatus::e_timeout) {
@@ -1042,11 +1043,13 @@ int main(int argc, const char * argv[])
 					}
                     else {
                         DBG_MSG << "Warning: connection idle\n";
+                        std::cout<< "Warning: connection idle\n";
 						exit(0);
 					}
                     last_time = last;
                 }
             }
+#endif
 
             //if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
             
