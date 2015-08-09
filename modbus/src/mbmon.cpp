@@ -16,6 +16,7 @@
 
 zmq::context_t *context;
 zmq::socket_t *psocket = 0;
+bool update_status = true;
 
 struct UserData {
 	
@@ -23,6 +24,8 @@ struct UserData {
 
 struct Options {
 	bool verbose;
+	std::string status_machine;
+	std::string status_property;
 	Options() : verbose(false) {}
 };
 Options options;
@@ -77,6 +80,26 @@ void process_command(std::list<Value> &params) {
 		free(data);
 	}
 }
+
+void sendStatus(const char *s) {
+/*
+	zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_REQ);
+	sock.connect("tcp://localhost:5555");
+*/
+
+	std::cout << "reporting status " << s << "\n";
+	if (options.status_machine.length()) {
+		std::list<Value>cmd;
+		cmd.push_back("PROPERTY");
+		cmd.push_back(options.status_machine.c_str());
+		cmd.push_back(options.status_property.c_str());
+		cmd.push_back(s);
+		process_command(cmd);
+	}
+	else
+		std::cout << " no status machine\n";
+}
+
 
 class ClockworkClientThread {
 
@@ -151,7 +174,7 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 	}
 	if (size) {
 		if (options.verbose && initial_read) {
-			//std::cout << name << " initial read. size: " << size << "\n";
+			std::cout << name << " initial read. size: " << size << " buflen " << buflen << "\n";
 			displayAscii(upd_data, buflen);
 			std::cout << "\n";
 		}
@@ -159,7 +182,7 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 		// note: masks are not currently used but we retain this functionality for future
 		for (size_t ii=0; ii<size; ++ii) {
 			ModbusMonitor *mm;
-			if (initial_read || *q != *p) { 
+			if (update_status || *q != *p) { 
 				if (options.verbose) std::cout << "change at " << (base_address + (q-cmp_data) ) << "\n";
 				mm = ModbusMonitor::lookupAddress(base_address + (q-cmp_data) ); 
 				if (mm) { changes.insert(mm); if (options.verbose) std::cout << "found change " << mm->name() << "\n"; }
@@ -319,6 +342,7 @@ public:
 			modbus_strerror(errno), errno);
         modbus_free(ctx);
 		ctx = 0;
+		sendStatus("disconnected");
 		connected = false;
     }
 	else connected = true;
@@ -355,6 +379,10 @@ public:
 }
 
 void close_connection() {
+std::cout << " closing connection\n";
+	sendStatus("disconnected");
+	update_status = true;
+
 	boost::mutex::scoped_lock(update_mutex);
 	assert(ctx);
 	modbus_flush(ctx);
@@ -364,7 +392,8 @@ void close_connection() {
 }
 
 bool check_error(const char *msg, int entry, int *retry) {
-	usleep(250000);
+	std::cout << "ERROR: " << msg << entry << " retry: " << *retry << "\n";
+	usleep(250);
 	if (errno == EAGAIN || errno == EINTR) {
 		fprintf(stderr, "%s %s (errno: %d), entry %d retrying %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
 		return true;
@@ -436,13 +465,13 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 	}
 	if (!connected) { std::cerr << "Lost connection\n"; return false; }
 	std::set<ModbusMonitor*> changes;
-	if (min<max) bm.check((max-min+1), dest+min, (grp<<16) + min, changes);
+		if (min<max) bm.check((max-min+1), dest+min, (grp<<16) + min, changes);
 	displayChanges(changes, dest);
 	return true;
 }
 
 template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, int grp, T *dest, 
-	std::map<std::string, ModbusMonitor>entries,
+	std::map<std::string, ModbusMonitor>&entries,
 	const char *fn_name,
 	int (*read_fn)(modbus_t *ctx, int addr, int nb, T *dest)) {
 
@@ -450,15 +479,18 @@ template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, int grp, T 
 	int rc = 0;
 	int min = 100000;
 	int max = 0;
+	std::cout << "processing " << entries.size() << " entries\n";
 	std::map<std::string, ModbusMonitor>::const_iterator iter = entries.begin();
 	while (iter != entries.end()) {
-		const std::pair<std::string, ModbusMonitor> &item = *iter++;
+		std::pair<std::string, ModbusMonitor> item = *iter++;
 		if (item.second.group() == grp) {
 			int offset = item.second.address();
-			int end = offset + item.second.length();
+			int end = offset + item.second.length() - 1;
 			if (offset<min) min = offset; if (end>max) max = end;
 			int retry = 2;
+			std::cout << " reading " << item.second.name() << " "<< offset <<  item.second.length() << "\n";
 			while ( (rc = read_fn(ctx, offset, item.second.length(), dest+offset)) == -1 ) {
+				std::cout << "rc: " << rc << "\n";
 				check_error(fn_name, offset, &retry); 
 				if (!connected) return false;
 				if (--retry>0) continue; else break;
@@ -466,6 +498,7 @@ template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, int grp, T 
 		}
 	}
 	if (!connected) { std::cerr << "Lost connection\n"; return false; }
+	if (min>max) return true;
 	std::set<ModbusMonitor*> changes;
 	bm.check((max-min+1), dest+min, (grp<<16) + min, changes);
 	displayChanges(changes, dest);
@@ -494,6 +527,11 @@ void operator()() {
 			error_count = 0;
 		}
 		else {
+			if (!connected || update_status) {
+				update_status = true;
+				sendStatus("initialising");
+			}
+std::cout << "collecting\n";
 #if 0
 			if (!collect_updates(bits_monitor, 0, tab_rp_bits, active_addresses, "modbus_read_bits", modbus_read_bits)) 
 				goto modbus_loop_end;
@@ -506,17 +544,26 @@ void operator()() {
 				goto modbus_loop_end;
 			}*/
 #else
-			if (!collect_selected_updates(bits_monitor, 0, tab_rp_bits, mc.monitors, "modbus_read_bits", modbus_read_bits)) 
-				goto modbus_loop_end;
-			if (!collect_selected_updates(robits_monitor, 1, tab_ro_bits, mc.monitors, "modbus_read_input_bits", modbus_read_input_bits)) 
-				goto modbus_loop_end;
-			if (!collect_selected_updates(regs_monitor, 3, tab_rq_registers, mc.monitors, "modbus_read_input registers", modbus_read_input_registers)) { 
-				goto modbus_loop_end;
+			if (!collect_selected_updates<uint8_t>(robits_monitor, 1, tab_ro_bits, mc.monitors, "modbus_read_input_bits", modbus_read_input_bits))  {
+				std::cout << "modbus_read_input_bits failed\n";
+				//goto modbus_loop_end;
+			}
+			if (!collect_selected_updates<uint8_t>(bits_monitor, 0, tab_rp_bits, mc.monitors, "modbus_read_bits", modbus_read_bits))  {
+				std::cout << "modbus_read_bits failed\n";
+				//goto modbus_loop_end;
+			}
+			if (!collect_selected_updates<uint16_t>(regs_monitor, 3, tab_rq_registers, mc.monitors, "modbus_read_input registers", modbus_read_input_registers)) { 
+				std::cout << "modbus_read_input_registers failed\n";
+				//goto modbus_loop_end;
 			}
 			/*if (!collect_selected_updates(holdings_monitor, 4, tab_rw_rq_registers, mc.monitors, "modbus_read_registers", modbus_read_registers)) {
 				goto modbus_loop_end;
 			}*/
 #endif
+			if ( update_status)  {
+				sendStatus("active");
+				update_status = false;
+			}
 		}
 		
 modbus_loop_end:	
@@ -570,6 +617,17 @@ int main(int argc, char *argv[]) {
 		else if ( strcmp(argv[arg], "-v") == 0) {
 			options.verbose = true;
 		}
+		else if ( strcmp(argv[arg], "--monitor") == 0 && arg+1 < argc) {
+			std::string mon = argv[++arg];
+			options.status_machine = mon;
+			size_t pos = mon.find_last_of(".");
+			if (pos) {
+				options.status_property=mon.substr(pos+1);
+				options.status_machine.erase(pos);;
+			}
+			else options.status_property = "status";
+		std::cout << "reporting status to property " << options.status_property << " of " << options.status_machine << "\n";
+		}
 		else if (argv[arg][0] == '-'){ usage(argv[0]); exit(0); }
 		else break;
 		++arg;
@@ -586,6 +644,8 @@ int main(int argc, char *argv[]) {
 
 	ClockworkClientThread cw_client;
 	boost::thread monitor_cw(boost::ref(cw_client));
+	usleep(10000);
+
 
 	MonitorConfiguration mc;
 	/*
@@ -594,6 +654,10 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	*/
+
+	sendStatus("initialising");
+	update_status = true;
+
 	{
 	std::list<Value>cmd;
 	cmd.push_back("CHANNEL");
@@ -708,6 +772,8 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
+
+	update_status = true;
 
 	ModbusClientThread modbus_interface(hostname, portnum, mc);
 	mb = &modbus_interface;
