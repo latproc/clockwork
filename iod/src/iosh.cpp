@@ -237,7 +237,7 @@ void initialise_machine_names(char *data) {
     std::list<Value> params;
     params.push_back("LIST");
     bool did_alloc = false;
-    if (!data) data = send_command(params);
+    if (!data) {data = send_command(params); did_alloc = true; }
     if (data) {
         cleanup();
         char buf[500];
@@ -321,7 +321,7 @@ int main(int argc, const char * argv[])
         
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
-        initialise_machine_names(0);
+				if (!quiet) initialise_machine_names(0);
         initialise_commands();
 
 		do yyparse(); while (!cmdline_done);

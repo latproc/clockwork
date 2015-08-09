@@ -66,6 +66,7 @@
 #include "ProcessingThread.h"
 #include "EtherCATSetup.h"
 
+const char *program_name = 0;
 bool program_done = false;
 bool machine_is_ready = false;
 
@@ -187,6 +188,9 @@ class IODHardwareActivation : public HardwareActivation {
 
 int main(int argc, char const *argv[])
 {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
 	std::cout << "main starting\n";
 	zmq::context_t *context = new zmq::context_t;
 	MessagingInterface::setContext(context);

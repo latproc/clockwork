@@ -60,6 +60,8 @@
 
 namespace po = boost::program_options;
 
+const char *program_name;
+
 static boost::mutex q_mutex;
 static boost::condition_variable_any cond;
 
@@ -890,6 +892,10 @@ class SetupConnectMonitor : public EventResponder {
 
 int main(int argc, const char * argv[])
 {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
+
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
 

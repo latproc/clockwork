@@ -880,9 +880,12 @@ public:
 
 int main(int argc, const char * argv[])
 {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
+
     zmq::context_t context;
     MessagingInterface::setContext(&context);
-	program_name = argv[0];
     
     last_send.tv_sec = 0;
     last_send.tv_usec = 0;
@@ -1013,6 +1016,7 @@ int main(int argc, const char * argv[])
         num_items = idx;
 
         
+				int error_count = 0;
         while (!done)
         {
             struct timeval now;
@@ -1021,12 +1025,21 @@ int main(int argc, const char * argv[])
 
             try {
                 if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
+								error_count = 0;
             }
             catch (std::exception e) {
-                if (zmq_errno())
+								++error_count;
+                if (zmq_errno()) {
                     std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
-                else
+										{ FileLogger fl(program_name); fl.f << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
+								}
+                else {
                     std::cerr << "exception when checking connections: " << e.what() << "\n";
+										{ FileLogger fl(program_name); fl.f << "exception when checking connections: " << e.what() <<"\n"<<std::flush; }
+								}
+								if (error_count > 10) {
+									FileLogger fl(program_name); fl.f << " too many errors. exiting."<<std::flush; sleep(2); exit(0);
+								}
             }
 
             

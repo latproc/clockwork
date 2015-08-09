@@ -46,6 +46,7 @@
 
 namespace po = boost::program_options;
 
+const char *program_name;
 
 bool done = false;
 zmq::socket_t *cmd_socket = 0;
@@ -190,6 +191,10 @@ void CollectPersistentStatus(PersistentStore &store) {
 
 
 int main(int argc, const char * argv[]) {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
+
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
     

@@ -20,12 +20,13 @@
 #include <fstream>
 #include <libgen.h>
 #include <sys/time.h>
+#include <Logger.h>
 
 bool iod_connected = false;
 bool update_status = true;
-char *program_name;
+const char *program_name;
 
-
+/*
 void getTimeString(char *buf, size_t buf_size) {
 	struct timeval now_tv;
 	gettimeofday(&now_tv,0);
@@ -36,6 +37,7 @@ void getTimeString(char *buf, size_t buf_size) {
 			 now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
 			 now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
 }
+*/
 
 struct UserData {
 	
@@ -879,6 +881,7 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	{FileLogger fl(program_name); fl.f << "----- starting -----\n"; }
 	std::string chn_instance_name;
 	MonitorConfiguration mc;
 	if (config_filename) {
@@ -889,9 +892,6 @@ int main(int argc, char *argv[]) {
 	}
 	else {
 
-		sendStatus("initialising");
-		update_status = true;
-
 		int linger = 0; // do not wait at socket close time
 		zmq::socket_t iod(*MessagingInterface::getContext(), ZMQ_REQ);
 		iod.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
@@ -901,8 +901,15 @@ int main(int argc, char *argv[]) {
 		cmd.push_back("CHANNEL");
 		cmd.push_back(channel_name);
 		char *response = send_command(iod, cmd);
+		if ( !response )
+		{FileLogger fl(program_name); fl.f << "null response to channel request. exiting\n" << std::flush; sleep(2); exit(1);}
+		else if (!*response)
+		{FileLogger fl(program_name); fl.f << "empty response to channel request. exiting\n"<< std::flush; sleep(2); exit(2);}
+		else
+		{FileLogger fl(program_name); fl.f << "got channel name " << response << "\n"<<std::flush; }
 		if (options.verbose) std::cout << response << "\n";
 		cJSON *obj = cJSON_Parse(response);
+
 		free(response);
 		
 		if (obj) {
@@ -911,8 +918,12 @@ int main(int argc, char *argv[]) {
 			cJSON_Delete(obj);
 			obj = 0;
 		}
+		else {
+		}
 		std::cout << chn_instance_name << "\n";
 
+		sendStatus("initialising");
+		update_status = true;
 		loadRemoteConfiguration(iod, chn_instance_name, plc, mc);
 	}
 
@@ -985,6 +996,7 @@ int main(int argc, char *argv[]) {
 		}
 		catch (std::exception ex) {
 			std::cout << "polling connections: " << ex.what() << "\n";
+			{FileLogger fl(program_name); fl.f << "polling connections " << ex.what()<< "\n"<<std::flush; }
 			if (++exception_count <= 5 && program_state != s_finished) { usleep(400000); continue; }
 			exit(0);
 		}

@@ -64,6 +64,9 @@
 #include "MessagingInterface.h"
 #include "Channel.h"
 #include "ProcessingThread.h"
+#include <libgen.h>
+
+const char *program_name;
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -139,6 +142,9 @@ class IODHardwareActivation : public HardwareActivation {
 
 int main (int argc, char const *argv[])
 {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
 	zmq::context_t *context = new zmq::context_t;
 	MessagingInterface::setContext(context);
 	Logger::instance();

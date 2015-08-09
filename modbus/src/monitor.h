@@ -16,6 +16,7 @@
 
 //void display(uint8_t *p, size_t len);
 //void displayAscii(uint8_t *p, size_t len);
+/*
 
 void getTimeString(char *buf, size_t buf_size);
 class FileLogger {
@@ -32,6 +33,7 @@ public:
 	}
 	
 };
+*/
 
 template<class T>void display(T *p, size_t len) {
 	size_t min = 0;
