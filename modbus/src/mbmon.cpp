@@ -466,6 +466,7 @@ template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, int grp, T 
 		}
 	}
 	if (!connected) { std::cerr << "Lost connection\n"; return false; }
+	if (min>max) return true;
 	std::set<ModbusMonitor*> changes;
 	bm.check((max-min+1), dest+min, (grp<<16) + min, changes);
 	displayChanges(changes, dest);
