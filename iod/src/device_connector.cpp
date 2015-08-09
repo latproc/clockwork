@@ -58,7 +58,7 @@
 #include "DebugExtra.h"
 #include <pthread.h>
 
-bool debug = false;
+bool debug = true;
 const char *program_name = "device_connector";
 
 class DeviceStatus {
@@ -716,13 +716,14 @@ struct ConnectionThread {
                         size_t len = strlen(buf);
 												if (debug) {
 	                        std::cout << "buf: ";
-	                        for (int i=0; i<=len; ++i) {
-	                            std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)buf[i] << " ";
+	                        for (unsigned int i=0; i<=len; ++i) {
+	                            std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)buf[i];
+															if (isprint(buf[i])) std::cout << "[" << (char)buf[i] << "] "; else std::cout <<" ";
 	                        }
 	                        std::cout << "\n";
 	                        std::cout << "     ";
 	                        
-	                        for (int i=0; i<offset; ++i) {
+	                        for (unsigned int i=0; i<offset; ++i) {
 	                            std::cout << std::hex << "   ";
 	                        }
 	                        std::cout << "^\n";
