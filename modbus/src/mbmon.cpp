@@ -171,7 +171,7 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 		if (!initial_read && memcmp( cmp_data, last_data, size * sizeof(T)) != 0) {
 				
 				if (options.verbose) { 
-					std::cout << "\n"; display(upd_data, buflen); std::cout << "\n";
+					std::cout << "\n"; display(upd_data, (buflen<120)?buflen:120); std::cout << "\n";
 					//std::cout << " "; display(dbg_mask, buflen); std::cout << "\n";
 					}
 		}
@@ -275,6 +275,8 @@ public:
 	BufferMonitor<uint8_t> robits_monitor;
 	BufferMonitor<uint16_t> regs_monitor;
 	BufferMonitor<uint16_t> holdings_monitor;
+
+	MonitorConfiguration &mc;
 	
 	void refresh() {
 		bits_monitor.refresh();
@@ -283,12 +285,12 @@ public:
 		holdings_monitor.refresh();
 	}
 
-	ModbusClientThread(const char *hostname, int portnum) :  
+	ModbusClientThread(const char *hostname, int portnum, MonitorConfiguration &modbus_config) :  
 			ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
 			tab_rq_registers(0), tab_rw_rq_registers(0), 
 			finished(false), connected(false), host(hostname), port(portnum),
 			bits_monitor("coils"), robits_monitor("discrete"),regs_monitor("registers"),
-			holdings_monitor("holdings")
+			holdings_monitor("holdings"), mc(modbus_config)
 	{
 	boost::mutex::scoped_lock(update_mutex);
     ctx = modbus_new_tcp(host.c_str(), port);
@@ -404,8 +406,8 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 	int len = bm.max_read_len;
 	if (len == 0) 
 		len = max-min+1;
-	//if (len > 16)
-	//	len = 16;
+	if (len > 16)
+		len = 16;
 	//if (options.verbose) std::cout << "collecting group " << grp << " start: " << min << " length: " << len << "\n";
 	while ( offset <= max) {
 		// look for the next active address before sending a request
@@ -418,7 +420,7 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 		//if (count && options.verbose) {
 			//std::cout << "skipping " << count << " scanning from address " << offset << "\n";
 		//}
-		//if (options.verbose) std::cout << "group " << grp << " read range " << offset << " to " << offset+len-1 << "\n";
+		if (options.verbose) std::cout << "group " << grp << " read range " << offset << " to " << offset+len-1 << "\n";
 		while ( (rc = read_fn(ctx, offset, len, dest+offset)) == -1 ) {
 			if (rc == -1 && errno == EMBMDATA) { 
 				len /= 2; if (len == 0) len = 1; bm.max_read_len = len;
@@ -438,6 +440,38 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 	displayChanges(changes, dest);
 	return true;
 }
+
+template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, int grp, T *dest, 
+	std::map<std::string, ModbusMonitor>entries,
+	const char *fn_name,
+	int (*read_fn)(modbus_t *ctx, int addr, int nb, T *dest)) {
+
+	if (entries.empty()) return true;
+	int rc = 0;
+	int min = 100000;
+	int max = 0;
+	std::map<std::string, ModbusMonitor>::const_iterator iter = entries.begin();
+	while (iter != entries.end()) {
+		const std::pair<std::string, ModbusMonitor> &item = *iter++;
+		if (item.second.group() == grp) {
+			int offset = item.second.address();
+			int end = offset + item.second.length();
+			if (offset<min) min = offset; if (end>max) max = end;
+			int retry = 2;
+			while ( (rc = read_fn(ctx, offset, item.second.length(), dest+offset)) == -1 ) {
+				check_error(fn_name, offset, &retry); 
+				if (!connected) return false;
+				if (--retry>0) continue; else break;
+			}
+		}
+	}
+	if (!connected) { std::cerr << "Lost connection\n"; return false; }
+	std::set<ModbusMonitor*> changes;
+	bm.check((max-min+1), dest+min, (grp<<16) + min, changes);
+	displayChanges(changes, dest);
+	return true;
+}
+
 
 void operator()() {
 	int error_count = 0;
@@ -460,6 +494,7 @@ void operator()() {
 			error_count = 0;
 		}
 		else {
+#if 0
 			if (!collect_updates(bits_monitor, 0, tab_rp_bits, active_addresses, "modbus_read_bits", modbus_read_bits)) 
 				goto modbus_loop_end;
 			if (!collect_updates(robits_monitor, 1, tab_ro_bits, ro_bits, "modbus_read_input_bits", modbus_read_input_bits)) 
@@ -470,6 +505,18 @@ void operator()() {
 			/*if (!collect_updates(holdings_monitor, 4, tab_rw_rq_registers, inputs, "modbus_read_registers", modbus_read_registers)) {
 				goto modbus_loop_end;
 			}*/
+#else
+			if (!collect_selected_updates(bits_monitor, 0, tab_rp_bits, mc.monitors, "modbus_read_bits", modbus_read_bits)) 
+				goto modbus_loop_end;
+			if (!collect_selected_updates(robits_monitor, 1, tab_ro_bits, mc.monitors, "modbus_read_input_bits", modbus_read_input_bits)) 
+				goto modbus_loop_end;
+			if (!collect_selected_updates(regs_monitor, 3, tab_rq_registers, mc.monitors, "modbus_read_input registers", modbus_read_input_registers)) { 
+				goto modbus_loop_end;
+			}
+			/*if (!collect_selected_updates(holdings_monitor, 4, tab_rw_rq_registers, mc.monitors, "modbus_read_registers", modbus_read_registers)) {
+				goto modbus_loop_end;
+			}*/
+#endif
 		}
 		
 modbus_loop_end:	
@@ -662,7 +709,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	ModbusClientThread modbus_interface(hostname, portnum);
+	ModbusClientThread modbus_interface(hostname, portnum, mc);
 	mb = &modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
 	
