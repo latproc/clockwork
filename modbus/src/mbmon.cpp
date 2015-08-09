@@ -830,6 +830,18 @@ int main(int argc, char *argv[]) {
 		else if ( strcmp(argv[arg], "-v") == 0) {
 			options.verbose = true;
 		}
+		else if ( strcmp(argv[arg], "--monitor") == 0 && arg+1 < argc) {
+			std::string mon = argv[++arg];
+			options.status_machine = mon;
+			size_t pos = mon.find_last_of(".");
+			if (pos) {
+				options.status_property=mon.substr(pos+1);
+				options.status_machine.erase(pos);;
+			}
+			else options.status_property = "status";
+			std::cout << "reporting status to property " << options.status_property << " of " << options.status_machine << "\n";
+		}
+
 		else if (argv[arg][0] == '-'){ usage(argv[0]); exit(0); }
 		else break;
 		++arg;
