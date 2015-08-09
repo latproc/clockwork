@@ -89,7 +89,7 @@ public:
 
 class ModbusMonitor {
 	public:
-	    ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format);
+	    ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format, bool read_only = true);
 	    ModbusMonitor(const ModbusMonitor &orig);
 	    ModbusMonitor &operator=(const ModbusMonitor &other);
 	    std::ostream &operator<<(std::ostream &out) const;
@@ -108,10 +108,16 @@ class ModbusMonitor {
 		const unsigned int &length() const { return len_; }
 		
 		void set(uint8_t *new_value, bool display = true);
-		void set(uint16_t *new_value, bool display = true);		
+		void set(uint16_t *new_value, bool display = true);	
+		void setRaw(uint16_t new_value, bool display = true);
+		void setRaw(uint32_t new_value, bool display = true);	
+		
+			
 		
 		static ModbusMonitor *lookupAddress(unsigned int adr);
 		static ModbusMonitor *lookup(unsigned int group, unsigned int adr);
+		
+		bool readOnly() { return read_only; }
 		
 		void add();
 	private:
@@ -121,6 +127,8 @@ class ModbusMonitor {
 		unsigned int len_;
 	public:
 		ModbusValue *value;
+	private:
+		bool read_only;
 	protected:
 		static std::map<unsigned int, ModbusMonitor*>addresses;
 		

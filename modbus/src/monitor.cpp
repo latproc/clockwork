@@ -40,6 +40,20 @@ void ModbusValueBit::set(uint16_t *data) {
 	}
 }
 
+void ModbusMonitor::setRaw(uint16_t new_value, bool display) {
+	uint16_t *val = value->getWordData();
+	*val = new_value;
+}
+
+void ModbusMonitor::setRaw(uint32_t new_value, bool display){
+	if (value->length == 2) {
+		uint32_t *val = (uint32_t *)value->getWordData();
+		*val = new_value;
+	}
+}
+
+
+
 uint8_t *ModbusValueBit::getBitData() { return val; }
 
 uint16_t *ModbusValueBit::getWordData() { return 0; }
@@ -99,8 +113,8 @@ std::ostream &operator<<(std::ostream &out, const ModbusMonitor &m) {
 }
 
 
-ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format)
-: name_(name), group_(group),address_(address), len_(len), value(0)
+ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format, bool readonly)
+: name_(name), group_(group),address_(address), len_(len), value(0), read_only(readonly)
 {
 	if (group_==0 || group_==1)
 		value = new ModbusValueBit(len_);
@@ -111,7 +125,7 @@ ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int 
 }
 
 ModbusMonitor::ModbusMonitor(const ModbusMonitor &other)
-: name_(other.name_), group_(other.group_),address_(other.address_), len_(other.len_), value(0)
+: name_(other.name_), group_(other.group_),address_(other.address_), len_(other.len_), value(0), read_only(other.read_only)
 {
 	if (group_==0 || group_==1) {
 		value = new ModbusValueBit(len_);
