@@ -17,10 +17,25 @@
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
 #include "ConnectionManager.h"
+#include <fstream>
+#include <libgen.h>
+#include <sys/time.h>
 
 bool iod_connected = false;
 bool update_status = true;
+char *program_name;
 
+
+void getTimeString(char *buf, size_t buf_size) {
+	struct timeval now_tv;
+	gettimeofday(&now_tv,0);
+	struct tm now_tm;
+	localtime_r(&now_tv.tv_sec, &now_tm);
+	uint32_t msec = now_tv.tv_usec / 1000L;
+	snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%03d ",
+			 now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
+			 now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
+}
 
 struct UserData {
 	
@@ -36,6 +51,10 @@ Options options;
 
 /* Clockwork interface */
 
+void sendMessage(zmq::socket_t &socket, const char *message) {
+	safeSend(socket, message, strlen(message));
+}
+#if 0
 /* Send a message using ZMQ */
 void sendMessage(zmq::socket_t &socket, const char *message) {
 	const char *msg = (message) ? message : "";
@@ -54,6 +73,7 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
 	}
    
 }
+#endif
 
 std::list<Value> params;
 char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
@@ -62,12 +82,15 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
+	{FileLogger fl(program_name); fl.f << "sending: " << msg << "\n"; }
 	if (options.verbose) std::cout << " sending: " << msg << "\n";
 	sendMessage(sock, msg);
 	size_t size = strlen(msg);
 	free(msg);
+	{FileLogger fl(program_name); fl.f << "getting reply:\n"; }
 	zmq::message_t reply;
 	if (sock.recv(&reply)) {
+		{FileLogger fl(program_name); fl.f << "got reply:\n"; }
 		size = reply.size();
 		char *data = (char *)malloc(size+1);
 		memcpy(data, reply.data(), size);
@@ -81,18 +104,18 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 void process_command(zmq::socket_t &sock, std::list<Value> &params) {
 	char * data = send_command(sock, params);
 	if (data) {
+		{FileLogger fl(program_name); fl.f << "response " << data << "\n"; }
 		if (options.verbose) std::cout << data << "\n";
 		free(data);
 	}
 }
 
 void sendStatus(const char *s) {
-
 	zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_REQ);
 	sock.connect("tcp://localhost:5555");
 
 
-	std::cout << "reporting status " << s << "\n";
+	{FileLogger fl(program_name); fl.f << "reporting status " << s << "\n"; }
 	if (options.status_machine.length()) {
 		std::list<Value>cmd;
 		cmd.push_back("PROPERTY");
@@ -102,7 +125,7 @@ void sendStatus(const char *s) {
 		process_command(sock, cmd);
 	}
 	else
-		std::cout << " no status machine\n";
+		{FileLogger fl(program_name); fl.f << "no status machine" << "\n"; }
 }
 
 /*
@@ -189,9 +212,9 @@ template<class T>void BufferMonitor<T>::check(size_t size, T *upd_data, unsigned
 		for (size_t ii=0; ii<size; ++ii) {
 			ModbusMonitor *mm;
 			if (update_status || *q != *p) { 
-				if (options.verbose) std::cout << "change at " << (base_address + (q-cmp_data) ) << "\n";
+				//if (options.verbose) std::cout << "change at " << (base_address + (q-cmp_data) ) << "\n";
 				mm = ModbusMonitor::lookupAddress(base_address + (q-cmp_data) ); 
-				if (mm) { changes.insert(mm); if (options.verbose) std::cout << "found change " << mm->name() << "\n"; }
+				if (mm) { changes.insert(mm); } //if (options.verbose) std::cout << "found change " << mm->name() << "\n"; }
 			}
 			*q++ = *p++; // & *msk++;
 		}
@@ -644,6 +667,7 @@ class SetupDisconnectMonitor : public EventResponder {
 public:
 	void operator()(const zmq_event_t &event_, const char* addr_) {
 		iod_connected = false;
+		exit(0);
 	}
 };
 
@@ -796,6 +820,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
 
 using namespace std;
 int main(int argc, char *argv[]) {
+	program_name = strdup(basename(argv[0]));
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
 

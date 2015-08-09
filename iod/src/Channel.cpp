@@ -1306,6 +1306,7 @@ bool Channel::doesMonitor() {
 }
 
 bool Channel::filtersAllow(MachineInstance *machine) {
+		if (!definition()->monitor_linked.empty() && ( machine->_type == "INPUTBIT" || machine->_type == "INPUTREGISTER") ) return false;
     if ((definition()->monitors_exports || monitors_exports) && !machine->modbus_exports.empty())
         return true;
     
