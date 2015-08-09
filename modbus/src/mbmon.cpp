@@ -229,21 +229,13 @@ void displayChanges(std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr) {
 			if (mm->length()==1) {
 				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff));
 				std::cout << mm->name() << " "; mm->set( val );
-				long res = *val;
-				//int mul = (mm->value->format() == "BCD") ? 10 : 16;				
-				//res = (*val & 0xff) * mul + ( (*val >> 8) )
-				std::cout << " " << res << "\n";
+				long res = *( (uint16_t*)mm->value->getWordData() );
 				cmd.push_back( res );
 			}
 			else if (mm->length() == 2) {
 				uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
 				std::cout << mm->name() << " "; mm->set( val );
-				long res = *( (uint32_t*)val );
-				//int mul = (mm->value->format() == "BCD") ? 10 : 16;				
-				//res = (*val & 0xff) * mul + ( (*val >> 8) )
-				//val++;
-				//res = res << 16 + ( (*val & 0xff) * mul + ( (*val >> 8) ) );
-				std::cout << " " << res << "\n"; 
+				long res = *( (uint32_t*)mm->value->getWordData() );
 				cmd.push_back( res );
 			}
 			else {
@@ -645,7 +637,7 @@ int main(int argc, char *argv[]) {
 	while (iter != mc.monitors.end()) {
 		const std::pair<std::string, ModbusMonitor> &item = *iter++;
 		if (item.second.group() == 0) {
-			for (int i=0; i<item.second.length(); ++i) {
+			for (unsigned int i=0; i<item.second.length(); ++i) {
 				if (options.verbose) 
 					std::cout << "monitoring: " << item.second.group() << ":" 
 					<< (item.second.address()+i) <<" " << item.second.name() << "\n";
@@ -653,7 +645,7 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		else if (item.second.group() == 1) {
-			for (int i=0; i<item.second.length(); ++i) {
+			for (unsigned int i=0; i<item.second.length(); ++i) {
 				if (options.verbose)
 					std::cout << "monitoring: " << item.second.group()
 					 << ":" << (item.second.address()+i) <<" " << item.second.name() << "\n";
@@ -661,7 +653,7 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		else if (item.second.group() >= 3) {
-			for (int i=0; i<item.second.length(); ++i) {
+			for (unsigned int i=0; i<item.second.length(); ++i) {
 				if (options.verbose) 
 					std::cout << "monitoring: " << item.second.group() << ":" 
 					<< (item.second.address()+i) <<" " << item.second.name() << "\n";

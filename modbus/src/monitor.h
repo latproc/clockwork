@@ -119,6 +119,7 @@ class ModbusMonitor {
 		unsigned int group_;
 		unsigned int address_;
 		unsigned int len_;
+	public:
 		ModbusValue *value;
 	protected:
 		static std::map<unsigned int, ModbusMonitor*>addresses;

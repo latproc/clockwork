@@ -26,13 +26,13 @@ ModbusValue::ModbusValue(unsigned int len, const std::string &format) : length(l
 void ModbusValueBit::set(uint8_t *data) {
 	// libmodbus  uses a byte to store each bit
 	uint8_t *p = val;
-	for (int i = 0; i<length; ++i) *p++ = *data++;
+	for (unsigned int i = 0; i<length; ++i) *p++ = *data++;
 }
 
 void ModbusValueBit::set(uint16_t *data) {
 	uint8_t *p = val;
 	
-	int i = 0;
+	unsigned int i = 0;
 	while (i++<length) {
 		uint16_t x = *data++;
 		*p++ = (x & 0xff00) >> 8;
@@ -46,40 +46,37 @@ uint16_t *ModbusValueBit::getWordData() { return 0; }
 
 void ModbusValueWord::set(uint8_t *data) {
 	uint16_t x = 0;
-	for (int i = 0; i<length; ++i) {
+	for (unsigned int i = 0; i<length; ++i) {
 		x = *data++;
 		x += ( *data++ ) <<8;
 		val[i] = x;
 	}
 }
 
-void ModbusValueWord::set(uint16_t *data) {
-	uint16_t *p = val;
+static long fromBCD(uint16_t *data, int length) {
 	long res = 0;
-	if (format() == "BCD") {
-		*p = 0;
-		for (int i = length; i>0; ) {
-			long tmp = 0;
-			--i;
-			uint16_t x = data[i];
-			tmp = ((0xf0 & x)>>4) * 10 + (0x0f & x);
-			tmp = tmp * 100 + ( ((0xf000 & x)>>12) * 10 + ((0x0f00 & x)>>8) );
-			res = res * 10000 + tmp;
-		}	
+	for (int i = length; i>0; ) {
+		long tmp = 0;
+		--i;
+		uint16_t x = data[i];
+		tmp = ( ((0xf000 & x)>>12) * 10 + ((0x0f00 & x)>>8) );
+		tmp = tmp * 100 + ((0xf0 & x)>>4) * 10 + (0x0f & x);
+		//tmp = tmp * 100 + ( ((0xf000 & x)>>12) * 10 + ((0x0f00 & x)>>8) );
+		res = res * 10000 + tmp;
+	}
+	return res;	
+}
+
+
+void ModbusValueWord::set(uint16_t *data) {
+	uint32_t res = 0;
+	if (format() == "BCD" && (length == 1 || length == 2) ) {
+		res = fromBCD(data, length);
+		memcpy(val, &res, 4);
 	}
 	else {
-		for (int i = length; i>0; ) {
-			--i;
-			uint16_t x = ((data[i] & 0xff) << 8) + (data[i] >> 8) ;
-			res = (res << 16) + x;
-		}
-	}
-	if (length == 1)
-		*val = (uint16_t)res;
-	else if (length == 2) 
-		memcpy(val, &res, 4);
-	else 
 		memcpy(val, data, length * 2);
+	}
 }
 
 ModbusValueWord::ModbusValueWord(unsigned int len) : ModbusValue(len), val(0) {
@@ -199,7 +196,7 @@ bool MonitorConfiguration::load(const char *fname) {
 
 void ModbusMonitor::add() {
 	unsigned int adr = (group_ <<16) + address_;
-	for (int i=0; i<len_; ++i) {
+	for (unsigned int i=0; i<len_; ++i) {
 		//std::cout << "adding address: " << (adr+i) << " for " << *this << "\n";
 		addresses[adr+i] = this;
 	}
