@@ -1394,7 +1394,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 		if (!chn->definition()->hasFeature(ChannelDefinition::ReportStateChanges)) continue;
 		
 #if 1
-		if (ms) {
+		if (machine->isShadow()) {
 			// shadowed machines don't send state changes on channels that update them
 			if (chn->definition()->updates_names.count(machine->getName())) {
 				//DBG_CHANNELS << " send state change ignored on shadow machine " << machine->getName() << "\n";

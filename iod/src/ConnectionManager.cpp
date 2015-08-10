@@ -294,8 +294,6 @@ bool SubscriptionManager::checkConnections() {
 	if (!isClient()) {
 		if (monit_subs.disconnected())
 			{FileLogger fl(program_name); fl.f << "SubscriptionManager checkConnections() server has no client connection\n"<<std::flush; }
-		else
-			{FileLogger fl(program_name); fl.f << "SubscriptionManager checkConnections() server has client connection\n"<<std::flush;}
 		return !monit_subs.disconnected();
 	}
     if (monit_setup->disconnected() && monit_subs.disconnected()) {

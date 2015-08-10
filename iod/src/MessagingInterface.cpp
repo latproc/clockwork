@@ -161,6 +161,7 @@ sendMessage_transmit:
 	while (1) {
 		if (timeout_us && microsecs() - start_time > timeout_us) {
 			response = "timeout";
+			{FileLogger fl(program_name); fl.f << "timeout when attempting to send.  exiting\n"<<std::flush; sleep(2); exit(2);}
 			return false; // unable to send
 		}
 		try {
@@ -180,12 +181,16 @@ sendMessage_transmit:
 			if (errno == EINTR) {
 				NB_MSG << "Warning: send was interrupted (EINTR)\n" << std::flush;
 				usleep(50);
+				if (retries<=0) 
+					{FileLogger fl(program_name); fl.f << "too many errors\n"<<std::flush;sleep(2); exit(2); }
+
 				continue;
 			}
 			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
-			std::cerr<< "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
+			{FileLogger fl(program_name); fl.f << "sendMessage: " << zmq_strerror(errno) << " transmitting\n"<<std::flush;sleep(2); exit(2); }
 			if (errno == EFSM) {
 				// attempt to recover from an FSM error
+				{FileLogger fl(program_name); fl.f << "attempting FSM recovery\n"<<std::flush; }
 				fsm_recovery = true;
 			}
 			char buf[100];
