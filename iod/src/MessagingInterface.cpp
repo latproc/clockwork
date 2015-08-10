@@ -186,8 +186,8 @@ sendMessage_transmit:
 
 				continue;
 			}
-			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
-			{FileLogger fl(program_name); fl.f << "sendMessage: " << zmq_strerror(errno) << " transmitting\n"<<std::flush;sleep(2); exit(2); }
+			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " (" << errno << ") when transmitting\n" << std::flush;
+			{FileLogger fl(program_name); fl.f << "sendMessage: " << zmq_strerror(errno) << " transmitting\n"<<std::flush;  }
 			if (errno == EFSM) {
 				// attempt to recover from an FSM error
 				{FileLogger fl(program_name); fl.f << "attempting FSM recovery\n"<<std::flush; }
