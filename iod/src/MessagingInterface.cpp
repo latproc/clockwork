@@ -80,27 +80,48 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
+bool safeRecv(zmq::socket_t &sock, std::string &response, bool block, uint64_t timeout);
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
+	std::string str;
+	bool res = safeRecv(sock, str, block, timeout);
+	if (!res) return false;	
+
+	if (str.length() >= (unsigned int)buflen) {
+		strncpy(buf, str.c_str(), buflen-1);
+		buf[buflen-1] = 0;
+	}
+	else strcpy(buf, str.c_str());
+	return true;
+}
+
+bool safeRecv(zmq::socket_t &sock, std::string &response, bool block, uint64_t timeout) {
 //    struct timeval now;
 //    gettimeofday(&now, 0);
 //    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
+	size_t response_len = 0;
 
-	response_len = 0;
 	int retries = 5;
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-			int n = zmq::poll( &items[0], 1, timeout);
-			if (!n && block) continue;
+			int n = zmq::poll( &items[0], 1, timeout/1000+1);
+			if (!n && block) { usleep(50); continue; }
 			if (items[0].revents & ZMQ_POLLIN) {
-				//NB_MSG << tnam << " safeRecv() collecting data\n";
-				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
-				if (response_len > 0 && response_len < (unsigned int)buflen) {
+				zmq::message_t rcvd;
+				if (sock.recv(&rcvd, ZMQ_DONTWAIT) ) {
+					response_len = rcvd.size();
+					if (!response_len) { 
+						{FileLogger fl(program_name); fl.f << " zero length message received, trying again\n" << std::flush; }
+						usleep(50); continue; 
+					}
+					char *buf = new char[response_len+1];
+					memcpy(buf, rcvd.data(), response_len);
 					buf[response_len] = 0;
-					//NB_MSG << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n";
+					response = buf;
+					delete[] buf;
 				}
 				else {
 					//NB_MSG << tnam << " saveRecv() collected data with length " << response_len << "\n";
@@ -110,9 +131,14 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			return (response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
+			{FileLogger fl(program_name); fl.f << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n"<< std::flush; }
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
-			if (--retries == 0) { exit(EXIT_FAILURE); }
-			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
+			if (--retries == 0) { 
+				{FileLogger fl(program_name); fl.f << " too many failures \n"<< std::flush; }
+				exit(EXIT_FAILURE); 
+			}
+			if (errno == EINTR) { 
+				std::cerr << "interrupted system call, retrying\n"; 
 				if (block) continue;
 			}
 			usleep(10);
@@ -149,6 +175,11 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us) {
+	safeSend(sock, msg, strlen(msg));
+	return safeRecv(sock, response, true, timeout_us);
+}
+/*
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -161,33 +192,34 @@ sendMessage_transmit:
 	while (1) {
 		if (timeout_us && microsecs() - start_time > timeout_us) {
 			response = "timeout";
-			{FileLogger fl(program_name); fl.f << "timeout when attempting to send.  exiting\n"<<std::flush; sleep(2); exit(2);}
+			{FileLogger fl(program_name); fl.f << "timeout " << timeout_us << " when attempting to send.  exiting\n"<<std::flush; sleep(2); exit(2);}
 			return false; // unable to send
 		}
 		try {
 			if ( !(*msg) ) {  // don't send zero length messages
-				MessageLog::instance()->add(" Warning: skipped sending empty message");
+				const char *err = " Warning: skipped sending empty message";
+				MessageLog::instance()->add(err);
 				response = "Discarding empty message";
-				return false; 
+				{FileLogger fl(program_name); fl.f << err << "\n" << std::flush; return false; }
+				size_t len = sock.send(msg, strlen(msg));
+				if (!len) {
+					usleep(50);
+					continue;
+				}
+				break;
 			}
-			size_t len = sock.send(msg, strlen(msg));
-			if (!len) {
-				usleep(50);
-				continue;
-			}
-			break;
 		}
 		catch (zmq::error_t e) {
+			{FileLogger fl(program_name); fl.f << "sendMessage: " << zmq_strerror(errno) << " transmitting\n"<<std::flush;  }
 			if (errno == EINTR) {
-				NB_MSG << "Warning: send was interrupted (EINTR)\n" << std::flush;
+				const char *err = "Warning: send was interrupted (EINTR)\n";
+				{FileLogger fl(program_name); fl.f << err << std::flush; }
 				usleep(50);
 				if (retries<=0) 
-					{FileLogger fl(program_name); fl.f << "too many errors\n"<<std::flush;sleep(2); exit(2); }
+				{FileLogger fl(program_name); fl.f << "too many errors\n"<<std::flush;sleep(2); exit(2); }
 
 				continue;
 			}
-			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " (" << errno << ") when transmitting\n" << std::flush;
-			{FileLogger fl(program_name); fl.f << "sendMessage: " << zmq_strerror(errno) << " transmitting\n"<<std::flush;  }
 			if (errno == EFSM) {
 				// attempt to recover from an FSM error
 				{FileLogger fl(program_name); fl.f << "attempting FSM recovery\n"<<std::flush; }
@@ -195,82 +227,84 @@ sendMessage_transmit:
 			}
 			char buf[100];
 			snprintf(buf, 100, "Error %s sending message", zmq_strerror(zmq_errno()));
-			MessageLog::instance()->add(buf);
-			NB_MSG << buf << "\n";
-			if (!fsm_recovery) {
-				response = buf;
+				MessageLog::instance()->add(buf);
+				NB_MSG << buf << "\n";
+				if (!fsm_recovery) {
+					response = buf;
+					return false;
+				}
+			}
+		}
+// receive response
+		char *buf = 0;
+		size_t len = 0;
+		start_time = microsecs();
+		uint64_t warn_at = 100000;
+		while (len == 0) {
+			uint64_t now = microsecs();
+			if (timeout_us && now - start_time > timeout_us) {
+				response = "receive timeout\n";
+				return false; // unable to  receive
+			}
+			if (now - start_time > warn_at) {
+				char tnam[100];
+				int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+				assert(pgn_rc == 0);
+				char buf[150];
+				snprintf(buf, 150, "warning: send message on thread %s taken %ld ms so far\n", tnam, now-start_time);
+				MessageLog::instance()->add(buf);
+				NB_MSG << buf << "\n" << std::flush;
+				warn_at += 100000;
+			}
+			try {
+				zmq::message_t rcvd;
+				if (sock.recv(&rcvd, ZMQ_DONTWAIT) ) {
+					len = rcvd.size();
+					if (!len) { usleep(50); continue; }
+					buf = new char[len+1];
+					memcpy(buf, rcvd.data(), len);
+					buf[len] = 0;
+					response = buf;
+					delete[] buf;
+				}
+				else {
+					usleep(100);
+					continue;
+				}
+				if (fsm_recovery) {
+					// a previous receive failed. we have now read its response so we retry our send
+					char buf[100];
+					snprintf(buf, 100, "ignored old data: %s", response.c_str());
+					MessageLog::instance()->add(buf);
+					std::cerr << buf << "\n";
+					NB_MSG << buf << "\n";
+					fsm_recovery = false;
+					goto sendMessage_transmit;
+				}
+				break;
+			}
+			catch(zmq::error_t e)  {
+				char err[300];
+				const char *fnam = strrchr(__FILE__, '/');
+				if (!fnam) fnam = __FILE__; else fnam++;
+				snprintf(err, 300, "sendMessage error: %s in %s:%d\n", zmq_strerror(errno), fnam, __LINE__);
+				std::cerr << err;
+				if (zmq_errno() == EFSM) {
+					// send must have failed
+					usleep(50);
+					const char *errmsg = "sendMessage FSM error, resending message";
+					MessageLog::instance()->add(errmsg);
+					NB_MSG << errmsg << "\n" << std::flush;
+					goto sendMessage_transmit;
+				}
+				if (errno == EINTR) continue;
+				response = err;
 				return false;
 			}
 		}
+		return true;
 	}
-	char *buf = 0;
-	size_t len = 0;
-	start_time = microsecs();
-	uint64_t warn_at = 100000;
-	while (len == 0) {
-		uint64_t now = microsecs();
-		if (timeout_us && now - start_time > timeout_us) {
-			response = "receive timeout\n";
-			return false; // unable to  receive
-		}
-		if (now - start_time > warn_at) {
-			char tnam[100];
-			int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-			assert(pgn_rc == 0);
-			char buf[150];
-			snprintf(buf, 150, "warning: send message on thread %s taken %ld ms so far\n", tnam, now-start_time);
-			MessageLog::instance()->add(buf);
-			NB_MSG << buf << "\n" << std::flush;
-			warn_at += 100000;
-		}
-		try {
-			zmq::message_t rcvd;
-			if (sock.recv(&rcvd, ZMQ_DONTWAIT) ) {
-				len = rcvd.size();
-				if (!len) { usleep(50); continue; }
-				buf = new char[len+1];
-				memcpy(buf, rcvd.data(), len);
-				buf[len] = 0;
-				response = buf;
-				delete[] buf;
-			}
-			else {
-				usleep(100);
-				continue;
-			}
-			if (fsm_recovery) {
-				// a previous receive failed. we have now read its response so we retry our send
-				char buf[100];
-				snprintf(buf, 100, "ignored old data: %s", response.c_str());
-				MessageLog::instance()->add(buf);
-				std::cerr << buf << "\n";
-				NB_MSG << buf << "\n";
-				fsm_recovery = false;
-				goto sendMessage_transmit;
-			}
-			break;
-		}
-		catch(zmq::error_t e)  {
-			char err[300];
-			const char *fnam = strrchr(__FILE__, '/');
-			if (!fnam) fnam = __FILE__; else fnam++;
-			snprintf(err, 300, "sendMessage error: %s in %s:%d\n", zmq_strerror(errno), fnam, __LINE__);
-			std::cerr << err;
-			if (zmq_errno() == EFSM) {
-				// send must have failed
-				usleep(50);
-				const char *errmsg = "sendMessage FSM error, resending message";
-				MessageLog::instance()->add(errmsg);
-				NB_MSG << errmsg << "\n" << std::flush;
-				goto sendMessage_transmit;
-			}
-			if (errno == EINTR) continue;
-			response = err;
-			return false;
-		}
-	}
-	return true;
-}
+*/
 
 void MessagingInterface::setContext(zmq::context_t *ctx) {
     zmq_context = ctx;

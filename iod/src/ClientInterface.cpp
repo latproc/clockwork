@@ -343,11 +343,11 @@ void IODCommandThread::operator()() {
     while (!done) {
         try {
             if (status == e_wait_processing_start) {
-				//NB_MSG << "e_wait_processing_start\n";
+				NB_MSG << "e_wait_processing_start\n";
 				access_req.send("access", 6);
 				// wait while processing occurs
 				status = e_wait_processing;
-				//NB_MSG << "Client Interface e_wait_processing_start->e_wait_processing\n";
+				NB_MSG << "Client Interface e_wait_processing_start->e_wait_processing\n";
 			}
 			if (status == e_wait_processing) {
 /*
@@ -357,7 +357,7 @@ void IODCommandThread::operator()() {
 				char acc_buf[10];
 				if (safeRecv(access_req, acc_buf, 10, true, acc_len, -1)) {
                 	status = e_responding;
-					//NB_MSG << "Client Interface e_wait_processing->e_responding\n";
+					NB_MSG << "Client Interface e_wait_processing->e_responding\n";
 				}
             }
             if (status == e_responding) {
@@ -389,14 +389,14 @@ void IODCommandThread::operator()() {
 						sendMessage(cti->socket, cmdres);
 					}
 					else {
-						//NB_MSG << "Client interface saw command error: " << command->error() << "\n";
+						NB_MSG << "Client interface saw command error: " << command->error() << "\n";
 						sendMessage(cti->socket, command->error());
 					}
 					delete command;
 					command = getCompletedCommand();
 				}
 				status = e_running;
-				//NB_MSG << "Client Interface e_responding->e_running\n";
+				NB_MSG << "Client Interface e_responding->e_running\n";
             }
 			if (status == e_running) {
                 zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
@@ -415,14 +415,14 @@ void IODCommandThread::operator()() {
                 char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
                 memcpy(data, request.data(), size);
                 data[size] = 0;
-//NB_MSG << "Client interface received:" << data << "\n";
+NB_MSG << "Client interface received:" << data << "\n";
 				IODCommand *command = parseCommandString(data);
 				if (command == 0) {
 					sendMessage(cti->socket, "Empty message received\n");
 					goto cleanup;
 				}
                 status = e_wait_processing_start;
-				//NB_MSG << "Client Interface e_running->e_wait_processing_start\n";
+				NB_MSG << "Client Interface e_running->e_wait_processing_start\n";
 				newPendingCommand(command);
 
             cleanup:
