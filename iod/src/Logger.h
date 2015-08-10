@@ -28,6 +28,35 @@
 #include <sstream>
 #include <iostream>
 #include "boost/thread/mutex.hpp"
+#include <fstream>
+#include <libgen.h>
+#include <sys/time.h>
+
+extern const char *program_name;
+class FileLogger {
+public:
+  std::ofstream f;
+  FileLogger(const char *fname){
+    std::string n("/tmp/");
+    n += fname;
+    n + ".txt";
+    f.open (n,  std::ofstream::out | std::ofstream::app);
+    char buf[40];
+    getTimeString(buf, 40);
+    f <<program_name << " " << buf << " " << std::flush;
+  }
+
+void getTimeString(char *buf, size_t buf_size) {
+  struct timeval now_tv;
+  gettimeofday(&now_tv,0);
+  struct tm now_tm;
+  localtime_r(&now_tv.tv_sec, &now_tm);
+  uint32_t msec = now_tv.tv_usec / 1000L;
+  snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%03d ",
+       now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
+       now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
+}
+};
 
 
 class LogState {

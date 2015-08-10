@@ -60,6 +60,8 @@
 
 namespace po = boost::program_options;
 
+const char *program_name;
+
 static boost::mutex q_mutex;
 static boost::condition_variable_any cond;
 
@@ -262,6 +264,8 @@ struct ModbusServerThread
 	void operator()()
 	{
 		std::cout << "------------------ Modbus Server Thread Started -----------------\n" << std::flush;
+		cmd_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+		cmd_interface->connect(local_commands);
 
 		int function_code_offset = 0; //modbus_get_header_length(modbus_context);
 
@@ -550,7 +554,7 @@ struct ModbusServerThread
 								std::string cmd = *iter++;
 								std::string response;
 								uint64_t cmd_timeout = 250;
-								if (!sendMessage(cmd.c_str(), cmd_interface, response, 150) ) {
+								if (!sendMessage(cmd.c_str(), *cmd_interface, response, 150) ) {
 									std::cerr << "Message send of " << cmd << " failed\n";
 								}
 								//char *res = sendIODMessage(cmd);
@@ -565,7 +569,7 @@ struct ModbusServerThread
 								std::string cmd( getIODSyncCommand(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0) );
 								std::string response;
 								uint64_t cmd_timeout = 250;
-								if (!sendMessage(cmd.c_str(), cmd_interface, response, cmd_timeout)) {
+								if (!sendMessage(cmd.c_str(), *cmd_interface, response, cmd_timeout)) {
 									std::cerr << "Message send of " << cmd << " failed\n";
 								}
 								//char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
@@ -610,10 +614,9 @@ struct ModbusServerThread
 		modbus_context = 0;
 
 	}
-	ModbusServerThread() : modbus_state(ms_paused), socket(0), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ)
+	ModbusServerThread() : modbus_state(ms_paused), socket(0), cmd_interface(0)
 	{
 		FD_ZERO(&connections);
-		cmd_interface.connect(local_commands);
 
 	}
 	~ModbusServerThread()
@@ -648,7 +651,7 @@ struct ModbusServerThread
 	fd_set connections;
 	int max_fd;
 	int socket;
-	zmq::socket_t cmd_interface;
+	zmq::socket_t *cmd_interface;
 	std::list<int> connection_list;
 
 };
@@ -889,6 +892,10 @@ class SetupConnectMonitor : public EventResponder {
 
 int main(int argc, const char * argv[])
 {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
+
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
 

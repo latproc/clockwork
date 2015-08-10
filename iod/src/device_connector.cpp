@@ -495,7 +495,7 @@ struct MatchFunction {
                         if (msg) {
                             if (!instance_) { MatchFunction::instance(); usleep(50); }
                             std::string response;
-							if(debug)std::cout << "sending: " << msg << "\n";
+							if(debug)std::cout << "sending: " << msg << "\n" << std::flush;
                             if (sendMessage(msg, MatchFunction::instance()->iod_interface, response)) {
                                 last_message = msg;
                                 last_send.tv_sec = now.tv_sec;
@@ -519,7 +519,7 @@ struct MatchFunction {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->machine(), Options::instance()->property(), res.c_str());
                     if (cmd) {
                         std::string response;
-										if(debug)std::cout << "sending: " << cmd << "\n";
+										if(debug)std::cout << "sending: " << cmd << "\n" << std::flush;
                         if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
@@ -716,13 +716,14 @@ struct ConnectionThread {
                         size_t len = strlen(buf);
 												if (debug) {
 	                        std::cout << "buf: ";
-	                        for (int i=0; i<=len; ++i) {
-	                            std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)buf[i] << " ";
+	                        for (unsigned int i=0; i<=len; ++i) {
+	                            std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)buf[i];
+															if (isprint(buf[i])) std::cout << "[" << (char)buf[i] << "] "; else std::cout <<" ";
 	                        }
 	                        std::cout << "\n";
 	                        std::cout << "     ";
 	                        
-	                        for (int i=0; i<offset; ++i) {
+	                        for (unsigned int i=0; i<offset; ++i) {
 	                            std::cout << std::hex << "   ";
 	                        }
 	                        std::cout << "^\n";
@@ -815,10 +816,10 @@ struct ConnectionThread {
 //                                            "status", stringFromDeviceStatus(DeviceStatus::instance()->current()));
             if (!sent) {
                 std::cerr << "Failed to set status property " << Options::instance()->name() << ".status\n"
-				<< " response: " << response << "\n";
+				<< " response: " << response << "\n" << std::flush;
             }
             if (response == "Unknown device") {
-                std::cout << "invalid clockwork device name " << Options::instance()->name() << "\n";
+                std::cout << "invalid clockwork device name " << Options::instance()->name() << "\n"<< std::flush;
             }
         }
     }
@@ -879,9 +880,12 @@ public:
 
 int main(int argc, const char * argv[])
 {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
+
     zmq::context_t context;
     MessagingInterface::setContext(&context);
-	program_name = argv[0];
     
     last_send.tv_sec = 0;
     last_send.tv_usec = 0;
@@ -945,7 +949,7 @@ int main(int argc, const char * argv[])
 				options.setChannelName(argv[++i]);
 			}
             else {
-                std::cerr << "Warning: parameter " << argv[i] << " not understood\n";
+                std::cerr << "Warning: parameter " << argv[i] << " not understood\n"<<std::flush;
             }
         }
         if (!options.valid()) {
@@ -956,7 +960,7 @@ int main(int argc, const char * argv[])
         struct timeval last_time;
         gettimeofday(&last_time, 0);
         if (!setup_signals()) {
-            std::cerr << "Error setting up signals " << strerror(errno) << "\n";
+            std::cerr << "Error setting up signals " << strerror(errno) << "\n"<<std::flush;
         }
         
         
@@ -972,7 +976,7 @@ int main(int argc, const char * argv[])
 				connection_manager = new CommandManager(options.iodHost(), 5555);
 		}
 		catch(zmq::error_t io) {
-			std::cout << "zmq error: " << zmq_strerror(errno) << "\n";
+			std::cout << "zmq error: " << zmq_strerror(errno) << "\n"<<std::flush;
 		}
 		catch(std::exception ex) {
 			std::cout << " unknown exception: " << zmq_strerror(errno) << "\n";
@@ -1012,6 +1016,7 @@ int main(int argc, const char * argv[])
         num_items = idx;
 
         
+				int error_count = 0;
         while (!done)
         {
             struct timeval now;
@@ -1020,15 +1025,25 @@ int main(int argc, const char * argv[])
 
             try {
                 if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
+								error_count = 0;
             }
             catch (std::exception e) {
-                if (zmq_errno())
+								++error_count;
+                if (zmq_errno()) {
                     std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
-                else
+										{ FileLogger fl(program_name); fl.f << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
+								}
+                else {
                     std::cerr << "exception when checking connections: " << e.what() << "\n";
+										{ FileLogger fl(program_name); fl.f << "exception when checking connections: " << e.what() <<"\n"<<std::flush; }
+								}
+								if (error_count > 10) {
+									FileLogger fl(program_name); fl.f << " too many errors. exiting."<<std::flush; sleep(2); exit(0);
+								}
             }
 
             
+#if 0
             // TBD once the connection is open, check that data has been received within the last second
             DeviceStatus::State dev_stat = DeviceStatus::instance()->current();
             if (dev_stat == DeviceStatus::e_up || dev_stat == DeviceStatus::e_connected || dev_stat == DeviceStatus::e_timeout) {
@@ -1041,11 +1056,13 @@ int main(int argc, const char * argv[])
 					}
                     else {
                         DBG_MSG << "Warning: connection idle\n";
+                        std::cout<< "Warning: connection idle\n";
 						exit(0);
 					}
                     last_time = last;
                 }
             }
+#endif
 
             //if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
             

@@ -155,6 +155,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, ui
 	int retries = 3;
 	assert(msg);
 	uint64_t start_time = microsecs();
+	bool fsm_recovery = false;
 sendMessage_transmit:
 	--retries;
 	while (1) {
@@ -182,14 +183,19 @@ sendMessage_transmit:
 				continue;
 			}
 			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
+			std::cerr<< "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
 			if (errno == EFSM) {
-				// no way to recover from an FSM error at this point
-				NB_MSG << "exiting\n";
+				// attempt to recover from an FSM error
+				fsm_recovery = true;
 			}
 			char buf[100];
-			snprintf(buf, 100, "Error %s (%d) sending message", zmq_strerror(zmq_errno()));
-			response = buf;
-			return false;
+			snprintf(buf, 100, "Error %s sending message", zmq_strerror(zmq_errno()));
+			MessageLog::instance()->add(buf);
+			NB_MSG << buf << "\n";
+			if (!fsm_recovery) {
+				response = buf;
+				return false;
+			}
 		}
 	}
 	char *buf = 0;
@@ -200,7 +206,7 @@ sendMessage_transmit:
 		uint64_t now = microsecs();
 		if (timeout_us && now - start_time > timeout_us) {
 			response = "receive timeout\n";
-			return false; // unable to send
+			return false; // unable to  receive
 		}
 		if (now - start_time > warn_at) {
 			char tnam[100];
@@ -226,6 +232,16 @@ sendMessage_transmit:
 			else {
 				usleep(100);
 				continue;
+			}
+			if (fsm_recovery) {
+				// a previous receive failed. we have now read its response so we retry our send
+				char buf[100];
+				snprintf(buf, 100, "ignored old data: %s", response.c_str());
+				MessageLog::instance()->add(buf);
+				std::cerr << buf << "\n";
+				NB_MSG << buf << "\n";
+				fsm_recovery = false;
+				goto sendMessage_transmit;
 			}
 			break;
 		}

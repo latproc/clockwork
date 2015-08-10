@@ -10,18 +10,41 @@
 #include <string>
 #include <map>
 #include <string.h>
+#include <fstream>
+#include <libgen.h>
+#include <sys/time.h>
 
 //void display(uint8_t *p, size_t len);
 //void displayAscii(uint8_t *p, size_t len);
+/*
+
+void getTimeString(char *buf, size_t buf_size);
+class FileLogger {
+public:
+	std::ofstream f;
+	FileLogger(const char *fname){ 
+		std::string n("/tmp/");
+		n += fname;
+		n + ".txt"; 
+		f.open (n,  std::ofstream::out | std::ofstream::app); 
+		char buf[40];
+		getTimeString(buf, 40);
+		f << buf << " " << std::flush;
+	}
+	
+};
+*/
 
 template<class T>void display(T *p, size_t len) {
 	size_t min = 0;
+	if (len>120) len=120;
 	for (size_t i=min; i<len; ++i) 
 		std::cout << std::setw(2*sizeof(T)) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
 }
 
 template<class T>void displayAscii(T *p, size_t len) {
 	size_t min = 0;
+	if (len>120) len=120;
 	for (size_t i=min; i<len; ++i) 
 	std::cout << std::setw(2*sizeof(T)) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
 	std::cout << "\n";
@@ -89,7 +112,7 @@ public:
 
 class ModbusMonitor {
 	public:
-	    ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format);
+	    ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format, bool read_only = true);
 	    ModbusMonitor(const ModbusMonitor &orig);
 	    ModbusMonitor &operator=(const ModbusMonitor &other);
 	    std::ostream &operator<<(std::ostream &out) const;
@@ -108,10 +131,16 @@ class ModbusMonitor {
 		const unsigned int &length() const { return len_; }
 		
 		void set(uint8_t *new_value, bool display = true);
-		void set(uint16_t *new_value, bool display = true);		
+		void set(uint16_t *new_value, bool display = true);	
+		void setRaw(uint16_t new_value, bool display = true);
+		void setRaw(uint32_t new_value, bool display = true);	
+		
+			
 		
 		static ModbusMonitor *lookupAddress(unsigned int adr);
 		static ModbusMonitor *lookup(unsigned int group, unsigned int adr);
+		
+		bool readOnly() { return read_only; }
 		
 		void add();
 	private:
@@ -119,7 +148,10 @@ class ModbusMonitor {
 		unsigned int group_;
 		unsigned int address_;
 		unsigned int len_;
+	public:
 		ModbusValue *value;
+	private:
+		bool read_only;
 	protected:
 		static std::map<unsigned int, ModbusMonitor*>addresses;
 		

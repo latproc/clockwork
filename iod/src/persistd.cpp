@@ -46,6 +46,7 @@
 
 namespace po = boost::program_options;
 
+const char *program_name;
 
 bool done = false;
 zmq::socket_t *cmd_socket = 0;
@@ -85,6 +86,14 @@ public:
         need_refresh = true;
     }
 };
+
+class SetupDisconnectMonitor : public EventResponder {
+public:
+	void operator()(const zmq_event_t &event_, const char* addr_) {
+		done = true;
+	}
+};
+
 
 std::set<std::string>ignored_properties;
 
@@ -180,7 +189,12 @@ void CollectPersistentStatus(PersistentStore &store) {
 }
 
 
+
 int main(int argc, const char * argv[]) {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
+
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
     
@@ -221,8 +235,10 @@ int main(int argc, const char * argv[]) {
     
     SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCLOCKWORK);
     SetupConnectMonitor connect_responder;
+    SetupDisconnectMonitor disconnect_responder;
     cmd_socket = &subscription_manager.setup();
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
+    subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
     
     while (!done) {
         zmq::pollitem_t items[] = {
