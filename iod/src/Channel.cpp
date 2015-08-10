@@ -1168,7 +1168,7 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
 		if (!chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) continue;
-
+		if (machine->ownerChannel() == chn) continue; // shadows don't forward their properties back on their channel
         if (!chn->channel_machines.count(machine))
             continue;
         if (chn->filtersAllow(machine)) {
