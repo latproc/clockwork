@@ -17,10 +17,10 @@ int getIntValue(cwpi_Scope s, const char *property_name, const long **res) {
         MessageLog::instance()->add("getIntValue was passed a null instance from a plugin");
         return 0;
     }
-    Value *value = scope->getMutableValue(property_name);
-    if (value->kind != Value::t_integer)
+    const Value &value = scope->getValue(property_name);
+    if (value.kind != Value::t_integer)
         return 0;
-    *res = &value->iValue;
+    *res = &value.iValue;
     return 1;
 }
 
