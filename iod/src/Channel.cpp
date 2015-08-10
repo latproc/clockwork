@@ -1393,7 +1393,8 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
 		if (!chn->definition()->hasFeature(ChannelDefinition::ReportStateChanges)) continue;
 		
-#if 1
+		if (machine->ownerChannel() == chn) continue; 
+#if 0
 		if (machine->isShadow()) {
 			// shadowed machines don't send state changes on channels that update them
 			if (chn->definition()->updates_names.count(machine->getName())) {
@@ -1666,6 +1667,7 @@ void Channel::setupShadows() {
 			m->publish();
             // this machine is a shadow
 			channel_machines.insert(m);
+			m->owner_channel = this;
         }
     }
 

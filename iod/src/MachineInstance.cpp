@@ -393,6 +393,10 @@ bool MachineInstance::isShadow() {
 	return false;
 }
 
+Channel* MachineInstance::ownerChannel() {
+	return owner_channel;
+}
+
 void MachineInstance::setNeedsThrottle(bool which) {
 	cache->needs_throttle = which;
 }
@@ -978,7 +982,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	is_traceable(false),
 	published(0),
 	cache(0),
-	action_errors(0)
+	action_errors(0),
+	owner_channel(0)
 {
 	if (!shared) shared = new SharedCache;
 	cache = new Cache;

@@ -246,7 +246,7 @@ private:
 	MachineEvent &operator=(const MachineEvent&);
 };
 
-
+class Channel;
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
     friend class MachineInstanceFactory;
 public:
@@ -314,6 +314,7 @@ public:
     void stopListening(MachineInstance *m);
     bool setStableState(); // returns true if a state change was made
 	virtual bool isShadow(); // is this machine a shadow instance?
+	virtual Channel* ownerChannel();
     
     std::string &fullName() const;
 	std::string modbusName(const std::string &property, const Value & property_val);
@@ -497,6 +498,7 @@ public:
 	static SharedCache *shared;
 	Cache *cache;
 	unsigned int action_errors;
+	Channel* owner_channel;
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
