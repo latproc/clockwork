@@ -294,6 +294,8 @@ bool SubscriptionManager::checkConnections() {
 	if (!isClient()) {
 		if (monit_subs.disconnected())
 			{FileLogger fl(program_name); fl.f << "SubscriptionManager checkConnections() server has no client connection\n"<<std::flush; }
+		else
+			{FileLogger fl(program_name); fl.f << "SubscriptionManager checkConnections() server has client connection\n"<<std::flush;}
 		return !monit_subs.disconnected();
 	}
     if (monit_setup->disconnected() && monit_subs.disconnected()) {
@@ -313,7 +315,7 @@ bool SubscriptionManager::checkConnections() {
     }
     if (setupStatus() == e_disconnected || ( !monit_setup->disconnected() && monit_subs.disconnected() ) ) {
         // clockwork has disconnected
-				{FileLogger fl(program_name); fl.f << "SubscriptionManager clockwork connection seems to be broken.\n"; }
+				{FileLogger fl(program_name); fl.f << "SubscriptionManager clockwork connection has broken.. exiting\n"; }
 				++channel_error_count;
 				if (channel_error_count>8) {
 					{FileLogger fl(program_name); fl.f << "Too many errors: exiting\n"; }
@@ -390,29 +392,9 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			// if we are a client, pass commands through the setup socket to the other end
 			// of the channel.
 			if (isClient() && monit_setup && !monit_setup->disconnected()) {
-
 				if (protocol != eCHANNEL) {
-trying_send:
 					{FileLogger fl(program_name); fl.f << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
-					try {
 					setup().send(buf,msglen);
-					goto sent_ok;
-					}
-					catch (std::exception ex) {
-						if (zmq_errno() == EFSM) {
-							{FileLogger fl(program_name); fl.f << "FSM error on setup channel. recovering..\n"<<std::flush; }
-						}
-					}
-					char tmpbuf[1000];
-					int reclen;
-					if ( (reclen = setup().recv(tmpbuf, 1000)) )
-					{
-							if (reclen>=1000) reclen=999;
-							tmpbuf[reclen] = 0;
-							FileLogger fl(program_name); fl.f << "recovered: " << tmpbuf << "\n"<<std::flush; 
-							goto trying_send;
-					}
-sent_ok:
 					run_status = e_waiting_response;
 				}
 				else {
@@ -434,7 +416,7 @@ sent_ok:
 					safeSend(cmd, "sent", 4);
 				}
 			}
-		}
+        }
 	}
 
 	if (run_status == e_waiting_response && !isClient()) {

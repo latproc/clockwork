@@ -161,7 +161,6 @@ sendMessage_transmit:
 	while (1) {
 		if (timeout_us && microsecs() - start_time > timeout_us) {
 			response = "timeout";
-			{FileLogger fl(program_name); fl.f << "timeout when attempting to send.  exiting\n"<<std::flush; sleep(2); exit(2);}
 			return false; // unable to send
 		}
 		try {
@@ -181,16 +180,12 @@ sendMessage_transmit:
 			if (errno == EINTR) {
 				NB_MSG << "Warning: send was interrupted (EINTR)\n" << std::flush;
 				usleep(50);
-				if (retries<=0) 
-					{FileLogger fl(program_name); fl.f << "too many errors\n"<<std::flush;sleep(2); exit(2); }
-
 				continue;
 			}
-			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " (" << errno << ") when transmitting\n" << std::flush;
-			{FileLogger fl(program_name); fl.f << "sendMessage: " << zmq_strerror(errno) << " transmitting\n"<<std::flush;  }
+			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
+			std::cerr<< "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
 			if (errno == EFSM) {
 				// attempt to recover from an FSM error
-				{FileLogger fl(program_name); fl.f << "attempting FSM recovery\n"<<std::flush; }
 				fsm_recovery = true;
 			}
 			char buf[100];
@@ -462,27 +457,26 @@ char *MessagingInterface::send(const char *txt) {
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
-    zmq::message_t msg(len);
-    strncpy ((char *) msg.data(), txt, len);
+	zmq::message_t msg(len);
+	strncpy ((char *) msg.data(), txt, len);
     while (true) {
-	    try {
-		    socket->send(msg);
-		    break;
-	    }
-	    catch (std::exception e) {
-		    if (errno == EINTR || errno == EAGAIN) {
-			    std::cerr << "MessagingInterface::send " << strerror(errno);
-			    usleep(50);
-			    continue;
-		    }
-		    if (zmq_errno())
-			    std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-		    else
-			    std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
-		    socket->disconnect(url.c_str());
-		    usleep(50000);
-		    connect();
-	    }
+        try {
+            socket->send(msg);
+            break;
+        }
+        catch (std::exception e) {
+			if (errno == EINTR || errno == EAGAIN) {
+				std::cerr << "MessagingInterface::send " << strerror(errno);
+				continue;
+			}
+            if (zmq_errno())
+                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+            else
+                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+            socket->disconnect(url.c_str());
+            usleep(50000);
+            connect();
+        }
     }
     if (!is_publisher) {
         while (true) {
@@ -491,7 +485,7 @@ char *MessagingInterface::send(const char *txt) {
                 zmq::poll( &items[0], 1, 500);
                 if (items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
-                    if (socket->recv(&reply, ZMQ_DONTWAIT)) {
+                    if (socket->recv(&reply)) {
                         len = reply.size();
                         char *data = (char *)malloc(len+1);
                         memcpy(data, reply.data(), len);
@@ -499,10 +493,6 @@ char *MessagingInterface::send(const char *txt) {
                         std::cerr << url << ": " << data << "\n";
                         return data;
                     }
-		    else {
-			usleep(50);
-			continue;
-		    }
                 }
                 else if (items[0].revents & ZMQ_POLLERR) {
                     std::cerr << "MessagingInterface::send: error during recv\n";
@@ -521,7 +511,6 @@ char *MessagingInterface::send(const char *txt) {
                     std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
                 else
                     std::cerr << "Exception when receiving response " << url << ": " << e.what() << "\n";
-		usleep(50);
             }
         }
     }
