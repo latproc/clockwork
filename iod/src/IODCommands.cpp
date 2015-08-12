@@ -195,8 +195,8 @@ bool IODCommandResume::run(std::vector<Value> &params) {
         if (params.size() == 2) {
 			DBG_MSG << "disabling " << params[1] << "\n";
 			MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
-			if (m && m->enabled()) {
-				m->disable();
+			if (m) {
+				if (m->enabled()) m->disable();
 				result_str = "OK";
 				return true;
 			}

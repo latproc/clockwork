@@ -279,8 +279,14 @@ void initialise_commands() {
     commands.push_back("QUIT");
 }
 
+const char *program_name;
+
 int main(int argc, const char * argv[])
 {
+	char *pn = strdup(argv[0]);
+	program_name = strdup(basename(pn));
+	free(pn);
+
     context = new zmq::context_t;
     
     try {
