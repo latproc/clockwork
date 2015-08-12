@@ -1,4 +1,4 @@
-PIDSPEEDCONFIGURATION MACHINE {
+PIDDIRECTIONCONFIGURATION MACHINE {
 	OPTION PERSISTENT true;
 	EXPORT RW 32BIT SlowSpeed, FullSpeed, StoppingTime, StoppingDistance, Tolerance, Kp, Ki, Kd;
 	EXPORT RO 16BIT PowerOffset;
@@ -14,7 +14,7 @@ PIDSPEEDCONFIGURATION MACHINE {
 
 # settings that override values given in PIDCONFIGURATION 
 	OPTION StoppingTime 300;  # 300ms stopping time
-	OPTION Kp 100000;
+	OPTION Kp 0;
 	OPTION Ki 0;
 	OPTION Kd 0;
 }
@@ -633,6 +633,33 @@ int poll_actions(void *scope) {
 					}
 			}
 			if (close_to_target) { halt(data, scope); new_power = 0; goto calculated_power; }
+
+
+			/* within a few tolerance steps of the stop position, constrain the set point
+				 we use the tolerance amount as out unit of measure here on the assumption 
+					that it is an indicator of the accuracy of the equipment we are using so
+					is a fair representation of the control we have. 
+				We arbitrarily decide that it's ok to limit speed within k tolerances
+			*/
+
+			/* in the filter before this we decided we were not 'close_to_target' but
+				  we change our mind now so that later filters can use that info if requied */
+			if ( dist_to_stop >= 0 && dist_to_stop < 5 * *data->fwd_tolerance) {
+				close_to_target = 1;
+				double tol = *data->fwd_tolerance;
+				if (tol == 0) tol = 1;
+				double maxspd = 50 +  (dist_to_stop / tol ) * 50;
+				if (set_point > maxspd) set_point = maxspd;
+			}
+			else if ( dist_to_stop <= 0 && dist_to_stop <= -5 * *data->rev_tolerance) {
+				close_to_target = 1;
+				double tol = *data->rev_tolerance;
+				if (tol == 0) tol = 1;
+				double maxspd = -50 +  (dist_to_stop / tol ) * 50;
+				if (set_point < maxspd) set_point = maxspd;
+			}
+			/* at this point the set_poin may bave been constrained due to proximity to the stop point*/
+			if (close_to_target && data->state == cs_prestart) data->state = new_state;
 		}
 
 
@@ -734,7 +761,7 @@ int poll_actions(void *scope) {
 		/* if we got here, we must be moving and we may be ramping up or down, controlling to a speed or 
 				seeking a position */
 
-		double ramp_down_ratio = 0.0;
+		double ramp_down_ratio = 1.0;
 		double ramp_up_ratio = 1.0;
 		long startup_time = (now_t - data->ramp_start_time + 500)/1000;
 
@@ -751,21 +778,41 @@ int poll_actions(void *scope) {
 			double stopping_time = (double) *data->stopping_time / 1000.0;
 			if (*data->stop_position >= *data->position && data->fwd_stopping_time) {
 				if (data->debug && *data->debug) printf("using forward stopping time\n");
-				stopping_time = *data->fwd_stopping_time / 1000.0;
+				stopping_time = ((double)*data->fwd_stopping_time) / 1000.0;
 			}
 			else if (*data->stop_position < *data->position && data->rev_stopping_time) {
 				if (data->debug && *data->debug) printf("using reverse stopping time\n");
-				stopping_time = *data->rev_stopping_time / 1000.0;
+				stopping_time = ((double)*data->rev_stopping_time) / 1000.0;
 			}
+				if (stopping_time < 0.05) stopping_time =  0.05;
+			printf("stopping time: %8.3lf\n", stopping_time);
 		
 			
+#if 1
+			/* calculate a ramp down ratio. later this will be used to modify the current set_point */
 			if (stopping_time > 0 && data->ramp_down_start) {
-				ramp_down_ratio = ( ((double)data->ramp_down_start - (double)now_t)/1000000.0 + stopping_time) / stopping_time;
+				ramp_down_ratio = ( ( (double)data->ramp_down_start - (double)now_t )/1000000.0 + stopping_time) / stopping_time;
+				if (ramp_down_ratio < 0.05) ramp_down_ratio = 0.05;
 			}
 			/* stopping distance at vel v with an even ramp is s=vt/2 */
 			double ramp_dist = fabs(*data->estimated_speed * stopping_time);
 			if (data->debug && *data->debug) 
-				printf("stopping_time: %8.3lf, ramp_dist: %8.3lf\n", stopping_time, ramp_dist);
+				printf("stopping_time: %8.3lf, ramp_dist: %8.3lf ramp_down: %8.3lf\n", stopping_time, ramp_dist, ramp_down_ratio);
+
+			/* we may not have calculated a ramp_down_ratio in which case it will have a value of 1 */
+			/* the double test here prevents us from recalculating the ramp_down_ratio unless
+				 it looks like we are stopping too fast
+			*/
+			if (labs(*data->stop_position - *data->position) < ramp_dist * ramp_down_ratio) {
+				if ( data->ramp_down_start == 0 && labs(*data->stop_position - *data->position) < ramp_dist) {
+					// start ramp down
+					data->ramp_down_start = now_t;
+					if (data->debug && *data->debug) 
+						printf("%s ramping down at %ld aiming for %ld over %5.3f\n", data->conveyor_name, 
+							*data->position, *data->stop_position, stopping_time);
+				}
+			}
+#else
 			if (labs(*data->stop_position - *data->position) < ramp_dist * ramp_down_ratio) {
 				if ( data->ramp_down_start == 0 && labs(*data->stop_position - *data->position) < ramp_dist) {
 					data->ramp_down_start = now_t;
@@ -781,9 +828,11 @@ int poll_actions(void *scope) {
 					if (scale <= 0.05) scale = 0.05;
 					if (scale > 1.0) scale = 1.0;
 					/* don't allow a zero set point */
+					printf("ramp down ratio %8.3lf scale %8.3lf\n", ramp_down_ratio, scale);
 					if (set_point * scale != 0.0) set_point *= scale; else set_point = sign(dist_to_stop);
 				}
 			}
+#endif
 			if (set_point != 0 && sign(set_point) != sign(dist_to_stop)) {
 				set_point = -set_point;
 				if (data->debug && *data->debug) printf("%s fixing direction: %5.3f\n", data->conveyor_name, set_point);
@@ -794,8 +843,10 @@ int poll_actions(void *scope) {
 					( sign(dist_to_stop) >= 0) ? "fwd" : "rev", ramp_down_ratio, dist_to_stop, set_point);
 		}
 		// if no ramp down was applied but we are within the ramp up time, apply the ramp up
-		if ( (ramp_down_ratio <= 0.0 || fabs(ramp_down_ratio) >= 1.0) && ramp_up_ratio <1.0)
-			set_point *= ramp_up_ratio;
+		if ( (ramp_down_ratio <= 0.0 || fabs(ramp_down_ratio) >= 1.0) && ramp_up_ratio <1.0) {
+			set_point = *data->set_point * ramp_up_ratio;
+			data->last_set_point = set_point; // don't let the set_point change detection get in the way
+		}
 
 	
 		if (data->state == cs_speed) {
@@ -822,17 +873,16 @@ int poll_actions(void *scope) {
 					}
 				}
 
-#if 0
+#if 1
 				//next_position = *data->stop_position;
 				if (ramp_down_ratio<0.05) {
 					next_position = *data->stop_position;
 					printf("adjust next_position to be the stop position\n");
 				}
-				else if (ramp_down_ratio <1.0) {
-					//if (data->debug && *data->debug) 
-					printf("adjusting positional error by %lf%%\n", ramp_down_ratio);
+				else if (ramp_down_ratio >=0 && ramp_down_ratio <1.0) {
+					if (data->debug && *data->debug) printf("adjusting positional error by %lf%%\n", ramp_down_ratio);
 					double ratio = ramp_down_ratio;
-					if (ratio<0.15) ratio = 0.15;
+					if (ratio<0.01) ratio = 0.01;
 					next_position = (next_position - data->last_position) * ramp_down_ratio;
 				}
 #endif
@@ -879,8 +929,8 @@ int poll_actions(void *scope) {
 			setIntValue(statistics_scope, "Vel", *data->estimated_speed);
 
 			// cap the total error to limit integrator windup effects
-			if (data->total_err > 2000) data->total_err = 2000;
-			else if (data->total_err < -2000) data->total_err = -2000;
+			if (data->total_err > 3000) data->total_err = 3000;
+			else if (data->total_err < -3000) data->total_err = -3000;
 
 			setIntValue(statistics_scope, "Err_i", data->total_err);
 
@@ -890,15 +940,21 @@ int poll_actions(void *scope) {
 			double de = (data->filtered_Ep - data->last_filtered_Ep) / dt; /*set_point - speed; (Ep - data->last_Ep); */
 			data->last_Ep = Ep;
 
+			if (de>6000) de = 6000.0; 
+			if (de<-6000) de = -6000;
+
 			setIntValue(statistics_scope, "Err_p", Ep);
 			setIntValue(statistics_scope, "Err_p", Ep);
 			setIntValue(statistics_scope, "Err_d", de);
 
 			double Dout = 0.0;
+#if 0
 			if ( next_position > *data->position && data->use_Kpidf) // forward
 				Dout = (int) (data->Kpf * Ep + data->Kif * data->total_err + data->Kdf * de);
 			else if (next_position < *data->position && data->use_Kpidr) // reverse
 				Dout = (int) (data->Kpr * Ep + data->Kir * data->total_err + data->Kdr * de);
+#endif
+			Dout = (int) (data->Kpr * Ep + data->Kir * data->total_err + data->Kdr * de);
 			//else  // at target position (at speed)
 			//	Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de);
 
