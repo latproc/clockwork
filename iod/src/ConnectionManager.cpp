@@ -323,9 +323,14 @@ bool SubscriptionManager::checkConnections() {
 			FileLogger fl(program_name); fl.f() << channel_name 
 				<< " state " << setupStatus() << " timer: " << timer << "\n"<<std::flush; 
 		}
-		if (timer>2000000 and setupStatus() == e_waiting_connect) {
+		if (timer>2000000 and (setupStatus() == e_waiting_connect || setupStatus() == e_disconnected) ) {
 			{FileLogger fl(program_name); fl.f() << channel_name << "attempting connect\n"; }
 			setSetupStatus(e_startup);
+			setupConnections();
+		}
+		if (timer>2000000 and setupStatus() == e_waiting_setup) {
+			{FileLogger fl(program_name); fl.f() << channel_name << "attempting connect\n"; }
+			setSetupStatus(e_waiting_connect);
 			setupConnections();
 		}
 	}
