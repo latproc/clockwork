@@ -313,8 +313,8 @@ static int channel_error_count = 0;
 
 bool SubscriptionManager::checkConnections() {
 	if (!isClient()) {
-		if (monit_subs.disconnected())
 /*
+		if (monit_subs.disconnected())
 			{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has no client connection\n"<<std::flush; }
 		else
 			{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has client connection\n"<<std::flush;}
@@ -339,6 +339,8 @@ bool SubscriptionManager::checkConnections() {
 		}
 	}
 	
+
+
 	if (monit_setup->disconnected() || monit_subs.disconnected() )
 	{
 		FileLogger fl(program_name); fl.f()
