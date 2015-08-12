@@ -33,10 +33,12 @@
 #include <sys/time.h>
 
 extern const char *program_name;
+class Internals;
 class FileLogger {
 public:
-  std::ofstream f;
-  FileLogger(const char *fname);
+	Internals *internals;
+	std::ostream &f();
+	FileLogger(const char *fname);
 
 	void getTimeString(char *buf, size_t buf_size);
 };

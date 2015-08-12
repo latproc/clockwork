@@ -48,17 +48,32 @@ Logger::Logger() : log_level(None), dummy_output(0), log_stream(&std::cout) {
 	Everything = LogState::instance()->insert(LogState::instance()->define("Everything"));
 }
 
-FileLogger::FileLogger(const char *fname){
-#if 0
+class Internals {
+public:
+	std::ostream *f;
+	std::ofstream &file() { return *(std::ofstream*)f; }
+	Internals() { f = new std::ofstream; }
+	~Internals() { delete f; }
+};
+
+FileLogger::FileLogger(const char *fname) : internals(0){
+	internals = new Internals;
+#if 1
     std::string n("/tmp/");
     n += fname;
     n + ".txt";
-    f.open (n,  std::ofstream::out | std::ofstream::app);
-#endif
+    internals->file().open (n,  std::ofstream::out | std::ofstream::app);
     char buf[40];
     getTimeString(buf, 40);
-    NB_MSG <<program_name << " " << buf << " " << std::flush;
+	internals->file()<<program_name << " " << buf << " " << std::flush;
+#else
+	internals->f = &std::cerr;
+#endif
   }
+
+std::ostream &FileLogger::f() { return internals->file(); }
+
+
 
 void FileLogger::getTimeString(char *buf, size_t buf_size) {
   struct timeval now_tv;

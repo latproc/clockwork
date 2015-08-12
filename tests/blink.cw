@@ -6,7 +6,7 @@
 Blinker MACHINE {
 
   on STATE;
-  off STATE;
+  off INITIAL;
 
   ENTER on { WAIT 1000; SEND turnOff TO SELF; }
   ENTER off { WAIT 1000; SEND turnOn TO SELF; }

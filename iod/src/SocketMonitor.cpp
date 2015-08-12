@@ -70,18 +70,21 @@ void SocketMonitor::operator()() {
         }
         catch (zmq::error_t io) {
             NB_MSG << "ZMQ error " << errno << ": "<< zmq_strerror(errno) << " in socket monitor\n";
-			if (errno == 88) exit(0);
+			if (errno == 88)
+				exit(0);
 				//if (errno != EAGAIN && errno != EINTR)
 				// monitoring a socket that has been removed. exit and rely on restart code (TBD)
 				//	exit(2);
 			++exception_count;
-			if (exception_count > 5) exit(EXIT_FAILURE);
+			if (exception_count > 5)
+				exit(EXIT_FAILURE);
 			usleep(100);
         }
         catch (std::exception ex) {
             NB_MSG << "unknown exception: " << ex.what() << " monitoring a socket\n";
 			++exception_count;
-			if (exception_count > 5) exit(EXIT_FAILURE);
+			if (exception_count > 5)
+				exit(EXIT_FAILURE);
 			usleep(100);
         }
     }

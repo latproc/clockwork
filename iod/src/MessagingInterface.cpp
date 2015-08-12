@@ -111,7 +111,9 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 		}
 		catch (zmq::error_t e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
-			if (--retries == 0) { exit(EXIT_FAILURE); }
+			if (--retries == 0) {
+				exit(EXIT_FAILURE);
+			}
 			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
 				if (block) continue;
 			}
@@ -136,7 +138,9 @@ void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
 		catch (zmq::error_t) {
 			if (zmq_errno() == EINTR) {
 				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
-				if (--retries == 0) { std::cerr << "exiting\n"; exit(EXIT_FAILURE); }
+				if (--retries == 0) {
+					std::cerr << "exiting\n"; exit(EXIT_FAILURE);
+				}
 				usleep(10);
 				continue;
 			} else {
