@@ -50,15 +50,16 @@ Logger::Logger() : log_level(None), dummy_output(0), log_stream(&std::cout) {
 
 class Internals {
 public:
+	bool allocated;
 	std::ostream *f;
 	std::ofstream &file() { return *(std::ofstream*)f; }
-	Internals() { f = new std::ofstream; }
-	~Internals() { delete f; }
+	Internals() { f = new std::ofstream; allocated = true;}
+	~Internals() { if (allocated) delete f; }
 };
 
 FileLogger::FileLogger(const char *fname) : internals(0){
 	internals = new Internals;
-#if 1
+#if 0
     std::string n("/tmp/");
     n += fname;
     n + ".txt";
@@ -68,6 +69,7 @@ FileLogger::FileLogger(const char *fname) : internals(0){
 	internals->file()<<program_name << " " << buf << " " << std::flush;
 #else
 	internals->f = &std::cerr;
+	internals->allocated = false;
 #endif
   }
 
