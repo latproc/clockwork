@@ -49,7 +49,8 @@ Logger::Logger() : log_level(None), dummy_output(0), log_stream(&std::cout) {
 }
 
 FileLogger::FileLogger(const char *fname){
-#if 0    std::string n("/tmp/");
+#if 0
+    std::string n("/tmp/");
     n += fname;
     n + ".txt";
     f.open (n,  std::ofstream::out | std::ofstream::app);
