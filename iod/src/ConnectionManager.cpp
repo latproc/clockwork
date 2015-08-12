@@ -245,6 +245,7 @@ void SubscriptionManager::configureSetupConnection(const char *host, int port) {
 	setup_port = port;
 }
     
+static char *setup_url = 0;
 bool SubscriptionManager::setupConnections() {
 	// setupStatus() == SubscriptionManager::e_disconnected)  ????
 	char url[100];
@@ -253,6 +254,7 @@ bool SubscriptionManager::setupConnections() {
 		current_channel = "";
 		try {
 			{FileLogger fl(program_name); fl.f() << "SubscriptionManager connecting to " << url << "\n"<<std::flush; }
+			setup_url = strdup(url);
 			setup().connect(url);
 		}
 		catch(zmq::error_t err) {
@@ -312,9 +314,11 @@ static int channel_error_count = 0;
 bool SubscriptionManager::checkConnections() {
 	if (!isClient()) {
 		if (monit_subs.disconnected())
+/*
 			{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has no client connection\n"<<std::flush; }
 		else
 			{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has client connection\n"<<std::flush;}
+*/
 		return !monit_subs.disconnected();
 	}
 	uint64_t timer = microsecs() - state_start;
@@ -363,7 +367,18 @@ bool SubscriptionManager::checkConnections() {
 			FileLogger fl(program_name); fl.f() 
 				<< channel_name 
 				<< "SubscriptionManager has no client or setup connection but setup status is " 
-				<< setupStatus() << "...exiting\n" << std::flush;
+				<< setupStatus() << "\n" << std::flush;
+			if (timer > 2000000) {
+				try {
+					if (!monit_setup->disconnected() )
+						setup().disconnect(setup_url);
+				}
+				catch (std::exception ex) {
+					FileLogger fl(program_name); fl.f() << channel_name << "exception "
+					<< zmq_strerror(zmq_errno()) <<" disconnecting\n";
+				}
+				setSetupStatus(e_startup);
+			}
 		}
 		usleep(50000);
 		return false;
