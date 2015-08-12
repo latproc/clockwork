@@ -48,6 +48,30 @@ Logger::Logger() : log_level(None), dummy_output(0), log_stream(&std::cout) {
 	Everything = LogState::instance()->insert(LogState::instance()->define("Everything"));
 }
 
+FileLogger::FileLogger(const char *fname){
+#if 0    std::string n("/tmp/");
+    n += fname;
+    n + ".txt";
+    f.open (n,  std::ofstream::out | std::ofstream::app);
+#endif
+    char buf[40];
+    getTimeString(buf, 40);
+    NB_MSG <<program_name << " " << buf << " " << std::flush;
+  }
+
+void FileLogger::getTimeString(char *buf, size_t buf_size) {
+  struct timeval now_tv;
+  gettimeofday(&now_tv,0);
+  struct tm now_tm;
+  localtime_r(&now_tv.tv_sec, &now_tm);
+  uint32_t msec = now_tv.tv_usec / 1000L;
+  snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%03d ",
+       now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
+       now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
+}
+
+
+
 void Logger::setLevel(std::string level_name){
     if(level_name=="None")setLevel(None);
     else if(level_name=="Important")setLevel(Important);
