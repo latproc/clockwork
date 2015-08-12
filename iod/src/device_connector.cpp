@@ -1031,14 +1031,14 @@ int main(int argc, const char * argv[])
 								++error_count;
                 if (zmq_errno()) {
                     std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
-										{ FileLogger fl(program_name); fl.f << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
+										{ FileLogger fl(program_name); fl.f() << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
 								}
                 else {
                     std::cerr << "exception when checking connections: " << e.what() << "\n";
-										{ FileLogger fl(program_name); fl.f << "exception when checking connections: " << e.what() <<"\n"<<std::flush; }
+										{ FileLogger fl(program_name); fl.f() << "exception when checking connections: " << e.what() <<"\n"<<std::flush; }
 								}
 								if (error_count > 10) {
-									FileLogger fl(program_name); fl.f << " too many errors. exiting."<<std::flush; sleep(2); exit(0);
+									FileLogger fl(program_name); fl.f() << " too many errors. exiting."<<std::flush; sleep(2); exit(0);
 								}
             }
 
