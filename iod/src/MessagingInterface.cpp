@@ -467,23 +467,36 @@ char *MessagingInterface::send(const char *txt) {
     // It seems unlikely the conditions will have changed between attempts.
 	zmq::message_t msg(len);
 	strncpy ((char *) msg.data(), txt, len);
+	enum { e_send, e_recover } send_state = e_send;
     while (true) {
         try {
+					if (send_state == e_send) {
             socket->send(msg);
             break;
+					}
+					else {
+						zmq::message_t m;
+						socket->recv(&m, ZMQ_DONTWAIT);
+						send_state = e_send
+				continue;
+					}
         }
         catch (std::exception e) {
 			if (errno == EINTR || errno == EAGAIN) {
 				std::cerr << "MessagingInterface::send " << strerror(errno);
 				continue;
 			}
-            if (zmq_errno())
-                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-            else
-                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
-            socket->disconnect(url.c_str());
-            usleep(50000);
-            connect();
+			if (zmq_errno() == EFSM) {
+				send_state = e_recover;
+				continue;
+			}
+			if (zmq_errno())
+				std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+			else
+				std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
+			socket->disconnect(url.c_str());
+			usleep(50000);
+			connect();
         }
     }
     if (!is_publisher) {
