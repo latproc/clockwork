@@ -187,10 +187,11 @@ sendMessage_transmit:
 				continue;
 			}
 			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
-			std::cerr<< "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
 			if (errno == EFSM) {
 				// attempt to recover from an FSM error
+				NB_MSG << "Finite state machine error\n";
 				fsm_recovery = true;
+				exit(2);
 			}
 			char buf[100];
 			snprintf(buf, 100, "Error %s sending message", zmq_strerror(zmq_errno()));
@@ -397,18 +398,21 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
 
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ || protocol == eCHANNEL) {
-        assert( pthread_equal(owner_thread, pthread_self()) );
-	    socket->connect(url.c_str());
-	    int linger = 0;
-	    socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
+		if (pthread_equal(owner_thread, pthread_self())) {
+			FileLogger fl(program_name); fl.f() << hostname<<":"<<port 
+				<<" socket connect being called from a thread that isn't the owner\n";
+		}
+		socket->connect(url.c_str());
+		int linger = 0;
+		socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
 	}
 	else {
 		char error[ANET_ERR_LEN];
-    	connection = anetTcpConnect(error, hostname.c_str(), port);
-    	if (connection == -1) {
-        	MessageLog::instance()->add(error);
-    	    std::cerr << error << "\n";
-    	}
+		connection = anetTcpConnect(error, hostname.c_str(), port);
+		if (connection == -1) {
+			MessageLog::instance()->add(error);
+			std::cerr << error << "\n";
+		}
 	}
 }
 
@@ -497,17 +501,23 @@ char *MessagingInterface::send(const char *txt) {
                         std::cerr << url << ": " << data << "\n";
                         return data;
                     }
+										else {
+											usleep(100);
+											continue;
+										}
                 }
                 else if (items[0].revents & ZMQ_POLLERR) {
                     std::cerr << "MessagingInterface::send: error during recv\n";
                     continue;
                 }
                 std::cerr << "timeout: abandoning message " << txt << "\n";
+#if 0
                 socket->disconnect(url.c_str());
                 delete socket;
                 socket = new zmq::socket_t(*getContext(), ZMQ_REQ);
                 usleep(50000);
                 connect();
+#endif
                 break;
             }
             catch (std::exception e) {

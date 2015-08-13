@@ -67,6 +67,7 @@
 extern bool program_done;
 extern bool machine_is_ready;
 extern Statistics *statistics;
+extern uint64_t client_watchdog_timer;
 
 #if 0
 
@@ -466,6 +467,10 @@ void ProcessingThread::operator()()
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
+
+			if ( client_watchdog_timer && labs(curr_t - client_watchdog_timer) > 125) {
+//				NB_MSG << "####################### WATCHDOG######################" << labs(curr_t - client_watchdog_timer) << "\n"<<std::flush;
+			}
 			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
 			//	<< " waiting: " << systems_waiting << "\n";
