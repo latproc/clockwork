@@ -1071,13 +1071,15 @@ int main(int argc, const char * argv[])
 			}
 			else if (cmd == "STARTUP")
 			{
-#if 1
+#if 0
 				active_addresses.clear();
 				initialised_address.clear();
 				exit(0);
 				break;
 #else
-				char *initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
+				active_addresses.clear();
+				initialised_address.clear();
+				char *initial_settings = g_iodcmd->send("MODBUS REFRESH");
 				loadData(initial_settings);
 				free(initial_settings);
 #endif
