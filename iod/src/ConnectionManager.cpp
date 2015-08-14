@@ -254,6 +254,7 @@ bool SubscriptionManager::setupConnections() {
 		current_channel = "";
 		try {
 			{FileLogger fl(program_name); fl.f() << "SubscriptionManager connecting to " << url << "\n"<<std::flush; }
+			if (setup_url) free(setup_url);
 			setup_url = strdup(url);
 			setup().connect(url);
 		}
@@ -482,12 +483,12 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			// of the channel.
 			if (isClient() && monit_setup && !monit_setup->disconnected()) {
 				if (protocol != eCHANNEL) {
-					//{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
+					{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
 					setup().send(buf,msglen);
 					run_status = e_waiting_response;
 				}
 				else {
-					//{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
+					{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
 					DBG_CHANNELS << " forwarding message to subscriber\n";
 					subscriber().send(buf, msglen);
 					safeSend(cmd, "sent", 4);
