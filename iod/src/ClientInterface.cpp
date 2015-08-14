@@ -38,8 +38,12 @@
 #include "MessageEncoding.h"
 #include <pthread.h>
 #include "MessageLog.h"
+#include "watchdog.h"
+
 
 extern bool machine_is_ready;
+static Watchdog *wd;
+
 IODCommandThread *IODCommandThread::instance_;
 
 IODCommandThread *IODCommandThread::instance() {
@@ -140,12 +144,17 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 
 IODCommand *IODCommandThread::getCommand() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
+	wd = new Watchdog("Client Interface Watchdog", 500, false);
+	wd->start();
 	boost::mutex::scoped_lock(cti->data_mutex);
-
-	if (pending_commands.empty()) return 0;
+	if (pending_commands.empty()) {
+		wd->stop();
+		return 0;
+	}
 	
 	IODCommand *cmd = pending_commands.front();
 	pending_commands.pop_front();
+	wd->stop();
 	return cmd;
 }
 
@@ -322,6 +331,7 @@ void IODCommandThread::operator()() {
     pthread_setname_np(pthread_self(), "iod command interface");
 #endif
 
+	wd = new Watchdog("Command Thread Watchdog", 600);
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
@@ -386,11 +396,13 @@ void IODCommandThread::operator()() {
 							cmdres = "NULL";
 						}
 						NB_MSG << "Client interface sending response: " << cmdres << "\n";
-						sendMessage(cti->socket, cmdres);
+						safeSend(cti->socket, cmdres, strlen(cmdres));
+						//sendMessage(cti->socket, cmdres, strlen(cmdres));
 					}
 					else {
 						NB_MSG << "Client interface saw command error: " << command->error() << "\n";
-						sendMessage(cti->socket, command->error());
+						safeSend(cti->socket, command->error(), strlen(command->error()));
+						//sendMessage(cti->socket, command->error());
 					}
 					delete command;
 					command = getCompletedCommand();
@@ -399,16 +411,21 @@ void IODCommandThread::operator()() {
 				NB_MSG << "Client Interface e_responding->e_running\n";
             }
 			if (status == e_running) {
+				wd->stop();
                 zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int rc = zmq::poll( &items[0], 1, 500);
                 if (!rc) continue;
                 if (done) break;
                 if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
 
+				wd->start();
+
                 zmq::message_t request;
                 if (!cti->socket.recv (&request)) continue; // interrupted system call
                 if (!machine_is_ready) {
-                    sendMessage(cti->socket, "Ignored during startup");
+					const char *tosend = "Ignored during startup";
+					safeSend(cti->socket, tosend, strlen(tosend));
+					//sendMessage(cti->socket, "Ignored during startup");
                     continue;
                 }
                 size_t size = request.size();
@@ -418,7 +435,8 @@ void IODCommandThread::operator()() {
 NB_MSG << "Client interface received:" << data << "\n";
 				IODCommand *command = parseCommandString(data);
 				if (command == 0) {
-					sendMessage(cti->socket, "Empty message received\n");
+					const char *tosend = "Empty message received\n";
+					safeSend(cti->socket, tosend, strlen(tosend));
 					goto cleanup;
 				}
                 status = e_wait_processing_start;
@@ -433,8 +451,12 @@ NB_MSG << "Client interface received:" << data << "\n";
             // when processing is stopped, we expect to get an exception on this interface
             // otherwise, we fail since something strange has happened
             if (!done) {
-							{FileLogger fl(program_name); fl.f() << "zmq message: " << zmq_strerror(zmq_errno()) << "\n" << std::flush; }
-								if (errno) { NB_MSG << "error during client communication: " << strerror(errno) << "\n" << std::flush; }
+				{FileLogger fl(program_name); fl.f()
+					<< "zmq error: " << zmq_strerror(zmq_errno()) << "\n" << std::flush;
+				}
+				if (errno) {
+					NB_MSG << "error during client communication: " << strerror(errno) << "\n" << std::flush;
+				}
                 if (zmq_errno())
                     std::cerr << "zmq message: " << zmq_strerror(zmq_errno()) << "\n" << std::flush;
                 else

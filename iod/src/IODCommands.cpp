@@ -1281,6 +1281,15 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
         return false;
     }
 
+// This command is only here for testing recovery code
+
+bool IODCommandFreeze::run(std::vector<Value> &params) {
+	while (true) {
+		usleep(10000);
+	}
+}
+
+/*
 void sendMessage(zmq::socket_t &socket, const char *message) {
     const char *msg = (message) ? message : "";
     size_t len = strlen(msg);
@@ -1297,4 +1306,7 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
         }
     }
 }
+ */
+
+
 

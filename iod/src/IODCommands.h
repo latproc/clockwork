@@ -29,7 +29,7 @@
 #include <map>
 #include "value.h"
 
-void sendMessage(zmq::socket_t &socket, const char *message);
+//void sendMessage(zmq::socket_t &socket, const char *message);
 
 extern std::map<std::string, std::string> message_handlers;
 
@@ -169,6 +169,11 @@ struct IODCommandNotice : public IODCommand {
 struct IODCommandFind : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
+
+struct IODCommandFreeze : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 
 
 #endif

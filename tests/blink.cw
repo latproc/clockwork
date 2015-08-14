@@ -33,3 +33,23 @@ a AltBlinker(delay:200);
 b AltBlinker(delay:400);
 c AltBlinker(delay:600);
 
+PINGGENERATOR MACHINE {
+  OPTION DELAY 0;
+  on WHEN SELF IS off AND TIMER >= 1000 || SELF IS on AND TIMER < 1000;
+  off DEFAULT;
+  ENTER INIT { WAIT delay; }
+}
+
+PING MACHINE Slave {
+  OPTION StartDelay 0;
+  OPTION OnTime 1000;
+  OPTION OffTime 1000;
+  on WHEN SELF IS off AND TIMER >= OffTime || SELF IS on AND TIMER < OnTime;
+  off DEFAULT;
+  ENTER on { SET Slave TO on; }
+  ENTER off { SET Slave TO off; }
+  ENTER INIT { WAIT StartDelay; }
+}
+
+ping PINGGENERATOR;
+

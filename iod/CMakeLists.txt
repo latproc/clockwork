@@ -43,6 +43,7 @@ set(HEADER_FILES
     ${CLOCKWORK_DIR}/value.h
     ${CLOCKWORK_DIR}/symboltable.h
     ${CLOCKWORK_DIR}/rate.h
+	${CLOCKWORK_DIR}/watchdog.h
     ${CLOCKWORK_DIR}/Message.h
     )
 
@@ -62,6 +63,7 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/symboltable.cpp
     ${CLOCKWORK_DIR}/rate.cpp
     ${CLOCKWORK_DIR}/Message.cpp 
+	${CLOCKWORK_DIR}/watchdog.cpp
 	${HEADER_FILES}
 )
 

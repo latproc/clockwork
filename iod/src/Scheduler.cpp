@@ -29,9 +29,11 @@
 #include <zmq.hpp>
 #include <boost/thread/mutex.hpp>
 #include <assert.h>
+#include "watchdog.h"
 
 Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000L;
+static Watchdog *wd = 0;
 
 static void setTime(struct timeval &now, long delta) {
 	gettimeofday(&now, 0);
@@ -171,6 +173,7 @@ std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
 }
 
 Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PULL), update_notify(0), next_delay_time(0), notification_sent(0) {
+	wd = new Watchdog("Scheduler", 100, false);
 	update_sync.bind("inproc://sch_items");
 	next_time.tv_sec = 0;
 	next_time.tv_usec = 0;
@@ -206,7 +209,9 @@ void Scheduler::add(ScheduledItem*item) {
 			update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
 			update_notify->connect("inproc://sch_items");
 		}
+		wd->start();
 		while (true) {
+			wd->poll();
 			try {
 				safeSend(*update_notify,"poke",4);
 				notification_sent = nowMicrosecs();
@@ -221,9 +226,11 @@ void Scheduler::add(ScheduledItem*item) {
 				MessageLog::instance()->add(errmsg);
 				delete update_notify;
 				update_notify = 0;
+				wd->stop();
 				throw;
 			} 
 		}
+		wd->stop();
 	}
 	else {
 		long wait_duration = nowMicrosecs() - last_notification;
@@ -293,6 +300,7 @@ void Scheduler::idle() {
 	while (state != e_aborted) {
 		next_delay_time = getNextDelay();
 		if (!ready() && state == e_waiting) {
+			wd->stop();
 #if 0
 			if (items.empty()) {
 				DBG_SCHEDULER << "scheduler waiting for work " 
@@ -325,6 +333,9 @@ void Scheduler::idle() {
 		}
 		is_ready = ready();
 		if (!is_ready && state == e_waiting) continue;
+
+		wd->start();
+
 		if ( state == e_waiting && is_ready) {
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
 			safeSend(sync,"sched", 5); // tell clockwork we have something to do
@@ -375,5 +386,6 @@ void Scheduler::idle() {
 			
 		}
 	}
+	wd->stop();
 }
 
