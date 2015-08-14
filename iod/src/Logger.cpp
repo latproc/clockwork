@@ -54,19 +54,19 @@ public:
 	std::ostream *f;
 	std::ofstream &file() { return *(std::ofstream*)f; }
 	Internals() { f = new std::ofstream; allocated = true;}
-	~Internals() { if (allocated) delete f; }
+	~Internals() { *f << std::flush; if (allocated) delete f; }
 };
 
 FileLogger::FileLogger(const char *fname) : internals(0){
 	internals = new Internals;
-#if 0
+#if 1
     std::string n("/tmp/");
     n += fname;
     n + ".txt";
     internals->file().open (n,  std::ofstream::out | std::ofstream::app);
     char buf[40];
     getTimeString(buf, 40);
-	internals->file()<<program_name << " " << buf << " " << std::flush;
+	internals->file()<<program_name << " " << buf << " ";
 #else
 	internals->f = &std::cerr;
 	internals->allocated = false;

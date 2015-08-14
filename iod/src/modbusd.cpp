@@ -553,8 +553,8 @@ struct ModbusServerThread
 							{
 								std::string cmd = *iter++;
 								std::string response;
-								uint64_t cmd_timeout = 250;
-								if (!sendMessage(cmd.c_str(), *cmd_interface, response, 150) ) {
+								uint64_t cmd_timeout = 2000000;
+								if (!sendMessage(cmd.c_str(), *cmd_interface, response, cmd_timeout) ) {
 									std::cerr << "Message send of " << cmd << " failed\n";
 								}
 								//char *res = sendIODMessage(cmd);
@@ -568,7 +568,7 @@ struct ModbusServerThread
 							{
 								std::string cmd( getIODSyncCommand(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0) );
 								std::string response;
-								uint64_t cmd_timeout = 250;
+								uint64_t cmd_timeout = 250000;
 								if (!sendMessage(cmd.c_str(), *cmd_interface, response, cmd_timeout)) {
 									std::cerr << "Message send of " << cmd << " failed\n";
 								}
@@ -996,9 +996,16 @@ int main(int argc, const char * argv[])
 
 				exception_count = 0;
 			}
+			catch (zmq::error_t zex) {
+					++error_count;
+					{FileLogger fl(program_name); fl.f() << " exception " << zmq_errno()  << " "
+						<< zmq_strerror(zmq_errno()) << " polling connections\n"; }
+				if (++exception_count <= 5 && program_state != s_finished) { usleep(2000); continue; }
+				assert(false);
+			}
 			catch (std::exception ex) {
 				std::cout << "polling connections: " << ex.what() << "\n";
-				if (++exception_count <= 5 && program_state != s_finished) { usleep(400000); continue; }
+				if (++exception_count <= 5 && program_state != s_finished) { usleep(2000); continue; }
 				exit(0);
 			}
 			if (need_refresh) {
@@ -1071,9 +1078,15 @@ int main(int argc, const char * argv[])
 			}
 			else if (cmd == "STARTUP")
 			{
-#if 0
+#if 1
+				{FileLogger fl(program_name); fl.f() << " iod startup detected. restarting to reload modbus\n"; }
+				try {
 				active_addresses.clear();
 				initialised_address.clear();
+				}
+				catch (std::exception ex) {
+					{FileLogger fl(program_name); fl.f() << "exception during restart " << ex.what() << "\n";  }
+				}
 				exit(0);
 				break;
 #else
@@ -1083,6 +1096,7 @@ int main(int argc, const char * argv[])
 				loadData(initial_settings);
 				free(initial_settings);
 #endif
+
 			}
 			else if (cmd == "DEBUG")
 			{

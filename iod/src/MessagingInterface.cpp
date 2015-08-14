@@ -187,10 +187,11 @@ sendMessage_transmit:
 				continue;
 			}
 			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
-			std::cerr<< "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
 			if (errno == EFSM) {
 				// attempt to recover from an FSM error
+				NB_MSG << "Finite state machine error\n";
 				fsm_recovery = true;
+				exit(2);
 			}
 			char buf[100];
 			snprintf(buf, 100, "Error %s sending message", zmq_strerror(zmq_errno()));
@@ -397,18 +398,21 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
 
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ || protocol == eCHANNEL) {
-        assert( pthread_equal(owner_thread, pthread_self()) );
-	    socket->connect(url.c_str());
-	    int linger = 0;
-	    socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
+		if (pthread_equal(owner_thread, pthread_self())) {
+			FileLogger fl(program_name); fl.f() << hostname<<":"<<port 
+				<<" socket connect being called from a thread that isn't the owner\n";
+		}
+		socket->connect(url.c_str());
+		int linger = 0;
+		socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
 	}
 	else {
 		char error[ANET_ERR_LEN];
-    	connection = anetTcpConnect(error, hostname.c_str(), port);
-    	if (connection == -1) {
-        	MessageLog::instance()->add(error);
-    	    std::cerr << error << "\n";
-    	}
+		connection = anetTcpConnect(error, hostname.c_str(), port);
+		if (connection == -1) {
+			MessageLog::instance()->add(error);
+			std::cerr << error << "\n";
+		}
 	}
 }
 
@@ -461,32 +465,61 @@ char *MessagingInterface::send(const char *txt) {
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
-	zmq::message_t msg(len);
-	strncpy ((char *) msg.data(), txt, len);
+    zmq::message_t msg(len);
+    strncpy ((char *) msg.data(), txt, len);
+    int fsm_retries = 1;
+    int retries = 3;
+    enum { e_send, e_recover } send_state = e_send;
     while (true) {
-        try {
-            socket->send(msg);
-            break;
-        }
-        catch (std::exception e) {
-			if (errno == EINTR || errno == EAGAIN) {
-				std::cerr << "MessagingInterface::send " << strerror(errno);
-				continue;
-			}
-            if (zmq_errno())
-                std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
-            else
-                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
-            socket->disconnect(url.c_str());
-            usleep(50000);
-            connect();
-        }
+	    try {
+		    if (send_state == e_send) {
+			    socket->send(msg);
+			    break;
+		    }
+		    else {
+			    zmq::message_t m;
+			    socket->recv(&m, ZMQ_DONTWAIT);
+			    send_state = e_send;
+			    continue;
+		    }
+	    }
+	    catch (std::exception e) {
+		    if (errno == EINTR || errno == EAGAIN) {
+			    std::cerr << "MessagingInterface::send " << strerror(errno);
+			    if (--retries <= 0) {
+				    FileLogger fl(program_name); fl.f() << "MessagingInterface::send aborting after too many errors\n";
+				    exit(2);
+			    }
+			    continue;
+		    }
+		    if (zmq_errno() == EFSM) {
+			    if (--fsm_retries <= 0) {
+				    FileLogger fl(program_name); fl.f() << "MessagingInterface::send aborting due to failed EFSM recovery\n";
+				    exit(2);
+			    }
+			    send_state = e_recover;
+			    continue;
+		    }
+		    if (zmq_errno()) {
+			    FileLogger fl(program_name); fl.f() 
+				    << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
+		    }
+		    else {
+			    FileLogger fl(program_name); fl.f() 
+				    << "Exception when sending " << url << ": " << e.what() << "\n";
+		    }
+		    /*			socket->disconnect(url.c_str());
+					usleep(50000);
+					connect();
+		     */
+		    exit(2);
+	    }
     }
     if (!is_publisher) {
         while (true) {
             try {
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-                zmq::poll( &items[0], 1, 500);
+                int n = zmq::poll( &items[0], 1, 500);
                 if (items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
                     if (socket->recv(&reply)) {
@@ -497,17 +530,24 @@ char *MessagingInterface::send(const char *txt) {
                         std::cerr << url << ": " << data << "\n";
                         return data;
                     }
+										else {
+											usleep(100);
+											continue;
+										}
                 }
                 else if (items[0].revents & ZMQ_POLLERR) {
                     std::cerr << "MessagingInterface::send: error during recv\n";
                     continue;
                 }
-                std::cerr << "timeout: abandoning message " << txt << "\n";
+								continue;
+                //std::cerr << "timeout: abandoning message " << txt << "\n";
+#if 0
                 socket->disconnect(url.c_str());
                 delete socket;
                 socket = new zmq::socket_t(*getContext(), ZMQ_REQ);
                 usleep(50000);
                 connect();
+#endif
                 break;
             }
             catch (std::exception e) {

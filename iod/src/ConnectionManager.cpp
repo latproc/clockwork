@@ -254,6 +254,7 @@ bool SubscriptionManager::setupConnections() {
 		current_channel = "";
 		try {
 			{FileLogger fl(program_name); fl.f() << "SubscriptionManager connecting to " << url << "\n"<<std::flush; }
+			if (setup_url) free(setup_url);
 			setup_url = strdup(url);
 			setup().connect(url);
 		}

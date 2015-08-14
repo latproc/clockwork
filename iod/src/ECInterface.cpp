@@ -887,7 +887,7 @@ char *collectSlaveConfig(bool reconfigure)
 
 	/* save a description of the bus configuration */
 	std::ofstream logfile;
-	logfile.open("ecat.log", std::ofstream::out /* | std::ofstream::app */);
+	logfile.open("/tmp/ecat.log", std::ofstream::out /* | std::ofstream::app */);
 	logfile << res << "\n";
     logfile.close();
 
