@@ -1078,16 +1078,26 @@ int main(int argc, const char * argv[])
 			}
 			else if (cmd == "STARTUP")
 			{
+				
+				{FileLogger fl(program_name); fl.f() << " iod startup detected. restarting to reload modbus\n"; }
 #if 1
+				try {
 				active_addresses.clear();
 				initialised_address.clear();
+				}
+				catch (std::exception ex) {
+					{FileLogger fl(program_name); fl.f() << "exception during restart " << ex.what() << "\n";  }
+				}
 				exit(0);
 				break;
 #else
-				char *initial_settings = g_iodcmd->sendMessage("MODBUS REFRESH");
+				active_addresses.clear();
+				initialised_address.clear();
+				char *initial_settings = g_iodcmd->send("MODBUS REFRESH");
 				loadData(initial_settings);
 				free(initial_settings);
 #endif
+
 			}
 			else if (cmd == "DEBUG")
 			{
