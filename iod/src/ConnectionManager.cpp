@@ -358,7 +358,7 @@ bool SubscriptionManager::checkConnections() {
 	if (monit_setup->disconnected() && monit_subs.disconnected()) {
 		if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
 			{FileLogger fl(program_name);
-				fl.f() << channel_name << "SubscriptionManager checkConnections() attempting to setup connection "
+				fl.f() << channel_name << "SubscriptionManager: checkConnections() attempting to setup connection "
 					<< " setup status is " << setupStatus() << "\n" << std::flush; }
 			if (setupStatus() == e_done || setupStatus() == e_settingup_subscriber) setSetupStatus(e_waiting_connect);
 			//setSetupStatus(e_startup);
@@ -368,9 +368,9 @@ bool SubscriptionManager::checkConnections() {
 		{
 			FileLogger fl(program_name); fl.f() 
 				<< channel_name 
-				<< "SubscriptionManager has no client or setup connection but setup status is " 
+				<< "SubscriptionManager: has no client or setup connection but setup status is "
 				<< setupStatus() << "\n" << std::flush;
-			if (timer > 2000000) {
+			if (timer > 1000000) {
 				try {
 					if (!monit_setup->disconnected() )
 						setup().disconnect(setup_url);
@@ -380,13 +380,14 @@ bool SubscriptionManager::checkConnections() {
 					<< zmq_strerror(zmq_errno()) <<" disconnecting\n";
 				}
 				setSetupStatus(e_startup);
+				setupConnections();
 			}
 		}
 		usleep(50000);
 		return false;
 	}
 	if (setupStatus() == e_disconnected) {
-		{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager clockwork connection has broken..\n"; }
+		{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager: clockwork connection has broken..\n"; }
 		setupConnections();
 		usleep(50000);
 		return false;
@@ -394,7 +395,7 @@ bool SubscriptionManager::checkConnections() {
     else if ( !monit_setup->disconnected() && monit_subs.disconnected() ) {
         // no subscriber
 		{FileLogger fl(program_name); fl.f() << channel_name
-					<< "SubscriptionManager subscriber is not connected clockwork connection state: "
+					<< "SubscriptionManager: subscriber is not connected clockwork connection state: "
 					<< setupStatus() << "\n"; }
 		if (setupStatus() == e_done) {
 			{FileLogger fl(program_name); fl.f() << "Too many errors: exiting\n"; }
