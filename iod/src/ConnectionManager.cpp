@@ -187,6 +187,7 @@ bool SubscriptionManager::requestChannel() {
 					{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 						<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
 					if (zmq_errno() == 156384763 /*EFSM*/) { 
+						exit(61);
 						{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
 						zmq::message_t m; setup().recv(&m); 
 						{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
