@@ -334,8 +334,6 @@ void Scheduler::idle() {
 		is_ready = ready();
 		if (!is_ready && state == e_waiting) continue;
 
-		wd->start();
-
 		if ( state == e_waiting && is_ready) {
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
 			safeSend(sync,"sched", 5); // tell clockwork we have something to do
@@ -350,6 +348,7 @@ void Scheduler::idle() {
 		int items_found = 0;
 		is_ready = ready();
 		while ( state == e_running && is_ready) {
+			wd->poll();
 			ScheduledItem *item = 0;
 			{
 				boost::mutex::scoped_lock(q_mutex);
@@ -369,6 +368,7 @@ void Scheduler::idle() {
 			else if (item->action) {
 				DBG_SCHEDULER << " pushing action to  " << item->action->getOwner()->getName() << "\n";
 				item->action->getOwner()->push(item->action);
+				item->action->getOwner()->setNeedsCheck();
 				delete item;
 				++items_found;
 			}
@@ -383,9 +383,8 @@ void Scheduler::idle() {
 			while (!safeRecv(sync, buf, 10, true, response_len, 100)) usleep(10); // wait for ack from clockwork
 			if (next() == 0) { DBG_SCHEDULER << "no more scheduled items\n"; }
 			state = e_waiting;
-			
+			wd->stop();
 		}
 	}
-	wd->stop();
 }
 

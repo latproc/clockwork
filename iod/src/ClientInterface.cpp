@@ -147,16 +147,13 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 IODCommand *IODCommandThread::getCommand() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 	wd = new Watchdog("Client Interface Watchdog", 500, false);
-	wd->start();
 	boost::mutex::scoped_lock(cti->data_mutex);
 	if (pending_commands.empty()) {
-		wd->stop();
 		return 0;
 	}
 	
 	IODCommand *cmd = pending_commands.front();
 	pending_commands.pop_front();
-	wd->stop();
 	return cmd;
 }
 
@@ -333,7 +330,7 @@ void IODCommandThread::operator()() {
     pthread_setname_np(pthread_self(), "iod command interface");
 #endif
 
-	wd = new Watchdog("Command Thread Watchdog", 600);
+	wd = new Watchdog("Command Thread Watchdog", 600, false);
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
@@ -355,41 +352,55 @@ void IODCommandThread::operator()() {
     while (!done) {
         try {
             if (status == e_wait_processing_start) {
-				//NB_MSG << "e_wait_processing_start\n";
-				access_req.send("access", 6);
-				// wait while processing occurs
-				status = e_wait_processing;
-				//NB_MSG << "Client Interface e_wait_processing_start->e_wait_processing\n";
+				{FileLogger fl(program_name); fl.f() << "e_wait_processing_start: sending access request to main threa\n"; }
+				try {
+					access_req.send("access", 6);
+					status = e_wait_processing;
+					// wait while processing occurs
+					NB_MSG << "Client Interface e_wait_processing_start->e_wait_processing\n";
+				} catch (zmq::error_t zex) {
+					{FileLogger fl(program_name); fl.f() << "error attempting to send access request\n";}
+				}
 			}
 			if (status == e_wait_processing) {
-/*
- processing thread will call: (*command)(params) for all pending commands
- */
+				/*
+				 processing thread will call: (*command)(params) for all pending commands
+				 */
+				{FileLogger fl(program_name); fl.f() << "e_wait_processing: waiting for response from main thread\n"; }
 				size_t acc_len = 0;
 				char acc_buf[10];
 				if (safeRecv(access_req, acc_buf, 10, true, acc_len, -1)) {
                 	status = e_responding;
-					//NB_MSG << "Client Interface e_wait_processing->e_responding\n";
+				NB_MSG << "Client Interface e_wait_processing->e_responding\n";
+				{FileLogger fl(program_name); fl.f() << "e_wait_processing: got response "
+					<< " from main thread\n"; }
 				}
             }
             if (status == e_responding) {
 				// let the processing thread continue straight away
+
+				{FileLogger fl(program_name); fl.f() << "sending access requeset to main thread\n"; }
+
 				access_req.send("done", 4);
 				// wait for an acknowledgement so the access request is back in the correct state
+				{FileLogger fl(program_name); fl.f() << "sent access request to main thread\n"; }
 				{
 					size_t acc_len = 0;
 					char acc_buf[10];
 					safeRecv(access_req, acc_buf, 10, true, acc_len);
 				}
+				{FileLogger fl(program_name); fl.f() << "received main thread ack\n"; }
 
 				CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 				boost::mutex::scoped_lock(cti->data_mutex);
 				IODCommand *command = getCompletedCommand();
 				while (command) {
-					assert(command->done != IODCommand::Unassigned);
+					if (command->done != IODCommand::Unassigned)
+						{FileLogger fl(program_name); fl.f() << "ERROR: command->done != IODCommand::Unassigned\n"; }
 					if (command->done == IODCommand::Success) {
 						const char * cmdres = command->result();
-						//NB_MSG << "Client Interface command generated response: " << cmdres << "\n";
+						{FileLogger fl(program_name); fl.f()
+							<< "Client Interface command generated response: " << cmdres << "\n"; }
 						if (!(*cmdres)) {
 							char buf[100];
 							snprintf(buf, 100, "command generated an empty response");
@@ -397,43 +408,52 @@ void IODCommandThread::operator()() {
 							//NB_MSG << buf << "\n";
 							cmdres = "NULL";
 						}
-						NB_MSG << "Client interface sending response: " << cmdres << "\n";
+						{FileLogger fl(program_name); fl.f()
+							<< "Client interface sending response: " << cmdres << "\n"; }
 						safeSend(cti->socket, cmdres, strlen(cmdres));
-						//sendMessage(cti->socket, cmdres, strlen(cmdres));
 					}
 					else {
-						NB_MSG << "Client interface saw command error: " << command->error() << "\n";
+						{FileLogger fl(program_name); fl.f()
+							<< "Client interface saw command error: " << command->error() << "\n"; }
 						safeSend(cti->socket, command->error(), strlen(command->error()));
-						//sendMessage(cti->socket, command->error());
 					}
 					delete command;
+
 					command = getCompletedCommand();
 				}
 				status = e_running;
-				//NB_MSG << "Client Interface e_responding->e_running\n";
+				{FileLogger fl(program_name); fl.f() << "Client Interface e_responding->e_running\n"; }
             }
 			if (status == e_running) {
+				{FileLogger fl(program_name); fl.f() << "Client Interface waiting for work\n"; }
 				wd->stop();
                 zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-                int rc = zmq::poll( &items[0], 1, 500);
-                if (!rc) continue;
-                if (done) break;
-                if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
-
+				int rc;
+				try {
+                	rc = zmq::poll( &items[0], 1, 500);
+					if (!rc) continue;
+					if (done) break;
+					if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
+				}
+				catch (zmq::error_t zex) {
+					{FileLogger fl(program_name); fl.f() << "Client Interface exception during poll()\n"; }
+					usleep(100);
+					continue;
+				}
 				wd->start();
+
                 zmq::message_t request;
                 if (!cti->socket.recv (&request)) continue; // interrupted system call
                 if (!machine_is_ready) {
 					const char *tosend = "Ignored during startup";
 					safeSend(cti->socket, tosend, strlen(tosend));
-					//sendMessage(cti->socket, "Ignored during startup");
                     continue;
                 }
                 size_t size = request.size();
                 char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
                 memcpy(data, request.data(), size);
                 data[size] = 0;
-//NB_MSG << "Client interface received:" << data << "\n";
+NB_MSG << "Client interface received:" << data << "\n";
 				IODCommand *command = parseCommandString(data);
 				if (command == 0) {
 					const char *tosend = "Empty message received\n";
@@ -441,7 +461,7 @@ void IODCommandThread::operator()() {
 					goto cleanup;
 				}
                 status = e_wait_processing_start;
-				//NB_MSG << "Client Interface e_running->e_wait_processing_start\n";
+				NB_MSG << "Client Interface e_running->e_wait_processing_start\n";
 				newPendingCommand(command);
 
             cleanup:
@@ -466,9 +486,11 @@ void IODCommandThread::operator()() {
             }
         }
     }
+	{FileLogger fl(program_name); fl.f() << "Client thread finished\n"; }
     monit.abort();
     cti->socket.close();
 }
+
 ClientInterfaceInternals::~ClientInterfaceInternals() {}
 
 IODCommandThread::IODCommandThread() : done(false), internals(0) {

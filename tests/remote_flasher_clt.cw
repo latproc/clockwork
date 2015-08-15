@@ -42,3 +42,5 @@ When the channel is setup on the server, it's name will be provided
 to the client and the client will then subscribe to the channel.
 */
 
+
+item1 Item(barcode:1234, serial:1111);

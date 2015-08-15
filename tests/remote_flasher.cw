@@ -28,6 +28,8 @@ FlasherChannel CHANNEL {
 	OPTION port 7720;
     UPDATES flasher FlagInterface;
     UPDATES flag FlagInterface;
+    UPDATES item1 ItemInterface;
+    UPDATES item2 ItemInterface;
 }
 
 # The FlasherChannel updates two machines that happen to both
@@ -41,4 +43,17 @@ ChannelCheck MACHINE connections {
   off DEFAULT;
 }
 connection_check ChannelCheck channels;
+
+# These items are shared across a channel. Each side has its 
+# own item and a shadow of the other one
+
+Item MACHINE {
+    OPTION barcode 0;
+    OPTION serial 0;
+}
+
+ItemInterface INTERFACE {
+    OPTION barcode 0;
+    OPTION serial 0;
+}
 

@@ -14,26 +14,36 @@ Watchdog::Watchdog(const char *wdname, uint64_t timeout, bool autostart, bool on
 }
 
 void Watchdog::poll(uint64_t t) {
+	//std::cout <<  name << " poll " << ( (is_running) ? "running" : "not running") << " " << last_time << "\n";
 	if (!is_running) {
 		is_running = true;
 		start(t);
 		return;
 	}
 	if (t==0) t = now();
-	if (!one_shot || trigger_time == 0){ last_time = t; }
+	if (!one_shot || trigger_time == 0){
+		last_time = t;
+		//std::cout << "last_time is now: " << t << "\n";
+	}
 }
 Watchdog::~Watchdog() { all.erase(name); }
 
-void Watchdog::reset() { trigger_time = 0; }
+void Watchdog::reset() {
+	//std::cout <<  name << " reset " << ( (is_running) ? "running" : "not running") << "\n";
+	trigger_time = 0;
+}
 	
 bool Watchdog::triggered(uint64_t t) const {
-	bool has_triggered = false;
+	if (t == 0) t = now();
 	if (!is_running)
 		return false;
+	bool has_triggered = false;
 	if (!one_shot) has_triggered = last_time<t && t-last_time > time_out;
 	else {has_triggered = trigger_time != 0;}
-	if (has_triggered)
+	if (has_triggered) {
+		//std::cout << name << " woof: " << (t-last_time)/1000 << "\n";
 		{FileLogger fl(program_name); fl.f() << name << " woof: " << (t-last_time)/1000 << "\n"; }
+	}
 	return has_triggered;
 }
 
@@ -46,8 +56,13 @@ uint64_t Watchdog::now() {
 }
 
 bool Watchdog::running() const { return is_running; }
-void Watchdog::stop() { if (!is_running) return; last_time = now(); is_running = false; }
+void Watchdog::stop() {
+	//std::cout <<  name << " stop " << ( (is_running) ? "running" : "not running") << "\n";
+	last_time = now();
+	is_running = false;
+}
 void Watchdog::start(uint64_t t) {
+	//std::cout <<  name << " start " << ( (is_running) ? "running" : "not running") << "\n";
 	is_running = true;
 	poll(t);
 }

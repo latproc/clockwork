@@ -469,8 +469,8 @@ void ProcessingThread::operator()()
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
-			if (Watchdog::anyTriggered(curr_t))
-				Watchdog::showTriggered(curr_t, true);
+			//if (Watchdog::anyTriggered(curr_t))
+			//	Watchdog::showTriggered(curr_t, true);
 			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
 			//	<< " waiting: " << systems_waiting << "\n";
