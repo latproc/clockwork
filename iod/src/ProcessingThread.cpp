@@ -385,8 +385,8 @@ void ProcessingThread::operator()()
 	sched_sync.connect("inproc://scheduler_sync");
 
 	// used to permit command processing
-	zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
-	resource_mgr.bind("inproc://resource_mgr");
+	zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_PAIR);
+	resource_mgr.connect("inproc://resource_mgr");
 
 	zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
 	ecat_sync.connect("inproc://ethercat_sync");
@@ -460,7 +460,7 @@ void ProcessingThread::operator()()
 			{ sched_sync, 0, ZMQ_POLLIN, 0 },
 			{ ecat_out, 0, ZMQ_POLLIN, 0 }
 		};
-		char buf[10];
+		char buf[100];
 		int poll_wait = 2 * cycle_delay / 1000; // millisecs
 		machine_check_delay = cycle_delay;
 		if (poll_wait == 0) poll_wait = 1;
@@ -571,7 +571,7 @@ void ProcessingThread::operator()()
 				AutoStat stats(avg_cmd_processing);
 #endif
 				//NB_MSG << "Processing: incoming data from client\n";
-				size_t len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
+				size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
 				if (len) status = e_waiting_cmd;
 			}
 		}
@@ -592,6 +592,7 @@ void ProcessingThread::operator()()
 				if (now_t - commands_start_time < 100)
 					command = command_interface.getCommand();
 			}
+			safeSend(resource_mgr, "ping", 4); // wakeup the client interface
 #ifdef KEEPSTATS
 			avg_command_time.update();
 #endif

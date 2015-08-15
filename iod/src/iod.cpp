@@ -338,6 +338,7 @@ if (num_errors > 0) {
 	std::cout << "-------- Starting Command Interface ---------\n";
 	IODCommandThread &stateMonitor(*IODCommandThread::instance());
 	boost::thread monitor(boost::ref(stateMonitor));
+	usleep(50000); // give time before starting the processin g thread
 
 	// Inform the modbus interface we have started
 	load_debug_config();

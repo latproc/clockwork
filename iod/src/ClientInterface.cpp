@@ -343,11 +343,17 @@ void IODCommandThread::operator()() {
 		snprintf(url_buf, 30, "tcp://*:%d", command_port());
     cti->socket.bind (url_buf);
     
-    zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_REQ);
-    access_req.connect("inproc://resource_mgr");
+    zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
+    access_req.bind("inproc://resource_mgr");
     
+		{ // wait to start
+			char buf[20];
+			size_t len;
+			safeRecv(access_req, buf, 10, true, len, -1);
+		}
 
     enum {e_running, e_wait_processing_start, e_wait_processing, e_responding} status = e_running; //are we holding shared resources?
+		int poll_time = 20;
     while (!done) {
 		try {
 	    /*
@@ -355,10 +361,9 @@ void IODCommandThread::operator()() {
 	     */
 	    // check for completed commands to return
 	    CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	    boost::mutex::scoped_lock(cti->data_mutex);
 	    IODCommand *command = getCompletedCommand();
 	    while (command) {
-		    if (command->done != IODCommand::Unassigned) {	
+		    if (command->done == IODCommand::Unassigned) {	
 					FileLogger fl(program_name); fl.f() << "ERROR: command->done != IODCommand::Unassigned " << *command << "\n"; 
 				}
 		    if (command->done == IODCommand::Success) {
@@ -386,17 +391,19 @@ void IODCommandThread::operator()() {
 		    delete command;
 		    command = getCompletedCommand();
 	    }
-	    {
-				FileLogger fl(program_name); fl.f() << "Client Interface waiting for work\n"; 
-			}
 	    wd->stop();
-	    zmq::pollitem_t items[] = { { cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+	    zmq::pollitem_t items[] = { 
+				{ cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } ,
+				{ access_req, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } 
+			};
 	    int rc;
 	    try {
-		    rc = zmq::poll( &items[0], 1, 500);
-		    if (!rc) continue;
+		    rc = zmq::poll( &items[0], 2, poll_time);
+				if (poll_time < 200) poll_time += 5; 
+		    if (!rc) continue; 
+				if (rc == -1 && errno == EAGAIN) continue;
 		    if (done) break;
-		    if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
+		    if ( !(items[0].revents & ZMQ_POLLIN) && !(items[1].revents & ZMQ_POLLIN) ) continue;
 	    }
 	    catch (zmq::error_t zex) {
 		    {
@@ -407,29 +414,39 @@ void IODCommandThread::operator()() {
 		    continue;
 	    }
     	wd->start();
+			poll_time -= 2;  // shorter polls for a while since something is happening
+			if (poll_time < 20) poll_time = 20;
+			if ( items[1].revents & ZMQ_POLLIN) {
+				char buf[10];
+				size_t response_len;
+				safeRecv(access_req, buf, 9, true, response_len);
+			}
 
-	    zmq::message_t request;
-	    if (!cti->socket.recv (&request)) continue; // interrupted system call
-	    if (!machine_is_ready) {
-		    const char *tosend = "Ignored during startup";
-		    safeSend(cti->socket, tosend, strlen(tosend));
-		    continue;
-	    }
-	    size_t size = request.size();
-	    char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
-	    memcpy(data, request.data(), size);
-	    data[size] = 0;
-	    NB_MSG << "Client interface received:" << data << "\n";
-	    IODCommand *new_command = parseCommandString(data);
-	    if (new_command == 0) {
-		    const char *tosend = "Empty message received\n";
-		    safeSend(cti->socket, tosend, strlen(tosend));
-		    goto cleanup;
-	    }
-	    // push this onto a queue for the main thread
-	    newPendingCommand(new_command);
-		cleanup:
-  	  free(data);
+			if ( items[0].revents & ZMQ_POLLIN) {
+		    zmq::message_t request;
+		    if (!cti->socket.recv (&request)) continue; // interrupted system call
+		    if (!machine_is_ready) {
+			    const char *tosend = "Ignored during startup";
+			    safeSend(cti->socket, tosend, strlen(tosend));
+			    continue;
+		    }
+		    size_t size = request.size();
+		    char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
+		    memcpy(data, request.data(), size);
+		    data[size] = 0;
+		    NB_MSG << "Client interface received:" << data << "\n";
+		    IODCommand *new_command = parseCommandString(data);
+		    if (new_command == 0) {
+			    const char *tosend = "Empty message received\n";
+			    safeSend(cti->socket, tosend, strlen(tosend));
+			    goto cleanup;
+		    }
+		    // push this onto a queue for the main thread
+		    newPendingCommand(new_command);
+				safeSend(access_req, "wakeup", 6);
+				cleanup:
+	  	  free(data);
+			}
 		}
 		catch (std::exception e) {
 			// when processing is stopped, we expect to get an exception on this interface
