@@ -2963,7 +2963,7 @@ void MachineInstance::disable() {
 			if (parameters[i].machine) parameters[i].machine->disable();
 		}
 	for (unsigned int i = 0; i<locals.size(); ++i) {
-		locals[i].machine->disable();
+		if (locals[i].machine) locals[i].machine->disable();
 	}
 	// if any dependent machines are already enabled, make sure they know we are disabled
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();
