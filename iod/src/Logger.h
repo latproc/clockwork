@@ -39,6 +39,7 @@ public:
 	Internals *internals;
 	std::ostream &f();
 	FileLogger(const char *fname);
+	~FileLogger();
 
 	void getTimeString(char *buf, size_t buf_size);
 };

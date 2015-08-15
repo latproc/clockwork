@@ -75,7 +75,7 @@ FileLogger::FileLogger(const char *fname) : internals(0){
 
 std::ostream &FileLogger::f() { return internals->file(); }
 
-
+FileLogger::~FileLogger() { delete internals; }
 
 void FileLogger::getTimeString(char *buf, size_t buf_size) {
   struct timeval now_tv;
