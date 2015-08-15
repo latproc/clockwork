@@ -74,6 +74,7 @@ Channel::~Channel() {
 
 void Channel::syncInterfaceProperties(MachineInstance *m) {
 	if (!definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) return;
+	if (m->isShadow()) return;
 	if ( definition()->updates_names.count(m->getName())
 		|| definition()-> shares_names.count(m->getName())) {
 
