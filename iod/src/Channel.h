@@ -273,6 +273,7 @@ public:
     //void setMessageHandler(MessageHandler *handler)  { message_handler = handler; }
     zmq::pollitem_t *getPollItems();
 	bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response);
+	void sendMessage(const char *msg, zmq::socket_t &sock);
 
 	static void sendPropertyChanges(MachineInstance *machine);
 	typedef std::map<std::string, Value> PropertyRecords;

@@ -127,7 +127,7 @@ bool Channel::syncRemoteStates() {
 				MachineInstance *m = *iter++;
 				if (!m->isShadow()) {
 					std::string state(m->getCurrentStateString());
-					//DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state << "\n";
+					DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state << "\n";
 					char buf[200];
 					const char *msg = MessageEncoding::encodeState(m->getName(), state);
 					std::string response;
@@ -164,6 +164,7 @@ bool Channel::syncRemoteStates() {
 					std::string response;
 					if (cmd_client)
 						sendMessage(msg, *cmd_client, response);
+						//safeSend(*cmd_client, msg, strlen(msg));
 					else
 						sendStateChange(m, state);
 				}
@@ -774,6 +775,18 @@ void Channel::operator()() {
 		DBG_CHANNELS << "Channel " << name << " saw exception " << ex.what() << "\n";
 	}
 }
+void Channel::sendMessage(const char *msg, zmq::socket_t &sock) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+	if (!subscriber_thread) {
+		//return ::sendMessage(msg, sock);
+		safeSend(sock, msg, strlen(msg));
+	}
+	else {
+		safeSend(*cmd_client, msg, strlen(msg));
+	}
+}
 
 bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
 	char tnam[100];
@@ -1147,9 +1160,11 @@ void Channel::sendPropertyChangeMessage(const std::string &name, const Value &ke
 		std::string response;
 		char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
 		if (isClient())
-				sendMessage(cmd, communications_manager->subscriber(),response); //setup()
+				//sendMessage(cmd, communications_manager->subscriber(),response); //setup()
+				safeSend(communications_manager->subscriber(), cmd, strlen(cmd) );
 			else
-				sendMessage(cmd, communications_manager->subscriber(),response);
+				//sendMessage(cmd, communications_manager->subscriber(),response);
+				safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
 			//DBG_CHANNELS << "channel " << name << " got response: " << response << "\n";
 			free(cmd);
 	}
@@ -1419,7 +1434,8 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 
 				if (!chn->definition()->isPublisher()) {
 					std::string response;
-					chn->sendMessage(cmdstr, chn->communications_manager->subscriber(),response);//setup()
+					//chn->sendMessage(cmdstr, chn->communications_manager->subscriber(),response);
+					safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
 					//DBG_CHANNELS << tnam << ": channel " << chn->name << " got response: " << response << "\n";
 				}
 				else {
@@ -1794,7 +1810,8 @@ void Channel::handleChannels() {
 		}
 		IODCommand *command = chn->getCommand();
 		while (command) {
-			DBG_CHANNELS << "Processing: received command: " << command->param(0) << " on channel " << chn->name << "\n";
+			DBG_CHANNELS << "Processing: received command: "
+			<< *command << "on channel " << chn->name << "\n";
 			(*command)();
 			chn->putCompletedCommand(command);
 			command = chn->getCommand();
