@@ -452,14 +452,14 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
         rc = zmq::poll(items, num_items, 500);
     if (rc == 0) return true; // no sockets have messages
 
-	char buf[1000]; // TBD BUG this should be allocated dynamically
+	char buf[10000]; // TBD BUG this should be allocated dynamically
     size_t msglen = 0;
 
 	if (items[0].revents & ZMQ_POLLIN) {
-		NB_MSG << "have message from clockwork\n";
+		NB_MSG << "have message activity from clockwork\n";
 	}
 	if (items[1].revents & ZMQ_POLLIN) {
-		NB_MSG << "have message from publisher\n";
+		NB_MSG << "have message activity from publisher\n";
 	}
 
 	// yuk. the command socket is assumed to be the last item in the poll item list.
@@ -476,10 +476,10 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	}
 
     if (run_status == e_waiting_cmd && items[command_item].revents & ZMQ_POLLIN) {
-		if (safeRecv(cmd, buf, 1000, false, msglen)) {
-            if (msglen == 1000) msglen--;
+		if (safeRecv(cmd, buf, 10000, false, msglen)) {
+            if (msglen == 10000) msglen--;
             buf[msglen] = 0;
-            DBG_CHANNELS << " got cmd: " << buf << " from main thread\n";
+            DBG_CHANNELS << " got cmd: " << buf << " of len: " << msglen << " from main thread\n";
 			// if we are a client, pass commands through the setup socket to the other end
 			// of the channel.
 			if (isClient() && monit_setup && !monit_setup->disconnected()) {
