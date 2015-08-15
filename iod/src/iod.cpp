@@ -360,6 +360,6 @@ if (num_errors > 0) {
 	}
 	catch (zmq::error_t) { // expected error when we remove the zmq context
 	}
-	monitor.join();
+	//monitor.join();
 	return 0;
 }

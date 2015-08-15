@@ -565,50 +565,37 @@ void ProcessingThread::operator()()
 		}
 
 		if (program_done) break;
-		if (status == e_waiting || status == e_waiting_cmd)  {
+		if (status == e_waiting)  {
 			if (items[CMD_ITEM].revents & ZMQ_POLLIN) {
 #ifdef KEEPSTATS
 				AutoStat stats(avg_cmd_processing);
 #endif
 				//NB_MSG << "Processing: incoming data from client\n";
 				size_t len = resource_mgr.recv(buf, 10, ZMQ_NOBLOCK);
-				if (len) {
-					if (status == e_waiting_cmd) {
-						//NB_MSG << "Processing: e_waiting_cmd->e_command_done\n";
-						status = e_command_done;
-					}
-					else {
-						//NB_MSG << "Processing: e_waiting_cmd->e_handling_cmd\n";
-						status = e_handling_cmd;
-					}
-				}
+				if (len) status = e_waiting_cmd;
 			}
 		}
-		if (status == e_handling_cmd) {
+		// process a pending command or two if there are any available
+		if (status == e_waiting || status == e_waiting_cmd) {
 #ifdef KEEPSTATS
 			avg_command_time.start();
 #endif
 			IODCommand *command = command_interface.getCommand();
-			while (command) {
+			// keep track of the time so we don't spend too much of it here
+			uint64_t commands_start_time = nowMicrosecs();
+			uint64_t now_t = commands_start_time;
+			while (command && now_t-commands_start_time <100) {
 				//NB_MSG << "Processing: received command: " << command->param(0) << "\n";
 				(*command)();
 				command_interface.putCompletedCommand(command);
-				command = command_interface.getCommand();
+				now_t = nowMicrosecs();
+				if (now_t - commands_start_time < 100)
+					command = command_interface.getCommand();
 			}
-			//NB_MSG << "Processing: e_handling_cmd->e_waiting_cmd\n";
-			safeSend(resource_mgr,"go", 2);
-			status = e_waiting_cmd; // waiting for the command interface to say it's collected results
-		}
-		if (status == e_command_done) {
-			char buf[10];
-			size_t len = 0;
-			//NB_MSG << "Processing: sending bye\n";
-			safeSend(resource_mgr,"bye", 3);
 #ifdef KEEPSTATS
 			avg_command_time.update();
 #endif
-			//NB_MSG << "Processing: e_command_done->e_waiting\n";
-			status = e_waiting;
+			status = e_waiting; //ange state back even though we haven't finished all the commands
 		}
 		if (program_done) break;
 
