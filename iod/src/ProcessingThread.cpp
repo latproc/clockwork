@@ -426,6 +426,8 @@ void ProcessingThread::operator()()
         activate_hardware();
     }
 
+	bool commands_started = false;
+
 	enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
 	std::set<IOComponent *>io_work_queue;
 	while (!program_done)
@@ -443,6 +445,7 @@ void ProcessingThread::operator()()
 					std::cerr << error << "\n";
 					MessageLog::instance()->add(error.c_str());
 				}
+				safeSend(resource_mgr, "start", 5);
 			}
 		}
 		else

@@ -346,11 +346,13 @@ void IODCommandThread::operator()() {
     zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
     access_req.bind("inproc://resource_mgr");
     
-		{ // wait to start
-			char buf[20];
+		char start_cli[20];
+		do { // wait to start
 			size_t len;
-			safeRecv(access_req, buf, 10, true, len, -1);
-		}
+			safeRecv(access_req, start_cli, 19, true, len, -1);
+			if (len>=0 && len<20) start_cli[len] = 0; else snprintf(start_cli, 10, "NULL");
+			usleep(100000);
+		} while (strcmp(start_cli, "start") != 0);
 
     enum {e_running, e_wait_processing_start, e_wait_processing, e_responding} status = e_running; //are we holding shared resources?
 		int poll_time = 20;
