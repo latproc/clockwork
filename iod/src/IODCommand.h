@@ -85,6 +85,8 @@ public:
 	size_t numParams() { return parameters.size(); }
 	const Value &param(size_t which) { if (which < parameters.size()) return parameters[which]; else return SymbolTable::Null; }
 
+	std::ostream & operator<<(std::ostream &) const;
+
 protected:
 	virtual bool run(std::vector<Value> &params) = 0;
 	std::vector<Value> parameters;
@@ -94,6 +96,6 @@ protected:
 	int max_params;
 };
 
-
+std::ostream & operator<<(std::ostream &, const IODCommand &);
 
 #endif

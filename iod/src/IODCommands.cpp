@@ -47,6 +47,16 @@ SequenceNumber IODCommand::sequences;
 
 extern bool program_done;
 
+std::ostream & IODCommand::operator<<(std::ostream &out) const {
+	const char *delim = "";
+	for (int i=0; i<parameters.size(); ++i) { out << delim << parameters[i]; delim = " "; }
+	return out;
+}
+
+std::ostream & operator<<(std::ostream &out, const IODCommand &cmd) {
+	return cmd.operator<<(out);
+}
+
 bool IODCommandGetStatus::run(std::vector<Value> &params) {
 	bool ok = false;
 	if (params.size() == 2) {
