@@ -218,7 +218,7 @@ void IODCommandThread::registerCommand(std::string name, IODCommandFactory *cmd)
 
 class MyMonitor : public zmq::monitor_t {
 public:
-	MyMonitor(zmq::socket_t *s) : monitoring(false), sock(s) {
+    MyMonitor(zmq::socket_t *s) : sock(s) {
     }
     void operator()() {
 #ifdef __APPLE__
@@ -226,10 +226,7 @@ public:
 #else
         pthread_setname_np(pthread_self(), "iod connection monitor");
 #endif
-		if (!monitoring) {
-			monitoring = true;
-			monitor(*sock, "inproc://monitor.rep");
-		}
+        monitor(*sock, "inproc://monitor.rep");
     }
     virtual void on_monitor_started() {
         //std::cerr << "command channel monitor started\n";
@@ -269,7 +266,6 @@ public:
     }
 
 private:
-	bool monitoring;
     zmq::socket_t *sock;
 };
 
@@ -279,6 +275,10 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 	boost::mutex::scoped_lock(cti->data_mutex);
 
 	pending_commands.push_back(cmd);
+	size_t n = pending_commands.size();
+	if ( n>10) {
+		FileLogger fl(program_name); fl.f() << "Warning: pending_commands on the client interface has grown to " << n << "\n";
+	}
 }
 
 IODCommand *IODCommandThread::getCommand() {
