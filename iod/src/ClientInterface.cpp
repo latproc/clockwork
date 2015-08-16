@@ -241,10 +241,10 @@ public:
         //std::cerr << "command channel command channel on_event_connect_retried " << addr_ << "\n";
     }
     virtual void on_event_listening(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_listening " << addr_ << "\n";
+        FileLogger fl(program_name); fl.f() << "command channel on_event_listening " << addr_ << "\n";
     }
     virtual void on_event_bind_failed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_bind_failed " << addr_ << "\n";
+		FileLogger fl(program_name); fl.f() << "command channel on_event_bind_failed " << addr_ << "\n";
     }
     virtual void on_event_accepted(const zmq_event_t &event_, const char* addr_) {
         //std::cerr << "command channel on_event_accepted " << event_.value << " " << addr_ << "\n";
