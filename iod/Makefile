@@ -14,3 +14,5 @@ debug:
 	[ -d "build/Debug" ] || mkdir build/Debug
 	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make -j 4
 
+debug-install:	debug
+	cd build/Debug && make install
