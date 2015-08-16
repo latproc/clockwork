@@ -218,7 +218,7 @@ void IODCommandThread::registerCommand(std::string name, IODCommandFactory *cmd)
 
 class MyMonitor : public zmq::monitor_t {
 public:
-    MyMonitor(zmq::socket_t *s) : sock(s) {
+	MyMonitor(zmq::socket_t *s) : monitoring(false), sock(s) {
     }
     void operator()() {
 #ifdef __APPLE__
@@ -226,7 +226,10 @@ public:
 #else
         pthread_setname_np(pthread_self(), "iod connection monitor");
 #endif
-        monitor(*sock, "inproc://monitor.rep");
+		if (!monitoring) {
+			monitoring = true;
+			monitor(*sock, "inproc://monitor.rep");
+		}
     }
     virtual void on_monitor_started() {
         //std::cerr << "command channel monitor started\n";
@@ -266,6 +269,7 @@ public:
     }
 
 private:
+	bool monitoring;
     zmq::socket_t *sock;
 };
 
