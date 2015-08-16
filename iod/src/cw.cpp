@@ -346,18 +346,21 @@ int main (int argc, char const *argv[])
     
     MQTTInterface::instance()->activate();
 
-    char buf[10];
+    char buf[100];
     size_t response_len;
-    safeRecv(sim_io, buf, 10, true, response_len);
-    
-    std::cerr << "processing has started\n";
+	if (safeRecv(sim_io, buf, 100, true, response_len) ) {
+		buf[ (response_len<100) ? response_len : 99 ] = 0;
+		NB_MSG << "simulated io got start message: " << buf << "\n";
+	}
+
+    NB_MSG << "processing has started\n";
     struct timeval then;
     gettimeofday(&then,0);
     while (!program_done) {
         MQTTInterface::instance()->collectState();
 
         //sim_io.send("ecat", 4);
-        //safeRecv(sim_io, buf, 10, true, response_len);
+        safeRecv(sim_io, buf, 10, true, response_len, 1);
         struct timeval now;
         gettimeofday(&now,0);
         
