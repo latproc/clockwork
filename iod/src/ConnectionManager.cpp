@@ -115,6 +115,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 		setup_(0),
 		_setup_status(e_startup), sub_status_(ss_init)
 {
+	state_start = microsecs();
 	if (subscriber_host == "*") {
 		_setup_status = e_not_used; // This is not a client
 		assert(protocol == eCHANNEL);
@@ -131,7 +132,6 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 }
 
 SubscriptionManager::~SubscriptionManager() {
-	//DBG_CHANNELS << "warning: SubscriptionManager did not cleanup properly\n";
 }
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
@@ -323,7 +323,16 @@ bool SubscriptionManager::checkConnections() {
 */
 		return !monit_subs.disconnected();
 	}
+
 	uint64_t timer = microsecs() - state_start;
+
+	//TBD is this helpful?
+	/*
+	if (monit_setup->disconnected() && setupStatus() != e_disconnected
+			&& setupStatus() != e_startup && setupStatus() != e_waiting_connect) {
+		setSetupStatus(e_disconnected);
+	}
+	 */
 	{
 		if (setupStatus() != e_done) {
 			FileLogger fl(program_name); fl.f() << channel_name 
@@ -340,9 +349,6 @@ bool SubscriptionManager::checkConnections() {
 			setupConnections();
 		}
 	}
-	
-
-
 	if (monit_setup->disconnected() || monit_subs.disconnected() )
 	{
 		FileLogger fl(program_name); fl.f()
@@ -400,9 +406,9 @@ bool SubscriptionManager::checkConnections() {
 					<< "SubscriptionManager: subscriber is not connected clockwork connection state: "
 					<< setupStatus() << "\n"; }
 		if (setupStatus() == e_done) {
-			{FileLogger fl(program_name); fl.f() << "Too many errors: exiting\n"; }
 			++channel_error_count;
 			if (channel_error_count>20) {
+				{FileLogger fl(program_name); fl.f() << "Too many errors: exiting\n"; }
 				exit(2);
 			}
 		}
@@ -411,10 +417,10 @@ bool SubscriptionManager::checkConnections() {
         return false;
     }
     if (monit_subs.disconnected() || monit_setup->disconnected()) {
-				if (monit_subs.disconnected())
-				{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server publisher\n"<<std::flush; }
-				if (monit_setup->disconnected())
-				{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n"<<std::flush; }
+		if (monit_subs.disconnected())
+		{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server publisher\n"<<std::flush; }
+		if (monit_setup->disconnected())
+		{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n"<<std::flush; }
         usleep(50000);
         return false;
 	}
