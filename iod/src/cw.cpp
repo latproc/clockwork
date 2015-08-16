@@ -360,7 +360,7 @@ int main (int argc, char const *argv[])
         MQTTInterface::instance()->collectState();
 
         //sim_io.send("ecat", 4);
-        safeRecv(sim_io, buf, 10, true, response_len, 1);
+        safeRecv(sim_io, buf, 10, false, response_len, 500);
         struct timeval now;
         gettimeofday(&now,0);
         
