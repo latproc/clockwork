@@ -58,15 +58,32 @@ bool CommandManager::setupConnections() {
     return false;
 }
 
+void CommandManager::setSetupStatus( Status new_status ) {
+	if (setup_status != new_status)
+	{
+		FileLogger fl(program_name); fl.f()
+		<< "setup status " << setup_status << " -> " << new_status << "\n"<<std::flush;
+		state_start = microsecs();
+		setup_status = new_status;
+	}
+}
+
 bool CommandManager::checkConnections() {
-    if (monit_setup->disconnected() ) {
-        setup_status = e_startup;
-        setupConnections();
-        //usleep(50000);
-        return false;
+
+	uint64_t timer = microsecs() - state_start;
+	{
+		FileLogger fl(program_name); fl.f()
+			<<  ( ( monit_setup->disconnected() ) ? "setup down " : "setup up " ) << "\n";
+	}
+
+	if (monit_setup->disconnected() ) {
+		if (setup_status == e_startup) { setupConnections(); return false; }
+		if (setupStatus() == e_waiting_connect ) return false; // just wait for reconnect
+		//wait for the connection to come back before we can do anything else.
+		// we will need to rerequest a channel etc
+		setSetupStatus(e_waiting_connect); return false;
     }
-    if (monit_setup->disconnected())
-        return false;
+	setSetupStatus(e_done);
     return true;
 }
 
@@ -76,6 +93,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
 	assert(pgn_rc == 0);
 	NB_MSG << tnam << " CommandManager check Connections\n";
     int rc = 0;
+#if 0
     if (setup_status!= e_waiting_connect && monit_setup->disconnected() ) {
         if (setup_status != e_waiting_connect) {
 			{FileLogger fl(program_name); fl.f() << "CommandManager checkConnections() attempting to setup connection "
@@ -91,6 +109,8 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
 
 		return false;
     }
+#endif
+	checkConnections();
     if ( monit_setup->disconnected() )
         rc = zmq::poll( &items[1], num_items-1, 0);
     else
@@ -135,6 +155,7 @@ CommandManager::CommandManager(const char *host, int portnum)
 	: host_name(host), port(portnum), setup(0), monit_setup(0) {
 	    setup = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
 	    monit_setup = new SingleConnectionMonitor(*setup, constructAlphaNumericString("inproc://", host, ".setup", "inproc://monitor.setup").c_str());
+		state_start = microsecs();
 	    init();
 }
 

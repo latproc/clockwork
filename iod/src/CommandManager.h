@@ -37,13 +37,17 @@ public:
     bool checkConnections();
     bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd);
     virtual int numSocks() { return 1; }
-    
-    std::string host_name;
+
+	Status setupStatus() const { return setup_status; } // always e_not_used for non client instances
+	void setSetupStatus( Status new_status );
+	
+	std::string host_name;
 	int port;
     zmq::socket_t *setup;
     SingleConnectionMonitor *monit_setup;
     Status setup_status;
     Status run_status;
+	uint64_t state_start;
 };
 
 #endif
