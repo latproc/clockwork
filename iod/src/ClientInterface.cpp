@@ -53,6 +53,86 @@ IODCommandThread *IODCommandThread::instance() {
 	return instance_;
 }
 
+class IODCommandFactory {
+public:
+	virtual ~IODCommandFactory() {}
+	virtual IODCommand *create();
+};
+
+IODCommand *IODCommandFactory::create() { return new IODCommandUnknown(); }
+
+struct IODCommandChannelFactory: public IODCommandFactory {
+	IODCommandChannel *create() { return new IODCommandChannel(); } };
+struct IODCommandChannelsFactory: public IODCommandFactory {
+	IODCommandChannels *create() { return new IODCommandChannels(); } };
+struct IODCommandInfoFactory: public IODCommandFactory {
+	IODCommandInfo *create() { return new IODCommandInfo(); } };
+struct IODCommandGetStatusFactory: public IODCommandFactory {
+	IODCommandGetStatus *create() { return new IODCommandGetStatus(); } };
+struct IODCommandGetPropertyFactory: public IODCommandFactory {
+	IODCommandGetProperty *create() { return new IODCommandGetProperty(); } };
+struct IODCommandSetStatusFactory: public IODCommandFactory {
+	IODCommandSetStatus *create() { return new IODCommandSetStatus(); } };
+struct IODCommandEnableFactory: public IODCommandFactory {
+	IODCommandEnable *create() { return new IODCommandEnable(); } };
+struct IODCommandResumeFactory: public IODCommandFactory {
+	IODCommandResume *create() { return new IODCommandResume(); } };
+struct IODCommandDisableFactory: public IODCommandFactory {
+	IODCommandDisable *create() { return new IODCommandDisable(); } };
+struct IODCommandToggleFactory: public IODCommandFactory {
+	IODCommandToggle *create() { return new IODCommandToggle(); } };
+struct IODCommandPropertyFactory: public IODCommandFactory {
+	IODCommandProperty *create() { return 0; }
+	IODCommandProperty *createPropertyCommand(const char *raw) {
+		return new IODCommandProperty(raw);
+	}
+};
+struct IODCommandDescribeFactory: public IODCommandFactory {
+	IODCommandDescribe *create() { return new IODCommandDescribe(); } };
+struct IODCommandListFactory: public IODCommandFactory {
+	IODCommandList *create() { return new IODCommandList(); } };
+struct IODCommandListJSONFactory: public IODCommandFactory {
+	IODCommandListJSON *create() { return new IODCommandListJSON(); } };
+struct IODCommandSendFactory: public IODCommandFactory {
+	IODCommandSend *create() { return new IODCommandSend(); } };
+struct IODCommandQuitFactory: public IODCommandFactory {
+	IODCommandQuit *create() { return new IODCommandQuit(); } };
+struct IODCommandHelpFactory: public IODCommandFactory {
+	IODCommandHelp *create() { return new IODCommandHelp(); } };
+struct IODCommandDebugShowFactory: public IODCommandFactory {
+	IODCommandDebugShow *create() { return new IODCommandDebugShow(); } };
+struct IODCommandDebugFactory: public IODCommandFactory {
+	IODCommandDebug *create() { return new IODCommandDebug(); } };
+struct IODCommandModbusFactory: public IODCommandFactory {
+	IODCommandModbus *create() { return new IODCommandModbus(); } };
+struct IODCommandTracingFactory: public IODCommandFactory {
+	IODCommandTracing *create() { return new IODCommandTracing(); } };
+struct IODCommandModbusExportFactory: public IODCommandFactory {
+	IODCommandModbusExport *create() { return new IODCommandModbusExport(); } };
+struct IODCommandModbusRefreshFactory: public IODCommandFactory {
+	IODCommandModbusRefresh *create() { return new IODCommandModbusRefresh(); } };
+struct IODCommandPerformanceFactory: public IODCommandFactory {
+	IODCommandPerformance *create() { return new IODCommandPerformance(); } };
+struct IODCommandPersistentStateFactory: public IODCommandFactory {
+	IODCommandPersistentState *create() { return new IODCommandPersistentState(); } };
+struct IODCommandChannelRefreshFactory: public IODCommandFactory {
+	IODCommandChannelRefresh *create() { return new IODCommandChannelRefresh(); } };
+struct IODCommandSchedulerStateFactory: public IODCommandFactory {
+	IODCommandSchedulerState *create() { return new IODCommandSchedulerState(); } };
+struct IODCommandStateFactory: public IODCommandFactory {
+	IODCommandState *create() { return new IODCommandState(); } };
+struct IODCommandUnknownFactory: public IODCommandFactory {
+	IODCommandUnknown *create() { return new IODCommandUnknown(); } };
+struct IODCommandDataFactory: public IODCommandFactory {
+	IODCommandData *create() { return new IODCommandData(); } };
+struct IODCommandShowMessagesFactory: public IODCommandFactory {
+	IODCommandShowMessages *create() { return new IODCommandShowMessages(); } };
+struct IODCommandNoticeFactory: public IODCommandFactory {
+	IODCommandNotice *create() { return new IODCommandNotice(); } };
+struct IODCommandFindFactory: public IODCommandFactory {
+	IODCommandFind *create() { return new IODCommandFind(); } };
+struct IODCommandFreezeFactory: public IODCommandFactory {
+	IODCommandFreeze *create() { return new IODCommandFreeze(); } };
 
 struct ListenerThreadInternals : public ClientInterfaceInternals {
     
@@ -68,19 +148,71 @@ void IODCommandListenerThread::operator()() {
 IODCommandListenerThread::IODCommandListenerThread() : done(false){ }
 void IODCommandListenerThread::stop() { done = true; }
 
+template<class T> class CommandTable {
+public:
+	typedef typename std::multimap<std::string, T> Table;
+	typedef typename Table::value_type Node;
+	typedef std::pair<typename Table::iterator, typename Table::iterator> Range;
+	typedef typename Table::iterator Iterator;
+
+	Table table;
+
+	void add(const char *name, T cmd) { table.insert( std::make_pair(name, cmd) ); }
+	Range find(const std::string &name) { return table.equal_range(name); }
+};
+
 
 struct CommandThreadInternals : public ClientInterfaceInternals {
 public:
     zmq::socket_t socket;
     pthread_t monitor_thread;
-	std::multimap<std::string, IODCommand*> commands;
+	CommandTable<IODCommandFactory*> commands;
 	boost::mutex data_mutex;
 
-    CommandThreadInternals() : socket(*MessagingInterface::getContext(), ZMQ_REP) {}
+    CommandThreadInternals() : socket(*MessagingInterface::getContext(), ZMQ_REP) {
+		commands.add("CHANNEL", new IODCommandChannelFactory());
+		commands.add("CHANNEL", new IODCommandChannelRefreshFactory());
+		commands.add("CHANNEL", new IODCommandChannelsFactory());
+		commands.add("DATA", new IODCommandDataFactory());
+		commands.add("DEBUG", new IODCommandDebugFactory());
+		commands.add("DEBUG", new IODCommandDebugShowFactory());
+		commands.add("DESCRIBE", new IODCommandDescribeFactory());
+		commands.add("DISABLE", new IODCommandDisableFactory());
+		commands.add("ENABLE", new IODCommandEnableFactory());
+		commands.add("FIND", new IODCommandFindFactory());
+		commands.add("FREEZE", new IODCommandFreezeFactory());
+		commands.add("GET", new IODCommandGetPropertyFactory());
+		commands.add("GET", new IODCommandGetStatusFactory());
+		commands.add("HELPINFO", new IODCommandHelpFactory());
+		commands.add("INFO", new IODCommandInfoFactory());
+		commands.add("LIST", new IODCommandListFactory());
+		commands.add("LIST", new IODCommandListJSONFactory());
+		commands.add("MODBUS", new IODCommandModbusExportFactory());
+		commands.add("MODBUS", new IODCommandModbusFactory());
+		commands.add("MODBUS", new IODCommandModbusRefreshFactory());
+		commands.add("NOTICE", new IODCommandNoticeFactory());
+		commands.add("STATS", new IODCommandPerformanceFactory());
+		commands.add("PERSISTENT", new IODCommandPersistentStateFactory());
+		commands.add("PROPERTY", new IODCommandPropertyFactory());
+		commands.add("QUIT", new IODCommandQuitFactory());
+		commands.add("RESUME", new IODCommandResumeFactory());
+		commands.add("RESUME", new IODCommandResumeFactory());
+		commands.add("SCHEDULER", new IODCommandSchedulerStateFactory());
+		commands.add("SEND", new IODCommandSendFactory());
+		commands.add("SET", new IODCommandSetStatusFactory());
+		commands.add("STATE", new IODCommandSetStatusFactory());
+		commands.add("MESSAGES", new IODCommandShowMessagesFactory());
+		//commands.add("", new IODCommandStateFactory());
+		commands.add("TOGGLE", new IODCommandToggleFactory());
+		commands.add("TRACING", new IODCommandTracingFactory());
+		//commands.add("", new IODCommandUnknownFactory());
+	}
 };
 
-void IODCommandThread::registerCommand(std::string name, IODCommand *cmd) {
-
+void IODCommandThread::registerCommand(std::string name, IODCommandFactory *cmd) {
+	CommandThreadInternals *cti
+		= dynamic_cast<CommandThreadInternals*>(IODCommandThread::instance()->internals);
+	cti->commands.add(name.c_str(), cmd);
 }
 
 
@@ -137,6 +269,7 @@ private:
     zmq::socket_t *sock;
 };
 
+
 void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 	boost::mutex::scoped_lock(cti->data_mutex);
@@ -179,6 +312,9 @@ void IODCommand::setParameters(std::vector<Value> &params) {
 }
 
 IODCommand *parseCommandString(const char *data) {
+	CommandThreadInternals *cti
+		= dynamic_cast<CommandThreadInternals*>(IODCommandThread::instance()->internals);
+
 	std::list<Value> parts;
 	size_t count = 0;
 	std::string ds;
@@ -314,6 +450,9 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "INFO") {
 		command = new IODCommandInfo;
 	}
+	else if (ds == "FREEZE") {
+		command = new IODCommandFreeze;
+	}
 	else {
 		command = new IODCommandUnknown;
 	}
@@ -345,14 +484,18 @@ void IODCommandThread::operator()() {
     
     zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
     access_req.bind("inproc://resource_mgr");
-    
-		char start_cli[20];
-		do { // wait to start
-			size_t len;
-			safeRecv(access_req, start_cli, 19, true, len, -1);
-			if (len>=0 && len<20) start_cli[len] = 0; else snprintf(start_cli, 10, "NULL");
-			usleep(100000);
-		} while (strcmp(start_cli, "start") != 0);
+
+	char start_cli[20];
+	do { // wait to start
+		size_t len;
+		safeRecv(access_req, start_cli, 19, true, len, -1);
+		if (len>20) {
+			start_cli[19] = 0;
+			FileLogger fl(program_name); fl.f() << "client interface startup got unexpected: " << start_cli << "\n";
+		}
+		if (len<20) start_cli[len] = 0;;
+		usleep(100000);
+	} while (strcmp(start_cli, "start") != 0);
 
     enum {e_running, e_wait_processing_start, e_wait_processing, e_responding} status = e_running; //are we holding shared resources?
 		int poll_time = 20;
@@ -366,12 +509,14 @@ void IODCommandThread::operator()() {
 	    IODCommand *command = getCompletedCommand();
 	    while (command) {
 		    if (command->done == IODCommand::Unassigned) {	
-					FileLogger fl(program_name); fl.f() << "ERROR: command->done != IODCommand::Unassigned " << *command << "\n"; 
+				FileLogger fl(program_name); fl.f()
+					<< "ERROR: command did not set a return status" << *command << "\n";
 				}
 		    if (command->done == IODCommand::Success) {
 			    const char * cmdres = command->result();
 			    {
-						FileLogger fl(program_name); fl.f() << "Client Interface command generated response: " << cmdres << "\n"; 
+					FileLogger fl(program_name); fl.f()
+						<< "Client Interface command generated response: " << cmdres << "\n";
 					}
 			    if (!(*cmdres)) {
 				    char buf[100];
@@ -384,10 +529,10 @@ void IODCommandThread::operator()() {
 			    safeSend(cti->socket, cmdres, strlen(cmdres));
 		    }
 		    else {
-			    {
-						FileLogger fl(program_name); 
-						fl.f() << "Client interface saw command error: " << command->error() << "\n"; 
-					}
+				{
+					FileLogger fl(program_name);
+					fl.f() << "Client interface saw command error: " << command->error() << "\n"; 
+				}
 			    safeSend(cti->socket, command->error(), strlen(command->error()));
 		    }
 		    delete command;

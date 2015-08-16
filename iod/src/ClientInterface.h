@@ -37,13 +37,14 @@ struct IODCommandListenerThread {
 IODCommand *parseCommandString(const char *data);
 
 class IODCommand;
+class IODCommandFactory;
 class IODCommandThread {
 public:
 	static IODCommandThread *instance();
     void operator()();
     void stop();
     bool done;
-	static void registerCommand(std::string name, IODCommand *cmd);
+	static void registerCommand(std::string name, IODCommandFactory *cmd);
 
 	void newPendingCommand(IODCommand *cmd);
 	IODCommand *getCommand();
@@ -53,12 +54,14 @@ public:
 	std::list<IODCommand *>pending_commands;
 	std::list<IODCommand *>completed_commands;
 
+protected:
+	ClientInterfaceInternals *internals;
+	friend IODCommand *parseCommandString(const char *data);
 private:
 	IODCommandThread();
 	~IODCommandThread();
 
 	static IODCommandThread *instance_;
-	ClientInterfaceInternals *internals;
 
 	IODCommandThread(const IODCommandThread &);
 	IODCommandThread &operator=(const IODCommandThread &);
