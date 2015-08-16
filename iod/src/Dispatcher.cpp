@@ -160,7 +160,7 @@ void Dispatcher::idle()
 	size_t response_len = 0;
 	safeRecv(sync, buf, 10, true, response_len); // wait for an ok to start from cw
 	buf[response_len]= 0;
-	std::cout << "Dispatcher got sync start: " << buf << "\n";
+	NB_MSG << "Dispatcher got sync start: " << buf << "\n";
 	
     /*
     { // wait for a start command

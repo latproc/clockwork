@@ -442,9 +442,10 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	if (!checkConnections()) {
-		{FileLogger fl(program_name); fl.f() << "SubscriptionManager checkConnections() failed\n"<<std::flush; }
-		return false;
+	if (!checkConnections() &&isClient()) {
+		FileLogger fl(program_name); fl.f()
+			<< "SubscriptionManager checkConnections() failed ";
+			fl.f()<< subscriber_host<<":"<<subscriber_port<< "\n";
 	}
     int rc = 0;
     if (isClient() && num_items>2 && (monit_subs.disconnected() || monit_setup->disconnected()) )
@@ -524,13 +525,13 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			run_status = e_waiting_cmd;
 		}
 		else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-			//DBG_CHANNELS << "incoming response\n";
+			DBG_CHANNELS << "incoming response\n";
 			bool got_response =
 				(isClient())
 					? safeRecv(setup(), buf, 1000, false, msglen)
 					: safeRecv(subscriber(), buf, 1000, false, msglen);
 			if (got_response) {
-				//DBG_CHANNELS << " forwarding response " << buf << "\n";
+				DBG_CHANNELS << " forwarding response " << buf << "\n";
 				if (msglen && msglen<1000) {
 					cmd.send(buf, msglen);
 				}
@@ -539,6 +540,12 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 				}
 				run_status = e_waiting_cmd;
 			}
+		}
+		else if ( items[0].revents & ZMQ_POLLIN ) {
+			char buf[1000];
+			size_t len;
+			bool res = safeRecv(setup(), buf, 1000, false, len);
+			FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";
 		}
 	}
     return true;

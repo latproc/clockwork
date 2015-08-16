@@ -844,7 +844,7 @@ int loadConfig(std::list<std::string> &files) {
             yyin = fopen(filename, "r");
             if (yyin)
             {
-                NB_MSG << "\nProcessing file: " << filename << "\n";
+                NB_MSG << "Processing file: " << filename << "\n";
                 yylineno = 1;
                 yycharno = 1;
                 yyfilename = filename;

@@ -445,11 +445,13 @@ void ProcessingThread::operator()()
 					std::cerr << error << "\n";
 					MessageLog::instance()->add(error.c_str());
 				}
+				FileLogger fl(program_name); fl.f() << "Enabling client access\n";
 				safeSend(resource_mgr, "start", 5);
 			}
 		}
-		else
+		else {
 			machine_is_ready = false;
+		}
 
 #ifdef KEEPSTATS
 		avg_poll_time.start();
@@ -472,8 +474,8 @@ void ProcessingThread::operator()()
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
-			//if (Watchdog::anyTriggered(curr_t))
-			//	Watchdog::showTriggered(curr_t, true);
+			if (Watchdog::anyTriggered(curr_t))
+				Watchdog::showTriggered(curr_t, true);
 			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
 			//	<< " waiting: " << systems_waiting << "\n";
