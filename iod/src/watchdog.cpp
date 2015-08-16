@@ -8,12 +8,12 @@
 
 std::map<std::string, Watchdog *>Watchdog::all;
 
-Watchdog::Watchdog(const char *wdname, uint64_t timeout, bool autostart, bool once_only ) 
+Watchdog::Watchdog(const char *wdname, int64_t timeout, bool autostart, bool once_only ) 
 	: name(wdname), last_time(0), time_out(timeout*1000), one_shot(once_only), is_running(autostart) { 
 	all[name] = this;
 }
 
-void Watchdog::poll(uint64_t t) {
+void Watchdog::poll(int64_t t) {
 	//std::cout <<  name << " poll " << ( (is_running) ? "running" : "not running") << " " << last_time << "\n";
 	if (!is_running) {
 		is_running = true;
@@ -26,6 +26,9 @@ void Watchdog::poll(uint64_t t) {
 		//std::cout << "last_time is now: " << t << "\n";
 	}
 }
+void Watchdog::poll(uint64_t t) {
+	poll( (int64_t) t);
+}
 Watchdog::~Watchdog() { all.erase(name); }
 
 void Watchdog::reset() {
@@ -33,7 +36,7 @@ void Watchdog::reset() {
 	trigger_time = 0;
 }
 	
-bool Watchdog::triggered(uint64_t t) const {
+bool Watchdog::triggered(int64_t t) const {
 	if (t == 0) t = now();
 	if (!is_running)
 		return false;
@@ -42,14 +45,18 @@ bool Watchdog::triggered(uint64_t t) const {
 	else {has_triggered = trigger_time != 0;}
 	if (has_triggered) {
 		//std::cout << name << " woof: " << (t-last_time)/1000 << "\n";
-		{FileLogger fl(program_name); fl.f() << name << " woof: " << (t-last_time)/1000 << "\n"; }
+		{FileLogger fl(program_name); fl.f() << name << " woof: " << (int64_t)(t-last_time)/1000 << "\n"; }
 	}
 	return has_triggered;
 }
 
-uint64_t Watchdog::last() { return last_time; }
+bool Watchdog::triggered(uint64_t t) const {
+	return triggered( (int64_t) t);
+}
 
-uint64_t Watchdog::now() {
+int64_t Watchdog::last() { return last_time; }
+
+int64_t Watchdog::now() {
 	struct timeval now;
 	gettimeofday(&now, 0);
 	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
@@ -61,13 +68,17 @@ void Watchdog::stop() {
 	last_time = now();
 	is_running = false;
 }
-void Watchdog::start(uint64_t t) {
+void Watchdog::start(int64_t t) {
 	//std::cout <<  name << " start " << ( (is_running) ? "running" : "not running") << "\n";
 	is_running = true;
 	poll(t);
 }
 
-bool Watchdog::anyTriggered(uint64_t t) {
+void Watchdog::start(uint64_t t) {
+	poll( (int64_t)t);
+}
+
+bool Watchdog::anyTriggered(int64_t t) {
 	if (t == 0) t = now();
 	std::map<std::string, Watchdog*>::iterator iter = all.begin();
 	while (iter != all.end()) {
@@ -76,8 +87,11 @@ bool Watchdog::anyTriggered(uint64_t t) {
 	}
 	return false;
 }
+bool Watchdog::anyTriggered(uint64_t t) {
+	return anyTriggered( (int64_t) t);
+}
 
-bool Watchdog::showTriggered(uint64_t t, bool reset, std::ostream &out) {
+bool Watchdog::showTriggered(int64_t t, bool reset, std::ostream &out) {
 	if (t == 0) t = now();
 	bool found = false;
 	std::map<std::string, Watchdog*>::iterator iter = all.begin();
@@ -90,6 +104,9 @@ bool Watchdog::showTriggered(uint64_t t, bool reset, std::ostream &out) {
 		}
 	}
 	return found;
+}
+bool Watchdog::showTriggered(uint64_t t, bool reset, std::ostream &out) {
+	return showTriggered(t, reset, out);
 }
 
 #ifdef TESTING
