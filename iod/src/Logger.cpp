@@ -59,17 +59,18 @@ public:
 
 FileLogger::FileLogger(const char *fname) : internals(0){
 	internals = new Internals;
+	char buf[40];
+	getTimeString(buf, 40);
 #if 1
     std::string n("/tmp/");
     n += fname;
     n + ".txt";
     internals->file().open (n,  std::ofstream::out | std::ofstream::app);
-    char buf[40];
-    getTimeString(buf, 40);
 	internals->file()<<program_name << " " << buf << " ";
 #else
 	internals->f = &std::cerr;
 	internals->allocated = false;
+	*internals->f << buf << " ";
 #endif
   }
 
