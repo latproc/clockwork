@@ -999,8 +999,5 @@ void initialise_machines() {
 		}
 	}
 
-	// let channels start processing messages
-	Channel::startChannels();
-
 }
 

@@ -964,6 +964,7 @@ int main(int argc, const char * argv[])
 	// the local command channel accepts commands from the modbus thread and relays them to iod.
 	zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
 	iosh_cmd.bind(local_commands);
+	usleep(50); // in case the bind takes a little while
 
 	SubscriptionManager subscription_manager("MODBUS_CHANNEL", eCLOCKWORK, "localhost", 5555);
 	subscription_manager.configureSetupConnection(host.c_str(), cw_out);

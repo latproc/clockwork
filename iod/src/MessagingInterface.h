@@ -42,10 +42,10 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then);
 
 enum ProtocolType { eCLOCKWORK, eRAW, eZMQ, eCHANNEL };
 
-bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout = -1);
+bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout = 1000);
 void safeSend(zmq::socket_t &sock, const char *buf, int buflen);
 
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us = 1000000);
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us = 1000);
 
 
 class MessagingInterface : public Receiver {

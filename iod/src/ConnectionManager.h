@@ -115,8 +115,13 @@ public:
 
 	// Status tracks the state of the connection between the subscription
 	// manager and the command interface of the remote application
-	enum Status {e_not_used, e_startup, e_disconnected, e_waiting_connect,
-		e_settingup_subscriber, e_waiting_subscriber, e_waiting_setup, e_done };
+	enum Status {e_not_used,
+		e_startup, //have not attempted to connet
+		e_waiting_connect, // have attempted to connect
+		e_waiting_setup, // have connected and requested channel
+		e_settingup_subscriber, // connecting to subscriber channel
+		e_waiting_subscriber, // 
+		e_done, e_disconnected };
 
 	// SubStatus tracks the state of the connection between each of the subscription
 	// manager's subscription channel; this is the main data channel for a subscription.
@@ -135,6 +140,7 @@ public:
 	void init();
 	
 	bool requestChannel();
+	bool connectToChannel();
 
 	void configureSetupConnection(const char *host, int port);
 	

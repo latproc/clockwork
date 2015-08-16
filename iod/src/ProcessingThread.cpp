@@ -446,7 +446,7 @@ void ProcessingThread::operator()()
 					MessageLog::instance()->add(error.c_str());
 				}
 				FileLogger fl(program_name); fl.f() << "Enabling client access\n";
-				safeSend(resource_mgr, "start", 5);
+				safeSend(resource_mgr, "begin", 5);
 			}
 		}
 		else {

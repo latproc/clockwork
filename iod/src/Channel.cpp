@@ -205,8 +205,6 @@ Action::Status Channel::setState(const State &new_state, bool resume) {
 	}
 	if (new_state == ChannelImplementation::CONNECTED) {
 		DBG_CHANNELS << name << " CONNECTED\n";
-		enableShadows();
-		setNeedsCheck();
 		if (isClient()) {
 			SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
 			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
@@ -298,7 +296,10 @@ void Channel::startChannels() {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		if (!chn->started()) chn->start();
+		if (!chn->started()) {
+			DBG_CHANNELS << "STARTING CHANNEL " << chn->name << "\n";
+			chn->start();
+		}
 	}
 }
 void Channel::stopChannels() {
@@ -331,6 +332,8 @@ void Channel::addConnection() {
 		}
 		else {
 			if (definition()->isPublisher()) {
+				enableShadows();
+				setNeedsCheck();
 				SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
@@ -504,6 +507,10 @@ public:
 };
 
 void Channel::startServer(ProtocolType proto) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+
 	//DBG_CHANNELS << name << " startServer\n";
 	if (mif) {
 		DBG_CHANNELS << "Channel::startServer() called when mif is already allocated\n";
@@ -514,6 +521,7 @@ void Channel::startServer(ProtocolType proto) {
 		return;
 	}
 
+	NB_MSG << tnam << " starting server\n";
 	std::string socknam("inproc://");
 	mif = MessagingInterface::create("*", port, proto);
 	monit_subs = new SocketMonitor(*mif->getSocket(), mif->getURL().c_str());
@@ -523,6 +531,7 @@ void Channel::startServer(ProtocolType proto) {
 	monit_subs->addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
 	monit_subs->addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
 	monitor_thread = new boost::thread(boost::ref(*monit_subs));
+	NB_MSG << tnam << " started server monitor\n";
 	mif->start();
 }
 
@@ -581,13 +590,17 @@ void Channel::stopServer() {
 // the client and server enter the downloading and uploading states
 // in opposite orders.
 void Channel::checkStateChange(std::string event) {
+	{FileLogger fl(program_name); fl.f() << "Received " << event << " in " << current_state << " on " << name << "\n";}
 	DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << name << "\n";
-	if (current_state == ChannelImplementation::DISCONNECTED) return;
+	//if (current_state == ChannelImplementation::DISCONNECTED)
+	//	return;
 	if (isClient()) {
 		if ( current_state == ChannelImplementation::DOWNLOADING )
 			setState(ChannelImplementation::UPLOADING);
 		else if (current_state == ChannelImplementation::UPLOADING) {
 			DBG_CHANNELS << name << " -> ACTIVE\n";
+			enableShadows();
+			setNeedsCheck();
 			setState(ChannelImplementation::ACTIVE);
 		}
 		else {
@@ -598,7 +611,8 @@ void Channel::checkStateChange(std::string event) {
 	else {
 		// note that the start event may arrive before our switch to waitstart.
 		// we rely on the client resending if necessary
-		if ( current_state == ChannelImplementation::WAITSTART && event == "status" )
+		if ( (current_state == ChannelImplementation::WAITSTART && event == "status")
+			|| (current_state == ChannelImplementation::DISCONNECTED && event == "status") )
 			setState(ChannelImplementation::UPLOADING);
 		else if (current_state == ChannelImplementation::ACTIVE && event == "status")
 			setState(ChannelImplementation::UPLOADING);
@@ -675,10 +689,11 @@ void Channel::operator()() {
 	char start_cmd[20];
 	DBG_CHANNELS << "channel " << name << " thread waiting for start message\n";
 	size_t start_len = cmd_server->recv(start_cmd, 20);
+	start_cmd[ (start_len<20)?start_len: 19 ] = 0;
 	if (!start_len) { DBG_CHANNELS << name << " error getting start message\n"; }
 	cmd_server->send("ok", 2);
 	zmq::pollitem_t *items = 0;
-	DBG_CHANNELS << "channel " << name << " thread received start message\n";
+	DBG_CHANNELS << "channel " << name << " thread received start message: " << start_cmd << "\n";
 
 	//SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
 	//enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
@@ -781,10 +796,12 @@ void Channel::sendMessage(const char *msg, zmq::socket_t &sock) {
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 	if (!subscriber_thread) {
+		NB_MSG << name << " sendMessage sending " << msg << "\n";
 		//return ::sendMessage(msg, sock);
 		safeSend(sock, msg, strlen(msg));
 	}
 	else {
+		NB_MSG << name << " sendMessage sending " << msg << " to cmd_client\n";
 		safeSend(*cmd_client, msg, strlen(msg));
 	}
 }
@@ -805,13 +822,14 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 		safeRecv(sock, buf, 200, true, len);*/
 	}
 	else {
-		DBG_CHANNELS << "Channel " << name << " sendMessage() sending " << msg << " through a channel thread\n";
+		DBG_CHANNELS << "Channel " << name << " " << tnam << " sendMessage() sending " << msg << " through a channel thread\n";
 		safeSend(*cmd_client, msg, strlen(msg));
 		char response_buf[100];
 		size_t rlen;
+		DBG_CHANNELS << "Channel " << name << " " << tnam << " sendMessage() receiving response from channel thread\n";
 		safeRecv(*cmd_client, response_buf, 100, true, rlen);
 		response = response_buf;
-		DBG_CHANNELS << "Channel " << name << " sendMessage() got response for " << msg << " from a channel thread\n";
+		DBG_CHANNELS << "Channel " << name <<" " << tnam << " sendMessage() got response for " << msg << " from a channel thread\n";
 
 	}
 	return true;
@@ -868,22 +886,25 @@ void Channel::startSubscriber() {
 		char tnam[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 		assert(pgn_rc == 0);
-		//DBG_CHANNELS << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
+		DBG_CHANNELS << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
 
 		subscriber_thread = new boost::thread(boost::ref(*this));
 
 		// create a socket to communicate with the newly started subscriber thread
 		cmd_client = createCommandSocket(true);
+		usleep(100);
 
 		// start the subcriber thread
-		DBG_CHANNELS << name << " sending command start message\n";
-		cmd_client->send("start",5);
+		DBG_CHANNELS << tnam << " "<< name << " sending command start message\n";
+		safeSend(*cmd_client, "start", 5);
 		char buf[100];
 		DBG_CHANNELS << name << " sent command start message\n";
-		size_t buflen = cmd_client->recv(buf, 100);
+		size_t response_len;
+		safeRecv(*cmd_client, buf, 100, true, response_len);
 		DBG_CHANNELS << name << " command start message acknowledged\n";
-		buf[buflen] = 0;
+		buf[response_len] = 0;
 
+		DBG_CHANNELS << tnam << " setting up channel monitors\n";
 		connect_responder = new ChannelConnectMonitor(this);
 		disconnect_responder = new ChannelDisconnectMonitor(this);
 		if (isClient())
@@ -1605,6 +1626,7 @@ void ChannelDefinition::addOptionName(const char *n, Value &v) {
 #include "EnableAction.h"
 
 void Channel::enableShadows() {
+	DBG_CHANNELS << "enabling shadows\n";
     // enable all machines that are updated by this channel
 	// don't perform the enable operation here though,
 	// queue them for later

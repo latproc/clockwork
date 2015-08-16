@@ -42,7 +42,7 @@ bool Watchdog::triggered(uint64_t t) const {
 	else {has_triggered = trigger_time != 0;}
 	if (has_triggered) {
 		//std::cout << name << " woof: " << (t-last_time)/1000 << "\n";
-		{FileLogger fl(program_name); fl.f() << name << " woof: " << (t-last_time)/1000 << "\n"; }
+		{FileLogger fl(program_name); fl.f() << name << " woof: " << (int64_t)(t-last_time)/1000 << "\n"; }
 	}
 	return has_triggered;
 }

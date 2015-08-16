@@ -1031,7 +1031,7 @@ int main(int argc, const char * argv[])
 								++error_count;
                 if (zmq_errno()) {
                     std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
-										{ FileLogger fl(program_name); fl.f() << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
+					{ FileLogger fl(program_name); fl.f() << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
 								}
                 else {
                     std::cerr << "exception when checking connections: " << e.what() << "\n";
