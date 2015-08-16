@@ -65,6 +65,7 @@
 #include "ecat_thread.h"
 #include "ProcessingThread.h"
 #include "EtherCATSetup.h"
+#include "Channel.h"
 
 const char *program_name = 0;
 bool program_done = false;
@@ -348,6 +349,10 @@ if (num_errors > 0) {
 	IODHardwareActivation iod_activation;
 	ProcessingThread processMonitor(machine, iod_activation, stateMonitor);
 	boost::thread process(boost::ref(processMonitor));
+
+	// let channels start processing messages
+	Channel::startChannels();
+
 	// do not start a thread, simply run this process directly
 	//processMonitor();
 	try {
