@@ -106,7 +106,7 @@ bool Watchdog::showTriggered(int64_t t, bool reset, std::ostream &out) {
 	return found;
 }
 bool Watchdog::showTriggered(uint64_t t, bool reset, std::ostream &out) {
-	return showTriggered(t, reset, out);
+	return showTriggered((int64_t)t, reset, out);
 }
 
 #ifdef TESTING
