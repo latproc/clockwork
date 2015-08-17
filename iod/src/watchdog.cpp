@@ -119,8 +119,8 @@ int main(int argc, char *argv[] ) {
 	for(int i=0; i<20; ++i) {
 		wd1.poll();
 		uint64_t now = Watchdog::now();
-		if (wd1.triggered(now)) { std::cout << "wd1 triggered:"<< (now - wd1.last()) <<"\n"; }
-		if (wd2.triggered(now)) { std::cout << "wd2 triggered:"<< (now - wd2.last()) <<"\n"; }
+		if (wd1.triggered(now)) { std::cout << "wd1 triggered:"<< (now - wd1.last()) <<"\n"; wd1.reset(); }
+		if (wd2.triggered(now)) { std::cout << "wd2 triggered:"<< (now - wd2.last()) <<"\n"; wd2.reset();}
 		usleep(5000);
 		
 	}

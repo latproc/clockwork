@@ -507,21 +507,21 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 					}
 				}
 				else {
-					{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
-					DBG_CHANNELS << " forwarding message to subscriber\n";
+					//{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
+					//DBG_CHANNELS << " forwarding message to subscriber\n";
 					subscriber().send(buf, msglen);
 					safeSend(cmd, "sent", 4);
 				}
 			}
 			else if (!monit_subs.disconnected()) {
-				DBG_CHANNELS << " forwarding message "<<buf<<" to subscriber\n";
+				//DBG_CHANNELS << " forwarding message "<<buf<<" to subscriber\n";
 				subscriber().send(buf, msglen);
 				if (protocol == eCLOCKWORK) { // require a response
-					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client and waiting response\n"<<std::flush; }
+					//{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client and waiting response\n"<<std::flush; }
 					run_status = e_waiting_response;
 				}
 				else {
-					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client\n"<<std::flush; }
+					//{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client\n"<<std::flush; }
 					safeSend(cmd, "sent", 4);
 				}
 			}
@@ -547,7 +547,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 					? safeRecv(setup(), buf, 1000, false, msglen)
 					: safeRecv(subscriber(), buf, 1000, false, msglen);
 			if (got_response) {
-				DBG_CHANNELS << " forwarding response " << buf << "\n";
+				//DBG_CHANNELS << " forwarding response " << buf << "\n";
 				if (msglen && msglen<1000) {
 					cmd.send(buf, msglen);
 				}

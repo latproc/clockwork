@@ -585,7 +585,7 @@ void IODCommandThread::operator()() {
 				char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
 				memcpy(data, request.data(), size);
 				data[size] = 0;
-				NB_MSG << "Client interface received:" << data << "\n";
+				//NB_MSG << "Client interface received:" << data << "\n";
 				IODCommand *new_command = parseCommandString(data);
 				if (new_command == 0) {
 					const char *tosend = "Empty message received\n";
