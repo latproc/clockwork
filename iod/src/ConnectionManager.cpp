@@ -172,13 +172,16 @@ bool SubscriptionManager::requestChannel() {
 	assert(isClient());
 	if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()
 	   ) {
-		bool sent_request = false;
+		static bool sent_request = false;
+		static uint64_t send_time = 0;
 		int error_count = 0;
-		while (!sent_request && error_count<4) {
+		if (!sent_request || send_time - microsecs() > 3000000) {
+
 			DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
 			char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
 			try {
-				usleep(100);
+				usleep(200);
+				setSetupStatus(SubscriptionManager::e_waiting_setup);
 				len = setup().send(channel_setup, strlen(channel_setup));
 				if (len == 0) // temporarily unavailable
 					usleep(20);
@@ -201,7 +204,6 @@ bool SubscriptionManager::requestChannel() {
 			{FileLogger fl(program_name); fl.f() << channel_name << " aborting\n" << std::flush; }
 			exit(2);
 		}
-		setSetupStatus(SubscriptionManager::e_waiting_setup);
 		return false;
 	}
 	if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
