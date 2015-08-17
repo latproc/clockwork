@@ -554,7 +554,7 @@ struct ModbusServerThread
 								std::string cmd = *iter++;
 								std::string response;
 								uint64_t cmd_timeout = 2000000;
-								if (!sendMessage(cmd.c_str(), *cmd_interface, response, cmd_timeout)
+								if (!sendMessage(cmd.c_str(), *cmd_interface, response, cmd_timeout))
 								{
 									FileLogger fl(program_name);
 									fl.f() << "Message send of " << cmd << " failed\n";
