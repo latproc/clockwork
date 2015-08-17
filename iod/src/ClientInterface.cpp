@@ -545,10 +545,6 @@ void IODCommandThread::operator()() {
 					}
 				if (command->done == IODCommand::Success) {
 					const char * cmdres = command->result();
-					{
-						FileLogger fl(program_name); fl.f()
-							<< "Client Interface command generated response: " << cmdres << "\n";
-						}
 					if (!(*cmdres)) {
 						char buf[100];
 						snprintf(buf, 100, "command generated an empty response");
