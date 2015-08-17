@@ -164,6 +164,7 @@ sendMessage_transmit:
 	--retries;
 	while (1) {
 		if (timeout_us && microsecs() - start_time > timeout_us) {
+			{FileLogger fl(program_name); fl.f() << "sendMessage timeout: " <<msg <<"\n"; }
 			response = "timeout";
 			return false; // unable to send
 		}
@@ -182,21 +183,21 @@ sendMessage_transmit:
 		}
 		catch (zmq::error_t e) {
 			if (errno == EINTR) {
-				NB_MSG << "Warning: send was interrupted (EINTR)\n" << std::flush;
+				FileLogger fl(program_name); fl.f()  << "Warning: send was interrupted (EINTR)\n" << std::flush;
 				usleep(50);
 				continue;
 			}
-			NB_MSG << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;
+			{FileLogger fl(program_name); fl.f()  << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;}
 			if (errno == EFSM) {
 				// attempt to recover from an FSM error
-				NB_MSG << "Finite state machine error\n";
+				FileLogger fl(program_name); fl.f()  << "Finite state machine error\n";
 				fsm_recovery = true;
 				exit(2);
 			}
 			char buf[100];
 			snprintf(buf, 100, "Error %s sending message", zmq_strerror(zmq_errno()));
 			MessageLog::instance()->add(buf);
-			NB_MSG << buf << "\n";
+			{FileLogger fl(program_name); fl.f()  << buf << "\n";}
 			if (!fsm_recovery) {
 				response = buf;
 				return false;
