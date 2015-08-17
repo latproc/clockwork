@@ -257,6 +257,7 @@ sendMessage_transmit:
 			snprintf(err, 300, "sendMessage error: %s in %s:%d\n", zmq_strerror(errno), fnam, __LINE__);
 			std::cerr << err;
 			if (zmq_errno() == EFSM) {
+				exit(61);
 				// send must have failed
 				usleep(50);
 				const char *errmsg = "sendMessage FSM error, resending message";

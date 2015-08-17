@@ -265,7 +265,7 @@ void Channel::start() {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
-	//DBG_CHANNELS << "Channel " << name << " starting from thread "<< tnam << "\n";
+	DBG_CHANNELS << "Channel " << name << " starting from thread "<< tnam << "\n";
 
 
 	if (isClient()) {
@@ -274,7 +274,10 @@ void Channel::start() {
 		startSubscriber();
 	}
 	else {
-		if (definition()->isPublisher()) startServer(eZMQ); else startSubscriber();
+		if (definition()->isPublisher())
+			startServer(eZMQ);
+		else
+			startSubscriber();
 	}
 	started_ = true;
 }
@@ -527,7 +530,7 @@ void Channel::startServer(ProtocolType proto) {
 }
 
 void Channel::startClient() {
-	//DBG_CHANNELS << name << " startClient\n";
+	DBG_CHANNELS << name << " startClient\n";
 	if (mif) {
 		DBG_CHANNELS << "Channel::startClient() called when mif is already allocated\n";
 		return;
@@ -1881,7 +1884,7 @@ void Channel::checkCommunications() {
 		}
     }
 #endif
-	{
+	//if (monit_subs && !monit_subs->disconnected()){
 		boost::mutex::scoped_lock(update_mutex);
 		std::list<IODCommand*>::iterator iter = pending_commands.begin();
 		while (iter != pending_commands.end()) {
@@ -1892,7 +1895,7 @@ void Channel::checkCommunications() {
 			iter = pending_commands.erase(iter);
 			completed_commands.push_back(command);
 		}
-	}
+	//}
 }
 
 void Channel::setupAllShadows() {

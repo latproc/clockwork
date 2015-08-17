@@ -1225,11 +1225,11 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 										}
                     while (true) {
                         try {
-													  std::cout << "instantiating a channel on port " << port << "\n";
-                            chn = defn->instantiate(port);
-														assert(chn);
-														chn->start();
-														chn->enable();
+							std::cout << "instantiating a channel on port " << port << "\n";
+							chn = defn->instantiate(port);
+							assert(chn);
+							chn->start();
+							chn->enable();
                             break;
                         }
                         catch (zmq::error_t err) {

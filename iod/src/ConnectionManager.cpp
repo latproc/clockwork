@@ -186,12 +186,12 @@ bool SubscriptionManager::requestChannel() {
 					++error_count;
 					{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 						<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
-					if (zmq_errno() == 156384763 /*EFSM*/) { 
-						exit(61);
+					if (zmq_errno() == EFSM /*EFSM*/) {
 						{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
 						zmq::message_t m; setup().recv(&m); 
 						{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
-						return false;
+						return false;						//exit(61);
+
 					}
 				}
 			}
@@ -314,41 +314,40 @@ zmq::socket_t &SubscriptionManager::setup() { assert(setup_); return *setup_; }
 static int channel_error_count = 0;
 
 bool SubscriptionManager::checkConnections() {
-	if (!isClient()) {
-/*
-		if (monit_subs.disconnected())
-			{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has no client connection\n"<<std::flush; }
-		else
-			{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has client connection\n"<<std::flush;}
-*/
+	if (!isClient())
 		return !monit_subs.disconnected();
-	}
 
+	if (setupStatus() == e_startup) {
+		setupConnections();
+		return false;
+	}
+	/*
+	if (monit_subs.disconnected())
+		{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has no client connection\n"<<std::flush; }
+	else
+		{FileLogger fl(program_name); fl.f()
+			<< channel_name
+			<< "SubscriptionManager checkConnections() server has client connection\n"<<std::flush;}
+*/
 	uint64_t timer = microsecs() - state_start;
 
-	//TBD is this helpful?
-	/*
-	if (monit_setup->disconnected() && setupStatus() != e_disconnected
+	if (monit_setup->disconnected()
 			&& setupStatus() != e_startup && setupStatus() != e_waiting_connect) {
-		setSetupStatus(e_disconnected);
+		setSetupStatus(e_waiting_connect);
+		return false;
 	}
-	 */
+	/*
 	{
 		if (setupStatus() != e_done) {
 			FileLogger fl(program_name); fl.f() << channel_name 
 				<< " state " << setupStatus() << " timer: " << timer << "\n"<<std::flush; 
-		}
-		if (timer>2000000 and (setupStatus() == e_waiting_connect || setupStatus() == e_disconnected) ) {
-			{FileLogger fl(program_name); fl.f() << channel_name << "attempting connect\n"; }
-			setSetupStatus(e_startup);
-			setupConnections();
-		}
-		if (timer>2000000 and setupStatus() == e_waiting_setup) {
-			{FileLogger fl(program_name); fl.f() << channel_name << "attempting connect\n"; }
-			setSetupStatus(e_waiting_connect);
-			setupConnections();
+			if (timer>20000 and (setupStatus() > e_waiting_connect) ) {
+				{FileLogger fl(program_name); fl.f() << channel_name << " attempting connect\n"; }
+				setupConnections();
+			}
 		}
 	}
+	*/
 	if (monit_setup->disconnected() || monit_subs.disconnected() )
 	{
 		FileLogger fl(program_name); fl.f()
@@ -356,13 +355,7 @@ bool SubscriptionManager::checkConnections() {
 		<< ( ( monit_subs.disconnected() ) ? "subs down " : "subs up " ) << "\n";
 	}
 
-	if (monit_setup->disconnected() && setupStatus() == e_done) {
-		setSetupStatus(e_startup);
-		return false; // wait for reconnect
-	}
-
-
-
+	/*
 	if (monit_setup->disconnected() && monit_subs.disconnected()) {
 		if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
 			{FileLogger fl(program_name);
@@ -416,21 +409,26 @@ bool SubscriptionManager::checkConnections() {
         usleep(50000);
         return false;
     }
+	 */
     if (monit_subs.disconnected() || monit_setup->disconnected()) {
 		if (monit_subs.disconnected())
-		{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server publisher\n"<<std::flush; }
+		{
+			FileLogger fl(program_name); fl.f()
+				<< "SubscriptionManager disconnected from server publisher\n"<<std::flush;
+			setupConnections();
+		}
 		if (monit_setup->disconnected())
 		{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n"<<std::flush; }
         usleep(50000);
         return false;
 	}
-	if (monit_setup && !monit_setup->disconnected())
+	if (monit_setup && !monit_setup->disconnected() && !monit_subs.disconnected())
 		setSetupStatus(SubscriptionManager::e_done);
 
 	channel_error_count = 0;
     return true;
 }
-
+/*
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items) {
 	assert(false); // shouldn't be used yet
 	if (!checkConnections()) return false;
@@ -442,7 +440,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	if (!rc) return true;
 	return false;
 }
-
+*/
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
