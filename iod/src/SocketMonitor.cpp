@@ -62,7 +62,6 @@ void SocketMonitor::operator()() {
 #else
         pthread_setname_np(pthread_self(), thread_name);
 #endif
-	usleep(300); // pause to give the other end of the socket time to bind
 	int exception_count = 0;
     while (!aborted) {
         try {
@@ -138,7 +137,7 @@ void SocketMonitor::on_event_bind_failed(const zmq_event_t &event_, const char* 
         //DBG_MSG << socket_name<< " on_event_bind_failed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_accepted(const zmq_event_t &event_, const char* addr_) {
-        DBG_MSG << socket_name << " on_event_accepted " << event_.value << " " << addr_ << "\n";
+        //DBG_MSG << socket_name << " on_event_accepted " << event_.value << " " << addr_ << "\n";
         disconnected_ = false;
 		checkResponders(event_, addr_);
     }
@@ -147,14 +146,14 @@ void SocketMonitor::on_event_accept_failed(const zmq_event_t &event_, const char
 }
 void SocketMonitor::on_event_closed(const zmq_event_t &event_, const char* addr_) {
 	disconnected_ = true;
-	DBG_MSG << socket_name<< " on_event_closed " << addr_ << "\n";
+        //DBG_MSG << socket_name<< " on_event_closed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_close_failed(const zmq_event_t &event_, const char* addr_) {
         //DBG_MSG << socket_name<< " on_event_close_failed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-	DBG_MSG << socket_name<< " on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
-	disconnected_ = true;
+        //DBG_MSG << socket_name<< " on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
+        disconnected_ = true;
 	checkResponders(event_, addr_);
 }
 void SocketMonitor::on_event_unknown(const zmq_event_t &event_, const char* addr_) {

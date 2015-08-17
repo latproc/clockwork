@@ -308,17 +308,11 @@ MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred
 }
 
 void MessagingInterface::start() {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-	if (started_) {
-		NB_MSG << tnam << " interface already started\n";
-		return;
-	}
+	if (started_) return;
 	if (protocol == eCLOCKWORK || protocol == eZMQ|| protocol == eCHANNEL) {
 		owner_thread = pthread_self();
 		if (hostname == "*" || hostname == "*") {
-			FileLogger fl(program_name); fl.f() << "  ****binding*** " << url << "\n";
+			NB_MSG << "binding " << url << "\n";
 			socket->bind(url.c_str());
 		}
 		else {

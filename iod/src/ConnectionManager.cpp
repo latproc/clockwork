@@ -171,10 +171,10 @@ bool SubscriptionManager::requestChannel() {
     size_t len = 0;
 	assert(isClient());
     if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-		bool sent_request = false;
-		int error_count = 0;
-		while (!sent_request && error_count<4) {
-			DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
+			bool sent_request = false;
+			int error_count = 0;
+			while (!sent_request && error_count<4) {
+				DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
         char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
 				try {
         len = setup().send(channel_setup, strlen(channel_setup));
@@ -202,11 +202,6 @@ bool SubscriptionManager::requestChannel() {
        setSetupStatus(SubscriptionManager::e_waiting_setup);
        return false;
     }
-	return false;
-}
-
-bool SubscriptionManager::connectToChannel() {
-	size_t len = 0;
     if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
         char buf[1000];
         if (!safeRecv(setup(), buf, 1000, false, len, 2)) return false; // attempt a connection but do not wait very long before giving up
@@ -242,10 +237,7 @@ bool SubscriptionManager::connectToChannel() {
             cJSON_Delete(chan);
         }
     }
-	if (current_channel == "") {
-		DBG_CHANNELS << "FAILED to setup channel\n";
-		return false;
-	}
+    if (current_channel == "") return false;
     return true;
 }
 
@@ -256,6 +248,7 @@ void SubscriptionManager::configureSetupConnection(const char *host, int port) {
     
 static char *setup_url = 0;
 bool SubscriptionManager::setupConnections() {
+	// setupStatus() == SubscriptionManager::e_disconnected)  ????
 	char url[100];
 	if (setupStatus() == SubscriptionManager::e_startup ) {
 		snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), setup_port);
@@ -333,6 +326,29 @@ bool SubscriptionManager::checkConnections() {
 
 	uint64_t timer = microsecs() - state_start;
 
+	//TBD is this helpful?
+	/*
+	if (monit_setup->disconnected() && setupStatus() != e_disconnected
+			&& setupStatus() != e_startup && setupStatus() != e_waiting_connect) {
+		setSetupStatus(e_disconnected);
+	}
+	 */
+	{
+		if (setupStatus() != e_done) {
+			FileLogger fl(program_name); fl.f() << channel_name 
+				<< " state " << setupStatus() << " timer: " << timer << "\n"<<std::flush; 
+		}
+		if (timer>2000000 and (setupStatus() == e_waiting_connect || setupStatus() == e_disconnected) ) {
+			{FileLogger fl(program_name); fl.f() << channel_name << "attempting connect\n"; }
+			setSetupStatus(e_startup);
+			setupConnections();
+		}
+		if (timer>2000000 and setupStatus() == e_waiting_setup) {
+			{FileLogger fl(program_name); fl.f() << channel_name << "attempting connect\n"; }
+			setSetupStatus(e_waiting_connect);
+			setupConnections();
+		}
+	}
 	if (monit_setup->disconnected() || monit_subs.disconnected() )
 	{
 		FileLogger fl(program_name); fl.f()
@@ -340,52 +356,81 @@ bool SubscriptionManager::checkConnections() {
 		<< ( ( monit_subs.disconnected() ) ? "subs down " : "subs up " ) << "\n";
 	}
 
-	if (monit_setup->disconnected()) {
-		if (setupStatus() == e_startup) { setupConnections(); return false; }
-
-		if (setupStatus() == e_waiting_connect ) return false;
-
-		//wait for the connection to come back before we can do anything else.
-		// we will need to rerequest a channel etc
-		setSetupStatus(e_waiting_connect); return false;
+	if (monit_setup->disconnected() && setupStatus() == e_done) {
+		setSetupStatus(e_startup);
+		return false; // wait for reconnect
 	}
-	else {
-		if (setupStatus() == e_waiting_connect && timer > 10000) {
-			DBG_CHANNELS << " REQUESTING CHANNEL\n";
-			requestChannel();
+
+
+
+	if (monit_setup->disconnected() && monit_subs.disconnected()) {
+		if (setupStatus() != e_waiting_connect && setupStatus() != e_disconnected) {
+			{FileLogger fl(program_name);
+				fl.f() << channel_name << "SubscriptionManager: checkConnections() attempting to setup connection "
+					<< " setup status is " << setupStatus() << "\n" << std::flush; }
+			if (setupStatus() == e_done || setupStatus() == e_settingup_subscriber) setSetupStatus(e_waiting_connect);
+			//setSetupStatus(e_startup);
+			setupConnections();
 		}
-		else if (setupStatus() == e_waiting_setup && timer > 10000) {
-			DBG_CHANNELS << " CONNECTING TO CHANNEL\n";
-			if (connectToChannel()) {
-				// define the channel
-				char url[100];
-				snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), subscriber_port);
-				if (!monit_subs.disconnected() && strcmp(url, channel_url.c_str()) != 0) {
-					// perhaps the subscriber hasn't had time to notice loss of connection but
-					// the url is now different. We can't deal with this situation yet
-					std::cerr << "NOTE: Channel has changed from " << channel_url << " to " << url << " exiting\n";
-					exit(0);
+		else
+		{
+			FileLogger fl(program_name); fl.f() 
+				<< channel_name 
+				<< "SubscriptionManager: has no client or setup connection but setup status is "
+				<< setupStatus() << "\n" << std::flush;
+			if (timer > 1000000) {
+				try {
+					if (!monit_setup->disconnected() )
+						setup().disconnect(setup_url);
 				}
-				channel_url = url;
-				if ( sub_status_ == ss_init && monit_subs.disconnected()) {
-					DBG_CHANNELS << " connecting subscriber to " << channel_url << "\n";
-					{FileLogger fl(program_name); fl.f() << " connecting subscriber to " << channel_url << "\n"; }
-					monit_subs.setEndPoint(channel_url.c_str());
-					subscriber().connect(channel_url.c_str());
-					//setSetupStatus(SubscriptionManager::e_done); //TBD is this correct? Shouldn't be here
-					sub_status_ =  (protocol == eCLOCKWORK) ? ss_sub : ss_ready;
+				catch (std::exception ex) {
+					FileLogger fl(program_name); fl.f() << channel_name << "exception "
+					<< zmq_strerror(zmq_errno()) <<" disconnecting\n";
 				}
+				setSetupStatus(e_startup);
+				setupConnections();
 			}
 		}
-		if (setupStatus() == e_settingup_subscriber && !monit_subs.disconnected())
-			setSetupStatus(e_done);
+		usleep(50000);
+		return false;
 	}
+	if (setupStatus() == e_disconnected) {
+		{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager: clockwork connection has broken..\n"; }
+		setupConnections();
+		usleep(50000);
+		return false;
+	}
+    else if ( !monit_setup->disconnected() && monit_subs.disconnected() ) {
+        // no subscriber
+		{FileLogger fl(program_name); fl.f() << channel_name
+					<< "SubscriptionManager: subscriber is not connected clockwork connection state: "
+					<< setupStatus() << "\n"; }
+		if (setupStatus() == e_done) {
+			++channel_error_count;
+			if (channel_error_count>20) {
+				{FileLogger fl(program_name); fl.f() << "Too many errors: exiting\n"; }
+				exit(2);
+			}
+		}
+        setupConnections();
+        usleep(50000);
+        return false;
+    }
+    if (monit_subs.disconnected() || monit_setup->disconnected()) {
+		if (monit_subs.disconnected())
+		{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server publisher\n"<<std::flush; }
+		if (monit_setup->disconnected())
+		{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n"<<std::flush; }
+        usleep(50000);
+        return false;
+	}
+	if (monit_setup && !monit_setup->disconnected())
+		setSetupStatus(SubscriptionManager::e_done);
 
 	channel_error_count = 0;
     return true;
 }
 
-/*
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items) {
 	assert(false); // shouldn't be used yet
 	if (!checkConnections()) return false;
@@ -397,7 +442,6 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	if (!rc) return true;
 	return false;
 }
-*/
 
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
 	char tnam[100];
@@ -408,7 +452,6 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		FileLogger fl(program_name); fl.f()
 			<< "SubscriptionManager checkConnections() failed ";
 			fl.f()<< subscriber_host<<":"<<subscriber_port<< "\n";
-		return false;
 	}
     int rc = 0;
     if (isClient() && num_items>2 && (monit_subs.disconnected() || monit_setup->disconnected()) )
@@ -444,39 +487,39 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		if (safeRecv(cmd, buf, 10000, false, msglen)) {
             if (msglen == 10000) msglen--;
             buf[msglen] = 0;
-            DBG_CHANNELS << tnam << " got cmd: " << buf << " of len: " << msglen << " from main thread\n";
+            DBG_CHANNELS << " got cmd: " << buf << " of len: " << msglen << " from main thread\n";
 			// if we are a client, pass commands through the setup socket to the other end
 			// of the channel.
 			if (isClient() && monit_setup && !monit_setup->disconnected()) {
 				if (protocol != eCHANNEL) {
 					if (setupStatus() == e_done) {
-						{FileLogger fl(program_name); fl.f() << " " << tnam << " received " <<buf<< "to pass on and get response\n"<<std::flush; }
+						{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
 						setup().send(buf,msglen);
 						run_status = e_waiting_response;
 					}
 					else {
-						{FileLogger fl(program_name); fl.f() << " " << tnam << "received " <<buf<< "to pass on and get response"
+						{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response"
 							<< " but the channel is not completely setup yet\n"<<std::flush; }
 						//setup().send(buf,msglen);
 						//run_status = e_waiting_response;
 					}
 				}
 				else {
-					{FileLogger fl(program_name); fl.f() << tnam << " " << "received " <<buf<< " to publish\n"<<std::flush; }
-					DBG_CHANNELS << tnam << " forwarding message to subscriber\n";
+					{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
+					DBG_CHANNELS << " forwarding message to subscriber\n";
 					subscriber().send(buf, msglen);
 					safeSend(cmd, "sent", 4);
 				}
 			}
 			else if (!monit_subs.disconnected()) {
-				DBG_CHANNELS << tnam << " forwarding message "<<buf<<" to subscriber\n";
+				DBG_CHANNELS << " forwarding message "<<buf<<" to subscriber\n";
 				subscriber().send(buf, msglen);
 				if (protocol == eCLOCKWORK) { // require a response
 					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client and waiting response\n"<<std::flush; }
 					run_status = e_waiting_response;
 				}
 				else {
-					{FileLogger fl(program_name); fl.f() << " " << tnam << "forwarding " <<buf<< "to client\n"<<std::flush; }
+					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client\n"<<std::flush; }
 					safeSend(cmd, "sent", 4);
 				}
 			}

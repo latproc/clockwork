@@ -24,17 +24,12 @@ flasher Flasher (tab:tests);
 # a three state machine. This machine needs to be kick started by being set to on or off
 
 Cycle MACHINE {
-	OPTION delay 150;
-	s1 WHEN SELF IS s1, EXECUTE flip WHEN TIMER>=delay;
-	s2 WHEN SELF IS s2, EXECUTE flip WHEN TIMER>=delay;
-	s3 WHEN SELF IS s3, EXECUTE flip WHEN TIMER>=delay;
+	s1 WHEN SELF IS s1, EXECUTE flip WHEN TIMER>=1000;
+	s2 WHEN SELF IS s2, EXECUTE flip WHEN TIMER>=1000;
+	s3 WHEN SELF IS s3, EXECUTE flip WHEN TIMER>=1000;
 	COMMAND flip { SEND next TO SELF }
 	TRANSITION s1 TO s2 ON next;
 	TRANSITION s2 TO s3 ON next;
 	TRANSITION s3 TO s1 ON next;
 }
 cycle Cycle (tab:tests);
-cycle1 Cycle (tab:tests);
-cycle2 Cycle (tab:tests);
-cycle3 Cycle (tab:tests);
-cycle4 Cycle (tab:tests);

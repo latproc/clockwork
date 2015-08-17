@@ -499,7 +499,7 @@ void IODCommandThread::operator()() {
 		}
 		if (len<20) start_cli[len] = 0;;
 		usleep(100000);
-	} while (strcmp(start_cli, "begin") != 0);
+	} while (strcmp(start_cli, "start") != 0);
 
     enum {e_running, e_wait_processing_start, e_wait_processing, e_responding} status = e_running; //are we holding shared resources?
 		int poll_time = 20;

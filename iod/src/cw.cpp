@@ -353,12 +353,6 @@ int main (int argc, char const *argv[])
 		NB_MSG << "simulated io got start message: " << buf << "\n";
 	}
 
-	usleep(1000);
-
-	// let channels start processing messages
-	Channel::startChannels();
-
-
     NB_MSG << "processing has started\n";
     struct timeval then;
     gettimeofday(&then,0);

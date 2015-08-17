@@ -71,25 +71,21 @@ bool CommandManager::checkConnections() {
 }
 
 bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-	NB_MSG << tnam << " CommandManager check Connections\n";
     int rc = 0;
     if (setup_status!= e_waiting_connect && monit_setup->disconnected() ) {
         if (setup_status != e_waiting_connect) {
-			{FileLogger fl(program_name); fl.f() << "CommandManager checkConnections() attempting to setup connection "
+						{FileLogger fl(program_name); fl.f() << "CommandManagercheckConnections() attempting to setup connection "
         			<< " setup status is " << setup_status << "\n" << std::flush; }
             setup_status = e_startup;
             setupConnections();
             //usleep(50000);
         }
-	else
-		{FileLogger fl(program_name); fl.f() << "CommandManager has no client or setup connection: setup status is "
-		<< setup_status << "\n" << std::flush;
-		}
+				else
+          {FileLogger fl(program_name); fl.f() << "CommandManager has no client or setup connection: setup status is "
+            << setup_status << "\n" << std::flush;
+          }
 
-		return false;
+        return false;
     }
     if ( monit_setup->disconnected() )
         rc = zmq::poll( &items[1], num_items-1, 0);
@@ -99,7 +95,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
     char buf[1000];
     size_t msglen = 0;
     if (rc > 0 && run_status == e_waiting_cmd && items[1].revents & ZMQ_POLLIN) {
-		{FileLogger fl(program_name); fl.f() << "command socket activity when waiting cmd.  receiving...\n" << std::flush; }
+				{FileLogger fl(program_name); fl.f() << "command socket activity when waiting cmd.  receiving...\n" << std::flush; }
         safeRecv(cmd, buf, 1000, false, msglen);
         if ( msglen ) {
             buf[msglen] = 0;
