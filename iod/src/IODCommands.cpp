@@ -49,7 +49,7 @@ extern bool program_done;
 
 std::ostream & IODCommand::operator<<(std::ostream &out) const {
 	const char *delim = "";
-	for (int i=0; i<parameters.size(); ++i) { out << delim << parameters[i]; delim = " "; }
+	for (unsigned int i=0; i<parameters.size(); ++i) { out << delim << parameters[i]; delim = " "; }
 	return out;
 }
 

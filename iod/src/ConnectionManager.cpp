@@ -170,22 +170,24 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
 bool SubscriptionManager::requestChannel() {
     size_t len = 0;
 	assert(isClient());
-    if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()) {
-			bool sent_request = false;
-			int error_count = 0;
-			while (!sent_request && error_count<4) {
-				DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
-        char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
-				try {
-        len = setup().send(channel_setup, strlen(channel_setup));
+	if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()
+	   ) {
+		bool sent_request = false;
+		int error_count = 0;
+		while (!sent_request && error_count<4) {
+			DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
+			char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
+			try {
+				usleep(100);
+				len = setup().send(channel_setup, strlen(channel_setup));
 				if (len == 0) // temporarily unavailable
 					usleep(20);
 				else sent_request = true;
-				}
-				catch (zmq::error_t ex) {
-					++error_count;
-					{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
-						<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
+			}
+			catch (zmq::error_t ex) {
+				++error_count;
+				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
+					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
 					if (zmq_errno() == EFSM /*EFSM*/) {
 						{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
 						zmq::message_t m; setup().recv(&m); 
@@ -193,16 +195,16 @@ bool SubscriptionManager::requestChannel() {
 						return false;						//exit(61);
 
 					}
-				}
 			}
-			if (error_count >=4) {
-				{FileLogger fl(program_name); fl.f() << channel_name << " aborting\n" << std::flush; }
-					exit(2);
-			}
-       setSetupStatus(SubscriptionManager::e_waiting_setup);
-       return false;
-    }
-    if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
+		}
+		if (error_count >=4) {
+			{FileLogger fl(program_name); fl.f() << channel_name << " aborting\n" << std::flush; }
+			exit(2);
+		}
+		setSetupStatus(SubscriptionManager::e_waiting_setup);
+		return false;
+	}
+	if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
         char buf[1000];
         if (!safeRecv(setup(), buf, 1000, false, len, 2)) return false; // attempt a connection but do not wait very long before giving up
         if (len == 0) return false; // no data yet
