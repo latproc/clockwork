@@ -553,7 +553,7 @@ struct ModbusServerThread
 							{
 								std::string cmd = *iter++;
 								std::string response;
-								uint64_t cmd_timeout = 2000000;
+								uint64_t cmd_timeout = 0;
 								if (!sendMessage(cmd.c_str(), *cmd_interface, response, cmd_timeout))
 								{
 									FileLogger fl(program_name);
@@ -570,7 +570,7 @@ struct ModbusServerThread
 							{
 								std::string cmd( getIODSyncCommand(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0) );
 								std::string response;
-								uint64_t cmd_timeout = 2000000;
+								uint64_t cmd_timeout = 0;
 								if (!sendMessage(cmd.c_str(), *cmd_interface, response, cmd_timeout))
 								{
 									FileLogger fl(program_name);
