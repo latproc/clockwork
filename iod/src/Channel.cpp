@@ -719,23 +719,26 @@ void Channel::operator()() {
 				DBG_CHANNELS << "Channel " << name << " ZMQ error: " << zmq_strerror(errno) << "\n";
 				continue;
 			}
-			if (!completed_commands.empty()) {
-				boost::mutex::scoped_lock(update_mutex);
-				std::string response;
-				DBG_CHANNELS << "Channel " << name << " finishing off processed commands\n";
-				std::list<IODCommand*>::iterator iter = completed_commands.begin();
-				while (iter != completed_commands.end()) {
-					IODCommand *cmd = *iter;
-					iter = completed_commands.erase(iter);
-					if (cmd->done == IODCommand::Success) {
-						DBG_CHANNELS << cmd->param(0) <<" succeeded: " << cmd->result() << "\n";
+			{
+				boost::mutex::scoped_lock(iod_cmd_mutex);
+				if (!completed_commands.empty()) {
+					boost::mutex::scoped_lock(iod_cmd_mutex);
+					std::string response;
+					DBG_CHANNELS << "Channel " << name << " finishing off processed commands\n";
+					std::list<IODCommand*>::iterator iter = completed_commands.begin();
+					while (iter != completed_commands.end()) {
+						IODCommand *cmd = *iter;
+						iter = completed_commands.erase(iter);
+						if (cmd->done == IODCommand::Success) {
+							DBG_CHANNELS << cmd->param(0) <<" succeeded: " << cmd->result() << "\n";
+						}
+						else {
+							DBG_CHANNELS << cmd->param(0) <<" failed: " << cmd->error() << "\n";
+						}
+						delete cmd;
 					}
-					else {
-						DBG_CHANNELS << cmd->param(0) <<" failed: " << cmd->error() << "\n";
-					}
-					delete cmd;
+					// TBD should this go back to the originator?
 				}
-				// TBD should this go back to the originator?
 			}
 
 			if (isClient() && current_state == ChannelImplementation::DOWNLOADING) {
@@ -768,7 +771,7 @@ void Channel::operator()() {
 			{
 				IODCommand *command = parseCommandString(data);
 				if (command) {
-					boost::mutex::scoped_lock(update_mutex);
+					boost::mutex::scoped_lock(iod_cmd_mutex);
 					pending_commands.push_back(command);
 				}
 			}
@@ -1778,7 +1781,12 @@ IODCommand *Channel::getCommand() {
 
 	if (pending_commands.empty()) return 0;
 
+
 	IODCommand *cmd = pending_commands.front();
+	for (int i=0; i<10; ++i ) {
+		assert(cmd == pending_commands.front());
+		usleep(5);
+	}
 	pending_commands.pop_front();
 	return cmd;
 }
@@ -1885,7 +1893,7 @@ void Channel::checkCommunications() {
     }
 #endif
 	//if (monit_subs && !monit_subs->disconnected()){
-		boost::mutex::scoped_lock(update_mutex);
+		boost::mutex::scoped_lock(iod_cmd_mutex);
 		std::list<IODCommand*>::iterator iter = pending_commands.begin();
 		while (iter != pending_commands.end()) {
 			IODCommand *command = *iter;

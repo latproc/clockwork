@@ -317,8 +317,8 @@ private:
 	boost::thread *monitor_thread;
 
 	unsigned int throttle_time;
-	boost::mutex update_mutex;
-	boost::mutex iod_cmd_mutex;
+	static boost::mutex update_mutex;
+	static boost::mutex iod_cmd_mutex;
 	
 	int connections;
 	bool aborted;
