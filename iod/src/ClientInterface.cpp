@@ -162,12 +162,17 @@ public:
 };
 
 
+
 struct CommandThreadInternals : public ClientInterfaceInternals {
 public:
     zmq::socket_t socket;
     pthread_t monitor_thread;
 	CommandTable<IODCommandFactory*> commands;
 	boost::mutex data_mutex;
+
+	std::list<IODCommand *>pending_commands;
+	std::list<IODCommand *>completed_commands;
+
 
     CommandThreadInternals() : socket(*MessagingInterface::getContext(), ZMQ_REP) {
 		commands.add("CHANNEL", new IODCommandChannelFactory());
@@ -274,8 +279,8 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 	boost::mutex::scoped_lock lock(cti->data_mutex);
 
-	pending_commands.push_back(cmd);
-	size_t n = pending_commands.size();
+	cti->pending_commands.push_back(cmd);
+	size_t n = cti->pending_commands.size();
 	if ( n>10) {
 		FileLogger fl(program_name); fl.f() << "Warning: pending_commands on the client interface has grown to " << n << "\n";
 	}
@@ -284,12 +289,12 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 IODCommand *IODCommandThread::getCommand() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 	boost::mutex::scoped_lock lock(cti->data_mutex);
-	if (pending_commands.empty()) {
+	if (cti->pending_commands.empty()) {
 		return 0;
 	}
 	
-	IODCommand *cmd = pending_commands.front();
-	pending_commands.pop_front();
+	IODCommand *cmd = cti->pending_commands.front();
+	cti->pending_commands.pop_front();
 	return cmd;
 }
 
@@ -297,10 +302,10 @@ IODCommand *IODCommandThread::getCompletedCommand() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 	boost::mutex::scoped_lock lock(cti->data_mutex);
 
-	if (completed_commands.empty()) return 0;
+	if (cti->completed_commands.empty()) return 0;
 
-	IODCommand *cmd = completed_commands.front();
-	completed_commands.pop_front();
+	IODCommand *cmd = cti->completed_commands.front();
+	cti->completed_commands.pop_front();
 	return cmd;
 }
 
@@ -308,7 +313,7 @@ void IODCommandThread::putCompletedCommand(IODCommand *cmd) {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 	boost::mutex::scoped_lock lock(cti->data_mutex);
 
-	completed_commands.push_back(cmd);
+	cti->completed_commands.push_back(cmd);
 }
 
 void IODCommand::setParameters(std::vector<Value> &params) {

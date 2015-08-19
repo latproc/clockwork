@@ -51,9 +51,6 @@ public:
 	void putCompletedCommand(IODCommand *cmd);
 	IODCommand *getCompletedCommand();
 
-	std::list<IODCommand *>pending_commands;
-	std::list<IODCommand *>completed_commands;
-
 protected:
 	ClientInterfaceInternals *internals;
 	friend IODCommand *parseCommandString(const char *data);

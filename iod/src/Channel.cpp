@@ -18,11 +18,10 @@
 #include "SyncRemoteStatesAction.h"
 #include "DebugExtra.h"
 
-boost::mutex Channel::update_mutex;
-boost::mutex Channel::iod_cmd_mutex;
-
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
+
+boost::mutex Channel::update_mutex;
 
 State ChannelImplementation::CONNECTING("CONNECTING");
 State ChannelImplementation::DISCONNECTED("DISCONNECTED");
@@ -31,6 +30,14 @@ State ChannelImplementation::WAITSTART("WAITSTART");
 State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
+
+class ChannelInternals {
+public:
+	boost::mutex iod_cmd_get_mutex;
+	boost::mutex iod_cmd_put_mutex;
+	std::list<IODCommand*> pending_commands;
+	std::list<IODCommand*> completed_commands;
+};
 
 MachineRef::MachineRef() : refs(1) {
 }
@@ -43,13 +50,14 @@ ChannelImplementation::~ChannelImplementation() { }
 
 Channel::Channel(const std::string ch_name, const std::string type)
         : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),
-            name(ch_name), port(0), mif(0), communications_manager(0),
+            internals(0), name(ch_name), port(0), mif(0), communications_manager(0),
 			monit_subs(0), monit_pubs(0),
 			connect_responder(0), disconnect_responder(0),
 			monitor_thread(0),
 			throttle_time(0), connections(0), aborted(false), subscriber_thread(0),
 			cmd_client(0), cmd_server(0)
 {
+	internals = new ChannelInternals();
     if (all == 0) {
         all = new std::map<std::string, Channel*>;
     }
@@ -716,8 +724,14 @@ void Channel::operator()() {
 				items[idx].revents = 0;
 				cmd_server_idx = idx;
 			}
+			bool no_commands;
+			{
+				internals->iod_cmd_put_mutex.lock();
+				no_commands = internals->completed_commands.empty();
+				internals->iod_cmd_put_mutex.unlock();
+			}
 			try {
-				if (completed_commands.empty() && !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
+				if (no_commands && !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
 					usleep(1000);
 					continue;
 				}
@@ -727,14 +741,14 @@ void Channel::operator()() {
 				continue;
 			}
 			{
-				if (!completed_commands.empty()) {
-					boost::mutex::scoped_lock lock(iod_cmd_mutex);
+				boost::mutex::scoped_lock lock(internals->iod_cmd_put_mutex);
+				if (!internals->completed_commands.empty()) {
 					std::string response;
 					DBG_CHANNELS << "Channel " << name << " finishing off processed commands\n";
-					std::list<IODCommand*>::iterator iter = completed_commands.begin();
-					while (iter != completed_commands.end()) {
+					std::list<IODCommand*>::iterator iter = internals->completed_commands.begin();
+					while (iter != internals->completed_commands.end()) {
 						IODCommand *cmd = *iter;
-						iter = completed_commands.erase(iter);
+						iter = internals->completed_commands.erase(iter);
 						if (cmd->done == IODCommand::Success) {
 							DBG_CHANNELS << cmd->param(0) <<" succeeded: " << cmd->result() << "\n";
 						}
@@ -754,7 +768,7 @@ void Channel::operator()() {
 				if (current_time > 1000) {
 					if (current_time > 2000) {
 						FileLogger fl(program_name);
-						fl.f() << "Channel " << name << " state change has not occurred after " << current_time/1000 << "ms\n";
+						fl.f() << "Channel " << name << " state change has not occurred after " << current_time/1000 << "s\n";
 					}
 					else {
 						DBG_CHANNELS << "channel " << name << " switching to CONNECTED state\n";
@@ -789,8 +803,9 @@ void Channel::operator()() {
 			{
 				IODCommand *command = parseCommandString(data);
 				if (command) {
-					boost::mutex::scoped_lock lock(iod_cmd_mutex);
-					pending_commands.push_back(command);
+					internals->iod_cmd_put_mutex.lock();
+					internals->pending_commands.push_back(command);
+					internals->iod_cmd_put_mutex.unlock();
 				}
 			}
 			free(data);
@@ -1455,7 +1470,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
                   && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
 
 				//IODCommand *cmd = new IODCommandSendStateChange(machine_name, new_state);
-				//chn->pending_commands.push_back(cmd);
+				//chn->internals->pending_messages.push_back(cmd);
 
 				if (!chn->definition()->isPublisher()) {
 					std::string response;
@@ -1789,40 +1804,41 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
 #endif
 
 void Channel::newPendingCommand(IODCommand *cmd) {
-	boost::mutex::scoped_lock lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(internals->iod_cmd_get_mutex);
 
-	pending_commands.push_back(cmd);
+	internals->pending_commands.push_back(cmd);
 }
 
 IODCommand *Channel::getCommand() {
-	boost::mutex::scoped_lock lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(internals->iod_cmd_get_mutex);
 
-	if (pending_commands.empty()) return 0;
+	if (internals->pending_commands.empty()) return 0;
 
-
-	IODCommand *cmd = pending_commands.front();
+	IODCommand *cmd = internals->pending_commands.front();
+	/*
 	for (int i=0; i<10; ++i ) {
-		assert(cmd == pending_commands.front());
+		assert(cmd == internals->pending_messages.front());
 		usleep(5);
 	}
-	pending_commands.pop_front();
+	*/
+	internals->pending_commands.pop_front();
 	return cmd;
 }
 
 IODCommand *Channel::getCompletedCommand() {
-	boost::mutex::scoped_lock lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(internals->iod_cmd_put_mutex);
 
-	if (completed_commands.empty()) return 0;
+	if (internals->completed_commands.empty()) return 0;
 
-	IODCommand *cmd = completed_commands.front();
-	completed_commands.pop_front();
+	IODCommand *cmd = internals->completed_commands.front();
+	internals->completed_commands.pop_front();
 	return cmd;
 }
 
 void Channel::putCompletedCommand(IODCommand *cmd) {
-	boost::mutex::scoped_lock lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(internals->iod_cmd_put_mutex);
 
-	completed_commands.push_back(cmd);
+	internals->completed_commands.push_back(cmd);
 }
 
 
@@ -1911,17 +1927,22 @@ void Channel::checkCommunications() {
     }
 #endif
 	//if (monit_subs && !monit_subs->disconnected()){
-		boost::mutex::scoped_lock lock(iod_cmd_mutex);
-		std::list<IODCommand*>::iterator iter = pending_commands.begin();
-		while (iter != pending_commands.end()) {
-			IODCommand *command = *iter;
-			assert(command);
-			(*command)();
-			DBG_CHANNELS << "Channel " << name << " processed command " << command->param(0) << "\n";
-			iter = pending_commands.erase(iter);
-			completed_commands.push_back(command);
+	if (internals->iod_cmd_get_mutex.try_lock()) {
+		if (internals->iod_cmd_put_mutex.try_lock()) {
+			//boost::mutex::scoped_lock lock(iod_cmd_mutex);
+			std::list<IODCommand*>::iterator iter = internals->pending_commands.begin();
+			while (iter != internals->pending_commands.end()) {
+				IODCommand *command = *iter;
+				assert(command);
+				(*command)();
+				DBG_CHANNELS << "Channel " << name << " processed command " << command->param(0) << "\n";
+				iter = internals->pending_commands.erase(iter);
+				internals->completed_commands.push_back(command);
+			}
+			internals->iod_cmd_put_mutex.unlock();
 		}
-	//}
+		internals->iod_cmd_get_mutex.unlock();
+	}
 }
 
 void Channel::setupAllShadows() {

@@ -196,6 +196,7 @@ public:
 	void setResponse(const char *res) {  response_ = res; done = true; }
 };
 
+class ChannelInternals;
 class IODCommand;
 class Channel : public ChannelImplementation, public MachineInstance {
 public:
@@ -286,10 +287,10 @@ public:
 	void putCompletedCommand(IODCommand *cmd);
 	IODCommand *getCompletedCommand();
 
+protected:
+	ChannelInternals *internals;
 private:
 	std::map<MachineInstance *, MachineRecord *> throttled_items;
-	std::list<IODCommand *>pending_commands;
-	std::list<IODCommand *>completed_commands;
 
 	void checkCommunications();
     void setPollItemBase(zmq::pollitem_t *);
@@ -318,8 +319,7 @@ private:
 
 	unsigned int throttle_time;
 	static boost::mutex update_mutex;
-	static boost::mutex iod_cmd_mutex;
-	
+
 	int connections;
 	bool aborted;
 	boost::thread *subscriber_thread;
@@ -327,8 +327,6 @@ private:
 	zmq::socket_t *cmd_client;
 	zmq::socket_t *cmd_server;
 	SequenceNumber seqno;
-	std::list<ChannelMessage> pending_messages;
-	std::list<ChannelMessage> completed_messages;
 	uint64_t last_throttled_send;
 
 };
