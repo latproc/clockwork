@@ -28,6 +28,7 @@ FlasherChannel CHANNEL {
 	OPTION port 7720;
     UPDATES flasher FlagInterface;
     UPDATES flag FlagInterface;
+	UPDATES client_flag FlagInterface;
     UPDATES item1 ItemInterface;
     UPDATES item2 ItemInterface;
 }

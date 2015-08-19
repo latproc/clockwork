@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include "boost/thread/mutex.hpp"
 
 class Watchdog {
 public:
@@ -13,8 +14,8 @@ public:
 	void poll(uint64_t now);
 	void reset();
 	
-	bool triggered(int64_t t) const;
-	bool triggered(uint64_t t) const;
+	bool triggered(int64_t t);
+	bool triggered(uint64_t t);
 	int64_t last();
 
 	bool running()const;
@@ -30,6 +31,7 @@ public:
 	static bool showTriggered(uint64_t now, bool reset = false, std::ostream &out = std::cerr) ;
 
 private:
+	boost::mutex mutex;
 	std::string name;
 	int64_t last_time;
 	int64_t time_out;

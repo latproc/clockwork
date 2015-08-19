@@ -700,7 +700,7 @@ static uint8_t *generateUpdateMask() {
 
 	std::set<IOComponent*>::iterator iter = updatedComponentsOut.begin();
 	while (iter != updatedComponentsOut.end()) {
-		IOComponent *ioc = *iter;
+		IOComponent *ioc = *iter; //TBD this can be null
 		if (ioc->ownersEnabled()) iter++; else iter = updatedComponentsOut.erase(iter);
 
 		if (ioc->direction() != IOComponent::DirOutput && ioc->direction() != IOComponent::DirBidirectional) 

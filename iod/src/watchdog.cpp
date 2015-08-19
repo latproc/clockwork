@@ -3,6 +3,7 @@
 #include <string>
 #include <sys/time.h>
 #include <unistd.h>
+#include "boost/thread/mutex.hpp"
 #include "watchdog.h"
 #include "Logger.h"
 
@@ -23,7 +24,7 @@ void Watchdog::poll(int64_t t) {
 	if (t==0) t = now();
 	if (!one_shot || trigger_time == 0){
 		last_time = t;
-		//std::cout << "last_time is now: " << t << "\n";
+		//NB_MSG <<name << " last_time is now: " << t << "\n";
 	}
 }
 void Watchdog::poll(uint64_t t) {
@@ -32,31 +33,38 @@ void Watchdog::poll(uint64_t t) {
 Watchdog::~Watchdog() { all.erase(name); }
 
 void Watchdog::reset() {
+	boost::mutex::scoped_lock lock(mutex);
 	//std::cout <<  name << " reset " << ( (is_running) ? "running" : "not running") << "\n";
 	trigger_time = 0;
 }
 	
-bool Watchdog::triggered(int64_t t) const {
+bool Watchdog::triggered(int64_t t) {
+	boost::mutex::scoped_lock lock(mutex);
 	if (t == 0) t = now();
-	if (!is_running)
+	if (!is_running) {
+		//NB_MSG <<name << " Watchdog is disabled\n";
 		return false;
+	}
 	bool has_triggered = false;
 	if (!one_shot) has_triggered = last_time<t && t-last_time > time_out;
 	else {has_triggered = trigger_time != 0;}
 	if (has_triggered) {
 		//std::cout << name << " woof: " << (t-last_time)/1000 << "\n";
-		{FileLogger fl(program_name); fl.f() << name << " woof: " << (t-last_time)/1000 << "\n"; }
+		{FileLogger fl(program_name); fl.f() << name << " woof: " << (int64_t)(t-last_time)/1000 << "\n"; }
 	}
 	return has_triggered;
 }
 
-bool Watchdog::triggered(uint64_t t) const {
+bool Watchdog::triggered(uint64_t t) {
+	boost::mutex::scoped_lock lock(mutex);
 	return triggered( (int64_t) t);
 }
 
 int64_t Watchdog::last() { return last_time; }
 
+static boost::mutex time_mutex;
 int64_t Watchdog::now() {
+	boost::mutex::scoped_lock lock(time_mutex);
 	struct timeval now;
 	gettimeofday(&now, 0);
 	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
@@ -99,7 +107,7 @@ bool Watchdog::showTriggered(int64_t t, bool reset, std::ostream &out) {
 		Watchdog *w = (*iter++).second;
 		if (w->triggered(t)) {
 			found = true;
-			out << w->name << " Triggered: " << (t-w->last_time)/1000 << "\n";
+			out << w->name << " Triggered: " << (int64_t)(t-w->last_time)/1000 << "\n";
 			if (reset) w->reset();
 		}
 	}

@@ -8,8 +8,8 @@ Blinker MACHINE {
   on STATE;
   off INITIAL;
 
-  ENTER on { WAIT 1000; SEND turnOff TO SELF; }
-  ENTER off { WAIT 1000; SEND turnOn TO SELF; }
+  ENTER on { WAIT 10; SEND turnOff TO SELF; }
+  ENTER off { WAIT 10; SEND turnOn TO SELF; }
   off DURING turnOff{}
   on DURING turnOn{}
 

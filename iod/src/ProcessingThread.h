@@ -2,6 +2,7 @@
 #define __cw_processingthread_h__
 
 #include "ClientInterface.h"
+#include "clockwork.h"
 
 class HardwareActivation {
 	public:
@@ -9,23 +10,21 @@ class HardwareActivation {
 		virtual void operator()(void) { }
 };
 
-class ProcessingThread
+class ProcessingThreadInternals;
+class ProcessingThread : public ClockworkProcessManager
 {
 public:
-    void operator()();
+	ProcessingThreadInternals *internals;
+
     ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface);
-    void stop();
+	~ProcessingThread();
+
+	void operator()();
+
+	void stop();
     bool checkAndUpdateCycleDelay();
     
     ControlSystemMachine &machine;
-    int sequence;
-    long cycle_delay;
-    
-    static const int ECAT_ITEM = 0;
-    static const int CMD_ITEM = 1;
-    static const int DISPATCHER_ITEM = 2;
-    static const int SCHEDULER_ITEM = 3;
-    static const int ECAT_OUT_ITEM = 4;
     
     enum Status { e_waiting, e_handling_ecat, e_start_handling_commands,
 				e_handling_cmd, e_waiting_cmd, e_command_done, 

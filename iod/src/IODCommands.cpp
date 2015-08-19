@@ -1291,12 +1291,15 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
         return false;
     }
 
-// This command is only here for testing recovery code
+// This command is only here for testing recovery code it blocks command processing for 10 seconds
 
 bool IODCommandFreeze::run(std::vector<Value> &params) {
-	while (true) {
-		usleep(10000);
+	uint64_t start = microsecs();
+	uint64_t now = start;
+	while (now-start < 10000000) {
+		usleep(100000);
 	}
+	return true;
 }
 
 /*

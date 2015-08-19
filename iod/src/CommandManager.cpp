@@ -96,7 +96,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
     size_t msglen = 0;
     if (rc > 0 && run_status == e_waiting_cmd && items[1].revents & ZMQ_POLLIN) {
 				{FileLogger fl(program_name); fl.f() << "command socket activity when waiting cmd.  receiving...\n" << std::flush; }
-        safeRecv(cmd, buf, 1000, false, msglen);
+        safeRecv(cmd, buf, 1000, false, msglen, 1);
         if ( msglen ) {
             buf[msglen] = 0;
 						{FileLogger fl(program_name); fl.f() << "got cmd: " << buf << " for clockwork\n"<<std::flush; }
@@ -114,7 +114,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
     }
     else if (rc > 0 && run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
 				{FileLogger fl(program_name); fl.f() << "command socket activity.  receiving...\n" << std::flush; }
-        if (safeRecv(*setup, buf, 1000, false, msglen)) {
+        if (safeRecv(*setup, buf, 1000, false, msglen, 1)) {
             if (msglen && msglen<1000) {
                 cmd.send(buf, msglen);
             }

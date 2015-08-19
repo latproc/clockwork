@@ -75,7 +75,13 @@ void MachineShadow::setState(const std::string new_state) {
     state = new_state;
 }
 
-ConnectionManager::ConnectionManager() : owner_thread(pthread_self()), aborted(false) { }
+class ConnectionManagerInternals {
+public:
+	virtual ~ConnectionManagerInternals() {}
+};
+
+ConnectionManager::ConnectionManager() : internals(0),owner_thread(pthread_self()), aborted(false) {
+}
 
 void ConnectionManager::abort() { aborted = true; }
 
@@ -103,6 +109,22 @@ std::string copyAlphaNumChars(const char *val, const char *default_name) {
 	return constructAlphaNumericString(0, val, 0, default_name);
 }
 
+class SubscriptionManagerInternals : public ConnectionManagerInternals {
+
+public:
+	SubscriptionManagerInternals() : sent_request(false), send_time(0) {
+
+	}
+
+	~SubscriptionManagerInternals() {
+
+	}
+	// helpers for connection resume
+	bool sent_request = false;
+	uint64_t send_time;
+	static const uint64_t channel_request_timeout = 3000000;
+};
+
 SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 										 const char *remote_host, int remote_port) :
 		subscriber_port(remote_port),
@@ -115,6 +137,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 		setup_(0),
 		_setup_status(e_startup), sub_status_(ss_init)
 {
+	internals = new SubscriptionManagerInternals();
 	state_start = microsecs();
 	if (subscriber_host == "*") {
 		_setup_status = e_not_used; // This is not a client
@@ -133,6 +156,8 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 
 SubscriptionManager::~SubscriptionManager() {
 }
+
+SubscriptionManager::SubStatus SubscriptionManager::subscriberStatus() { return sub_status_;}
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
 	assert(isClient());
@@ -168,36 +193,35 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
 }
 
 bool SubscriptionManager::requestChannel() {
+	SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals*>(internals);
     size_t len = 0;
+	uint64_t now = microsecs();
 	assert(isClient());
 	if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()
 	   ) {
-		static bool sent_request = false;
-		static uint64_t send_time = 0;
 		int error_count = 0;
-		if (!sent_request || send_time - microsecs() > 3000000) {
+		if (!smi->sent_request
+			|| smi->send_time - now > SubscriptionManagerInternals::channel_request_timeout) {
 
 			DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
 			char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
 			try {
 				usleep(200);
 				setSetupStatus(SubscriptionManager::e_waiting_setup);
-				len = setup().send(channel_setup, strlen(channel_setup));
-				if (len == 0) // temporarily unavailable
-					usleep(20);
-				else sent_request = true;
+				safeSend(setup(), channel_setup, strlen(channel_setup));
+				smi->sent_request = true;
+				smi->send_time = now;
 			}
 			catch (zmq::error_t ex) {
 				++error_count;
 				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
-					if (zmq_errno() == EFSM /*EFSM*/) {
-						{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
-						zmq::message_t m; setup().recv(&m); 
-						{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
-						return false;						//exit(61);
-
-					}
+				if (zmq_errno() == EFSM /*EFSM*/) {
+					{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
+					zmq::message_t m; setup().recv(&m); 
+					{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
+					return false;						//exit(61);
+				}
 			}
 		}
 		if (error_count >=4) {
@@ -414,11 +438,11 @@ bool SubscriptionManager::checkConnections() {
         return false;
     }
 	 */
-    if (monit_subs.disconnected() || monit_setup->disconnected()) {
+    if (monit_subs.disconnected() && !monit_setup->disconnected()) {
 		if (monit_subs.disconnected())
 		{
 			FileLogger fl(program_name); fl.f()
-				<< "SubscriptionManager disconnected from server publisher\n"<<std::flush;
+				<< "SubscriptionManager disconnected from server publisher with setup status: " << setupStatus() << "\n"<<std::flush;
 			setupConnections();
 		}
 		if (monit_setup->disconnected())
@@ -464,14 +488,14 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 
 	char buf[10000]; // TBD BUG this should be allocated dynamically
     size_t msglen = 0;
-
+/*
 	if (items[0].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from clockwork\n";
 	}
 	if (items[1].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from publisher\n";
 	}
-
+*/
 	// yuk. the command socket is assumed to be the last item in the poll item list.
 
 	// check the command socket to see if a message is coming in from the main thread
@@ -486,7 +510,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	}
 
     if (run_status == e_waiting_cmd && items[command_item].revents & ZMQ_POLLIN) {
-		if (safeRecv(cmd, buf, 10000, false, msglen)) {
+		if (safeRecv(cmd, buf, 10000, false, msglen, 0)) {
             if (msglen == 10000) msglen--;
             buf[msglen] = 0;
             DBG_CHANNELS << " got cmd: " << buf << " of len: " << msglen << " from main thread\n";
@@ -507,21 +531,21 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 					}
 				}
 				else {
-					//{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
-					//DBG_CHANNELS << " forwarding message to subscriber\n";
+					{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
+					DBG_CHANNELS << " forwarding message to subscriber\n";
 					subscriber().send(buf, msglen);
 					safeSend(cmd, "sent", 4);
 				}
 			}
 			else if (!monit_subs.disconnected()) {
-				//DBG_CHANNELS << " forwarding message "<<buf<<" to subscriber\n";
+				DBG_CHANNELS << " forwarding message "<<buf<<" to subscriber\n";
 				subscriber().send(buf, msglen);
 				if (protocol == eCLOCKWORK) { // require a response
-					//{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client and waiting response\n"<<std::flush; }
+					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client and waiting response\n"<<std::flush; }
 					run_status = e_waiting_response;
 				}
 				else {
-					//{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client\n"<<std::flush; }
+					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client\n"<<std::flush; }
 					safeSend(cmd, "sent", 4);
 				}
 			}
@@ -544,8 +568,8 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			DBG_CHANNELS << "incoming response\n";
 			bool got_response =
 				(isClient())
-					? safeRecv(setup(), buf, 1000, false, msglen)
-					: safeRecv(subscriber(), buf, 1000, false, msglen);
+					? safeRecv(setup(), buf, 1000, false, msglen, 0)
+					: safeRecv(subscriber(), buf, 1000, false, msglen, 0);
 			if (got_response) {
 				//DBG_CHANNELS << " forwarding response " << buf << "\n";
 				if (msglen && msglen<1000) {
@@ -560,7 +584,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		else if ( items[0].revents & ZMQ_POLLIN ) {
 			char buf[1000];
 			size_t len;
-			bool res = safeRecv(setup(), buf, 1000, false, len);
+			bool res = safeRecv(setup(), buf, 1000, false, len, 0);
 			FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";
 		}
 	}

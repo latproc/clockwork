@@ -172,7 +172,7 @@ std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
     return item.operator<<(out);
 }
 
-Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PULL), update_notify(0), next_delay_time(0), notification_sent(0) {
+Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PAIR), update_notify(0), next_delay_time(0), notification_sent(0) {
 	wd = new Watchdog("Scheduler", 100, false);
 	update_sync.bind("inproc://sch_items");
 	next_time.tv_sec = 0;
@@ -206,7 +206,7 @@ void Scheduler::add(ScheduledItem*item) {
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	if (!last_notification) {
 		if (!update_notify) {
-			update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
+			update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 			update_notify->connect("inproc://sch_items");
 		}
 		wd->start();
@@ -291,7 +291,7 @@ void Scheduler::idle() {
 	sync.bind("inproc://scheduler_sync");
 	char buf[10];
 	size_t response_len = 0;
-	while (!  safeRecv(sync, buf, 10, true, response_len)) usleep(100);
+	while (!  safeRecv(sync, buf, 10, true, response_len, 0)) usleep(100);
 	NB_MSG << "Scheduler started\n";
 
 	state = e_waiting;
@@ -340,7 +340,7 @@ void Scheduler::idle() {
 			state = e_waiting_cw;
 		}
 		if (state == e_waiting_cw) {
-			safeRecv(sync, buf, 10, true, response_len);
+			safeRecv(sync, buf, 10, true, response_len, 0);
             DBG_SCHEDULER << "scheduler received ok from driver\n";
 			state = e_running;
 		}

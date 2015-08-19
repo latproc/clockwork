@@ -77,6 +77,7 @@ public:
 	void setState(const std::string);
 };
 
+class ConnectionManagerInternals;
 class ConnectionManager {
 public:
 	ConnectionManager();
@@ -89,6 +90,7 @@ public:
 	void abort();
 	bool ready() { return rate_limiter.ready(); }
 protected:
+	ConnectionManagerInternals *internals;
 	pthread_t owner_thread;
 	bool aborted;
 	std::map<std::string, MachineShadow *> machines;
@@ -154,6 +156,7 @@ public:
 
 	Status setupStatus() const { return _setup_status; } // always e_not_used for non client instances
 	void setSetupStatus( Status new_status );
+	SubStatus subscriberStatus();
 	uint64_t state_start;
 	RunStatus run_status;
 	int subscriber_port;

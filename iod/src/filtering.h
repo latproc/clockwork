@@ -22,6 +22,7 @@ public:
 private:
     Buffer(const Buffer &);
     Buffer &operator=(const Buffer&);
+protected:
     boost::recursive_mutex q_mutex;
 };
 

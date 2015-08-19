@@ -1,6 +1,15 @@
 #include <math.h>
+#include <boost/thread.hpp>
+//#include <boost/thread/mutex.hpp>
 #include "filtering.h"
 
+
+class scoped_lock {
+public:
+	scoped_lock( boost::recursive_mutex &mut) : mutex(mut) { mutex.lock(); }
+	~scoped_lock() { mutex.unlock(); }
+	boost::recursive_mutex &mutex;
+};
 Buffer::Buffer(int buf_size): BUFSIZE(buf_size) {
     front = -1;
     back = -1;
@@ -13,14 +22,13 @@ int Buffer::length()
 }
 
 void Buffer::reset() {
-    boost::mutex::scoped_lock(q_mutex);
+	scoped_lock lock(q_mutex) ;
     front = back = -1;
 	total_ = 0.0;
 }
 
 float Buffer::difference(int idx_a, int idx_b) const
 {
-  boost::mutex::scoped_lock(q_mutex);
   float a = getFloatAtOffset(idx_a);
   float b = getFloatAtOffset(idx_b);
   a = a - b;
@@ -30,7 +38,6 @@ float Buffer::difference(int idx_a, int idx_b) const
 
 float Buffer::distance(int idx_a, int idx_b) const
 {
-  boost::mutex::scoped_lock(q_mutex);
   float a = difference(idx_a, idx_b);
   a = fabs(a);
   if (a<0.0001) a = 0.0f;
@@ -39,7 +46,7 @@ float Buffer::distance(int idx_a, int idx_b) const
 
 float Buffer::average(int n)
 {
-  boost::mutex::scoped_lock(q_mutex);
+  scoped_lock lock(q_mutex);
   float res = 0.0f;
   if (front == -1) return 0.0f; // empty buffer
   if (n == 0) return 0.0f;
@@ -67,7 +74,7 @@ float Buffer::average(int n)
 
 void LongBuffer::append(long val)
 {
-    boost::mutex::scoped_lock(q_mutex);
+    scoped_lock lock(q_mutex);
     front = (front + 1) % BUFSIZE;
 	if (front == back) total_ -= buf[front];
     buf[front] = val;
@@ -106,7 +113,7 @@ float FloatBuffer::getFloatAtIndex(int idx) const
 
 void FloatBuffer::append( float val)
 {
-    boost::mutex::scoped_lock(q_mutex);
+    scoped_lock lock(q_mutex);
     front = (front + 1) % BUFSIZE;
 	if (front == back) total_ -= buf[front];
     buf[front] = val;
@@ -127,7 +134,7 @@ void FloatBuffer::set(unsigned int n, float value)
 
 float FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
 {
-  boost::mutex::scoped_lock(q_mutex);
+  scoped_lock lock(q_mutex);
   float sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f;
   float sumXsquared = 0.0f, sumYsquared = 0.0f;
   int n = length()-1;
@@ -168,7 +175,7 @@ void SampleBuffer::quickAppend( float val, uint64_t time) {
 }
 
 void SampleBuffer::append( float val, uint64_t time) {
-    boost::mutex::scoped_lock(q_mutex);
+    scoped_lock lock(q_mutex);
     
     /* if we are not running on a real time system, we may have missed samples
        the following generates the missing samples based on past recording rates.

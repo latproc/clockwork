@@ -110,16 +110,42 @@ void checkInputs()
 }
 #endif
 
+class ProcessingThreadInternals {
+public:
+	int sequence;
+	long cycle_delay;
+
+	static const int ECAT_ITEM = 0;
+	static const int CMD_ITEM = 1;
+	static const int DISPATCHER_ITEM = 2;
+	static const int SCHEDULER_ITEM = 3;
+	static const int ECAT_OUT_ITEM = 4;
+
+	Watchdog processing_wd;
+	ClockworkProcessManager process_manager;
+
+	ProcessingThreadInternals() : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000) {
+
+	}
+
+};
+
 	ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface)
-: machine(m), sequence(0), cycle_delay(1000), status(e_waiting),
+: internals(0), machine(m), status(e_waiting),
 	activate_hardware(activator), command_interface(cmd_interface)
 {
+	internals = new ProcessingThreadInternals();
+}
+
+ProcessingThread::~ProcessingThread() {
+	delete internals;
 }
 
 void ProcessingThread::stop()
 {
 	program_done = true;
 	MessagingInterface::abort();
+	exit(0);
 }
 
 
@@ -129,12 +155,12 @@ bool ProcessingThread::checkAndUpdateCycleDelay()
 	long delay = 100;
 	if (cycle_delay_v && cycle_delay_v->iValue >= 100)
 		delay = cycle_delay_v->iValue;
-	if (delay != cycle_delay)
+	if (delay != internals->cycle_delay)
 	{
 		set_cycle_time(delay);
 		//ECInterface::FREQUENCY = 1000000 / delay;
 		//ECInterface::instance()->start();
-		cycle_delay = delay;
+		internals->cycle_delay = delay;
 		return true;
 	}
 	return false;
@@ -186,7 +212,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 			char buf[10];
 			res = zmq::poll(&items[0], 5, poll_wait);
 			if (!res) return res;
-			if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+			if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)
 			{
 				//DBG_MSG << "receiving data from EtherCAT\n";
 				// the EtherCAT message carries a mask and data
@@ -350,6 +376,17 @@ private:
 	AutoStatStorage &storage_;
 };
 
+static void setStatus(ProcessingThread::Status &s, Watchdog &wd, const ProcessingThread::Status new_state) {
+	if (s != new_state) {
+		if (new_state == ProcessingThread::Status::e_waiting) {
+			wd.poll();
+		}
+		s = new_state;
+	}
+	else if (s == ProcessingThread::Status::e_waiting)
+		wd.poll();
+}
+
 void ProcessingThread::operator()()
 {
 
@@ -430,9 +467,14 @@ void ProcessingThread::operator()()
 
 	enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
 	std::set<IOComponent *>io_work_queue;
+
+	//  we need to stop polling io (ie exit) if the control threads do not seem
+	// to be responding.
+	const int MAX_UNCONTROLLED_POLLS = 5;
+	int io_unsafe_polls_remaining = MAX_UNCONTROLLED_POLLS;
 	while (!program_done)
 	{
-		unsigned int machine_check_delay = cycle_delay;
+		unsigned int machine_check_delay = internals->cycle_delay;
 		machine.idle();
 		if (machine.connected())
 		{
@@ -466,16 +508,17 @@ void ProcessingThread::operator()()
 			{ ecat_out, 0, ZMQ_POLLIN, 0 }
 		};
 		char buf[100];
-		int poll_wait = 2 * cycle_delay / 1000; // millisecs
-		machine_check_delay = cycle_delay;
+		int poll_wait = 2 * internals->cycle_delay / 1000; // millisecs
+		machine_check_delay = internals->cycle_delay;
 		if (poll_wait == 0) poll_wait = 1;
 		uint64_t curr_t = 0;
 		int systems_waiting = 0;
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
-			if (Watchdog::anyTriggered(curr_t))
-				Watchdog::showTriggered(curr_t, true);
+			internals->process_manager.SetTime(curr_t);
+			//if (Watchdog::anyTriggered(curr_t))
+			//	Watchdog::showTriggered(curr_t, true);
 			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
 			//	<< " waiting: " << systems_waiting << "\n";
@@ -515,7 +558,7 @@ void ProcessingThread::operator()()
 			other activities being given time, we give other jobs
 			some time anyway.
 		*/
-		if (items[ECAT_ITEM].revents & ZMQ_POLLIN)
+		if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)
 		{
 			static unsigned long total_mp_time = 0;
 			static unsigned long mp_count = 0;
@@ -571,7 +614,7 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if (status == e_waiting)  {
-			if (items[CMD_ITEM].revents & ZMQ_POLLIN) {
+			if (items[internals->CMD_ITEM].revents & ZMQ_POLLIN) {
 #ifdef KEEPSTATS
 				AutoStat stats(avg_cmd_processing);
 #endif
@@ -605,7 +648,7 @@ void ProcessingThread::operator()()
 		}
 		if (program_done) break;
 
-		if (status == e_waiting && items[DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
+		if (status == e_waiting && items[internals->DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
 			if (status == e_waiting) 
 			{
 				size_t len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
@@ -626,13 +669,13 @@ void ProcessingThread::operator()()
 				size_t len = 0;
 				safeSend(dispatch_sync,"continue",3);
 				// wait for the dispatcher
-				safeRecv(dispatch_sync, buf, 10, true, len);
+				safeRecv(dispatch_sync, buf, 10, true, len, 0);
 				safeSend(dispatch_sync,"bye",3);
 				status = e_waiting;
 			}
 		}
 
-		if (status == e_waiting && items[SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
+		if (status == e_waiting && items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
 			if (processing_state != eIdle) {
 				// cannot process scheduled events at present
 				status = e_waiting;

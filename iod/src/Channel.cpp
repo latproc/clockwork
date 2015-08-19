@@ -18,6 +18,8 @@
 #include "SyncRemoteStatesAction.h"
 #include "DebugExtra.h"
 
+boost::mutex Channel::update_mutex;
+boost::mutex Channel::iod_cmd_mutex;
 
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
@@ -316,7 +318,7 @@ void Channel::stopChannels() {
 bool Channel::started() { return started_; }
 
 void Channel::addConnection() {
-	boost::mutex::scoped_lock(update_mutex);
+	boost::mutex::scoped_lock lock(update_mutex);
 	++connections;
 	DBG_CHANNELS << getName() << " client number " << connections << " connected in state " << current_state << "\n";
 	if (connections == 1) {
@@ -355,7 +357,7 @@ void Channel::addConnection() {
  }
 
 void Channel::dropConnection() {
-	boost::mutex::scoped_lock(update_mutex);
+	boost::mutex::scoped_lock lock(update_mutex);
 	assert(connections);
 	--connections;
 	DBG_CHANNELS << getName() << " client disconnected\n";
@@ -601,6 +603,8 @@ void Channel::checkStateChange(std::string event) {
 	else {
 		// note that the start event may arrive before our switch to waitstart.
 		// we rely on the client resending if necessary
+		if ( current_state == ChannelImplementation::CONNECTED && event == "status" )
+			setState(ChannelImplementation::UPLOADING);
 		if ( current_state == ChannelImplementation::WAITSTART && event == "status" )
 			setState(ChannelImplementation::UPLOADING);
 		else if (current_state == ChannelImplementation::ACTIVE && event == "status")
@@ -686,6 +690,8 @@ void Channel::operator()() {
 	//SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
 	//enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 
+	SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(communications_manager);
+	int cmd_server_idx = 0;
 	try {
 		while (!aborted && communications_manager) {
 			// clients have a socket to setup the channel, servers do not need it
@@ -708,6 +714,7 @@ void Channel::operator()() {
 				items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
 				items[idx].fd = 0;
 				items[idx].revents = 0;
+				cmd_server_idx = idx;
 			}
 			try {
 				if (completed_commands.empty() && !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
@@ -720,9 +727,8 @@ void Channel::operator()() {
 				continue;
 			}
 			{
-				boost::mutex::scoped_lock(iod_cmd_mutex);
 				if (!completed_commands.empty()) {
-					boost::mutex::scoped_lock(iod_cmd_mutex);
+					boost::mutex::scoped_lock lock(iod_cmd_mutex);
 					std::string response;
 					DBG_CHANNELS << "Channel " << name << " finishing off processed commands\n";
 					std::list<IODCommand*>::iterator iter = completed_commands.begin();
@@ -741,13 +747,25 @@ void Channel::operator()() {
 				}
 			}
 
-			if (isClient() && current_state == ChannelImplementation::DOWNLOADING) {
+			if (isClient()
+				&& !sm->monit_subs.disconnected() && sm->subscriberStatus() == SubscriptionManager::ss_ready
+				&& current_state == ChannelImplementation::DOWNLOADING) {
 				long current_time = getTimerVal()->iValue;
 				if (current_time > 1000) {
-					DBG_CHANNELS << "channel " << name << " resending status request to server\n";
-					SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
-					enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
+					if (current_time > 2000) {
+						FileLogger fl(program_name);
+						fl.f() << "Channel " << name << " state change has not occurred after " << current_time/1000 << "ms\n";
+					}
+					else {
+						DBG_CHANNELS << "channel " << name << " switching to CONNECTED state\n";
+						SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
+						enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
+					}
 				}
+			}
+
+			if (items[cmd_server_idx].revents & ZMQ_POLLIN) {
+				DBG_CHANNELS << name << " incoming activity on channel\n";
 			}
 
 			if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
@@ -771,7 +789,7 @@ void Channel::operator()() {
 			{
 				IODCommand *command = parseCommandString(data);
 				if (command) {
-					boost::mutex::scoped_lock(iod_cmd_mutex);
+					boost::mutex::scoped_lock lock(iod_cmd_mutex);
 					pending_commands.push_back(command);
 				}
 			}
@@ -815,7 +833,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 		safeSend(*cmd_client, msg, strlen(msg));
 		char response_buf[100];
 		size_t rlen;
-		safeRecv(*cmd_client, response_buf, 100, true, rlen);
+		safeRecv(*cmd_client, response_buf, 100, true, rlen, 0);
 		response = response_buf;
 		DBG_CHANNELS << "Channel " << name << " sendMessage() got response for " << msg << " from a channel thread\n";
 
@@ -897,7 +915,7 @@ void Channel::startSubscriber() {
 		else
 			communications_manager->monit_subs.addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
 		communications_manager->monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
-		//DBG_CHANNELS << "Channel " << name << " got response to start: " << buf << "\n";
+		DBG_CHANNELS << "Channel " << name << " got response to start: " << buf << "\n";
 	}
 }
 
@@ -1167,11 +1185,11 @@ void Channel::sendPropertyChangeMessage(const std::string &name, const Value &ke
 		std::string response;
 		char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
 		if (isClient())
-				//sendMessage(cmd, communications_manager->subscriber(),response); //setup()
-				safeSend(communications_manager->subscriber(), cmd, strlen(cmd) );
+				sendMessage(cmd, communications_manager->subscriber(),response); //setup()
+				//safeSend(communications_manager->subscriber(), cmd, strlen(cmd) );
 			else
-				//sendMessage(cmd, communications_manager->subscriber(),response);
-				safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
+				sendMessage(cmd, communications_manager->subscriber(),response);
+				//safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
 			//DBG_CHANNELS << "channel " << name << " got response: " << response << "\n";
 			free(cmd);
 	}
@@ -1771,13 +1789,13 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
 #endif
 
 void Channel::newPendingCommand(IODCommand *cmd) {
-	boost::mutex::scoped_lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(iod_cmd_mutex);
 
 	pending_commands.push_back(cmd);
 }
 
 IODCommand *Channel::getCommand() {
-	boost::mutex::scoped_lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(iod_cmd_mutex);
 
 	if (pending_commands.empty()) return 0;
 
@@ -1792,7 +1810,7 @@ IODCommand *Channel::getCommand() {
 }
 
 IODCommand *Channel::getCompletedCommand() {
-	boost::mutex::scoped_lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(iod_cmd_mutex);
 
 	if (completed_commands.empty()) return 0;
 
@@ -1802,7 +1820,7 @@ IODCommand *Channel::getCompletedCommand() {
 }
 
 void Channel::putCompletedCommand(IODCommand *cmd) {
-	boost::mutex::scoped_lock(iod_cmd_mutex);
+	boost::mutex::scoped_lock lock(iod_cmd_mutex);
 
 	completed_commands.push_back(cmd);
 }
@@ -1893,7 +1911,7 @@ void Channel::checkCommunications() {
     }
 #endif
 	//if (monit_subs && !monit_subs->disconnected()){
-		boost::mutex::scoped_lock(iod_cmd_mutex);
+		boost::mutex::scoped_lock lock(iod_cmd_mutex);
 		std::list<IODCommand*>::iterator iter = pending_commands.begin();
 		while (iter != pending_commands.end()) {
 			IODCommand *command = *iter;

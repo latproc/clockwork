@@ -158,7 +158,7 @@ void Dispatcher::idle()
 	
 	char buf[11];
 	size_t response_len = 0;
-	safeRecv(sync, buf, 10, true, response_len); // wait for an ok to start from cw
+	safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
 	buf[response_len]= 0;
 	NB_MSG << "Dispatcher got sync start: " << buf << "\n";
 	
@@ -204,7 +204,7 @@ void Dispatcher::idle()
         if (status == e_waiting_cw)
         {
 			sync.send("dispatch",8);
-            safeRecv(sync, buf, 10, true, response_len);
+            safeRecv(sync, buf, 10, true, response_len, 0);
             status = e_running;
         }
         else if (status == e_running)
@@ -338,7 +338,7 @@ void Dispatcher::idle()
                 DBG_DISPATCHER << "dispatcher command\n";
             }
             sync.send("done", 4);
-			safeRecv(sync, buf, 10, true, response_len); // wait for ack from cw
+			safeRecv(sync, buf, 10, true, response_len, 0); // wait for ack from cw
 			DBG_DISPATCHER << "Dispatcher done\n";
             status = e_waiting;
         }

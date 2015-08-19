@@ -90,6 +90,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 
 	response_len = 0;
 	int retries = 5;
+	if (block && timeout == 0) timeout = 500;
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };

@@ -272,7 +272,7 @@ private:
 
 void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock(cti->data_mutex);
+	boost::mutex::scoped_lock lock(cti->data_mutex);
 
 	pending_commands.push_back(cmd);
 	size_t n = pending_commands.size();
@@ -283,7 +283,7 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 
 IODCommand *IODCommandThread::getCommand() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock(cti->data_mutex);
+	boost::mutex::scoped_lock lock(cti->data_mutex);
 	if (pending_commands.empty()) {
 		return 0;
 	}
@@ -295,7 +295,7 @@ IODCommand *IODCommandThread::getCommand() {
 
 IODCommand *IODCommandThread::getCompletedCommand() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock(cti->data_mutex);
+	boost::mutex::scoped_lock lock(cti->data_mutex);
 
 	if (completed_commands.empty()) return 0;
 
@@ -306,7 +306,7 @@ IODCommand *IODCommandThread::getCompletedCommand() {
 
 void IODCommandThread::putCompletedCommand(IODCommand *cmd) {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock(cti->data_mutex);
+	boost::mutex::scoped_lock lock(cti->data_mutex);
 
 	completed_commands.push_back(cmd);
 }
@@ -570,7 +570,7 @@ void IODCommandThread::operator()() {
 			if ( items[1].revents & ZMQ_POLLIN) {
 				char buf[10];
 				size_t response_len;
-				safeRecv(access_req, buf, 9, true, response_len);
+				safeRecv(access_req, buf, 9, true, response_len, 0);
 			}
 
 			if ( items[0].revents & ZMQ_POLLIN) {

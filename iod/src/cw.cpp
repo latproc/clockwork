@@ -348,7 +348,7 @@ int main (int argc, char const *argv[])
 
     char buf[100];
     size_t response_len;
-	if (safeRecv(sim_io, buf, 100, true, response_len) ) {
+	if (safeRecv(sim_io, buf, 100, true, response_len, 0) ) {
 		buf[ (response_len<100) ? response_len : 99 ] = 0;
 		NB_MSG << "simulated io got start message: " << buf << "\n";
 	}

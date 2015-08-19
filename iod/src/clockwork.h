@@ -32,6 +32,11 @@ int loadConfig(std::list<std::string> &files);
 
 void initialise_machines();
 
+class ClockworkProcessManager {
+public:
+	void SetTime(uint64_t t);
+};
+
 class ClockworkInterpreter {
 public:
     static ClockworkInterpreter* instance();
@@ -40,13 +45,20 @@ public:
     
     const Value *cycle_delay;
     Value *default_poll_delay;
+
+	inline uint64_t now() const { return current_time; }
+
 private:
     ClockworkInterpreter();
     ClockworkInterpreter(const ClockworkInterpreter&);
     ClockworkInterpreter &operator =(const ClockworkInterpreter&);
     static ClockworkInterpreter *_instance;
 
-    MachineInstance *_settings;
+	MachineInstance *_settings;
+protected:
+	uint64_t current_time;
+
+	friend class ClockworkProcessManager;
 };
 
 
