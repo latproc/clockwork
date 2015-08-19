@@ -2,8 +2,9 @@
 # is connected to the client and is implemented as shown below.
 
 FlasherMachine MACHINE {
-    on WHEN SELF IS on,  EXECUTE turnOff WHEN TIMER >= 1;
-    off WHEN SELF IS off, EXECUTE turnOn WHEN  TIMER >= 1;
+	OPTION delay 100;
+    on WHEN SELF IS on,  EXECUTE turnOff WHEN SELF IS on && TIMER >= delay;
+    off WHEN SELF IS off, EXECUTE turnOn WHEN SELF IS off && TIMER >= delay;
 	stopped WHEN SELF IS stopped;
     #on STATE;
     #off STATE;

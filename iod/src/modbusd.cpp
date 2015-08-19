@@ -62,7 +62,6 @@ namespace po = boost::program_options;
 
 const char *program_name;
 
-static boost::mutex q_mutex;
 static boost::condition_variable_any cond;
 
 const char *local_commands = "inproc://local_cmds";

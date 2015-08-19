@@ -35,6 +35,19 @@ Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000L;
 static Watchdog *wd = 0;
 
+class SchedulerInternals {
+public:
+	boost::recursive_mutex q_mutex;
+};
+
+class scheduler_queue_scoped_lock {
+public:
+	scheduler_queue_scoped_lock( boost::recursive_mutex &mut) : mutex(mut) { mutex.lock(); }
+	~scheduler_queue_scoped_lock() { mutex.unlock(); }
+	boost::recursive_mutex &mutex;
+};
+
+
 static void setTime(struct timeval &now, long delta) {
 	gettimeofday(&now, 0);
 	if (delta<0) { 
@@ -53,7 +66,7 @@ static void setTime(struct timeval &now, long delta) {
 
 std::string Scheduler::getStatus() { 
 
-	boost::mutex::scoped_lock(q_mutex);
+	scheduler_queue_scoped_lock lock(internals->q_mutex);
 	struct timeval now;
 	gettimeofday(&now, 0);
 	long wait_duration = 0;
@@ -93,25 +106,25 @@ bool ScheduledItem::operator>=(const ScheduledItem& other) const {
 }
 
 ScheduledItem *Scheduler::next() const { 
-	boost::mutex::scoped_lock(q_mutex);
+	scheduler_queue_scoped_lock lock(internals->q_mutex);
 	if (items.empty()) return 0; else return items.top(); 
 }
 
 void Scheduler::pop() { 
-	boost::mutex::scoped_lock(q_mutex);
+	scheduler_queue_scoped_lock lock(internals->q_mutex);
 	//items.check();
 	items.pop(); 
 }
 
 ScheduledItem* PriorityQueue::top() const { 
-	boost::mutex::scoped_lock(q_mutex);
+	scheduler_queue_scoped_lock lock(Scheduler::instance()->internals->q_mutex);
 	return queue.front(); 
 }
 bool PriorityQueue::empty() const { 
 	return queue.empty();
 }
 void PriorityQueue::pop() { 
-	boost::mutex::scoped_lock(q_mutex);
+	scheduler_queue_scoped_lock lock(Scheduler::instance()->internals->q_mutex);
 	queue.pop_front(); 
 }
 size_t PriorityQueue::size() const { 
@@ -119,7 +132,7 @@ size_t PriorityQueue::size() const {
 }
 
 void PriorityQueue::push(ScheduledItem *item) {
-	boost::mutex::scoped_lock(q_mutex);
+	scheduler_queue_scoped_lock lock(Scheduler::instance()->internals->q_mutex);
 	std::list<ScheduledItem*>::iterator iter = queue.begin();
 	while (iter!= queue.end()) {
 		ScheduledItem *queued = *iter;
@@ -172,8 +185,11 @@ std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
     return item.operator<<(out);
 }
 
-Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PAIR), update_notify(0), next_delay_time(0), notification_sent(0) {
-	wd = new Watchdog("Scheduler", 100, false);
+Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PAIR),
+		update_notify(0), next_delay_time(0), notification_sent(0) {
+
+	internals = new SchedulerInternals;
+	wd = new Watchdog("Scheduler", 300, false);
 	update_sync.bind("inproc://sch_items");
 	next_time.tv_sec = 0;
 	next_time.tv_usec = 0;
@@ -194,7 +210,6 @@ int64_t Scheduler::getNextDelay() {
 void Scheduler::add(ScheduledItem*item) {
 	ScheduledItem *top = 0;
 	{
-		boost::mutex::scoped_lock(q_mutex);
 		DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
 		//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
 		items.push(item);
@@ -202,7 +217,6 @@ void Scheduler::add(ScheduledItem*item) {
 	top = next();
 	next_time = top->delivery_time;
 	next_delay_time = getNextDelay();
-	//assert(next_delay_time < 60000000L);
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	if (!last_notification) {
 		if (!update_notify) {
@@ -265,7 +279,7 @@ std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
 
 bool Scheduler::ready() {
 	if (items.empty()) { return false; }
-	boost::mutex::scoped_lock(q_mutex);
+	scheduler_queue_scoped_lock lock(internals->q_mutex);
 	return getNextDelay() <= 0;
 }
 
@@ -351,7 +365,7 @@ void Scheduler::idle() {
 			wd->poll();
 			ScheduledItem *item = 0;
 			{
-				boost::mutex::scoped_lock(q_mutex);
+				scheduler_queue_scoped_lock lock(internals->q_mutex);
 				item = next();
 				DBG_SCHEDULER << "Scheduled item " << (*item) << " ready. " << items.size() << " items remain\n";
 				pop();

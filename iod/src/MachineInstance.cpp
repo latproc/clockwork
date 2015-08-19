@@ -1142,6 +1142,7 @@ void MachineInstance::describe(std::ostream &out) {
 	}
 
 	if (!mail_queue.empty()) {
+		boost::mutex::scoped_lock lock(q_mutex);
 		out << "queued messages: " << mail_queue.size() << "\n";
 		std::list<Package>::iterator evt_iter = mail_queue.begin();
 		while (evt_iter != mail_queue.end()) {
@@ -1327,15 +1328,20 @@ void MachineInstance::idle() {
 			last->release();
 		}
 	}
-	// TBD this could be an infinite loop if there is a way for handle() to cause a push
 	while (!mail_queue.empty()){
 		if (!mail_queue.empty()) {
-			boost::mutex::scoped_lock(q_mutex);
-			DBG_M_MESSAGING << _name << " has " <<  mail_queue.size() << " messages waiting\n";
-			Package p = mail_queue.front();
-			DBG_M_MESSAGING << _name << " found package " << p << "\n";
-			mail_queue.pop_front();
-			handle(p.message, p.transmitter, p.needs_receipt);
+			Package *p = 0;
+			{
+				boost::mutex::scoped_lock lock(q_mutex);
+				DBG_M_MESSAGING << _name << " has " <<  mail_queue.size() << " messages waiting\n";
+				p = new Package(mail_queue.front());
+				DBG_M_MESSAGING << _name << " found package " << p << "\n";
+				mail_queue.pop_front();
+			}
+			if (p) {
+				handle(p->message, p->transmitter, p->needs_receipt);
+				delete p;
+			}
 		}
 	}
 	if (mail_queue.empty() && active_actions.empty()) has_work = false;
@@ -2799,7 +2805,7 @@ void MachineInstance::clearAllActions() {
 		a->release();
 	}
 
-	boost::mutex::scoped_lock(q_mutex);
+	boost::mutex::scoped_lock lock(q_mutex);
 	mail_queue.clear();
 	has_work = false;
 }

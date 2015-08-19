@@ -281,6 +281,7 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 
 	cti->pending_commands.push_back(cmd);
 	size_t n = cti->pending_commands.size();
+	NB_MSG << " after push client pending commands queued: " <<cti->pending_commands.size();
 	if ( n>10) {
 		FileLogger fl(program_name); fl.f() << "Warning: pending_commands on the client interface has grown to " << n << "\n";
 	}
@@ -295,6 +296,7 @@ IODCommand *IODCommandThread::getCommand() {
 	
 	IODCommand *cmd = cti->pending_commands.front();
 	cti->pending_commands.pop_front();
+	NB_MSG << " after pop  pending completed commands queued: " <<cti->pending_commands.size();
 	return cmd;
 }
 
@@ -306,6 +308,7 @@ IODCommand *IODCommandThread::getCompletedCommand() {
 
 	IODCommand *cmd = cti->completed_commands.front();
 	cti->completed_commands.pop_front();
+	NB_MSG << " after pop  client completed commands queued: " <<cti->completed_commands.size();
 	return cmd;
 }
 
@@ -314,6 +317,7 @@ void IODCommandThread::putCompletedCommand(IODCommand *cmd) {
 	boost::mutex::scoped_lock lock(cti->data_mutex);
 
 	cti->completed_commands.push_back(cmd);
+	NB_MSG << " client push completed commands queued: " <<cti->completed_commands.size();
 }
 
 void IODCommand::setParameters(std::vector<Value> &params) {

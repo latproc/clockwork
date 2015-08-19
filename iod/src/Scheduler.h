@@ -76,6 +76,7 @@ public:
     bool operator()(const ScheduledItem *a, const ScheduledItem *b) const;
 };
 
+class SchedulerInternals;
 class Scheduler {
 public:
 	static Scheduler *instance() { if (!instance_) instance_ = new Scheduler(); return instance_; }
@@ -94,6 +95,7 @@ public:
 	int64_t getNextDelay();
     
 protected:
+	SchedulerInternals *internals;
     Scheduler();
 	~Scheduler() {}
 	static Scheduler *instance_;
@@ -111,7 +113,8 @@ protected:
 	zmq::socket_t *update_notify;
 	long next_delay_time;
 	unsigned long notification_sent; // the scheduler has been notified that an item is scheduled
-	boost::mutex q_mutex;
+
+	friend class PriorityQueue;
 };
 
 //std::ostream &operator<<(std::ostream &out, const Scheduler &m);

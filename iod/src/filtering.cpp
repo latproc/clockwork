@@ -10,6 +10,7 @@ public:
 	~scoped_lock() { mutex.unlock(); }
 	boost::recursive_mutex &mutex;
 };
+
 Buffer::Buffer(int buf_size): BUFSIZE(buf_size) {
     front = -1;
     back = -1;

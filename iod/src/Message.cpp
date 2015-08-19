@@ -32,6 +32,7 @@
 
 // Used to generate a unique id for each transmitter.
 long Transmitter::next_id;
+boost::mutex Receiver::q_mutex;
 
 std::set<Receiver*> Receiver::working_machines; // machines that have non-empty work queues
 
@@ -78,7 +79,7 @@ std::list<Value> *Message::makeParams(Value p1, Value p2, Value p3, Value p4) {
 }
 
 void Receiver::enqueue(const Package &package) { 
-	boost::mutex::scoped_lock(q_mutex);
+	boost::mutex::scoped_lock lock(q_mutex);
 	mail_queue.push_back(package);
     has_work = true;
 }
