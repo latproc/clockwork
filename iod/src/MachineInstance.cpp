@@ -3880,7 +3880,10 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
-//NB_MSG << _name << " Sending modbus update " << property_name  << " " << new_value << "\n";
+{FileLogger fl(program_name);
+fl.f() << _name << " Sending modbus update " << property_name  << " " << new_value 
+	<< " (kind:" << new_value.kind<< ")"<< "\n";
+}
 
 	ModbusAddress ma = modbus_exports[property_name];
 	switch(ma.getGroup()) {
@@ -3903,7 +3906,13 @@ void MachineInstance::sendModbusUpdate(const std::string &property_name, const V
 				}
 			}
 			else if (new_value.kind == Value::t_string || new_value.kind == Value::t_symbol){
-				ma.update(this, new_value.sValue);
+				long val;
+				char *res;
+				val = strtol(new_value.sValue.c_str(), &res, 10);
+				if (errno == 0 && *res == 0) // complete string parsed as a number
+					ma.update(this, val);
+				else
+					ma.update(this, new_value.sValue);
 			}
 			else {
 				DBG_M_MODBUS << "unable to export " << property_name << "\n";
