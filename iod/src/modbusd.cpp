@@ -112,9 +112,6 @@ void activate_address(std::string& addr_str)
 		active_addresses.insert(addr_str);
 		initialised_address[addr_str] = false;
 	}
-	else
-		if (DEBUG_BASIC)
-			std::cerr << "(fyi) address " << addr_str << " already active\n";
 }
 
 void insert(int group, int addr, const char *value, size_t len)

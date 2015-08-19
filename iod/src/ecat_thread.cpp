@@ -69,7 +69,7 @@ void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
 	char buf[10];
 	size_t response_len;
-	return safeRecv(sync_sock, buf, 10, true, response_len);
+	return safeRecv(sync_sock, buf, 10, true, response_len, 0);
 }
 
 #ifndef USE_RTC

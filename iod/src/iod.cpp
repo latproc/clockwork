@@ -165,7 +165,7 @@ static void finish(int sig)
 
 bool setup_signals()
 {
-	return; // TBD disabled catching signals
+	return false; // TBD disabled catching signals
 	struct sigaction sa;
 	sa.sa_handler = finish;
 	sigemptyset(&sa.sa_mask);
