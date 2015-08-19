@@ -1934,7 +1934,19 @@ void Channel::checkCommunications() {
 			while (iter != internals->pending_commands.end()) {
 				IODCommand *command = *iter;
 				assert(command);
-				(*command)();
+				try {
+					(*command)();
+				}
+				catch (std::exception zex){
+					{FileLogger fl(program_name);
+					fl.f() << "Exception when executing command\n";
+					}
+				}
+				catch (zmq::error_t zex){
+					{FileLogger fl(program_name);
+						fl.f() << "Exception when executing command\n";
+					}
+				}
 				DBG_CHANNELS << "Channel " << name << " processed command " << command->param(0) << "\n";
 				iter = internals->pending_commands.erase(iter);
 				internals->completed_commands.push_back(command);
