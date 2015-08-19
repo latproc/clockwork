@@ -1941,14 +1941,14 @@ void Channel::checkCommunications() {
 				try {
 					(*command)();
 				}
-				catch (std::exception zex){
-					{FileLogger fl(program_name);
-					fl.f() << "Exception when executing command\n";
-					}
-				}
 				catch (zmq::error_t zex){
 					{FileLogger fl(program_name);
 						fl.f() << "Exception when executing command\n";
+					}
+				}
+				catch (std::exception zex){
+					{FileLogger fl(program_name);
+					fl.f() << "Exception when executing command\n";
 					}
 				}
 				DBG_CHANNELS << "Channel " << name << " processed command " << command->param(0) << "\n";
