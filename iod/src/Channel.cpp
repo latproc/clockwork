@@ -769,6 +769,10 @@ void Channel::operator()() {
 					if (current_time > 2000) {
 						FileLogger fl(program_name);
 						fl.f() << "Channel " << name << " state change has not occurred after " << current_time/1000 << "s\n";
+						if (current_time > 10000) {
+							fl.f() << name << " aborting\n";
+							exit(53);
+						}
 					}
 					else {
 						DBG_CHANNELS << "channel " << name << " switching to CONNECTED state\n";
