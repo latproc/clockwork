@@ -281,8 +281,8 @@ void IODCommandThread::newPendingCommand(IODCommand *cmd) {
 
 	cti->pending_commands.push_back(cmd);
 	size_t n = cti->pending_commands.size();
-	NB_MSG << " after push client pending commands queued: " <<cti->pending_commands.size();
-	if ( n>10) {
+	//NB_MSG << " after push client pending commands queued: " <<cti->pending_commands.size() << "\n";
+	if ( n>10 ) {
 		FileLogger fl(program_name); fl.f() << "Warning: pending_commands on the client interface has grown to " << n << "\n";
 	}
 }
@@ -296,7 +296,7 @@ IODCommand *IODCommandThread::getCommand() {
 	
 	IODCommand *cmd = cti->pending_commands.front();
 	cti->pending_commands.pop_front();
-	NB_MSG << " after pop  pending completed commands queued: " <<cti->pending_commands.size();
+	//NB_MSG << " after pop  pending completed commands queued: " <<cti->pending_commands.size();
 	return cmd;
 }
 
@@ -308,7 +308,7 @@ IODCommand *IODCommandThread::getCompletedCommand() {
 
 	IODCommand *cmd = cti->completed_commands.front();
 	cti->completed_commands.pop_front();
-	NB_MSG << " after pop  client completed commands queued: " <<cti->completed_commands.size();
+	//NB_MSG << " after pop  client completed commands queued: " <<cti->completed_commands.size();
 	return cmd;
 }
 
@@ -317,7 +317,11 @@ void IODCommandThread::putCompletedCommand(IODCommand *cmd) {
 	boost::mutex::scoped_lock lock(cti->data_mutex);
 
 	cti->completed_commands.push_back(cmd);
-	NB_MSG << " client push completed commands queued: " <<cti->completed_commands.size();
+	//NB_MSG << " client push completed commands queued: " <<cti->completed_commands.size();
+	size_t n = cti->completed_commands.size();
+	if ( n>10 ) {
+		FileLogger fl(program_name); fl.f() << "Warning: completed commands on the client interface has grown to " << n << "\n";
+	}
 }
 
 void IODCommand::setParameters(std::vector<Value> &params) {
@@ -511,7 +515,7 @@ void IODCommandThread::operator()() {
 	} while (strcmp(start_cli, "start") != 0);
 
     enum {e_running, e_wait_processing_start, e_wait_processing, e_responding} status = e_running; //are we holding shared resources?
-		int poll_time = 20;
+		int poll_time = 2;
     while (!done) {
 		try {
 			wd->stop(); // disable the watchdog while we wait for something to do
@@ -522,7 +526,7 @@ void IODCommandThread::operator()() {
 			int rc;
 			try {
 				rc = zmq::poll( &items[0], 2, poll_time);
-				if (poll_time < 200) poll_time += 5;
+				if (poll_time < 20) poll_time += 1;
 				if (!rc) continue;
 				if (rc == -1 && errno == EAGAIN) continue;
 				if (done) break;
@@ -539,7 +543,7 @@ void IODCommandThread::operator()() {
 			wd->poll();
 
 			// use a shorter activity poll for a while since something is happening
-			(poll_time < 22) ? poll_time = 20 : poll_time -= 2;
+			(poll_time < 4) ? poll_time = 2 : poll_time -= 2;
 			/*
 			   processing thread will call: (*command)(params) for all pending commands
 			 */
