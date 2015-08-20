@@ -381,7 +381,12 @@ bool SubscriptionManager::checkConnections() {
 		FileLogger fl(program_name); fl.f()
 		<<  ( ( monit_setup->disconnected() ) ? "setup down " : "setup up " )
 		<< ( ( monit_subs.disconnected() ) ? "subs down " : "subs up " ) << "\n";
+		if ( timer > 10000000) {
+			{FileLogger fl(program_name); fl.f() << " waiting too long in state " << setupStatus() << ". aborting\n"; }
+			usleep(5); exit(63);
+		}
 	}
+
 
 	/*
 	if (monit_setup->disconnected() && monit_subs.disconnected()) {
