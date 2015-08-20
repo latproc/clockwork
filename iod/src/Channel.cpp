@@ -39,6 +39,25 @@ public:
 	std::list<IODCommand*> completed_commands;
 };
 
+
+class chn_scoped_lock {
+public:
+	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) { 
+//		NB_MSG << location << " LOCKING...\n";
+		lock.lock(); 
+//		NB_MSG << location << " LOCKED...\n";
+	}
+	~chn_scoped_lock() { 
+		lock.unlock(); 
+//		NB_MSG << location << " UNLOCKED\n";
+		}
+	std::string location;
+	boost::mutex &mutex;
+	boost::unique_lock<boost::mutex> lock;
+};
+
+
+
 MachineRef::MachineRef() : refs(1) {
 }
 
@@ -660,7 +679,7 @@ void Channel::operator()() {
 		////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
 		DBG_CHANNELS << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
 		communications_manager = new SubscriptionManager(definition()->name.c_str(),
-														 eCHANNEL, host.asString().c_str(),(int)port);
+				eCHANNEL, host.asString().c_str(),(int)port);
 		//DBG_CHANNELS << "Channel " << name << "::operator() subscriber thread initialising\n";
 	}
 	else {
@@ -726,9 +745,8 @@ void Channel::operator()() {
 			}
 			bool no_commands;
 			{
-				internals->iod_cmd_put_mutex.lock();
+				chn_scoped_lock ("main loop checking for completed command", internals->iod_cmd_put_mutex);
 				no_commands = internals->completed_commands.empty();
-				internals->iod_cmd_put_mutex.unlock();
 			}
 			try {
 				if (no_commands && !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
@@ -741,82 +759,90 @@ void Channel::operator()() {
 				continue;
 			}
 			{
-				boost::mutex::scoped_lock lock(internals->iod_cmd_put_mutex);
-				if (!internals->completed_commands.empty()) {
-					std::string response;
-					DBG_CHANNELS << "Channel " << name << " finishing off processed commands\n";
-					std::list<IODCommand*>::iterator iter = internals->completed_commands.begin();
-					while (iter != internals->completed_commands.end()) {
-						IODCommand *cmd = *iter;
-						iter = internals->completed_commands.erase(iter);
-						if (cmd->done == IODCommand::Success) {
-							DBG_CHANNELS << cmd->param(0) <<" succeeded: " << cmd->result() << "\n";
+				boost::unique_lock<boost::mutex> lock1(internals->iod_cmd_put_mutex, boost::defer_lock);
+				//boost::unique_lock<boost::mutex> lock2(internals->iod_cmd_get_mutex, boost::defer_lock);
+				//NB_MSG << "main loop trying completed lock for cleaning up\n";
+				if (lock1.try_lock()) {
+					//NB_MSG << "main loop got completed lock for cleaning up\n";
+					//chn_scoped_lock ("main loop cleaning completed", internals->iod_cmd_put_mutex);
+					if (!internals->completed_commands.empty()) {
+						std::string response;
+						DBG_CHANNELS << "Channel " << name << " finishing off processed commands\n";
+						std::list<IODCommand*>::iterator iter = internals->completed_commands.begin();
+						while (iter != internals->completed_commands.end()) {
+							IODCommand *cmd = *iter;
+							iter = internals->completed_commands.erase(iter);
+							if (cmd->done == IODCommand::Success) {
+								DBG_CHANNELS << cmd->param(0) <<" succeeded: " << cmd->result() << "\n";
+							}
+							else {
+								DBG_CHANNELS << cmd->param(0) <<" failed: " << cmd->error() << "\n";
+							}
+							delete cmd;
 						}
-						else {
-							DBG_CHANNELS << cmd->param(0) <<" failed: " << cmd->error() << "\n";
-						}
-						delete cmd;
+						// TBD should this go back to the originator?
 					}
-					// TBD should this go back to the originator?
+					//NB_MSG << "main loop cleaned up completed. unlocking.\n";
+					lock1.unlock();
+					//internals->iod_cmd_put_mutex.unlock();
 				}
-			}
 
-			if (isClient()
+				if (isClient()
 				&& !sm->monit_subs.disconnected() && sm->subscriberStatus() == SubscriptionManager::ss_ready
 				&& current_state == ChannelImplementation::DOWNLOADING) {
-				long current_time = getTimerVal()->iValue;
-				if (current_time > 1000) {
-					if (current_time > 2000) {
-						FileLogger fl(program_name);
-						fl.f() << "Channel " << name << " state change has not occurred after " << current_time/1000 << "s\n";
-						if (current_time > 10000) {
-							fl.f() << name << " aborting\n";
-							exit(53);
+					long current_time = getTimerVal()->iValue;
+					if (current_time > 1000) {
+						if (current_time > 2000) {
+							FileLogger fl(program_name);
+							fl.f() << "Channel " << name << " state change has not occurred after " << current_time/1000 << "s\n";
+							if (current_time > 10000) {
+								fl.f() << name << " aborting\n";
+								exit(53);
+							}
+						}
+						else {
+							DBG_CHANNELS << "channel " << name << " switching to CONNECTED state\n";
+							SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
+							enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 						}
 					}
-					else {
-						DBG_CHANNELS << "channel " << name << " switching to CONNECTED state\n";
-						SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
-						enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
+				}
+
+				if (items[cmd_server_idx].revents & ZMQ_POLLIN) {
+					DBG_CHANNELS << name << " incoming activity on channel\n";
+				}
+
+				if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
+						|| (items[subscriber_idx].revents & ZMQ_POLLERR) )
+					continue;
+				zmq::message_t update;
+				communications_manager->subscriber().recv(&update, ZMQ_NOBLOCK);
+				struct timeval now;
+				gettimeofday(&now, 0);
+				long len = update.size();
+				if (len == 0) continue;
+
+				char *data = (char *)malloc(len+1);
+				memcpy(data, update.data(), len);
+				data[len] = 0;
+				DBG_CHANNELS << "Channel " << name << " subscriber received: " << data << "\n";
+				if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
+					checkStateChange(data);
+				}
+				else
+				{
+					IODCommand *command = parseCommandString(data);
+					if (command) {
+						chn_scoped_lock lock("main loop add pending command", internals->iod_cmd_get_mutex);
+						internals->pending_commands.push_back(command);
 					}
 				}
+				free(data);
 			}
-
-			if (items[cmd_server_idx].revents & ZMQ_POLLIN) {
-				DBG_CHANNELS << name << " incoming activity on channel\n";
-			}
-
-			if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
-				|| (items[subscriber_idx].revents & ZMQ_POLLERR) )
-				continue;
-			zmq::message_t update;
-			communications_manager->subscriber().recv(&update, ZMQ_NOBLOCK);
-			struct timeval now;
-			gettimeofday(&now, 0);
-			long len = update.size();
-			if (len == 0) continue;
-
-			char *data = (char *)malloc(len+1);
-			memcpy(data, update.data(), len);
-			data[len] = 0;
-			DBG_CHANNELS << "Channel " << name << " subscriber received: " << data << "\n";
-			if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
-				checkStateChange(data);
-			}
-			else
-			{
-				IODCommand *command = parseCommandString(data);
-				if (command) {
-					internals->iod_cmd_put_mutex.lock();
-					internals->pending_commands.push_back(command);
-					internals->iod_cmd_put_mutex.unlock();
-				}
-			}
-			free(data);
 		}
 	}
 	catch (std::exception ex) {
-		DBG_CHANNELS << "Channel " << name << " saw exception " << ex.what() << "\n";
+		NB_MSG << "Channel " << name << " saw exception " << ex.what() << "\n";
 	}
 }
 void Channel::sendMessage(const char *msg, zmq::socket_t &sock) {
@@ -1204,11 +1230,11 @@ void Channel::sendPropertyChangeMessage(const std::string &name, const Value &ke
 		std::string response;
 		char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
 		if (isClient())
-				sendMessage(cmd, communications_manager->subscriber(),response); //setup()
-				//safeSend(communications_manager->subscriber(), cmd, strlen(cmd) );
+				//sendMessage(cmd, communications_manager->subscriber(),response); //setup()
+				safeSend(communications_manager->subscriber(), cmd, strlen(cmd) );
 			else
-				sendMessage(cmd, communications_manager->subscriber(),response);
-				//safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
+				//sendMessage(cmd, communications_manager->subscriber(),response);
+				safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
 			//DBG_CHANNELS << "channel " << name << " got response: " << response << "\n";
 			free(cmd);
 	}
@@ -1808,13 +1834,13 @@ int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
 #endif
 
 void Channel::newPendingCommand(IODCommand *cmd) {
-	boost::mutex::scoped_lock lock(internals->iod_cmd_get_mutex);
+	chn_scoped_lock lock("newPending", internals->iod_cmd_get_mutex);
 
 	internals->pending_commands.push_back(cmd);
 }
 
 IODCommand *Channel::getCommand() {
-	boost::mutex::scoped_lock lock(internals->iod_cmd_get_mutex);
+	chn_scoped_lock lock("getCommand", internals->iod_cmd_get_mutex);
 
 	if (internals->pending_commands.empty()) return 0;
 
@@ -1830,7 +1856,7 @@ IODCommand *Channel::getCommand() {
 }
 
 IODCommand *Channel::getCompletedCommand() {
-	boost::mutex::scoped_lock lock(internals->iod_cmd_put_mutex);
+	chn_scoped_lock ("getCompleted", internals->iod_cmd_put_mutex);
 
 	if (internals->completed_commands.empty()) return 0;
 
@@ -1840,7 +1866,7 @@ IODCommand *Channel::getCompletedCommand() {
 }
 
 void Channel::putCompletedCommand(IODCommand *cmd) {
-	boost::mutex::scoped_lock lock(internals->iod_cmd_put_mutex);
+	chn_scoped_lock ("putCompleted", internals->iod_cmd_put_mutex);
 
 	internals->completed_commands.push_back(cmd);
 }
@@ -1860,13 +1886,15 @@ void Channel::handleChannels() {
 		}
 		IODCommand *command = chn->getCommand();
 		while (command) {
-			DBG_CHANNELS << "Processing: received command: "
-			<< *command << "on channel " << chn->name << "\n";
+			{FileLogger fl(program_name);
+			fl.f() << "Processing: received command: " << *command << "on channel " << chn->name << "\n";}
 			(*command)();
+			{FileLogger fl(program_name);
+			fl.f() << "posting completed command: " << *command << "on channel " << chn->name << "\n";}
 			chn->putCompletedCommand(command);
 			command = chn->getCommand();
 		}
-    }
+	}
 }
 
 #if 0
@@ -1931,33 +1959,44 @@ void Channel::checkCommunications() {
     }
 #endif
 	//if (monit_subs && !monit_subs->disconnected()){
-	if (internals->iod_cmd_get_mutex.try_lock()) {
-		if (internals->iod_cmd_put_mutex.try_lock()) {
-			//boost::mutex::scoped_lock lock(iod_cmd_mutex);
+	
+	boost::unique_lock<boost::mutex> lock1(internals->iod_cmd_put_mutex, boost::defer_lock);
+	boost::unique_lock<boost::mutex> lock2(internals->iod_cmd_get_mutex, boost::defer_lock);
+	//NB_MSG << "Trying pending queue\n";
+	if (lock2.try_lock()) {
+		//NB_MSG << "pending queue locked\n";
+		//NB_MSG << "Trying completed queue\n";
+		if (lock1.try_lock()) {
 			std::list<IODCommand*>::iterator iter = internals->pending_commands.begin();
+			//NB_MSG << "completed queue locked\n";
 			while (iter != internals->pending_commands.end()) {
 				IODCommand *command = *iter;
+				//NB_MSG << name << " processing loop got command " << command->param(0) << "\n";
 				assert(command);
 				try {
 					(*command)();
 				}
 				catch (zmq::error_t zex){
+					//NB_MSG << "Exception when executing command\n";
 					{FileLogger fl(program_name);
 						fl.f() << "Exception when executing command\n";
 					}
 				}
 				catch (std::exception zex){
+					//NB_MSG << "Exception when executing command\n";
 					{FileLogger fl(program_name);
 					fl.f() << "Exception when executing command\n";
 					}
 				}
-				DBG_CHANNELS << "Channel " << name << " processed command " << command->param(0) << "\n";
+				NB_MSG << "Channel " << name << " processed command " << command->param(0) << "\n";
 				iter = internals->pending_commands.erase(iter);
 				internals->completed_commands.push_back(command);
 			}
-			internals->iod_cmd_put_mutex.unlock();
+			//NB_MSG << "unlocking completed queue\n";
+			lock1.unlock();
 		}
-		internals->iod_cmd_get_mutex.unlock();
+		//NB_MSG << "unlocking pending queue\n";
+		lock2.unlock();
 	}
 }
 
