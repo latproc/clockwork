@@ -4,12 +4,12 @@
 # machine powers-up in the (hidden) INIT state.
 
 Blinker MACHINE {
-
+  OPTION delay 10;
   on STATE;
   off INITIAL;
 
-  ENTER on { WAIT 10; SEND turnOff TO SELF; }
-  ENTER off { WAIT 10; SEND turnOn TO SELF; }
+  ENTER on { WAIT delay; SEND turnOff TO SELF; }
+  ENTER off { WAIT delay; SEND turnOn TO SELF; }
   off DURING turnOff{}
   on DURING turnOn{}
 

@@ -33,7 +33,8 @@ public:
     Status status;
 
     int pollZMQItems(int poll_time, 
-			zmq::pollitem_t items[], zmq::socket_t &ecat_sync, 
+			zmq::pollitem_t items[], int num_items,
+			zmq::socket_t &ecat_sync,
 			zmq::socket_t &resource_mgr, zmq::socket_t &dispatch, 
 			zmq::socket_t &sched, zmq::socket_t &ecat_out);
 

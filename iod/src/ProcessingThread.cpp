@@ -115,22 +115,24 @@ public:
 	int sequence;
 	long cycle_delay;
 
-	static const int ECAT_ITEM = 0;
-	static const int CMD_ITEM = 1;
-	static const int DISPATCHER_ITEM = 2;
-	static const int SCHEDULER_ITEM = 3;
-	static const int ECAT_OUT_ITEM = 4;
+	static const int ECAT_ITEM = 0; // ethercat data incoming
+	static const int CMD_ITEM = 1;  // client interface time sync
+	static const int DISPATCHER_ITEM = 2; // messages being dispatched
+	static const int SCHEDULER_ITEM = 3; // scheduled items firing
+	static const int ECAT_OUT_ITEM = 4; //io has data update for ethercat
+	static const int CMD_SYNC_ITEM = 5; // client interface sending message
 
 	Watchdog processing_wd;
 	ClockworkProcessManager process_manager;
 
-	ProcessingThreadInternals() : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000) {
+	ProcessingThreadInternals() : sequence(0), cycle_delay(1000),
+		processing_wd("Processing Loop Watchdog", 2000) {
 
 	}
 
 };
 
-	ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface)
+ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface)
 : internals(0), machine(m), status(e_waiting),
 	activate_hardware(activator), command_interface(cmd_interface)
 {
@@ -158,8 +160,6 @@ bool ProcessingThread::checkAndUpdateCycleDelay()
 	if (delay != internals->cycle_delay)
 	{
 		set_cycle_time(delay);
-		//ECInterface::FREQUENCY = 1000000 / delay;
-		//ECInterface::instance()->start();
 		internals->cycle_delay = delay;
 		return true;
 	}
@@ -196,7 +196,7 @@ static void display(uint8_t *p) {
 }
 #endif
 
-int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], 
+int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int num_items,
 		zmq::socket_t &ecat_sync, 
 		zmq::socket_t &resource_mgr, 
 		zmq::socket_t &dispatcher, 
@@ -210,7 +210,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[],
 		{
 			long len = 0;
 			char buf[10];
-			res = zmq::poll(&items[0], 5, poll_wait);
+			res = zmq::poll(&items[0], num_items, poll_wait);
 			if (!res) return res;
 			if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)
 			{
@@ -428,6 +428,9 @@ void ProcessingThread::operator()()
 	zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
 	ecat_sync.connect("inproc://ethercat_sync");
 
+	zmq::socket_t command_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
+	command_sync.connect("inproc://command_sync");
+
 	IOComponent::setHardwareState(IOComponent::s_hardware_init);
 
 	safeSend(sched_sync,"go",2); // scheduled items
@@ -505,7 +508,8 @@ void ProcessingThread::operator()()
 			{ resource_mgr, 0, ZMQ_POLLIN, 0 },
 			{ dispatch_sync, 0, ZMQ_POLLIN, 0 },
 			{ sched_sync, 0, ZMQ_POLLIN, 0 },
-			{ ecat_out, 0, ZMQ_POLLIN, 0 }
+			{ ecat_out, 0, ZMQ_POLLIN, 0 },
+			{ command_sync, 0, ZMQ_POLLIN, 0 }
 		};
 		char buf[100];
 		int poll_wait = 2 * internals->cycle_delay / 1000; // millisecs
@@ -519,7 +523,7 @@ void ProcessingThread::operator()()
 			internals->process_manager.SetTime(curr_t);
 			//if (Watchdog::anyTriggered(curr_t))
 			//	Watchdog::showTriggered(curr_t, true);
-			systems_waiting = pollZMQItems(poll_wait, items, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
+			systems_waiting = pollZMQItems(poll_wait, items, 6, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
 			//	<< " waiting: " << systems_waiting << "\n";
 			if (systems_waiting > 0) break;
@@ -629,6 +633,8 @@ void ProcessingThread::operator()()
 			avg_command_time.start();
 #endif
 			IODCommand *command = command_interface.getCommand();
+			if (command)
+				safeSend(resource_mgr, "ping", 4); // wakeup the client interface
 			// keep track of the time so we don't spend too much of it here
 			uint64_t commands_start_time = nowMicrosecs();
 			uint64_t now_t = commands_start_time;
@@ -640,7 +646,6 @@ void ProcessingThread::operator()()
 				if (now_t - commands_start_time < 100)
 					command = command_interface.getCommand();
 			}
-			safeSend(resource_mgr, "ping", 4); // wakeup the client interface
 #ifdef KEEPSTATS
 			avg_command_time.update();
 #endif
@@ -672,6 +677,31 @@ void ProcessingThread::operator()()
 				safeRecv(dispatch_sync, buf, 10, true, len, 0);
 				safeSend(dispatch_sync,"bye",3);
 				status = e_waiting;
+			}
+		}
+
+		if (status == e_waiting && items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
+			zmq::message_t msg;
+			char *buf = 0;
+			size_t len = 0;
+			if (safeRecv(command_sync, &buf, &len, false, 0) ) {
+				{
+					FileLogger fl(program_name);
+					fl.f() << "Main thread received command " << buf << "\n";
+				}
+				IODCommand *command = parseCommandString(buf);
+				delete[] buf;
+				try {
+					(*command)();
+				}
+				catch (std::exception e) {
+					FileLogger fl(program_name);
+					fl.f() << "command execution threw an exception\n";
+				}
+				char *response = strdup(command->result());
+				safeSend(command_sync, response, strlen(response));
+				free(response);
+				delete command;
 			}
 		}
 

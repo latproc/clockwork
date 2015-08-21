@@ -502,6 +502,9 @@ void IODCommandThread::operator()() {
     zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
     access_req.bind("inproc://resource_mgr");
 
+	zmq::socket_t command_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
+	command_sync.bind("inproc://command_sync");
+
 	char start_cli[20];
 	do { // wait to start
 		size_t len;
@@ -521,17 +524,22 @@ void IODCommandThread::operator()() {
 			wd->stop(); // disable the watchdog while we wait for something to do
 			zmq::pollitem_t items[] = {
 				{ cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } ,
-				{ access_req, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
+				{ access_req, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+				{ command_sync, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
 			};
 			int rc;
 			try {
-				rc = zmq::poll( &items[0], 2, poll_time);
+				rc = zmq::poll( &items[0], 3, poll_time);
 				if (poll_time < 20) poll_time += 1;
 				if (!rc) continue;
 				if (rc == -1 && errno == EAGAIN) continue;
 				if (done) break;
-				if ( !(items[0].revents & ZMQ_POLLIN) && !(items[1].revents & ZMQ_POLLIN) ) continue;
-			}
+/*				if ( !(items[0].revents & ZMQ_POLLIN)
+					&& !(items[1].revents & ZMQ_POLLIN)
+					&& !(items[1].revents & ZMQ_POLLIN)
+				)
+					continue;
+*/			}
 			catch (zmq::error_t zex) {
 				{
 					FileLogger fl(program_name);
@@ -544,9 +552,11 @@ void IODCommandThread::operator()() {
 
 			// use a shorter activity poll for a while since something is happening
 			(poll_time < 4) ? poll_time = 2 : poll_time -= 2;
+
 			/*
 			   processing thread will call: (*command)(params) for all pending commands
 			 */
+
 			// check for completed commands to return
 			CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 			IODCommand *command = getCompletedCommand();
@@ -580,6 +590,20 @@ void IODCommandThread::operator()() {
 			}
 			wd->poll();
 
+			if ( items[2].revents & ZMQ_POLLIN) {
+				char *buf = 0;
+				size_t response_len;
+				if (safeRecv(command_sync, &buf, &response_len, true, 0)) {
+					{
+						FileLogger fl(program_name);
+						fl.f() << "client interface received " << buf << "\n";
+					}
+					safeSend(cti->socket, buf, response_len);
+					delete[] buf;
+				}
+			}
+
+
 			if ( items[1].revents & ZMQ_POLLIN) {
 				char buf[10];
 				size_t response_len;
@@ -598,6 +622,7 @@ void IODCommandThread::operator()() {
 				char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
 				memcpy(data, request.data(), size);
 				data[size] = 0;
+#if 0
 				//NB_MSG << "Client interface received:" << data << "\n";
 				IODCommand *new_command = parseCommandString(data);
 				if (new_command == 0) {
@@ -608,7 +633,9 @@ void IODCommandThread::operator()() {
 				// push this onto a queue for the main thread
 				newPendingCommand(new_command);
 				safeSend(access_req, "wakeup", 6);
-				cleanup:
+#else
+				safeSend(command_sync, data, size);
+#endif
 				free(data);
 			}
 
