@@ -159,10 +159,11 @@ bool Channel::syncRemoteStates() {
 					std::string state(m->getCurrentStateString());
 					DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state << "\n";
 					char buf[200];
-					const char *msg = MessageEncoding::encodeState(m->getName(), state);
+					char *msg = MessageEncoding::encodeState(m->getName(), state);
 					std::string response;
 					// TBD this can take some time. need to remember where we are up to and come back later
 					sendMessage(msg, *cmd_client, response);
+					free(msg);
 				}
 			}
 		}
@@ -227,6 +228,13 @@ bool Channel::syncRemoteStates() {
 }
 
 Action::Status Channel::setState(const State &new_state, bool resume) {
+	if ( communications_manager
+		&& ( communications_manager->monit_setup->disconnected()
+			|| communications_manager->monit_subs.disconnected() )
+		 && new_state != ChannelImplementation::DISCONNECTED )
+
+		return Action::Failed; // channel is disconnected
+
 	Action::Status res = MachineInstance::setState(new_state, resume);
 	if (res != Action::Complete) {
 		DBG_CHANNELS << "Action " << *this << " not complete\n";
@@ -387,7 +395,7 @@ void Channel::dropConnection() {
 	boost::mutex::scoped_lock lock(update_mutex);
 	assert(connections);
 	--connections;
-	DBG_CHANNELS << getName() << " client disconnected\n";
+	{FileLogger fl(program_name); fl.f() << getName() << " client disconnected\n"; }
 	if(!connections) {
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "DISCONNECTED" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
@@ -812,9 +820,15 @@ void Channel::operator()() {
 					DBG_CHANNELS << name << " incoming activity on channel\n";
 				}
 
+				if (items[subscriber_idx].revents & ZMQ_POLLERR) {
+					{FileLogger fl(program_name); fl.f() << name << " thread detected error on subscriber connection\n"; }
+				}
+
 				if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
 						|| (items[subscriber_idx].revents & ZMQ_POLLERR) )
 					continue;
+
+				// incoming channel data
 				zmq::message_t update;
 				communications_manager->subscriber().recv(&update, ZMQ_NOBLOCK);
 				struct timeval now;
@@ -845,6 +859,7 @@ void Channel::operator()() {
 		NB_MSG << "Channel " << name << " saw exception " << ex.what() << "\n";
 	}
 }
+
 void Channel::sendMessage(const char *msg, zmq::socket_t &sock) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
@@ -1887,10 +1902,10 @@ void Channel::handleChannels() {
 		IODCommand *command = chn->getCommand();
 		while (command) {
 			{FileLogger fl(program_name);
-			fl.f() << "Processing: received command: " << *command << "on channel " << chn->name << "\n";}
+			fl.f() << "Processing: received command: " << *command << " on channel " << chn->name << "\n";}
 			(*command)();
 			{FileLogger fl(program_name);
-			fl.f() << "posting completed command: " << *command << "on channel " << chn->name << "\n";}
+			fl.f() << "posting completed command: " << *command << " on channel " << chn->name << "\n";}
 			chn->putCompletedCommand(command);
 			command = chn->getCommand();
 		}
