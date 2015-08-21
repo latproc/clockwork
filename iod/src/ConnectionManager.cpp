@@ -349,14 +349,7 @@ bool SubscriptionManager::checkConnections() {
 		setupConnections();
 		return false;
 	}
-	/*
-	if (monit_subs.disconnected())
-		{FileLogger fl(program_name); fl.f() << channel_name << "SubscriptionManager checkConnections() server has no client connection\n"<<std::flush; }
-	else
-		{FileLogger fl(program_name); fl.f()
-			<< channel_name
-			<< "SubscriptionManager checkConnections() server has client connection\n"<<std::flush;}
-*/
+
 	uint64_t timer = microsecs() - state_start;
 
 	if (monit_setup->disconnected()
@@ -364,24 +357,12 @@ bool SubscriptionManager::checkConnections() {
 		setSetupStatus(e_waiting_connect);
 		return false;
 	}
-	/*
-	{
-		if (setupStatus() != e_done) {
-			FileLogger fl(program_name); fl.f() << channel_name 
-				<< " state " << setupStatus() << " timer: " << timer << "\n"<<std::flush; 
-			if (timer>20000 and (setupStatus() > e_waiting_connect) ) {
-				{FileLogger fl(program_name); fl.f() << channel_name << " attempting connect\n"; }
-				setupConnections();
-			}
-		}
-	}
-	*/
 	if (monit_setup->disconnected() || monit_subs.disconnected() )
 	{
 		FileLogger fl(program_name); fl.f()
 		<<  ( ( monit_setup->disconnected() ) ? "setup down " : "setup up " )
 		<< ( ( monit_subs.disconnected() ) ? "subs down " : "subs up " ) << "\n";
-		if ( timer > 10000000) {
+		if ( this->protocol == eCLOCKWORK && timer > 10000000) {
 			{FileLogger fl(program_name); fl.f() << " waiting too long in state " << setupStatus() << ". aborting\n"; }
 			usleep(5); exit(63);
 		}
