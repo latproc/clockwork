@@ -80,6 +80,52 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout) {
+	//    struct timeval now;
+	//    gettimeofday(&now, 0);
+	//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+
+	*response_len = 0;
+	int retries = 5;
+	if (block && timeout == 0) timeout = 500;
+	while (!MessagingInterface::aborted()) {
+		try {
+			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+			int n = zmq::poll( &items[0], 1, timeout);
+			if (!n && block) continue;
+			bool got_response = false;
+			if (items[0].revents & ZMQ_POLLIN) {
+				zmq::message_t message;
+				if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+					*response_len = message.size();
+					*buf = new char[*response_len+1];
+					memcpy(*buf, message.data(), *response_len);
+					(*buf)[*response_len] = 0;
+					return true;
+				}
+				else if (block) continue;
+			}
+			return (response_len == 0) ? false : true;
+		}
+		catch (zmq::error_t e) {
+			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			if (errno == EINTR) {
+				{
+					FileLogger fl(program_name);
+					fl.f() << "safeRecv interrupted system call, retrying\n";
+				}
+				if (block) continue;
+			}
+			usleep(10);
+			return false;
+		}
+	}
+	return false;
+}
+
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
 //    struct timeval now;
 //    gettimeofday(&now, 0);

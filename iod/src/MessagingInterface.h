@@ -44,7 +44,7 @@ enum ProtocolType { eCLOCKWORK, eRAW, eZMQ, eCHANNEL };
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout);
 void safeSend(zmq::socket_t &sock, const char *buf, int buflen);
-
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout);
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us = 0);
 
 
