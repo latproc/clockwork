@@ -768,7 +768,7 @@ void Channel::operator()() {
 					num_poll_items = 2;
 					subscriber_idx = 0;
 				}
-				if (items) delete items;
+				if (items) delete[] items;
 				items = new zmq::pollitem_t[num_poll_items];
 				int idx = communications_manager->configurePoll(items);
 				assert(idx < num_poll_items);
