@@ -228,16 +228,28 @@ bool Channel::syncRemoteStates() {
 }
 
 Action::Status Channel::setState(const State &new_state, bool resume) {
-	if (new_state != ChannelImplementation::DISCONNECTED) {
+	if (new_state != ChannelImplementation::DISCONNECTED && connections == 0) {
 		// can only change state if the channel is actually connected
-		if (!communications_manager || (isClient() && !communications_manager->monit_setup) )
+		if (!communications_manager || (isClient() && !communications_manager->monit_setup) ) {
+			{FileLogger fl(program_name);
+			fl.f() << name << " state chanage to " << new_state << " failed. Subscription manager is not initialised\n"; }
 			return Action::Failed;
+		}
 		if ( ( isClient() && communications_manager->monit_setup->disconnected() )
-			|| communications_manager->monit_subs.disconnected() )
-			return Action::Failed;
+			|| communications_manager->monit_subs.disconnected() ) {
+				{FileLogger fl(program_name);
+				fl.f() << name << " state chanage to " << new_state << " failed. command socket is not connected\n"; }
+				return Action::Failed;
+		}
+		if ( communications_manager->monit_subs.disconnected() ) {
+				{FileLogger fl(program_name);
+				fl.f() << name << " state chanage to " << new_state << " failed. Subscriber is disconnected\n"; }
+				return Action::Failed;
+		}
 	}
 
 	Action::Status res = MachineInstance::setState(new_state, resume);
+
 	if (res != Action::Complete) {
 		DBG_CHANNELS << "Action " << *this << " not complete\n";
 		return res;
@@ -265,12 +277,14 @@ Action::Status Channel::setState(const State &new_state, bool resume) {
 		DBG_CHANNELS << name << " DOWNLOADING\n";
 		std::string ack;
 		if (isClient()) {
-			sendMessage("status", *cmd_client, ack);
-			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
+			//sendMessage("status", *cmd_client, ack);
+			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
+			safeSend(*cmd_client, "status", 6);
 		}
 		else {
-			sendMessage("done", *cmd_client, ack);
-			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
+			//sendMessage("done", *cmd_client, ack);
+			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
+			safeSend(*cmd_client, "done", 4);
 		}
 	}
 	else if (new_state == ChannelImplementation::DISCONNECTED) {
@@ -297,7 +311,7 @@ Action::Status Channel::setState(const State &new_state, bool resume) {
 
 Action::Status Channel::setState(const char *new_state_cstr, bool resume) {
 	State new_state(new_state_cstr);
-	return MachineInstance::setState(new_state, resume);
+	return setState(new_state, resume);
 }
 
 void Channel::start() {
@@ -357,7 +371,8 @@ bool Channel::started() { return started_; }
 void Channel::addConnection() {
 	boost::mutex::scoped_lock lock(update_mutex);
 	++connections;
-	DBG_CHANNELS << getName() << " client number " << connections << " connected in state " << current_state << "\n";
+	{FileLogger fl(program_name);
+	fl.f() << getName() << " client number " << connections << " connected in state " << current_state << "\n";}
 	if (connections == 1) {
 		if (isClient()){
 			if (definition()->isPublisher()) {
@@ -624,10 +639,18 @@ void Channel::stopServer() {
 // in opposite orders.
 void Channel::checkStateChange(std::string event) {
 	DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << name << "\n";
-	if (current_state == ChannelImplementation::DISCONNECTED) return;
+	
+	if (current_state == ChannelImplementation::DISCONNECTED) {
+		checkCommunications();
+	}
+	if (current_state == ChannelImplementation::DISCONNECTED) {
+		return;
+	}
 	if (isClient()) {
-		if ( current_state == ChannelImplementation::DOWNLOADING )
-			setState(ChannelImplementation::UPLOADING);
+		if ( current_state == ChannelImplementation::DOWNLOADING ) {
+			if (setState(ChannelImplementation::UPLOADING) == Action::Failed) {
+			}
+		}
 		else if (current_state == ChannelImplementation::UPLOADING) {
 			DBG_CHANNELS << name << " -> ACTIVE\n";
 			setState(ChannelImplementation::ACTIVE);
@@ -644,8 +667,10 @@ void Channel::checkStateChange(std::string event) {
 			setState(ChannelImplementation::UPLOADING);
 		if ( current_state == ChannelImplementation::WAITSTART && event == "status" )
 			setState(ChannelImplementation::UPLOADING);
-		else if (current_state == ChannelImplementation::ACTIVE && event == "status")
-			setState(ChannelImplementation::UPLOADING);
+		else if (current_state == ChannelImplementation::ACTIVE && event == "status") {
+			{FileLogger fl(program_name); fl.f() << "ignoring " << event << " while active\n"; }
+			//setState(ChannelImplementation::UPLOADING);
+		}
 		else if (current_state == ChannelImplementation::UPLOADING)
 			setState(ChannelImplementation::ACTIVE);
 		else if (current_state == ChannelImplementation::DOWNLOADING)
@@ -1269,7 +1294,8 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		if (!chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) continue;
+			if (!chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) continue;
+			if (chn->current_state != ChannelImplementation::ACTIVE) continue;
 		//if (machine->ownerChannel() == chn) continue; // shadows don't forward their properties back on their channel
         if (!chn->channel_machines.count(machine))
             continue;
@@ -1290,6 +1316,11 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
 // step through the list of properties that have been throttled on this channel
 // and send the property change and/or the modbus update depending on channel features
 void Channel::sendThrottledUpdates() {
+	if (current_state != ChannelImplementation::ACTIVE)
+		return;
+	if ( !communications_manager || communications_manager->monit_subs.disconnected()) {
+		return;
+	}
 	bool do_modbus = definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
 	bool do_properties = definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
 	last_throttled_send = nowMicrosecs();
@@ -1337,9 +1368,10 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		bool do_modbus = chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
-		bool do_properties = chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
-		if (!do_modbus && !do_properties) continue;
+			bool do_modbus = chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
+			bool do_properties = chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
+			if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+			if (!do_modbus && !do_properties) continue;
 
         if (!chn->channel_machines.count(machine))
             continue;
@@ -1555,6 +1587,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 	std::map<std::string, Channel*>::iterator iter = all->begin();
 	while (iter != all->end()) {
 		Channel *chn = (*iter).second; iter++;
+		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
 		if (command == "UPDATE" && !chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates))
 			continue;
 
@@ -1977,6 +2010,7 @@ void Channel::checkCommunications() {
 #endif
 	//if (monit_subs && !monit_subs->disconnected()){
 	
+#if 0
 	boost::unique_lock<boost::mutex> lock1(internals->iod_cmd_put_mutex, boost::defer_lock);
 	boost::unique_lock<boost::mutex> lock2(internals->iod_cmd_get_mutex, boost::defer_lock);
 	//NB_MSG << "Trying pending queue\n";
@@ -2015,6 +2049,7 @@ void Channel::checkCommunications() {
 		//NB_MSG << "unlocking pending queue\n";
 		lock2.unlock();
 	}
+#endif
 }
 
 void Channel::setupAllShadows() {
