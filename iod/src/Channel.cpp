@@ -277,14 +277,14 @@ Action::Status Channel::setState(const State &new_state, bool resume) {
 		DBG_CHANNELS << name << " DOWNLOADING\n";
 		std::string ack;
 		if (isClient()) {
-			//sendMessage("status", *cmd_client, ack);
-			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
-			safeSend(*cmd_client, "status", 6);
+			sendMessage("status", *cmd_client, ack);
+			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
+			//safeSend(*cmd_client, "status", 6);
 		}
 		else {
-			//sendMessage("done", *cmd_client, ack);
-			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
-			safeSend(*cmd_client, "done", 4);
+			sendMessage("done", *cmd_client, ack);
+			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
+			//safeSend(*cmd_client, "done", 4);
 		}
 	}
 	else if (new_state == ChannelImplementation::DISCONNECTED) {
