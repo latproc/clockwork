@@ -475,6 +475,7 @@ void ProcessingThread::operator()()
 	// to be responding.
 	const int MAX_UNCONTROLLED_POLLS = 5;
 	int io_unsafe_polls_remaining = MAX_UNCONTROLLED_POLLS;
+	bool have_started_clients = false;
 	while (!program_done)
 	{
 		unsigned int machine_check_delay = internals->cycle_delay;
@@ -490,8 +491,11 @@ void ProcessingThread::operator()()
 					std::cerr << error << "\n";
 					MessageLog::instance()->add(error.c_str());
 				}
-				FileLogger fl(program_name); fl.f() << "Enabling client access\n";
-				safeSend(resource_mgr, "start", 5);
+				if (!have_started_clients) {
+					have_started_clients = true;
+					FileLogger fl(program_name); fl.f() << "Enabling client access\n";
+					safeSend(resource_mgr, "start", 5);
+				}
 			}
 		}
 		else {
