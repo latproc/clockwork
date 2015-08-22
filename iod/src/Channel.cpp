@@ -228,12 +228,14 @@ bool Channel::syncRemoteStates() {
 }
 
 Action::Status Channel::setState(const State &new_state, bool resume) {
-	if ( communications_manager
-		&& ( communications_manager->monit_setup->disconnected()
+	if (new_state != ChannelImplementation::DISCONNECTED) {
+		// can only change state if the channel is actually connected
+		if (!communications_manager || (isClient() && !communications_manager->monit_setup) )
+			return Action::Failed;
+		if ( ( isClient() && communications_manager->monit_setup->disconnected() )
 			|| communications_manager->monit_subs.disconnected() )
-		 && new_state != ChannelImplementation::DISCONNECTED )
-
-		return Action::Failed; // channel is disconnected
+			return Action::Failed;
+	}
 
 	Action::Status res = MachineInstance::setState(new_state, resume);
 	if (res != Action::Complete) {
