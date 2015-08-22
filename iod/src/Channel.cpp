@@ -39,7 +39,6 @@ public:
 	std::list<IODCommand*> completed_commands;
 };
 
-
 class chn_scoped_lock {
 public:
 	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) { 
@@ -62,6 +61,10 @@ MachineRef::MachineRef() : refs(1) {
 }
 
 MachineRecord::MachineRecord(MachineInstance *m) : machine(m), last_sent(0) {
+}
+
+ChannelImplementation::ChannelImplementation() : monitors_exports(false), authority(0) {
+	authority = random();
 }
 
 ChannelImplementation::~ChannelImplementation() { }
@@ -132,6 +135,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 					std::string response;
 					// TBD this can take some time. need to remember where we are up to and come back later
 					sendMessage(cmd, *cmd_client, response);
+					//safeSend(*cmd_client, cmd, strlen(cmd));
 				}
 				else {
 					DBG_CHANNELS << "Note: machine " << m->getName() << " does not have a property "
@@ -158,8 +162,7 @@ bool Channel::syncRemoteStates() {
 				if (!m->isShadow()) {
 					std::string state(m->getCurrentStateString());
 					DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state << "\n";
-					char buf[200];
-					char *msg = MessageEncoding::encodeState(m->getName(), state);
+					char *msg = MessageEncoding::encodeState(m->getName(), state, authority);
 					std::string response;
 					// TBD this can take some time. need to remember where we are up to and come back later
 					sendMessage(msg, *cmd_client, response);
@@ -181,7 +184,9 @@ bool Channel::syncRemoteStates() {
 		sendMessage("done", *cmd_client, ack);
 		DBG_CHANNELS << "channel " << name << " got " << ack << " from server\n";
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
-		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
+		SetStateAction *ssa = (SetStateAction*)ssat.factory(this);
+		// execute this state change once all other actions are
+		enqueueAction(ssa);
 	}
 	else {
 		if (definition()->hasFeature(ChannelDefinition::ReportStateChanges)) {
@@ -191,13 +196,14 @@ bool Channel::syncRemoteStates() {
 				if (!m->isShadow()) {
 					const char *state = m->getCurrentStateString();
 					char buf[200];
-					const char *msg = MessageEncoding::encodeState(m->getName(), state);
-					std::string response;
-					if (cmd_client)
+					if (cmd_client) {
+						const char *msg = MessageEncoding::encodeState(m->getName(), state, definition()->authority);
+						std::string response;
 						sendMessage(msg, *cmd_client, response);
 						//safeSend(*cmd_client, msg, strlen(msg));
+					}
 					else
-						sendStateChange(m, state);
+						sendStateChange(m, state, definition()->authority);
 				}
 			}
 		}
@@ -227,12 +233,15 @@ bool Channel::syncRemoteStates() {
 	return true;
 }
 
-Action::Status Channel::setState(const State &new_state, bool resume) {
+Action::Status Channel::setState(const State &new_state, uint64_t authority, bool resume) {
 	if (new_state != ChannelImplementation::DISCONNECTED && connections == 0) {
 		// can only change state if the channel is actually connected
 		if (!communications_manager || (isClient() && !communications_manager->monit_setup) ) {
-			{FileLogger fl(program_name);
-			fl.f() << name << " state chanage to " << new_state << " failed. Subscription manager is not initialised\n"; }
+			{
+				FileLogger fl(program_name);
+				fl.f() << name << " state change to "
+					<< new_state << " failed. Subscription manager is not initialised\n";
+			}
 			return Action::Failed;
 		}
 		if ( ( isClient() && communications_manager->monit_setup->disconnected() )
@@ -309,7 +318,7 @@ Action::Status Channel::setState(const State &new_state, bool resume) {
 	return res;
 }
 
-Action::Status Channel::setState(const char *new_state_cstr, bool resume) {
+Action::Status Channel::setState(const char *new_state_cstr, uint64_t authority, bool resume) {
 	State new_state(new_state_cstr);
 	return setState(new_state, resume);
 }
@@ -373,6 +382,7 @@ void Channel::addConnection() {
 	++connections;
 	{FileLogger fl(program_name);
 	fl.f() << getName() << " client number " << connections << " connected in state " << current_state << "\n";}
+
 	if (connections == 1) {
 		if (isClient()){
 			if (definition()->isPublisher()) {
@@ -863,7 +873,7 @@ void Channel::operator()() {
 				long len = update.size();
 				if (len == 0) continue;
 
-				char *data = (char *)malloc(len+1);
+				char *data = new char[len+1];
 				memcpy(data, update.data(), len);
 				data[len] = 0;
 				DBG_CHANNELS << "Channel " << name << " subscriber received: " << data << "\n";
@@ -878,7 +888,7 @@ void Channel::operator()() {
 						internals->pending_commands.push_back(command);
 					}
 				}
-				free(data);
+				delete[] data;
 			}
 		}
 	}
@@ -906,7 +916,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 	assert(pgn_rc == 0);
 
 	if (!subscriber_thread) {
-		//DBG_CHANNELS << tnam << " Channel " << name << " sendMessage() sending " << msg << " directly\n";
+		DBG_CHANNELS << tnam << " Channel " << name << " sendMessage() sending " << msg << " directly\n";
 		return ::sendMessage(msg, sock, response);
 		/*safeSend(sock, msg, strlen(msg));
 		usleep(10);
@@ -918,9 +928,9 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 	else {
 		DBG_CHANNELS << "Channel " << name << " sendMessage() sending " << msg << " through a channel thread\n";
 		safeSend(*cmd_client, msg, strlen(msg));
-		char response_buf[100];
+		char *response_buf;
 		size_t rlen;
-		safeRecv(*cmd_client, response_buf, 100, true, rlen, 0);
+		safeRecv(*cmd_client, &response_buf, &rlen, true, 0);
 		response = response_buf;
 		DBG_CHANNELS << "Channel " << name << " sendMessage() got response for " << msg << " from a channel thread\n";
 
@@ -1028,6 +1038,12 @@ void ChannelDefinition::instantiateInterfaces() {
 							instance_name.second.asString().c_str(),
 							MachineInstance::MACHINE_SHADOW);
                     m->setDefinitionLocation("dynamic", 0);
+					m->requireAuthority(item.second->authority);
+					{
+						FileLogger fl(program_name);
+						fl.f() << "shadow " << instance_name.first
+							<< " requires authority " << item.second->authority << "\n";
+					}
 					MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
                     m->setProperties(mc->properties);
                     m->setStateMachine(mc);
@@ -1053,6 +1069,12 @@ void ChannelDefinition::instantiateInterfaces() {
 																		instance_name.second.asString().c_str(),
 																		MachineInstance::MACHINE_SHADOW);
 					m->setDefinitionLocation("dynamic", 0);
+					m->requireAuthority(item.second->authority);
+					{
+						FileLogger fl(program_name);
+						fl.f() << "shadow " << instance_name.first
+						<< " requires authority " << item.second->authority << "\n";
+					}
 					MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
 					m->setProperties(mc->properties);
 					m->setStateMachine(mc);
@@ -1370,7 +1392,7 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
         Channel *chn = (*iter).second; iter++;
 			bool do_modbus = chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
 			bool do_properties = chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
-			if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+			if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
 			if (!do_modbus && !do_properties) continue;
 
         if (!chn->channel_machines.count(machine))
@@ -1490,7 +1512,7 @@ void Channel::sendModbusUpdate(MachineInstance *machine, const std::string &prop
 	std::map<std::string, Channel*>::iterator iter = all->begin();
 	while (iter != all->end()) {
 		Channel *chn = (*iter).second; iter++;
-		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+		if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
 		if (!chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates)) continue;
 
 		//TBD change modbus channels to send data using a guaranteed delivery method
@@ -1510,7 +1532,7 @@ void Channel::sendModbusUpdate(MachineInstance *machine, const std::string &prop
 	}
 }
 
-void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
+void Channel::sendStateChange(MachineInstance *machine, std::string new_state, uint64_t auth) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -1519,37 +1541,39 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 
 	if (!all) return;
     std::string machine_name = machine->fullName();
-	char *cmdstr = MessageEncoding::encodeState(machine_name, new_state); // send command
+	char *cmdstr = 0;
+
 
 	std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+		if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
 		if (!chn->definition()->hasFeature(ChannelDefinition::ReportStateChanges)) continue;
-		
-		//if (machine->ownerChannel() == chn) continue; 
-#if 0
-		if (machine->isShadow()) {
-			// shadowed machines don't send state changes on channels that update them
-			if (chn->definition()->updates_names.count(machine->getName())) {
-				//DBG_CHANNELS << " send state change ignored on shadow machine " << machine->getName() << "\n";
-				continue;
-			}
-		}
-#endif
+
 		if (!chn->channel_machines.count(machine))
-            continue;
+			continue;
+
+		// shadow machines use the authority provided by the caller to effect the
+		// state change but 'real' devices escalate to the channel's authority to
+		// make sure that shadow listen.
+
         if (chn->filtersAllow(machine)) {
-			//DBG_CHANNELS << "Channel " << chn->name << " sendStateChange " << machine->getName() << "->" << new_state << "\n";
+
+			if (!chn->definition()->isPublisher()) {
+				if (machine->isShadow())
+					cmdstr = MessageEncoding::encodeState(machine_name, new_state, auth);
+				else
+					cmdstr = MessageEncoding::encodeState(machine_name, new_state, chn->getAuthority());
+			}
+			else // publisher channels do not use the authority parameter on state changes
+				cmdstr = MessageEncoding::encodeState(machine_name, new_state);
+
 			if (!chn->isClient() && chn->communications_manager) {
 				std::string response;
 				safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
 			}
             else if (chn->communications_manager
                   && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
-
-				//IODCommand *cmd = new IODCommandSendStateChange(machine_name, new_state);
-				//chn->internals->pending_messages.push_back(cmd);
 
 				if (!chn->definition()->isPublisher()) {
 					std::string response;
@@ -1571,9 +1595,9 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state) {
 					 machine->getName().c_str());
                 MessageLog::instance()->add(buf);
             }
+			free(cmdstr);
         }
     }
-	free(cmdstr);
 }
 
 void Channel::sendCommand(MachineInstance *machine, std::string command, std::list<Value>*params) {
@@ -1587,7 +1611,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 	std::map<std::string, Channel*>::iterator iter = all->begin();
 	while (iter != all->end()) {
 		Channel *chn = (*iter).second; iter++;
-		if (chn->current_state != ChannelImplementation::ACTIVE) continue;
+		if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
 		if (command == "UPDATE" && !chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates))
 			continue;
 
@@ -1727,12 +1751,19 @@ void Channel::enableShadows() {
     // enable all machines that are updated by this channel
 	// don't perform the enable operation here though,
 	// queue them for later
+
+	// shadow devices on the client side need to have their authorisatio key set
+	// to the same as devices on the server side.
+	if (isClient()) {
+		authority = communications_manager->authority;
+	}
     std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
     while (iter != definition()->updates_names.end()) {
         const std::pair< std::string, Value> item = *iter++;
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
+			if (isClient()) ms->requireAuthority(authority);
 			//DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
 			channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
 			EnableActionTemplate ea(ms->getName().c_str());

@@ -164,7 +164,8 @@ bool ConditionHandler::check(MachineInstance *machine) {
 				else {
 					// execute this state change once all other actions are complete
 					SetStateActionTemplate ssat("SELF", "off" );
-					flag->enqueueAction(ssat.factory(flag));
+					SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(flag));
+					flag->enqueueAction(ssa);
 				}
 			}
 		}
@@ -716,14 +717,14 @@ void MachineShadowInstance::idle() {
 	return;
 }
 
-Action::Status MachineShadowInstance::setState(const State &new_state, bool resume) {
+Action::Status MachineShadowInstance::setState(const State &new_state, uint64_t authority, bool resume) {
 	NB_MSG << _name << " (shadow) setState("<<current_state<< "->" << new_state << ")\n";
-	return MachineInstance::setState(new_state, resume);
+	return MachineInstance::setState(new_state, authority, resume);
 }
 
-Action::Status MachineShadowInstance::setState(const char *new_state, bool resume) {
+Action::Status MachineShadowInstance::setState(const char *new_state, uint64_t authority, bool resume) {
 	NB_MSG << _name << " (shadow) setState(" << new_state << ")\n";
-	return MachineInstance::setState(new_state, resume);
+	return MachineInstance::setState(new_state, authority, resume);
 }
 
 
@@ -983,7 +984,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	published(0),
 	cache(0),
 	action_errors(0),
-	owner_channel(0)
+	owner_channel(0), expected_authority(0)
 {
 	if (!shared) shared = new SharedCache;
 	cache = new Cache;
@@ -1025,7 +1026,8 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	is_traceable(false),
 	published(0),
 	cache(0),
-	action_errors(0)
+	action_errors(0),
+	owner_channel(0), expected_authority(0)
 {
 	if (!shared) shared = new SharedCache;
 	cache = new Cache;
@@ -1056,7 +1058,7 @@ void simple_deltat(std::ostream &out, uint64_t dt) {
 void MachineInstance::describe(std::ostream &out) {
 	out << "---------------\n" << _name << ": " << current_state.getName() << " "
 		<< (enabled() ? "" : " DISABLED") <<  "\n"
-		<< (isShadow() ? " SHADOW" : "") <<  "\n"
+		<< (isShadow() ? " SHADOW " : "") << "authority " << expected_authority  <<  "\n"
 		<< (isActive() ? "" : " NOT ACTIVE") <<  "\n"
 		<< "  Class: " << _type << " instantiated at: " << definition_file
 		<< " line:" << definition_line << "\n";
@@ -1895,7 +1897,7 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	return false;
 }
 
-Action::Status MachineInstance::setState(const char *sn, bool resume) {
+Action::Status MachineInstance::setState(const char *sn, uint64_t authority, bool resume) {
 	char buf[150];
 	if (!state_machine) {
 		snprintf(buf, 150, "Error: setting state to %s on a machine (%s) with no statemachine", sn, _name.c_str());
@@ -1910,7 +1912,7 @@ Action::Status MachineInstance::setState(const char *sn, bool resume) {
 		DBG_MSG << buf << "\n";
 		return Action::Failed;
 	}
-	return setState(*s, resume);
+	return setState(*s, authority, resume);
 }
 
 void MachineInstance::forceStableStateCheck() { 
@@ -1918,7 +1920,22 @@ void MachineInstance::forceStableStateCheck() {
 	total_machines_needing_check++; 
 }
 
-Action::Status MachineInstance::setState(const State &new_state, bool resume) {
+void MachineInstance::requireAuthority(uint64_t auth) {
+	expected_authority = auth;
+}
+
+Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
+	if (expected_authority != 0 && expected_authority != authority ) {
+		FileLogger fl(program_name);
+		fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
+		<< " needed: " << expected_authority << " got " << authority << "\n";
+		if (isShadow()) {
+			Channel *chn = ownerChannel();
+			if (chn && chn->current_state == ChannelImplementation::ACTIVE)
+				chn->sendStateChange(this, new_state.getName(), authority);
+		}
+		return Action::Failed;
+	}
 
 	if (!hasState(new_state)) {
 		const Value &s = getValue(new_state.getName().c_str());
@@ -1930,7 +1947,7 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 			DBG_MSG << buf << "\n";
 			return Action::Failed;
 		}
-		return setState(propertyState);
+		return setState(propertyState, authority, resume);
 	}
 	Action::Status stat = Action::Complete;
 
@@ -2159,7 +2176,7 @@ Action::Status MachineInstance::setState(const State &new_state, bool resume) {
 
 
 		if (published) {
-			Channel::sendStateChange(this, new_state.getName());
+			Channel::sendStateChange(this, new_state.getName(), authority);
 		}
 
 		/* notify everyone we are entering a state */
@@ -2506,7 +2523,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 
 		if(m.getText() == "on_enter" && current_state.getName() != "on") {
 			const State *on = state_machine->findState("on");
-			if (on) setState(*on);
+			if (on) setState(*on, expected_authority, false);
 			else {
 				char buf[120];
 				snprintf(buf, 120, "%s does not have a state 'on' executing 'on_enter'", _name.c_str());
@@ -2516,7 +2533,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
 		}
 		else if (m.getText() == "off_enter" && current_state.getName() != "off") {
 			const State *off = state_machine->findState("off");
-			if (off) setState(*off);
+			if (off) setState(*off, expected_authority, false);
 			else {
 				char buf[120];
 				snprintf(buf, 120, "%s does not have a state 'off' executing 'off_enter'", _name.c_str());
@@ -2846,7 +2863,7 @@ void MachineInstance::resume() {
 		for (unsigned int i = 0; i<locals.size(); ++i) {
 			locals[i].machine->resume();
 		}
-		setState(current_state, true);
+		setState(current_state, expected_authority, true);
 		setNeedsCheck();
 	} 
 }
@@ -2868,7 +2885,7 @@ void MachineInstance::setInitialState() {
 	if (state_machine) {
 		if (io_interface) {
 			const State *s = state_machine->findState(io_interface->getStateString());
-			if (s) setState(*s);
+			if (s) setState(*s, expected_authority, false);
 			else {
 				char buf[100];
 				snprintf(buf, 100,"Warning: setting initial state on %s to unknown state: %s\n", _name.c_str(), io_interface->getStateString());
@@ -2880,7 +2897,7 @@ void MachineInstance::setInitialState() {
 			if (state_machine->token_id == ClockworkToken::LIST )
 				fixListState(*this);
 			else
-				setState(state_machine->initial_state); 
+				setState(state_machine->initial_state,expected_authority, false);
 			setNeedsCheck();
 		}
 	}
@@ -2990,7 +3007,7 @@ void MachineInstance::resume(const State &s) {
 		for (unsigned int i = 0; i<locals.size(); ++i) {
 			locals[i].machine->resume();
 		}
-		setState(s, true);
+		setState(s, expected_authority, true);
 		setNeedsCheck();
 	}
 }
@@ -4597,7 +4614,7 @@ void MachineInstance::setError(int val) {
 
 void MachineInstance::resetError() {
 	error_state = 0; 
-	if (state_machine) setState(state_machine->initial_state); 
+	if (state_machine) setState(state_machine->initial_state);
 }
 
 void MachineInstance::ignoreError() {

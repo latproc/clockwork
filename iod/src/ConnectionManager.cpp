@@ -129,7 +129,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 										 const char *remote_host, int remote_port) :
 		subscriber_port(remote_port),
 		subscriber_host(remote_host),
-		channel_name(chname), protocol(proto), setup_port(5555), 
+		channel_name(chname), protocol(proto), setup_port(5555), authority(0),
 		subscriber_(*MessagingInterface::getContext(), (proto == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
 		monit_subs(subscriber_,
 				   constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str() ),
@@ -217,10 +217,11 @@ bool SubscriptionManager::requestChannel() {
 				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
 				if (zmq_errno() == EFSM /*EFSM*/) {
-					{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
+					{
+						FileLogger fl(program_name);
+						fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
 					zmq::message_t m; setup().recv(&m); 
-					{FileLogger fl(program_name); fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
-					return false;						//exit(61);
+					return false;
 				}
 			}
 		}
@@ -266,6 +267,12 @@ bool SubscriptionManager::requestChannel() {
                 if (chan_name && chan_name->type == cJSON_String) {
                     current_channel = chan_name->valuestring;
                 }
+				cJSON *chan_key = cJSON_GetObjectItem(chan, "authority");
+				if (chan_key && chan_key->type == cJSON_Number) {
+					authority = chan_key->valueint;
+					{FileLogger fl(program_name);
+						fl.f() << current_channel << " set channel key to " << authority << "\n"; }
+				}
             }
             else {
                 setSetupStatus(SubscriptionManager::e_disconnected);
@@ -536,13 +543,13 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			}
 			else if (!monit_subs.disconnected()) {
 				DBG_CHANNELS << " forwarding message "<<buf<<" to subscriber\n";
-				subscriber().send(buf, msglen);
+				subscriber().send(buf, strlen(buf));
 				if (protocol == eCLOCKWORK) { // require a response
-					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client and waiting response\n"<<std::flush; }
+					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< " to client and waiting response\n"<<std::flush; }
 					run_status = e_waiting_response;
 				}
 				else {
-					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< "to client\n"<<std::flush; }
+					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< " to client\n"<<std::flush; }
 					safeSend(cmd, "sent", 4);
 				}
 			}
@@ -582,7 +589,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			char buf[1000];
 			size_t len;
 			bool res = safeRecv(setup(), buf, 1000, false, len, 0);
-			FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";
+			if (res) {FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";}
 		}
 	}
     return true;

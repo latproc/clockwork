@@ -569,7 +569,7 @@ char *MessagingInterface::send(const char *txt) {
             try {
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int n = zmq::poll( &items[0], 1, 500);
-                if (items[0].revents & ZMQ_POLLIN) {
+                if (n == 1 && items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
                     if (socket->recv(&reply)) {
                         len = reply.size();

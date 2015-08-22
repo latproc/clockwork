@@ -416,6 +416,7 @@ public:
 	bool isModbusExported() { return modbus_exported != none; }
 	bool needsThrottle();
 	void setNeedsThrottle(bool which);
+	void requireAuthority(uint64_t auth);
     
     bool isTraceable() { return is_traceable.bValue; }
 	
@@ -468,8 +469,8 @@ protected:
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
-	virtual Action::Status setState(const State &new_state, bool resume = false);
-    virtual Action::Status setState(const char *new_state, bool resume = false);
+	virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
+    virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
 	bool is_enabled;
 	Value state_timer;
 	MachineInstance *locked;
@@ -514,6 +515,7 @@ protected:
     static std::list<Package*> pending_events; // machines that shadow remote machines
     static unsigned int num_machines_with_work;
     static unsigned int total_machines_needing_check;
+	uint64_t expected_authority;
 
 	friend struct SetStateAction;
 	friend struct MoveStateAction;
@@ -550,8 +552,8 @@ public:
     virtual void idle();
 	virtual bool isShadow() { return true; }
 
-	virtual Action::Status setState(const State &new_state, bool resume = false);
-	virtual Action::Status setState(const char *new_state, bool resume = false);
+	virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
+	virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
 
 
     friend class MachineInstanceFactory;

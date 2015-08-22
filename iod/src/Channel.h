@@ -62,7 +62,7 @@ std::ostream &operator<<(std::ostream &out, const MachineRef &m);
 
 class ChannelImplementation {
 public:
-    ChannelImplementation() : monitors_exports(false) {}
+	ChannelImplementation();
     virtual ~ChannelImplementation();
     void addMonitor(const char *);
     void addIgnorePattern(const char *);
@@ -92,6 +92,8 @@ public:
 	static State ACTIVE;
 
 	bool monitorsLinked() const { return !monitor_linked.empty(); }
+	uint64_t getAuthority() const { return authority; }
+	void setAuthority(uint64_t auth) { authority = auth; }
 
 protected:
     std::set<std::string> monitors_patterns;
@@ -104,6 +106,7 @@ protected:
     bool monitors_exports;
     uint64_t last_modified; // if the modified time > check time, a full check will be used
     uint64_t last_checked;
+	uint64_t authority; // used to gain permission to change remote objects
 
 private:
     ChannelImplementation(const ChannelImplementation &);
@@ -211,8 +214,8 @@ public:
 	void operator()();
 	void abort();
 
-	virtual Action::Status setState(const State &new_state, bool resume = false);
-	virtual Action::Status setState(const char *new_state, bool resume = false);
+	virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
+	virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
 
     bool doesMonitor(); // is this channel monitoring any machines?
     bool doesUpdate(); // does this channel update any machines?
@@ -229,7 +232,7 @@ public:
     static void remove(const std::string name);
     static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
-    static void sendStateChange(MachineInstance *machine, std::string new_state);
+    static void sendStateChange(MachineInstance *machine, std::string new_state, uint64_t authority);
 	static void sendModbusUpdate(MachineInstance *machine, const std::string &property_name, const Value &new_value);
 	static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value>*params);
     static void setupAllShadows();

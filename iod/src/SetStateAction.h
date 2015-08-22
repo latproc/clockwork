@@ -43,10 +43,11 @@ struct SetStateActionTemplate : public ActionTemplate {
 };
 
 struct SetStateAction : public Action {
-    SetStateAction(MachineInstance *mi, SetStateActionTemplate &t) 
-	    : Action(mi), target(t.target), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0) { }
+    SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth = 0)
+	    : Action(mi), target(t.target), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) { }
     Status run();
     Status checkComplete();
+	void setAuthority(uint64_t auth) { authority = auth; }
     virtual std::ostream &operator<<(std::ostream &out)const;
     CStringHolder target;
     Value new_state; // new state as given by the program (may be a property name)
@@ -54,6 +55,7 @@ struct SetStateAction : public Action {
     MachineInstance *machine;
 	Condition condition;
 protected:
+	uint64_t authority;
 	Status executeStateChange(bool use_transitions);
 };
 
@@ -63,20 +65,22 @@ struct MoveStateActionTemplate : public SetStateActionTemplate {
 };
 
 struct MoveStateAction : public SetStateAction {
-	MoveStateAction(MachineInstance *mi, MoveStateActionTemplate &t) : SetStateAction(mi, t){ }
+	MoveStateAction(MachineInstance *mi, MoveStateActionTemplate &t, uint64_t auth = 0) : SetStateAction(mi, t, auth){ }
 	~MoveStateAction();
 	std::ostream &operator<<(std::ostream &out) const;
     Status run();
 };
 
 struct SetIOStateAction : public Action {
-    SetIOStateAction(MachineInstance *mi, IOComponent *io, const State& new_state) 
-	    : Action(mi), io_interface(io), state(new_state) {}
+    SetIOStateAction(MachineInstance *mi, IOComponent *io, const State& new_state, uint64_t auth = 0)
+	    : Action(mi), io_interface(io), state(new_state), authority(auth) {}
     Status run();
     Status checkComplete();
+	void setAuthority(uint64_t auth) { authority = auth; }
     virtual std::ostream &operator<<(std::ostream &out)const;
 	IOComponent *io_interface;
 	State state;
+	uint64_t authority;
 };
 
 #endif

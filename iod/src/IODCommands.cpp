@@ -89,13 +89,22 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
 bool IODCommandSetStatus::run(std::vector<Value> &params) {
 	std::string ds;
 	std::string state_name;
-    if (params.size() == 4) { // SET machine TO state
+	uint64_t auth = 0;
+    if (params.size() == 5 || (params.size() == 4 && params[2] == "TO") ) { // SET machine TO state
         ds = params[1].asString();
 		state_name = params[3].asString();
+		if (params.size() == 5) {
+			long res;
+			if (params[4].asInteger(res)) auth = res;
+		}
 	}
-	else if (params.size() == 3) { // STATE machine state
+	else if (params.size() == 3 || params.size() == 4) { // STATE machine state
 		ds = params[1].asString();
 		state_name = params[2].asString();
+		if (params.size() == 4) {
+			long res;
+			if (params[3].asInteger(res)) auth = res;
+		}
 	}
 	else {
 		error_str = "Usage: SET device TO state";
@@ -145,7 +154,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 				mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
 			}
 			else
-				mi->setState(state_name.c_str());
+				mi->setState(state_name.c_str(),auth);
 			result_str = "OK";
 			return true;
 		}
@@ -1211,18 +1220,18 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
                 }
 				
                 chn = Channel::findByType(ch_name.asString());
-                if (!chn) {
-										std::cout << "no channel found, creating one\n";
-										long port = 0;
+				if (!chn) {
+					std::cout << "no channel found, creating one\n";
+					long port = 0;
 
-										//Value portval = (defn->properties.exists("port")) ? defn->properties.lookup("port") : SymbolTable::Null;
-										Value portval = defn->getValue("port");
-										std::cout << "default port for channel: " << portval << "\n";
-										if (portval == SymbolTable::Null || !portval.asInteger(port)) 
-                    	port = Channel::uniquePort();
-										else {
-											NB_MSG << " using default channel port: " << port << " for channel " << ch_name << "\n";
-										}
+					//Value portval = (defn->properties.exists("port")) ? defn->properties.lookup("port") : SymbolTable::Null;
+					Value portval = defn->getValue("port");
+					std::cout << "default port for channel: " << portval << "\n";
+					if (portval == SymbolTable::Null || !portval.asInteger(port)) 
+						port = Channel::uniquePort();
+					else {
+						NB_MSG << " using default channel port: " << port << " for channel " << ch_name << "\n";
+					}
                     while (true) {
                         try {
 							std::cout << "instantiating a channel on port " << port << "\n";
@@ -1246,6 +1255,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
             cJSON *res_json = cJSON_CreateObject();
             cJSON_AddNumberToObject(res_json, "port", chn->getPort());
             cJSON_AddStringToObject(res_json, "name", chn->getName().c_str());
+			cJSON_AddNumberToObject(res_json, "authority", chn->definition()->getAuthority());
             char *res = cJSON_Print(res_json);
             result_str = res;
             free(res);

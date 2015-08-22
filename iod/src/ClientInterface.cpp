@@ -386,10 +386,10 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "MODBUS") {
 		command = new IODCommandModbus;
 	}
-	else if (count == 4 && ds == "SET" && params[2] == "TO") {
+	else if (count >= 4 && ds == "SET" && params[2] == "TO") {
 		command =  new IODCommandSetStatus;
 	}
-	else if (count == 3 && ds == "STATE") {
+	else if (count >= 3 && ds == "STATE") {
 		command =  new IODCommandSetStatus;
 	}
 	else if (count == 2 && ds == "DEBUG" && params[1] == "SHOW") {
@@ -471,6 +471,8 @@ IODCommand *parseCommandString(const char *data) {
 		command = new IODCommandFreeze;
 	}
 	else {
+		FileLogger fl(program_name);
+		fl.f() << "Warning: no command found for " << data << "\n";
 		command = new IODCommandUnknown;
 	}
 	command->setParameters(params);

@@ -167,6 +167,7 @@ public:
 	ProtocolType protocol;
 	std::string setup_host;
 	int setup_port;
+	uint64_t authority;
 protected:
 	zmq::socket_t subscriber_;
 public:

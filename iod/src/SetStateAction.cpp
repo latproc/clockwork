@@ -25,14 +25,14 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 
-Action *SetStateActionTemplate::factory(MachineInstance *mi) 
+Action *SetStateActionTemplate::factory(MachineInstance *mi)
 { 
-	return new SetStateAction(mi, *this); 
+	return new SetStateAction(mi, *this);
 }
 
-Action *MoveStateActionTemplate::factory(MachineInstance *mi) 
+Action *MoveStateActionTemplate::factory(MachineInstance *mi)
 { 
-	return new MoveStateAction(mi, *this); 
+	return new MoveStateAction(mi, *this);
 }
 
 Action::Status SetStateAction::executeStateChange(bool use_transitions)
@@ -167,7 +167,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				}
 				//DBG_M_ACTIONS << "SetStateAction didn't find a transition for " << machine->getCurrent() << " to " << value << "; manually setting\n";
 			}
-			status = machine->setState( value );
+			status = machine->setState( value, authority );
 			if (status == Complete || status == Failed)
 				owner->stop(this);
 			else
@@ -296,7 +296,7 @@ Action::Status SetIOStateAction::run() {
 Action::Status SetIOStateAction::checkComplete() {
 	if (status != Running && status != Suspended) return status;
 	if (state.getName() == io_interface->getStateString()) {
-		status = owner->setState( state );
+		status = owner->setState( state, authority );
 		if (status == Complete || status == Failed) {
 			owner->stop(this);
 		}
