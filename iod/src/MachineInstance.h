@@ -417,6 +417,7 @@ public:
 	bool needsThrottle();
 	void setNeedsThrottle(bool which);
 	void requireAuthority(uint64_t auth);
+	uint64_t requiredAuthority();
     
     bool isTraceable() { return is_traceable.bValue; }
 	

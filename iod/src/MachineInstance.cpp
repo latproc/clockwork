@@ -357,10 +357,6 @@ void MachineInstance::setNeedsCheck() {
 }
 
 std::string &MachineInstance::fullName() const {
-	if (!cache) {
-		int x = 1;
-	}
-
 	if (cache->full_name) return *cache->full_name;
 	std::string res = _name;
 	MachineInstance *o = owner;
@@ -391,6 +387,7 @@ std::string MachineInstance::modbusName(const std::string &property, const Value
 }
 
 bool MachineInstance::isShadow() {
+	if (my_instance_type == MACHINE_SHADOW) return true;
 	return false;
 }
 
@@ -1922,6 +1919,10 @@ void MachineInstance::forceStableStateCheck() {
 
 void MachineInstance::requireAuthority(uint64_t auth) {
 	expected_authority = auth;
+}
+
+uint64_t MachineInstance::requiredAuthority() {
+	return expected_authority;
 }
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
@@ -3983,6 +3984,12 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 	}
 	else {
 
+		// Ths expected authority facility ensures that only
+		// authorised sources are able to update a property
+		// In the case of a shadow, if the current method
+		// was not called with the
+		// right authority, the request is forwarded to
+		// the channel that owns the current machine.
 		if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
 			FileLogger fl(program_name);
 			fl.f() << _name << " refused to set property " << property << " to " << new_value << " due to authority mismatch. "
@@ -4080,11 +4087,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 				if (modbus_exports.count(property_name)){
 					Channel::sendModbusUpdate(this, property_name, new_value);
 				}
-//				else
-//					{ NB_MSG << property_name << " is not exported\n"; }
 			}
-//				else
-//					{ NB_MSG << property_name << " is not published\n"; }
 		}
 		// only tell dependent machines to recheck predicates if the property
 		// actually changes value
