@@ -113,7 +113,7 @@ private:
     ChannelImplementation & operator=(const ChannelImplementation &);
 };
 
-class ChannelDefinition : public ChannelImplementation, public MachineClass {
+class ChannelDefinition : public MachineClass, public ChannelImplementation {
 public:
 	enum Feature { ReportStateChanges, ReportPropertyChanges, ReportModbusUpdates };
 
@@ -201,7 +201,7 @@ public:
 
 class ChannelInternals;
 class IODCommand;
-class Channel : public ChannelImplementation, public MachineInstance {
+class Channel : public MachineInstance, public ChannelImplementation{
 public:
     typedef std::set< MachineRef* > MachineList;
     Channel(const std::string name, const std::string type);

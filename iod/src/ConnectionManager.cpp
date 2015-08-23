@@ -490,16 +490,16 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
         rc = zmq::poll(items, num_items, 500);
     if (rc == 0) return true; // no sockets have messages
 
-	char buf[10000]; // TBD BUG this should be allocated dynamically
+	char *buf;
     size_t msglen = 0;
-/*
+
 	if (items[0].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from clockwork\n";
 	}
 	if (items[1].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from publisher\n";
 	}
-*/
+
 	// yuk. the command socket is assumed to be the last item in the poll item list.
 
 	// check the command socket to see if a message is coming in from the main thread
@@ -513,32 +513,38 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		DBG_CHANNELS << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
 	}
 
+	// Here we process an incoming message that we may need to forward on and
+	// collect a response for.  If the message is forwarded we change state to
+	// e_waiting_response and otherwise we send a nak back to the server and
+	// stay in e_waiting_cmd
     if (run_status == e_waiting_cmd && items[command_item].revents & ZMQ_POLLIN) {
-		if (safeRecv(cmd, buf, 10000, false, msglen, 0)) {
-            if (msglen == 10000) msglen--;
-            buf[msglen] = 0;
+		if (safeRecv(cmd, &buf, &msglen, false, 0)) {
             DBG_CHANNELS << " got cmd: " << buf << " of len: " << msglen << " from main thread\n";
 			// if we are a client, pass commands through the setup socket to the other end
 			// of the channel.
-			if (isClient() && monit_setup && !monit_setup->disconnected()) {
-				if (protocol != eCHANNEL) {
-					if (setupStatus() == e_done) {
-						{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
-						setup().send(buf,msglen);
-						run_status = e_waiting_response;
+			if (isClient()) {
+				if (monit_setup && !monit_setup->disconnected()) {
+					if (protocol != eCHANNEL) {
+						if (setupStatus() == e_done) {
+							{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
+							setup().send(buf,msglen);
+							run_status = e_waiting_response;
+						}
+						else {
+							{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response"
+								<< " but the channel is not completely setup yet\n"<<std::flush; }
+							safeSend(cmd, "failed", 6);
+						}
 					}
 					else {
-						{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response"
-							<< " but the channel is not completely setup yet\n"<<std::flush; }
-						//setup().send(buf,msglen);
-						//run_status = e_waiting_response;
+						{FileLogger fl(program_name); fl.f() << "received " <<buf<< " to publish\n"<<std::flush; }
+						DBG_CHANNELS << " forwarding message to subscriber\n";
+						subscriber().send(buf, msglen);
+						safeSend(cmd, "sent", 4);
 					}
 				}
 				else {
-					{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to publish\n"<<std::flush; }
-					DBG_CHANNELS << " forwarding message to subscriber\n";
-					subscriber().send(buf, msglen);
-					safeSend(cmd, "sent", 4);
+					safeSend(cmd, "failed", 6);
 				}
 			}
 			else if (!monit_subs.disconnected()) {
@@ -552,6 +558,9 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 					{FileLogger fl(program_name); fl.f() << "forwarding " <<buf<< " to client\n"<<std::flush; }
 					safeSend(cmd, "sent", 4);
 				}
+			}
+			else {
+				safeSend(cmd, "failed", 6);
 			}
         }
 	}
@@ -569,13 +578,25 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			run_status = e_waiting_cmd;
 		}
 		else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
+			{
+				FileLogger fl(program_name);
+				if (isClient()) {
+					fl.f() << "incoming response from setup channel\n";
+				}
+				else {
+					fl.f() << "incoming response from subscriber\n";
+				}
+			}
 			DBG_CHANNELS << "incoming response\n";
+
+			// note that items[0].socket is the correct socket to use. do we really
+			// need this use of setup() and subscriber()?
 			bool got_response =
 				(isClient())
-					? safeRecv(setup(), buf, 1000, false, msglen, 0)
-					: safeRecv(subscriber(), buf, 1000, false, msglen, 0);
+					? safeRecv(setup(), &buf, &msglen, false, 0)
+					: safeRecv(subscriber(), &buf, &msglen, false, 0);
 			if (got_response) {
-				//DBG_CHANNELS << " forwarding response " << buf << "\n";
+				DBG_CHANNELS << " forwarding response " << buf << "\n";
 				if (msglen && msglen<1000) {
 					cmd.send(buf, msglen);
 				}
@@ -586,6 +607,11 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			}
 		}
 		else if ( items[0].revents & ZMQ_POLLIN ) {
+			{
+				FileLogger fl(program_name);
+				fl.f() << "incoming response from setup channel not already caught\n";
+				assert(false);
+			}
 			char buf[1000];
 			size_t len;
 			bool res = safeRecv(setup(), buf, 1000, false, len, 0);

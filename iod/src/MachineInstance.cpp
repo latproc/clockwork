@@ -1925,7 +1925,7 @@ void MachineInstance::requireAuthority(uint64_t auth) {
 }
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
-	if (expected_authority != 0 && expected_authority != authority ) {
+	if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
 		FileLogger fl(program_name);
 		fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
 		<< " needed: " << expected_authority << " got " << authority << "\n";
@@ -2176,6 +2176,10 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
 
 		if (published) {
+			{
+				FileLogger fl(program_name);
+				fl.f() << "Sending state change for " << _name << " to " << new_state.getName() << "\n";
+			}
 			Channel::sendStateChange(this, new_state.getName(), authority);
 		}
 

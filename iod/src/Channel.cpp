@@ -71,7 +71,7 @@ ChannelImplementation::~ChannelImplementation() { }
 
 
 Channel::Channel(const std::string ch_name, const std::string type)
-        : ChannelImplementation(), MachineInstance(ch_name.c_str(), type.c_str()),
+        : MachineInstance(ch_name.c_str(), type.c_str()), ChannelImplementation(),
             internals(0), name(ch_name), port(0), mif(0), communications_manager(0),
 			monit_subs(0), monit_pubs(0),
 			connect_responder(0), disconnect_responder(0),
@@ -166,6 +166,7 @@ bool Channel::syncRemoteStates() {
 					std::string response;
 					// TBD this can take some time. need to remember where we are up to and come back later
 					sendMessage(msg, *cmd_client, response);
+					//safeSend(*cmd_client, msg, strlen(msg));
 					free(msg);
 				}
 			}
@@ -300,20 +301,6 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 		DBG_CHANNELS << name << " DISCONNECTED\n";
 		disableShadows();
 		setNeedsCheck();
-#if 0
-		if (isClient()) {
-			if (monitor_thread && monit_subs) {
-				monit_subs->abort();
-				monitor_thread->join();
-				delete monit_subs;
-				monit_subs = 0;
-				delete monitor_thread;
-				monitor_thread = 0;
-			}
-			if (communications_manager) delete communications_manager;
-			communications_manager = 0;
-		}
-#endif
 	}
 	return res;
 }
@@ -331,8 +318,6 @@ void Channel::start() {
 
 
 	if (isClient()) {
-		//if (definition()->monitors() || monitors()) startSubscriber();
-		//else startClient();
 		startSubscriber();
 	}
 	else {
@@ -366,6 +351,8 @@ void Channel::startChannels() {
 		if (!chn->started()) chn->start();
 	}
 }
+
+//NOTE: currently this method is not used
 void Channel::stopChannels() {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
@@ -430,7 +417,7 @@ void Channel::dropConnection() {
 	assert(connections>=0);
 	if (connections == 0) {
 		//DBG_CHANNELS << "last connection dropped, stopping channel " << _name << "\n";
-		stopServer();
+		//stopServer();
 		//delete this;
 	}
 }
@@ -621,6 +608,9 @@ void Channel::startClient() {
 	mif->start();
 }
 
+// intended to be called when a connection is dropped before the
+// connection is deleted but we no longer delete connections
+//
 void Channel::stopServer() {
 	return;
 
@@ -647,6 +637,10 @@ void Channel::stopServer() {
 
 // the client and server enter the downloading and uploading states
 // in opposite orders.
+
+// This is used within the channels thread to manage the initial exchange
+// of data for the channel
+
 void Channel::checkStateChange(std::string event) {
 	DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << name << "\n";
 	
@@ -696,6 +690,7 @@ bool Channel::isClient() {
 	return (definition_file != "dynamic");
 }
 
+// used to stop the channel thread
 void Channel::abort() { aborted = true; }
 
 void Channel::operator()() {
@@ -720,19 +715,18 @@ void Channel::operator()() {
 			host = "localhost";
 		long port = 0;
 		if (!port_val.asInteger(port)) return;
-		//char buf[150];
-		////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
+
 		DBG_CHANNELS << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
 		communications_manager = new SubscriptionManager(definition()->name.c_str(),
 				eCHANNEL, host.asString().c_str(),(int)port);
-		//DBG_CHANNELS << "Channel " << name << "::operator() subscriber thread initialising\n";
 	}
 	else {
 		communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL, "*", port);
 	}
 
 	{
-		int retry = 4;
+		int retry = 1;
+		// TBD why is it necessary to have this loop? may introduce more problems than it solves
 		while (cmd_server == 0)  {
 			try {
 				cmd_server = createCommandSocket(false);
@@ -753,9 +747,14 @@ void Channel::operator()() {
 	usleep(500);
 	char start_cmd[20];
 	DBG_CHANNELS << "channel " << name << " thread waiting for start message\n";
-	size_t start_len = cmd_server->recv(start_cmd, 20);
-	if (!start_len) { DBG_CHANNELS << name << " error getting start message\n"; }
-	cmd_server->send("ok", 2);
+	size_t start_len;
+	safeRecv(*cmd_server, start_cmd, 20, true, start_len, 0);
+	if (!start_len) {
+		FileLogger fl(program_name);
+		fl.f() << name << " error getting start message\n";
+	}
+	safeSend(*cmd_server, "ok", 2);
+
 	zmq::pollitem_t *items = 0;
 	DBG_CHANNELS << "channel " << name << " thread received start message\n";
 
@@ -794,7 +793,8 @@ void Channel::operator()() {
 				no_commands = internals->completed_commands.empty();
 			}
 			try {
-				if (no_commands && !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
+				if (no_commands
+					&& !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
 					usleep(1000);
 					continue;
 				}
@@ -833,8 +833,10 @@ void Channel::operator()() {
 				}
 
 				if (isClient()
-				&& !sm->monit_subs.disconnected() && sm->subscriberStatus() == SubscriptionManager::ss_ready
-				&& current_state == ChannelImplementation::DOWNLOADING) {
+						&& !sm->monit_subs.disconnected()
+						&& sm->subscriberStatus() == SubscriptionManager::ss_ready
+						&& current_state == ChannelImplementation::DOWNLOADING) {
+
 					long current_time = getTimerVal()->iValue;
 					if (current_time > 1000) {
 						if (current_time > 2000) {
@@ -858,7 +860,8 @@ void Channel::operator()() {
 				}
 
 				if (items[subscriber_idx].revents & ZMQ_POLLERR) {
-					{FileLogger fl(program_name); fl.f() << name << " thread detected error on subscriber connection\n"; }
+					{FileLogger fl(program_name);
+						fl.f() << name << " thread detected error on subscriber connection\n"; }
 				}
 
 				if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
@@ -866,17 +869,11 @@ void Channel::operator()() {
 					continue;
 
 				// incoming channel data
-				zmq::message_t update;
-				communications_manager->subscriber().recv(&update, ZMQ_NOBLOCK);
-				struct timeval now;
-				gettimeofday(&now, 0);
-				long len = update.size();
+				char *data;
+				size_t len;
+				safeRecv(communications_manager->subscriber(), &data, &len, false, 0);
+				DBG_CHANNELS << "Channel " << name << " subscriber received: " << data << " len:" << len << "\n";
 				if (len == 0) continue;
-
-				char *data = new char[len+1];
-				memcpy(data, update.data(), len);
-				data[len] = 0;
-				DBG_CHANNELS << "Channel " << name << " subscriber received: " << data << "\n";
 				if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
 					checkStateChange(data);
 				}
@@ -970,52 +967,39 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 
 void Channel::startSubscriber() {
 	assert(!communications_manager);
+	assert(!definition()->isPublisher()); // publishers use startServer()
 
-	if (definition_->isPublisher()) {
-		assert(false); // untested code
-		Value host = getValue("host");
-		Value port_val = getValue("port");
-		if (host == SymbolTable::Null)
-			host = "localhost";
-		long port = 0;
-		if (!port_val.asInteger(port)) return;
-		//char buf[150];
-		////snprintf(buf, 150, "tcp://%s:%d", host.asString().c_str(), (int)port);
-		DBG_CHANNELS << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
-		communications_manager = new SubscriptionManager(definition()->name.c_str(),
-                              eCLOCKWORK, host.asString().c_str(), (int)port);
-	}
-	else {
-		char tnam[100];
-		int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-		assert(pgn_rc == 0);
-		//DBG_CHANNELS << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
+	// A clockwork to clockwork connection uses its own thread to manage a subscription
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+	//DBG_CHANNELS << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
 
-		subscriber_thread = new boost::thread(boost::ref(*this));
+	subscriber_thread = new boost::thread(boost::ref(*this));
 
-		// create a socket to communicate with the newly started subscriber thread
-		cmd_client = createCommandSocket(true);
+	// create a socket to communicate with the newly started subscriber thread
+	cmd_client = createCommandSocket(true);
 
-		// start the subcriber thread
-		DBG_CHANNELS << name << " sending command start message\n";
-		cmd_client->send("start",5);
-		char buf[100];
-		DBG_CHANNELS << name << " sent command start message\n";
-		size_t buflen = cmd_client->recv(buf, 100);
-		DBG_CHANNELS << name << " command start message acknowledged\n";
-		buf[buflen] = 0;
+	// start the subcriber thread
+	DBG_CHANNELS << name << " sending command start message\n";
+	cmd_client->send("start",5);
+	char buf[100];
+	DBG_CHANNELS << name << " sent command start message\n";
+	size_t buflen = cmd_client->recv(buf, 100);
+	DBG_CHANNELS << name << " command start message acknowledged\n";
+	buf[buflen] = 0;
 
-		connect_responder = new ChannelConnectMonitor(this);
-		disconnect_responder = new ChannelDisconnectMonitor(this);
-		if (isClient())
-			communications_manager->monit_subs.addResponder(ZMQ_EVENT_CONNECTED, connect_responder);
-		else
-			communications_manager->monit_subs.addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
-		communications_manager->monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
-		DBG_CHANNELS << "Channel " << name << " got response to start: " << buf << "\n";
-	}
+	connect_responder = new ChannelConnectMonitor(this);
+	disconnect_responder = new ChannelDisconnectMonitor(this);
+	if (isClient())
+		communications_manager->monit_subs.addResponder(ZMQ_EVENT_CONNECTED, connect_responder);
+	else
+		communications_manager->monit_subs.addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
+	communications_manager->monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
+	DBG_CHANNELS << "Channel " << name << " got response to start: " << buf << "\n";
 }
 
+// NOTE this method is not currently called
 void Channel::stopSubscriber() {
 	delete communications_manager;
 	communications_manager = 0;
@@ -1560,10 +1544,14 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
         if (chn->filtersAllow(machine)) {
 
 			if (!chn->definition()->isPublisher()) {
-				if (machine->isShadow())
+				if (machine->isShadow()) {
 					cmdstr = MessageEncoding::encodeState(machine_name, new_state, auth);
-				else
+				}
+				else {
+					NB_MSG << "using authority " << chn->getAuthority()
+					<< " to set " << machine_name << " to " << new_state << "\n";
 					cmdstr = MessageEncoding::encodeState(machine_name, new_state, chn->getAuthority());
+				}
 			}
 			else // publisher channels do not use the authority parameter on state changes
 				cmdstr = MessageEncoding::encodeState(machine_name, new_state);
@@ -1969,9 +1957,28 @@ void Channel::handleChannels() {
 		while (command) {
 			{FileLogger fl(program_name);
 			fl.f() << "Processing: received command: " << *command << " on channel " << chn->name << "\n";}
-			(*command)();
+			//hack?
+			if (command->param(0) == "STATE"
+				&& command->numParams() == 4) {
+				if ( chn->isClient() && command->param(3) == (long)chn->getAuthority()) {
+					// do nothing, this is an echo of a command we sent
+					{FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
+				}
+				else if ( !chn->isClient() && command->param(3) == (long)chn->definition()->getAuthority()) {
+					// do nothing, this is an echo of a command we sent
+					{FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
+				}
+				else {
+					{FileLogger fl(program_name);
+						fl.f() << chn->name << " processing echoed command "
+						<< chn->getAuthority() << " != " << command->param(3) << "\n"; }
+					(*command)();
+				}
+			}
+			else
+				(*command)();
 			{FileLogger fl(program_name);
-			fl.f() << "posting completed command: " << *command << " on channel " << chn->name << "\n";}
+			fl.f() << chn->name << "posting completed command: " << *command << " on channel " << chn->name << "\n";}
 			chn->putCompletedCommand(command);
 			command = chn->getCommand();
 		}
