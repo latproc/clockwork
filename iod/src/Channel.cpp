@@ -1588,6 +1588,72 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
     }
 }
 
+void Channel::requestStateChange(MachineInstance *machine, std::string new_state, uint64_t auth) {
+	// this is an instance based version of the above
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+
+	MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(machine);
+
+	std::string machine_name = machine->fullName();
+	char *cmdstr = 0;
+
+	Channel *chn = this;
+	if (current_state == ChannelImplementation::DISCONNECTED) return;
+	if (!definition()->hasFeature(ChannelDefinition::ReportStateChanges)) return;
+	if (!channel_machines.count(machine)) return;
+
+	// shadow machines use the authority provided by the caller to effect the
+	// state change but 'real' devices escalate to the channel's authority to
+	// make sure that shadow listen.
+
+	if (filtersAllow(machine)) {
+
+		if (!definition()->isPublisher()) {
+			if (machine->isShadow()) {
+				cmdstr = MessageEncoding::encodeState(machine_name, new_state, auth);
+			}
+			else {
+				NB_MSG << "using authority " << chn->getAuthority()
+				<< " to set " << machine_name << " to " << new_state << "\n";
+				cmdstr = MessageEncoding::encodeState(machine_name, new_state, chn->getAuthority());
+			}
+		}
+		else // publisher channels do not use the authority parameter on state changes
+			cmdstr = MessageEncoding::encodeState(machine_name, new_state);
+
+		if (!isClient() && communications_manager) {
+			std::string response;
+			safeSend(communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
+		}
+		else if (communications_manager
+				 && communications_manager->setupStatus() == SubscriptionManager::e_done ) {
+
+			if (!definition()->isPublisher()) {
+				std::string response;
+				//chn->sendMessage(cmdstr, chn->communications_manager->subscriber(),response);
+				safeSend(communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
+				//DBG_CHANNELS << tnam << ": channel " << chn->name << " got response: " << response << "\n";
+			}
+			else {
+				safeSend(communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
+			}
+		}
+		else if (mif) {
+			mif->send(cmdstr);
+		}
+		else {
+			char buf[150];
+			snprintf(buf, 150,
+					 "Warning: machine %s changed state but the channel is not connected",
+					 machine->getName().c_str());
+			MessageLog::instance()->add(buf);
+		}
+		free(cmdstr);
+	}
+}
+
 void Channel::sendCommand(MachineInstance *machine, std::string command, std::list<Value>*params) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);

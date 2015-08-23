@@ -1932,7 +1932,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		if (isShadow()) {
 			Channel *chn = ownerChannel();
 			if (chn && chn->current_state == ChannelImplementation::ACTIVE)
-				chn->sendStateChange(this, new_state.getName(), authority);
+				chn->requestStateChange(this, new_state.getName(), authority);
 		}
 		return Action::Failed;
 	}

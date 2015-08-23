@@ -222,7 +222,8 @@ public:
 	bool doesShare(); // does this channel share any machines?
     const ChannelDefinition *definition() const { return definition_; }
     void setDefinition(const ChannelDefinition *);
-    
+	void requestStateChange(MachineInstance *machine, std::string new_state, uint64_t authority);
+
     const std::string &getName() const { return name; }
 	const std::set<MachineInstance*> &channelMachines() const { return channel_machines; }
     
