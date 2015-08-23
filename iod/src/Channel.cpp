@@ -2056,25 +2056,56 @@ void Channel::handleChannels() {
 			//hack?
 			if (command->param(0) == "STATE"
 				&& command->numParams() == 4) {
-				if ( chn->isClient() && command->param(3) == (long)chn->getAuthority()) {
-					// do nothing, this is an echo of a command we sent
-					{FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
-				}
-				else if ( !chn->isClient() && command->param(3) == (long)chn->definition()->getAuthority()) {
-					// do nothing, this is an echo of a command we sent
-					{FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
+				MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
+				if ( !m->isShadow()){
+					if (command->param(3) == (long)chn->getAuthority()) {
+						// do nothing, this is an echo of a command we sent
+						{FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
+					}
+					else {
+						(*command)();
+					}
 				}
 				else {
-					{FileLogger fl(program_name);
-						fl.f() << chn->name << " processing echoed command "
-						<< chn->getAuthority() << " != " << command->param(3) << "\n"; }
-					(*command)();
-				}
+					if (command->param(3) != 0) {
+						{FileLogger fl(program_name);
+							fl.f() << chn->name
+							<< "(client) processing command for shadow  with auth: "
+							<< command->param(3) << "\n";
+						}
+						(*command)();
+					}
+/*
+					if (chn->isClient() && command->param(3) == (long)chn->definition()->getAuthority() ){
+						{FileLogger fl(program_name);
+							fl.f() << chn->name
+							<< "(client) processing command for shadow  with auth: "
+							<< command->param(3) << "\n";
+						}
+						(*command)();
+					}
+					else if (!chn->isClient() && command->param(3) == (long)chn->getAuthority()) {
+						{FileLogger fl(program_name);
+							fl.f() << chn->name << " processing command for shadow  with auth: "
+							<< command->param(3) << "\n";
+						}
+						(*command)();
+					}
+					else {
+						{FileLogger fl(program_name);
+							fl.f() << chn->name << " ignoring command with auth: "
+							<< command->param(3) << "\n";
+						}
+						//command->result_str = "unauthorised";
+					}
+*/				}
 			}
 			else
 				(*command)();
+
 			{FileLogger fl(program_name);
 			fl.f() << chn->name << "posting completed command: " << *command << " on channel " << chn->name << "\n";}
+
 			chn->putCompletedCommand(command);
 /*
 			{FileLogger fl(program_name);
