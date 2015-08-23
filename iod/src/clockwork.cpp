@@ -931,7 +931,8 @@ void initialise_machines() {
 				std::string name(m->fullName());
 				//if (m->owner) name += m->owner->getName() + ".";
 				//name += m->getName();
-				m->enable();
+				if (!m->isShadow())
+					m->enable();
                 std::map<std::string, std::map<std::string, Value> >::iterator found = store.init_values.find(name);
                 if (found != store.init_values.end()) {
 					std::map< std::string, Value > &list((*found).second);
@@ -998,7 +999,8 @@ void initialise_machines() {
 		MachineInstance *m = *m_iter++;
 		Value enable = m->getValue("startup_enabled");
 		if (enable == SymbolTable::Null || enable == true) {
-			if (!only_startup || (only_startup && m->_type == "STARTUP") ) m->enable();
+			if (!only_startup || (only_startup && m->_type == "STARTUP") )
+				if (!m->isShadow()) m->enable();
 		}
 		else {
 			DBG_INITIALISATION << m->getName() << " is disabled at startup\n";
