@@ -1832,11 +1832,11 @@ void ChannelDefinition::addOptionName(const char *n, Value &v) {
 #include "EnableAction.h"
 
 void Channel::enableShadows() {
-    // enable all machines that are updated by this channel
+    // enable all machines that are owned by this channel
 	// don't perform the enable operation here though,
 	// queue them for later
 
-	// shadow devices on the client side need to have their authorisatio key set
+	// shadow devices on the client side need to have their authorisation key set
 	// to the same as devices on the server side.
 	if (isClient()) {
 		authority = communications_manager->authority;
@@ -1847,11 +1847,16 @@ void Channel::enableShadows() {
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			if (isClient()) ms->requireAuthority(authority);
-			//DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
-			channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
-			EnableActionTemplate ea(ms->getName().c_str());
-			enqueueAction(ea.factory(ms));
+			uint64_t machine_auth = ms->ownerChannel()->definition()->authority;
+			if (definition()->updates_names.count(ms->getName()))
+				ms->requireAuthority(machine_auth);
+			if ( (isClient() && authority == machine_auth)
+				|| ( definition()->authority == machine_auth)) {
+				DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
+				channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+				EnableActionTemplate ea(ms->getName().c_str());
+				enqueueAction(ea.factory(ms));
+			}
 		}
     }
 	iter = definition()->shares_names.begin();
@@ -1860,24 +1865,32 @@ void Channel::enableShadows() {
 		MachineInstance *m = MachineInstance::find(item.first.c_str());
 		MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			//DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
-			channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
-			EnableActionTemplate ea(ms->getName().c_str());
-			enqueueAction(ea.factory(ms));
+			uint64_t machine_auth = ms->ownerChannel()->definition()->authority;
+			if (isClient()) ms->requireAuthority(machine_auth);
+			if (authority == machine_auth) {
+				//DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
+				channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+				EnableActionTemplate ea(ms->getName().c_str());
+				enqueueAction(ea.factory(ms));
+			}
 		}
 	}
 }
 
 void Channel::disableShadows() {
-    // disable all machines that are updated by this channel
+    // disable all machines that are owned by this channel
     std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
     while (iter != definition()->updates_names.end()) {
         const std::pair< std::string, Value> item = *iter++;
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			//DBG_CHANNELS << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
-			ms->disable();
+			uint64_t machine_auth = ms->ownerChannel()->definition()->authority;
+			if ( (isClient() && authority == machine_auth)
+				|| ( definition()->authority == machine_auth)) {
+				DBG_CHANNELS << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
+				ms->disable();
+			}
 		}
     }
 	iter = definition()->shares_names.begin();
@@ -1886,8 +1899,11 @@ void Channel::disableShadows() {
 		MachineInstance *m = MachineInstance::find(item.first.c_str());
 		MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance*>(m);
 		if (ms) {
-			//DBG_CHANNELS << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
-			ms->disable();
+			uint64_t machine_auth = ms->ownerChannel()->definition()->authority;
+			if (authority == machine_auth) {
+				DBG_CHANNELS << "Channel " << name << " disabling shadow machine " << ms->getName() << "\n";
+				ms->disable();
+			}
 		}
 	}
 }
@@ -1938,65 +1954,9 @@ void Channel::setupShadows() {
 		}
 	}
 
-
     //- TBD should this only subscribe if channel monitors a machine?
 }
 
-#if 0
-// poll channels and return number of descriptors with activity
-// if n is 0 the block of data will be reallocated,
-// otherwise up to n items will be initialised
-int Channel::pollChannels(zmq::pollitem_t * &poll_items, long timeout, int n) {
-    if (!all) return 0;
-    if (!n) {
-        std::map<std::string, Channel*>::iterator iter = all->begin();
-        while (iter != all->end()) {
-            const std::pair<std::string, Channel *> &item = *iter++;
-            Channel *chn = item.second;
-            if (chn->communications_manager) n += chn->communications_manager->numSocks();
-        }
-        if (poll_items) delete poll_items;
-		poll_items = 0;
-        if (n) poll_items = new zmq::pollitem_t[n];
-    }
-	if (!poll_items) return 0;
-
-    int count = 0;
-    zmq::pollitem_t *curr = poll_items;
-    std::map<std::string, Channel*>::iterator iter = all->begin();
-    while (iter != all->end()) {
-        const std::pair<std::string, Channel *> &item = *iter++;
-        Channel *chn = item.second;
-        if (chn->communications_manager) {
-            chn->communications_manager->checkConnections();
-            if (chn->communications_manager && n >= count + chn->communications_manager->numSocks()) {
-                count += chn->communications_manager->configurePoll(curr);
-                chn->setPollItemBase(curr);
-                curr += count;
-            }
-        }
-    }
-    int rc = 0;
-    while (true) {
-        try {
-            
-            int rc = zmq::poll(poll_items, count, timeout);
-            if (rc == -1 && errno == EAGAIN) continue;
-            break;
-        }
-        catch(zmq::error_t e) {
-            if (errno == EINTR) continue;
-            char buf[150];
-            snprintf(buf, 150, "Channel error: %s", zmq_strerror(errno));
-            MessageLog::instance()->add(buf);
-            DBG_CHANNELS << buf << "\n";
-            break;
-        }
-    }
-    //if (rc>0) DBG_CHANNELS << rc << " channels with activity\n";
-    return rc;
-}
-#endif
 
 void Channel::newPendingCommand(IODCommand *cmd) {
 	chn_scoped_lock lock("newPending", internals->iod_cmd_get_mutex);
@@ -2122,12 +2082,6 @@ void Channel::handleChannels() {
 	}
 }
 
-#if 0
-void Channel::setPollItemBase(zmq::pollitem_t *base) {
-    poll_items = base;
-}
-#endif
-
 void Channel::enable() {
 	if (enabled()) {
 		DBG_CHANNELS << "Channel " << name << " is already enabled\n";
@@ -2185,46 +2139,6 @@ void Channel::checkCommunications() {
 #endif
 	//if (monit_subs && !monit_subs->disconnected()){
 	
-#if 0
-	boost::unique_lock<boost::mutex> lock1(internals->iod_cmd_put_mutex, boost::defer_lock);
-	boost::unique_lock<boost::mutex> lock2(internals->iod_cmd_get_mutex, boost::defer_lock);
-	//NB_MSG << "Trying pending queue\n";
-	if (lock2.try_lock()) {
-		//NB_MSG << "pending queue locked\n";
-		//NB_MSG << "Trying completed queue\n";
-		if (lock1.try_lock()) {
-			std::list<IODCommand*>::iterator iter = internals->pending_commands.begin();
-			//NB_MSG << "completed queue locked\n";
-			while (iter != internals->pending_commands.end()) {
-				IODCommand *command = *iter;
-				//NB_MSG << name << " processing loop got command " << command->param(0) << "\n";
-				assert(command);
-				try {
-					(*command)();
-				}
-				catch (zmq::error_t zex){
-					//NB_MSG << "Exception when executing command\n";
-					{FileLogger fl(program_name);
-						fl.f() << "Exception when executing command\n";
-					}
-				}
-				catch (std::exception zex){
-					//NB_MSG << "Exception when executing command\n";
-					{FileLogger fl(program_name);
-					fl.f() << "Exception when executing command\n";
-					}
-				}
-				NB_MSG << "Channel " << name << " processed command " << command->param(0) << "\n";
-				iter = internals->pending_commands.erase(iter);
-				internals->completed_commands.push_back(command);
-			}
-			//NB_MSG << "unlocking completed queue\n";
-			lock1.unlock();
-		}
-		//NB_MSG << "unlocking pending queue\n";
-		lock2.unlock();
-	}
-#endif
 }
 
 void Channel::setupAllShadows() {

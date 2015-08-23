@@ -607,15 +607,16 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			}
 		}
 		else if ( items[0].revents & ZMQ_POLLIN ) {
+			char *buf;
+			size_t len;
+			bool res = safeRecv(setup(), *buf, &lef, false, 0);
+			if (res) {FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";}
 			{
 				FileLogger fl(program_name);
 				fl.f() << "incoming response from setup channel not already caught\n";
 				assert(false);
 			}
-			char buf[1000];
-			size_t len;
-			bool res = safeRecv(setup(), buf, 1000, false, len, 0);
-			if (res) {FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";}
+			delete[] buf;
 		}
 	}
     return true;

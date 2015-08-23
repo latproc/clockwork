@@ -631,30 +631,7 @@ void ProcessingThread::operator()()
 				if (len) status = e_waiting_cmd;
 			}
 		}
-		// process a pending command or two if there are any available
-		if (status == e_waiting || status == e_waiting_cmd) {
-#ifdef KEEPSTATS
-			avg_command_time.start();
-#endif
-			IODCommand *command = command_interface.getCommand();
-			if (command)
-				safeSend(resource_mgr, "ping", 4); // wakeup the client interface
-			// keep track of the time so we don't spend too much of it here
-			uint64_t commands_start_time = nowMicrosecs();
-			uint64_t now_t = commands_start_time;
-			while (command && now_t-commands_start_time <100) {
-				//NB_MSG << "Processing: received command: " << command->param(0) << "\n";
-				(*command)();
-				command_interface.putCompletedCommand(command);
-				now_t = nowMicrosecs();
-				if (now_t - commands_start_time < 100)
-					command = command_interface.getCommand();
-			}
-#ifdef KEEPSTATS
-			avg_command_time.update();
-#endif
-			status = e_waiting; //ange state back even though we haven't finished all the commands
-		}
+
 		if (program_done) break;
 
 		if (status == e_waiting && items[internals->DISPATCHER_ITEM].revents & ZMQ_POLLIN) {

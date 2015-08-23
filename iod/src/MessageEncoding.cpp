@@ -244,7 +244,7 @@ bool MessageEncoding::getCommand(const char *msg, std::string &cmd, std::vector<
                 for (int i=0; i<num_params; ++i) {
                     cJSON *item = cJSON_GetArrayItem(cjParams, i);
                     Value item_val = valueFromJSONObject(item, 0);
-                    if (item_val != SymbolTable::Null) (*params)->push_back(item_val);
+                    (*params)->push_back(item_val);
                 }
             }
             else

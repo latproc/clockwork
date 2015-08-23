@@ -275,55 +275,6 @@ private:
 };
 
 
-void IODCommandThread::newPendingCommand(IODCommand *cmd) {
-	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock lock(cti->data_mutex);
-
-	cti->pending_commands.push_back(cmd);
-	size_t n = cti->pending_commands.size();
-	//NB_MSG << " after push client pending commands queued: " <<cti->pending_commands.size() << "\n";
-	if ( n>10 ) {
-		FileLogger fl(program_name); fl.f() << "Warning: pending_commands on the client interface has grown to " << n << "\n";
-	}
-}
-
-IODCommand *IODCommandThread::getCommand() {
-	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock lock(cti->data_mutex);
-	if (cti->pending_commands.empty()) {
-		return 0;
-	}
-	
-	IODCommand *cmd = cti->pending_commands.front();
-	cti->pending_commands.pop_front();
-	//NB_MSG << " after pop  pending completed commands queued: " <<cti->pending_commands.size();
-	return cmd;
-}
-
-IODCommand *IODCommandThread::getCompletedCommand() {
-	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock lock(cti->data_mutex);
-
-	if (cti->completed_commands.empty()) return 0;
-
-	IODCommand *cmd = cti->completed_commands.front();
-	cti->completed_commands.pop_front();
-	//NB_MSG << " after pop  client completed commands queued: " <<cti->completed_commands.size();
-	return cmd;
-}
-
-void IODCommandThread::putCompletedCommand(IODCommand *cmd) {
-	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	boost::mutex::scoped_lock lock(cti->data_mutex);
-
-	cti->completed_commands.push_back(cmd);
-	//NB_MSG << " client push completed commands queued: " <<cti->completed_commands.size();
-	size_t n = cti->completed_commands.size();
-	if ( n>10 ) {
-		FileLogger fl(program_name); fl.f() << "Warning: completed commands on the client interface has grown to " << n << "\n";
-	}
-}
-
 void IODCommand::setParameters(std::vector<Value> &params) {
 	std::copy(params.begin(), params.end(), back_inserter(parameters));
 }
@@ -536,12 +487,7 @@ void IODCommandThread::operator()() {
 				if (!rc) continue;
 				if (rc == -1 && errno == EAGAIN) continue;
 				if (done) break;
-/*				if ( !(items[0].revents & ZMQ_POLLIN)
-					&& !(items[1].revents & ZMQ_POLLIN)
-					&& !(items[1].revents & ZMQ_POLLIN)
-				)
-					continue;
-*/			}
+			}
 			catch (zmq::error_t zex) {
 				{
 					FileLogger fl(program_name);
@@ -558,38 +504,6 @@ void IODCommandThread::operator()() {
 			/*
 			   processing thread will call: (*command)(params) for all pending commands
 			 */
-
-			// check for completed commands to return
-			CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-			IODCommand *command = getCompletedCommand();
-			while (command) {
-				wd->poll();
-				if (command->done == IODCommand::Unassigned) {	
-					FileLogger fl(program_name); fl.f()
-						<< "ERROR: command did not set a return status" << *command << "\n";
-					}
-				if (command->done == IODCommand::Success) {
-					const char * cmdres = command->result();
-					if (!(*cmdres)) {
-						char buf[100];
-						snprintf(buf, 100, "command generated an empty response");
-						MessageLog::instance()->add(buf);
-						//NB_MSG << buf << "\n";
-						cmdres = "NULL";
-							FileLogger fl(program_name); fl.f() << "Client interface sending response: " << cmdres << "\n"; 
-						}
-					safeSend(cti->socket, cmdres, strlen(cmdres));
-				}
-				else {
-					{
-						FileLogger fl(program_name);
-						fl.f() << "Client interface saw command error: " << command->error() << "\n"; 
-					}
-					safeSend(cti->socket, command->error(), strlen(command->error()));
-				}
-				delete command;
-				command = getCompletedCommand();
-			}
 			wd->poll();
 
 			if ( items[2].revents & ZMQ_POLLIN) {
@@ -604,7 +518,6 @@ void IODCommandThread::operator()() {
 					delete[] buf;
 				}
 			}
-
 
 			if ( items[1].revents & ZMQ_POLLIN) {
 				char buf[10];
@@ -624,20 +537,7 @@ void IODCommandThread::operator()() {
 				char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
 				memcpy(data, request.data(), size);
 				data[size] = 0;
-#if 0
-				//NB_MSG << "Client interface received:" << data << "\n";
-				IODCommand *new_command = parseCommandString(data);
-				if (new_command == 0) {
-					const char *tosend = "Empty message received\n";
-					safeSend(cti->socket, tosend, strlen(tosend));
-					goto cleanup;
-				}
-				// push this onto a queue for the main thread
-				newPendingCommand(new_command);
-				safeSend(access_req, "wakeup", 6);
-#else
 				safeSend(command_sync, data, size);
-#endif
 				free(data);
 			}
 
