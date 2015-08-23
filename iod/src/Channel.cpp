@@ -131,7 +131,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 				const std::string &s = *props++;
 				Value v = m->getValue(s);
 				if (v != SymbolTable::Null) {
-					char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v);
+					char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v, (long)definition()->getAuthority());
 					std::string response;
 					// TBD this can take some time. need to remember where we are up to and come back later
 					sendMessage(cmd, *cmd_client, response);
@@ -1273,18 +1273,46 @@ void Channel::setDefinition(const ChannelDefinition *def) {
     definition_ = def;
 }
 
-void Channel::sendPropertyChangeMessage(const std::string &name, const Value &key, const Value &val) {
+void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
+										const Value &val, uint64_t auth) {
 	if (communications_manager) {
 		std::string response;
-		char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
-		if (isClient())
+		char *cmd;
+		if (!definition()->isPublisher()) {
+
+			if (m->isShadow()) {
+				cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val, (long)getAuthority());
+			}
+			else {
+				NB_MSG << "using authority " << getAuthority()
+				<< " to set " << name << "." << key << " to " << val << "\n";
+				cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val, (long)definition()->getAuthority());
+
+			}
+		}
+		else { // publishers do not use the authority system
+			cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val);
+		}
+		if (isClient()){
+			if (communications_manager->setupStatus() == SubscriptionManager::e_done)
 				//sendMessage(cmd, communications_manager->subscriber(),response); //setup()
 				safeSend(communications_manager->subscriber(), cmd, strlen(cmd) );
-			else
-				//sendMessage(cmd, communications_manager->subscriber(),response);
-				safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
-			//DBG_CHANNELS << "channel " << name << " got response: " << response << "\n";
-			free(cmd);
+		}
+		else if (communications_manager) {
+			safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
+		}
+		else if (mif) {
+			mif->send(cmd);
+		}
+		else {
+			char buf[150];
+			snprintf(buf, 150,
+					 "Warning: property %s.%s changed  but the channel is not connected",
+					 m->getName().c_str(), key.asString().c_str());
+			MessageLog::instance()->add(buf);
+
+		}
+		free(cmd);
 	}
 	else if (mif) {
 		char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
@@ -1294,7 +1322,7 @@ void Channel::sendPropertyChangeMessage(const std::string &name, const Value &ke
 }
 
 
-void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val) {
+void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val, uint64_t authority) {
     if (!all) return;
     std::string name = machine->fullName();
     std::map<std::string, Channel*>::iterator iter = all->begin();
@@ -1313,7 +1341,7 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
 				chn->throttled_items[machine]->properties[key.asString()] = val;
 			}
 			else {
-				chn->sendPropertyChangeMessage(machine->getName(), key, val);
+				chn->sendPropertyChangeMessage(machine, machine->getName(), key, val, authority);
 			}
         }
     }
@@ -1340,7 +1368,9 @@ void Channel::sendThrottledUpdates() {
 				while (props_iter != props->end()) {
 					std::pair<std::string, Value> prop = *props_iter;
 					Value key(prop.first);
-					sendPropertyChangeMessage(item.second->machine->getName(), key, prop.second);
+					sendPropertyChangeMessage(item.second->machine,
+											  item.second->machine->getName(), key,
+											  prop.second);
 					if (!do_modbus)
 						props_iter = props->erase(props_iter);
 					else props_iter++;
@@ -1392,7 +1422,7 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
 				std::pair<std::string, Value> item = *iter;
 				Value key(item.first);
 				if (do_properties)
-					chn->sendPropertyChangeMessage(machine->getName(), key, item.second);
+					chn->sendPropertyChangeMessage(machine, machine->getName(), key, item.second);
 				if (do_modbus)
 					machine->sendModbusUpdate(item.first, item.second);
 				iter = mr->properties.erase(iter);
@@ -2020,7 +2050,7 @@ void Channel::handleChannels() {
 			chn->sendThrottledUpdates();
 		}
 		IODCommand *command = chn->getCommand();
-		while (command) {
+		if (command) {
 			{FileLogger fl(program_name);
 			fl.f() << "Processing: received command: " << *command << " on channel " << chn->name << "\n";}
 			//hack?
@@ -2046,7 +2076,17 @@ void Channel::handleChannels() {
 			{FileLogger fl(program_name);
 			fl.f() << chn->name << "posting completed command: " << *command << " on channel " << chn->name << "\n";}
 			chn->putCompletedCommand(command);
+/*
+			{FileLogger fl(program_name);
+				fl.f() << chn->name << "done.. getting next\n";}
 			command = chn->getCommand();
+			{FileLogger fl(program_name);
+				if (command)
+					fl.f() << chn->name << ": got one: " << *command << " on channel " << chn->name << "\n";
+				else
+					fl.f() << chn->name << " no more\n";
+			}
+*/
 		}
 	}
 }

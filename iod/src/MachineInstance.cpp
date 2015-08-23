@@ -776,7 +776,7 @@ bool CounterRateInstance::hasWork() {
 }
 #endif
 
-void CounterRateInstance::setValue(const std::string &property, Value new_value) {
+void CounterRateInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
 	if (property == "VALUE") {
 		if (new_value.kind == Value::t_symbol) {
 			new_value = lookup(new_value.sValue.c_str());
@@ -905,7 +905,7 @@ RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * ty
 	}
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
-void RateEstimatorInstance::setValue(const std::string &property, Value new_value) {
+void RateEstimatorInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
 	if (property == "VALUE") {
 		if (new_value.kind == Value::t_symbol) {
 			new_value = lookup(new_value.sValue.c_str());
@@ -3952,9 +3952,8 @@ fl.f() << _name << " Sending modbus update " << property_name  << " " << new_val
 	}
 }
 
-void MachineInstance::setValue(const std::string &property, Value new_value) {
-	//forceStableStateCheck();
-	//forceIdleCheck();
+void MachineInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
+
 	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
 	if (property.find('.') != std::string::npos) {
 		// property is on another machine
@@ -3983,6 +3982,24 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 		}
 	}
 	else {
+
+		if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
+			FileLogger fl(program_name);
+			fl.f() << _name << " refused to set property " << property << " to " << new_value << " due to authority mismatch. "
+			<< " needed: " << expected_authority << " got " << authority << "\n";
+			if (isShadow()) {
+				Channel *chn = ownerChannel();
+				if (chn && chn->current_state != ChannelImplementation::DISCONNECTED) {
+					chn->sendPropertyChangeMessage(this, fullName(), property, new_value, authority);
+					fl.f() << _name << "forwarding property change request to owner channel\n";
+				}
+				else if (chn) {
+					fl.f() << _name << "cannot forward property change request because the channel is disconnected\n";
+				}
+			}
+			return;
+		}
+
 		Value property_val(property); // use this value in comparisons for performance
 
 		if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
@@ -4057,7 +4074,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value) {
 			}
 			std::string property_name(modbusName(property, property_val));
 			if (published) {
-				Channel::sendPropertyChange(this, property.c_str(), new_value);
+				Channel::sendPropertyChange(this, property.c_str(), new_value, authority);
 
 				// update modbus with the new value
 				if (modbus_exports.count(property_name)){

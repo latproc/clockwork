@@ -135,11 +135,12 @@ char *MessageEncoding::encodeCommand(std::string cmd, std::list<Value> *params) 
     return res;
 }
 
-char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value p3) {
+char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value p3, Value p4) {
     std::list<Value>params;
-    params.push_back(p1);
-    params.push_back(p2);
-    params.push_back(p3);
+	if (p1 != SymbolTable::Null) params.push_back(p1);
+    if (p2 != SymbolTable::Null) params.push_back(p2);
+    if (p3 != SymbolTable::Null) params.push_back(p3);
+	if (p4 != SymbolTable::Null) params.push_back(p4);
     return encodeCommand(cmd, &params);
 }
 

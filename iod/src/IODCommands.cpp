@@ -395,29 +395,45 @@ bool IODCommandResume::run(std::vector<Value> &params) {
         //if (params.size() == 4) {
 		    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		    if (m) {
-                if (params.size() != 4)
+                if (params.size() > 5)
 				{
                     error_str = "Usage: PROPERTY machine property value";
                     return false;
 				}
-                else if (params.size() == 4) {
+                else if (params.size() == 4 || params.size() == 5) {
                     if (m->debug()) {
                         DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
                     }
+					long authority = 0;
+					bool use_authority = false;
+					if (params.size() == 5 && params[4].asInteger(authority) ) {
+						use_authority = true;
+					}
 					if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
 	                    long x;
 	                    char *p;
 	                    x = strtol(params[3].asString().c_str(), &p, 0);
-	                    if (*p == 0)
-	                        m->setValue(params[2].asString(), x);
-	                    else
-	                        m->setValue(params[2].asString(), params[3]);
+						if (use_authority)
+							if (*p == 0)
+								m->setValue(params[2].asString(), x, authority);
+							else
+								m->setValue(params[2].asString(), params[3], authority);
+						else
+							if (*p == 0)
+								m->setValue(params[2].asString(), x);
+							else
+								m->setValue(params[2].asString(), params[3]);
 					}
 					else {
-	                    m->setValue(params[2].asString(), params[3]);
+						if (use_authority)
+							m->setValue(params[2].asString(), params[3], authority);
+						else
+							m->setValue(params[2].asString(), params[3]);
 					}
                 }
-                else {
+#if 0
+				// Disabled the following feature
+				else {
                     // extra parameters implies the value contains spaces so 
 					// we find the tail of the parameter string and use that for the property value
                     size_t pos = raw_message_.find(params[2].asString().c_str());
@@ -430,7 +446,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                     const char *p = raw_message_.c_str() + pos;
                     m->setValue(params[2].asString(), p);
                 }
-
+#endif
                 result_str = "OK";
                 return true;
 			}

@@ -232,7 +232,7 @@ public:
     static Channel *find(const std::string name);
     static void remove(const std::string name);
     static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
-    static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val);
+    static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val, uint64_t authority = 0);
     static void sendStateChange(MachineInstance *machine, std::string new_state, uint64_t authority);
 	static void sendModbusUpdate(MachineInstance *machine, const std::string &property_name, const Value &new_value);
 	static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value>*params);
@@ -286,6 +286,9 @@ public:
 	void addConnection();
 	void dropConnection();
 
+	void sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
+								   const Value &val, uint64_t authority = 0);
+
 	void newPendingCommand(IODCommand *cmd);
 	IODCommand *getCommand();
 	void putCompletedCommand(IODCommand *cmd);
@@ -301,7 +304,6 @@ private:
 
 	bool throttledItemsReady(uint64_t now_usecs) const;
 	void sendThrottledUpdates();
-	void sendPropertyChangeMessage(const std::string &name, const Value &key, const Value &val);
 
     std::string name;
     unsigned int port;

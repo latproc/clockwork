@@ -301,7 +301,7 @@ public:
     const Value &getValue(const std::string &property); // provides the current value of an object accessible in the scope of this machine
     const Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
     const Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
-    virtual void setValue(const std::string &property, Value new_value);
+    virtual void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
     const Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
     
     void setStateMachine(MachineClass *machine_class);
@@ -566,7 +566,7 @@ protected:
     CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 public:
     ~CounterRateInstance();
-    void setValue(const std::string &property, Value new_value);
+    void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
     long filter(long val);
     virtual void idle();
 	//virtual bool hasWork();
@@ -585,7 +585,7 @@ protected:
     RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 public:
     ~RateEstimatorInstance();
-    void setValue(const std::string &property, Value new_value);
+    void setValue(const std::string &property, Value new_value, uint64_t authority =0);
     long filter(long val);
     virtual void setNeedsCheck();
     virtual void idle();
