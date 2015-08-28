@@ -348,7 +348,7 @@ if (num_errors > 0) {
 	Dispatcher::start();
 
 	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(machine, iod_activation, stateMonitor);
+	ProcessingThread processMonitor(&machine, iod_activation, stateMonitor);
 	boost::thread process(boost::ref(processMonitor));
 
 	// let channels start processing messages
