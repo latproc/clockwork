@@ -519,8 +519,10 @@ void IODCommandThread::operator()() {
 				size_t response_len;
 				if (safeRecv(command_sync, &buf, &response_len, true, 0)) {
 					{
+						char line[80];
+						snprintf(line, 80, "%s", buf);
 						FileLogger fl(program_name);
-						fl.f() << "client interface received " << buf << "\n";
+						fl.f() << "client interface received " << line << "\n";
 					}
 					safeSend(cti->socket, buf, response_len);
 					delete[] buf;

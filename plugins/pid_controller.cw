@@ -475,7 +475,7 @@ int poll_actions(void *scope) {
 	double set_point = *data->set_point;
 
 
-	long ramp_time = data->filtered_set_point;
+	long ramp_time = *data->fwd_ramp_time;
 	if (set_point < 0  || 
 				(set_point > 0 
 						&& (new_state == cs_position || new_state == cs_atposition ) 

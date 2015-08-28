@@ -532,7 +532,7 @@ void MessageRouter::removeFilter(int route_id, MessageFilter *filter) {
 void MessageRouter::poll() {
 	boost::unique_lock<boost::mutex> lock(internals->data_mutex);
 	if (!internals->remote) { usleep(10); return; }
-	int num_socks = internals->routes.size()+1;
+	unsigned int num_socks = internals->routes.size()+1;
 
 	if (internals->saved_num_items != num_socks) {
 		if (internals->destinations) delete[] internals->destinations;
@@ -574,12 +574,12 @@ void MessageRouter::poll() {
 	}
 
 	int c = 0;
-	for (int i=0; i<num_socks; ++i) if (items[i].revents & ZMQ_POLLIN)++c;
+	for (unsigned int i=0; i<num_socks; ++i) if (items[i].revents & ZMQ_POLLIN)++c;
 	if (!c) return;
 
 	if (c) {
 		std::cout << "activity: ";
-		for (int i=0; i<num_socks; ++i) {
+		for (unsigned int i=0; i<num_socks; ++i) {
 			if (items[i].revents & ZMQ_POLLIN) std::cout << i << " " << (i==0) << " ";
 		}
 		std::cout << "\n";
@@ -628,7 +628,7 @@ void MessageRouter::poll() {
 	}
 
 	// forwarding to remote socket
-	for (int i=1; i<num_socks; ++i) {
+	for (unsigned int i=1; i<num_socks; ++i) {
 		if (items[i].revents & ZMQ_POLLIN) {
 			NB_MSG << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
 			std::map<int, RouteInfo *>::iterator found = internals->routes.find(destinations[i-1]);
@@ -646,7 +646,6 @@ void MessageRouter::poll() {
 	delete[] buf;
 	usleep(10);
 }
-
 
 bool SubscriptionManager::checkConnections() {
 	if (!isClient())
@@ -667,27 +666,32 @@ bool SubscriptionManager::checkConnections() {
 	}
 	if (monit_setup->disconnected() || monit_subs.disconnected() )
 	{
+#if 0
 		FileLogger fl(program_name); fl.f()
-		<<  ( ( monit_setup->disconnected() ) ? "setup down " : "setup up " )
-		<< ( ( monit_subs.disconnected() ) ? "subs down " : "subs up " ) << "\n";
+			<<  ( ( monit_setup->disconnected() ) ? "setup down " : "setup up " )
+			<< ( ( monit_subs.disconnected() ) ? "subs down " : "subs up " ) << "\n";
 		if ( this->protocol == eCLOCKWORK && timer > 10000000) {
 			{FileLogger fl(program_name); fl.f() << " waiting too long in state " << setupStatus() << ". aborting\n"; }
 			usleep(5); exit(63);
 		}
+#endif
 		if (monit_setup->disconnected() && monit_subs.disconnected()) return false;
 	}
+	if (monit_setup->disconnected()) {
+		FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n"; 
+		return false;
+	}
 
-    if (monit_subs.disconnected() && !monit_setup->disconnected()) {
-		if (monit_subs.disconnected())
+	if (monit_subs.disconnected() && !monit_setup->disconnected()) {
+#if 0
 		{
 			FileLogger fl(program_name); fl.f()
 				<< "SubscriptionManager disconnected from server publisher with setup status: " << setupStatus() << "\n"<<std::flush;
-			setupConnections();
 		}
-		if (monit_setup->disconnected())
-			{FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n"; }
-        usleep(50000);
-        return false;
+#endif
+		setupConnections();
+		usleep(50000);
+		return false;
 	}
 	if (monit_setup && !monit_setup->disconnected() && !monit_subs.disconnected())
 		setSetupStatus(SubscriptionManager::e_done);

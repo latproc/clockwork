@@ -798,7 +798,7 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value,
         settings->readings.append( val, delta_t);
 
 		int32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
-		if ( abs(mean - settings->last_sent) > settings->noise_tolerance ) {
+		if ( (uint32_t)abs(mean - settings->last_sent) > settings->noise_tolerance ) {
 			settings->last_sent = mean;
 		}
 		settings->position = settings->last_sent;

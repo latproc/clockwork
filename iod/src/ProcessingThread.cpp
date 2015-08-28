@@ -719,7 +719,7 @@ void ProcessingThread::operator()()
 				have_command = true;
 			}
 			else {
-				for (int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + internals->channel_sockets.size(); ++i) {
+				for (unsigned int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + internals->channel_sockets.size(); ++i) {
 					if (items[i].revents & ZMQ_POLLIN) {
 						NB_MSG << "Processing thread has a command from a channel command interface\n";
 						have_command = true;
@@ -730,7 +730,7 @@ void ProcessingThread::operator()()
 			if ( have_command) {
 				NB_MSG << "processing incoming commands\n";
 				std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
-				int i = internals->CMD_SYNC_ITEM;
+				unsigned int i = internals->CMD_SYNC_ITEM;
 				while (i<=CommandSocketInfo::last_idx ) {
 					zmq::socket_t *sock = 0;
 					CommandSocketInfo *info = 0;
