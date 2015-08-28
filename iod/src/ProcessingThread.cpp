@@ -217,13 +217,14 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 			char buf[10];
 			res = zmq::poll(&items[0], num_items, poll_wait);
 			if (!res) return res;
-			NB_MSG << res << " items returned from zmq;:poll\n";
+#if 0
 			for (int i=0; i<num_items; i++) {
 				if (items[i].revents && POLL_IN) {
 					NB_MSG << "Item: " <<i << " ";
 				}
 			}
 			NB_MSG << "\n";
+#endif
 			if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)
 			{
 				//DBG_MSG << "receiving data from EtherCAT\n";
