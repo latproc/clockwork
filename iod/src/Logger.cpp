@@ -52,7 +52,13 @@ class Internals {
 public:
 	bool allocated;
 	std::ostream *f;
-	std::ofstream &file() { return *(std::ofstream*)f; }
+	std::ofstream &file() { 
+		if (!f) {
+			f = new std::ofstream;
+			allocated = true;
+		}
+		return *(std::ofstream*)f; 
+	}
 	Internals(): allocated(false), f(0) { }
 	~Internals() { *f << std::flush; if (allocated) delete f; }
 };
@@ -78,7 +84,8 @@ std::ostream &FileLogger::f() {
 		internals->f = new std::ofstream;
 		internals->allocated = true;
 	}
-	return internals->file(); }
+	return internals->file(); 
+}
 
 FileLogger::~FileLogger() { delete internals; }
 
