@@ -193,6 +193,13 @@ int main(int argc, char const *argv[])
 	char *pn = strdup(argv[0]);
 	program_name = strdup(basename(pn));
 	free(pn);
+std::string thread_name("Main");
+#ifdef __APPLE__
+	pthread_setname_np(thread_name.c_str());
+#else
+	pthread_setname_np(pthread_self(), thread_name.c_str());
+#endif
+
 	std::cout << "main starting\n";
 	zmq::context_t *context = new zmq::context_t;
 	MessagingInterface::setContext(context);
@@ -200,7 +207,6 @@ int main(int argc, char const *argv[])
 	Dispatcher::instance();
 	MessageLog::setMaxMemory(10000);
 	Scheduler::instance();
-	ControlSystemMachine machine;
 
 	Logger::instance()->setLevel(Logger::Debug);
 	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
@@ -275,6 +281,7 @@ int main(int argc, char const *argv[])
 	if (test_only() )
 	{
 		const char *backup_file_name = "modbus_mappings.bak";
+	ControlSystemMachine machine;
 		rename(modbus_map(), backup_file_name);
 		// export the modbus mappings and exit
 		std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
@@ -338,8 +345,13 @@ if (num_errors > 0) {
 
 
 	std::cout << "-------- Starting Command Interface ---------\n";
-	IODCommandThread &stateMonitor(*IODCommandThread::instance());
-	boost::thread monitor(boost::ref(stateMonitor));
+	ControlSystemMachine machine;
+	IODCommandThread *stateMonitor = IODCommandThread::instance();
+	IODHardwareActivation iod_activation;
+	ProcessingThread processMonitor(&machine, iod_activation, *stateMonitor);
+
+
+	boost::thread monitor(boost::ref(*stateMonitor));
 	usleep(50000); // give time before starting the processin g thread
 
 	// Inform the modbus interface we have started
@@ -347,8 +359,7 @@ if (num_errors > 0) {
 	ModbusAddress::message("STARTUP");
 	Dispatcher::start();
 
-	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(&machine, iod_activation, stateMonitor);
+	processMonitor.setProcessingThreadInstance(&processMonitor);
 	boost::thread process(boost::ref(processMonitor));
 
 	// let channels start processing messages
@@ -361,7 +372,7 @@ if (num_errors > 0) {
 		return 0;
 		Dispatcher::instance()->stop();
 		Scheduler::instance()->stop();
-		stateMonitor.stop();
+		stateMonitor-> stop();
 		ethercat.stop();
 		delete context;
 	}
