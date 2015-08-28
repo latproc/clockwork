@@ -145,6 +145,14 @@ int main (int argc, char const *argv[])
 	char *pn = strdup(argv[0]);
 	program_name = strdup(basename(pn));
 	free(pn);
+
+	std::string thread_name("Main");
+#ifdef __APPLE__
+	pthread_setname_np(thread_name.c_str());
+#else
+	pthread_setname_np(pthread_self(), thread_name.c_str());
+#endif
+
 	zmq::context_t *context = new zmq::context_t;
 	MessagingInterface::setContext(context);
 	Logger::instance();
@@ -321,7 +329,11 @@ int main (int argc, char const *argv[])
 
 	bool sigok = setup_signals();
 	assert(sigok);
-    
+
+	IODCommandThread *stateMonitor = IODCommandThread::instance();
+	IODHardwareActivation iod_activation;
+	ProcessingThread processMonitor(&machine, iod_activation, *stateMonitor);
+
 	//zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
 	//resource_mgr.bind("inproc://resource_mgr");
     
@@ -332,7 +344,6 @@ int main (int argc, char const *argv[])
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
     
 	DBG_INITIALISATION << "-------- Starting Command Interface ---------\n";
-	IODCommandThread *stateMonitor = IODCommandThread::instance();
 	boost::thread monitor(boost::ref(*stateMonitor));
 
 	// Inform the modbus interface we have started
@@ -340,8 +351,7 @@ int main (int argc, char const *argv[])
 	ModbusAddress::message("STARTUP");
 	Dispatcher::start();
 
-	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(machine, iod_activation, *stateMonitor);
+	processMonitor.setProcessingThreadInstance(&processMonitor);
 	boost::thread process(boost::ref(processMonitor));
     
     MQTTInterface::instance()->activate();
@@ -360,7 +370,7 @@ int main (int argc, char const *argv[])
         MQTTInterface::instance()->collectState();
 
         //sim_io.send("ecat", 4);
-        safeRecv(sim_io, buf, 10, false, response_len, 500);
+        safeRecv(sim_io, buf, 10, false, response_len, 100000);
         struct timeval now;
         gettimeofday(&now,0);
         

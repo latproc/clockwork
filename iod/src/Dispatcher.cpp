@@ -188,7 +188,7 @@ void Dispatcher::idle()
 		if (status == e_waiting) {
 			try {
             	// check for messages to be sent or commands to be processed (TBD)
-	            int rc = zmq::poll( &items[0], 2, -1);
+	            int rc = zmq::poll( &items[0], 2, 500);
 				if (rc == 0) { usleep(50); continue; }
 			}
 			catch (zmq::error_t err) {

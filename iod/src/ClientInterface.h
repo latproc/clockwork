@@ -45,12 +45,12 @@ public:
     void stop();
     bool done;
 	static void registerCommand(std::string name, IODCommandFactory *cmd);
-
+/*
 	void newPendingCommand(IODCommand *cmd);
 	IODCommand *getCommand();
 	void putCompletedCommand(IODCommand *cmd);
 	IODCommand *getCompletedCommand();
-
+*/
 protected:
 	ClientInterfaceInternals *internals;
 	friend IODCommand *parseCommandString(const char *data);

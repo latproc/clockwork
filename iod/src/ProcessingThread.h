@@ -11,13 +11,19 @@ class HardwareActivation {
 };
 
 class ProcessingThreadInternals;
+class ControlSystemMachine;
+class CommandSocketInfo;
 class ProcessingThread : public ClockworkProcessManager
 {
 public:
 	ProcessingThreadInternals *internals;
 
-    ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface);
+    ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface);
 	~ProcessingThread();
+
+	static ProcessingThread *instance();
+	static void setProcessingThreadInstance( ProcessingThread* pti);
+	CommandSocketInfo *addCommandChannel();
 
 	void operator()();
 

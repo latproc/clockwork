@@ -199,6 +199,18 @@ public:
 	void setResponse(const char *res) {  response_ = res; done = true; }
 };
 
+
+class CommandSocketInfo{
+public:
+	std::string address;
+	zmq::socket_t *sock;
+	unsigned int index;
+	static unsigned int last_idx;
+	CommandSocketInfo();
+	~CommandSocketInfo();
+};
+
+
 class ChannelInternals;
 class IODCommand;
 class Channel : public MachineInstance, public ChannelImplementation{
@@ -217,7 +229,9 @@ public:
 	virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
 	virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
 
-    bool doesMonitor(); // is this channel monitoring any machines?
+	static void initialiseChannels();
+
+	bool doesMonitor(); // is this channel monitoring any machines?
     bool doesUpdate(); // does this channel update any machines?
 	bool doesShare(); // does this channel share any machines?
     const ChannelDefinition *definition() const { return definition_; }
@@ -242,6 +256,7 @@ public:
     
     void setupFilters();
     void setupShadows();
+	static void setupCommandSockets();
     void enableShadows();
     void disableShadows();
 	void startServer(ProtocolType proto = eZMQ);// used by shared (publish/subscribe) and one-to-one channels
@@ -250,9 +265,12 @@ public:
 	void stopSubscriber();
 	void stopServer();
 	bool isClient(); 	// does this channel connect to another instance of clockwork?
-	bool syncRemoteStates();
-	void syncInterfaceProperties(MachineInstance *m);
+	bool syncRemoteStates(std::list<char *> &);
+	void syncInterfaceProperties(MachineInstance *m, std::list<char *> &);
+	std::string getCommandSocketName(bool client_endpoint);
 	zmq::socket_t *createCommandSocket(bool client_endpoint);
+
+	void addSocket(int route_id, const char *addr);
 
 	void start(); // begin executing by making connections or serving
 	void stop();
@@ -277,7 +295,7 @@ public:
     static void handleChannels();
     //void setMessageHandler(MessageHandler *handler)  { message_handler = handler; }
     zmq::pollitem_t *getPollItems();
-	bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response);
+	bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, MessageHeader &header);
 	void sendMessage(const char *msg, zmq::socket_t &sock);
 
 	static void sendPropertyChanges(MachineInstance *machine);
@@ -288,15 +306,15 @@ public:
 
 	void sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
 								   const Value &val, uint64_t authority = 0);
-
+/*
 	void newPendingCommand(IODCommand *cmd);
 	IODCommand *getCommand();
 	void putCompletedCommand(IODCommand *cmd);
 	IODCommand *getCompletedCommand();
-
+*/
 protected:
 	ChannelInternals *internals;
-private:
+
 	std::map<MachineInstance *, MachineRecord *> throttled_items;
 
 	void checkCommunications();
@@ -335,6 +353,7 @@ private:
 	SequenceNumber seqno;
 	uint64_t last_throttled_send;
 
+	friend class SyncRemoteStatesAction;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

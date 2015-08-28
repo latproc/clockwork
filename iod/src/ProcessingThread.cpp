@@ -110,6 +110,8 @@ void checkInputs()
 }
 #endif
 
+unsigned int CommandSocketInfo::last_idx = 5;
+
 class ProcessingThreadInternals {
 public:
 	int sequence;
@@ -124,16 +126,14 @@ public:
 
 	Watchdog processing_wd;
 	ClockworkProcessManager process_manager;
+	std::list<CommandSocketInfo*> channel_sockets;
 
 	ProcessingThreadInternals() : sequence(0), cycle_delay(1000),
-		processing_wd("Processing Loop Watchdog", 2000) {
-
-	}
-
+		processing_wd("Processing Loop Watchdog", 2000) { }
 };
 
-ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator, IODCommandThread &cmd_interface)
-: internals(0), machine(m), status(e_waiting),
+ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface)
+: internals(0), machine(*m), status(e_waiting),
 	activate_hardware(activator), command_interface(cmd_interface)
 {
 	internals = new ProcessingThreadInternals();
@@ -150,6 +150,11 @@ void ProcessingThread::stop()
 	exit(0);
 }
 
+CommandSocketInfo *ProcessingThread::addCommandChannel() {
+	CommandSocketInfo *info = new CommandSocketInfo();
+	internals->channel_sockets.push_back(info);
+	return info;
+}
 
 bool ProcessingThread::checkAndUpdateCycleDelay()
 {
@@ -204,7 +209,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 		zmq::socket_t &ecat_out)
 {
 	int res = 0;
-	while (!program_done ) // && (status == e_waiting || status == e_waiting_cmd) )
+	while (!program_done )
 	{
 		try
 		{
@@ -212,6 +217,13 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 			char buf[10];
 			res = zmq::poll(&items[0], num_items, poll_wait);
 			if (!res) return res;
+			NB_MSG << res << " items returned from zmq;:poll\n";
+			for (int i=0; i<num_items; i++) {
+				if (items[i].revents && POLL_IN) {
+					NB_MSG << "Item: " <<i << " ";
+				}
+			}
+			NB_MSG << "\n";
 			if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)
 			{
 				//DBG_MSG << "receiving data from EtherCAT\n";
@@ -376,6 +388,7 @@ private:
 	AutoStatStorage &storage_;
 };
 
+#if 0
 static void setStatus(ProcessingThread::Status &s, Watchdog &wd, const ProcessingThread::Status new_state) {
 	if (s != new_state) {
 		if (new_state == ProcessingThread::Status::e_waiting) {
@@ -385,6 +398,15 @@ static void setStatus(ProcessingThread::Status &s, Watchdog &wd, const Processin
 	}
 	else if (s == ProcessingThread::Status::e_waiting)
 		wd.poll();
+}
+#endif
+
+ProcessingThread *instance_ = 0;
+ProcessingThread *ProcessingThread::instance() {
+	return instance_;
+}
+void ProcessingThread::setProcessingThreadInstance( ProcessingThread* pti) {
+	instance_ = pti;
 }
 
 void ProcessingThread::operator()()
@@ -432,6 +454,8 @@ void ProcessingThread::operator()()
 	command_sync.connect("inproc://command_sync");
 
 	IOComponent::setHardwareState(IOComponent::s_hardware_init);
+
+	Channel::initialiseChannels();
 
 	safeSend(sched_sync,"go",2); // scheduled items
 	usleep(10000);
@@ -506,7 +530,7 @@ void ProcessingThread::operator()()
 		avg_poll_time.start();
 #endif
 
-		zmq::pollitem_t items[] =
+		zmq::pollitem_t fixed_items[] =
 		{
 			{ ecat_sync, 0, ZMQ_POLLIN, 0 },
 			{ resource_mgr, 0, ZMQ_POLLIN, 0 },
@@ -515,6 +539,12 @@ void ProcessingThread::operator()()
 			{ ecat_out, 0, ZMQ_POLLIN, 0 },
 			{ command_sync, 0, ZMQ_POLLIN, 0 }
 		};
+		zmq::pollitem_t items[10];
+		for (int i=0; i<6; ++i) {
+			items[i] = fixed_items[i];
+		}
+		int dynamic_poll_start_idx = 6;
+
 		char buf[100];
 		int poll_wait = 2 * internals->cycle_delay / 1000; // millisecs
 		machine_check_delay = internals->cycle_delay;
@@ -524,10 +554,29 @@ void ProcessingThread::operator()()
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
+			for (int i=0; i<6; ++i) {
+				items[i] = fixed_items[i];
+			}
+
+			// add the channel sockets to our poll info
+			{
+				std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
+				int idx = 6;
+				while (csi_iter != internals->channel_sockets.end()) {
+					CommandSocketInfo *info = *csi_iter++;
+					items[idx].socket = *info->sock;
+					items[idx].fd = 0;
+					items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
+					items[idx].revents = 0;
+					idx++;
+					if (idx == 10) break;
+				}
+			}
+
 			internals->process_manager.SetTime(curr_t);
 			//if (Watchdog::anyTriggered(curr_t))
 			//	Watchdog::showTriggered(curr_t, true);
-			systems_waiting = pollZMQItems(poll_wait, items, 6, ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
+			systems_waiting = pollZMQItems(poll_wait, items, 6 + internals->channel_sockets.size(), ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
 			//	<< " waiting: " << systems_waiting << "\n";
 			if (systems_waiting > 0) break;
@@ -661,28 +710,81 @@ void ProcessingThread::operator()()
 			}
 		}
 
-		if (status == e_waiting && items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
-			zmq::message_t msg;
-			char *buf = 0;
-			size_t len = 0;
-			if (safeRecv(command_sync, &buf, &len, false, 0) ) {
-				{
-					FileLogger fl(program_name);
-					fl.f() << "Main thread received command " << buf << "\n";
+		if (status == e_waiting) {
+			// check the command interface and any command channels for activity
+			bool have_command = false;
+			if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
+				NB_MSG << "Processing thread has a command from the client interface\n";
+				have_command = true;
+			}
+			else {
+				for (int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + internals->channel_sockets.size(); ++i) {
+					if (items[i].revents & ZMQ_POLLIN) {
+						NB_MSG << "Processing thread has a command from a channel command interface\n";
+						have_command = true;
+						break;
+					}
 				}
-				IODCommand *command = parseCommandString(buf);
-				delete[] buf;
-				try {
-					(*command)();
+			}
+			if ( have_command) {
+				NB_MSG << "processing incoming commands\n";
+				std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
+				int i = internals->CMD_SYNC_ITEM;
+				while (i<=CommandSocketInfo::last_idx ) {
+					zmq::socket_t *sock = 0;
+					CommandSocketInfo *info = 0;
+					if (i == internals->CMD_SYNC_ITEM) {
+						sock = &command_sync;
+					}
+					else {
+						if (csi_iter == internals->channel_sockets.end()) break;
+						info = *csi_iter++;
+						sock = info->sock;
+					}
+
+					if (! (items[i].revents & ZMQ_POLLIN) ) {
+						++i;
+						continue;
+					}
+					NB_MSG << "Processing thread has activity on poll item " << i << "\n";
+
+					zmq::message_t msg;
+					char *buf = 0;
+					size_t len = 0;
+					if (safeRecv(*sock, &buf, &len, false, 0) ) {
+						{
+							FileLogger fl(program_name);
+							fl.f() << "Processing thread received command ";
+							if (buf)fl.f() << buf << " "; else fl.f() << "NULL";
+							fl.f() << "\n";
+							if (!buf) continue;
+							
+						}
+						IODCommand *command = parseCommandString(buf);
+						if (command) {
+							delete[] buf;
+							try {
+								(*command)();
+							}
+							catch (std::exception e) {
+								FileLogger fl(program_name);
+								fl.f() << "command execution threw an exception " << e.what() << "\n";
+							}
+							char *response = strdup(command->result());
+							safeSend(*sock, response, strlen(response));
+							free(response);
+						}
+						else {
+							char *response = new char[len+40];
+							snprintf(response, len+40, "Unrecognised command: %s", buf);
+							safeSend(*sock, response, strlen(response));
+							delete[] response;
+							delete[] buf;
+						}
+						delete command;
+					}
+					++i;
 				}
-				catch (std::exception e) {
-					FileLogger fl(program_name);
-					fl.f() << "command execution threw an exception\n";
-				}
-				char *response = strdup(command->result());
-				safeSend(command_sync, response, strlen(response));
-				free(response);
-				delete command;
 			}
 		}
 

@@ -40,13 +40,14 @@ public:
 	boost::recursive_mutex q_mutex;
 };
 
+#if 0
 class scheduler_queue_scoped_lock {
 public:
 	scheduler_queue_scoped_lock( boost::recursive_mutex &mut) : mutex(mut) { mutex.lock(); }
 	~scheduler_queue_scoped_lock() { mutex.unlock(); }
 	boost::recursive_mutex &mutex;
 };
-
+#endif
 
 static void setTime(struct timeval &now, long delta) {
 	gettimeofday(&now, 0);
@@ -65,8 +66,7 @@ static void setTime(struct timeval &now, long delta) {
 }
 
 std::string Scheduler::getStatus() { 
-
-	scheduler_queue_scoped_lock lock(internals->q_mutex);
+	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	struct timeval now;
 	gettimeofday(&now, 0);
 	long wait_duration = 0;
@@ -106,33 +106,33 @@ bool ScheduledItem::operator>=(const ScheduledItem& other) const {
 }
 
 ScheduledItem *Scheduler::next() const { 
-	scheduler_queue_scoped_lock lock(internals->q_mutex);
+	boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
 	if (items.empty()) return 0; else return items.top(); 
 }
 
 void Scheduler::pop() { 
-	scheduler_queue_scoped_lock lock(internals->q_mutex);
+	boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
 	//items.check();
 	items.pop(); 
 }
 
 ScheduledItem* PriorityQueue::top() const { 
-	scheduler_queue_scoped_lock lock(Scheduler::instance()->internals->q_mutex);
-	return queue.front(); 
+	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
+	return queue.front();
 }
 bool PriorityQueue::empty() const { 
 	return queue.empty();
 }
 void PriorityQueue::pop() { 
-	scheduler_queue_scoped_lock lock(Scheduler::instance()->internals->q_mutex);
-	queue.pop_front(); 
+	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
+	queue.pop_front();
 }
 size_t PriorityQueue::size() const { 
 	return queue.size(); 
 }
 
 void PriorityQueue::push(ScheduledItem *item) {
-	scheduler_queue_scoped_lock lock(Scheduler::instance()->internals->q_mutex);
+	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	std::list<ScheduledItem*>::iterator iter = queue.begin();
 	while (iter!= queue.end()) {
 		ScheduledItem *queued = *iter;
@@ -169,6 +169,9 @@ ScheduledItem::ScheduledItem(long when, Package *p) :package(p), action(0) {
 ScheduledItem::ScheduledItem(long when, Action *a) :package(0), action(a) {
 	setTime(delivery_time, when);
 	DBG_SCHEDULER << "scheduled action: " << delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec << "\n";
+}
+
+ScheduledItem::~ScheduledItem() {
 }
 
 std::ostream &ScheduledItem::operator <<(std::ostream &out) const {
@@ -279,7 +282,7 @@ std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
 
 bool Scheduler::ready() {
 	if (items.empty()) { return false; }
-	scheduler_queue_scoped_lock lock(internals->q_mutex);
+	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return getNextDelay() <= 0;
 }
 
@@ -325,7 +328,7 @@ void Scheduler::idle() {
 			notification_sent = 0; // checking now, if more items are pushed we will want to know
 			if (items.empty()) {
 				// empty, just wait for someone to add some work
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 1000)) {
+				if (!safeRecv(update_sync, buf, 10, false, response_len, 10000)) {
 					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
 				}
 			}
@@ -365,7 +368,7 @@ void Scheduler::idle() {
 			wd->poll();
 			ScheduledItem *item = 0;
 			{
-				scheduler_queue_scoped_lock lock(internals->q_mutex);
+				boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 				item = next();
 				DBG_SCHEDULER << "Scheduled item " << (*item) << " ready. " << items.size() << " items remain\n";
 				pop();

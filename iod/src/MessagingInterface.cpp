@@ -44,6 +44,20 @@ zmq::context_t *MessagingInterface::zmq_context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 bool MessagingInterface::abort_all = false;
 
+const int MessageHeader::NEED_REPLY = 1;
+
+const int MessageHeader::SOCK_CW = 1;
+const int MessageHeader::SOCK_CHAN = 2;
+const int MessageHeader::SOCK_CTRL = 3;
+
+std::ostream &MessageHeader::operator<<(std::ostream &out) const  {
+	out << dest<<":" << source<<":" << options;
+	return out;
+}
+
+std::ostream &operator<<(std::ostream &out, const MessageHeader&mh) {
+	return mh.operator<<(out);
+}
 
 uint64_t nowMicrosecs() {
 	struct timeval now;
@@ -77,36 +91,82 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 	return t;
 }
 
+MessageHeader::MessageHeader(uint32_t dst, uint32_t src, bool need_reply)
+		: dest(dst), source(src), start_time(microsecs()), arrival_time(0), options(0)
+{
+	if (need_reply) options |= NEED_REPLY;
+}
+
+MessageHeader::MessageHeader() : dest(0), source(0), start_time(microsecs()), arrival_time(0), options(0){}
+
+void MessageHeader::needReply(bool needs) {
+	if (needs) options|=NEED_REPLY;
+	else options &= (-1 ^ NEED_REPLY);
+}
+
+bool MessageHeader::needsReply() {
+	return ((options & NEED_REPLY) == NEED_REPLY);
+}
+
+void MessageHeader::reply() {
+	uint32_t tmp = dest;
+	dest = source;
+	source = tmp;
+}
+
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
 bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout) {
-	//    struct timeval now;
-	//    gettimeofday(&now, 0);
-	//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
+	//NB_MSG << tnam << " receiving\n";
+
 	*response_len = 0;
 	int retries = 5;
 	if (block && timeout == 0) timeout = 500;
+
+	int64_t more = 0;
+	size_t more_size = sizeof (more);
+
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			bool got_response = false;
+			bool got_address = false;
 			if (items[0].revents & ZMQ_POLLIN) {
+
+				bool done = false;
 				zmq::message_t message;
-				if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
-					*response_len = message.size();
-					*buf = new char[*response_len+1];
-					memcpy(*buf, message.data(), *response_len);
-					(*buf)[*response_len] = 0;
-					return true;
+				while (!done) {
+					{
+					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
+							{
+								FileLogger fl(program_name);
+								fl.f() << "Error: unexpected message header\n";
+							}
+							continue;
+						}
+						*response_len = message.size();
+						*buf = new char[*response_len+1];
+						memcpy(*buf, message.data(), *response_len);
+						(*buf)[*response_len] = 0;
+						//NB_MSG << tnam << "received: " << *buf << "\n";
+						return true;
+					}
+					else {
+						if (!block) {
+							done = true;
+						}
+					}
+					}
 				}
-				else if (block) continue;
+				usleep(10000);
 			}
 			return (response_len == 0) ? false : true;
 		}
@@ -126,17 +186,90 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	return false;
 }
 
-bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
-//    struct timeval now;
-//    gettimeofday(&now, 0);
-//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, MessageHeader &header) {
+	//    struct timeval now;
+	//    gettimeofday(&now, 0);
+	//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	response_len = 0;
+	//NB_MSG << tnam << " receiving\n";
+
+	*response_len = 0;
 	int retries = 5;
 	if (block && timeout == 0) timeout = 500;
+
+	int64_t more = 0;
+	size_t more_size = sizeof (more);
+
+	while (!MessagingInterface::aborted()) {
+		try {
+			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+			int n = zmq::poll( &items[0], 1, timeout);
+			if (!n && block) continue;
+			bool got_response = false;
+			bool got_address = false;
+			if (items[0].revents & ZMQ_POLLIN) {
+
+				bool done = false;
+				zmq::message_t message;
+				while (!done) {
+					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
+							memcpy(&header, message.data(), sizeof(MessageHeader));
+							got_address = true;
+							continue;
+						}
+						*response_len = message.size();
+						*buf = new char[*response_len+1];
+						memcpy(*buf, message.data(), *response_len);
+						(*buf)[*response_len] = 0;
+
+						if (got_address) {
+							//NB_MSG << " received addressed message " << header << " " << (*buf) << "\n";
+						}
+						//NB_MSG << tnam << "received: " << *buf << "\n";
+
+						return true;
+					}
+					else {
+						if (!block) {
+							done = true;
+						}
+					}
+				}
+				return (*response_len == 0) ? false : true;
+			}
+			else return false;
+		}
+		catch (zmq::error_t e) {
+			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			if (errno == EINTR) {
+				{
+					FileLogger fl(program_name);
+					fl.f() << "safeRecv interrupted system call, retrying\n";
+				}
+				if (block) continue;
+			}
+			usleep(10);
+			return false;
+		}
+	}
+	return false;
+}
+
+bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+
+	//NB_MSG << tnam << " receiving\n";
+
+	response_len = 0;
+	int retries = 5;
+	if (block && timeout == 0)
+		timeout = 500;
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
@@ -171,154 +304,116 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 	return false;
 }
 
-void safeSend(zmq::socket_t &sock, const char *buf, int buflen) {
+void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader header) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
-	int retries = 5;
+
+	//NB_MSG << tnam << " Sending " << header<< " " << buf << "\n";
+
+	enum send_stage {e_sending_dest, e_sending_source, e_sending_data} stage = e_sending_data;
+	if (header.dest || header.source) {
+		stage = e_sending_source;
+	}
+
 	while (!MessagingInterface::aborted()) {
 		try {
 			//NB_MSG << tnam << " safeSend() sending " << buf << "\n";
-			sock.send(buf, buflen);
+			if (stage == e_sending_source) {
+				zmq::message_t msg(sizeof(MessageHeader));
+				memcpy(msg.data(), &header, sizeof(MessageHeader) );
+				sock.send(msg, ZMQ_SNDMORE);
+				stage = e_sending_data;
+			}
+			if (stage == e_sending_data ) {
+				zmq::message_t msg(buflen);
+				memcpy(msg.data(), buf, buflen );
+				sock.send(msg);
+			}
 			break;
 		}
 		catch (zmq::error_t) {
-			if (zmq_errno() == EINTR) {
+			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
-				if (--retries == 0) {
-					std::cerr << "exiting\n"; exit(EXIT_FAILURE);
-				}
 				usleep(10);
+				if (zmq_errno() == EFSM) throw;
 				continue;
 			} else {
 				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				usleep(10);
 			}
-			throw;
 		}
 	}
+}
+
+void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+
+	//NB_MSG << tnam << " sending " << buf << "\n";
+
+	while (!MessagingInterface::aborted()) {
+		try {
+			zmq::message_t msg(buflen);
+			memcpy(msg.data(), buf, buflen );
+			sock.send(msg);
+			break;
+		}
+		catch (zmq::error_t) {
+			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
+				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				usleep(10);
+				if (zmq_errno() == EFSM) {
+					usleep(10000);
+					throw;
+				}
+				continue;
+			} else {
+				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				usleep(10);
+			}
+		}
+	}
+}
+
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
+				 uint32_t timeout_us, MessageHeader header) {
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
+
+	//NB_MSG << tnam << " sendMessage " << msg << "\n";
+
+	safeSend(sock, msg, strlen(msg), header);
+
+	char *buf;
+	size_t len;
+	MessageHeader response_header;
+	//bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, int *source) {
+	if (safeRecv(sock, &buf, &len, true, (uint64_t)timeout_us, response_header)) {
+		response = buf;
+		return true;
+	}
+	return false;
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
-	int retries = 3;
-	assert(msg);
-	uint64_t start_time = microsecs();
-	bool fsm_recovery = false;
-sendMessage_transmit:
-	--retries;
-	while (1) {
-		if (timeout_us && microsecs() - start_time > timeout_us) {
-			{FileLogger fl(program_name); fl.f() << "sendMessage timeout: " <<msg <<"\n"; }
-			response = "timeout";
-			return false; // unable to send
-		}
-		try {
-			if ( !(*msg) ) {  // don't send zero length messages
-				MessageLog::instance()->add(" Warning: skipped sending empty message");
-				response = "Discarding empty message";
-				return false; 
-			}
-			size_t len = sock.send(msg, strlen(msg));
-			if (!len) {
-				usleep(50);
-				continue;
-			}
-			break;
-		}
-		catch (zmq::error_t e) {
-			if (errno == EINTR) {
-				FileLogger fl(program_name); fl.f()  << "Warning: send was interrupted (EINTR)\n" << std::flush;
-				usleep(50);
-				continue;
-			}
-			{FileLogger fl(program_name); fl.f()  << "sendMessage: " << zmq_strerror(errno) << " when transmitting\n" << std::flush;}
-			if (errno == EFSM) {
-				// attempt to recover from an FSM error
-				FileLogger fl(program_name); fl.f()  << "Finite state machine error\n";
-				fsm_recovery = true;
-				exit(2);
-			}
-			char buf[100];
-			snprintf(buf, 100, "Error %s sending message", zmq_strerror(zmq_errno()));
-			MessageLog::instance()->add(buf);
-			{FileLogger fl(program_name); fl.f()  << buf << "\n";}
-			if (!fsm_recovery) {
-				response = buf;
-				return false;
-			}
-		}
+
+	//NB_MSG << tnam << " sendMessage " << msg << "\n";
+
+	safeSend(sock, msg, strlen(msg));
+
+	char *buf;
+	size_t len;
+	if (safeRecv(sock, &buf, &len, true, (uint64_t)timeout_us)) {
+		response = buf;
+		return true;
 	}
-	char *buf = 0;
-	size_t len = 0;
-	start_time = microsecs();
-	uint64_t warn_at = 100000;
-	while (len == 0) {
-		uint64_t now = microsecs();
-		if (timeout_us && now - start_time > timeout_us) {
-			response = "receive timeout\n";
-			return false; // unable to  receive
-		}
-		if (now - start_time > warn_at) {
-			char tnam[100];
-			int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-			assert(pgn_rc == 0);
-			char buf[150];
-			snprintf(buf, 150, "warning: send message on thread %s taken %ld ms so far\n", tnam, now-start_time);
-			MessageLog::instance()->add(buf);
-			NB_MSG << buf << "\n" << std::flush;
-			warn_at += 100000;
-		}
-		try {
-			zmq::message_t rcvd;
-			if (sock.recv(&rcvd, ZMQ_DONTWAIT) ) {
-				len = rcvd.size();
-				if (!len) { usleep(50); continue; }
-				buf = new char[len+1];
-				memcpy(buf, rcvd.data(), len);
-				buf[len] = 0;
-				response = buf;
-				delete[] buf;
-			}
-			else {
-				usleep(100);
-				continue;
-			}
-			if (fsm_recovery) {
-				// a previous receive failed. we have now read its response so we retry our send
-				char buf[100];
-				snprintf(buf, 100, "ignored old data: %s", response.c_str());
-				MessageLog::instance()->add(buf);
-				std::cerr << buf << "\n";
-				NB_MSG << buf << "\n";
-				fsm_recovery = false;
-				goto sendMessage_transmit;
-			}
-			break;
-		}
-		catch(zmq::error_t e)  {
-			char err[300];
-			const char *fnam = strrchr(__FILE__, '/');
-			if (!fnam) fnam = __FILE__; else fnam++;
-			snprintf(err, 300, "sendMessage error: %s in %s:%d\n", zmq_strerror(errno), fnam, __LINE__);
-			std::cerr << err;
-			if (zmq_errno() == EFSM) {
-				exit(61);
-				// send must have failed
-				usleep(50);
-				const char *errmsg = "sendMessage FSM error, resending message";
-				MessageLog::instance()->add(errmsg);
-				NB_MSG << errmsg << "\n" << std::flush;
-				goto sendMessage_transmit;
-			}
-			if (errno == EINTR) continue;
-			response = err;
-			return false;
-		}
-	}
-	return true;
+	return false;
 }
 
 void MessagingInterface::setContext(zmq::context_t *ctx) {
@@ -361,7 +456,7 @@ void MessagingInterface::start() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ|| protocol == eCHANNEL) {
 		owner_thread = pthread_self();
 		if (hostname == "*" || hostname == "*") {
-			NB_MSG << "binding " << url << "\n";
+			//NB_MSG << "binding " << url << "\n";
 			socket->bind(url.c_str());
 		}
 		else {
@@ -568,7 +663,7 @@ char *MessagingInterface::send(const char *txt) {
         while (true) {
             try {
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-                int n = zmq::poll( &items[0], 1, 500);
+                int n = zmq::poll( &items[0], 1, 1);
                 if (n == 1 && items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
                     if (socket->recv(&reply)) {
@@ -588,15 +683,6 @@ char *MessagingInterface::send(const char *txt) {
                     std::cerr << "MessagingInterface::send: error during recv\n";
                     continue;
                 }
-								continue;
-                //std::cerr << "timeout: abandoning message " << txt << "\n";
-#if 0
-                socket->disconnect(url.c_str());
-                delete socket;
-                socket = new zmq::socket_t(*getContext(), ZMQ_REQ);
-                usleep(50000);
-                connect();
-#endif
                 break;
             }
             catch (std::exception e) {

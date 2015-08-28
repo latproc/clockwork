@@ -27,27 +27,33 @@
 #include "Message.h"
 #include "State.h"
 #include "Expression.h"
+#include <zmq.hpp>
 
+class Channel;
 class MachineInstance;
 
 struct SyncRemoteStatesActionTemplate : public ActionTemplate {
-    SyncRemoteStatesActionTemplate() { }
+	SyncRemoteStatesActionTemplate(Channel *channel, zmq::socket_t *socket);
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
         return out << "SyncRemoteStatesAction";
     }
     std::string trigger_event;
-	Condition condition;
+	Channel *chn;
+	zmq::socket_t *sock;
 };
 
-struct SyncRemoteStatesAction : public Action {
-    SyncRemoteStatesAction(MachineInstance *mi, SyncRemoteStatesActionTemplate &t)
-	    : Action(mi) { }
+class SyncRemoteStatesActionInternals;
+class SyncRemoteStatesAction : public Action {
+public:
+	SyncRemoteStatesAction(MachineInstance *mi, SyncRemoteStatesActionTemplate &t);
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
+
 protected:
 	Status execute();
+	SyncRemoteStatesActionInternals *internals;
 };
 
 #endif

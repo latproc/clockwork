@@ -32,24 +32,142 @@ Action *SyncRemoteStatesActionTemplate::factory(MachineInstance *mi)
 	return new SyncRemoteStatesAction(mi, *this);
 }
 
+class SyncRemoteStatesActionInternals {
+public:
+	std::list<char *>messages;  // encoded messages (free() required on completion)
+	MessageHeader header;
+	std::list<char *>::iterator *iter;
+	Channel *chn;
+	zmq::socket_t *sock;
+
+	std::string sockurl;
+
+
+	enum MessageState { e_sending, e_receiving, e_done } message_state;
+	enum ProcessState { ps_init, ps_sending_messages, ps_waiting_ack } process_state;
+
+	SyncRemoteStatesActionInternals()
+	: header(MessageHeader::SOCK_CW,MessageHeader::SOCK_CHAN, false),
+		iter(0), chn(0), sock(0),
+		message_state(e_sending), process_state(ps_init) {
+		//(ChannelInternals::SOCK_CHAN, ChannelInternals::SOCK_CHAN, true);
+	}
+};
+
+SyncRemoteStatesActionTemplate::SyncRemoteStatesActionTemplate(Channel *channel, zmq::socket_t *s)
+	: chn(channel), sock(s)
+{
+}
+
+
+SyncRemoteStatesAction::SyncRemoteStatesAction(MachineInstance *mi, SyncRemoteStatesActionTemplate &t)
+: Action(mi) {
+	internals = new SyncRemoteStatesActionInternals;
+	internals->sock = t.sock;
+	internals->chn = t.chn;
+}
+
 Action::Status SyncRemoteStatesAction::execute()
 {
-	owner->start(this);
-	status = Running;
 	Channel *chn = dynamic_cast<Channel*>(owner);
-	assert(chn);
-	if (chn->syncRemoteStates()) {
-		status = Complete;
-		result_str = "OK";
+	if (internals->process_state == SyncRemoteStatesActionInternals::ps_init) {
+		owner->start(this);
+		status = Running;
+#if 0
+		if (!internals->sock){
+			internals->sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
+			internals->sock->bind("inproc://syncstates");
+			chn->addSocket(10, "inproc://syncstates");
+		}
+#endif
+		//assert(chn);
+		//assert(chn == internals->chn);
+		internals->process_state = SyncRemoteStatesActionInternals::ps_sending_messages;
+		if (chn->syncRemoteStates(internals->messages)) {
+			internals->iter = new std::list<char*>::iterator(internals->messages.begin());
+			if (*internals->iter != internals->messages.end())
+				internals->message_state = SyncRemoteStatesActionInternals::e_sending;
+			else
+				internals->message_state = SyncRemoteStatesActionInternals::e_done;
+		}
+		else{
+			status = Failed;
+			error_str = "Failed to sync";
+			owner->stop(this);
+			return status;
+		}
 	}
-	else {
-		status = Failed;
-		char buf[150];
-		snprintf(buf, 150, "Sync Remote States on %s failed", chn->getName().c_str());
-		MessageLog::instance()->add(buf);
-		error_str = (const char *)buf; // when assigning to a CStringHolder, statically allocated strings need to be const
+
+	if (internals->process_state == SyncRemoteStatesActionInternals::ps_sending_messages)
+	{
+		if (*internals->iter == internals->messages.end()) {
+			internals->message_state = SyncRemoteStatesActionInternals::e_done;
+		}
+		if (internals->message_state == SyncRemoteStatesActionInternals::e_sending) {
+			char *current_message = *(*internals->iter);
+			internals->header.needReply(false);
+			safeSend(*internals->sock, current_message, strlen(current_message), internals->header);
+			free( current_message );
+			*internals->iter = internals->messages.erase(*internals->iter);
+			internals->message_state = SyncRemoteStatesActionInternals::e_receiving;
+			// skip receiving temporarily
+			internals->message_state = SyncRemoteStatesActionInternals::e_done;
+		}
+		else if (internals->message_state == SyncRemoteStatesActionInternals::e_receiving) {
+			char *buf; size_t len;
+			if (safeRecv(*internals->sock, &buf, &len, false, 0, internals->header)) {
+				NB_MSG << "got reply: " << buf << "\n";
+				internals->message_state = SyncRemoteStatesActionInternals::e_done;
+				delete[] buf;
+			}
+			else return Running;
+		}
+		if (internals->message_state == SyncRemoteStatesActionInternals::e_done)  {
+			if (*internals->iter != internals->messages.end()) {
+				internals->message_state = SyncRemoteStatesActionInternals::e_sending;
+			}
+			else {
+				if (internals->iter) {delete internals->iter; internals->iter =0; }
+			}
+			if (!internals->iter) { // finished sending messages
+				if (internals->process_state == SyncRemoteStatesActionInternals::ps_sending_messages) {
+					//safeSend(*cmd_client, "done", 4);
+					std::string ack;
+					//MessageHeader mh(ChannelInternals::SOCK_CTRL, ChannelInternals::SOCK_CTRL, false);
+					//sendMessage("done", *cmd_client, ack, mh);
+					internals->header.dest = MessageHeader::SOCK_CTRL;
+					internals->header.dest = MessageHeader::SOCK_CTRL;
+					internals->header.needReply(true);
+					safeSend(*internals->sock, "done", 4, internals->header);
+					internals->process_state = SyncRemoteStatesActionInternals::ps_waiting_ack;
+				}
+			}
+		}
 	}
-	owner->stop(this);
+	else if (internals->process_state == SyncRemoteStatesActionInternals::ps_waiting_ack) {
+		char *ack; size_t len;
+		if (safeRecv(*internals->sock, &ack, &len, false, 0, internals->header)) {
+			DBG_CHANNELS << "channel " << chn->name << " got " << ack << " from server\n";
+			status = Complete;
+			result_str = (const char *)ack; // force a new allocation
+			delete[] ack;
+			owner->stop(this);
+
+			// execute a state change once all other actions are
+
+			if (chn->isClient()) {
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
+				SetStateAction *ssa = (SetStateAction*)ssat.factory(chn);
+				chn->enqueueAction(ssa);
+			}
+			else {
+
+				SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
+				chn->enqueueAction(ssat.factory(chn));
+			}
+			return status;
+		}
+	}
 	return status;
 #if 0
 	std::stringstream ss;
@@ -64,15 +182,15 @@ Action::Status SyncRemoteStatesAction::execute()
 
 
 Action::Status SyncRemoteStatesAction::run() {
-	execute();
-	return Running;
+	return execute();
 }
 
 Action::Status SyncRemoteStatesAction::checkComplete() {
-	if (status == New || status == NeedsRetry) { execute(); }
+	if (status == New || status == NeedsRetry) { status = execute(); }
 	if (status == Suspended) resume();
 	if (status != Running) return status;
-
+	else
+		status = execute();
 	return status;
 }
 

@@ -53,7 +53,7 @@ public:
 	bool allocated;
 	std::ostream *f;
 	std::ofstream &file() { return *(std::ofstream*)f; }
-	Internals() { f = new std::ofstream; allocated = true;}
+	Internals(): allocated(false), f(0) { }
 	~Internals() { *f << std::flush; if (allocated) delete f; }
 };
 
@@ -61,7 +61,7 @@ FileLogger::FileLogger(const char *fname) : internals(0){
 	internals = new Internals;
 	char buf[40];
 	getTimeString(buf, 40);
-#if 0
+#if 1
     std::string n("/tmp/");
     n += fname;
     n + ".txt";
@@ -69,12 +69,16 @@ FileLogger::FileLogger(const char *fname) : internals(0){
 	internals->file()<<program_name << " " << buf << " ";
 #else
 	internals->f = &std::cerr;
-	internals->allocated = false;
 	*internals->f << buf << " ";
 #endif
   }
 
-std::ostream &FileLogger::f() { return internals->file(); }
+std::ostream &FileLogger::f() {
+	if (!internals->f) {
+		internals->f = new std::ofstream;
+		internals->allocated = true;
+	}
+	return internals->file(); }
 
 FileLogger::~FileLogger() { delete internals; }
 

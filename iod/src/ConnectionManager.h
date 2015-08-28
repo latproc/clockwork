@@ -89,6 +89,7 @@ public:
 	virtual int numSocks() =0;
 	void abort();
 	bool ready() { return rate_limiter.ready(); }
+	const pthread_t &ownerThread() const { return owner_thread; }
 protected:
 	ConnectionManagerInternals *internals;
 	pthread_t owner_thread;
@@ -96,6 +97,56 @@ protected:
 	std::map<std::string, MachineShadow *> machines;
 	RateLimiter rate_limiter;
 };
+
+
+class MessageFilterInternals  {
+public:
+	MessageFilterInternals() {}
+	virtual ~MessageFilterInternals() {}
+};
+
+class MessageFilter {
+public:
+	MessageFilter() : internals(0) {}
+	~MessageFilter() {}
+	virtual void init(MessageFilterInternals *) {}
+	virtual bool filter(char **buf, size_t &len) { return true; }
+	virtual bool filter(char **buf, size_t &len, MessageHeader &) { return true; }
+private:
+	MessageFilter(const MessageFilter & );
+	MessageFilter &operator=(const MessageFilter &);
+	MessageFilterInternals *internals;
+};
+
+class MessageRouterInternals;
+class MessageRouter {
+public:
+	MessageRouter();
+	~MessageRouter();
+
+	void operator()();
+	void finish();
+	void poll();
+	void addRoute(int route_id, int type, const std::string address);
+	void addDefaultRoute(int type, const std::string address);
+	void addRemoteSocket(int type, const std::string address);
+
+	// used when not running as a thread
+	void addRoute(int route_id, zmq::socket_t *dest);
+	void addDefaultRoute(zmq::socket_t *def);
+	void setRemoteSocket(zmq::socket_t *remote_sock);
+
+	void removeRoute(int route_id);
+
+	void addFilter(int route_id, MessageFilter *filter);
+	void removeFilter(int route_id, MessageFilter *filter);
+
+private:
+	MessageRouter(const MessageRouter &other);
+	MessageRouter &operator=(const MessageRouter &other);
+	MessageRouterInternals *internals;
+};
+
 
 /*
  Subscription Manager - create and maintain a connection to a remote clockwork driver
@@ -133,7 +184,7 @@ public:
 						const char *remote_host = "localhost", int remote_port = 5555);
 	virtual ~SubscriptionManager();
 	void setSetupMonitor(SingleConnectionMonitor *monitor);
-	
+	void createSubscriberSocket(const char *chame);
 	void init();
 	
 	bool requestChannel();
@@ -151,6 +202,8 @@ public:
 	int configurePoll(zmq::pollitem_t *);
 
 	zmq::socket_t &subscriber();
+	zmq::socket_t *sender();
+	void setupSender();
 	zmq::socket_t &setup(); // invalid for non-client instances
 	bool isClient(); // only clients have a setup socket
 
@@ -170,6 +223,7 @@ public:
 	uint64_t authority;
 protected:
 	zmq::socket_t subscriber_;
+	zmq::socket_t *sender_;
 public:
 	SingleConnectionMonitor monit_subs;
 	SingleConnectionMonitor *monit_pubs;

@@ -17,6 +17,7 @@
 #include "IODCommands.h"
 #include "SyncRemoteStatesAction.h"
 #include "DebugExtra.h"
+#include "ProcessingThread.h"
 
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
@@ -31,12 +32,68 @@ State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
 
+
+class RemoteClockworkCommandFilterInternals : public MessageFilterInternals {
+
+};
+
+class RemoteClockworkCommandFilter : public MessageFilter {
+public:
+	RemoteClockworkCommandFilter(Channel *chn) :channel(chn) {}
+	void init(MessageFilterInternals *init_data) {}
+	bool filter(char **buf, size_t &len);
+	bool filter(char **buf, size_t &len, MessageHeader &mh);
+	Channel *channel;
+};
+
+
+bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len, MessageHeader &mh) {
+	return filter(buf, len);
+}
+
+bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
+	char *data = *buf;
+	{
+		FileLogger fl(program_name);
+		fl.f() << "Channel " << channel->getName() << " subscriber received: " << data << " len:" << len << "\n";
+	}
+	if (len == 0) return true;
+	IODCommand *command = parseCommandString(data);
+	if (command) {
+		if (command->param(0) == "STATE") {
+			MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
+			if ( !m->isShadow()){
+				if (command->numParams() == 4 && command->param(3) == (long)channel->getAuthority()) {
+					// do nothing, this is an echo of a command we sent
+					{FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
+					return false;
+				}
+				else {
+					char *msg = MessageEncoding::encodeState(m->getName(),
+					command->param(2).sValue.c_str(),
+					(long)channel->getAuthority());
+					delete[] *buf;
+					len = strlen(msg)+1;
+					*buf = new char[len];
+					memcpy(*buf, msg, len);
+				}
+			}
+		}
+	}
+	return true;
+}
+
 class ChannelInternals {
 public:
 	boost::mutex iod_cmd_get_mutex;
 	boost::mutex iod_cmd_put_mutex;
-	std::list<IODCommand*> pending_commands;
-	std::list<IODCommand*> completed_commands;
+//	std::list<IODCommand*> pending_commands;
+//	std::list<IODCommand*> completed_commands;
+	CommandSocketInfo *cmd_sock_info;
+	std::string command_sock_name;
+	zmq::socket_t *command_sock;
+	MessageRouter router;
+	boost::thread *router_thread;
 };
 
 class chn_scoped_lock {
@@ -68,6 +125,7 @@ ChannelImplementation::ChannelImplementation() : monitors_exports(false), author
 }
 
 ChannelImplementation::~ChannelImplementation() { }
+
 
 
 Channel::Channel(const std::string ch_name, const std::string type)
@@ -104,7 +162,11 @@ Channel::~Channel() {
     remove(name);
 }
 
-void Channel::syncInterfaceProperties(MachineInstance *m) {
+void Channel::addSocket(int route_id, const char *addr) {
+	internals->router.addRoute(route_id, ZMQ_PAIR, addr);
+}
+
+void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &messages) {
 	if (!definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) return;
 	if (m->isShadow()) return;
 	if ( definition()->updates_names.count(m->getName())
@@ -125,17 +187,19 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 		}
 		MachineInterface *mi = dynamic_cast<MachineInterface*>(mc);
 		if (mi) {
-			DBG_CHANNELS << "sending properties for machine " << m->getName() <<":" << mi->name << "\n";
+			DBG_CHANNELS << "collecting properties for machine " << m->getName() <<":" << mi->name << "\n";
 			std::set<std::string>::iterator props = mi->property_names.begin();
 			while (props != mi->property_names.end()) {
 				const std::string &s = *props++;
 				Value v = m->getValue(s);
 				if (v != SymbolTable::Null) {
 					char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v, (long)definition()->getAuthority());
-					std::string response;
-					// TBD this can take some time. need to remember where we are up to and come back later
-					sendMessage(cmd, *cmd_client, response);
-					//safeSend(*cmd_client, cmd, strlen(cmd));
+					NB_MSG  << name << " prepared command" << cmd << "\n";
+					messages.push_back(cmd);
+					//std::string response;
+					//sendMessage(cmd, *cmd_client, response);
+					//MessageHeader mh(ChannelInternals::SOCK_CHAN, ChannelInternals::SOCK_CHAN, true);
+					//safeSend(*cmd_client, cmd, strlen(cmd), mh);
 				}
 				else {
 					DBG_CHANNELS << "Note: machine " << m->getName() << " does not have a property "
@@ -149,11 +213,12 @@ void Channel::syncInterfaceProperties(MachineInstance *m) {
 	}
 }
 
-bool Channel::syncRemoteStates() {
+bool Channel::syncRemoteStates(std::list<char *> &messages) {
 	//DBG_CHANNELS << "Channel " << name << " syncRemoteStates " << current_state << "\n";
 	// publishers do not initially send the state of all machines
 	if (definition()->isPublisher()) return false;
 	if (current_state == ChannelImplementation::DISCONNECTED) return false;
+
 	if (isClient()) {
 		if (definition()->hasFeature(ChannelDefinition::ReportStateChanges)) {
 			std::set<MachineInstance*>::iterator iter = this->channel_machines.begin();
@@ -163,11 +228,12 @@ bool Channel::syncRemoteStates() {
 					std::string state(m->getCurrentStateString());
 					DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state << "\n";
 					char *msg = MessageEncoding::encodeState(m->getName(), state, authority);
-					std::string response;
+					//std::string response;
+					messages.push_back(msg);
 					// TBD this can take some time. need to remember where we are up to and come back later
-					sendMessage(msg, *cmd_client, response);
-					//safeSend(*cmd_client, msg, strlen(msg));
-					free(msg);
+					//sendMessage(msg, *cmd_client, response);
+					//safeSend(*cmd_client, msg, strlen(msg), mh);
+					//free(msg);
 				}
 			}
 		}
@@ -177,17 +243,9 @@ bool Channel::syncRemoteStates() {
 				MachineInstance *m = *iter++;
 				// look at the interface defined for this machine and for each property
 				// on the interface, send the current value
-				syncInterfaceProperties(m);
+				syncInterfaceProperties(m, messages);
 			}
 		}
-		//safeSend(*cmd_client, "done", 4);
-		std::string ack;
-		sendMessage("done", *cmd_client, ack);
-		DBG_CHANNELS << "channel " << name << " got " << ack << " from server\n";
-		SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE" );
-		SetStateAction *ssa = (SetStateAction*)ssat.factory(this);
-		// execute this state change once all other actions are
-		enqueueAction(ssa);
 	}
 	else {
 		if (definition()->hasFeature(ChannelDefinition::ReportStateChanges)) {
@@ -198,9 +256,10 @@ bool Channel::syncRemoteStates() {
 					const char *state = m->getCurrentStateString();
 					char buf[200];
 					if (cmd_client) {
-						const char *msg = MessageEncoding::encodeState(m->getName(), state, definition()->authority);
-						std::string response;
-						sendMessage(msg, *cmd_client, response);
+						char *msg = MessageEncoding::encodeState(m->getName(), state, definition()->authority);
+						messages.push_back(msg);
+						//std::string response;
+						//sendMessage(msg, *cmd_client, response, mh);
 						//safeSend(*cmd_client, msg, strlen(msg));
 					}
 					else
@@ -214,11 +273,9 @@ bool Channel::syncRemoteStates() {
 				MachineInstance *m = *iter++;
 				// look at the interface defined for this machine and for each property
 				// on the interface, send the current value
-				syncInterfaceProperties(m);
+				syncInterfaceProperties(m, messages);
 			}
 		}
-		SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
-		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 /*
  		if (cmd_client) {
 			std::string ack;
@@ -280,21 +337,23 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 	else if (new_state == ChannelImplementation::UPLOADING) {
 		DBG_CHANNELS << name << " UPLOADING\n";
 		setNeedsCheck();
-		SyncRemoteStatesActionTemplate srsat;
+		SyncRemoteStatesActionTemplate srsat(this, cmd_client);
 		enqueueAction(srsat.factory(this));
 	}
 	else if (new_state == ChannelImplementation::DOWNLOADING) {
 		DBG_CHANNELS << name << " DOWNLOADING\n";
+		MessageHeader mh(MessageHeader::SOCK_CTRL, MessageHeader::SOCK_CTRL, false);
+
 		std::string ack;
 		if (isClient()) {
-			sendMessage("status", *cmd_client, ack);
+			//sendMessage("status", *cmd_client, ack, mh);
 			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
-			//safeSend(*cmd_client, "status", 6);
+			safeSend(*cmd_client, "status", 6, mh);
 		}
 		else {
-			sendMessage("done", *cmd_client, ack);
+			//sendMessage("done", *cmd_client, ack, mh);
 			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
-			//safeSend(*cmd_client, "done", 4);
+			safeSend(*cmd_client, "done", 4, mh);
 		}
 	}
 	else if (new_state == ChannelImplementation::DISCONNECTED) {
@@ -512,6 +571,7 @@ Channel *ChannelDefinition::instantiate(unsigned int port) {
     
     Channel *chn = Channel::findByType(name);
     if (!chn) chn = Channel::create(port, this);
+	if (chn) Channel::setupCommandSockets();
     return chn;
 }
 
@@ -710,11 +770,18 @@ void Channel::operator()() {
 	 */
 	if (isClient()){
 		Value host = getValue("host");
-		Value port_val = getValue("port");
+		const Value port_val = getValue("port");
 		if (host == SymbolTable::Null)
 			host = "localhost";
 		long port = 0;
-		if (!port_val.asInteger(port)) return;
+		if (!port_val.asInteger(port)) {
+			if (definition_->options.find("port") != definition_->options.end())
+			{
+				const Value item = definition_->options.at("port");
+				port = item.iValue;
+			}
+			if (port == 0) return;
+		}
 
 		DBG_CHANNELS << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
 		communications_manager = new SubscriptionManager(definition()->name.c_str(),
@@ -723,7 +790,7 @@ void Channel::operator()() {
 	else {
 		communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL, "*", port);
 	}
-
+#if 1
 	{
 		int retry = 1;
 		// TBD why is it necessary to have this loop? may introduce more problems than it solves
@@ -744,6 +811,7 @@ void Channel::operator()() {
 			}
 		}
 	}
+#endif
 	usleep(500);
 	char start_cmd[20];
 	DBG_CHANNELS << "channel " << name << " thread waiting for start message\n";
@@ -755,6 +823,7 @@ void Channel::operator()() {
 	}
 	safeSend(*cmd_server, "ok", 2);
 
+
 	zmq::pollitem_t *items = 0;
 	DBG_CHANNELS << "channel " << name << " thread received start message\n";
 
@@ -763,134 +832,114 @@ void Channel::operator()() {
 
 	SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(communications_manager);
 	int cmd_server_idx = 0;
-	try {
-		while (!aborted && communications_manager) {
+
+
+	NB_MSG << name << " connecting to remote socket " << internals->command_sock_name << "\n";
+	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
+	internals->command_sock->connect( internals->cmd_sock_info->address.c_str() );
+
+
+	zmq::socket_t remote_sock(*MessagingInterface::getContext(), ZMQ_PAIR);
+	remote_sock.bind("inproc://sock_control");
+
+	// start routine messages through the subscriber socket
+	internals->router.setRemoteSocket(&communications_manager->subscriber());
+	internals->router.addRoute(MessageHeader::SOCK_CW, internals->command_sock);
+	internals->router.addRoute(MessageHeader::SOCK_CHAN, cmd_server);
+	internals->router.addRoute(MessageHeader::SOCK_CTRL, ZMQ_PAIR, "inproc://sock_control");
+
+	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new RemoteClockworkCommandFilter(this));
+
+	//internals->router_thread = new boost::thread(boost::ref(internals->router));
+
+	NB_MSG << name << " setup message router\n";
+
+	while (!aborted && communications_manager) {
+		try {
+
+			if (!communications_manager->checkConnections()) {
+				usleep(500000); continue;
+			}
+
+			internals->router.poll();
+
 			// clients have a socket to setup the channel, servers do not need it
 			int num_poll_items = 0;
 			int subscriber_idx = 0;
 			{
-				if (communications_manager->isClient()) {
-					num_poll_items = 3;
-					subscriber_idx = 1;
-				}
-				else {
-					num_poll_items = 2;
-					subscriber_idx = 0;
-				}
 				if (items) delete[] items;
-				items = new zmq::pollitem_t[num_poll_items];
-				int idx = communications_manager->configurePoll(items);
-				assert(idx < num_poll_items);
-				items[idx].socket = *cmd_server;
-				items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
+
+				items = new zmq::pollitem_t[2];
+				int idx = 0;
+				if (isClient()) {
+					items[idx].socket = communications_manager->setup();
+					items[idx].events = ZMQ_POLLIN;
+					items[idx].revents = 0;
+					items[idx].fd = 0;
+					++idx;
+				}
+				items[idx].socket = remote_sock;
+				items[idx].events = ZMQ_POLLIN;
 				items[idx].fd = 0;
 				items[idx].revents = 0;
-				cmd_server_idx = idx;
+				subscriber_idx = idx;
+				num_poll_items = ++idx;
 			}
-			bool no_commands;
-			{
-				chn_scoped_lock ("main loop checking for completed command", internals->iod_cmd_put_mutex);
-				no_commands = internals->completed_commands.empty();
-			}
+
 			try {
-				if (no_commands
-					&& !communications_manager->checkConnections(items, num_poll_items, *cmd_server)) {
-					usleep(1000);
-					continue;
+				int rc = zmq::poll(items, num_poll_items, 0);
+				if (rc == 0) {usleep(20); continue; }
+
+			}
+			catch ( zmq::error_t tex) {
+				{FileLogger fl(program_name);
+					fl.f() << name << "Error polling channel port\n";
 				}
 			}
-			catch(zmq::error_t err) {
-				DBG_CHANNELS << "Channel " << name << " ZMQ error: " << zmq_strerror(errno) << "\n";
+
+			//if (!communications_manager->checkConnections(items, num_poll_items, *cmd_server) ) {
+			//	usleep(100); continue;
+			//}
+
+			if (items[subscriber_idx].revents & ZMQ_POLLERR) {
+				{FileLogger fl(program_name);
+					fl.f() << name << " thread detected error on subscriber connection\n"; }
+			}
+
+			if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
+				|| (items[subscriber_idx].revents & ZMQ_POLLERR) )
 				continue;
-			}
-			{
-				boost::unique_lock<boost::mutex> lock1(internals->iod_cmd_put_mutex, boost::defer_lock);
-				//boost::unique_lock<boost::mutex> lock2(internals->iod_cmd_get_mutex, boost::defer_lock);
-				//NB_MSG << "main loop trying completed lock for cleaning up\n";
-				if (lock1.try_lock()) {
-					//NB_MSG << "main loop got completed lock for cleaning up\n";
-					//chn_scoped_lock ("main loop cleaning completed", internals->iod_cmd_put_mutex);
-					if (!internals->completed_commands.empty()) {
-						std::string response;
-						DBG_CHANNELS << "Channel " << name << " finishing off processed commands\n";
-						std::list<IODCommand*>::iterator iter = internals->completed_commands.begin();
-						while (iter != internals->completed_commands.end()) {
-							IODCommand *cmd = *iter;
-							iter = internals->completed_commands.erase(iter);
-							if (cmd->done == IODCommand::Success) {
-								DBG_CHANNELS << cmd->param(0) <<" succeeded: " << cmd->result() << "\n";
-							}
-							else {
-								DBG_CHANNELS << cmd->param(0) <<" failed: " << cmd->error() << "\n";
-							}
-							delete cmd;
-						}
-						// TBD should this go back to the originator?
-					}
-					//NB_MSG << "main loop cleaned up completed. unlocking.\n";
-					lock1.unlock();
-					//internals->iod_cmd_put_mutex.unlock();
-				}
 
-				if (isClient()
-						&& !sm->monit_subs.disconnected()
-						&& sm->subscriberStatus() == SubscriptionManager::ss_ready
-						&& current_state == ChannelImplementation::DOWNLOADING) {
-
-					long current_time = getTimerVal()->iValue;
-					if (current_time > 1000) {
-						if (current_time > 2000) {
-							FileLogger fl(program_name);
-							fl.f() << "Channel " << name << " state change has not occurred after " << current_time/1000 << "s\n";
-							if (current_time > 10000) {
-								fl.f() << name << " aborting\n";
-								exit(53);
-							}
-						}
-						else {
-							DBG_CHANNELS << "channel " << name << " switching to CONNECTED state\n";
-							SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
-							enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
-						}
-					}
-				}
-
-				if (items[cmd_server_idx].revents & ZMQ_POLLIN) {
-					DBG_CHANNELS << name << " incoming activity on channel\n";
-				}
-
-				if (items[subscriber_idx].revents & ZMQ_POLLERR) {
-					{FileLogger fl(program_name);
-						fl.f() << name << " thread detected error on subscriber connection\n"; }
-				}
-
-				if ( !(items[subscriber_idx].revents & ZMQ_POLLIN)
-						|| (items[subscriber_idx].revents & ZMQ_POLLERR) )
-					continue;
-
-				// incoming channel data
+			if (items[subscriber_idx].revents & ZMQ_POLLIN) {
 				char *data;
 				size_t len;
-				safeRecv(communications_manager->subscriber(), &data, &len, false, 0);
-				DBG_CHANNELS << "Channel " << name << " subscriber received: " << data << " len:" << len << "\n";
-				if (len == 0) continue;
-				if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
-					checkStateChange(data);
-				}
-				else
-				{
-					IODCommand *command = parseCommandString(data);
-					if (command) {
-						chn_scoped_lock lock("main loop add pending command", internals->iod_cmd_get_mutex);
-						internals->pending_commands.push_back(command);
+				MessageHeader mh;
+				NB_MSG << "CTRL waiting for command\n";
+				if ( safeRecv(remote_sock, &data, &len, false, 0, mh) ) {
+					NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
+					if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
+						checkStateChange(data);
+					}
+					if (mh.needsReply()) {
+						NB_MSG << name << " sending reply as requested\n";
+						mh.dest = MessageHeader::SOCK_CHAN;
+						mh.source = MessageHeader::SOCK_CTRL;
+						mh.needReply(false);
+						safeSend(remote_sock, "ack", 3, mh);
 					}
 				}
-				delete[] data;
+			}
+
+		}
+		catch (zmq::error_t zex) {
+			{
+				FileLogger fl(program_name);
+				fl.f() << "zmq exception in Channel " << name << " " << zmq_strerror(zmq_errno()) << "\n";
 			}
 		}
-	}
-	catch (std::exception ex) {
-		NB_MSG << "Channel " << name << " saw exception " << ex.what() << "\n";
+		catch (std::exception ex) {
+			NB_MSG << "Channel " << name << " saw exception " << ex.what() << "\n";
+		}
 	}
 }
 
@@ -907,52 +956,58 @@ void Channel::sendMessage(const char *msg, zmq::socket_t &sock) {
 	}
 }
 
-bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &response) {
+bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, MessageHeader &header ) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
 	if (!subscriber_thread) {
 		DBG_CHANNELS << tnam << " Channel " << name << " sendMessage() sending " << msg << " directly\n";
-		return ::sendMessage(msg, sock, response);
-		/*safeSend(sock, msg, strlen(msg));
+		//return ::sendMessage(msg, sock, response, source);
+		
+		safeSend(sock, msg, strlen(msg), header);
 		usleep(10);
 		zmq::message_t resp;
-		char buf[200];
+		char *buf;
 		size_t len;
-		safeRecv(sock, buf, 200, true, len);*/
+		safeRecv(sock, &buf, &len, true, 0, header);
 	}
 	else {
 		DBG_CHANNELS << "Channel " << name << " sendMessage() sending " << msg << " through a channel thread\n";
-		safeSend(*cmd_client, msg, strlen(msg));
+		NB_MSG << "Message header: " << header << "\n";
+		safeSend(*cmd_client, msg, strlen(msg), header);
 		char *response_buf;
-		size_t rlen;
-		safeRecv(*cmd_client, &response_buf, &rlen, true, 0);
+		size_t rlen;\
+		DBG_CHANNELS << "Channel " << name << " sendMessage() waiting for response\n";
+		safeRecv(*cmd_client, &response_buf, &rlen, true, 0, header);
 		response = response_buf;
-		DBG_CHANNELS << "Channel " << name << " sendMessage() got response for " << msg << " from a channel thread\n";
+		DBG_CHANNELS << "Channel " << name << " sendMessage() got response " << response << " for " << msg << " from a channel thread\n";
 
 	}
 	return true;
 }
-
-zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
+std::string Channel::getCommandSocketName(bool client_endpoint) {
 	char cmd_socket_name[100];
 	snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
 	DBG_CHANNELS << "using " << cmd_socket_name
-		<< " for the " << ( (client_endpoint) ? "client " : "server ") << "command socket\n";
+	<< " for the " << ( (client_endpoint) ? "client " : "server ") << "command socket\n";
 	char *pos = strchr(cmd_socket_name, ':')+1;
 	while ( (pos = strchr(pos, ':'))  ) *pos = '-';
+	return cmd_socket_name;
+}
 
+zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
+	std::string cmd_socket_name = getCommandSocketName( client_endpoint );
 	if (client_endpoint) {
-		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
-		sock->connect(cmd_socket_name);
+		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
+		sock->connect(cmd_socket_name.c_str());
 		DBG_CHANNELS << name << " connected channel command client\n";
 		return sock;
 	}
 	else {
-		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REP);
+		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 		try {
-			sock->bind(cmd_socket_name);
+			sock->bind(cmd_socket_name.c_str());
 			int linger = 0;
 			sock->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 			DBG_CHANNELS << name << " bound channel command server\n";
@@ -1003,6 +1058,11 @@ void Channel::startSubscriber() {
 void Channel::stopSubscriber() {
 	delete communications_manager;
 	communications_manager = 0;
+}
+
+void Channel::initialiseChannels() {
+	if (!all) return;
+	setupCommandSockets();
 }
 
 void ChannelDefinition::instantiateInterfaces() {
@@ -1091,6 +1151,7 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
     chn->setDefinition(defn);
 	chn->setDefinitionLocation("dynamic", 0);
     chn->setStateMachine(defn);
+	chn->internals->cmd_sock_info = new CommandSocketInfo();
 	if (defn->getThrottleTime())
 	{
 		DBG_CHANNELS << " channel " << channel_name << " is throttled (" << defn->getThrottleTime() << ")\n";
@@ -1100,7 +1161,7 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
     chn->modified();
     chn->setupShadows();
     chn->setupFilters();
-    return chn;
+	return chn;
 }
 
 void ChannelImplementation::modified() {
@@ -1293,13 +1354,13 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
 		else { // publishers do not use the authority system
 			cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val);
 		}
+		MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
 		if (isClient()){
 			if (communications_manager->setupStatus() == SubscriptionManager::e_done)
-				//sendMessage(cmd, communications_manager->subscriber(),response); //setup()
-				safeSend(communications_manager->subscriber(), cmd, strlen(cmd) );
+				safeSend(*cmd_client, cmd, strlen(cmd), mh );
 		}
 		else if (communications_manager) {
-			safeSend(communications_manager->subscriber(), cmd, strlen(cmd));
+			safeSend(*cmd_client, cmd, strlen(cmd), mh);
 		}
 		else if (mif) {
 			mif->send(cmd);
@@ -1588,20 +1649,21 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
 
 			if (!chn->isClient() && chn->communications_manager) {
 				std::string response;
-				safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
+				safeSend(*chn->cmd_client, cmdstr, strlen(cmdstr),
+						 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
+				//chn->sendMessage(cmdstr, *chn->cmd_client, response);
 			}
             else if (chn->communications_manager
                   && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
 
-				if (!chn->definition()->isPublisher()) {
-					std::string response;
-					//chn->sendMessage(cmdstr, chn->communications_manager->subscriber(),response);
-					safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
-					//DBG_CHANNELS << tnam << ": channel " << chn->name << " got response: " << response << "\n";
-				}
-				else {
-					safeSend(chn->communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
-				}
+				//if (!chn->definition()->isPublisher()) {
+				//	std::string response;
+					safeSend(*chn->cmd_client, cmdstr, strlen(cmdstr),
+							 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
+				//}
+				//else {
+				//	safeSend(*chn->cmd_server, cmdstr, strlen(cmdstr) );
+				//}
             }
             else if (chn->mif) {
                 chn->mif->send(cmdstr);
@@ -1655,19 +1717,21 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
 
 		if (!isClient() && communications_manager) {
 			std::string response;
-			safeSend(communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
+			safeSend(*cmd_client, cmdstr, strlen(cmdstr),
+					 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
 		}
 		else if (communications_manager
 				 && communications_manager->setupStatus() == SubscriptionManager::e_done ) {
 
 			if (!definition()->isPublisher()) {
 				std::string response;
-				//chn->sendMessage(cmdstr, chn->communications_manager->subscriber(),response);
-				safeSend(communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
+				safeSend(*cmd_client, cmdstr, strlen(cmdstr),
+						 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
 				//DBG_CHANNELS << tnam << ": channel " << chn->name << " got response: " << response << "\n";
 			}
 			else {
-				safeSend(communications_manager->subscriber(), cmdstr, strlen(cmdstr) );
+				safeSend(*cmd_client, cmdstr, strlen(cmdstr),
+					MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
 			}
 		}
 		else if (mif) {
@@ -1708,7 +1772,9 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 				std::string response;
 				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
 				DBG_CHANNELS << "Channel " << chn->name << " sending " << cmd << "\n";
-				chn->sendMessage(cmd, chn->communications_manager->subscriber(),response);//setup()
+				MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
+				//chn->sendMessage(cmd, *chn->cmd_server, response, mh);//setup()
+				safeSend(*chn->cmd_server, cmd, strlen(cmd), mh);
 				free(cmd);
 			}
 			else if (chn->mif) {
@@ -1868,7 +1934,7 @@ void Channel::enableShadows() {
 			uint64_t machine_auth = ms->ownerChannel()->definition()->authority;
 			if (isClient()) ms->requireAuthority(machine_auth);
 			if (authority == machine_auth) {
-				//DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
+				DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
 				channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
 				EnableActionTemplate ea(ms->getName().c_str());
 				enqueueAction(ea.factory(ms));
@@ -1958,42 +2024,42 @@ void Channel::setupShadows() {
 }
 
 
-void Channel::newPendingCommand(IODCommand *cmd) {
-	chn_scoped_lock lock("newPending", internals->iod_cmd_get_mutex);
 
-	internals->pending_commands.push_back(cmd);
+CommandSocketInfo::CommandSocketInfo() : sock(0), index(0) {
+	last_idx++;
+	index = last_idx;
+	char buf[50];
+	snprintf(buf, 50, "inproc://chn_%d", index);
+	address = buf;
+	sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
+	sock->bind(buf);
+	NB_MSG << "Bound command channel socket (processing side) to " << buf << " at index " << index << "\n";
 }
 
-IODCommand *Channel::getCommand() {
-	chn_scoped_lock lock("getCommand", internals->iod_cmd_get_mutex);
+CommandSocketInfo::~CommandSocketInfo() { delete sock; }
 
-	if (internals->pending_commands.empty()) return 0;
 
-	IODCommand *cmd = internals->pending_commands.front();
-	/*
-	for (int i=0; i<10; ++i ) {
-		assert(cmd == internals->pending_messages.front());
-		usleep(5);
+void Channel::setupCommandSockets() {
+	NB_MSG << "Setting up command sockets\n";
+	std::map<std::string, Channel*>::iterator iter = all->begin();
+	while (iter != all->end()) {
+		const std::pair<std::string, Channel *> &item = *iter++;
+		Channel *chn = item.second;
+		if (chn->internals->command_sock) continue;
+		if (chn->definition() && !chn->definition()->isPublisher()) {
+			try {
+				chn->internals->cmd_sock_info = ProcessingThread::instance()->addCommandChannel();
+				NB_MSG << chn->name << " remote end bound to socket " << chn->internals->cmd_sock_info->address << "\n";
+				usleep(50);
+			}
+			catch (std::exception ex) {
+				NB_MSG << ex.what() << "\n";
+			}
+		}
+		else {
+			NB_MSG << chn->name << " s a publisher. not using a command socket\n";
+		}
 	}
-	*/
-	internals->pending_commands.pop_front();
-	return cmd;
-}
-
-IODCommand *Channel::getCompletedCommand() {
-	chn_scoped_lock ("getCompleted", internals->iod_cmd_put_mutex);
-
-	if (internals->completed_commands.empty()) return 0;
-
-	IODCommand *cmd = internals->completed_commands.front();
-	internals->completed_commands.pop_front();
-	return cmd;
-}
-
-void Channel::putCompletedCommand(IODCommand *cmd) {
-	chn_scoped_lock ("putCompleted", internals->iod_cmd_put_mutex);
-
-	internals->completed_commands.push_back(cmd);
 }
 
 
@@ -2001,7 +2067,7 @@ void Channel::putCompletedCommand(IODCommand *cmd) {
 void Channel::handleChannels() {
 	if (!all) return;
 	uint64_t now = nowMicrosecs();
-    std::map<std::string, Channel*>::iterator iter = all->begin();
+	std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         const std::pair<std::string, Channel *> &item = *iter++;
         Channel *chn = item.second;
@@ -2009,6 +2075,7 @@ void Channel::handleChannels() {
 		if (chn->throttledItemsReady(now)) {
 			chn->sendThrottledUpdates();
 		}
+		/*
 		IODCommand *command = chn->getCommand();
 		if (command) {
 			{FileLogger fl(program_name);
@@ -2035,30 +2102,7 @@ void Channel::handleChannels() {
 						}
 						(*command)();
 					}
-/*
-					if (chn->isClient() && command->param(3) == (long)chn->definition()->getAuthority() ){
-						{FileLogger fl(program_name);
-							fl.f() << chn->name
-							<< "(client) processing command for shadow  with auth: "
-							<< command->param(3) << "\n";
-						}
-						(*command)();
-					}
-					else if (!chn->isClient() && command->param(3) == (long)chn->getAuthority()) {
-						{FileLogger fl(program_name);
-							fl.f() << chn->name << " processing command for shadow  with auth: "
-							<< command->param(3) << "\n";
-						}
-						(*command)();
-					}
-					else {
-						{FileLogger fl(program_name);
-							fl.f() << chn->name << " ignoring command with auth: "
-							<< command->param(3) << "\n";
-						}
-						//command->result_str = "unauthorised";
-					}
-*/				}
+				}
 			}
 			else
 				(*command)();
@@ -2067,18 +2111,9 @@ void Channel::handleChannels() {
 			fl.f() << chn->name << "posting completed command: " << *command << " on channel " << chn->name << "\n";}
 
 			chn->putCompletedCommand(command);
-/*
-			{FileLogger fl(program_name);
-				fl.f() << chn->name << "done.. getting next\n";}
-			command = chn->getCommand();
-			{FileLogger fl(program_name);
-				if (command)
-					fl.f() << chn->name << ": got one: " << *command << " on channel " << chn->name << "\n";
-				else
-					fl.f() << chn->name << " no more\n";
-			}
-*/
+
 		}
+		 */
 	}
 }
 
@@ -2104,8 +2139,10 @@ void Channel::checkCommunications() {
 #endif
 	if (!communications_manager) return;
 	if (!communications_manager->ready()) return;
-    bool ok = communications_manager->checkConnections();
-    if (!ok) {
+    //bool ok = communications_manager->checkConnections();
+    if (communications_manager->monit_setup->disconnected()
+		|| communications_manager->monit_subs.disconnected() )
+ 	{
 		if (isClient()) {
 			if (communications_manager->monit_setup->disconnected()
 				&& current_state != ChannelImplementation::DISCONNECTED)
@@ -2130,15 +2167,6 @@ void Channel::checkCommunications() {
 			setState(ChannelImplementation::UPLOADING);
 	}
 
-#if 0
-    if ( poll_items && !(poll_items[1].revents & ZMQ_POLLIN) && message_handler) {
-        if (message_handler->receiveMessage(communications_manager->subscriber())) {
-            DBG_CHANNELS << "Channel got message: " << message_handler->data << "\n";
-		}
-    }
-#endif
-	//if (monit_subs && !monit_subs->disconnected()){
-	
 }
 
 void Channel::setupAllShadows() {
@@ -2146,7 +2174,9 @@ void Channel::setupAllShadows() {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-        if (chn) chn->setupShadows();
+		if (chn) {
+			chn->setupShadows();
+		}
     }
 }
 

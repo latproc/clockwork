@@ -302,7 +302,8 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 		MachineClass *cls = MachineClass::find(type);
 		ChannelDefinition *defn = dynamic_cast<ChannelDefinition*>(cls);
 		if (defn) {
-			return new Channel(name.get(), type);
+			Channel *chn = new Channel(name.get(), type);
+			chn->setDefinition(defn);
 		}
 		return new MachineInstance(name, type, instance_type);
 	}
@@ -606,13 +607,9 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 		found = machines[seek_machine_name];
 		goto cache_local_name;
 	}
-	//NB_MSG << "CACHE MISS: failed to find machine " << seek_machine_name << "\n";
-	//ss << " not found";
-	//	DBG_M_MACHINELOOKUPS << ss << "";
 	return 0;
 
 cache_local_name:
-	//	DBG_M_MACHINELOOKUPS << "\n";
 
 	if (found) {
 		if (seek_machine_name != found->getName())  {
@@ -1054,10 +1051,11 @@ void simple_deltat(std::ostream &out, uint64_t dt) {
 
 void MachineInstance::describe(std::ostream &out) {
 	out << "---------------\n" << _name << ": " << current_state.getName() << " "
-		<< (enabled() ? "" : " DISABLED") <<  "\n"
-		<< (isShadow() ? " SHADOW " : "") << "authority " << expected_authority  <<  "\n"
-		<< (isActive() ? "" : " NOT ACTIVE") <<  "\n"
-		<< "  Class: " << _type << " instantiated at: " << definition_file
+		<< " Class: " << _type
+		<< (enabled() ? "" : " DISABLED")
+		<< (isShadow() ? " SHADOW " : "") << "authority " << expected_authority
+		<< (isActive() ? "" : " PASSIVE") <<  "\n"
+		<< " instantiated at: " << definition_file
 		<< " line:" << definition_line << "\n";
 	if (locked) {
 		out << "Locked by: " << locked->getName() << "\n";
@@ -1934,8 +1932,10 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			Channel *chn = ownerChannel();
 			if (chn && chn->current_state == ChannelImplementation::ACTIVE)
 				chn->requestStateChange(this, new_state.getName(), authority);
+			return Action::Running;
 		}
-		return Action::Failed;
+		else
+			return Action::Failed;
 	}
 
 	if (!hasState(new_state)) {

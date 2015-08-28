@@ -170,8 +170,8 @@ public:
 	CommandTable<IODCommandFactory*> commands;
 	boost::mutex data_mutex;
 
-	std::list<IODCommand *>pending_commands;
-	std::list<IODCommand *>completed_commands;
+	//std::list<IODCommand *>pending_commands;
+	//std::list<IODCommand *>completed_commands;
 
 
     CommandThreadInternals() : socket(*MessagingInterface::getContext(), ZMQ_REP) {
@@ -447,11 +447,20 @@ void IODCommandThread::operator()() {
     boost::thread cmd_monitor(boost::ref(monit));
     
     int linger = 0; // do not wait at socket close time
-		cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-		char url_buf[30];
-		snprintf(url_buf, 30, "tcp://*:%d", command_port());
-    cti->socket.bind (url_buf);
-    
+	cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+	char url_buf[30];
+	snprintf(url_buf, 30, "tcp://*:%d", command_port());
+	try {
+		cti->socket.bind (url_buf);
+	}
+	catch (zmq::error_t zex) {
+		{	NB_MSG << "Error: " << zmq_strerror(zmq_errno()) << "\n";
+			FileLogger fl(program_name); usleep(10);
+			fl.f() << "Error: " << zmq_strerror(zmq_errno()) << "\n";
+			exit(1);
+		}
+	}
+
     zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
     access_req.bind("inproc://resource_mgr");
 
@@ -504,7 +513,6 @@ void IODCommandThread::operator()() {
 			/*
 			   processing thread will call: (*command)(params) for all pending commands
 			 */
-			wd->poll();
 
 			if ( items[2].revents & ZMQ_POLLIN) {
 				char *buf = 0;

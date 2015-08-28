@@ -5,8 +5,8 @@
 # FlagInterface has an implicit initial state of INIT.
 
 FlagInterface INTERFACE {
-	OPTION x , y;
-	OPTION z 100;
+#	OPTION x , y;
+#	OPTION z 100;
 
     on STATE;
     off INITIAL;
@@ -38,12 +38,12 @@ FlasherChannel CHANNEL {
 # can be instantiated at either end of the channel
 
 
-channels LIST PERSISTENCE_CHANNEL_7901;
+#channels LIST PERSISTENCE_CHANNEL_7901;
 ChannelCheck MACHINE connections {
   on WHEN ALL connections ARE ACTIVE;
   off DEFAULT;
 }
-connection_check ChannelCheck channels;
+#connection_check ChannelCheck channels;
 
 # These items are shared across a channel. Each side has its 
 # own item and a shadow of the other one

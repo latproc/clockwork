@@ -42,6 +42,7 @@ struct ScheduledItem {
 	bool operator>=(const ScheduledItem& other) const;
 	ScheduledItem(long when, Package *p);
 	ScheduledItem(long when, Action *a);
+	~ScheduledItem();
     std::ostream &operator <<(std::ostream &out) const;
 
 private:
