@@ -87,14 +87,14 @@ class ChannelInternals {
 public:
 	boost::mutex iod_cmd_get_mutex;
 	boost::mutex iod_cmd_put_mutex;
-//	std::list<IODCommand*> pending_commands;
-//	std::list<IODCommand*> completed_commands;
 	CommandSocketInfo *cmd_sock_info;
 	std::string command_sock_name;
 	zmq::socket_t *command_sock;
 	MessageRouter router;
 	boost::thread *router_thread;
+	ChannelInternals() :cmd_sock_info(0), command_sock(0), router_thread(0) {}
 };
+
 
 class chn_scoped_lock {
 public:
@@ -834,7 +834,7 @@ void Channel::operator()() {
 	int cmd_server_idx = 0;
 
 
-	NB_MSG << name << " connecting to remote socket " << internals->command_sock_name << "\n";
+	NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
 	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 	internals->command_sock->connect( internals->cmd_sock_info->address.c_str() );
 
@@ -1142,25 +1142,24 @@ void ChannelDefinition::instantiateInterfaces() {
 }
 
 Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
-    assert(defn);
-    char channel_name[100];
-    snprintf(channel_name, 100, "%s_%d", defn->name.c_str(), port);
-    Channel *chn = new Channel(channel_name, defn->name);
+	assert(defn);
+	char channel_name[100];
+	snprintf(channel_name, 100, "%s_%d", defn->name.c_str(), port);
+	Channel *chn = new Channel(channel_name, defn->name);
 
-    chn->setPort(port);
-    chn->setDefinition(defn);
+	chn->setPort(port);
+	chn->setDefinition(defn);
 	chn->setDefinitionLocation("dynamic", 0);
-    chn->setStateMachine(defn);
-	chn->internals->cmd_sock_info = new CommandSocketInfo();
+	chn->setStateMachine(defn);
 	if (defn->getThrottleTime())
 	{
 		DBG_CHANNELS << " channel " << channel_name << " is throttled (" << defn->getThrottleTime() << ")\n";
 		chn->setThrottleTime(defn->getThrottleTime());
 	}
-    if (defn->monitors_exports) chn->monitors_exports = true;
-    chn->modified();
-    chn->setupShadows();
-    chn->setupFilters();
+	if (defn->monitors_exports) chn->monitors_exports = true;
+	chn->modified();
+	chn->setupShadows();
+	chn->setupFilters();
 	return chn;
 }
 
@@ -1331,7 +1330,8 @@ void Channel::remove(const std::string name) {
 }
 
 void Channel::setDefinition(const ChannelDefinition *def) {
-    definition_ = def;
+	definition_ = def;
+	internals->cmd_sock_info = new CommandSocketInfo();
 }
 
 void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
