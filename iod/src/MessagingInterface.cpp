@@ -662,8 +662,10 @@ char *MessagingInterface::send(const char *txt) {
     if (!is_publisher) {
         while (true) {
             try {
+std::cout << "." << std::flush;
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-                int n = zmq::poll( &items[0], 1, 1);
+                int n = zmq::poll( &items[0], 1, 10);
+								if (n == 0) continue;
                 if (n == 1 && items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
                     if (socket->recv(&reply)) {
