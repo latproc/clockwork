@@ -1,4 +1,4 @@
- 	/*
+/*
   Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
   This file is part of Latproc
@@ -562,7 +562,7 @@ void MessageRouter::poll() {
 	}
 
 	try {
-		int rc = zmq::poll(items, num_socks, 0);
+		int rc = zmq::poll(items, num_socks, 2);
 		if (rc == 0) { return; }
 	}
 	catch (zmq::error_t zex) {

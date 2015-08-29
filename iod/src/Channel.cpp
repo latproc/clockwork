@@ -892,7 +892,7 @@ void Channel::operator()() {
 			}
 
 			try {
-				int rc = zmq::poll(items, num_poll_items, 0);
+				int rc = zmq::poll(items, num_poll_items, 1);
 				if (rc == 0) {usleep(20); continue; }
 
 			}
