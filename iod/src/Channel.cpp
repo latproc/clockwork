@@ -772,7 +772,12 @@ void Channel::operator()() {
 		Value host = getValue("host");
 		const Value port_val = getValue("port");
 		if (host == SymbolTable::Null)
-			host = "localhost";
+			if (definition_->options.find("host") != definition_->options.end())
+			{
+				const Value item = definition_->options.at("host");
+				host = item.sValue;
+			}
+
 		long port = 0;
 		if (!port_val.asInteger(port)) {
 			if (definition_->options.find("port") != definition_->options.end())
