@@ -1760,47 +1760,74 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
-	DBG_CHANNELS << " sending " << command << " to channels that monitor " << machine->getName() << "\n";
 
 	if (!all) return;
-	std::string name = machine->fullName();
-	std::map<std::string, Channel*>::iterator iter = all->begin();
-	while (iter != all->end()) {
-		Channel *chn = (*iter).second; iter++;
-		if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
-		if (command == "UPDATE" && !chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates))
-			continue;
+	DBG_CHANNELS << " sending " << command << " to channels that monitor " << machine->getName() << "\n";
+	if (machine->isShadow()) {
+		Channel *chn = machine->ownerChannel();
+		if (chn->current_state == ChannelImplementation::DISCONNECTED) return;
+		if (command == "UPDATE") {
+			assert(false);
+			return; // there should be no way for modbus updates to go to shadows
+		}
+		char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+		DBG_CHANNELS << "Channel " << chn->name << " sending " << cmd << "\n";
+		MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
+		//chn->sendMessage(cmd, *chn->cmd_server, response, mh);//setup()
+		if (!chn->isClient() && chn->communications_manager)
+			safeSend(*chn->cmd_client, cmd, strlen(cmd), mh);
+		else if (chn->communications_manager
+				&& chn->communications_manager->setupStatus() == SubscriptionManager::e_done )
+			safeSend(*chn->cmd_client, cmd, strlen(cmd), mh);
+		else {
+			char buf[150];
+			snprintf(buf, 150,
+					 "Warning: machine %s wanted to send '%s' but couldn't\n",
+					 machine->getName().c_str(), cmd);
+			MessageLog::instance()->add(buf);
+		}
+		free(cmd);
+	}
+	else {
+		std::string name = machine->fullName();
+		std::map<std::string, Channel*>::iterator iter = all->begin();
+		while (iter != all->end()) {
+			Channel *chn = (*iter).second; iter++;
+			if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
+			if (command == "UPDATE" && !chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates))
+				continue;
 
-		if (!chn->channel_machines.count(machine))
-			continue;
-		if (chn->filtersAllow(machine)) {
-			if ( (!chn->isClient() && chn->communications_manager)
-					 || ( chn->isClient() && chn->communications_manager
-						&& chn->communications_manager->setupStatus() == SubscriptionManager::e_done) ) {
-				std::string response;
-				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
-				DBG_CHANNELS << "Channel " << chn->name << " sending " << cmd << "\n";
-				MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
-				//chn->sendMessage(cmd, *chn->cmd_server, response, mh);//setup()
-				safeSend(*chn->cmd_server, cmd, strlen(cmd), mh);
-				free(cmd);
-			}
-			else if (chn->mif) {
-				char *cmd = MessageEncoding::encodeCommand(command, params); // send command
-				DBG_CHANNELS << "Channel " << name << " sending " << cmd << "\n";
-				chn->mif->send(cmd);
-				free(cmd);
+			if (!chn->channel_machines.count(machine))
+				continue;
+			if (chn->filtersAllow(machine)) {
+				if ( (!chn->isClient() && chn->communications_manager)
+						 || ( chn->isClient() && chn->communications_manager
+							&& chn->communications_manager->setupStatus() == SubscriptionManager::e_done) ) {
+					std::string response;
+					char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+					DBG_CHANNELS << "Channel " << chn->name << " sending " << cmd << "\n";
+					MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
+					//chn->sendMessage(cmd, *chn->cmd_server, response, mh);//setup()
+					safeSend(*chn->cmd_server, cmd, strlen(cmd), mh);
+					free(cmd);
+				}
+				else if (chn->mif) {
+					char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+					DBG_CHANNELS << "Channel " << name << " sending " << cmd << "\n";
+					chn->mif->send(cmd);
+					free(cmd);
+				}
+				else {
+					char buf[150];
+					snprintf(buf, 150, "Warning: machine %s should send %s but the channel is not connected",
+							machine->getName().c_str(), command.c_str() );
+					MessageLog::instance()->add(buf);
+					NB_MSG << buf << "\n";
+				}
 			}
 			else {
-				char buf[150];
-				snprintf(buf, 150, "Warning: machine %s should send %s but the channel is not connected",
-						machine->getName().c_str(), command.c_str() );
-				MessageLog::instance()->add(buf);
-				NB_MSG << buf << "\n";
+				DBG_CHANNELS << "message on channel " << chn->name << " skipped as it does not match filters\n";
 			}
-		}
-		else {
-			DBG_CHANNELS << "message on channel " << chn->name << " skipped as it does not match filters\n";
 		}
 	}
 }
