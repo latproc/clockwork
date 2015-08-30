@@ -2591,9 +2591,11 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 		addressed_message += m->getText();
 		std::list<Value> *params = new std::list<Value>;
 		params->push_back(addressed_message.c_str());
-		MachineInstance *receiver = dynamic_cast<MachineInstance*>(r);
-		if (receiver)
-			Channel::sendCommand(receiver, "SEND", params); // empty command parameter list
+		MachineInstance *mi = dynamic_cast<MachineInstance*>(r);
+		if (mi) {
+			MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+			Channel::sendCommand(mi, "SEND", params, mh); // empty command parameter list
+		}
 		else {
 			char buf[150];
 			snprintf(buf, 150, "Channel is unable to send to non machine instance");
