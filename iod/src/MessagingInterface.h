@@ -41,6 +41,7 @@ int64_t get_diff_in_microsecs(uint64_t now, const struct timeval *then);
 int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then);
 
 struct MessageHeader {
+	uint32_t msgid;
 	uint32_t dest;
 	uint32_t source;
 	uint64_t start_time;
@@ -49,6 +50,7 @@ struct MessageHeader {
 
 	static const int NEED_REPLY;
 
+	static const int SOCK_REMOTE;
 	static const int SOCK_CW;
 	static const int SOCK_CHAN;
 	static const int SOCK_CTRL;
@@ -60,6 +62,8 @@ struct MessageHeader {
 	void needReply(bool needs);
 	bool needsReply();
 	void reply(); // switch message send/receive
+	uint32_t getId() { return msgid; }
+	static uint32_t last_id;
 };
 
 std::ostream &operator<<(std::ostream &out, const MessageHeader&);
