@@ -427,6 +427,8 @@ public:
  {}
 	boost::mutex data_mutex;
 	std::map<int, RouteInfo *> routes;
+	std::list<MessageFilter*> filters;
+
 	zmq::socket_t *remote;
 	zmq::socket_t *default_dest;
 	bool done;
@@ -468,7 +470,7 @@ void MessageRouter::addRoute(int route_id, zmq::socket_t *dest) {
 	scoped_lock lock("addRoute", internals->data_mutex);
 
 	if (internals->routes.find(route_id) == internals->routes.end()) {
-		NB_MSG << " added route " << route_id << "\n";
+		//NB_MSG << " added route " << route_id << "\n";
 		internals->routes[route_id] = new RouteInfo(dest);
 	}
 }
@@ -516,14 +518,20 @@ void MessageRouter::operator()() {
 }
 
 void MessageRouter::addFilter(int route_id, MessageFilter *filter) {
-	if (internals->routes.find(route_id) != internals->routes.end()) {
+	if (route_id == MessageHeader::SOCK_REMOTE) {
+		internals->filters.push_back(filter);
+	}
+	else if (internals->routes.find(route_id) != internals->routes.end()) {
 		RouteInfo *ri = internals->routes[route_id];
 		ri->filters.push_back(filter);
 	}
 }
 
 void MessageRouter::removeFilter(int route_id, MessageFilter *filter) {
-	if (internals->routes.find(route_id) != internals->routes.end()) {
+	if (route_id == MessageHeader::SOCK_REMOTE) {
+		internals->filters.remove(filter);
+	}
+	else if (internals->routes.find(route_id) != internals->routes.end()) {
 		RouteInfo *ri = internals->routes[route_id];
 		ri->filters.remove(filter);
 	}
@@ -592,12 +600,12 @@ void MessageRouter::poll() {
 
 	// receiving from remote socket
 	if (items[0].revents & ZMQ_POLLIN) {
-		NB_MSG << "Message router collecting message from remote\n";
+		//NB_MSG << "Message router collecting message from remote\n";
 		if (safeRecv(*internals->remote, &buf, &len, false, 0, mh)) {
 			int buflen = len;
 			//if (mh.dest != 3)
 			//	mh.dest = 3;
-			NB_MSG << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
+			//NB_MSG << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
 			std::map<int, RouteInfo *>::const_iterator found = internals->routes.find(mh.dest);
 			if (found != internals->routes.end()) {
 				RouteInfo * ri = internals->routes.at(mh.dest);
@@ -614,7 +622,7 @@ void MessageRouter::poll() {
 						safeSend(*dest, buf, len, mh);
 				}
 				else {
-					NB_MSG << "forwarding " << buf << " to " << mh.dest << "\n";
+					//NB_MSG << "forwarding " << buf << " to " << mh.dest << "\n";
 					safeSend(*dest, buf, len, mh);
 				}
 			}
@@ -622,7 +630,7 @@ void MessageRouter::poll() {
 				safeSend(*internals->default_dest, buf, len);
 			}
 			else {
-				NB_MSG << "Message " << buf << " needed a default route but none has been set\n";
+				//NB_MSG << "Message " << buf << " needed a default route but none has been set\n";
 			}
 		}
 	}
@@ -630,16 +638,23 @@ void MessageRouter::poll() {
 	// forwarding to remote socket
 	for (unsigned int i=1; i<num_socks; ++i) {
 		if (items[i].revents & ZMQ_POLLIN) {
-			NB_MSG << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
+			//NB_MSG << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
 			std::map<int, RouteInfo *>::iterator found = internals->routes.find(destinations[i-1]);
 			assert(found != internals->routes.end());
 			zmq::socket_t *sock = internals->routes[ destinations[i-1] ]->sock;
 			MessageHeader mh;
 			if (safeRecv(*sock, &buf, &len, false, 0, mh)) {
-				NB_MSG << " collected " << buf << " from channel " << buf << " with header " << mh << "\n";
-				//mh.source = destinations[i-1];
-				//mh.dest = 3;
-				safeSend(*internals->remote, buf, len, mh);
+				//NB_MSG << " collected " << buf << " from route " << destinations[i-1] << " with header " << mh << "\n";
+				bool do_send = true; // by default all messages are sent. a filter can stop that
+				std::list<MessageFilter *>::iterator fi = internals->filters.begin();
+				while (fi != internals->filters.end()) {
+					MessageFilter *filter = *fi++;
+					if ( !(filter->filter(&buf, len, mh))) do_send = false;
+				}
+				if (do_send)
+					safeSend(*internals->remote, buf, len, mh);
+				else
+					NB_MSG << "dropped message due to filter\n";
 			}
 		}
 	}
@@ -720,14 +735,14 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 
 	char *buf;
     size_t msglen = 0;
-
+#if 0
 	if (items[0].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from clockwork\n";
 	}
 	if (items[1].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from publisher\n";
 	}
-
+#endif
 	// yuk. the command socket is assumed to be the last item in the poll item list.
 
 	// check the command socket to see if a message is coming in from the main thread
