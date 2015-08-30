@@ -125,7 +125,8 @@ void ModbusAddress::update(MachineInstance *owner, Group group, int addr, const 
     params.push_back(Value(name.c_str(),Value::t_string));
     params.push_back(len);
     params.push_back(Value(str_value,Value::t_string));
-	Channel::sendCommand(owner, "UPDATE", &params);
+	MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+	Channel::sendCommand(owner, "UPDATE", &params, mh);
 }
 
 void ModbusAddress::update(MachineInstance *owner, Group group, int addr, int new_value, int len) {
@@ -135,7 +136,8 @@ void ModbusAddress::update(MachineInstance *owner, Group group, int addr, int ne
     params.push_back(Value(name.c_str(),Value::t_string));
     params.push_back(len);
     params.push_back(new_value);
-	Channel::sendCommand(owner, "UPDATE", &params);
+	MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+	Channel::sendCommand(owner, "UPDATE", &params, mh);
 }
 
 void ModbusAddress::update(MachineInstance *owner, int index, int new_value, int len) {
