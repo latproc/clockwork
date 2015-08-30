@@ -249,7 +249,7 @@ public:
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val, uint64_t authority = 0);
     static void sendStateChange(MachineInstance *machine, std::string new_state, uint64_t authority);
 	static void sendModbusUpdate(MachineInstance *machine, const std::string &property_name, const Value &new_value);
-	static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value>*params);
+	static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value>*params, MessageHeader mh);
     static void setupAllShadows();
     static Channel *findByType(const std::string kind);
     MessagingInterface *getPublisher() { return mif; }
