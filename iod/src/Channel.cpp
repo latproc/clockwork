@@ -33,6 +33,28 @@ State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
 
 
+class CommandLogFilter : public MessageFilter {
+public:
+	CommandLogFilter(Channel *chn, const char *hdr) :channel(chn), header(hdr) {}
+	void init(MessageFilterInternals *init_data) {}
+	bool filter(char **buf, size_t &len);
+	bool filter(char **buf, size_t &len, MessageHeader &mh);
+	Channel *channel;
+	std::string header;
+};
+
+bool CommandLogFilter::filter(char **buf, size_t &len, MessageHeader &mh) {
+	char *data = *buf;
+	//NB_MSG << header << mh << " " << data << "\n";
+	return true;
+}
+
+bool CommandLogFilter::filter(char **buf, size_t &len) {
+	char *data = *buf;
+	//NB_MSG << header << data << "\n";
+	return true;
+}
+
 class RemoteClockworkCommandFilterInternals : public MessageFilterInternals {
 
 };
@@ -194,7 +216,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
 				Value v = m->getValue(s);
 				if (v != SymbolTable::Null) {
 					char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v, (long)definition()->getAuthority());
-					NB_MSG  << name << " prepared command" << cmd << "\n";
+					//NB_MSG  << name << " prepared command" << cmd << "\n";
 					messages.push_back(cmd);
 					//std::string response;
 					//sendMessage(cmd, *cmd_client, response);
@@ -842,7 +864,7 @@ void Channel::operator()() {
 	int cmd_server_idx = 0;
 
 
-	NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
+	//NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
 	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 	internals->command_sock->connect( internals->cmd_sock_info->address.c_str() );
 
@@ -856,11 +878,16 @@ void Channel::operator()() {
 	internals->router.addRoute(MessageHeader::SOCK_CHAN, cmd_server);
 	internals->router.addRoute(MessageHeader::SOCK_CTRL, ZMQ_PAIR, "inproc://sock_control");
 
-	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new RemoteClockworkCommandFilter(this));
+	//internals->router.addFilter(MessageHeader::SOCK_CW, new CommandLogFilter(this, "****** "));
+	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new CommandLogFilter(this, "------ "));
+	//internals->router.addFilter(MessageHeader::SOCK_CTRL, new CommandLogFilter(this, "###### "));
 
+	//internals->router.addFilter(MessageHeader::SOCK_REMOTE, new CommandLogFilter(this, "%%%%% "));
+
+	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new RemoteClockworkCommandFilter(this));
 	//internals->router_thread = new boost::thread(boost::ref(internals->router));
 
-	NB_MSG << name << " setup message router\n";
+	//NB_MSG << name << " setup message router\n";
 
 	while (!aborted && communications_manager) {
 		try {
@@ -922,14 +949,14 @@ void Channel::operator()() {
 				char *data;
 				size_t len;
 				MessageHeader mh;
-				NB_MSG << "CTRL waiting for command\n";
+				//NB_MSG << "CTRL waiting for command\n";
 				if ( safeRecv(remote_sock, &data, &len, false, 0, mh) ) {
-					NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
+					//NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
 					if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
 						checkStateChange(data);
 					}
 					if (mh.needsReply()) {
-						NB_MSG << name << " sending reply as requested\n";
+						//NB_MSG << name << " sending reply as requested\n";
 						mh.dest = MessageHeader::SOCK_CHAN;
 						mh.source = MessageHeader::SOCK_CTRL;
 						mh.needReply(false);
@@ -982,7 +1009,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 	}
 	else {
 		DBG_CHANNELS << "Channel " << name << " sendMessage() sending " << msg << " through a channel thread\n";
-		NB_MSG << "Message header: " << header << "\n";
+		//NB_MSG << "Message header: " << header << "\n";
 		safeSend(*cmd_client, msg, strlen(msg), header);
 		char *response_buf;
 		size_t rlen;\
@@ -1353,8 +1380,8 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
 				cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val, (long)getAuthority());
 			}
 			else {
-				NB_MSG << "using authority " << getAuthority()
-				<< " to set " << name << "." << key << " to " << val << "\n";
+				//NB_MSG << "using authority " << getAuthority()
+				//<< " to set " << name << "." << key << " to " << val << "\n";
 				cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val, (long)definition()->getAuthority());
 
 			}
@@ -1647,8 +1674,8 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
 					cmdstr = MessageEncoding::encodeState(machine_name, new_state, auth);
 				}
 				else {
-					NB_MSG << "using authority " << chn->getAuthority()
-					<< " to set " << machine_name << " to " << new_state << "\n";
+					//NB_MSG << "using authority " << chn->getAuthority()
+					//<< " to set " << machine_name << " to " << new_state << "\n";
 					cmdstr = MessageEncoding::encodeState(machine_name, new_state, chn->getAuthority());
 				}
 			}
@@ -1715,8 +1742,8 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
 				cmdstr = MessageEncoding::encodeState(machine_name, new_state, auth);
 			}
 			else {
-				NB_MSG << "using authority " << chn->getAuthority()
-				<< " to set " << machine_name << " to " << new_state << "\n";
+				//NB_MSG << "using authority " << chn->getAuthority()
+				//<< " to set " << machine_name << " to " << new_state << "\n";
 				cmdstr = MessageEncoding::encodeState(machine_name, new_state, chn->getAuthority());
 			}
 		}
@@ -1756,14 +1783,14 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
 	}
 }
 
-void Channel::sendCommand(MachineInstance *machine, std::string command, std::list<Value>*params) {
+void Channel::sendCommand(MachineInstance *machine, std::string command, std::list<Value>*params, MessageHeader mh) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
 	if (!all) return;
-	DBG_CHANNELS << " sending " << command << " to channels that monitor " << machine->getName() << "\n";
 	if (machine->isShadow()) {
+		DBG_CHANNELS << " redirecting " << command << " to " << machine->getName() << " owner channel\n";
 		Channel *chn = machine->ownerChannel();
 		if (chn->current_state == ChannelImplementation::DISCONNECTED) return;
 		if (command == "UPDATE") {
@@ -1789,6 +1816,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 		free(cmd);
 	}
 	else {
+		DBG_CHANNELS << " sending " << command << " to channels that monitor " << machine->getName() << "\n";
 		std::string name = machine->fullName();
 		std::map<std::string, Channel*>::iterator iter = all->begin();
 		while (iter != all->end()) {
@@ -1822,7 +1850,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 					snprintf(buf, 150, "Warning: machine %s should send %s but the channel is not connected",
 							machine->getName().c_str(), command.c_str() );
 					MessageLog::instance()->add(buf);
-					NB_MSG << buf << "\n";
+					//NB_MSG << buf << "\n";
 				}
 			}
 			else {
@@ -2075,7 +2103,7 @@ CommandSocketInfo::~CommandSocketInfo() { delete sock; }
 
 
 void Channel::setupCommandSockets() {
-	NB_MSG << "Setting up command sockets\n";
+	//NB_MSG << "Setting up command sockets\n";
 	std::map<std::string, Channel*>::iterator iter = all->begin();
 	while (iter != all->end()) {
 		const std::pair<std::string, Channel *> &item = *iter++;
@@ -2084,11 +2112,11 @@ void Channel::setupCommandSockets() {
 		if (chn->definition() && !chn->definition()->isPublisher()) {
 			try {
 				chn->internals->cmd_sock_info = ProcessingThread::instance()->addCommandChannel();
-				NB_MSG << chn->name << " remote end bound to socket " << chn->internals->cmd_sock_info->address << "\n";
+				//NB_MSG << chn->name << " remote end bound to socket " << chn->internals->cmd_sock_info->address << "\n";
 				usleep(50);
 			}
 			catch (std::exception ex) {
-				NB_MSG << ex.what() << "\n";
+				NB_MSG << "setupCommandSockets " << ex.what() << "\n";
 			}
 		}
 		else {

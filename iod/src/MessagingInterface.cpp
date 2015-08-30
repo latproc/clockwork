@@ -46,9 +46,12 @@ bool MessagingInterface::abort_all = false;
 
 const int MessageHeader::NEED_REPLY = 1;
 
+const int MessageHeader::SOCK_REMOTE = 9;
 const int MessageHeader::SOCK_CW = 1;
 const int MessageHeader::SOCK_CHAN = 2;
 const int MessageHeader::SOCK_CTRL = 3;
+
+uint32_t MessageHeader::last_id = 0;
 
 std::ostream &MessageHeader::operator<<(std::ostream &out) const  {
 	out << dest<<":" << source<<":" << options;
@@ -92,12 +95,12 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 }
 
 MessageHeader::MessageHeader(uint32_t dst, uint32_t src, bool need_reply)
-		: dest(dst), source(src), start_time(microsecs()), arrival_time(0), options(0)
+		: msgid(++last_id), dest(dst), source(src), start_time(microsecs()), arrival_time(0), options(0)
 {
 	if (need_reply) options |= NEED_REPLY;
 }
 
-MessageHeader::MessageHeader() : dest(0), source(0), start_time(microsecs()), arrival_time(0), options(0){}
+MessageHeader::MessageHeader() : msgid(++last_id), dest(0), source(0), start_time(microsecs()), arrival_time(0), options(0){}
 
 void MessageHeader::needReply(bool needs) {
 	if (needs) options|=NEED_REPLY;
@@ -662,7 +665,6 @@ char *MessagingInterface::send(const char *txt) {
     if (!is_publisher) {
         while (true) {
             try {
-std::cout << "." << std::flush;
                 zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int n = zmq::poll( &items[0], 1, 10);
 								if (n == 0) continue;
