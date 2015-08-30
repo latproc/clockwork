@@ -3171,7 +3171,10 @@ bool MachineInstance::setStableState() {
 						std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 						while (iter != s.subcondition_handlers->end()) {
 							ConditionHandler *ch = &(*iter++);
-							ch->check(this);
+							DBG_AUTOSTATES << "checking "
+							<< (*ch).condition.last_evaluation
+							<< "\n";
+							if (!ch->check(this)) ch->condition.predicate->scheduleTimerEvents(this);
 						}
 					}
 					found_match = true;
@@ -3207,9 +3210,9 @@ bool MachineInstance::setStableState() {
 
 				   Workaround for now: check stable states every millisecond or so if any state uses a timer.
 				 */
-				/*  Trigger *trigger = new Trigger("Timer");
+				  /*Trigger *trigger = new Trigger("Timer");
 				    Scheduler::instance()->add(new ScheduledItem(1000, new FireTriggerAction(this, trigger)));
-				    trigger->release(); */
+				    trigger->release();*/
 			}
 			// this state is not active so ensure its subcondition flags are turned off
 			if (s.subcondition_handlers) {
