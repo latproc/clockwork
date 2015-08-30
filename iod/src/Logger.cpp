@@ -60,7 +60,7 @@ public:
 		return *(std::ofstream*)f; 
 	}
 	Internals(): allocated(false), f(0) { }
-	~Internals() { *f << std::flush; if (allocated) delete f; }
+	~Internals() { /**f << std::flush;*/ if (allocated) delete f; }
 };
 
 FileLogger::FileLogger(const char *fname) : internals(0){
@@ -94,8 +94,8 @@ void FileLogger::getTimeString(char *buf, size_t buf_size) {
   gettimeofday(&now_tv,0);
   struct tm now_tm;
   localtime_r(&now_tv.tv_sec, &now_tm);
-  uint32_t msec = now_tv.tv_usec / 1000L;
-  snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%03d ",
+  uint32_t msec = now_tv.tv_usec;
+  snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%06d ",
        now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
        now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
 }
@@ -114,8 +114,8 @@ void Logger::getTimeString(char *buf, size_t buf_size) {
 	gettimeofday(&now_tv,0);
 	struct tm now_tm;
 	localtime_r(&now_tv.tv_sec, &now_tm);
-	uint32_t msec = now_tv.tv_usec / 1000L;
-	snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%03d ",
+	uint32_t msec = now_tv.tv_usec;
+	snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%06d ",
 			 now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
 			 now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
 }
@@ -144,7 +144,7 @@ std::ostream &LogState::operator<<(std::ostream &out) const {
 		out << delim << curr.first <<  " " << (state_flags.count(curr.second) ? "on" : "off");
 		delim = "\n";
 	}
-	out << std::flush;
+	//out << std::flush;
 	return out;
 }
 
