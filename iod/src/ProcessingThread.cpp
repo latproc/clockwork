@@ -715,77 +715,111 @@ void ProcessingThread::operator()()
 			// check the command interface and any command channels for activity
 			bool have_command = false;
 			if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
-				NB_MSG << "Processing thread has a command from the client interface\n";
+				//NB_MSG << "Processing thread has a command from the client interface\n";
 				have_command = true;
 			}
 			else {
 				for (unsigned int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + internals->channel_sockets.size(); ++i) {
 					if (items[i].revents & ZMQ_POLLIN) {
-						NB_MSG << "Processing thread has a command from a channel command interface\n";
+						//NB_MSG << "Processing thread has a command from a channel command interface\n";
 						have_command = true;
 						break;
 					}
 				}
 			}
 			if ( have_command) {
-				NB_MSG << "processing incoming commands\n";
-				std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
-				unsigned int i = internals->CMD_SYNC_ITEM;
-				while (i<=CommandSocketInfo::last_idx ) {
-					zmq::socket_t *sock = 0;
-					CommandSocketInfo *info = 0;
-					if (i == internals->CMD_SYNC_ITEM) {
-						sock = &command_sync;
-					}
-					else {
-						if (csi_iter == internals->channel_sockets.end()) break;
-						info = *csi_iter++;
-						sock = info->sock;
-					}
-
-					if (! (items[i].revents & ZMQ_POLLIN) ) {
-						++i;
-						continue;
-					}
-					NB_MSG << "Processing thread has activity on poll item " << i << "\n";
-
-					zmq::message_t msg;
-					char *buf = 0;
-					size_t len = 0;
-					if (safeRecv(*sock, &buf, &len, false, 0) ) {
-						{
-							FileLogger fl(program_name);
-							fl.f() << "Processing thread received command ";
-							if (buf)fl.f() << buf << " "; else fl.f() << "NULL";
-							fl.f() << "\n";
-							if (!buf) continue;
-							
-						}
-						IODCommand *command = parseCommandString(buf);
-						if (command) {
-							delete[] buf;
-							try {
-								(*command)();
-							}
-							catch (std::exception e) {
-								FileLogger fl(program_name);
-								fl.f() << "command execution threw an exception " << e.what() << "\n";
-							}
-							char *response = strdup(command->result());
-							safeSend(*sock, response, strlen(response));
-							free(response);
+				//NB_MSG << "processing incoming commands\n";
+				uint64_t start_time = microsecs();
+				uint64_t now = start_time;
+#ifdef KEEPSTATS
+				AutoStat stats(avg_cmd_processing);
+#endif
+				int count = 0;
+				while (have_command && now - start_time < internals->cycle_delay/2) {
+					have_command = false;
+					std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
+					unsigned int i = internals->CMD_SYNC_ITEM;
+					while (i<=CommandSocketInfo::last_idx && now - start_time < internals->cycle_delay/2 ) {
+						zmq::socket_t *sock = 0;
+						CommandSocketInfo *info = 0;
+						if (i == internals->CMD_SYNC_ITEM) {
+							sock = &command_sync;
 						}
 						else {
-							char *response = new char[len+40];
-							snprintf(response, len+40, "Unrecognised command: %s", buf);
-							safeSend(*sock, response, strlen(response));
-							delete[] response;
-							delete[] buf;
+							if (csi_iter == internals->channel_sockets.end()) break;
+							info = *csi_iter++;
+							sock = info->sock;
 						}
-						delete command;
+						int rc = zmq::poll(&items[i], 1, 0);
+						if (! (items[i].revents & ZMQ_POLLIN) ) {
+							++i;
+							continue;
+						}
+						//NB_MSG << "Processing thread has activity on poll item " << i << "\n";
+						have_command = true;
+
+						zmq::message_t msg;
+						char *buf = 0;
+						size_t len = 0;
+						MessageHeader mh;
+						uint32_t default_id = mh.getId(); // save the msgid to following check
+						if (safeRecv(*sock, &buf, &len, false, 0, mh) ) {
+							++count;
+							if (false){
+								FileLogger fl(program_name);
+								fl.f() << "Processing thread received command ";
+								if (buf)fl.f() << buf << " "; else fl.f() << "NULL";
+								fl.f() << "\n";
+							}
+							if (!buf) continue;
+							IODCommand *command = parseCommandString(buf);
+							if (command) {
+								delete[] buf;
+								try {
+									(*command)();
+								}
+								catch (std::exception e) {
+									FileLogger fl(program_name);
+									fl.f() << "command execution threw an exception " << e.what() << "\n";
+								}
+
+								if (mh.needsReply() || mh.getId() == default_id) {
+									char *response = strdup(command->result());
+									safeSend(*sock, response, strlen(response));
+									free(response);
+								}
+								else {
+									//char *response = strdup(command->result());
+									//safeSend(*sock, response, strlen(response));
+									//free(response);
+								}
+							}
+							else {
+								if (mh.needsReply() || mh.getId() == default_id) {
+									char *response = new char[len+40];
+									snprintf(response, len+40, "Unrecognised command: %s", buf);
+									safeSend(*sock, response, strlen(response));
+									delete[] response;
+								}
+								else {
+									/*
+									char *response = new char[len+40];
+									snprintf(response, len+40, "Unrecognised command: %s", buf);
+									safeSend(*sock, response, strlen(response));
+									 delete[] response;
+									 */
+								}
+								delete[] buf;
+							}
+							delete command;
+						}
+						++i;
+
 					}
-					++i;
+					usleep(0);
+					now = microsecs();
 				}
+				//NB_MSG << " @@@@@@@@@@@ " << count << " Processed\n";
 			}
 		}
 
