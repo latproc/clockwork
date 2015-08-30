@@ -547,7 +547,9 @@ void IODCommandThread::operator()() {
 				char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
 				memcpy(data, request.data(), size);
 				data[size] = 0;
-				safeSend(command_sync, data, size);
+				MessageHeader mh;
+				mh.needReply(true);
+				safeSend(command_sync, data, size, mh);
 				free(data);
 			}
 
