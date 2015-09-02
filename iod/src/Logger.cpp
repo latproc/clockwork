@@ -67,7 +67,7 @@ FileLogger::FileLogger(const char *fname) : internals(0){
 	internals = new Internals;
 	char buf[40];
 	getTimeString(buf, 40);
-#if 1
+#if 0
     std::string n("/tmp/");
     n += fname;
     n + ".txt";

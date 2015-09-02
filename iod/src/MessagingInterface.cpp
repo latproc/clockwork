@@ -38,6 +38,7 @@
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
 #include "Channel.h"
+#include "string.h"
 
 MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
@@ -125,7 +126,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//NB_MSG << tnam << " receiving\n";
+	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
 
 	*response_len = 0;
 	int retries = 5;
@@ -149,7 +150,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 					{
 					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
-							{
+							if (false){
 								FileLogger fl(program_name);
 								fl.f() << "Error: unexpected message header\n";
 							}
@@ -159,7 +160,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 						*buf = new char[*response_len+1];
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
-						//NB_MSG << tnam << "received: " << *buf << "\n";
+						if (*response_len>10){FileLogger fl(program_name); fl.f() << tnam << "received: " << *buf << "\n"; }
 						return true;
 					}
 					else {
@@ -197,7 +198,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//NB_MSG << tnam << " receiving\n";
+	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n"; }
 
 	*response_len = 0;
 	int retries = 5;
@@ -229,10 +230,16 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
 
-						if (got_address) {
-							//NB_MSG << " received addressed message " << header << " " << (*buf) << "\n";
+						if (*response_len > 10) {
+							if (got_address) {
+								{FileLogger fl(program_name); fl.f() << tnam << " received 	addressed message " << header << " " << (*buf) << "\n"; }
+								if (strstr(*buf, "G_CorePower")) {
+									int x = 1;
+								}
+							}
+							else 
+								{FileLogger fl(program_name); fl.f() << tnam << " received: " << *buf << "\n"; }
 						}
-						//NB_MSG << tnam << "received: " << *buf << "\n";
 
 						return true;
 					}
@@ -267,7 +274,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//NB_MSG << tnam << " receiving\n";
+	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
 
 	response_len = 0;
 	int retries = 5;
@@ -279,21 +286,24 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			if (items[0].revents & ZMQ_POLLIN) {
-				//NB_MSG << tnam << " safeRecv() collecting data\n";
+				//{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
 				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
 				if (response_len > 0 && response_len < (unsigned int)buflen) {
 					buf[response_len] = 0;
-					//NB_MSG << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n";
+					if (response_len>10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n"; }
 				}
 				else {
-					//NB_MSG << tnam << " saveRecv() collected data with length " << response_len << "\n";
+					if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
 				}
 				if (!response_len && block) continue;
 			}
 			return (response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
-			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			{
+				FileLogger fl(program_name); 
+				fl.f() << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			}
 			if (--retries == 0) {
 				exit(EXIT_FAILURE);
 			}
@@ -312,7 +322,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//NB_MSG << tnam << " Sending " << header<< " " << buf << "\n";
+	if (buflen>10) {FileLogger fl(program_name); fl.f() << tnam << " Sending\n"; }
 
 	enum send_stage {e_sending_dest, e_sending_source, e_sending_data} stage = e_sending_data;
 	if (header.dest || header.source) {
@@ -321,7 +331,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			//NB_MSG << tnam << " safeSend() sending " << buf << "\n";
+			if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );
@@ -337,12 +347,18 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 		}
 		catch (zmq::error_t) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
-				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				{
+					FileLogger fl(program_name);
+					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				}
 				usleep(10);
 				if (zmq_errno() == EFSM) throw;
 				continue;
 			} else {
-				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				{
+					FileLogger fl(program_name);
+					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				}
 				usleep(10);
 			}
 		}
@@ -354,7 +370,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//NB_MSG << tnam << " sending " << buf << "\n";
+	if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " sending " << buf << "\n"; }
 
 	while (!MessagingInterface::aborted()) {
 		try {
@@ -365,7 +381,10 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 		}
 		catch (zmq::error_t) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
-				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				{
+					FileLogger fl(program_name); 
+					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				}
 				usleep(10);
 				if (zmq_errno() == EFSM) {
 					usleep(10000);
@@ -386,7 +405,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//NB_MSG << tnam << " sendMessage " << msg << "\n";
+	{FileLogger fl(program_name); fl.f() << tnam << " sendMessage " << msg << "\n"; }
 
 	safeSend(sock, msg, strlen(msg), header);
 

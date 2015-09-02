@@ -1937,6 +1937,12 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		else
 			return Action::Failed;
 	}
+	else if (expected_authority == 0 && authority != 0)  {
+		FileLogger fl(program_name);
+		fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
+		<< " needed: " << expected_authority << " got " << authority << "\n";
+		return Action::Failed;
+	}
 
 	if (!hasState(new_state)) {
 		const Value &s = getValue(new_state.getName().c_str());
@@ -2224,12 +2230,14 @@ void MachineInstance::notifyDependents(Message &msg){
 
 
 		if (dep->receives(msg, this)) {
-			if (!dep->isActive())
+			//if (!dep->isActive())
 				dep->execute(msg, this);
+#if 0
 			else {
 				Package *p = new Package(this, dep, msg, false);
 				Dispatcher::instance()->deliver(p);
 			}
+#endif
 		}
 
 #if 0

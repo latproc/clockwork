@@ -205,9 +205,12 @@ public:
 	std::string address;
 	zmq::socket_t *sock;
 	unsigned int index;
-	static unsigned int last_idx;
-	CommandSocketInfo();
+	static unsigned int lastIndex() { return last_idx; }
+	CommandSocketInfo(Channel *chn);
 	~CommandSocketInfo();
+protected:
+	static unsigned int last_idx;
+	static boost::mutex mutex;
 };
 
 

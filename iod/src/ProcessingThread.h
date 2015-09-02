@@ -13,6 +13,7 @@ class HardwareActivation {
 class ProcessingThreadInternals;
 class ControlSystemMachine;
 class CommandSocketInfo;
+class Channel;
 class ProcessingThread : public ClockworkProcessManager
 {
 public:
@@ -23,7 +24,8 @@ public:
 
 	static ProcessingThread *instance();
 	static void setProcessingThreadInstance( ProcessingThread* pti);
-	CommandSocketInfo *addCommandChannel();
+	CommandSocketInfo *addCommandChannel(Channel *);
+	CommandSocketInfo *addCommandChannel(CommandSocketInfo*);
 
 	void operator()();
 

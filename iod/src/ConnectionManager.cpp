@@ -470,7 +470,7 @@ void MessageRouter::addRoute(int route_id, zmq::socket_t *dest) {
 	scoped_lock lock("addRoute", internals->data_mutex);
 
 	if (internals->routes.find(route_id) == internals->routes.end()) {
-		//NB_MSG << " added route " << route_id << "\n";
+		NB_MSG << " added route " << route_id << "\n";
 		internals->routes[route_id] = new RouteInfo(dest);
 	}
 }
@@ -585,6 +585,7 @@ void MessageRouter::poll() {
 	for (unsigned int i=0; i<num_socks; ++i) if (items[i].revents & ZMQ_POLLIN)++c;
 	if (!c) return;
 
+#if 0
 	if (c) {
 		std::cout << "activity: ";
 		for (unsigned int i=0; i<num_socks; ++i) {
@@ -592,6 +593,7 @@ void MessageRouter::poll() {
 		}
 		std::cout << "\n";
 	}
+#endif
 
 	char *buf = 0;
 	size_t len = 0;
@@ -600,12 +602,10 @@ void MessageRouter::poll() {
 
 	// receiving from remote socket
 	if (items[0].revents & ZMQ_POLLIN) {
-		//NB_MSG << "Message router collecting message from remote\n";
+		NB_MSG << "Message router collecting message from remote\n";
 		if (safeRecv(*internals->remote, &buf, &len, false, 0, mh)) {
 			int buflen = len;
-			//if (mh.dest != 3)
-			//	mh.dest = 3;
-			//NB_MSG << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
+			NB_MSG << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
 			std::map<int, RouteInfo *>::const_iterator found = internals->routes.find(mh.dest);
 			if (found != internals->routes.end()) {
 				RouteInfo * ri = internals->routes.at(mh.dest);
@@ -622,29 +622,31 @@ void MessageRouter::poll() {
 						safeSend(*dest, buf, len, mh);
 				}
 				else {
-					//NB_MSG << "forwarding " << buf << " to " << mh.dest << "\n";
+					NB_MSG << "forwarding " << buf << " to " << mh.dest << "\n";
 					safeSend(*dest, buf, len, mh);
 				}
 			}
 			else if (internals->default_dest) {
 				safeSend(*internals->default_dest, buf, len);
 			}
+#if 1
 			else {
-				//NB_MSG << "Message " << buf << " needed a default route but none has been set\n";
+				NB_MSG << "Message " << buf << " needed a default route but none has been set\n";
 			}
+#endif
 		}
 	}
 
 	// forwarding to remote socket
 	for (unsigned int i=1; i<num_socks; ++i) {
 		if (items[i].revents & ZMQ_POLLIN) {
-			//NB_MSG << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
+			NB_MSG << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
 			std::map<int, RouteInfo *>::iterator found = internals->routes.find(destinations[i-1]);
 			assert(found != internals->routes.end());
 			zmq::socket_t *sock = internals->routes[ destinations[i-1] ]->sock;
 			MessageHeader mh;
 			if (safeRecv(*sock, &buf, &len, false, 0, mh)) {
-				//NB_MSG << " collected " << buf << " from route " << destinations[i-1] << " with header " << mh << "\n";
+				NB_MSG << " collected " << buf << " from route " << destinations[i-1] << " with header " << mh << "\n";
 				bool do_send = true; // by default all messages are sent. a filter can stop that
 				std::list<MessageFilter *>::iterator fi = internals->filters.begin();
 				while (fi != internals->filters.end()) {

@@ -116,7 +116,7 @@ Action::Status SyncRemoteStatesAction::execute()
 		else if (internals->message_state == SyncRemoteStatesActionInternals::e_receiving) {
 			char *buf; size_t len;
 			if (safeRecv(*internals->sock, &buf, &len, false, 0, internals->header)) {
-				NB_MSG << "got reply: " << buf << "\n";
+				//NB_MSG << "got reply: " << buf << "\n";
 				internals->message_state = SyncRemoteStatesActionInternals::e_done;
 				delete[] buf;
 			}
@@ -186,6 +186,7 @@ Action::Status SyncRemoteStatesAction::run() {
 }
 
 Action::Status SyncRemoteStatesAction::checkComplete() {
+	usleep(5);
 	if (status == New || status == NeedsRetry) { status = execute(); }
 	if (status == Suspended) resume();
 	if (status != Running) return status;

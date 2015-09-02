@@ -150,8 +150,23 @@ void ProcessingThread::stop()
 	exit(0);
 }
 
-CommandSocketInfo *ProcessingThread::addCommandChannel() {
-	CommandSocketInfo *info = new CommandSocketInfo();
+CommandSocketInfo *ProcessingThread::addCommandChannel(CommandSocketInfo *csi) {
+	std::list<CommandSocketInfo*>::iterator iter= internals->channel_sockets.begin();
+	int idx = 0;
+	while (iter != internals->channel_sockets.end() ) {
+		CommandSocketInfo *info = *iter++; ++idx;
+		if (info == csi) {
+			NB_MSG << "Processing thread already has command socket info for " << csi->address << " at index " << idx << "\n";
+			return csi; // already configured
+		}
+	}
+	internals->channel_sockets.push_back(csi);
+	return csi;
+}
+
+CommandSocketInfo *ProcessingThread::addCommandChannel(Channel *chn) {
+	if (chn->definition()->isPublisher()) return 0;
+	CommandSocketInfo *info = new CommandSocketInfo(chn);
 	internals->channel_sockets.push_back(info);
 	return info;
 }
@@ -540,7 +555,7 @@ void ProcessingThread::operator()()
 			{ ecat_out, 0, ZMQ_POLLIN, 0 },
 			{ command_sync, 0, ZMQ_POLLIN, 0 }
 		};
-		zmq::pollitem_t items[10];
+		zmq::pollitem_t items[15];
 		for (int i=0; i<6; ++i) {
 			items[i] = fixed_items[i];
 		}
@@ -570,7 +585,7 @@ void ProcessingThread::operator()()
 					items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
 					items[idx].revents = 0;
 					idx++;
-					if (idx == 10) break;
+					if (idx == 15) break;
 				}
 			}
 
@@ -739,7 +754,7 @@ void ProcessingThread::operator()()
 					have_command = false;
 					std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
 					unsigned int i = internals->CMD_SYNC_ITEM;
-					while (i<=CommandSocketInfo::last_idx && now - start_time < internals->cycle_delay/2 ) {
+					while (i<=CommandSocketInfo::lastIndex() && now - start_time < internals->cycle_delay/2 ) {
 						zmq::socket_t *sock = 0;
 						CommandSocketInfo *info = 0;
 						if (i == internals->CMD_SYNC_ITEM) {
@@ -755,7 +770,8 @@ void ProcessingThread::operator()()
 							++i;
 							continue;
 						}
-						//NB_MSG << "Processing thread has activity on poll item " << i << "\n";
+						if (i>5)
+							NB_MSG << "Processing thread has activity on poll item " << i << " of 0.." << CommandSocketInfo::lastIndex() << "\n";
 						have_command = true;
 
 						zmq::message_t msg;
@@ -765,7 +781,7 @@ void ProcessingThread::operator()()
 						uint32_t default_id = mh.getId(); // save the msgid to following check
 						if (safeRecv(*sock, &buf, &len, false, 0, mh) ) {
 							++count;
-							if (false){
+							if (true && len>10){
 								FileLogger fl(program_name);
 								fl.f() << "Processing thread received command ";
 								if (buf)fl.f() << buf << " "; else fl.f() << "NULL";
@@ -774,14 +790,16 @@ void ProcessingThread::operator()()
 							if (!buf) continue;
 							IODCommand *command = parseCommandString(buf);
 							if (command) {
-								delete[] buf;
 								try {
+									NB_MSG << "processing thread executing " << buf << "\n";
 									(*command)();
+									NB_MSG << "execution result " << command->result() << "\n";
 								}
 								catch (std::exception e) {
 									FileLogger fl(program_name);
 									fl.f() << "command execution threw an exception " << e.what() << "\n";
 								}
+								delete[] buf;
 
 								if (mh.needsReply() || mh.getId() == default_id) {
 									char *response = strdup(command->result());

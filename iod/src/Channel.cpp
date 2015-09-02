@@ -23,6 +23,7 @@ std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
 
 boost::mutex Channel::update_mutex;
+boost::mutex CommandSocketInfo::mutex;
 
 State ChannelImplementation::CONNECTING("CONNECTING");
 State ChannelImplementation::DISCONNECTED("DISCONNECTED");
@@ -31,6 +32,23 @@ State ChannelImplementation::WAITSTART("WAITSTART");
 State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
+
+
+class chn_scoped_lock {
+public:
+	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) { 
+//		NB_MSG << location << " LOCKING...\n";
+		lock.lock(); 
+//		NB_MSG << location << " LOCKED...\n";
+	}
+	~chn_scoped_lock() { 
+		lock.unlock(); 
+//		NB_MSG << location << " UNLOCKED\n";
+		}
+	std::string location;
+	boost::mutex &mutex;
+	boost::unique_lock<boost::mutex> lock;
+};
 
 
 class CommandLogFilter : public MessageFilter {
@@ -109,29 +127,14 @@ class ChannelInternals {
 public:
 	boost::mutex iod_cmd_get_mutex;
 	boost::mutex iod_cmd_put_mutex;
-	CommandSocketInfo *cmd_sock_info;
+	// used for the cmd_client/cmd_server interface to the main thread
 	std::string command_sock_name;
 	zmq::socket_t *command_sock;
+	// used for sending commands to the main thread
+	CommandSocketInfo *cmd_sock_info;
 	MessageRouter router;
 	boost::thread *router_thread;
-	ChannelInternals() :cmd_sock_info(0), command_sock(0), router_thread(0) {}
-};
-
-
-class chn_scoped_lock {
-public:
-	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) { 
-//		NB_MSG << location << " LOCKING...\n";
-		lock.lock(); 
-//		NB_MSG << location << " LOCKED...\n";
-	}
-	~chn_scoped_lock() { 
-		lock.unlock(); 
-//		NB_MSG << location << " UNLOCKED\n";
-		}
-	std::string location;
-	boost::mutex &mutex;
-	boost::unique_lock<boost::mutex> lock;
+	ChannelInternals() :command_sock(0), cmd_sock_info(0), router_thread(0) {}
 };
 
 
@@ -834,7 +837,7 @@ void Channel::operator()() {
 				}
 			}
 			catch(zmq::error_t err) {
-				DBG_CHANNELS << "Channel " << name << " ZMQ error: " << zmq_strerror(errno)
+				DBG_CHANNELS << "Channel " << name << " ZMQ error: " << errno << ": " << zmq_strerror(errno)
 					<< " trying to create internal channel command listener socket\n";
 				if (--retry == 0) { assert(false); exit(2); }
 				usleep(10);
@@ -864,19 +867,28 @@ void Channel::operator()() {
 	int cmd_server_idx = 0;
 
 
-	//NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
+	NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
 	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 	internals->command_sock->connect( internals->cmd_sock_info->address.c_str() );
+
+usleep(50);
+internals->command_sock->send("TEST", 4);
+usleep(50);
 
 
 	zmq::socket_t remote_sock(*MessagingInterface::getContext(), ZMQ_PAIR);
 	remote_sock.bind("inproc://sock_control");
+	usleep(50);
 
 	// start routine messages through the subscriber socket
 	internals->router.setRemoteSocket(&communications_manager->subscriber());
 	internals->router.addRoute(MessageHeader::SOCK_CW, internals->command_sock);
+	usleep(50);
+	NB_MSG << "Clockwork command processor on other end of " << internals->cmd_sock_info->address << "\n";
 	internals->router.addRoute(MessageHeader::SOCK_CHAN, cmd_server);
+	usleep(50);
 	internals->router.addRoute(MessageHeader::SOCK_CTRL, ZMQ_PAIR, "inproc://sock_control");
+	usleep(50);
 
 	//internals->router.addFilter(MessageHeader::SOCK_CW, new CommandLogFilter(this, "****** "));
 	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new CommandLogFilter(this, "------ "));
@@ -949,9 +961,9 @@ void Channel::operator()() {
 				char *data;
 				size_t len;
 				MessageHeader mh;
-				//NB_MSG << "CTRL waiting for command\n";
+				//NB_MSG << "CTRL checking for command\n";
 				if ( safeRecv(remote_sock, &data, &len, false, 0, mh) ) {
-					//NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
+					NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
 					if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
 						checkStateChange(data);
 					}
@@ -1046,6 +1058,7 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 			int linger = 0;
 			sock->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 			DBG_CHANNELS << name << " bound channel command server\n";
+			usleep(100);
 			return sock;
 		}
 		catch(std::exception ex) {
@@ -1366,7 +1379,10 @@ void Channel::remove(const std::string name) {
 
 void Channel::setDefinition(const ChannelDefinition *def) {
 	definition_ = def;
-	internals->cmd_sock_info = new CommandSocketInfo();
+	if (!internals->cmd_sock_info) {
+		NB_MSG << "creating command socket info for " << name << " while setting its definition\n";
+		internals->cmd_sock_info = new CommandSocketInfo(this);
+	}
 }
 
 void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
@@ -1792,6 +1808,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 	if (machine->isShadow()) {
 		DBG_CHANNELS << " redirecting " << command << " to " << machine->getName() << " owner channel\n";
 		Channel *chn = machine->ownerChannel();
+		if (!chn) return; // not connected
 		if (chn->current_state == ChannelImplementation::DISCONNECTED) return;
 		if (command == "UPDATE") {
 			assert(false);
@@ -2088,31 +2105,46 @@ void Channel::setupShadows() {
 
 
 
-CommandSocketInfo::CommandSocketInfo() : sock(0), index(0) {
-	last_idx++;
-	index = last_idx;
+CommandSocketInfo::CommandSocketInfo(Channel* chn) : sock(0), index(0) {
+	chn_scoped_lock lock("construct CommandSocketInfo", mutex);
+	index = ++last_idx;
 	char buf[50];
 	snprintf(buf, 50, "inproc://chn_%d", index);
 	address = buf;
 	sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
-	sock->bind(buf);
-	NB_MSG << "Bound command channel socket (processing side) to " << buf << " at index " << index << "\n";
+	try {
+		sock->bind(buf);
+		usleep(50);
+	}
+	catch (zmq::error_t zex) {
+		NB_MSG << "Exception binding to " << buf << "\n";
+	}
+	NB_MSG << "Bound command channel socket (processing side) of " << chn->getName() << " to " << buf << " at index " << index << "\n";
 }
 
 CommandSocketInfo::~CommandSocketInfo() { delete sock; }
 
 
 void Channel::setupCommandSockets() {
-	//NB_MSG << "Setting up command sockets\n";
+	char tnam[100];
+	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	NB_MSG << tnam << " setting up command sockets\n";
 	std::map<std::string, Channel*>::iterator iter = all->begin();
 	while (iter != all->end()) {
 		const std::pair<std::string, Channel *> &item = *iter++;
 		Channel *chn = item.second;
-		if (chn->internals->command_sock) continue;
+		if (chn->internals->cmd_sock_info) {
+			ProcessingThread::instance()->addCommandChannel(chn->internals->cmd_sock_info);
+			NB_MSG << "channel " << chn->getName() << " already has a command socket.. using it\n";
+			continue;
+		}
+		if (!chn->definition()) {
+			NB_MSG << "channel " << chn->getName() << " does not have a definition structure.. skipping\n";
+		}
 		if (chn->definition() && !chn->definition()->isPublisher()) {
 			try {
-				chn->internals->cmd_sock_info = ProcessingThread::instance()->addCommandChannel();
-				//NB_MSG << chn->name << " remote end bound to socket " << chn->internals->cmd_sock_info->address << "\n";
+				chn->internals->cmd_sock_info = ProcessingThread::instance()->addCommandChannel(chn);
+				NB_MSG << tnam << " " << chn->name << " remote end bound to socket " << chn->internals->cmd_sock_info->address << "\n";
 				usleep(50);
 			}
 			catch (std::exception ex) {
