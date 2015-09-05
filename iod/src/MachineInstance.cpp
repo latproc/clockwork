@@ -1994,14 +1994,8 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 					DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
 				}
 
-				// execute the message on the dependant machine or queue it for later processing
-				if (!dep->isActive())
-					dep->execute(msg, this);
-				else {
-					Package *p = new Package(this, dep, msg, false);
-					Dispatcher::instance()->deliver(p);
-				}
-				//dep->setNeedsCheck();
+				// execute the message on the dependant machine
+				dep->execute(msg, this);
 			}
 		}
 #endif
@@ -2229,16 +2223,8 @@ void MachineInstance::notifyDependents(Message &msg){
 			<< " it is " << current_state.getName() << " using " << msg << "\n";
 
 
-		if (dep->receives(msg, this)) {
-			//if (!dep->isActive())
-				dep->execute(msg, this);
-#if 0
-			else {
-				Package *p = new Package(this, dep, msg, false);
-				Dispatcher::instance()->deliver(p);
-			}
-#endif
-		}
+		if (dep->receives(msg, this))
+			dep->execute(msg, this);
 
 #if 0
 		Action *act = dep->executingCommand();
