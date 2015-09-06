@@ -1389,10 +1389,11 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
 										const Value &val, uint64_t auth) {
 	if (communications_manager) {
 		std::string response;
-		char *cmd;
+		char *cmd = 0;
 		if (!definition()->isPublisher()) {
 
-			if (m->isShadow()) {
+			if (m->isShadow() && ownerChannel() == this) {
+				if (auth) return; // do not reflect authorised property changes back to the owner
 				cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val, (long)getAuthority());
 			}
 			else {
@@ -1687,7 +1688,8 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
 
 			if (!chn->definition()->isPublisher()) {
 				if (machine->isShadow()) {
-					cmdstr = MessageEncoding::encodeState(machine_name, new_state, auth);
+					//cmdstr = MessageEncoding::encodeState(machine_name, new_state, auth);
+					continue;
 				}
 				else {
 					//NB_MSG << "using authority " << chn->getAuthority()
