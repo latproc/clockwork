@@ -770,8 +770,9 @@ void ProcessingThread::operator()()
 							++i;
 							continue;
 						}
-						if (i>5)
+						if (i>5) {
 							NB_MSG << "Processing thread has activity on poll item " << i << " of 0.." << CommandSocketInfo::lastIndex() << "\n";
+						}
 						have_command = true;
 
 						zmq::message_t msg;
@@ -841,21 +842,34 @@ void ProcessingThread::operator()()
 			}
 		}
 
-		if (status == e_waiting && items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
-			if (processing_state != eIdle) {
-				// cannot process scheduled events at present
-				status = e_waiting;
-			}
-			else {
-				if (status == e_waiting)
-				{
-					size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
-					if (len) {
-						status = e_handling_sched;
+		if (items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
+			if (status == e_waiting && processing_state == eIdle) {
+				size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
+				if (len) {
+					status = e_handling_sched;
 #ifdef KEEPSTATS
-						avg_scheduler_time.start();
+					avg_scheduler_time.start();
 #endif
-					}
+				}
+				else {
+					char buf[100];
+					snprintf(buf, 100, "WARNING: scheduler sync returned zero length message");
+					MessageLog::instance()->add(buf);
+				}
+			}
+			else if (status == e_waiting_sched ) {
+				size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
+				if (len) {
+					safeSend(sched_sync,"bye",3);
+					status = e_waiting;
+#ifdef KEEPSTATS
+					avg_scheduler_time.update();
+#endif
+				}
+				else {
+					char buf[100];
+					snprintf(buf, 100, "WARNING: scheduler sync returned zero length message");
+					MessageLog::instance()->add(buf);
 				}
 			}
 		}
@@ -863,16 +877,6 @@ void ProcessingThread::operator()()
 			size_t len = 0;
 			safeSend(sched_sync,"continue",8);
 			status = e_waiting_sched;
-		}
-		if (status == e_waiting_sched) {
-			size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
-			if (len) {
-				safeSend(sched_sync,"bye",3);
-				status = e_waiting;
-#ifdef KEEPSTATS
-				avg_scheduler_time.update();
-#endif
-			}
 		}
 
 		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
