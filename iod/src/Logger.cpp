@@ -63,7 +63,7 @@ public:
 	~Internals() { /**f << std::flush;*/ if (allocated) delete f; }
 };
 
-FileLogger::FileLogger(const char *fname) : internals(0){
+FileLogger::FileLogger(const char *fname) : internals(0), lock(mutex_) {
 	internals = new Internals;
 	char buf[40];
 	getTimeString(buf, 40);
@@ -77,7 +77,7 @@ FileLogger::FileLogger(const char *fname) : internals(0){
 	internals->f = &std::cerr;
 	*internals->f << buf << " ";
 #endif
-  }
+}
 
 std::ostream &FileLogger::f() {
 	if (!internals->f) {
@@ -87,7 +87,7 @@ std::ostream &FileLogger::f() {
 	return internals->file(); 
 }
 
-FileLogger::~FileLogger() { delete internals; }
+FileLogger::~FileLogger() { delete internals;  lock.unlock();}
 
 void FileLogger::getTimeString(char *buf, size_t buf_size) {
   struct timeval now_tv;

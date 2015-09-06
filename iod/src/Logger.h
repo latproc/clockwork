@@ -42,6 +42,8 @@ public:
 	~FileLogger();
 
 	void getTimeString(char *buf, size_t buf_size);
+	boost::mutex mutex_;
+	boost::unique_lock<boost::mutex> lock;
 };
 
 
