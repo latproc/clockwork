@@ -1053,7 +1053,7 @@ void MachineInstance::describe(std::ostream &out) {
 	out << "---------------\n" << _name << ": " << current_state.getName() << " "
 		<< " Class: " << _type
 		<< (enabled() ? "" : " DISABLED")
-		<< (isShadow() ? " SHADOW " : "") << "authority " << expected_authority
+		<< (isShadow() ? " SHADOW " : " ") << "authority " << expected_authority
 		<< (isActive() ? "" : " PASSIVE") <<  "\n"
 		<< " instantiated at: " << definition_file
 		<< " line:" << definition_line << "\n";
@@ -1562,10 +1562,10 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 	while (iter != MachineInstance::pending_state_change.end() ) {
 		MachineInstance *mi = *iter;
 		if (mi->executingCommand() == 0) {
-			// leave the state check on the queue until it is stable
-			if (!mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
+			// unless the machine is disabled leave the state check on the queue until it is stable
+			if (!mi->enabled() || !mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
 		}
-		else {
+		else if (mi->enabled()) {
 			busy_machines.insert(mi);
 			iter++;
 		}
