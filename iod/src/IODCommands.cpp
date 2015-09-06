@@ -409,10 +409,15 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 					if (params.size() == 5 && params[4].asInteger(authority) ) {
 						use_authority = true;
 					}
+					if (use_authority && authority && !m->isShadow()) {
+						error_str = "Refusing to change property due to authorisation conflict";
+						NB_MSG << error() << "\n";
+						return false;
+					}
 					if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
-	                    long x;
-	                    char *p;
-	                    x = strtol(params[3].asString().c_str(), &p, 0);
+						long x;
+						char *p;
+						x = strtol(params[3].asString().c_str(), &p, 0);
 						if (use_authority)
 							if (*p == 0)
 								m->setValue(params[2].asString(), x, authority);
