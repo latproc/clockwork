@@ -213,6 +213,7 @@ int64_t Scheduler::getNextDelay() {
 void Scheduler::add(ScheduledItem*item) {
 	ScheduledItem *top = 0;
 	{
+		boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 		DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
 		//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
 		items.push(item);
@@ -281,8 +282,8 @@ std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
  */
 
 bool Scheduler::ready() {
-	if (items.empty()) { return false; }
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
+	if (items.empty()) { return false; }
 	return getNextDelay() <= 0;
 }
 
@@ -318,15 +319,14 @@ void Scheduler::idle() {
 		next_delay_time = getNextDelay();
 		if (!ready() && state == e_waiting) {
 			wd->stop();
-#if 0
-			if (items.empty()) {
-				DBG_SCHEDULER << "scheduler waiting for work " 
-					<< next_delay_time << " N: " << items.size() << "\n";
-			}
-#endif
 			long delay = next_delay_time;
 			notification_sent = 0; // checking now, if more items are pushed we will want to know
-			if (items.empty()) {
+			bool no_items = false;
+			{
+				boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
+				no_items = items.empty();
+			}
+			if (no_items) {
 				// empty, just wait for someone to add some work
 				if (!safeRecv(update_sync, buf, 10, false, response_len, 10000)) {
 					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
