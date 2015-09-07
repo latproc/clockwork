@@ -586,6 +586,19 @@ bool ChannelDefinition::hasFeature(Feature f) const {
 	return features.count(f) != 0;
 }
 
+/* find the interface definition for a machine updated by this channel */
+MachineClass* ChannelDefinition::interfaceFor(const char *monitored_machine) const {
+	std::map<std::string, Value>::const_iterator found = updates_names.find(monitored_machine);
+	if (found != updates_names.end()) {
+		return MachineClass::find((*found).second.asString().c_str());
+	};
+	found = shares_names.find(monitored_machine);
+	if (found != shares_names.end()) {
+		return MachineClass::find((*found).second.asString().c_str());
+	};
+	return 0;
+}
+
 ChannelDefinition *ChannelDefinition::find(const char *name) {
     if (!all) return 0;
     std::map< std::string, ChannelDefinition* >::iterator found = all->find(name);
@@ -1394,11 +1407,17 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
 
 			if (m->isShadow() && m->ownerChannel() == this) {
 				if (auth) return; // do not reflect authorised property changes back to the owner
+				if (!m->getStateMachine()->property_names.count(key.asString())) return; //ignore properties no in the interface definition
 				cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val, (long)auth);
 			}
 			else {
 				//NB_MSG << "using authority " << getAuthority()
 				//<< " to set " << name << "." << key << " to " << val << "\n";
+				MachineClass *if_defn = definition()->interfaceFor(m->getName().c_str());
+				assert(if_defn);
+				if (if_defn && !if_defn->property_names.count(key.asString()))
+					return; //ignore properties no in the interface definition
+
 				cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val, (long)definition()->getAuthority());
 
 			}

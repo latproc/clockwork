@@ -140,6 +140,8 @@ public:
     void addReceiveName(const char *);
     void addOptionName(const char *n, Value &v);
 
+	MachineClass* interfaceFor(const char *monitored_machine) const;
+
 	void setThrottleTime(unsigned int t) { throttle_time = t; }
 	unsigned int getThrottleTime() { return throttle_time; }
 
