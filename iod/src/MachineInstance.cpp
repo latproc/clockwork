@@ -1569,6 +1569,8 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 			busy_machines.insert(mi);
 			iter++;
 		}
+		else
+			iter++;
 	}
 	return true;
 }
