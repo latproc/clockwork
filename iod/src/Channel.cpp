@@ -181,7 +181,7 @@ Channel::~Channel() {
     }
 	::machines.erase(_name);
     this->channel_machines.clear();
-	busy_machines.erase(this);
+	SharedWorkSet::instance()->remove(this);
 	all_machines.remove(this);
 	pending_state_change.erase(this);
     remove(name);

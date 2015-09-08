@@ -39,6 +39,8 @@
 #include "SetStateAction.h"
 #include "MachineCommandAction.h"
 #include "Statistic.h"
+#include <boost/thread.hpp>
+#include <boost/thread/mutex.hpp>
 
 extern SymbolTable globals;
 
@@ -246,6 +248,25 @@ private:
 	MachineEvent &operator=(const MachineEvent&);
 };
 
+class SharedWorkSet {
+public:
+	static SharedWorkSet *instance();
+	void add(MachineInstance *m);
+	void remove(MachineInstance *m);
+	std::set<MachineInstance*>::iterator erase(std::set<MachineInstance*>::iterator &iter);
+	bool empty();
+	size_t size();
+	std::set<MachineInstance*>::iterator begin();
+	std::set<MachineInstance*>::iterator end();
+	boost::recursive_mutex &getMutex() { return mutex; }
+private:
+	static SharedWorkSet *instance_;
+	boost::recursive_mutex mutex;
+	SharedWorkSet() {}
+	std::set<MachineInstance*> busy_machines; // machines that have work queued to them
+};
+
+
 class Channel;
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
     friend class MachineInstanceFactory;
@@ -378,7 +399,7 @@ public:
 	void markPlugin();
     
 	MachineClass *getStateMachine() const { return state_machine; }
-	void setInitialState();
+	void setInitialState( bool resume = false);
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
 	Value *getCurrentStateVal() { return &current_state_val; }
@@ -456,7 +477,6 @@ public:
     static void forceStableStateCheck();
     static void forceIdleCheck();
     static bool workToDo();
-	static std::set<MachineInstance*>& busyMachines();
 	static std::list<Package*>& pendingEvents();
     static std::set<MachineInstance*>& pluginMachines();
 
@@ -501,6 +521,7 @@ public:
 	Cache *cache;
 	unsigned int action_errors;
 	Channel* owner_channel;
+
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
@@ -510,7 +531,6 @@ protected:
     static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
     static std::list<MachineInstance*> active_machines; // machines that require idle() processing
     static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
-    static std::set<MachineInstance*> busy_machines; // machines that have work queued to them
     static std::set<MachineInstance*> pending_state_change; // machines that need to check their stable states
     static std::set<MachineInstance*> plugin_machines; // machines that have plugins
     static std::list<Package*> pending_events; // machines that shadow remote machines

@@ -47,6 +47,7 @@
 #include "MessageLog.h"
 #include "cJSON.h"
 #include "Channel.h"
+#include <boost/thread/mutex.hpp>
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -116,7 +117,7 @@ Transition &Transition::operator=(const Transition &other) {
 	return *this;
 }
 
-	ConditionHandler::ConditionHandler(const ConditionHandler &other)
+ConditionHandler::ConditionHandler(const ConditionHandler &other)
 : condition(other.condition),
 	command_name(other.command_name),
 	flag_name(other.flag_name),
@@ -277,7 +278,6 @@ std::list<MachineInstance*> MachineInstance::all_machines;
 std::list<MachineInstance*> MachineInstance::automatic_machines;
 std::list<MachineInstance*> MachineInstance::active_machines;
 std::list<MachineInstance*> MachineInstance::shadow_machines;
-std::set<MachineInstance*> MachineInstance::busy_machines;
 std::set<MachineInstance*> MachineInstance::plugin_machines;
 std::list<Package*> MachineInstance::pending_events;
 std::set<MachineInstance*> MachineInstance::pending_state_change;
@@ -288,6 +288,42 @@ std::map<std::string, HardwareAddress> MachineInstance::hw_names;
 std::list<MachineClass*> MachineClass::all_machine_classes;
 
 std::map<std::string, MachineClass> MachineClass::machine_classes;
+SharedWorkSet *SharedWorkSet::instance_ = 0;
+
+SharedWorkSet *SharedWorkSet::instance() {
+	if (!instance_) instance_ = new SharedWorkSet();
+	return instance_;
+}
+
+
+void SharedWorkSet::add(MachineInstance *m) {
+	boost::recursive_mutex::scoped_lock lock(mutex);
+	busy_machines.insert(m);
+}
+
+void SharedWorkSet::remove(MachineInstance *m) {
+	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
+	busy_machines.erase(m);
+}
+
+std::set<MachineInstance*>::iterator SharedWorkSet::erase(std::set<MachineInstance*>::iterator &iter) {
+	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
+	return busy_machines.erase(iter);
+}
+
+bool SharedWorkSet::empty() {
+	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
+	return busy_machines.empty();
+}
+
+size_t SharedWorkSet::size() {
+	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
+	return busy_machines.size();
+}
+
+std::set<MachineInstance*>::iterator SharedWorkSet::begin() { return busy_machines.begin(); }
+std::set<MachineInstance*>::iterator SharedWorkSet::end() { return busy_machines.end(); }
+
 
 /* Factory methods */
 
@@ -320,7 +356,7 @@ void MachineInstance::setNeedsCheck() {
 	}
 	if (!active_actions.empty() || !mail_queue.empty()) {
 		//DBG_MSG << _name << " queued for action processing\n";
-		busy_machines.insert(this);
+		SharedWorkSet::instance()->add(this);
 	}
 	else if (getStateMachine()->allow_auto_states) {
 		//DBG_MSG << _name << " queued for stable state checks\n";
@@ -328,7 +364,7 @@ void MachineInstance::setNeedsCheck() {
 	}
 	else {
 		//DBG_MSG << _name << " queued for action processing\n";
-		busy_machines.insert(this);
+		SharedWorkSet::instance()->add(this);
 	}
 	next_poll = 0;
 	if (state_machine->token_id == ClockworkToken::LIST) {
@@ -410,7 +446,7 @@ void MachineInstance::enqueueAction(Action *a){
 	num_machines_with_work++;
 	DBG_ACTIONS << _name << " New Action queued: " << *a << "\n";
 	has_work = true;
-	busy_machines.insert(this);
+	SharedWorkSet::instance()->add(this);
 }
 
 void MachineInstance::enqueue(const Package &package) {
@@ -419,10 +455,9 @@ void MachineInstance::enqueue(const Package &package) {
 }
 
 bool MachineInstance::workToDo() { 
-	return !pending_events.empty() || !busy_machines.empty() || !pending_state_change.empty()
+	return !pending_events.empty() || !SharedWorkSet::instance()->empty() || !pending_state_change.empty()
 				|| num_machines_with_work + total_machines_needing_check > 0; 
 }
-std::set<MachineInstance*>& MachineInstance::busyMachines() { return busy_machines; }
 std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
 std::set<MachineInstance*>& MachineInstance::pluginMachines() { return plugin_machines; }
 
@@ -430,7 +465,6 @@ void MachineInstance::forceIdleCheck() {
 	num_machines_with_work++; 
 	DBG_AUTOSTATES  << " forced an idle check " << num_machines_with_work << "\n";
 }
-
 
 #if 0
 void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset){
@@ -470,8 +504,8 @@ void MachineInstance::triggerFired(Trigger *trig) {
 void MachineInstance::checkActions() {
 	num_machines_with_work++;
 	has_work = true;
-	busy_machines.insert(this);
-	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << busy_machines.size() << "\n";
+	SharedWorkSet::instance()->add(this);
+	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << SharedWorkSet::instance()->size() << "\n";
 }
 
 void MachineInstance::resetTemporaryStringStream() {
@@ -837,7 +871,7 @@ void RateEstimatorInstance::setNeedsCheck() {
 	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
 	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
 	MachineInstance::setNeedsCheck();
-	busy_machines.insert(this);
+	SharedWorkSet::instance()->add(this);
 }
 
 void RateEstimatorInstance::idle() {
@@ -1386,17 +1420,20 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 	}
 
 	process_time = nowMicrosecs();
-
-	std::set<MachineInstance*>::iterator busy_it = busy_machines.begin();
-	while (busy_it != busy_machines.end() ) {
-		MachineInstance *mi = *busy_it;
-		mi->idle();
-		if (mi->state_machine && mi->state_machine->plugin) mi->state_machine->plugin->poll_actions(mi);
-		if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
-			busy_it = busy_machines.erase(busy_it);
-			if (mi->is_active) pending_state_change.insert(mi);
+	boost::recursive_mutex &mutex = SharedWorkSet::instance()->getMutex();
+	{
+		boost::recursive_mutex::scoped_lock lock(mutex);
+		std::set<MachineInstance*>::iterator busy_it = SharedWorkSet::instance()->begin();
+		while (busy_it != SharedWorkSet::instance()->end() ) {
+			MachineInstance *mi = *busy_it;
+			mi->idle();
+			if (mi->state_machine && mi->state_machine->plugin) mi->state_machine->plugin->poll_actions(mi);
+			if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
+				busy_it = SharedWorkSet::instance()->erase(busy_it);
+				if (mi->is_active) pending_state_change.insert(mi);
+			}
+			else busy_it++;
 		}
-		else busy_it++;
 	}
 
 #if 0
@@ -1566,7 +1603,7 @@ bool MachineInstance::checkStableStates(uint32_t max_time) {
 			if (!mi->enabled() || !mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
 		}
 		else if (mi->enabled()) {
-			busy_machines.insert(mi);
+			SharedWorkSet::instance()->add(mi);
 			iter++;
 		}
 		else
@@ -2575,7 +2612,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
 	enqueueAction(hma);
-	busy_machines.insert(this);
+	SharedWorkSet::instance()->add(this);
 }
 
 void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) {
@@ -2881,7 +2918,7 @@ void fixListState(MachineInstance &list) {
 	list.setState(*s);
 }
 
-void MachineInstance::setInitialState() {
+void MachineInstance::setInitialState(bool resume) {
 	if (io_interface) {
 		io_interface->setInitialState();
 	}
@@ -2900,7 +2937,7 @@ void MachineInstance::setInitialState() {
 			if (state_machine->token_id == ClockworkToken::LIST )
 				fixListState(*this);
 			else
-				setState(state_machine->initial_state,expected_authority, false);
+				setState(state_machine->initial_state,expected_authority, resume);
 			setNeedsCheck();
 		}
 	}
@@ -2941,7 +2978,7 @@ void MachineInstance::enable() {
 			if (parameters[i].machine) parameters[i].machine->enable();
 		}
 
-	setInitialState();
+	setInitialState(true);
 	setNeedsCheck();
 	// if any dependent machines are already enabled, make sure they know we are awake
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();
@@ -3012,6 +3049,16 @@ void MachineInstance::resume(const State &s) {
 		}
 		setState(s, expected_authority, true);
 		setNeedsCheck();
+		if (_type == "LIST") // resuming a list resumes the members
+			for (unsigned int i = 0; i<parameters.size(); ++i) {
+				// parameters my be just values but if they are machines they need to be enabled
+				if (parameters[i].machine) parameters[i].machine->resume();
+			}
+		std::set<MachineInstance *>::iterator d_iter = depends.begin();
+		while (d_iter != depends.end()) {
+			MachineInstance *dep = *d_iter++;
+			if (dep->enabled()) dep->setNeedsCheck();
+		}	
 	}
 }
 
@@ -3034,13 +3081,13 @@ void MachineInstance::push(Action *new_action) {
 	new_action->start();
 	num_machines_with_work++;
 	has_work = true;
-	busy_machines.insert(this);
+	SharedWorkSet::instance()->add(this);
 	if (tracing() && isTraceable()) {
 		resetTemporaryStringStream();
 		ss << "starting action: " << *new_action;
 		setValue("TRACE", ss.str());
 	}
-	DBG_M_ACTIONS << _name << " ADDED to machines with work " << busy_machines.size() << "\n";
+	DBG_M_ACTIONS << _name << " ADDED to machines with work " << SharedWorkSet::instance()->size() << "\n";
 	return;
 }
 

@@ -374,7 +374,14 @@ public:
 			*rp = total_delays / total_polls;
 		}
 	}
+	bool running() { return start_time != 0; };
 	void start() { start_time = nowMicrosecs(); }
+	void stop() {
+		if (start_time) {
+			uint64_t now = nowMicrosecs(); update(now, now-start_time);
+			start_time = 0;
+		}
+	}
 	void update() {
 		uint64_t now = nowMicrosecs();
 		if (start_time) {update(now, now-start_time); }
@@ -451,6 +458,7 @@ void ProcessingThread::operator()()
 	AutoStatStorage avg_scheduler_time("AVG_SCHEDULER_TIME", 0);
 	AutoStatStorage avg_clockwork_time("AVG_CLOCKWORK_TIME", 0);
 	AutoStatStorage avg_update_time("AVG_UPDATE_TIME", 0);
+	AutoStatStorage scheduler_delay("SCHEDULER_POLL_SEPARATION", 0);
 #endif
 
 	zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
@@ -597,7 +605,7 @@ void ProcessingThread::operator()()
 			//	<< " waiting: " << systems_waiting << "\n";
 			if (systems_waiting > 0) break;
 			if  (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
-			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo()) break;
+			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo() ) break;
 			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
 #ifdef KEEPSTATS
 			avg_poll_time.update();
@@ -843,11 +851,15 @@ void ProcessingThread::operator()()
 		}
 
 		if (items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
+#ifdef KEEPSTATS
+			if (!scheduler_delay.running()) scheduler_delay.start();
+#endif
 			if (status == e_waiting && processing_state == eIdle) {
 				size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
 				if (len) {
 					status = e_handling_sched;
 #ifdef KEEPSTATS
+					scheduler_delay.stop();
 					avg_scheduler_time.start();
 #endif
 				}

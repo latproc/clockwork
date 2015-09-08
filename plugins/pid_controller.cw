@@ -97,6 +97,8 @@ struct PIDData {
 	struct CircularBuffer *samples;
 	struct CircularBuffer *fwd_power_offsets;
 	struct CircularBuffer *rev_power_offsets;
+	struct CircularBuffer *power_rates;
+	struct CircularBuffer *power_records;
 	
 	uint64_t now_t;
 	uint64_t delta_t;
@@ -141,6 +143,7 @@ struct PIDData {
 	uint64_t ramp_start_time;
 	uint64_t last_poll;
 	
+	
 	long last_position;
 	long tolerance;
 	long saved_set_point;       /* saved copy of the last user set point */
@@ -166,6 +169,7 @@ struct PIDData {
 	const long *rev_start_power;
 	/* keep a record of how long it took to see movement */
 	uint64_t start_time;
+	double power_rate;
 	uint64_t fwd_start_delay;
 	uint64_t rev_start_delay;
 
@@ -197,6 +201,7 @@ struct PIDData {
 
 	double total_err;
 	FILE *logfile;
+	FILE *datafile;
 };
 
 static void reset_stop_test(struct PIDData *data) {
@@ -307,10 +312,13 @@ int check_states(void *scope)
 		data->samples = createBuffer(8);
 		data->fwd_power_offsets = createBuffer(8);
 		data->rev_power_offsets = createBuffer(8);
+		data->power_rates = createBuffer(8);
+		data->power_records = createBuffer(8);
 		{
 		    int i; for (i=0; i<8; ++i) {
 					addSample(data->fwd_power_offsets, i, 0);
 					addSample(data->rev_power_offsets, i, 0);
+					addSample(data->power_rates, i, 1.0);
 				}
 		}
 #ifdef USE_MEASURED_PERIOD
@@ -431,6 +439,7 @@ int check_states(void *scope)
 		    int i; for (i=0; i<8; ++i) addSample(data->samples, i, data->start_position);
 		    rate(data->samples);
 		}
+		data->power_rate = bufferAverage(data->power_rates);
 
 		data->stop_marker = 0;
 		data->last_stop_position = 0;
@@ -508,7 +517,7 @@ static void stop(struct PIDData*data, void *scope) {
 	if (data->debug && *data->debug) fprintf(data->logfile,"%s stop command\n", data->conveyor_name);
 	halt(data, scope);
 	data->stop_marker = 0;
-	data->last_stop_position = 0;
+	//data->last_stop_position = 0;
 	setIntValue(scope, "SetPoint", 0);
 	data->state = cs_stopped;
 	data->curr_seek_power = 20;
@@ -600,8 +609,8 @@ static long check_ramp(struct PIDData *data, double set_point, uint64_t now_t, u
 		/* calculate the ramped set point */
 		set_point = data->last_set_point;
 		set_point += (double)( now_t - data->changing_set_point )
-		/ ramp_time / 1000
-		* (data->filtered_set_point - data->last_set_point);
+        		/ ramp_time / 1000
+        		* (data->filtered_set_point - data->last_set_point);
 		if (data->debug && *data->debug)
 			fprintf(data->logfile,"%s ramping to new set point: %ld, now using: %5.2f\n",
 					data->conveyor_name, data->filtered_set_point, set_point);
@@ -761,7 +770,7 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, double set_
 		if (new_state == cs_position || new_state == cs_speed) {
 			data->state = new_state; 
 			data->sub_state = is_ramping_up;
- 			data->ramp_start_time = data->now_t;
+ 			data->ramp_start_time = 0;
 			data->last_position = *data->position;
 		}
 		/* update forward power offset */
@@ -777,7 +786,7 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, double set_
 		if (new_state == cs_position || new_state == cs_speed) {
 			data->state = new_state;
 			data->sub_state = is_ramping_up;
-			data->ramp_start_time = data->now_t;
+			data->ramp_start_time = 0;
 			data->last_position = *data->position;
 		}
 		update_reverse_power_offset(data, scope);
@@ -1137,13 +1146,24 @@ int poll_actions(void *scope) {
     	long startup_time = (now_t - data->ramp_start_time + 500)/1000;
 	    
 		ramp_up_ratio = (double)startup_time / curr_startup_time;
-		if ( sign(data->speed) == sign(set_point) && labs(data->speed) >= (long)fabs(set_point)) ramp_up_ratio = 1.0;
+		if ( sign(data->speed) == sign(set_point) && labs(data->speed) >= (long)fabs(set_point)) {
+    		ramp_up_ratio = 1.0;
+		}
 		
 		if (ramp_up_ratio < 0.05) ramp_up_ratio = 0.05;
 		if (data->debug && *data->debug && ramp_up_ratio >0.0 && ramp_up_ratio<=1.0)
 			fprintf(data->logfile,"%s rampup ratio: %5.3f\n", data->conveyor_name, ramp_up_ratio);
-		if (ramp_up_ratio >= 1.0 )
+		if (ramp_up_ratio >= 1.0 ) {
 		    data->sub_state = is_speed;
+		    if ( fabs(set_point) > 800.0) {
+		        double power = getBufferValueAt(data->power_records, (long)now_t - 80000);
+		        data->power_rate = power / set_point;
+		        if (fabs(data->power_rate) > 2.0) 2.0 / data->power_rate;
+		        if (data->debug && *data->debug) {
+		            fprintf(data->logfile, "%s using power ratio %8.3lf from power %8.3lf", data->conveyor_name, data->power_rate, power);
+		        }
+		    }
+		}
 	}
 
 	/* calculate ramp-down adjustments */
@@ -1205,7 +1225,7 @@ int poll_actions(void *scope) {
 	}
 	else	/* if no ramp down was applied but we are within the ramp up time, apply the ramp up */
     	if ( (ramp_down_ratio <= 0.0 || fabs(ramp_down_ratio) >= 1.0) && ramp_up_ratio <1.0) {
-    		set_point = data->filtered_set_point * ramp_up_ratio;
+    		set_point = data->filtered_set_point * ramp_up_ratio * data->power_rate;
     		data->last_set_point = set_point; /* don't let the set_point change detection get in the way */
     	}
 
@@ -1235,7 +1255,6 @@ int poll_actions(void *scope) {
 				}
 			}
 
-#if 1
 			/* next_position = *data->stop_position; */
 			if (ramp_down_ratio <= 0.05) {
 				next_position = *data->stop_position;
@@ -1247,7 +1266,6 @@ int poll_actions(void *scope) {
 				if (ratio<0.01) ratio = 0.01;
 				next_position = *data->position + (next_position - data->last_position) * ramp_down_ratio;
 			}
-#endif
 		}
 
 	}
@@ -1342,8 +1360,14 @@ calculated_power:
 			new_power = data->current_power - *data->ramp_limit;
 		}
     	long power = 0;
-    	if (new_power>0) power = output_scaled(data, (long) new_power + *data->fwd_start_power);
-    	else if (new_power<0) power = output_scaled(data, (long) new_power + *data->rev_start_power);
+    	if (new_power>0) {
+    	    power = output_scaled(data, (long) new_power + *data->fwd_start_power);
+    	    addSample(data->power_records, data->now_t, power);
+    	}
+    	else if (new_power<0) {
+    	    power = output_scaled(data, (long) new_power + *data->rev_start_power);
+    	    addSample(data->power_records, data->now_t, power);
+    	}
     	else power = output_scaled(data, 0);
 
     	if (data->debug && *data->debug)

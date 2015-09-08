@@ -305,7 +305,7 @@ void Dispatcher::idle()
                             MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
                             if (mi)
                             {
-								MachineInstance::busyMachines().insert(mi);
+								SharedWorkSet::instance()->add(mi);
                                 Action *curr = mi->executingCommand();
                                 if (curr)
                                 {
