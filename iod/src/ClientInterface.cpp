@@ -166,7 +166,7 @@ public:
 struct CommandThreadInternals : public ClientInterfaceInternals {
 public:
     zmq::socket_t socket;
-    pthread_t monitor_thread;
+    //pthread_t monitor_thread;
 	CommandTable<IODCommandFactory*> commands;
 	boost::mutex data_mutex;
 
@@ -443,8 +443,8 @@ void IODCommandThread::operator()() {
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
 
-    MyMonitor monit(&cti->socket);
-    boost::thread cmd_monitor(boost::ref(monit));
+    //MyMonitor monit(&cti->socket);
+    //boost::thread cmd_monitor(boost::ref(monit));
     
     int linger = 0; // do not wait at socket close time
 	cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
@@ -571,7 +571,7 @@ void IODCommandThread::operator()() {
 	}
 }
 {FileLogger fl(program_name); fl.f() << "Client thread finished\n"; }
-monit.abort();
+//monit.abort();
 cti->socket.close();
 }
 
