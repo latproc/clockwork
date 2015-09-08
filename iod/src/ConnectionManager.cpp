@@ -251,12 +251,9 @@ bool SubscriptionManager::requestChannel() {
 	if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
         char buf[1000];
         if (!safeRecv(setup(), buf, 1000, false, len, 2)) {
-					{FileLogger fl(program_name);
-							fl.f() << " waiting setup, safeRecv failed\n";
-					}
-					return false; // attempt a connection but do not wait very long before giving up
-				}
-				else {
+			return false; // attempt a connection but do not wait very long before giving up
+		}
+		else {
         	if (len < 1000) buf[len] =0;
 					{FileLogger fl(program_name);
 					fl.f() << "safeRecv got data: " << buf << " in esiting setup\n";
