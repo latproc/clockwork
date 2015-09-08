@@ -203,6 +203,7 @@ Action::Status MachineCommand::run() {
 
 Action::Status MachineCommand::checkComplete() {
 	DBG_M_ACTIONS << "MachineCommand::checkComplete " << owner->getName() << "\n";
+	if (status == Suspended) resume();
 	if (status != Running) return status;
     while (current_step < actions.size()) {
         // currently running, attempt to move through the actions
@@ -221,6 +222,7 @@ Action::Status MachineCommand::checkComplete() {
 			return status; // an action failed
 		}
         else if (a->getStatus() == Running || a->getStatus() == Suspended){
+			a->complete();
             return a->getStatus(); // still running at step a
         }
         status = runActions(); // note: this increments current_step 
