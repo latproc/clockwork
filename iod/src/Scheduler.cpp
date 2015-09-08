@@ -121,6 +121,7 @@ ScheduledItem* PriorityQueue::top() const {
 	return queue.front();
 }
 bool PriorityQueue::empty() const { 
+	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return queue.empty();
 }
 void PriorityQueue::pop() { 
@@ -128,6 +129,7 @@ void PriorityQueue::pop() {
 	queue.pop_front();
 }
 size_t PriorityQueue::size() const { 
+	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return queue.size(); 
 }
 
@@ -221,8 +223,10 @@ void Scheduler::add(ScheduledItem*item) {
 	top = next();
 	next_time = top->delivery_time;
 	next_delay_time = getNextDelay();
+#if 0
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
-	if (!last_notification) {
+	long wait_duration = nowMicrosecs() - last_notification;
+	if (ready() ||  !last_notification) {
 		if (!update_notify) {
 			update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 			update_notify->connect("inproc://sch_items");
@@ -251,11 +255,14 @@ void Scheduler::add(ScheduledItem*item) {
 		wd->stop();
 	}
 	else {
-		long wait_duration = nowMicrosecs() - last_notification;
-		//if (wait_duration >= 1000000L && item->action) 
-		//	std::cout << "scheduler waiting for a long time for a response: " << wait_duration << "\n";
+		if (wait_duration >= 1000000L && item->action)
+		{
+			FileLogger fl(program_name);
+			fl.f() << "scheduler waiting for a long time for a response: " << wait_duration << "\n";
+		}
 		//assert (wait_duration < 1000000L);
 	}
+#endif
 }
 
 /*
@@ -298,9 +305,9 @@ void Scheduler::operator()() {
 
 void Scheduler::stop() {
 	state = e_aborted;
-	zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
-	update_notify.connect("inproc://sch_items");
-	safeSend(update_notify,"poke",4);
+	//zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
+	//update_notify.connect("inproc://sch_items");
+	//safeSend(update_notify,"poke",4);
 }
 	
 
@@ -320,6 +327,8 @@ void Scheduler::idle() {
 		if (!ready() && state == e_waiting) {
 			wd->stop();
 			long delay = next_delay_time;
+			usleep(1000);
+#if 0
 			notification_sent = 0; // checking now, if more items are pushed we will want to know
 			bool no_items = false;
 			{
@@ -328,7 +337,7 @@ void Scheduler::idle() {
 			}
 			if (no_items) {
 				// empty, just wait for someone to add some work
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 10000)) {
+				if (!safeRecv(update_sync, buf, 10, false, response_len, 5)) {
 					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
 				}
 			}
@@ -347,6 +356,7 @@ void Scheduler::idle() {
 				if (!safeRecv(update_sync, buf, 10, false, response_len, delay/1000)) {
 					//std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
 				}
+#endif
 		}
 		is_ready = ready();
 		if (!is_ready && state == e_waiting) continue;
@@ -363,7 +373,7 @@ void Scheduler::idle() {
 		}
 		
 		int items_found = 0;
-		is_ready = ready();
+		//is_ready = ready();
 		while ( state == e_running && is_ready) {
 			wd->poll();
 			ScheduledItem *item = 0;
@@ -397,7 +407,7 @@ void Scheduler::idle() {
 			DBG_SCHEDULER << "scheduler done\n";
 			safeSend(sync,"done", 4);
 			if (next() == 0) { DBG_SCHEDULER << "no more scheduled items, waiting for cw ack\n"; }
-			while (!safeRecv(sync, buf, 10, true, response_len, 100)) usleep(10); // wait for ack from clockwork
+			while (!safeRecv(sync, buf, 10, true, response_len, 100)); // wait for ack from clockwork
 			if (next() == 0) { DBG_SCHEDULER << "no more scheduled items\n"; }
 			state = e_waiting;
 			wd->stop();
