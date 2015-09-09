@@ -120,7 +120,7 @@ public:
 
 	}
 	// helpers for connection resume
-	bool sent_request = false;
+	bool sent_request;
 	uint64_t send_time;
 	static const uint64_t channel_request_timeout = 3000000;
 };
