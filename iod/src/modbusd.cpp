@@ -583,6 +583,13 @@ struct ModbusServerThread
 						{
 							int val = getInt( &query[function_code_offset+5]);
 							std::string res(getIODSyncCommand(4, addr+1, modbus_mapping->tab_registers[addr]) );
+							std::string response;
+							uint64_t cmd_timeout = 0;
+							if (!sendMessage(res.c_str(), *cmd_interface, response, cmd_timeout))
+							{
+								FileLogger fl(program_name);
+								fl.f() << "Message send of " << res << " failed\n";
+							}
 							//                sendIOD(4, addr+1, modbus_mapping->tab_registers[addr]) );
 							//if (res) free(res);
 							if (DEBUG_BASIC)
@@ -665,7 +672,7 @@ std::string getIODSyncCommand(int group, int addr, bool which)
 {
 	int new_value = (which) ? 1 : 0;
 	char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
-	sendIODMessage(msg);
+	//sendIODMessage(msg);
 
 	if (DEBUG_BASIC) std::cout << "IOD command: " << msg << "\n";
 	std::string s(msg);
