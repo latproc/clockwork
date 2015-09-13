@@ -96,8 +96,10 @@ public:
 	static IOUpdate *getUpdates();
 	static IOUpdate *getDefaults();
 	static uint8_t *generateMask(std::list<MachineInstance*> &outputs);
+	static uint64_t getClock() { return global_clock; }
 protected:
 	static std::map<std::string, IOAddress> io_names;
+	static uint64_t global_clock;
 private:
 	IOComponent(const IOComponent &);
 	static std::list<IOComponent *>processing_queue;
@@ -209,11 +211,15 @@ public:
     InputFilterSettings *config;
 };
 
+class CounterInternals;
 class Counter : public IOComponent {
 public:
 	Counter(IOAddress addr);
 	virtual const char *type() { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
+    virtual int32_t filter(int32_t raw);
+private:
+	CounterInternals *internals;
 };
 
 class CounterRate : public IOComponent {

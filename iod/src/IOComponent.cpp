@@ -70,7 +70,8 @@
 std::list<IOComponent *> IOComponent::processing_queue;
 std::map<std::string, IOAddress> IOComponent::io_names;
 static uint64_t current_time;
-uint64_t IOComponent::io_clock;
+uint64_t IOComponent::io_clock;	// clock value when ProcessAll is called
+uint64_t IOComponent::global_clock; // clock value last received
 size_t IOComponent::process_data_size = 0;
 uint8_t *IOComponent::io_process_data = 0;
 uint8_t *IOComponent::io_process_mask = 0;
@@ -394,7 +395,7 @@ public:
     uint16_t buffer_len;
 	const long *tolerance;
     
-    InputFilterSettings() :property_changed(true), noise_tolerance(6), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
+    InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
 };
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
@@ -416,6 +417,20 @@ int32_t AnalogueInput::filter(int32_t raw) {
     if (config->property_changed) {
         config->property_changed = false;
     }
+
+	/* most machines reading sensor values will be prompted when teh
+		sensor value changes, depending on whether this filter yields a
+		changed value. Some systems such as plugins that operate on 
+		their own clock may wish to ignore the filtered value and 
+		access the raw io value and read time but note that these 
+		values do not cause notifications when they change
+	*/
+	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
+	while (owners_iter != owners.end()) {
+		MachineInstance *o = *owners_iter++;
+		o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
+		o->properties.add("IOVALUE", raw, SymbolTable::ST_REPLACE);
+	}
     config->positions.append(raw);
     int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
 	if (config->tolerance) config->noise_tolerance = *config->tolerance;
@@ -429,7 +444,23 @@ void AnalogueInput::update() {
     config->property_changed = true;
 }
 
-Counter::Counter(IOAddress addr) : IOComponent(addr) { }
+class CounterInternals {
+};
+
+Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { }
+
+int32_t Counter::filter(int32_t val) {
+	/* as for the AnalogueInput, note that these 'IO' properties do not 
+		cause value change notifications throughout clockwork 
+	*/
+	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
+	while (owners_iter != owners.end()) {
+		MachineInstance *o = *owners_iter++;
+		o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
+		o->properties.add("IOVALUE", val, SymbolTable::ST_REPLACE);
+	}
+	return IOComponent::filter(val);
+}
 
 CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) {
     struct timeval now;
@@ -438,6 +469,15 @@ CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positio
 }
 
 int32_t CounterRate::filter(int32_t val) {
+	/* as for the AnalogueInput, note that these 'IO' properties do not 
+		cause value change notifications throughout clockwork 
+	*/
+	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
+	while (owners_iter != owners.end()) {
+		MachineInstance *o = *owners_iter++;
+		o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
+		o->properties.add("IOVALUE", val, SymbolTable::ST_REPLACE);
+	}
     return IOComponent::filter(val);
 /* disabled since this is now implemented at the MachineInstance level
     position = val;

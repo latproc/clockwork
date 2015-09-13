@@ -10,6 +10,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include <stdint.h>
 
 typedef void * cwpi_Scope;
     
@@ -24,6 +25,7 @@ void setStringValue(cwpi_Scope, const char *property_name, const char *new_value
 int changeState(cwpi_Scope, const char *new_state);
 char *getState(cwpi_Scope);
 void log_message(cwpi_Scope, const char *);
+uint64_t getIOClock();
 
 void *getInstanceData(cwpi_Scope);
 void setInstanceData(cwpi_Scope, void *block);
