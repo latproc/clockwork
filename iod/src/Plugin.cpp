@@ -5,6 +5,11 @@
 #include "MachineInstance.h"
 #include "SetStateAction.h"
 #include "MessageLog.h"
+#include "IOComponent.h"
+
+uint64_t getIOClock() {
+	return IOComponent::getClock();
+}
 
 void log_message(cwpi_Scope, const char *m) {
 	std::cout << m << "\n";
