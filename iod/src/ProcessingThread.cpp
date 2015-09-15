@@ -71,6 +71,8 @@ extern Statistics *statistics;
 extern uint64_t client_watchdog_timer;
 uint64_t clockwork_watchdog_timer = 0;
 
+#undef KEEPSTATS
+
 #if 0
 
 #include "SimulatedRawInput.h"
@@ -688,7 +690,9 @@ void ProcessingThread::operator()()
 		}
 
 		if (status == e_waiting) {
+#ifdef KEEPSTATS
 			AutoStat stats(avg_channel_time);
+#endif
 			// poll channels
 			Channel::handleChannels();
 		}
@@ -758,11 +762,11 @@ void ProcessingThread::operator()()
 				AutoStat stats(avg_cmd_processing);
 #endif
 				int count = 0;
-				while (have_command && now - start_time < internals->cycle_delay/2) {
+				while (have_command && (long)(now - start_time) < internals->cycle_delay/2) {
 					have_command = false;
 					std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
 					unsigned int i = internals->CMD_SYNC_ITEM;
-					while (i<=CommandSocketInfo::lastIndex() && now - start_time < internals->cycle_delay/2 ) {
+					while (i<=CommandSocketInfo::lastIndex() && (long)(now - start_time) < internals->cycle_delay/2 ) {
 						zmq::socket_t *sock = 0;
 						CommandSocketInfo *info = 0;
 						if (i == internals->CMD_SYNC_ITEM) {
