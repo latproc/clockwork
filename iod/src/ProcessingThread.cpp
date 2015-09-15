@@ -778,9 +778,11 @@ void ProcessingThread::operator()()
 							++i;
 							continue;
 						}
+#if 0
 						if (i>5) {
 							NB_MSG << "Processing thread has activity on poll item " << i << " of 0.." << CommandSocketInfo::lastIndex() << "\n";
 						}
+#endif
 						have_command = true;
 
 						zmq::message_t msg;
@@ -790,7 +792,7 @@ void ProcessingThread::operator()()
 						uint32_t default_id = mh.getId(); // save the msgid to following check
 						if (safeRecv(*sock, &buf, &len, false, 0, mh) ) {
 							++count;
-							if (true && len>10){
+							if (false && len>10){
 								FileLogger fl(program_name);
 								fl.f() << "Processing thread received command ";
 								if (buf)fl.f() << buf << " "; else fl.f() << "NULL";
@@ -800,9 +802,9 @@ void ProcessingThread::operator()()
 							IODCommand *command = parseCommandString(buf);
 							if (command) {
 								try {
-									NB_MSG << "processing thread executing " << buf << "\n";
+									//NB_MSG << "processing thread executing " << buf << "\n";
 									(*command)();
-									NB_MSG << "execution result " << command->result() << "\n";
+									//NB_MSG << "execution result " << command->result() << "\n";
 								}
 								catch (std::exception e) {
 									FileLogger fl(program_name);

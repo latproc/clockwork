@@ -431,13 +431,13 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("IOVALUE", (long)raw, SymbolTable::ST_REPLACE);
 	}
-    config->positions.append(raw);
-    int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
+	config->positions.append(raw);
+	int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
 	if (config->tolerance) config->noise_tolerance = *config->tolerance;
-    if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
-        config->last_sent = mean;
-    }
-    return config->last_sent;
+	if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
+		config->last_sent = mean;
+	}
+	return config->last_sent;
 }
 
 void AnalogueInput::update() {
@@ -445,6 +445,12 @@ void AnalogueInput::update() {
 }
 
 class CounterInternals {
+	int32_t noise_tolerance; // filter out changes with +/- this range
+	LongBuffer positions;
+	int32_t last_sent; // this is the value to send unless the read value moves away from the mean
+	uint16_t buffer_len;
+	const long *tolerance;
+	CounterInternals() : noise_tolerance(6), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
 };
 
 Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { }
@@ -460,6 +466,15 @@ int32_t Counter::filter(int32_t val) {
 		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
 	}
 	return IOComponent::filter(val);
+#if 0
+	config->positions.append(val);
+	int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
+	//if (config->tolerance) config->noise_tolerance = *config->tolerance;
+	if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
+		config->last_sent = mean;
+	}
+	return config->last_sent;
+#endif
 }
 
 CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) {
@@ -478,20 +493,7 @@ int32_t CounterRate::filter(int32_t val) {
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
 	}
-    return IOComponent::filter(val);
-/* disabled since this is now implemented at the MachineInstance level
-    position = val;
-    struct timeval now;
-    gettimeofday(&now, 0);
-    uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-    uint64_t delta_t = now_t - start_t;
-    times.append(delta_t);
-    positions.append(val);
-    if (positions.length() < 4) return 0;
-    //float speed = positions.difference(positions.length()-1, 0) / times.difference(times.length()-1,0) * 1000000;
-    float speed = positions.slopeFromLeastSquaresFit(times) * 250000;
-    return speed;
- */
+	return IOComponent::filter(val);
 }
 
 /* The Speed Controller class */

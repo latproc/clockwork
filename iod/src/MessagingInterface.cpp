@@ -150,17 +150,14 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 					{
 					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
-							if (false){
-								FileLogger fl(program_name);
-								fl.f() << "Error: unexpected message header\n";
-							}
+							//{ FileLogger fl(program_name); fl.f() << "Error: unexpected message header\n"; }
 							continue;
 						}
 						*response_len = message.size();
 						*buf = new char[*response_len+1];
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
-						if (*response_len>10){FileLogger fl(program_name); fl.f() << tnam << "received: " << *buf << "\n"; }
+						//if (*response_len>10){FileLogger fl(program_name); fl.f() << tnam << "received: " << *buf << "\n"; }
 						return true;
 					}
 					else {
@@ -230,16 +227,15 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
 
+#if 0
 						if (*response_len > 10) {
 							if (got_address) {
 								{FileLogger fl(program_name); fl.f() << tnam << " received 	addressed message " << header << " " << (*buf) << "\n"; }
-								if (strstr(*buf, "G_CorePower")) {
-									int x = 1;
-								}
 							}
 							else 
 								{FileLogger fl(program_name); fl.f() << tnam << " received: " << *buf << "\n"; }
 						}
+#endif
 
 						return true;
 					}
@@ -290,10 +286,10 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
 				if (response_len > 0 && response_len < (unsigned int)buflen) {
 					buf[response_len] = 0;
-					if (response_len>10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n"; }
+					//if (response_len>10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n"; }
 				}
 				else {
-					if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
+					//if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
 				}
 				if (!response_len && block) continue;
 			}
@@ -322,7 +318,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	if (buflen>10) {FileLogger fl(program_name); fl.f() << tnam << " Sending\n"; }
+	//if (buflen>10) {FileLogger fl(program_name); fl.f() << tnam << " Sending\n"; }
 
 	enum send_stage {e_sending_dest, e_sending_source, e_sending_data} stage = e_sending_data;
 	if (header.dest || header.source) {
@@ -331,7 +327,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
+			//if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );
@@ -370,7 +366,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " sending " << buf << "\n"; }
+	//if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " sending " << buf << "\n"; }
 
 	while (!MessagingInterface::aborted()) {
 		try {
@@ -405,7 +401,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	{FileLogger fl(program_name); fl.f() << tnam << " sendMessage " << msg << "\n"; }
+	//{FileLogger fl(program_name); fl.f() << tnam << " sendMessage " << msg << "\n"; }
 
 	safeSend(sock, msg, strlen(msg), header);
 
