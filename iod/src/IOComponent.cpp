@@ -418,6 +418,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
         config->property_changed = false;
     }
 
+#if 0
 	/* most machines reading sensor values will be prompted when teh
 		sensor value changes, depending on whether this filter yields a
 		changed value. Some systems such as plugins that operate on 
@@ -431,6 +432,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("IOVALUE", (long)raw, SymbolTable::ST_REPLACE);
 	}
+#endif
 	config->positions.append(raw);
 	int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
 	if (config->tolerance) config->noise_tolerance = *config->tolerance;
@@ -456,6 +458,7 @@ class CounterInternals {
 Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { }
 
 int32_t Counter::filter(int32_t val) {
+#if 0
 	/* as for the AnalogueInput, note that these 'IO' properties do not 
 		cause value change notifications throughout clockwork 
 	*/
@@ -465,6 +468,7 @@ int32_t Counter::filter(int32_t val) {
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
 	}
+#endif
 	return IOComponent::filter(val);
 #if 0
 	config->positions.append(val);
@@ -484,6 +488,7 @@ CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positio
 }
 
 int32_t CounterRate::filter(int32_t val) {
+#if 0
 	/* as for the AnalogueInput, note that these 'IO' properties do not 
 		cause value change notifications throughout clockwork 
 	*/
@@ -493,6 +498,7 @@ int32_t CounterRate::filter(int32_t val) {
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
 	}
+#endif
 	return IOComponent::filter(val);
 }
 
