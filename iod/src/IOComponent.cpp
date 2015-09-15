@@ -428,8 +428,8 @@ int32_t AnalogueInput::filter(int32_t raw) {
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
-		o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
-		o->properties.add("IOVALUE", raw, SymbolTable::ST_REPLACE);
+		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
+		o->properties.add("IOVALUE", (long)raw, SymbolTable::ST_REPLACE);
 	}
 	config->positions.append(raw);
 	int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
@@ -462,8 +462,8 @@ int32_t Counter::filter(int32_t val) {
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
-		o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
-		o->properties.add("IOVALUE", val, SymbolTable::ST_REPLACE);
+		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
+		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
 	}
 	return IOComponent::filter(val);
 #if 0
@@ -490,8 +490,8 @@ int32_t CounterRate::filter(int32_t val) {
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
-		o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
-		o->properties.add("IOVALUE", val, SymbolTable::ST_REPLACE);
+		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
+		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
 	}
 	return IOComponent::filter(val);
 }
