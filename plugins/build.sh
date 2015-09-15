@@ -26,7 +26,7 @@ cat "$script" | awk -v file="$script" '
 	}  
 	' >plugin_$$.c
 
-[ `uname -s` == "Linux" ] && LDFLAGS="-shared -Wall -pedantic -fPIC -Wl,-soname,$out,-undefined,dynamic_lookup"
+[ `uname -s` == "Linux" ] && LDFLAGS="-shared -Wall -fPIC -Wl,-soname,$out,-undefined,dynamic_lookup"
 [ `uname -s` == "Darwin" ] && LDFLAGS="-dynamiclib -Wall -pedantic -fPIC -Wl,-undefined,dynamic_lookup"
 
 echo gcc $LDFLAGS -I /usr/local/include -I../iod/src plugin_$$.c -o "$out" 
