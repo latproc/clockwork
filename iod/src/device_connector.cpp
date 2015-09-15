@@ -1020,7 +1020,7 @@ int main(int argc, const char * argv[])
         while (!done)
         {
             struct timeval now;
-						usleep(50);
+						usleep(5000);
             gettimeofday(&now, 0);
 
             try {
