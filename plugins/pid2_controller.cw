@@ -68,7 +68,7 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #define USE_IOTIME 1
 */
 
-#define DEBUG_MODE ( data->debug && *data->debug )
+#define DEBUG_MODE ( data->debug && *data->debug && data->logfile)
 
 enum State {
 	cs_init,
@@ -464,7 +464,7 @@ int check_states(void *scope)
 #ifdef USE_MEASURED_PERIOD
 		data->psamples = createBuffer(5);
 #endif
-		data->samples = createBuffer(8);
+		data->samples = createBuffer(3);
 		data->fwd_power_offsets = createBuffer(8);
 		data->rev_power_offsets = createBuffer(8);
 		data->fwd_power_rates = createBuffer(8);
@@ -626,7 +626,7 @@ int check_states(void *scope)
     	data->default_rev_crawl = -50;
 		
 		{   /* prime the position samples */
-		    int i; for (i=0; i<8; ++i) addSample(data->samples, i, data->start_position);
+		    int i; for (i=0; i<3; ++i) addSample(data->samples, i, data->start_position);
 		    rate(data->samples);
 		}
 		data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0; /*bufferAverage(data->fwd_power_rates); */		
@@ -670,7 +670,10 @@ int check_states(void *scope)
 		
 		data->crawl_adjustment = 25;
 
-		fprintf(data->logfile,"%s plugin initialised ok: update time %ld\n", data->conveyor_name, *data->min_update_time);
+		if (data->logfile)
+			fprintf(data->logfile,"%s plugin initialised ok: update time %ld\n", data->conveyor_name, *data->min_update_time);
+		else
+			printf("%s plugin initialised without logging: update time %ld\n", data->conveyor_name, *data->min_update_time);
 	}
 
 	return PLUGIN_COMPLETED;
@@ -755,7 +758,7 @@ static int get_position(struct PIDData *data) {
 		data->last_position = *data->position;
 		data->start_position = data->last_position;
 		{   /* prepare the speed sample buffer */
-		    int i; for (i=0; i< 8; ++i) addSample(data->samples, i, data->start_position);
+		    int i; for (i=0; i< 3; ++i) addSample(data->samples, i, data->start_position);
 		}
 	}
 	if ( labs(*data->position - data->last_position) > 10000 ) { /* protection against wraparound */
@@ -810,6 +813,7 @@ static void get_speed(struct PIDData *data) {
 #endif
 }
 
+#if 0
 static void init_stats(void *statistics_scope) {
 	changeState(statistics_scope, "Idle");
 	setIntValue(statistics_scope, "Vel", 0);
@@ -819,6 +823,7 @@ static void init_stats(void *statistics_scope) {
 	setIntValue(statistics_scope, "Err_i", 0);
 	setIntValue(statistics_scope, "Err_d", 0);
 }
+#endif
 
 static int within_tolerance(struct PIDData *data) {
 	return  ( *data->position < *data->stop_position  && *data->stop_position - *data->position <= *data->fwd_tolerance )
@@ -1192,7 +1197,9 @@ int poll_actions(void *scope) {
         		stop(data, scope);
     		}
 			new_power = 0;
+#if 0
 			if (DEBUG_MODE) init_stats(statistics_scope);
+#endif
     		data->state = cs_stopped;
     		data->sub_state = is_stopped;
         	goto calculated_power;
@@ -1750,6 +1757,7 @@ int poll_actions(void *scope) {
 		    }
 		}
 
+#if 0
 		/* calculate PID control if we are ramping, driving or seeking */
 		if ( data->state == cs_speed || data->state == cs_ramp 
 		        || (data->state == cs_position && (data->sub_state == is_ramp || data->sub_state == is_speed ) ) ) {
@@ -1765,7 +1773,6 @@ int poll_actions(void *scope) {
 		        Kp = data->Kpr; Ki = data->Kir; Kd = data->Kdr;
 		     }
 			
-#if 0
 			correction = data->Ep * Kp + data->Ei * Ki + data->Ed * Kd;
 			base = data->power_rate * data->current_set_point;
             /* Not currently applying PID control */
@@ -1783,8 +1790,8 @@ int poll_actions(void *scope) {
             	setIntValue(statistics_scope, "Base", (long)base);
             	setIntValue(statistics_scope, "Corr", (long)correction);
 			}
-#endif
 		}
+#endif
 	}
 		
 	addSample(data->power_records, now_t, new_power);
