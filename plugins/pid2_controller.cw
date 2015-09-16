@@ -154,8 +154,8 @@ struct PIDData {
 	struct CircularBuffer *samples;
 	struct CircularBuffer *fwd_power_offsets;
 	struct CircularBuffer *rev_power_offsets;
-	struct CircularBuffer *fwd_power_rates;
-	struct CircularBuffer *rev_power_rates;
+	struct CircularBuffer *fwd_power_scales;
+	struct CircularBuffer *rev_power_scales;
 	struct CircularBuffer *power_records;
 	
 	struct ramp_settings ramp;
@@ -483,15 +483,15 @@ int check_states(void *scope)
 		data->samples = createBuffer(NPOS_SAMPLES);
 		data->fwd_power_offsets = createBuffer(8);
 		data->rev_power_offsets = createBuffer(8);
-		data->fwd_power_rates = createBuffer(8);
-		data->rev_power_rates = createBuffer(8);
+		data->fwd_power_scales = createBuffer(8);
+		data->rev_power_scales = createBuffer(8);
 		data->power_records = createBuffer(8);
 		{
 		    int i; for (i=0; i<8; ++i) {
 					addSample(data->fwd_power_offsets, i, 0);
 					addSample(data->rev_power_offsets, i, 0);
-					addSample(data->fwd_power_rates, i, 0.5);
-					addSample(data->rev_power_rates, i, 0.5);
+					addSample(data->fwd_power_scales, i, 0.5);
+					addSample(data->rev_power_scales, i, 0.5);
 			}
 		}
 #ifdef USE_MEASURED_PERIOD
@@ -624,6 +624,20 @@ int check_states(void *scope)
             long new_start_power = long_range_limited( bufferAverage(data->rev_power_offsets), -2000, -1);
             setIntValue(scope, "rev_settings.PowerOffset", new_start_power);
 		}
+		
+		/* load the persistent list of recent power scale values */
+		const char *scale_str = getStringValue(scope, "fwd_settings.PowerScales");
+		if (scale_str) {
+            loadArray(data, scope, 8, scale_str, data->fwd_power_scales, "fwd_settings.PowerScales");
+			long new_scale =long_range_limited( bufferAverage(data->fwd_power_scales), 500, 1500);
+			setIntValue(scope, "fwd_settings.PowerScale", new_scale);
+		}
+		scale_str = getStringValue(scope, "rev_settings.PowerScales");
+		if (scale_str) {
+            loadArray(data, scope, 8, scale_str, data->rev_power_scales, "rev_settings.PowerScales");
+            long new_scale = long_range_limited( bufferAverage(data->rev_power_scales), 500, 1500);
+            setIntValue(scope, "rev_settings.PowerScale", new_scale);
+		}
 
 		data->state = cs_init;
 		data->current_power = 0.0;
@@ -640,8 +654,8 @@ int check_states(void *scope)
 		    int i; for (i=0; i<NPOS_SAMPLES; ++i) addSample(data->samples, i, data->start_position);
 		    rate(data->samples);
 		}
-		data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0; /*bufferAverage(data->fwd_power_rates); */		
-		data->rev_power_rate = (double)*data->rev_power_scale / 1000.0; /*bufferAverage(data->fwd_power_rates); */
+		data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0; 		
+		data->rev_power_rate = (double)*data->rev_power_scale / 1000.0;
 
 		data->stop_marker = 0;
 		data->last_stop_position = 0;
@@ -1768,31 +1782,51 @@ int poll_actions(void *scope) {
 		        if (ratio < 0.90) {
 		            if (speed > 0.0) {
     		            new_power = set_point * data->fwd_power_rate + *data->fwd_crawl_adjust;
-    		            data->fwd_power_rate = new_power / set_point;
-    		            setIntValue(scope, "fwd_settings.PowerScale", (long) (data->fwd_power_rate * 1000.0));
-		                if (DEBUG_MODE) { fprintf(data->logfile, "increased power scale to %ld\n", *data->fwd_power_scale); }
+    		            double new_power_rate = new_power / set_point;
+    		            addSample(data->fwd_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
+    		            long new_scale = long_range_limited( bufferAverage(data->fwd_power_scales), 500, 1500);
+                    	char *tmpstr = doubleArrayToString(length(data->fwd_power_scales), data->fwd_power_scales->values);
+                    	setStringValue(scope,"fwd_settings.PowerScales", tmpstr);
+            			setIntValue(scope, "fwd_settings.PowerScale", new_scale);
+                		data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0; 		
+		                if (DEBUG_MODE) { fprintf(data->logfile, "increased fwd power scale to %ld\n", *data->fwd_power_scale); }
     		        }
     		        else {
-    		            new_power = set_point * data->rev_power_rate + -labs(*data->rev_crawl_adjust);
-    		            data->rev_power_rate = new_power / set_point;
-    		            setIntValue(scope, "rev_settings.PowerScale", (long) (data->rev_power_rate * 1000));
-		                if (DEBUG_MODE) { fprintf(data->logfile, "increased power scale to %ld\n", *data->rev_power_scale); }
+    		            new_power = set_point * data->rev_power_rate - labs(*data->rev_crawl_adjust);
+    		            double new_power_rate = fabs(new_power / set_point);
+    		            addSample(data->rev_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
+    		            long new_scale = long_range_limited( bufferAverage(data->rev_power_scales), 500, 1500);
+                    	char *tmpstr = doubleArrayToString(length(data->rev_power_scales), data->rev_power_scales->values);
+                    	setStringValue(scope,"rev_settings.PowerScales", tmpstr);
+            			setIntValue(scope, "rev_settings.PowerScale", new_scale);
+                		data->rev_power_rate = (double)*data->rev_power_scale / 1000.0; 		
+		                if (DEBUG_MODE) { fprintf(data->logfile, "increased rev power scale to %ld\n", *data->rev_power_scale); }
        		        }
     		        data->last_control_change = now_t;
 		        }
-		        else if (ratio > 1.05) {
-		            if (data->speed > 0) {
+		        else if (ratio > 1.10) {
+		            if (speed > 0.0) {
     		            new_power = set_point * data->fwd_power_rate - *data->fwd_crawl_adjust;
-    		            data->fwd_power_rate = new_power / set_point;
-    		            setIntValue(scope, "fwd_settings.PowerScale", (long) (data->fwd_power_rate * 1000));
-		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased power scale to %ld\n", *data->fwd_power_scale); }
-		            }
+    		            double new_power_rate = new_power / set_point;
+    		            addSample(data->fwd_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
+    		            long new_scale = long_range_limited( bufferAverage(data->fwd_power_scales), 500, 1500);
+                    	char *tmpstr = doubleArrayToString(length(data->fwd_power_scales), data->fwd_power_scales->values);
+                    	setStringValue(scope,"fwd_settings.PowerScales", tmpstr);
+            			setIntValue(scope, "fwd_settings.PowerScale", new_scale);
+                		data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0; 		
+		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased fwd power scale to %ld\n", *data->fwd_power_scale); }
+    		        }
     		        else {
     		            new_power = set_point * data->rev_power_rate + labs(*data->rev_crawl_adjust);
-    		            data->rev_power_rate = new_power / set_point;
-    		            setIntValue(scope, "rev_settings.PowerScale", (long) (data->rev_power_rate * 1000));
-		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased power scale to %ld\n", *data->rev_power_scale); }
-		            }
+    		            double new_power_rate = fabs(new_power / set_point);
+    		            addSample(data->rev_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
+    		            long new_scale = long_range_limited( bufferAverage(data->rev_power_scales), 500, 1500);
+                     	char *tmpstr = doubleArrayToString(length(data->rev_power_scales), data->rev_power_scales->values);
+                    	setStringValue(scope,"fwd_settings.PowerScales", tmpstr);
+           			    setIntValue(scope, "rev_settings.PowerScale", new_scale);
+                		data->rev_power_rate = (double)*data->rev_power_scale / 1000.0; 		
+		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased rev power scale to %ld\n", *data->rev_power_scale); }
+       		        }
     		        data->last_control_change = now_t;
 		        }
 		    }
