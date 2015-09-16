@@ -191,6 +191,7 @@ struct PIDData {
 	const long *fwd_power_scale;
 	const long *stop_ramp_adjust;
 	const long *fwd_stop_ramp_adjust;
+	const long *fwd_crawl_adjust;
 
 	const long *rev_tolerance;
 	const long *rev_stopping_dist;
@@ -200,6 +201,7 @@ struct PIDData {
 	const long *rev_crawl_speed;
 	const long *rev_power_scale;
 	const long *rev_stop_ramp_adjust;
+	const long *rev_crawl_adjust;
 
 	/* statistics/debug */
 	const long *stop_error;
@@ -278,7 +280,6 @@ struct PIDData {
     double Ei;
     double Ed;
 	double total_err;
-	double crawl_adjustment;
 	
 	FILE *logfile;
 	FILE *datafile;
@@ -300,7 +301,8 @@ static uint64_t microsecs() {
 void show_status(struct PIDData *data, double new_power) {
 	if ( DEBUG_MODE && data->last_position != *data->position) 
 	{
-	    if (data->state == cs_ramp || data->sub_state == is_ramp) {
+	    if (data->state == cs_ramp || data->sub_state == is_ramp)
+	    {
 	        fprintf(data->logfile,"@ramp: %ld started %ldms ago from %.3lf to %.3lf\n",
 	            data->ramp.ramp_time,(long) (microsecs() - data->ramp.ramp_start)/1000, data->ramp.start_point, data->ramp.target);
 	    }
@@ -447,6 +449,19 @@ long output_scaled(struct PIDData * settings, long power) {
 	return raw;
 }
 
+void loadArray(struct PIDData *data, void *scope, int N, const char *arr_str, struct CircularBuffer *buf, const char *setting_name) {
+	double offsets[N];
+	int n = stringToDoubleArray(arr_str, N, offsets);
+	if (DEBUG_MODE) 
+    fprintf(data->logfile,"%s: %d forward startup power offsets found\n", data->conveyor_name, n);
+	int i;
+	for (i=0; i<n; ++i)
+		addSample(buf, i, offsets[i]);
+	char *tmpstr = doubleArrayToString(length(buf), buf->values);
+	setStringValue(scope,setting_name, tmpstr);
+	free(tmpstr);
+}
+
 PLUGIN_EXPORT
 int check_states(void *scope)
 {
@@ -565,6 +580,15 @@ int check_states(void *scope)
 			getInt(scope, "rev_settings.StopAdjust", &data->rev_stop_ramp_adjust);
 		}
 
+		if (!getInt(scope, "fwd_settings.CrawlAdjust", &data->fwd_crawl_adjust)) {
+			setIntValue(scope, "fwd_settings.CrawlAdjust", 25);
+			getInt(scope, "fwd_settings.CrawlAdjust", &data->fwd_crawl_adjust);
+		}
+		if (!getInt(scope, "rev_settings.CrawlAdjust", &data->rev_crawl_adjust)) {
+			setIntValue(scope, "rev_settings.CrawlAdjust", -25);
+			getInt(scope, "rev_settings.CrawlAdjust", &data->rev_crawl_adjust);
+		}
+
 		if (!getInt(scope, "DEBUG", &data->debug) )
 			data->debug = &data->default_debug;
 
@@ -590,33 +614,15 @@ int check_states(void *scope)
 		/* load the persistent list of recent power offsets */
 		const char *startup_offset_str = getStringValue(scope, "fwd_settings.StartupPowerOffsets");
 		if (startup_offset_str) {
-			double offsets[8];
-			int n = stringToDoubleArray(startup_offset_str, 8, offsets);
-			if (DEBUG_MODE) 
-		    fprintf(data->logfile,"%s: %d forward startup power offsets found\n", data->conveyor_name, n);
-			int i;
-			for (i=0; i<n; ++i)
-				addSample(data->fwd_power_offsets, i, offsets[i]);
-			char *tmpstr = doubleArrayToString(length(data->fwd_power_offsets), data->fwd_power_offsets->values);
-			setStringValue(scope,"fwd_settings.StartupPowerOffsets", tmpstr);
-			free(tmpstr);
+            loadArray(data, scope, 8, startup_offset_str, data->fwd_power_offsets, "fwd_settings.StartupPowerOffsets");
 			long new_start_power =long_range_limited( bufferAverage(data->fwd_power_offsets), 1, 2000);
 			setIntValue(scope, "fwd_settings.PowerOffset", new_start_power);
 		}
 		startup_offset_str = getStringValue(scope, "rev_settings.StartupPowerOffsets");
 		if (startup_offset_str) {
-			double offsets[8];
-			int n = stringToDoubleArray(startup_offset_str, 8, offsets);
-			if (DEBUG_MODE) 
-		    fprintf(data->logfile,"%s: %d reverse startup power offsets found\n", data->conveyor_name, n);
-			int i;
-			for (i=0; i<n; ++i)
-				addSample(data->rev_power_offsets, i, offsets[i]);
-			char *tmpstr = doubleArrayToString(length(data->rev_power_offsets), data->rev_power_offsets->values);
-			setStringValue(scope,"rev_settings.StartupPowerOffsets", tmpstr);
-			free(tmpstr);
-			long new_start_power = long_range_limited( bufferAverage(data->rev_power_offsets), -2000, -1);
-			setIntValue(scope, "rev_settings.PowerOffset", new_start_power);
+            loadArray(data, scope, 8, startup_offset_str, data->rev_power_offsets, "rev_settings.StartupPowerOffsets");
+            long new_start_power = long_range_limited( bufferAverage(data->rev_power_offsets), -2000, -1);
+            setIntValue(scope, "rev_settings.PowerOffset", new_start_power);
 		}
 
 		data->state = cs_init;
@@ -673,8 +679,6 @@ int check_states(void *scope)
 		snprintf(buf, 200, "/tmp/%s", data->conveyor_name);
 		data->logfile = fopen(buf, "a");
 		
-		data->crawl_adjustment = 25;
-
 		if (data->logfile)
 			fprintf(data->logfile,"%s plugin initialised ok: update time %ld\n", data->conveyor_name, *data->min_update_time);
 		else
@@ -709,6 +713,7 @@ static void halt(struct PIDData*data, void *scope) {
 	data->ramp_start_time = 0;
 	data->current_power = 0;
 	data->current_set_point = 0;
+	data->start_time = 0; /* allow prestart calculations */
 	setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
 	if (DEBUG_MODE) 
 	    fprintf(data->logfile, "output driver set to %ld\n", output_scaled(data, 0) );
@@ -995,22 +1000,27 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 	if (set_point > 0 && *data->position - data->start_position > 20) { /* fwd motion */
 		if (data->state == cs_position) {
 			data->sub_state = is_ramp;
-			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart\n");
-   			init_ramp(data, &data->ramp, data->current_set_point, set_point, *data->fwd_startup_time);
+			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart target = %.0lf\n", data->ramp.target);
+			data->ramp.ramp_start = data->now_t;
+   			//init_ramp(data, &data->ramp, data->current_set_point, *data->set_point, *data->fwd_startup_time);
 		}
-		else if (data->state == cs_speed) {
+		else if (data->state == cs_speed || data->state == cs_ramp) {
 			data->state = cs_ramp; 
+			data->sub_state = is_ramp;
  			data->ramp_start_time = 0;
 			data->last_position = *data->position;
-			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart\n");
-    		init_ramp(data, &data->ramp, data->current_set_point, set_point, *data->fwd_startup_time);
+			data->ramp.ramp_start = data->now_t;
+			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart target = %.0lf\n", data->ramp.target);
+    		//init_ramp(data, &data->ramp, data->current_set_point, *data->set_point, *data->fwd_startup_time);
 		}
 		/* update forward power offset */
 		update_forward_power_offset(data, scope);
 
 		if (DEBUG_MODE)
-			fprintf(data->logfile,"@fwd movement started. time: %ld power: %ld\n",
-					(long)data->fwd_start_delay, *data->fwd_start_power);
+			fprintf(data->logfile,"@fwd movement started. time: %ld power: %ld, %s %s\n",
+					(long)data->fwd_start_delay, *data->fwd_start_power,
+					show_state(data->state), show_istate(data->sub_state));
+		
 	}
 
 	/* have we found reverse movement during prestart */
@@ -1018,13 +1028,14 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 		if (data->state == cs_position) {
 			data->sub_state = is_ramp;
 			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart\n");
-			init_ramp(data, &data->ramp, data->current_set_point, -labs(*data->set_point), *data->rev_startup_time);		
-		} else if ( data->state == cs_speed) {
+			//init_ramp(data, &data->ramp, data->current_set_point, -labs(*data->set_point), *data->rev_startup_time);		
+		} else if ( data->state == cs_speed || data->state == cs_ramp) {
 			data->state = cs_ramp;
+			data->sub_state = is_ramp;
 			data->ramp_start_time = 0;
 			data->last_position = *data->position;
 			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart\n");
-			init_ramp(data, &data->ramp, data->current_set_point, - labs(*data->set_point), *data->rev_startup_time);
+			//init_ramp(data, &data->ramp, data->current_set_point, - labs(*data->set_point), *data->rev_startup_time);
 		}
 		update_reverse_power_offset(data, scope);
 		if (DEBUG_MODE)
@@ -1061,6 +1072,7 @@ static void handle_state_change(struct PIDData *data, enum State new_state) {
 	    data->state = cs_speed;
 	    data->sub_state = is_prestart;
 	    data->start_time = data->now_t;
+	    data->start_position = *data->position;
 	    
 	    data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0;
 	    data->rev_power_rate = (double)*data->rev_power_scale / 1000.0;
@@ -1077,6 +1089,7 @@ static void handle_state_change(struct PIDData *data, enum State new_state) {
         	data->state = cs_stopped;
         	data->sub_state = is_stopped;
     	}
+   	    data->saved_set_point = *data->set_point;   
     }
     else if (new_state != data->state && new_state == cs_atposition) {
         if (data->state == cs_stopped) {
@@ -1275,6 +1288,7 @@ int poll_actions(void *scope) {
             data->state = cs_speed;
             data->sub_state = is_prestart;
             data->start_time = data->now_t;
+	        data->start_position = *data->position;
         }
         else if ( data->state == cs_speed || data->state == cs_ramp){
             data->state = cs_ramp;
@@ -1303,12 +1317,30 @@ int poll_actions(void *scope) {
             else if (data->state == cs_position && *data->stop_position < *data->position) set_point = -labs(set_point);
         
     	    if (set_point > 0) {
-    			if (DEBUG_MODE) fprintf(data->logfile,"ramping fwd due to set speed change\n");
-        	    init_ramp(data, &data->ramp, data->speed, set_point, *data->fwd_ramp_time);
+    	        if ( data->start_time == 0 && labs(data->speed) < 100 && labs(set_point) >= 1000 ) {
+        			if (DEBUG_MODE) fprintf(data->logfile,"ramp fwd starting\n");
+            	    init_ramp(data, &data->ramp, data->speed, set_point, *data->fwd_startup_time);
+            		data->sub_state = is_prestart;
+            		data->start_time = data->now_t;
+	                data->start_position = *data->position;
+        	    }
+        	    else {
+        			if (DEBUG_MODE) fprintf(data->logfile,"ramping fwd due to set speed change\n");
+            	    init_ramp(data, &data->ramp, data->speed, set_point, *data->fwd_ramp_time);
+        	    }
     	    }
     	    else if (set_point < 0) {   
-    			if (DEBUG_MODE) fprintf(data->logfile,"ramping rev due to set speed change\n");
-        	    init_ramp(data, &data->ramp, data->speed, set_point, *data->rev_ramp_time);
+    	        if ( data->start_time == 0 && labs(data->speed) < 100 && labs(set_point) >= 1000 ) {
+        			if (DEBUG_MODE) fprintf(data->logfile,"ramping rev starting\n");
+            	    init_ramp(data, &data->ramp, data->speed, set_point, *data->rev_startup_time);
+            		data->sub_state = is_prestart;
+		            data->start_time = data->now_t;
+	                data->start_position = *data->position;
+            	}
+            	else {
+        			if (DEBUG_MODE) fprintf(data->logfile,"ramping rev due to set speed change\n");
+            	    init_ramp(data, &data->ramp, data->speed, set_point, *data->rev_ramp_time);
+            	}
         	}
     	    else {
     	        if (data->speed > 0) {
@@ -1328,7 +1360,7 @@ int poll_actions(void *scope) {
         if (data->state == cs_position)
             new_power = handle_prestart_calculations(data, scope, new_state, new_power, (*data->stop_position > *data->position) );
         else
-            new_power = handle_prestart_calculations(data, scope, new_state, new_power, sign(*data->set_point) );
+            new_power = handle_prestart_calculations(data, scope, new_state, new_power, *data->set_point > 1 );
             
         if ( data->sub_state == is_prestart ) goto calculated_power;
 	}
@@ -1362,11 +1394,11 @@ int poll_actions(void *scope) {
     	        fprintf (data->logfile, "%s detected overshoot\n", data->conveyor_name);
     	    data->sub_state = is_stopping;
     	    if (*data->position < *data->stop_position) {
-    			new_power = data->crawl_adjustment;
+    			new_power = *data->fwd_crawl_adjust;
     			data->current_set_point = new_power / data->fwd_power_rate;
             }
     	    else {
-    			new_power = -data->crawl_adjustment;
+    			new_power = - labs(*data->rev_crawl_adjust);
     			data->current_set_point = new_power / data->rev_power_rate;
             }
     	}
@@ -1436,7 +1468,7 @@ int poll_actions(void *scope) {
 		        
 		        /* do not allow this to ramp too hard */
 		        if (data->last_position == *data->position || new_power > -500) {
-        		    new_power -= data->crawl_adjustment;
+        		    new_power -= labs(*data->rev_crawl_adjust);
         			data->current_set_point = new_power / data->rev_power_rate;
     			}
     			if (DEBUG_MODE) 
@@ -1448,7 +1480,7 @@ int poll_actions(void *scope) {
     	            fprintf(data->logfile,"@crawling back; too close to increase speed\n");
     	            
     	        /* do not allow this to change direction */
-    	        if (new_power < -2 * data->crawl_adjustment) new_power += data->crawl_adjustment;
+    	        if (new_power < -2 * labs(*data->rev_crawl_adjust) ) new_power += labs(*data->rev_crawl_adjust);
     	    }
 		}
 		/* check for crawling forwards and need to adjust driving speed */
@@ -1460,7 +1492,7 @@ int poll_actions(void *scope) {
 		    if ( data->speed < *data->fwd_crawl_speed 
 		            || (*data->position + 4 * stopping_distance + 100 < *data->stop_position - *data->fwd_tolerance) ) {
 		        if (data->last_position == *data->position || new_power < 500 ) {
-        		    new_power += data->crawl_adjustment;
+        		    new_power += labs(*data->fwd_crawl_adjust);
         			data->current_set_point = new_power / data->fwd_power_rate;
     			}
     			if (DEBUG_MODE) 
@@ -1470,7 +1502,7 @@ int poll_actions(void *scope) {
     	    else { 
     	    	if (DEBUG_MODE) 
     	            fprintf(data->logfile,"@crawling forward; too close to increase speed\n");
-    	        if (new_power > 2 * data->crawl_adjustment) new_power -= data->crawl_adjustment;
+    	        if (new_power > 2 * labs(*data->fwd_crawl_adjust) ) new_power -= labs(*data->fwd_crawl_adjust);
     	    }
 		}
 	}
@@ -1735,13 +1767,13 @@ int poll_actions(void *scope) {
 		        double set_point = (double)( labs(data->current_set_point) * sign(data->speed)) ;
 		        if (ratio < 0.90) {
 		            if (speed > 0.0) {
-    		            new_power = set_point * data->fwd_power_rate + 2.0 * data->crawl_adjustment;
+    		            new_power = set_point * data->fwd_power_rate + *data->fwd_crawl_adjust;
     		            data->fwd_power_rate = new_power / set_point;
     		            setIntValue(scope, "fwd_settings.PowerScale", (long) (data->fwd_power_rate * 1000.0));
 		                if (DEBUG_MODE) { fprintf(data->logfile, "increased power scale to %ld\n", *data->fwd_power_scale); }
     		        }
     		        else {
-    		            new_power = set_point * data->rev_power_rate - 2.0 * data->crawl_adjustment;
+    		            new_power = set_point * data->rev_power_rate + -labs(*data->rev_crawl_adjust);
     		            data->rev_power_rate = new_power / set_point;
     		            setIntValue(scope, "rev_settings.PowerScale", (long) (data->rev_power_rate * 1000));
 		                if (DEBUG_MODE) { fprintf(data->logfile, "increased power scale to %ld\n", *data->rev_power_scale); }
@@ -1750,13 +1782,13 @@ int poll_actions(void *scope) {
 		        }
 		        else if (ratio > 1.05) {
 		            if (data->speed > 0) {
-    		            new_power = set_point * data->fwd_power_rate - 2.0 * data->crawl_adjustment;
+    		            new_power = set_point * data->fwd_power_rate - *data->fwd_crawl_adjust;
     		            data->fwd_power_rate = new_power / set_point;
     		            setIntValue(scope, "fwd_settings.PowerScale", (long) (data->fwd_power_rate * 1000));
 		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased power scale to %ld\n", *data->fwd_power_scale); }
 		            }
     		        else {
-    		            new_power = set_point * data->rev_power_rate + 2.0 * data->crawl_adjustment;
+    		            new_power = set_point * data->rev_power_rate + labs(*data->rev_crawl_adjust);
     		            data->rev_power_rate = new_power / set_point;
     		            setIntValue(scope, "rev_settings.PowerScale", (long) (data->rev_power_rate * 1000));
 		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased power scale to %ld\n", *data->rev_power_scale); }
