@@ -64,6 +64,7 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <buffering.c>
 #include <unistd.h>
 
+#define NPOS_SAMPLES 6
 /*
 #define USE_IOTIME 1
 */
@@ -335,7 +336,7 @@ double adjust_power (double current, double start, double target, long ramp_time
 		/* check for overshoot */
 		if (target >= start && new_sp > target) new_sp = target;
 		else if (target <= start && new_sp < target) new_sp = target;
-		printf("@new power %.3lf\n", new_sp * power_rate);
+		//printf( "@new power %.3lf\n", new_sp * power_rate);
 		return new_sp * power_rate;
 }
 
@@ -464,7 +465,7 @@ int check_states(void *scope)
 #ifdef USE_MEASURED_PERIOD
 		data->psamples = createBuffer(5);
 #endif
-		data->samples = createBuffer(3);
+		data->samples = createBuffer(NPOS_SAMPLES);
 		data->fwd_power_offsets = createBuffer(8);
 		data->rev_power_offsets = createBuffer(8);
 		data->fwd_power_rates = createBuffer(8);
@@ -555,10 +556,14 @@ int check_states(void *scope)
 		    getInt(scope, "rev_settings.PowerScale", &data->rev_power_scale);
 		} 
 		
-		if (!getInt(scope, "fwd_settings.StopAdjust", &data->fwd_stop_ramp_adjust))
-		    data->fwd_stop_ramp_adjust = &data->default_stop_ramp_adjust;
-		if (!getInt(scope, "rev_settings.StopAdjust", &data->rev_stop_ramp_adjust))
-		    data->rev_stop_ramp_adjust = &data->default_stop_ramp_adjust;
+		if (!getInt(scope, "fwd_settings.StopAdjust", &data->fwd_stop_ramp_adjust)) {
+			setIntValue(scope, "fwd_settings.StopAdjust", 100);
+			getInt(scope, "fwd_settings.StopAdjust", &data->fwd_stop_ramp_adjust);
+		}
+		if (!getInt(scope, "rev_settings.StopAdjust", &data->rev_stop_ramp_adjust)) {
+			setIntValue(scope, "rev_settings.StopAdjust", 100);
+			getInt(scope, "rev_settings.StopAdjust", &data->rev_stop_ramp_adjust);
+		}
 
 		if (!getInt(scope, "DEBUG", &data->debug) )
 			data->debug = &data->default_debug;
@@ -626,7 +631,7 @@ int check_states(void *scope)
     	data->default_rev_crawl = -50;
 		
 		{   /* prime the position samples */
-		    int i; for (i=0; i<3; ++i) addSample(data->samples, i, data->start_position);
+		    int i; for (i=0; i<NPOS_SAMPLES; ++i) addSample(data->samples, i, data->start_position);
 		    rate(data->samples);
 		}
 		data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0; /*bufferAverage(data->fwd_power_rates); */		
@@ -758,7 +763,7 @@ static int get_position(struct PIDData *data) {
 		data->last_position = *data->position;
 		data->start_position = data->last_position;
 		{   /* prepare the speed sample buffer */
-		    int i; for (i=0; i< 3; ++i) addSample(data->samples, i, data->start_position);
+		    int i; for (i=0; i< NPOS_SAMPLES; ++i) addSample(data->samples, i, data->start_position);
 		}
 	}
 	if ( labs(*data->position - data->last_position) > 10000 ) { /* protection against wraparound */
@@ -1651,8 +1656,10 @@ int poll_actions(void *scope) {
     				if ( data->state == cs_ramp ) { data->state = cs_speed; }
     				data->last_control_change = now_t; 
     				data->sub_state = is_end_ramp;
+    				/*
     			    data->current_set_point = data->ramp.target;
     			    data->last_set_point = data->ramp.target;
+    			    */
         			if (DEBUG_MODE) {
             		    fprintf(data->logfile, "%s end of ramp: set point is now %ld\n", data->conveyor_name, data->current_set_point);
         		    }
@@ -1710,6 +1717,8 @@ int poll_actions(void *scope) {
 		
 		if (data->sub_state == is_end_ramp && now_t - data->last_control_change >= 140000 ) {
 		    data->sub_state = is_speed;
+		    data->current_set_point = data->speed;
+		    data->last_set_point = data->speed;
 		}
 		else if (data->sub_state == is_end_ramp ) {
 		    data->current_set_point = data->speed;
@@ -1828,11 +1837,16 @@ calculated_power:
 			new_power = data->current_power - *data->ramp_limit;
 		}
     	long power = 0;
+		
     	if (new_power>0) {
+    	    long max_power = labs( (long) ((double)*data->set_point * data->fwd_power_rate) );
+    	    if (new_power > max_power) new_power = max_power;
     	    power = output_scaled(data, (long) new_power + *data->fwd_start_power);
     	    addSample(data->power_records, data->now_t, new_power);
     	}
     	else if (new_power<0) {
+    	    long max_power = labs( (long) ((double)*data->set_point * data->rev_power_rate) );
+    	    if (new_power < -max_power) new_power = -max_power;
     	    power = output_scaled(data, (long) new_power + *data->rev_start_power);
     	    addSample(data->power_records, data->now_t, new_power);
     	}
