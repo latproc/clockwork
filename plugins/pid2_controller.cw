@@ -850,10 +850,9 @@ static void init_stats(void *statistics_scope) {
 }
 #endif
 
-static int within_tolerance(struct PIDData *data) {
-	return  ( *data->position < *data->stop_position  && *data->stop_position - *data->position <= *data->fwd_tolerance )
-	||
-	( *data->position > *data->stop_position && *data->position - *data->stop_position <= *data->rev_tolerance );
+static int within_tolerance(struct PIDData *data, long pos) {
+    long dist = *data->stop_position - pos;
+	return  (dist >= 0 && dist <= *data->fwd_tolerance) || (dist < 0 && -dist <= *data->rev_tolerance);
 }
 
 int overshot(struct PIDData *data) {
@@ -867,9 +866,11 @@ int overshot(struct PIDData *data) {
             && fabs(data->ramp.target) > fabs(data->ramp.start_point)
             && data->ramp.ramp_used < 0.25) return 0; 
 
-    int res =  data->state == cs_position 
-        && (        ( *data->stop_position > *data->position && data->speed < 2 * *data->rev_crawl_speed )
-                ||  ( *data->stop_position < *data->position && data->speed > 2 * *data->fwd_crawl_speed ) );
+    long dist = *data->stop_position - *data->position;
+
+    int res = data->state == cs_position
+        && (        ( dist >= *data->fwd_tolerance && data->speed < 0 )
+                ||  ( dist <= - *data->rev_tolerance && data->speed > 0) );
     if (res && DEBUG_MODE) 
 	    fprintf(data->logfile,"%s overshot speed: %ld pos: %ld stop: %ld\n", 
 	        data->conveyor_name, data->speed, *data->position, *data->stop_position);
@@ -888,7 +889,7 @@ int position_close(struct PIDData *data, double stopping_time, long stopping_dis
     /* note that *data->stopping time is in ms but stopping time passed in is in secs (float) */
     if (data->state != cs_position && data->state != cs_atposition) return 0;
     int res = 
-           within_tolerance(data) 
+           within_tolerance(data, *data->position) 
         || /* travelling forwards and running out of time to stop */
 	       (*data->stop_position > *data->position 
 	            && *data->stop_position <= *data->position + stopping_dist )
@@ -917,7 +918,7 @@ int position_close(struct PIDData *data, double stopping_time, long stopping_dis
 
 int reposition(struct PIDData *data) {
 	return labs(*data->position - *data->stop_position) > 2.0 * (*data->fwd_tolerance + *data->rev_tolerance);
-	//return !within_tolerance(data);
+	//return !within_tolerance(data, *data->position);
 }
 
 int stopped(struct PIDData *data) {
@@ -1041,7 +1042,8 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 		update_forward_power_offset(data, scope, startup_power);
 
 		if (DEBUG_MODE)
-			fprintf(data->logfile,"@fwd movement started. time: %ld power: %ld, %s %s\n",
+			fprintf(data->logfile,"@fwd movement started at %ld. time: %ld power: %ld, %s %s\n",
+			        (long)data->now_t,
 					(long)data->fwd_start_delay, *data->fwd_start_power,
 					show_state(data->state), show_istate(data->sub_state));
 		
@@ -1051,6 +1053,7 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 	else if (set_point < 0 && *data->position - data->start_position < -20) { /* reverse motion */
 		if (data->state == cs_position) {
 			data->sub_state = is_ramp;
+			data->ramp_start_time = 0;
 			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart\n");
 			//init_ramp(data, &data->ramp, data->current_set_point, -labs(*data->set_point), *data->rev_startup_time);		
 		} else if ( data->state == cs_speed || data->state == cs_ramp) {
@@ -1065,8 +1068,10 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 		long startup_power = (long)getBufferValueAt(data->power_records, data->now_t - 60000);
 		update_reverse_power_offset(data, scope, startup_power);
 		if (DEBUG_MODE)
-			fprintf(data->logfile,"%s rev movement started. time: %ld power: %ld\n",
-					data->conveyor_name, (long)data->rev_start_delay, *data->rev_start_power);
+			fprintf(data->logfile,"@rev movement started at %ld. time: %ld power: %ld %s %s\n",
+			        (long)data->now_t,
+					(long)data->rev_start_delay, *data->rev_start_power,
+					show_state(data->state), show_istate(data->sub_state));
 	}
 	else {
 		/* waiting for motion during prestart */
@@ -1266,8 +1271,8 @@ int poll_actions(void *scope) {
             long distance_to_stop = *data->stop_position - *data->position;
     
             /* new position is close */
-            if (within_tolerance(data)) {
-            	if (DEBUG_MODE) fprintf(data->logfile,"@within tolerance\n");
+            if (within_tolerance(data, *data->position)) {
+            	if (DEBUG_MODE && data->state != cs_atposition) fprintf(data->logfile,"@within tolerance and changed stop position\n");
         		new_power = 0.0;
            		data->current_set_point = 0.0;
            		data->state = cs_position;
@@ -1411,7 +1416,7 @@ int poll_actions(void *scope) {
 
 	
 	/* should be at position but we have moved away */
-	if (data->state == cs_atposition && !within_tolerance(data)) {
+	if (data->state == cs_atposition && !within_tolerance(data, *data->position)) {
 		if (DEBUG_MODE) fprintf(data->logfile,"@at position but not within tolerance\n");
     	data->state = cs_position;
     	changeState(scope, "seeking");
@@ -1433,6 +1438,12 @@ int poll_actions(void *scope) {
 	}
 	
 	if (data->state == cs_position) {
+
+		/* if we are almost stopped, we will coast a little before the motion stops, here
+		    is a rough estimate of that distance */
+		long future_stop = *data->position + 3 * (*data->position - data->last_position );
+		int future_stop_ok = within_tolerance(data, future_stop);
+
     	if ( overshot(data) )  {
     	    if (DEBUG_MODE)
     	        fprintf (data->logfile, "%s detected overshoot\n", data->conveyor_name);
@@ -1446,15 +1457,25 @@ int poll_actions(void *scope) {
     			data->current_set_point = new_power / data->rev_power_rate;
             }
     	}
-    	else if (within_tolerance(data)) {
-        	if (DEBUG_MODE) 
-        	            fprintf(data->logfile,"@within tolerance\n");
+    	else if (within_tolerance(data, *data->position) || future_stop_ok) {
+        	if (DEBUG_MODE && data->state != cs_atposition) 
+        	            fprintf(data->logfile,"@within tolerance or almost stopped and expect to be within tolerance\n");
     		new_power = 0.0;
        		data->current_set_point = 0.0;
        		data->sub_state = is_stopping;
     	}
+    	else /* are we positioning and far enough away to ramp to speed   */
+        	if (  (data->sub_state != is_ramp && data->sub_state != is_prestart && data->sub_state != is_speed_ramp) &&
+        	        labs(*data->stop_position - *data->position ) > labs(*data->set_point) / 2 
+    	            * ( (*data->fwd_startup_time + *data->rev_startup_time)/2 + (*data->fwd_stopping_time + *data->rev_stopping_time)/2 ) ) {
+                data->sub_state = is_ramp;
+                if (aiming_forwards(data))
+                    init_ramp(data, &data->ramp,  *data->fwd_crawl_speed, 5 * *data->fwd_crawl_speed, 150);
+                else 
+                    init_ramp(data, &data->ramp,  *data->rev_crawl_speed, 5 * *data->rev_crawl_speed, 150);
+    	}
     	else /* are we positioning but not moving fast enough? */
-    	    if ( (data->sub_state != is_ramp && data->sub_state != is_speed_ramp) && 
+    	    if ( (data->sub_state != is_ramp && data->sub_state != is_prestart && data->sub_state != is_speed_ramp) && 
         	     ( ( aiming_forwards(data) && data->speed < *data->fwd_crawl_speed )
         	       || ( aiming_backwards(data) && data->speed > *data->rev_crawl_speed ) ) ) 
         	{
@@ -1488,13 +1509,18 @@ int poll_actions(void *scope) {
     	
     	long stopping_distance = getStoppingDistance(data, stopping_time);
     	
-		/* within tolerance - stop immediately */
-		if (within_tolerance(data) ) {
+		/* within tolerance or within 60ms of the stop position - stop immediately */
+		
+		/* if we are almost stopped, we will coast a little before the motion stops, here
+		    is a rough estimate of that distance */
+		long future_stop = *data->position + 3 * (*data->position - data->last_position );
+		int future_stop_ok = within_tolerance(data, future_stop);
+		if (within_tolerance(data, *data->position) || future_stop_ok ) {
 			if (DEBUG_MODE && new_power != 0) 
 		        fprintf(data->logfile,"@stopping within tolerance\n");
-			data->current_set_point = 0.0; // 
+			data->current_set_point = 0.0; /* normally setting this is a bad idea... TBD */
 			new_power = 0.0;
-			if (*data->position == data->last_position) {
+			if ( *data->position == data->last_position && future_stop_ok) {
 				if (data->state != cs_atposition) {
     				atposition(data, scope);
     				data->sub_state = is_stopped;
