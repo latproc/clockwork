@@ -395,7 +395,7 @@ public:
     uint16_t buffer_len;
 	const long *tolerance;
     
-    InputFilterSettings() :property_changed(true), noise_tolerance(8), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
+    InputFilterSettings() :property_changed(true), noise_tolerance(6), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
 };
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
