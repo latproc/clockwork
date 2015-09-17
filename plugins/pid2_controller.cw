@@ -64,7 +64,7 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <buffering.c>
 #include <unistd.h>
 
-#define NPOS_SAMPLES 6
+#define NPOS_SAMPLES 4
 /*
 #define USE_IOTIME 1
 */
@@ -94,6 +94,7 @@ enum InternalState {
 	is_stopping,    /* creeping to a set position */
 	is_holding,     /* monitoring a position and driving back/forth as necessary */
 	is_ramp,
+	is_speed_ramp,  /* a ramp to a different set point within positioning mode */
 	is_end_ramp
 };
 
@@ -301,7 +302,7 @@ static uint64_t microsecs() {
 void show_status(struct PIDData *data, double new_power) {
 	if ( DEBUG_MODE && data->last_position != *data->position) 
 	{
-	    if (data->state == cs_ramp || data->sub_state == is_ramp)
+	    if (data->state == cs_ramp || data->sub_state == is_ramp || data->sub_state == is_speed_ramp)
 	    {
 	        fprintf(data->logfile,"@ramp: %ld started %ldms ago from %.3lf to %.3lf\n",
 	            data->ramp.ramp_time,(long) (microsecs() - data->ramp.ramp_start)/1000, data->ramp.start_point, data->ramp.target);
@@ -861,7 +862,8 @@ int overshot(struct PIDData *data) {
 
     /* ignore backward movement or overshoot when we are less than 25% into the ramp */
 
-    if ( (data->state == cs_ramp || data->sub_state == is_ramp) && fabs(data->ramp.start_point) < 500 
+    if ( (data->state == cs_ramp || data->sub_state == is_ramp || data->sub_state == is_speed_ramp) 
+            && fabs(data->ramp.start_point) < 500 
             && fabs(data->ramp.target) > fabs(data->ramp.start_point)
             && data->ramp.ramp_used < 0.25) return 0; 
 
@@ -925,14 +927,14 @@ int stopped(struct PIDData *data) {
 int aiming_forwards(struct PIDData *data) {
     if (data->state == cs_speed ) return *data->set_point > 0;
     if (data->state == cs_position) return *data->stop_position > *data->position;
-    if ( (data->state == cs_ramp || data->sub_state == is_ramp) && data->ramp.target > 0) return 1;
+    if ( (data->state == cs_ramp || data->sub_state == is_ramp || data->sub_state == is_speed_ramp) && data->ramp.target > 0) return 1;
     return 0;
 }
 
 int aiming_backwards(struct PIDData *data) {
     if (data->state == cs_speed ) return *data->set_point < 0;
     if (data->state == cs_position) return *data->stop_position < *data->position;
-    if ( (data->state == cs_ramp || data->sub_state == is_ramp) && data->ramp.target < 0) return 1;
+    if ( (data->state == cs_ramp || data->sub_state == is_ramp || data->sub_state == is_speed_ramp) && data->ramp.target < 0) return 1;
     return 0;
 }
 
@@ -943,20 +945,24 @@ int position_homing(struct PIDData *data) {
 		return labs(*data->position - *data->stop_position + *data->rev_tolerance) < 50;
 }
 
-static void update_forward_power_offset(struct PIDData *data, void *scope) {
+static void update_forward_power_offset(struct PIDData *data, void *scope, long startup_power) {
 
-    if (!power_valid( data, data->current_power) ) {
+    if (!power_valid( data, startup_power) ) {
         if (DEBUG_MODE)
-            fprintf(data->logfile, "%s ERROR: calculated power %8.3lf is out of range\n",
-                data->conveyor_name, data->current_power);
-        data->current_power = 0.0;  
+            fprintf(data->logfile, "%s ERROR: calculated power %ld is out of range\n",
+                data->conveyor_name, startup_power);
     }    
     else if (data->current_power>0 ) {
+        /* here we have another delicate calculation. We have a new power at which movement has been seen
+            but the system may be unresponsive and we do not want to use a high power value  if that is
+            not the actual value needed to start the system. We try to check for 'excessive' movement
+            but what is a good measure of 'excessive' in this case.
+        */
     	double mean_offset = bufferAverage(data->fwd_power_offsets);
-    	if (*data->position - data->last_position > 6 && data->current_power > 0.5*mean_offset) /* overpowered */
+    	if (*data->position - data->last_position > 20 && startup_power > 0.7*mean_offset) /* overpowered */
     		addSample(data->fwd_power_offsets, data->now_t, 0.5 * mean_offset);
     	else
-    		addSample(data->fwd_power_offsets, data->now_t, data->current_power);
+    		addSample(data->fwd_power_offsets, data->now_t, startup_power);
     	long new_start_power = long_range_limited( bufferAverage(data->fwd_power_offsets), 1, 2000);
     	setIntValue(scope, "fwd_settings.PowerOffset", new_start_power);
 
@@ -968,19 +974,19 @@ static void update_forward_power_offset(struct PIDData *data, void *scope) {
     }
 }
 
-void update_reverse_power_offset(struct PIDData *data, void *scope) {
-    if (!power_valid( data, data->current_power) ) {
+void update_reverse_power_offset(struct PIDData *data, void *scope, long startup_power) {
+    if (!power_valid( data, startup_power) ) {
         if (DEBUG_MODE)
-            fprintf(data->logfile, "%s ERROR: calculated power %8.3lf is out of range\n",
-                data->conveyor_name, data->current_power);
-        data->current_power = 0.0;  
+            fprintf(data->logfile, "%s ERROR: calculated power %ld is out of range\n",
+                data->conveyor_name, startup_power);
     }    
-    else if (data->current_power < 0) {
+    else if (startup_power < 0) {
+        /* see corresponding comments about the fwd version of this */
     	double mean_offset = bufferAverage(data->rev_power_offsets);
-    	if (*data->position - data->last_position < -6 && data->current_power < 0.5*mean_offset) /* overpowered */
+    	if (*data->position - data->last_position < -10 && startup_power < 0.7*mean_offset) /* overpowered */
     		addSample(data->rev_power_offsets, data->now_t, 0.5 * mean_offset);
     	else
-    		addSample(data->rev_power_offsets, data->now_t, data->current_power);
+    		addSample(data->rev_power_offsets, data->now_t, startup_power);
     	long new_start_power = long_range_limited( bufferAverage(data->rev_power_offsets), -2000, -1);
     	setIntValue(scope, "rev_settings.PowerOffset", new_start_power);
 
@@ -996,8 +1002,9 @@ void update_reverse_power_offset(struct PIDData *data, void *scope) {
 
 long handle_prestart_calculations(struct PIDData *data, void *scope, enum State new_state, long new_power, int go_forward) {
     double set_point = labs(*data->set_point)  * (go_forward) ? 1 : -1;
-	if (DEBUG_MODE)
+	/*if (DEBUG_MODE)
 		fprintf(data->logfile,"processing prestart calculations %s\n", (go_forward) ? "fwd" : "rev");
+	*/
 
     if (data->current_power == 0.0) {
 		data->current_power = sign(set_point);   
@@ -1014,7 +1021,8 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 	if (set_point > 0 && *data->position - data->start_position > 20) { /* fwd motion */
 		if (data->state == cs_position) {
 			data->sub_state = is_ramp;
-			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart target = %.0lf\n", data->ramp.target);
+			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart target = %.0lf, time = %ld\n", 
+			        data->ramp.target, data->ramp.ramp_time);
 			data->ramp.ramp_start = data->now_t;
    			//init_ramp(data, &data->ramp, data->current_set_point, *data->set_point, *data->fwd_startup_time);
 		}
@@ -1024,11 +1032,13 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
  			data->ramp_start_time = 0;
 			data->last_position = *data->position;
 			data->ramp.ramp_start = data->now_t;
-			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart target = %.0lf\n", data->ramp.target);
+			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart target = %.0lf, time = %ld\n", 
+			        data->ramp.target, data->ramp.ramp_time);
     		//init_ramp(data, &data->ramp, data->current_set_point, *data->set_point, *data->fwd_startup_time);
 		}
-		/* update forward power offset */
-		update_forward_power_offset(data, scope);
+		/* update forward power offset - use the power from 60ms ago to account for latency */
+		double startup_power = getBufferValueAt(data->power_records, data->now_t - 60000);
+		update_forward_power_offset(data, scope, startup_power);
 
 		if (DEBUG_MODE)
 			fprintf(data->logfile,"@fwd movement started. time: %ld power: %ld, %s %s\n",
@@ -1051,7 +1061,9 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 			if (DEBUG_MODE) fprintf(data->logfile,"ramping from prestart\n");
 			//init_ramp(data, &data->ramp, data->current_set_point, - labs(*data->set_point), *data->rev_startup_time);
 		}
-		update_reverse_power_offset(data, scope);
+		/* update forward power offset - use the power from 60ms ago to account for latency */
+		long startup_power = (long)getBufferValueAt(data->power_records, data->now_t - 60000);
+		update_reverse_power_offset(data, scope, startup_power);
 		if (DEBUG_MODE)
 			fprintf(data->logfile,"%s rev movement started. time: %ld power: %ld\n",
 					data->conveyor_name, (long)data->rev_start_delay, *data->rev_start_power);
@@ -1271,14 +1283,31 @@ int poll_actions(void *scope) {
     			if (DEBUG_MODE) fprintf(data->logfile,"@ramping forward for stop pos change\n");
             	data->state = cs_position;
 				data->sub_state = is_ramp;
-                init_ramp(data, &data->ramp, data->speed, labs(*data->set_point), *data->fwd_ramp_time);
+				/* going to ramp up, decide whether to use the startup ramp time or the speed-to-speed ramp time */
+				if ( labs(data->speed) < 400 && labs(*data->set_point) - labs(data->speed) > 1000 )
+                    init_ramp(data, &data->ramp, data->speed, labs(*data->set_point), *data->fwd_startup_time);
+                else
+                    init_ramp(data, &data->ramp, data->speed, labs(*data->set_point), *data->fwd_ramp_time);
+                if (distance_to_stop > 2000) {
+                    data->sub_state = is_prestart;
+                    data->start_time = data->now_t;
+        	        data->start_position = *data->position;
+                }
             }
-            /* new position is behing */
+            /* new position is behind */
             else if ( distance_to_stop < 0 )  {
     			if (DEBUG_MODE) fprintf(data->logfile,"@ramping reverse for stop pos change\n");
         		data->state = cs_position;
 				data->sub_state = is_ramp;
-                init_ramp(data, &data->ramp, data->speed, -labs(*data->set_point), *data->rev_ramp_time);
+				if ( labs(data->speed) < 400 && labs(*data->set_point) - labs(data->speed) > 1000 )
+                    init_ramp(data, &data->ramp, data->speed, -labs(*data->set_point), *data->rev_startup_time);
+                else
+                    init_ramp(data, &data->ramp, data->speed, -labs(*data->set_point), *data->rev_ramp_time);
+                if (distance_to_stop < -2000) {
+                    data->sub_state = is_prestart;
+                    data->start_time = data->now_t;
+        	        data->start_position = *data->position;
+                }
             }
         }
     }
@@ -1293,7 +1322,8 @@ int poll_actions(void *scope) {
                 ( data->state == cs_position && 
                     ( data->sub_state == is_speed /* positioning and moving */
                         /*or positioning and ramping to the old set point */
-                    || ( data->sub_state == is_ramp && data->ramp.target == data->saved_set_point )
+                    || ( (data->sub_state == is_ramp || data->sub_state == is_speed_ramp)
+                            && data->ramp.target == data->saved_set_point )
                     ) 
                 )
             )
@@ -1318,12 +1348,12 @@ int poll_actions(void *scope) {
             }
             else
                 data->sub_state = is_ramp;
-        }
+        }   
         
    	    data->saved_set_point = *data->set_point;   
    	    
    	    /* if we should be ramping, adjust the ramp now */
-   	    if (data->sub_state == is_ramp) {
+   	    if (data->sub_state == is_ramp || data->sub_state == is_speed_ramp) {
             long set_point = *data->set_point;
         
             /* if positioning, make sure the new set point points in the right direction */
@@ -1424,11 +1454,12 @@ int poll_actions(void *scope) {
        		data->sub_state = is_stopping;
     	}
     	else /* are we positioning but not moving fast enough? */
-    	    if ( data->sub_state != is_ramp && 
+    	    if ( (data->sub_state != is_ramp && data->sub_state != is_speed_ramp) && 
         	     ( ( aiming_forwards(data) && data->speed < *data->fwd_crawl_speed )
         	       || ( aiming_backwards(data) && data->speed > *data->rev_crawl_speed ) ) ) 
         	{
-                if ( labs(*data->stop_position - *data->position) > 400 && data->sub_state != is_ramp ) {
+                if ( labs(*data->stop_position - *data->position) > 400 
+                        && (data->sub_state != is_ramp && data->sub_state != is_speed_ramp) ) {
     		        if (DEBUG_MODE) 
     		            fprintf(data->logfile,"@positioning %s %s but too slow - ramping\n", 
         		            show_state(data->state), show_istate(data->sub_state));
@@ -1544,14 +1575,14 @@ int poll_actions(void *scope) {
     		}
     		
     		/* ramping up and seeking - abort the ramp and ramp down. */
-    		if (data->sub_state == is_ramp  && close_to_target
+    		if ( (data->sub_state == is_ramp || data->sub_state == is_speed_ramp)  && close_to_target
     		        && fabs(data->ramp.target) > fabs(data->ramp.start_point)) {
     		    if (DEBUG_MODE)  fprintf(data->logfile, "@ramping-up abort and stop\n");
     		    init_ramp(data, &data->ramp, data->current_set_point, 0.0, stopping_time * 1000 );
     		}
 
     		/* seeking and getting close to the target */
-    		if ( data->sub_state != is_stopped && data->sub_state != is_ramp && close_to_target  )
+    		if ( data->sub_state != is_stopped && data->sub_state != is_ramp && data->sub_state != is_speed_ramp && close_to_target  )
     		{
     			data->sub_state = is_ramp;
     			if ( *data->position < *data->stop_position) {
@@ -1578,29 +1609,7 @@ int poll_actions(void *scope) {
     		    
     		*/
     		
-    		/*
-    		if (data->sub_state == is_ramp && *data->stop_position > *data->position 
-    		        &&  labs(data->speed) < *data->fwd_crawl_speed
-    		        && *data->stop_position - *data->position < 400)
-        		) {
-    		    
-				data->sub_state = is_stopping;
-				data->current_set_point = 2 * *data->fwd_crawl_speed;
-				new_power = data->fwd_power_rate * data->current_set_point;
-			}
-			else 
-			
-    			if (data->sub_state == is_ramp 
-    			        && *data->stop_position < *data->position 
-    			        &&  labs(data->speed) > *data->rev_crawl_speed) {
-    				data->sub_state = is_stopping;
-     				data->current_set_point = 2 * *data->rev_crawl_speed;
-    				new_power = data->rev_power_rate * data->current_set_point;
-    			}
-    		else
-    		*/ 
-    		
-    		if ( data->sub_state == is_ramp 
+    		if ( (data->sub_state == is_ramp   || data->sub_state == is_speed_ramp)
     		    && fabs(data->ramp.target) < 4.0 * *data->fwd_crawl_speed 
     			&&  !close_to_target  ) /* at the current deceleration we will stop before target */
     		{	
@@ -1656,15 +1665,15 @@ int poll_actions(void *scope) {
     		}
     		
     	}
-		if (data->state == cs_ramp || (data->state == cs_position && data->sub_state == is_ramp) ) {
+		if (data->state == cs_ramp || (data->state == cs_position 
+		        && (data->sub_state == is_ramp || data->sub_state == is_speed_ramp) ) ) {
 			if (DEBUG_MODE) 
 		        fprintf(data->logfile,"@ramping \n");
 			double set_point = data->current_set_point;
 		
 		    /* positioning and slowing down */
 			if ( data->state == cs_position 
-			        && fabs(data->ramp.target) < fabs(data->ramp.start_point) 
-			        && fabs(data->ramp.target) < 4 * *data->fwd_crawl_speed ) { /* stopping */
+			        && fabs(data->ramp.target) < 4 * labs(*data->fwd_crawl_speed) ) { /* stopping */
 			        
 			    /* since we are trying to seek a position, do not allow the ramp down to get too slow. */
 			        
@@ -1702,16 +1711,13 @@ int poll_actions(void *scope) {
     				if ( data->state == cs_ramp ) { data->state = cs_speed; }
     				data->last_control_change = now_t; 
     				data->sub_state = is_end_ramp;
-    				/*
-    			    data->current_set_point = data->ramp.target;
-    			    data->last_set_point = data->ramp.target;
-    			    */
         			if (DEBUG_MODE) {
             		    fprintf(data->logfile, "%s end of ramp: set point is now %ld\n", data->conveyor_name, data->current_set_point);
         		    }
 			    }
 			    else if ( ramp_done(&data->ramp) ) {
 			        /* update the driving state to switch out of the ramp */
+			        if (DEBUG_MODE)  fprintf(data->logfile, "switching out of ramp back to speed mode\n");
     				if ( data->state == cs_ramp ) data->state = cs_speed;
     				data->last_control_change = now_t;
     				data->sub_state = is_end_ramp;
@@ -1761,19 +1767,10 @@ int poll_actions(void *scope) {
 		    We have a +/- 5% window around the target speed where no control adjustments are attempted.
 		*/
 		
-		if (data->sub_state == is_end_ramp && now_t - data->last_control_change >= 140000 ) {
-		    data->sub_state = is_speed;
-		    data->current_set_point = data->speed;
-		    data->last_set_point = data->speed;
-		}
-		else if (data->sub_state == is_end_ramp ) {
-		    data->current_set_point = data->speed;
-		    data->last_set_point = data->speed;
-		}
-		
-		if ( ( (data->state == cs_speed && data->sub_state != is_end_ramp) || ( data->state == cs_position && data->sub_state == is_speed) )
+		if ( data->sub_state != is_end_ramp && ( (data->state == cs_speed ) || ( data->state == cs_position && data->sub_state == is_speed) )
 		        && labs(data->speed) >= 500 && labs(data->current_set_point) >= 2000 ) {
-		        
+		    
+		    double calculated_power = new_power;
 		    if (now_t - data->last_control_change > 100000 ) {
 		        double ratio = fabs((double)data->speed / (double)data->current_set_point);
 		        double speed = data->speed;
@@ -1781,8 +1778,8 @@ int poll_actions(void *scope) {
 		        double set_point = (double)( labs(data->current_set_point) * sign(data->speed)) ;
 		        if (ratio < 0.90) {
 		            if (speed > 0.0) {
-    		            new_power = set_point * data->fwd_power_rate + *data->fwd_crawl_adjust;
-    		            double new_power_rate = new_power / set_point;
+    		            calculated_power = set_point * data->fwd_power_rate + *data->fwd_crawl_adjust;
+    		            double new_power_rate = calculated_power / set_point;
     		            addSample(data->fwd_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
     		            long new_scale = long_range_limited( bufferAverage(data->fwd_power_scales), 500, 1500);
                     	char *tmpstr = doubleArrayToString(length(data->fwd_power_scales), data->fwd_power_scales->values);
@@ -1792,8 +1789,8 @@ int poll_actions(void *scope) {
 		                if (DEBUG_MODE) { fprintf(data->logfile, "increased fwd power scale to %ld\n", *data->fwd_power_scale); }
     		        }
     		        else {
-    		            new_power = set_point * data->rev_power_rate - labs(*data->rev_crawl_adjust);
-    		            double new_power_rate = fabs(new_power / set_point);
+    		            calculated_power = set_point * data->rev_power_rate - labs(*data->rev_crawl_adjust);
+    		            double new_power_rate = fabs(calculated_power / set_point);
     		            addSample(data->rev_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
     		            long new_scale = long_range_limited( bufferAverage(data->rev_power_scales), 500, 1500);
                     	char *tmpstr = doubleArrayToString(length(data->rev_power_scales), data->rev_power_scales->values);
@@ -1806,8 +1803,8 @@ int poll_actions(void *scope) {
 		        }
 		        else if (ratio > 1.10) {
 		            if (speed > 0.0) {
-    		            new_power = set_point * data->fwd_power_rate - *data->fwd_crawl_adjust;
-    		            double new_power_rate = new_power / set_point;
+    		            calculated_power = set_point * data->fwd_power_rate - *data->fwd_crawl_adjust;
+    		            double new_power_rate = calculated_power / set_point;
     		            addSample(data->fwd_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
     		            long new_scale = long_range_limited( bufferAverage(data->fwd_power_scales), 500, 1500);
                     	char *tmpstr = doubleArrayToString(length(data->fwd_power_scales), data->fwd_power_scales->values);
@@ -1817,8 +1814,8 @@ int poll_actions(void *scope) {
 		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased fwd power scale to %ld\n", *data->fwd_power_scale); }
     		        }
     		        else {
-    		            new_power = set_point * data->rev_power_rate + labs(*data->rev_crawl_adjust);
-    		            double new_power_rate = fabs(new_power / set_point);
+    		            calculated_power = set_point * data->rev_power_rate + labs(*data->rev_crawl_adjust);
+    		            double new_power_rate = fabs(calculated_power / set_point);
     		            addSample(data->rev_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
     		            long new_scale = long_range_limited( bufferAverage(data->rev_power_scales), 500, 1500);
                      	char *tmpstr = doubleArrayToString(length(data->rev_power_scales), data->rev_power_scales->values);
@@ -1830,8 +1827,47 @@ int poll_actions(void *scope) {
     		        data->last_control_change = now_t;
 		        }
 		    }
+		    new_power = calculated_power;
 		}
-
+		
+		if (data->sub_state == is_end_ramp && now_t - data->last_control_change >= 140000 ) {
+		    double speed = data->speed;
+	        double set_point = (double)( labs(*data->set_point) * sign(data->speed)) ;
+	        if (speed > 0.0) {
+                double calculated_power = set_point * data->fwd_power_rate + *data->fwd_crawl_adjust;
+                double new_power_rate = calculated_power / set_point;
+                addSample(data->fwd_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
+                long new_scale = long_range_limited( bufferAverage(data->fwd_power_scales), 500, 1500);
+            	char *tmpstr = doubleArrayToString(length(data->fwd_power_scales), data->fwd_power_scales->values);
+            	setStringValue(scope,"fwd_settings.PowerScales", tmpstr);
+    			setIntValue(scope, "fwd_settings.PowerScale", new_scale);
+        		data->fwd_power_rate = (double)*data->fwd_power_scale / 1000.0; 		
+                calculated_power = set_point * data->fwd_power_rate;
+    	        new_power = calculated_power;
+	        }
+	        else {
+                double calculated_power = set_point * data->rev_power_rate + *data->rev_crawl_adjust;
+                double new_power_rate = calculated_power / set_point;
+                addSample(data->rev_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
+                long new_scale = long_range_limited( bufferAverage(data->rev_power_scales), 500, 1500);
+            	char *tmpstr = doubleArrayToString(length(data->rev_power_scales), data->rev_power_scales->values);
+            	setStringValue(scope,"rev_settings.PowerScales", tmpstr);
+    			setIntValue(scope, "rev_settings.PowerScale", new_scale);
+        		data->rev_power_rate = (double)*data->rev_power_scale / 1000.0; 		
+                calculated_power = set_point * data->rev_power_rate;
+    	        new_power = calculated_power;
+	        }
+		    data->sub_state = is_speed;
+		    data->current_set_point = set_point;
+		    data->last_set_point = set_point;
+		    data->last_control_change = data->now_t;
+		}
+/*
+		else if (data->sub_state == is_end_ramp ) {
+		    data->current_set_point = data->speed;
+		    data->last_set_point = data->speed;
+		}
+*/
 #if 0
 		/* calculate PID control if we are ramping, driving or seeking */
 		if ( data->state == cs_speed || data->state == cs_ramp 
@@ -1885,15 +1921,17 @@ int poll_actions(void *scope) {
 calculated_power:
 	if (new_power == 0 || new_power != data->current_power) {
     
+#if 0
     	if (new_power != data->current_power && DEBUG_MODE)
     		fprintf(data->logfile,"%s new power: %8.3lf curr power %8.3lf\n", 
     		    data->conveyor_name, new_power, data->current_power);
+#endif		    
     		    
     	if (DEBUG_MODE) setIntValue(statistics_scope, "Pwr", new_power);
 		if ( new_power > 0 && new_power > data->current_power + *data->ramp_limit) {
 			if (DEBUG_MODE) 
-			    fprintf(data->logfile,"warning: %s wanted change of %f6.2, limited to %ld\n",
-					data->conveyor_name, new_power - data->current_power, *data->ramp_limit);
+			    fprintf(data->logfile,"warning: %s wanted change of %f6.2, for power %.3lf limited to %ld\n",
+					data->conveyor_name, new_power - data->current_power, new_power, *data->ramp_limit);
 			new_power = data->current_power + *data->ramp_limit;
 		}
 		else if ( new_power < 0 && new_power < data->current_power - *data->ramp_limit) {
