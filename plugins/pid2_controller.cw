@@ -64,7 +64,7 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <buffering.c>
 #include <unistd.h>
 
-#define NPOS_SAMPLES 4
+#define NPOS_SAMPLES 12
 /*
 #define USE_IOTIME 1
 */
@@ -237,6 +237,7 @@ struct PIDData {
 	long speed; /* current estimated speed */
 	int speedcount; /* how many counts have we been at this speed */
 	enum InternalState sub_state;
+	long current_stop_position;
 
 	/* keep a record of the power at which movement started */
 	const long *fwd_start_power;
@@ -258,6 +259,7 @@ struct PIDData {
 	long current_set_point;
 
 	char *conveyor_name;
+	int is_carriage;
 
 	/* stop/start control */
 	long stop_marker;
@@ -314,11 +316,13 @@ void show_status(struct PIDData *data, double new_power) {
 	}
 }
 
-double adjust_set_point (double current, double start, double target, long ramp_time, long ramp_start) {
-        if (ramp_time <= 0) return target;
+double adjust_set_point (struct PIDData *data, double current, double start, double target, long ramp_time, long ramp_start ){
+		if (ramp_time <= 0) return target;
 		long tr = (microsecs() - ramp_start) / 1000;
 		double delta = target - start;
-		double new_sp = target - delta *  (double)(ramp_time - tr) / ramp_time;
+		double ratio = (double)(ramp_time - tr) / (double)ramp_time;
+    if (data->is_carriage && ratio > 0.6 && start > 3000 && target < start) ratio = 0.6;
+		double new_sp = target - delta * ratio;
 		/* check for overshoot */
 		if (target >= start && new_sp > target) new_sp = target;
 		else if (target <= start && new_sp < target) new_sp = target;
@@ -326,14 +330,16 @@ double adjust_set_point (double current, double start, double target, long ramp_
 		return new_sp;
 }
 
-double adjust_power (double current, double start, double target, long ramp_time, long ramp_start, double power_rate, double *ramp_used) {
+double adjust_power (struct PIDData *data, double current, double start, double target, long ramp_time, long ramp_start, double power_rate, double *ramp_used) {
         if (ramp_time <= 0) return target;
 		long tr = (microsecs() - ramp_start) / 1000;
 		double delta = target - start;
 		*ramp_used = (double)(ramp_time - tr) / (double)ramp_time;
 		if (*ramp_used > 1.0) *ramp_used = 1.0;
 		if (*ramp_used < 0.0) *ramp_used = 0.0;
-		double new_sp = target - delta *  *ramp_used;
+		double ratio = *ramp_used;
+    if (data->is_carriage && ratio > 0.6 && start > 3000 && target < start) ratio = 0.6;
+		double new_sp = target - delta * ratio;
 		
 		/* check for overshoot */
 		if (target >= start && new_sp > target) new_sp = target;
@@ -343,7 +349,7 @@ double adjust_power (double current, double start, double target, long ramp_time
 }
 
 double adjust_set_point_ramp(struct PIDData *data, struct ramp_settings *rs) {
-	rs->set_point = adjust_set_point( rs->set_point, rs->start_point, rs->target, rs->ramp_time, rs->ramp_start);
+	rs->set_point = adjust_set_point(data, rs->set_point, rs->start_point, rs->target, rs->ramp_time, rs->ramp_start);
 	return rs->set_point;
 }
 
@@ -355,7 +361,7 @@ double ramp_stage(struct PIDData *data, struct ramp_settings *rs)  {
 }
 
 double adjust_power_ramp(struct PIDData *data, struct ramp_settings *rs) {
-	double power = adjust_power( rs->set_point, rs->start_point, rs->target, rs->ramp_time, rs->ramp_start ,rs->power_rate, &rs->ramp_used);
+	double power = adjust_power(data, rs->set_point, rs->start_point, rs->target, rs->ramp_time, rs->ramp_start ,rs->power_rate, &rs->ramp_used);
 	return power;
 }
 
@@ -475,6 +481,7 @@ int check_states(void *scope)
 		{
 			data->conveyor_name = getStringValue(scope, "NAME");
 			if (!data->conveyor_name) data->conveyor_name = strdup("UNKNOWN CONVEYOR");
+			else if (strcmp(data->conveyor_name, "C_GrabCarriage") == 0) data->is_carriage = 1;
 		}
 
 #ifdef USE_MEASURED_PERIOD
@@ -641,6 +648,7 @@ int check_states(void *scope)
 
 		data->state = cs_init;
 		data->current_power = 0.0;
+		data->current_stop_position = 0;
 
 		data->now_t = 0;
 		data->delta_t = 0;
@@ -709,6 +717,7 @@ static void atposition(struct PIDData*data, void *scope) {
 	data->have_stopped = 1;
 	reset_stop_test(data);
 	data->state = cs_atposition;
+	data->current_stop_position = *data->position;
 	data->ramp_down_start = 0;
 	data->current_set_point = 0;
 	changeState(scope, "atposition");
@@ -845,8 +854,14 @@ static void init_stats(void *statistics_scope) {
 #endif
 
 static int within_tolerance(struct PIDData *data, long pos) {
-    long dist = *data->stop_position - pos;
-	return  (dist >= 0 && dist <= *data->fwd_tolerance) || (dist < 0 && -dist <= *data->rev_tolerance);
+    if (data->state == cs_atposition) {
+        long dist = data->current_stop_position - pos;
+    	return  (dist >= 0 && dist <= 2* *data->fwd_tolerance) || (dist < 0 && -dist <= 2* *data->rev_tolerance);
+	}
+	else {
+        long dist = *data->stop_position - pos;
+    	return  (dist >= 0 && dist <= *data->fwd_tolerance) || (dist < 0 && -dist <= *data->rev_tolerance);	
+	}
 }
 
 int overshot(struct PIDData *data) {
@@ -870,9 +885,9 @@ int overshot(struct PIDData *data) {
     long dist = *data->stop_position - *data->position;
     int res = data->state == cs_position
         && ( ( dist >= *data->fwd_tolerance && data->speed < 0 
-            && dist < abs(data->speed) * data->delta_t * 5 / 1000000) /* check the overshoot not a ridiculous distance */
+            && dist < labs(data->speed) * data->delta_t * 5 ) /* check the overshoot not a ridiculous distance */
         || ( dist <= - *data->rev_tolerance && data->speed > 0 
-            && labs(dist) < data->speed * data->delta_t * 5 / 1000000  ) );
+            && labs(dist) < data->speed * data->delta_t * 5  ) );
 #endif
     if (res && DEBUG_MODE) 
 	    fprintf(data->logfile,"%s overshot speed: %ld pos: %ld stop: %ld\n", 
