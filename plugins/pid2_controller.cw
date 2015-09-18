@@ -376,6 +376,7 @@ void init_ramp(struct PIDData *data, struct ramp_settings *rs, double start, dou
 	rs->ramp_time = ramp_time;
 	rs->now = microsecs();
 	rs->ramp_start = rs->now;
+	if (start == target) rs->ramp_start = rs->now - rs->ramp_time; /* already complete if the target == start */
 	rs->start_point = start;
 	rs->target = target;
 	rs->set_point = rs->start_point;
@@ -1315,7 +1316,7 @@ int poll_actions(void *scope) {
                     init_ramp(data, &data->ramp, data->speed, labs(*data->set_point), *data->fwd_startup_time);
                 else
                     init_ramp(data, &data->ramp, data->speed, labs(*data->set_point), *data->fwd_ramp_time);
-                if (distance_to_stop > 2000) {
+                if (data->speed == 0 && distance_to_stop > 2000) {
                     data->sub_state = is_prestart;
                     data->start_time = data->now_t;
         	        data->start_position = *data->position;
@@ -1330,7 +1331,7 @@ int poll_actions(void *scope) {
                     init_ramp(data, &data->ramp, data->speed, -labs(*data->set_point), *data->rev_startup_time);
                 else
                     init_ramp(data, &data->ramp, data->speed, -labs(*data->set_point), *data->rev_ramp_time);
-                if (distance_to_stop < -2000) {
+                if (data->speed == 0 && distance_to_stop < -2000) {
                     data->sub_state = is_prestart;
                     data->start_time = data->now_t;
         	        data->start_position = *data->position;
@@ -1376,8 +1377,6 @@ int poll_actions(void *scope) {
             else
                 data->sub_state = is_ramp;
         }   
-        
-   	    data->saved_set_point = *data->set_point;   
    	    
    	    /* if we should be ramping, adjust the ramp now */
    	    if (data->sub_state == is_ramp || data->sub_state == is_speed_ramp) {
@@ -1424,6 +1423,9 @@ int poll_actions(void *scope) {
             	}
         	}
     	}
+    	        
+   	    data->saved_set_point = *data->set_point;   
+
     }
     
     if (*data->set_point && data->sub_state == is_prestart ) {
@@ -1716,7 +1718,8 @@ int poll_actions(void *scope) {
 		if (data->state == cs_ramp || (data->state == cs_position 
 		        && (data->sub_state == is_ramp || data->sub_state == is_speed_ramp) ) ) {
 			if (DEBUG_MODE) 
-		        fprintf(data->logfile,"@ramping \n");
+		        fprintf(data->logfile,"@ramping from %.3lf to %.3lf over %ld\n",
+					data->ramp.start_point, data->ramp.target, data->ramp.ramp_time);
 			double set_point = data->current_set_point;
 		
 		    /* positioning and slowing down */
@@ -1751,16 +1754,18 @@ int poll_actions(void *scope) {
 			    //if (DEBUG_MODE) {fprintf(data->logfile, "accelerating\n"); }
 			    
 			    /* if the current speed is close to the target set point, stop ramping */
-			    if ( fabs( (double)data->speed) >= 0.80 * fabs(data->ramp.target) || ramp_done(&data->ramp) ) {
+				int am_at_speed = fabs( (double)data->speed) >= 0.80 * fabs(data->ramp.target);
+			    if ( am_at_speed ) {
 			    
-			        if (DEBUG_MODE) { fprintf(data->logfile, "at speed\n"); }
+			        if (DEBUG_MODE)	fprintf(data->logfile, "at speed %ld\n", data->speed);
 			        
 			        /* update the driving state to switch out of the ramp */
     				if ( data->state == cs_ramp ) { data->state = cs_speed; }
     				data->last_control_change = now_t; 
     				data->sub_state = is_end_ramp;
         			if (DEBUG_MODE) {
-            		    fprintf(data->logfile, "%s end of ramp: set point is now %ld\n", data->conveyor_name, data->current_set_point);
+            		    fprintf(data->logfile, "%s end of ramp: set point is now %ld\n", 
+							data->conveyor_name, data->current_set_point);
         		    }
 			    }
 			    else if ( ramp_done(&data->ramp) ) {
@@ -1867,7 +1872,7 @@ int poll_actions(void *scope) {
     		            addSample(data->rev_power_scales, data->now_t, long_range_limited( 1000 * new_power_rate, 500, 1500));
     		            long new_scale = long_range_limited( bufferAverage(data->rev_power_scales), 500, 1500);
                      	char *tmpstr = doubleArrayToString(length(data->rev_power_scales), data->rev_power_scales->values);
-                    	setStringValue(scope,"fwd_settings.PowerScales", tmpstr);
+                    	setStringValue(scope,"rev_settings.PowerScales", tmpstr);
            			    setIntValue(scope, "rev_settings.PowerScale", new_scale);
                 		data->rev_power_rate = (double)*data->rev_power_scale / 1000.0; 		
 		                if (DEBUG_MODE) { fprintf(data->logfile, "decreased rev power scale to %ld\n", *data->rev_power_scale); }
