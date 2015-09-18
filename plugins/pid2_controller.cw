@@ -859,6 +859,7 @@ int overshot(struct PIDData *data) {
     /* overshot the target? */
     if (data->state != cs_position) return 0;
 
+#if 0
     /* ignore backward movement or overshoot when we are less than 25% into the ramp */
 
     if ( (data->state == cs_ramp || data->sub_state == is_ramp || data->sub_state == is_speed_ramp) 
@@ -871,6 +872,14 @@ int overshot(struct PIDData *data) {
     int res = data->state == cs_position
         && (        ( dist >= *data->fwd_tolerance && data->speed < 0 )
                 ||  ( dist <= - *data->rev_tolerance && data->speed > 0) );
+#else
+    long dist = *data->stop_position - *data->position;
+    int res = data->state == cs_position
+        && ( ( dist >= *data->fwd_tolerance && data->speed < 0 
+            && dist < labs(data->speed) * data->delta_t * 5 ) /* check the overshoot not a ridiculous distance */
+        || ( dist <= - *data->rev_tolerance && data->speed > 0 
+            && labs(dist) < data->speed * data->delta_t * 5  ) );
+#endif
     if (res && DEBUG_MODE) 
 	    fprintf(data->logfile,"%s overshot speed: %ld pos: %ld stop: %ld\n", 
 	        data->conveyor_name, data->speed, *data->position, *data->stop_position);
