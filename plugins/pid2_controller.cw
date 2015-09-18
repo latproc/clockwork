@@ -64,7 +64,7 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <buffering.c>
 #include <unistd.h>
 
-#define NPOS_SAMPLES 4
+#define NPOS_SAMPLES 12
 /*
 #define USE_IOTIME 1
 */
@@ -1375,7 +1375,7 @@ int poll_actions(void *scope) {
         	    }
         	    else {
         			if (DEBUG_MODE) fprintf(data->logfile,"ramping fwd due to set speed change\n");
-            	    init_ramp(data, &data->ramp, data->speed, set_point, *data->fwd_ramp_time);
+            	    init_ramp(data, &data->ramp, data->saved_set_point, set_point, *data->fwd_ramp_time);
         	    }
     	    }
     	    else if (set_point < 0) {   
@@ -1388,7 +1388,7 @@ int poll_actions(void *scope) {
             	}
             	else {
         			if (DEBUG_MODE) fprintf(data->logfile,"ramping rev due to set speed change\n");
-            	    init_ramp(data, &data->ramp, data->speed, set_point, *data->rev_ramp_time);
+            	    init_ramp(data, &data->ramp, -labs(data->saved_set_point), set_point, *data->rev_ramp_time);
             	}
         	}
     	    else {
