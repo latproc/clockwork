@@ -64,7 +64,7 @@ PIDCONTROLLER MACHINE M_Control, settings, output_settings, fwd_settings, rev_se
 #include <buffering.c>
 #include <unistd.h>
 
-#define NPOS_SAMPLES 12
+#define NPOS_SAMPLES 4
 /*
 #define USE_IOTIME 1
 */
@@ -876,9 +876,9 @@ int overshot(struct PIDData *data) {
     long dist = *data->stop_position - *data->position;
     int res = data->state == cs_position
         && ( ( dist >= *data->fwd_tolerance && data->speed < 0 
-            && dist < abs(data->speed) * data->delta_t * 5 ) /* check the overshoot not a ridiculous distance */
+            && dist < abs(data->speed) * data->delta_t * 5 / 1000000) /* check the overshoot not a ridiculous distance */
         || ( dist <= - *data->rev_tolerance && data->speed > 0 
-            && labs(dist) < data->speed * data->delta_t * 5  ) )
+            && labs(dist) < data->speed * data->delta_t * 5 / 1000000  ) );
 #endif
     if (res && DEBUG_MODE) 
 	    fprintf(data->logfile,"%s overshot speed: %ld pos: %ld stop: %ld\n", 
