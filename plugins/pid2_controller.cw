@@ -254,7 +254,6 @@ struct PIDData {
 	uint64_t last_control_change;
 
 	uint64_t ramp_down_start;
-	long curr_seek_power;
 	double power_scalar;
 	long current_set_point;
 
@@ -686,7 +685,6 @@ int check_states(void *scope)
 		data->speedcount = 0;
 		data->last_control_change = 0;
 
-		data->curr_seek_power = 20;
 		data->sub_state = is_stopped;
 		data->power_scalar = 1.0;
 
@@ -720,7 +718,6 @@ static void atposition(struct PIDData*data, void *scope) {
 static void halt(struct PIDData*data, void *scope) {
 	if (DEBUG_MODE) fprintf(data->logfile,"%s halt\n", data->conveyor_name);
 	data->last_set_point = 0;
-	data->saved_set_point = 0;
 	data->changing_set_point = 0;
 	data->last_Ep = 0;
 	data->total_err = 0;
@@ -728,6 +725,7 @@ static void halt(struct PIDData*data, void *scope) {
 	data->ramp_start_time = 0;
 	data->current_power = 0;
 	data->current_set_point = 0;
+	data->sub_state = is_stopped;
 	data->start_time = 0; /* allow prestart calculations */
 	setIntValue(scope, "driver.VALUE", output_scaled(data, 0) );
 	if (DEBUG_MODE) 
@@ -738,19 +736,15 @@ static void stop(struct PIDData*data, void *scope) {
 	if (DEBUG_MODE) fprintf(data->logfile,"%s stop command\n", data->conveyor_name);
 	halt(data, scope);
 	data->stop_marker = 0;
-	//data->last_stop_position = 0;
-	setIntValue(scope, "SetPoint", 0);
-	data->state = cs_stopped;
-	data->curr_seek_power = 20;
 	if (data->state == cs_interlocked) {
-		if (DEBUG_MODE)
-			fprintf(data->logfile,"%s interlocked\n", data->conveyor_name);
+		if (DEBUG_MODE) fprintf(data->logfile,"%s interlocked\n", data->conveyor_name);
 	}
 	else {
-		if (DEBUG_MODE)
-		fprintf(data->logfile,"%s stopped\n", data->conveyor_name);
+		if (DEBUG_MODE) fprintf(data->logfile,"%s stopped\n", data->conveyor_name);
+	    setIntValue(scope, "SetPoint", 0);
+	    data->state = cs_stopped;
+	    data->saved_set_point = 0;
 	}
-
 }
 
 static int sign(double val) { return (0 < val) - (val < 0); }
@@ -1107,7 +1101,7 @@ long handle_prestart_calculations(struct PIDData *data, void *scope, enum State 
 
 static void handle_state_change(struct PIDData *data, enum State new_state) {
 	/* starting to move from stopped state -> check the prestart values also load the power scale from the user  */
-	if ( new_state == cs_speed && (data->state == cs_stopped || data->state == cs_atposition) ) {
+	if ( new_state == cs_speed && (data->state == cs_interlocked || data->state == cs_stopped || data->state == cs_atposition) ) {
 	    
 	    data->state = cs_speed;
 	    data->sub_state = is_prestart;
@@ -1158,7 +1152,7 @@ int poll_actions(void *scope) {
 	if (data->last_poll == 0) goto done_polling_actions; // priming read
 	data->delta_t = now_t - data->last_poll;
 
-	void *statistics_scope = getNamedScope(scope, "stats");
+	/*void *statistics_scope = getNamedScope(scope, "stats"); */
 
 	/* collect position, last_position values */
 	if ( !get_position(data) ) return PLUGIN_COMPLETED;
@@ -1238,8 +1232,9 @@ int poll_actions(void *scope) {
 	if (new_state == cs_interlocked ) {
 	    if (DEBUG_MODE && data->state != cs_interlocked) fprintf(data->logfile, "@interlocked\n");
 		if (data->state != cs_interlocked)  {
-			stop(data, scope);
+			halt(data, scope);
 			data->state = cs_interlocked;
+    	    changeState(scope, "interlocked");
 		}
 		goto done_polling_actions;
 	}
@@ -1962,7 +1957,7 @@ calculated_power:
     		    data->conveyor_name, new_power, data->current_power);
 #endif		    
     		    
-    	if (DEBUG_MODE) setIntValue(statistics_scope, "Pwr", new_power);
+    	/*if (DEBUG_MODE) setIntValue(statistics_scope, "Pwr", new_power);*/
 		if ( new_power > 0 && new_power > data->current_power + *data->ramp_limit) {
 			if (DEBUG_MODE) 
 			    fprintf(data->logfile,"warning: %s wanted change of %f6.2, for power %.3lf limited to %ld\n",
@@ -2024,11 +2019,15 @@ done_polling_actions:
 	# Since we are not using stable states for stopped, seeking etc we 
 	# the machine would otherwise never leave interlocked.
 	interlocked WHEN driver IS interlocked OR abort IS on;
+	seeking WHEN SELF IS interlocked AND LastState == "seeking";
+	speed WHEN SELF IS interlocked AND LastState == "speed";
 	restore WHEN SELF IS interlocked; # restore state to what was happening before the interlock
 	stopped INITIAL;
 	seeking STATE;
 	speed STATE;
 	atposition STATE;
+	
+	OPTION LastState "unknown";
 	
 	abort FLAG;
 
@@ -2037,15 +2036,19 @@ done_polling_actions:
 	}
 	ENTER stopped { 
 		SET M_Control TO Ready;
-		StopPosition := 0; StopMarker := 0; 
+		StopPosition := 0; 
+		StopMarker := 0; 
 	}
-	ENTER seeking { 
+	ENTER seeking {
+    	LastState := "seeking";
 		SET M_Control TO Resetting;
 	}
 	ENTER speed { 
+    	LastState := "speed";
 		SET M_Control TO Working;
 	}
 	ENTER atposition { 
+    	LastState := atposition;
 		SET M_Control TO Ready;
 	}
 	ENTER restore { SET SELF TO stopped; } 
