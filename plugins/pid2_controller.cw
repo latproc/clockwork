@@ -1020,7 +1020,10 @@ void update_reverse_power_offset(struct PIDData *data, void *scope, long startup
 }
 
 long handle_prestart_calculations(struct PIDData *data, void *scope, enum State new_state, long new_power, int go_forward) {
-    double set_point = labs(*data->set_point)  * (go_forward) ? 1 : -1;
+	double set_point = *data->set_point;
+	if (set_point == 0) set_point =  (go_forward) ? 1 : -1;
+	else set_point = fabs(set_point) * (go_forward) ? 1 : -1;
+
 	/*if (DEBUG_MODE)
 		fprintf(data->logfile,"processing prestart calculations %s\n", (go_forward) ? "fwd" : "rev");
 	*/
