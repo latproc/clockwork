@@ -13,12 +13,12 @@ struct CircularBuffer {
 
 struct CircularBuffer *createBuffer(int size);
 void destroyBuffer(struct CircularBuffer *buf);
-void addSample(struct CircularBuffer *buf, long time, double pos);
 int size(struct CircularBuffer *buf);
 int length(struct CircularBuffer *buf);
 double bufferAverage(struct CircularBuffer *buf);
 double bufferSum(struct CircularBuffer *buf);
-double getBufferVal(struct CircularBuffer *buf, int n); /* return the item added n items ago */
+double getBufferValue(struct CircularBuffer *buf, int n);
+void addSample(struct CircularBuffer *buf, long time, double val);
 
 /* calculate the rate of change by a direct method */
 double rate(struct CircularBuffer *buf);
