@@ -261,7 +261,10 @@ void predefine_special_machines() {
 	ain_class->default_state = State("stable");
 	ain_class->initial_state = State("stable");
 	ain_class->disableAutomaticStateChanges();
+	ain_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
 	ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+	ain_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
+	ain_class->properties.add("Velocity", Value(0), SymbolTable::ST_REPLACE);
 
 	MachineClass *cnt_class = new MachineClass("COUNTER");
 	cnt_class->parameters.push_back(Parameter("module"));
@@ -272,7 +275,10 @@ void predefine_special_machines() {
 	cnt_class->default_state = State("off");
 	cnt_class->initial_state = State("off");
 	cnt_class->disableAutomaticStateChanges();
+	cnt_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
 	cnt_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+	cnt_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
+	cnt_class->properties.add("Velocity", Value(0), SymbolTable::ST_REPLACE);
 
 	MachineClass *re_class = new MachineClass("RATEESTIMATOR");
 	re_class->parameters.push_back(Parameter("position_input"));
