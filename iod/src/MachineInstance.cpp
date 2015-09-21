@@ -1964,9 +1964,9 @@ uint64_t MachineInstance::requiredAuthority() {
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
 	if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
-		FileLogger fl(program_name);
-		fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
-		<< " needed: " << expected_authority << " got " << authority << "\n";
+		//FileLogger fl(program_name);
+		//fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
+		//<< " needed: " << expected_authority << " got " << authority << "\n";
 		if (isShadow()) {
 			Channel *chn = ownerChannel();
 			if (chn && chn->current_state == ChannelImplementation::ACTIVE)
@@ -1977,9 +1977,9 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			return Action::Failed;
 	}
 	else if (expected_authority == 0 && authority != 0)  {
-		FileLogger fl(program_name);
-		fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
-		<< " needed: " << expected_authority << " got " << authority << "\n";
+		//FileLogger fl(program_name);
+		//fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
+		//<< " needed: " << expected_authority << " got " << authority << "\n";
 		return Action::Failed;
 	}
 
@@ -2216,7 +2216,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
 
 		if (published) {
-			{
+			if (false){
 				FileLogger fl(program_name);
 				fl.f() << "Sending state change for " << _name << " to " << new_state.getName() << "\n";
 			}
@@ -3956,7 +3956,7 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
-{FileLogger fl(program_name);
+if (false){FileLogger fl(program_name);
 fl.f() << _name << " Sending modbus update " << property_name  << " " << new_value 
 	<< " (kind:" << new_value.kind<< ")"<< "\n";
 }
@@ -4039,17 +4039,17 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		// right authority, the request is forwarded to
 		// the channel that owns the current machine.
 		if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
-			FileLogger fl(program_name);
-			fl.f() << _name << " refused to set property " << property << " to " << new_value << " due to authority mismatch. "
-			<< " needed: " << expected_authority << " got " << authority << "\n";
+			//FileLogger fl(program_name);
+			//fl.f() << _name << " refused to set property " << property << " to " << new_value << " due to authority mismatch. "
+			//<< " needed: " << expected_authority << " got " << authority << "\n";
 			if (isShadow()) {
 				Channel *chn = ownerChannel();
 				if (chn && chn->current_state != ChannelImplementation::DISCONNECTED) {
 					chn->sendPropertyChangeMessage(this, fullName(), property, new_value, authority);
-					fl.f() << _name << "forwarding property change request to owner channel\n";
+					//fl.f() << _name << "forwarding property change request to owner channel\n";
 				}
 				else if (chn) {
-					fl.f() << _name << "cannot forward property change request because the channel is disconnected\n";
+					//fl.f() << _name << "cannot forward property change request because the channel is disconnected\n";
 				}
 			}
 			return;
