@@ -31,6 +31,7 @@
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #endif
+#include "buffering.c"
 
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
@@ -86,6 +87,21 @@ unsigned int IOComponent::max_offset = 0;
 unsigned int IOComponent::min_offset = 1000000L;
 static std::vector<IOComponent*> *indexed_components = 0;
 IOComponent::HardwareState IOComponent::hardware_state = s_hardware_preinit;
+
+std::list<IOComponent*>regular_polls;
+
+static uint64_t last_sample = 0;
+void handle_io_sampling(uint64_t io_clock) {
+	uint64_t now = microsecs();
+	if (now - last_sample < 10000) return;
+	last_sample = now;
+	std::list <IOComponent*>::iterator iter = regular_polls.begin();
+	while (iter != regular_polls.end() ) {
+		IOComponent *ioc = *iter++;
+		ioc->read_time = io_clock;
+		ioc->filter(ioc->address.value);
+	}
+}
 
 //static void display(uint8_t *p, unsigned int count = 0);
 
@@ -391,7 +407,7 @@ class InputFilterSettings {
 public:
     bool property_changed;
     uint32_t noise_tolerance; // filter out changes with +/- this range
-    LongBuffer positions;
+    CircularBuffer *positions;
     int32_t last_sent; // this is the value to send unless the read value moves away from the mean
     int32_t prev_sent; // this is the value to send unless the read value moves away from the mean
 	uint64_t last_time; // the last time we calculated speed;_
@@ -402,14 +418,15 @@ public:
 	const long *filter_type;
 	long speed;
     
-    InputFilterSettings() :property_changed(true), noise_tolerance(6), positions(16), 
+    InputFilterSettings() :property_changed(true), noise_tolerance(6), positions(0), 
 			last_sent(0), prev_sent(0), last_time(0),
 			buffer_len(16), tolerance(0), filter_coeff(0),filter_len(0), filter_type(0),
 			speed(0) {
-	filter_coeff = new double[9];
-	double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
-	memmove(filter_coeff, c, 9 * sizeof(double));
-	filter_len = 9;
+		filter_coeff = new double[9];
+		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
+		memmove(filter_coeff, c, 9 * sizeof(double));
+		filter_len = 9;
+		positions = createBuffer(20);
  }
 
 void update(uint64_t read_time) {
@@ -419,20 +436,23 @@ void update(uint64_t read_time) {
 		prev_sent = last_sent;
 	}
 	else if (read_time - last_time >= 10000) {
+/*
 		double dt = (double)(read_time - last_time);
 		double dv = (double)(last_sent - prev_sent);
 		speed = (long)( dv / dt * 1000000.0 );
+*/
+		speed = 1000000.0 * rate(positions);
 		last_time = read_time;
 		prev_sent = last_sent;
 	}
 	
 }
 	double filter() {
-		if ((unsigned int)positions.length() < filter_len) return positions.get(0);
+		if ((unsigned int)length(positions) < filter_len) return getBufferValue(positions, 0);
 		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
-		float res = 0;
+		double res = 0;
 		for (unsigned int i=0; i<filter_len; ++i) {
-			float f = (double)positions.get(i);
+			double f = (double)getBufferValue(positions, i);
 			//printf(" %.3f,%.3f ",f, f*c[i]); 
 			res += f * c[i];
 		}
@@ -458,19 +478,20 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 	if (v2.kind == Value::t_integer) {
 		config->filter_type = &v2.iValue;
 	}
+	regular_polls.push_back(this);
 }
 
 int32_t AnalogueInput::filter(int32_t raw) {
     if (config->property_changed) {
         config->property_changed = false;
     }
-	config->positions.append(raw);
+	addSample(config->positions, (long)read_time, (double)raw);
 
-	if (!config->filter_type || (config->filter_type && *config->filter_type == 0) ) {
+	if (config->filter_type && *config->filter_type == 0 ) {
 		config->last_sent = raw;
 	}
-	else if (config->filter_type && *config->filter_type == 1) {
-		int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
+	else if ( !config->filter_type || (config->filter_type && *config->filter_type == 1))  {
+		int32_t mean = (bufferAverage(config->positions) + 0.5f);
 		if (config->tolerance) config->noise_tolerance = *config->tolerance;
 		if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
 			config->last_sent = mean;
@@ -513,15 +534,17 @@ void AnalogueInput::update() {
 class CounterInternals {
 public:
 	int32_t noise_tolerance; // filter out changes with +/- this range
-	LongBuffer positions;
+	CircularBuffer *positions;
 	int32_t last_sent; // this is the value to send unless the read value moves away from the mean
     int32_t prev_sent; // this is the value to send unless the read value moves away from the mean
 	uint64_t last_time; // the last time we calculated speed;_
 	long speed;
 	uint16_t buffer_len;
 	const long *tolerance;
-	CounterInternals() : noise_tolerance(6), positions(16), last_sent(0), 
-	prev_sent(0), last_time(0), speed(0), buffer_len(16), tolerance(0) { }
+	CounterInternals() : noise_tolerance(6), positions(0), last_sent(0), 
+	prev_sent(0), last_time(0), speed(0), buffer_len(16), tolerance(0) {
+		positions = createBuffer(20);
+	}
 
 void update(uint64_t read_time) {
 	if (prev_sent == 0) prev_sent = last_sent;
@@ -530,20 +553,23 @@ void update(uint64_t read_time) {
 		prev_sent = last_sent;
 	}
 	else if (read_time - last_time >= 10000) {
+/*
 		double dt = (double)(read_time - last_time);
 		double dv = (double)(last_sent - prev_sent);
 		speed = (long)( dv / dt * 1000000.0) ;
+*/
+		speed = 1000000.0 * rate(positions);
 		last_time = read_time;
 		prev_sent = last_sent;
 	}
 }
 	
 double filter() {
-	if ((unsigned int)positions.length() < 9) return positions.get(0);
+	if ((unsigned int)length(positions) < 9) return getBufferValue(positions,0);
 	double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
-	float res = 0;
+	double res = 0;
 	for (unsigned int i=0; i<9; ++i) {
-		float f = (double)positions.get(i);
+		double f = (double)getBufferValue(positions, i);
 		//printf(" %.3f,%.3f ",f, f*c[i]); 
 		res += f * c[i];
 	}
@@ -555,10 +581,11 @@ double filter() {
 
 Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { 
 	internals = new CounterInternals;
+	regular_polls.push_back(this);
 }
 
 int32_t Counter::filter(int32_t val) {
-	internals->positions.append(val);
+	addSample(internals->positions, (long)read_time, (double)val);
 
 #if 0
 	if (internals->filter_type && *internals->filter_type == 0) {
@@ -603,7 +630,7 @@ int32_t Counter::filter(int32_t val) {
 	return internals->last_sent;
 }
 
-CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) {
+CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {
     struct timeval now;
     gettimeofday(&now, 0);
     start_t = now.tv_sec * 1000000 + now.tv_usec;
