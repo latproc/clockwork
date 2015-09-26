@@ -84,6 +84,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
                 }
 			}
         }
+		delete[] payload;
     }
 }
 
