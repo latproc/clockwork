@@ -19,6 +19,7 @@ int length(struct CircularBuffer *buf);
 double bufferAverage(struct CircularBuffer *buf);
 double bufferSum(struct CircularBuffer *buf);
 double getBufferVal(struct CircularBuffer *buf, int n); /* return the item added n items ago */
+double getBufferValueAt(struct CircularBuffer *buf, long t); /* return an estimate of the value at time t */
 
 /* calculate the rate of change by a direct method */
 double rate(struct CircularBuffer *buf);
