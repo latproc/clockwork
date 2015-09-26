@@ -70,7 +70,7 @@ Value::Value(std::string str, Kind k)
 
 
 void Value::setDynamicValue(DynamicValue *dv) {
-    if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
+    if (kind == t_dynamic && dyn_value) { dyn_value = dyn_value->deref(); }
     kind = t_dynamic;
     dyn_value = DynamicValue::ref(dv);
 }
