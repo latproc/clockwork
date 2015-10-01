@@ -914,7 +914,7 @@ void RateEstimatorInstance::idle() {
 			Trigger *trigger = new Trigger("RateEstimatorTimer");
 			Scheduler::instance()->add(
 				new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
-			trigger = trigger->release();
+			trigger->release();
 		}
 		settings->last_pos = pos;
 	}
@@ -1427,7 +1427,8 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		while (busy_it != SharedWorkSet::instance()->end() ) {
 			MachineInstance *mi = *busy_it;
 			mi->idle();
-			if (mi->state_machine && mi->state_machine->plugin) mi->state_machine->plugin->poll_actions(mi);
+			if (mi->state_machine && mi->state_machine->plugin)
+				mi->state_machine->plugin->poll_actions(mi);
 			if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
 				busy_it = SharedWorkSet::instance()->erase(busy_it);
 				if (mi->is_active) pending_state_change.insert(mi);
@@ -2216,10 +2217,10 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
 
 		if (published) {
-			{
+			/*{
 				FileLogger fl(program_name);
 				fl.f() << "Sending state change for " << _name << " to " << new_state.getName() << "\n";
-			}
+			}*/
 			Channel::sendStateChange(this, new_state.getName(), authority);
 		}
 
@@ -2787,8 +2788,8 @@ void MachineInstance::start(Action *a) {
 	DBG_ACTIONS << _name << " STARTING: " << *a << "\n";
 
 	int i=0;
-	size_t imax = active_actions.size()-1;
 #if 0
+	size_t imax = active_actions.size()-1;
 	BOOST_FOREACH(Action *action, active_actions) {
 		if (a == action && i!= imax) {
 			NB_MSG << *a << " already queued at position " << i << " of " << active_actions.size() << "\n";
