@@ -665,9 +665,9 @@ void ProcessingThread::operator()()
 					std::cout << "received EtherCAT data but machine is not ready\n";
 			}
 
-			if (curr_t - last_sample_poll >= 50000) {
-				handle_io_sampling(global_clock); // devices that need a regular poll
+			if (curr_t - last_sample_poll >= 10000) {
 				last_sample_poll = curr_t;
+				handle_io_sampling(global_clock); // devices that need a regular poll
 			}
 			safeSend(ecat_sync,"go",2);
 		}
