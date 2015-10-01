@@ -29,27 +29,27 @@ void Buffer::reset() {
 	total_ = 0.0;
 }
 
-float Buffer::difference(int idx_a, int idx_b) const
+double Buffer::difference(int idx_a, int idx_b) const
 {
-  float a = getFloatAtOffset(idx_a);
-  float b = getFloatAtOffset(idx_b);
+  double a = getFloatAtOffset(idx_a);
+  double b = getFloatAtOffset(idx_b);
   a = a - b;
   if (fabs(a) >= 0.0001) return a;
   return 0.0f;
 }
 
-float Buffer::distance(int idx_a, int idx_b) const
+double Buffer::distance(int idx_a, int idx_b) const
 {
-  float a = difference(idx_a, idx_b);
+  double a = difference(idx_a, idx_b);
   a = fabs(a);
   if (a<0.0001) a = 0.0f;
   return a;
 }
 
-float Buffer::average(int n)
+double Buffer::average(int n)
 {
 	boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
-  float res = 0.0f;
+  double res = 0.0f;
   if (front == -1) return 0.0f; // empty buffer
   if (n == 0) return 0.0f;
   int len = length();
@@ -93,27 +93,27 @@ void LongBuffer::set(unsigned int n, long value)
     buf[ (front + BUFSIZE - n) % BUFSIZE] = value;
 }
 
-float LongBuffer::getFloatAtOffset(int offset) const
+double LongBuffer::getFloatAtOffset(int offset) const
 {
     return get(offset);
 }
 
-float LongBuffer::getFloatAtIndex(int idx) const
+double LongBuffer::getFloatAtIndex(int idx) const
 {
     return buf[idx];
 }
 
-float FloatBuffer::getFloatAtOffset(int offset) const
+double FloatBuffer::getFloatAtOffset(int offset) const
 {
     return get(offset);
 }
 
-float FloatBuffer::getFloatAtIndex(int idx) const
+double FloatBuffer::getFloatAtIndex(int idx) const
 {
     return buf[idx];
 }
 
-void FloatBuffer::append( float val)
+void FloatBuffer::append( double val)
 {
 	boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
     front = (front + 1) % BUFSIZE;
@@ -124,50 +124,50 @@ void FloatBuffer::append( float val)
       back = (back + 1) % BUFSIZE;
 }
 
-float FloatBuffer::get(unsigned int n) const
+double FloatBuffer::get(unsigned int n) const
 {
     return buf[ (front + BUFSIZE - n) % BUFSIZE];
 }
 
-void FloatBuffer::set(unsigned int n, float value)
+void FloatBuffer::set(unsigned int n, double value)
 {
     buf[ (front + BUFSIZE - n) % BUFSIZE] = value;
 }
 
-float FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
+double FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
 {
 	boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
-  float sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f;
-  float sumXsquared = 0.0f, sumYsquared = 0.0f;
+  double sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f;
+  double sumXsquared = 0.0f, sumYsquared = 0.0f;
   int n = length()-1;
 	if (n<=0) return 0;
-  float t0 = time_buf.get(n);
+  double t0 = time_buf.get(n);
   for (int i = n; i>0; i--)
   {
-    float y = (get(i) - get(n));
-    float x = time_buf.get(i) - t0;
+    double y = (get(i) - get(n));
+    double x = time_buf.get(i) - t0;
     sumX += x;
     sumY += y;
     sumXsquared += x*x;
     sumYsquared += y*y;
     sumXY += x*y;
   }
-  float denom = (float)n*sumXsquared - sumX*sumX;
+  double denom = (double)n*sumXsquared - sumX*sumX;
 	if (fabs(denom) < 0.00001f ) return 0.0f;
-  float m = ((float)n * sumXY - sumX*sumY) / denom;
-  //float c = (sumXsquared * sumY - sumXY * sumX) / denom;
+  double m = ((double)n * sumXY - sumX*sumY) / denom;
+  //double c = (sumXsquared * sumY - sumXY * sumX) / denom;
   return m;
 }
 
 
-float SampleBuffer::getFloatAtOffset(int offset) const {
+double SampleBuffer::getFloatAtOffset(int offset) const {
     return values[ (front + BUFSIZE - offset) % BUFSIZE];
 }
 
-float SampleBuffer::getFloatAtIndex(int idx) const {
+double SampleBuffer::getFloatAtIndex(int idx) const {
     return values[ idx ];
 }
-void SampleBuffer::quickAppend( float val, uint64_t time) {
+void SampleBuffer::quickAppend( double val, uint64_t time) {
 	front = (front + 1) % BUFSIZE;
 	if (front == back) total_ -= values[front];
 	if (front == back || back == -1) back = (back + 1) % BUFSIZE;
@@ -176,7 +176,7 @@ void SampleBuffer::quickAppend( float val, uint64_t time) {
 	times[front] = time;
 }
 
-void SampleBuffer::append( float val, uint64_t time) {
+void SampleBuffer::append( double val, uint64_t time) {
 	boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
 
     /* if we are not running on a real time system, we may have missed samples
@@ -206,7 +206,7 @@ void SampleBuffer::append( float val, uint64_t time) {
 	times[front] = time;
 }
 
-float SampleBuffer::rate() const // returns dv/dt between the two sample positions
+double SampleBuffer::rate() const // returns dv/dt between the two sample positions
 {
     if (front == back || back == -1) return 0.0f;
     double v1 = values[back], v2 = values[front];
