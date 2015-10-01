@@ -2,6 +2,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "buffering.h"
+#include <assert.h>
 #ifdef TEST
 #include <math.h>
 #endif
@@ -24,6 +25,16 @@ void destroyBuffer(struct CircularBuffer *buf) {
     free(buf);
 }
 
+int bufferIndexFor(struct CircularBuffer *buf, int i) {
+	int l = length(buf);
+	/* it is a non recoverable error to access the buffer without 
+		adding a value */
+	if (l == 0) { assert(0); abort(); }
+
+	if (i>=l) return buf->back; /* looking past the end of the buffer */
+	return (buf->front + buf->bufsize - i) % buf->bufsize;
+}
+
 void addSample(struct CircularBuffer *buf, long time, double val) {
   buf->front = (buf->front + 1) % buf->bufsize;
   if (buf->front == buf->back) buf->total -= buf->values[buf->front];
@@ -38,14 +49,31 @@ void addSampleDebug(struct CircularBuffer *buf, long time, double val) {
 	printf("buffer added: %5.2f, %ld at %d\n", val, time, buf->front);
 }
 
-double rate(struct CircularBuffer *buf) {
+double rate(struct CircularBuffer *buf, int n) {
     if (buf->front == buf->back || buf->back == -1) return 0.0f;
-    double v1 = buf->values[buf->back], v2 = buf->values[buf->front];
-    double t1 = buf->times[buf->back], t2 = buf->times[buf->front];
+	int idx = bufferIndexFor(buf, n);
+    double v1 = buf->values[idx], v2 = buf->values[buf->front];
+    double t1 = buf->times[idx], t2 = buf->times[buf->front];
     double ds = v2-v1;
     double dt = t2-t1;
 		if (dt == 0) return 0;
     return ds/dt;
+}
+
+int findMovement(struct CircularBuffer *buf, double amount, int max_len) {
+	/* reading the buffer without entering data is a non-recoverable error */
+	int l = length(buf);
+	if (l == 0) { assert(0); abort(); }
+	int n = 0;
+	int idx = buf->front;
+	double current = buf->values[idx];
+	
+	while (idx != buf->back && n<max_len) {
+		idx--; if (idx == -1) idx = buf->bufsize-1;
+		++n;
+		if ( fabs(current - buf->values[idx]) >= amount) return n;
+	}
+	return  n;
 }
 
 double rateDebug(struct CircularBuffer *buf) {
@@ -62,34 +90,39 @@ double rateDebug(struct CircularBuffer *buf) {
     return ds/dt;
 }
 
-double bufferAverage(struct CircularBuffer *buf) {
-	int n = length(buf);
-	return (n==0) ? n : bufferSum(buf) / n;
+double bufferAverage(struct CircularBuffer *buf, int n) {
+	int l = length(buf);
+	if (n>l) n = l;
+	return (n==0) ? n : bufferSum(buf, n) / n;
 }
 
 double getBufferValue(struct CircularBuffer *buf, int n) {
-	return buf->values[ (buf->front + buf->bufsize - n) % buf->bufsize];
+	int idx = bufferIndexFor(buf, n);
+	return buf->values[ idx ];
 }
 
 long getBufferTime(struct CircularBuffer *buf, int n) {
-  return buf->times[ (buf->front + buf->bufsize - n) % buf->bufsize];
+	int idx = bufferIndexFor(buf, n);
+	return buf->times[ idx ];
 }
 
-double getBufferValueAt(struct CircularBuffer *buf, long t) {
-  int n = length(buf) - 1;
-  int idx = (buf->front + buf->bufsize - n) % buf->bufsize;
-  if (buf->times[idx] >= t) return buf->values[idx];
-  if (t >= buf->times[buf->front]) return buf->values[buf->front];
-  int nxt = (idx+1) % buf->bufsize;
-  while (buf->times[nxt] < t) { idx = nxt; nxt = (idx+1) % buf->bufsize; }
-  double dt = buf->times[nxt] - buf->times[idx];
-  double scale = (double)(t - buf->times[idx]) / dt;
-  return buf->values[idx] + scale * (buf->values[nxt] - buf->values[idx]);
+double getBufferValueAt(struct CircularBuffer *buf, unsigned long t) {
+	int n = length(buf) - 1;
+	int idx = bufferIndexFor(buf, n);
+
+	if (buf->times[idx] >= t) return buf->values[idx];
+	if (t >= buf->times[buf->front]) return buf->values[buf->front];
+	int nxt = (idx+1) % buf->bufsize;
+	while (buf->times[nxt] < t) { idx = nxt; nxt = (idx+1) % buf->bufsize; }
+	double dt = buf->times[nxt] - buf->times[idx];
+	double scale = (double)(t - buf->times[idx]) / dt;
+	return buf->values[idx] + scale * (buf->values[nxt] - buf->values[idx]);
 }
 
-double bufferSum(struct CircularBuffer *buf) {
-	return buf->total;
+double bufferSum(struct CircularBuffer *buf, int n) {
+	//return buf->total;
 	int i = length(buf);
+	if (i>n) i = n;
 	double tot = 0.0;
 	while (i) {
 		i--;
@@ -142,46 +175,79 @@ void fail(int test) {
 }
 
 int main(int argc, const char *argv[]) {
-	double (*sum)(struct CircularBuffer *buf) = bufferSum;
-	double (*average)(struct CircularBuffer *buf) = bufferAverage;
+	double (*sum)(struct CircularBuffer *buf, int n) = bufferSum;
+	double (*average)(struct CircularBuffer *buf, int n) = bufferAverage;
 	
   int tests = 0;
-	int test_buffer_size = 4;
+  int test_buffer_size = 4;
   struct CircularBuffer *mybuf = createBuffer(test_buffer_size);
   int i = 0;
 
   for (i=0; i<10; ++i) addSample(mybuf, i, i);
-  ++tests; if (rate(mybuf) != 1.0) { fail(tests); }
+  for (i=0; i<10; ++i) printf("index for %d: %d\n", i, bufferIndexFor(mybuf, i));
+	  ++tests; if (rate(mybuf, 6) != 1.0) { 
+		fail(tests); 
+		printf("rate returned %.3lf\n", rate(mybuf, 4) ); 
+	}
 
   for (i=0; i<10; ++i) addSample(mybuf, i, 1.5*i);
-  ++tests; if (rate(mybuf) != 1.5) { fail(tests); }
-  ++tests; if (slope(mybuf) != 1.5) { fail(tests); }
+	++tests; if (rate(mybuf,8) != 1.5) { 
+		fail(tests); 
+		printf("rate returned %.3lf\n", rate(mybuf, 4) ); 
+	}
+	++tests; if (slope(mybuf) != 1.5) { fail(tests); }
 	++tests; if (length(mybuf) != test_buffer_size) { fail(tests); }
-	++tests; if (sum(mybuf) / test_buffer_size != average(mybuf)) { fail(tests); }
+	++tests; if (sum(mybuf, size(mybuf)) / test_buffer_size != average(mybuf,size(mybuf))) 
+				{ fail(tests); }
 	if (test_buffer_size == 4) { /* this test only works if the buffer is of length 4 */
-		++tests; if (sum(mybuf) != (6 + 7 + 8 + 9)*1.5) { fail(tests); }
+		++tests; if (sum(mybuf, size(mybuf)) != (6 + 7 + 8 + 9)*1.5) { fail(tests); }
 	}
 
 	/// negative numbers
 	destroyBuffer(mybuf);
     mybuf = createBuffer(test_buffer_size);
-	long ave = average(mybuf);
+	long ave = average(mybuf, test_buffer_size);
 	//printf("%ld\n",ave);
 	addSample(mybuf,10000,1);
 	//printf("%ld\n",ave);
 	addSample(mybuf,10040,-20);
 	//printf("%ld\n",ave);
     for (i=0; i<10; ++i) addSample(mybuf, i, -1.5*i);
-    ++tests; if (rate(mybuf) != -1.5) { fail(tests); printf("unexpected rate: %lf\n", rate(mybuf)); }
+    ++tests; if (rate(mybuf, size(mybuf)) != -1.5) { 
+		fail(tests); printf("unexpected rate: %lf expected -1.5\n", rate(mybuf, size(mybuf))); }
 
 	i=0;
 	while (i<test_buffer_size) { addSample(mybuf, i, random()%5000); ++i; }
 	while (i<8) { addSample(mybuf, i, 0); ++i; }
-	++tests; if (bufferAverage(mybuf) != 0.0) {fail(tests); printf("unexpected average: %lf\n", average(mybuf));}
-	++tests; if (bufferSum(mybuf) != 0.0) {fail(tests); printf("unexpected sum: %lf\n", bufferSum(mybuf));}
-	printf("tests:\t%d\nfailures:\t%d\n", tests, failures );
+	++tests; if ( fabs(bufferAverage(mybuf, size(mybuf))) >1.0E-4) {
+			fail(tests); printf("unexpected average: %lf\n", average(mybuf, size(mybuf)));}
+	++tests; if (bufferSum(mybuf, size(mybuf)) != 0.0) {
+			fail(tests); printf("unexpected sum: %lf\n", bufferSum(mybuf, size(mybuf)));}
 
 	destroyBuffer(mybuf);
+
+	/* test whether findMovement correctly finds a net movememnt */
+	++tests; 
+    mybuf = createBuffer(20);
+	addSample(mybuf, 0, 2200);
+	addSample(mybuf, 1, 2200);
+	for (i=2; i<10; ++i) addSample(mybuf, i, 2000);
+	for (; i<20; ++i) addSample(mybuf, i, 2020);
+	{ int n;
+	if ( ( n=findMovement(mybuf, 10)) != 10 ) {
+		fail(tests); printf("findMovement(..,10) expected 10, got %d\n", n);
+	}
+	++tests;
+	if ( ( n=findMovement(mybuf, 100)) != 18 ) {
+		/*2200,2200,2000,2000,2000,2000,2000,2000,2000,2000,
+		2020,2020,2020,2020,2020,2020,2020,2020,2020,2020 */
+		fail(tests); printf("findMovement(..,100) expected 18, got %d\n", n);
+	}
+	}
+	destroyBuffer(mybuf);
+	
+	printf("tests:\t%d\nfailures:\t%d\n", tests, failures );
+
 	/* 
 		generate a sign curve and calculate the slope using
 		the rate() and slope() functions for comparison purposes
