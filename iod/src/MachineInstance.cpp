@@ -2959,7 +2959,10 @@ void MachineInstance::enable() {
 	is_enabled = true; 
 	error_state = 0; 
 	clearAllActions(); 
-	if (io_interface) io_interface->handleChange(pending_events);
+	if (io_interface) {
+		io_interface->setupProperties(this);
+		io_interface->handleChange(pending_events);
+	}
 	for (unsigned int i = 0; i<locals.size(); ++i) {
 		if (!locals[i].machine) {
 			std::stringstream ss;
@@ -4107,7 +4110,6 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		if (changed ){
 			setNeedsCheck();
 			properties.add(property, new_value, SymbolTable::ST_REPLACE);
-			if ( io_interface ) io_interface->setupProperties(this);
 			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
 				char buf[100];
 				errno = 0;
