@@ -218,6 +218,7 @@ public:
 	virtual const char *type() { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
     virtual int32_t filter(int32_t raw);
+	virtual void setupProperties(MachineInstance *m); // link properties in the component to the MachineInstance properties
 private:
 	CounterInternals *internals;
 };
