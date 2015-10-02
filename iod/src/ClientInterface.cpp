@@ -280,9 +280,6 @@ void IODCommand::setParameters(std::vector<Value> &params) {
 }
 
 IODCommand *parseCommandString(const char *data) {
-	CommandThreadInternals *cti
-		= dynamic_cast<CommandThreadInternals*>(IODCommandThread::instance()->internals);
-
 	std::list<Value> parts;
 	size_t count = 0;
 	std::string ds;

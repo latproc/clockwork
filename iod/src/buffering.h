@@ -24,6 +24,8 @@ void addSample(struct CircularBuffer *buf, long time, double val);
     before a total movement of amount occurred, ignoring direction */
 int findMovement(struct CircularBuffer *buf, double amount);
 
+double getBufferValueAt(struct CircularBuffer *buf, long t); /* return an estimate of the value at time t */
+
 /* calculate the rate of change by a direct method */
 double rate(struct CircularBuffer *buf, int n);
 

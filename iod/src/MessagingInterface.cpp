@@ -219,7 +219,9 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							memcpy(&header, message.data(), sizeof(MessageHeader));
+#if 0
 							got_address = true;
+#endif
 							continue;
 						}
 						*response_len = message.size();
@@ -425,8 +427,8 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, ui
 
 	safeSend(sock, msg, strlen(msg));
 
-	char *buf;
-	size_t len;
+	char *buf = 0;
+	size_t len = 0;
 	if (safeRecv(sock, &buf, &len, true, (uint64_t)timeout_us)) {
 		response = buf;
 		return true;

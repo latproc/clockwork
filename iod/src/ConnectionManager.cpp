@@ -601,7 +601,6 @@ void MessageRouter::poll() {
 	if (items[0].revents & ZMQ_POLLIN) {
 		NB_MSG << "Message router collecting message from remote\n";
 		if (safeRecv(*internals->remote, &buf, &len, false, 0, mh)) {
-			int buflen = len;
 			NB_MSG << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
 			std::map<int, RouteInfo *>::const_iterator found = internals->routes.find(mh.dest);
 			if (found != internals->routes.end()) {
@@ -671,7 +670,6 @@ bool SubscriptionManager::checkConnections() {
 	}
 
 	if (state_start == 0) state_start = microsecs();
-	uint64_t timer = microsecs() - state_start;
 
 	if (monit_setup->disconnected()
 			&& setupStatus() != e_startup && setupStatus() != e_waiting_connect) {
