@@ -408,6 +408,7 @@ int32_t IOComponent::filter(int32_t val) {
     return val;
 }
 
+
 class InputFilterSettings {
 public:
     bool property_changed;
@@ -424,11 +425,11 @@ public:
 	const long *speed_tolerance; // the tolerance used in determining movement
 	unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
 	long speed;					// the current estimated speed
-	const long default_tolerance = 8;	// a default value for filter_len
-	const long default_filter_len = 12;	// a default value for filter_len
-	const long default_speed_filter_len = 4;	// a default value for speed_filter_len
-	const long default_position_history = 20;	// a default value for position_history
-	const long default_speed_tolerance = 20;	// a default value for speed_tolerance
+	static long default_tolerance;	// a default value for filter_len
+	static long default_filter_len;	// a default value for filter_len
+	static long default_speed_filter_len;	// a default value for speed_filter_len
+	static long default_position_history;	// a default value for position_history
+	static long default_speed_tolerance;	// a default value for speed_tolerance
 	FloatBuffer speeds;
 	long rate_len;
     
@@ -486,6 +487,11 @@ public:
 	}
 };
 
+long InputFilterSettings::default_tolerance = 8;	// a default value for filter_len
+long InputFilterSettings::default_filter_len = 12;	// a default value for filter_len
+long InputFilterSettings::default_speed_filter_len = 4;	// a default value for speed_filter_len
+long InputFilterSettings::default_position_history = 20;	// a default value for position_history
+long InputFilterSettings::default_speed_tolerance = 20;	// a default value for speed_tolerance
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
 	config = new InputFilterSettings();
@@ -576,10 +582,10 @@ public:
 	int32_t last_sent; // this is the value to send unless the read value moves away from the mean
     int32_t prev_sent; // this is the value to send unless the read value moves away from the mean
 	uint64_t last_time; // the last time we calculated speed;_
-	const long default_tolerance = 1;
-	const long default_filter_len = 8;
-	const long default_position_history = 20;
-	const long default_speed_tolerance = 10;
+	static long default_tolerance;
+	static long default_filter_len;
+	static long default_position_history;
+	static long default_speed_tolerance;
 	long speed;
 	uint16_t buffer_len;
 	FloatBuffer speeds;
@@ -631,6 +637,11 @@ double filter() {
 	return res;
 }
 };
+
+long CounterInternals::default_tolerance = 1;
+long CounterInternals::default_filter_len = 8;
+long CounterInternals::default_position_history = 20;
+long CounterInternals::default_speed_tolerance = 10;
 
 Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { 
 	internals = new CounterInternals;
