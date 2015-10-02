@@ -9,7 +9,6 @@ POSITIONCHECK MACHINE Count {
 	off INITIAL;	# not active, counter not seen
 
   COMMAND mark { 
-		Mark := Count.VALUE; 
 		LOG "mark set: " + Mark;
 		SET SELF TO waiting; 
   }
@@ -66,15 +65,17 @@ int check_states(void *scope)
 	else {
 
 		char *current = getState(scope);
+		long count = *data->count;
 		if (current && strcmp(current, "waiting") == 0) {
-			if (data->debug && *data->debug) printf("%s count: %ld mark: %ld\n", data->machine_name, *data->count, *data->mark);
-			if ( (*data->count >= *data->mark  && data->last_position <= *data->mark)
-				 || (*data->count <= *data->mark  && data->last_position >= *data->mark)
+			if (data->debug && *data->debug) printf("%s count: %ld mark: %ld\n", data->machine_name, count, *data->mark);
+			if ( (count >= *data->mark  && data->last_position <= *data->mark)
+				 || (count <= *data->mark  && data->last_position >= *data->mark)
 				)  {
 				changeState(scope, "on");
 				if (data->debug && *data->debug) printf("%s turned on\n", data->machine_name);
 			}
 		}
+		data->last_position = count;
 		free(current);
 		return PLUGIN_COMPLETED;
 	}
