@@ -71,6 +71,8 @@ extern Statistics *statistics;
 extern uint64_t client_watchdog_timer;
 uint64_t clockwork_watchdog_timer = 0;
 
+extern void handle_io_sampling(uint64_t clock);
+
 #undef KEEPSTATS
 
 #if 0
@@ -577,6 +579,7 @@ void ProcessingThread::operator()()
 		if (poll_wait == 0) poll_wait = 1;
 		uint64_t curr_t = 0;
 		int systems_waiting = 0;
+		uint64_t last_sample_poll = 0;
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
@@ -660,6 +663,11 @@ void ProcessingThread::operator()()
 				}
 				else
 					std::cout << "received EtherCAT data but machine is not ready\n";
+			}
+
+			if (curr_t - last_sample_poll >= 10000) {
+				last_sample_poll = curr_t;
+				handle_io_sampling(global_clock); // devices that need a regular poll
 			}
 			safeSend(ecat_sync,"go",2);
 		}

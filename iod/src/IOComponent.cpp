@@ -26,10 +26,12 @@
 #include "MessagingInterface.h"
 #include <netinet/in.h>
 #include "Logger.h"
+#include <string.h>
 #include <algorithm>
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #endif
+#include "buffering.c"
 
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
@@ -86,6 +88,27 @@ unsigned int IOComponent::min_offset = 1000000L;
 static std::vector<IOComponent*> *indexed_components = 0;
 IOComponent::HardwareState IOComponent::hardware_state = s_hardware_preinit;
 
+/* these items define a process for polling certain IOComponents on a regular basis */
+
+std::set<IOComponent*>regular_polls;
+
+static uint64_t last_sample = 0; // retains a timestamp for the last sample
+
+// as long as there has been a sufficient delay, run the filter for each
+// of the nominated components.
+
+void handle_io_sampling(uint64_t io_clock) {
+	uint64_t now = microsecs();
+	if (now - last_sample < 10000) return;
+	last_sample = now;
+	std::set <IOComponent*>::iterator iter = regular_polls.begin();
+	while (iter != regular_polls.end() ) {
+		IOComponent *ioc = *iter++;
+		ioc->read_time = io_clock;
+		ioc->filter(ioc->address.value);
+	}
+}
+
 //static void display(uint8_t *p, unsigned int count = 0);
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
@@ -135,7 +158,6 @@ IOComponent::IOComponent(IOAddress addr)
 	processing_queue.push_back(this); 
 	// the io_index is the bit offset of the first bit in this objects address space
 	io_index = addr.io_offset*8 + addr.io_bitpos;
-	
 }
 
 IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0), direction_(DirBidirectional) { 
@@ -327,8 +349,8 @@ IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
     addr.entry_position = entry_pos;
 	addr.description = name;
 	addr.is_signed = signed_value;
-  char buf[80];
-  snprintf(buf, 80, "io:%s_%d", name, module_pos);
+	char buf[80];
+	snprintf(buf, 80, "io:%s_%d", name, module_pos);
 	if (io_names.find(std::string(buf)) != io_names.end())  {
 		std::cerr << "IOComponent::add_io_entry: warning - an IO component named " 
 			<< name << " already existed on module " << module_pos << "\n";
@@ -389,36 +411,134 @@ int32_t IOComponent::filter(int32_t val) {
 class InputFilterSettings {
 public:
     bool property_changed;
-    uint32_t noise_tolerance; // filter out changes with +/- this range
-    LongBuffer positions;
-    int32_t last_sent; // this is the value to send unless the read value moves away from the mean
-    uint16_t buffer_len;
-	const long *tolerance;
+    CircularBuffer *positions;
+    int32_t last_sent;			// this is the value to send unless the read value moves away from the mean
+    int32_t prev_sent;			// this is previous value of last_sent
+	uint64_t last_time;			// the last time we calculated speed;_
+    uint16_t buffer_len;		// the maximum length of the circular buffer
+	const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
+	double *filter_coeff;		// the Butterworth filter uses these coefficients
+	const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
+	const long *filter_type;	// the user can select the filter using a "filter" property
+	const long *position_history; // the amount of position history to use in determining movement
+	const long *speed_tolerance; // the tolerance used in determining movement
+	unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
+	long speed;					// the current estimated speed
+	const long default_tolerance = 8;	// a default value for filter_len
+	const long default_filter_len = 12;	// a default value for filter_len
+	const long default_speed_filter_len = 4;	// a default value for speed_filter_len
+	const long default_position_history = 20;	// a default value for position_history
+	const long default_speed_tolerance = 20;	// a default value for speed_tolerance
+	FloatBuffer speeds;
+	long rate_len;
     
-    InputFilterSettings() :property_changed(true), noise_tolerance(6), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
+    InputFilterSettings() :property_changed(true), positions(0), 
+			last_sent(0), prev_sent(0), last_time(0),
+			buffer_len(200), tolerance(&default_tolerance), filter_coeff(0),filter_len(&default_filter_len), 
+			filter_type(0),
+			position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
+			speed(0), speeds(4), rate_len(4) {
+
+		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
+		butterworth_len = sizeof(c) / sizeof(double);
+		filter_coeff = new double[butterworth_len];
+		memmove(filter_coeff, c, sizeof(c));
+		positions = createBuffer(buffer_len);
+	}
+
+	void update(uint64_t read_time) {
+		if (prev_sent == 0) prev_sent = last_sent;
+		if (last_time == 0) {
+			last_time = read_time;
+			prev_sent = last_sent;
+			speed = 0;
+			speeds.append(speed);
+		}
+		else if (read_time - last_time >= 10000) {
+	/*
+			double dt = (double)(read_time - last_time);
+			double dv = (double)(last_sent - prev_sent);
+			speed = (long)( dv / dt * 1000000.0 );
+	*/
+			rate_len = findMovement(positions, 20, *position_history);
+			if (rate_len < *position_history) {
+				speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
+			}
+			else speed = 0.0;
+			speeds.append(speed);
+			last_time = read_time;
+			prev_sent = last_sent;
+		}
+	}
+
+	double filter() {
+		if ((unsigned int)length(positions) < *filter_len) return getBufferValue(positions, 0);
+		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
+		double res = 0;
+		for (unsigned int i=0; i < *filter_len; ++i) {
+			double f = (double)getBufferValue(positions, i);
+			//printf(" %.3f,%.3f ",f, f*c[i]); 
+			res += f * c[i];
+		}
+		//printf(" %.3f\n",res); 
+
+		return res;
+	}
 };
+
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
 	config = new InputFilterSettings();
 	direction_ = DirInput;
+	regular_polls.insert(this);
 }
 
 void AnalogueInput::setupProperties(MachineInstance *m) {
 	const Value &v = m->getValue("tolerance");
 	if (v.kind == Value::t_integer) {
 		config->tolerance = &v.iValue;
-		config->noise_tolerance = *config->tolerance;
+	}
+	const Value &v2 = m->getValue("filter");
+	if (v2.kind == Value::t_integer) {
+		config->filter_type = &v2.iValue;
+	}
+	const Value &v3 = m->getValue("filter_len");
+	if (v3.kind == Value::t_integer) {
+		config->filter_len = &v3.iValue;
+	}
+	const Value &v4 = m->getValue("speed_tolerance");
+	if (v4.kind == Value::t_integer) {
+		config->speed_tolerance= &v4.iValue;
+	}
+	const Value &v5 = m->getValue("position_history");
+	if (v5.kind == Value::t_integer) {
+		config->position_history = &v5.iValue;
 	}
 }
 
 int32_t AnalogueInput::filter(int32_t raw) {
-		if (config->tolerance == 0) {
-		}
     if (config->property_changed) {
         config->property_changed = false;
     }
+	addSample(config->positions, (long)read_time, (double)raw);
 
-#if 0
+	if (config->filter_type && *config->filter_type == 0 ) {
+		config->last_sent = raw;
+	}
+	else if ( !config->filter_type || (config->filter_type && *config->filter_type == 1))  {
+		int32_t mean = (bufferAverage(config->positions, *config->filter_len) + 0.5f);
+		if ( (uint32_t)abs(mean - config->last_sent) >= *config->tolerance) {
+			config->last_sent = mean;
+		}
+	}
+	else if (config->filter_type && *config->filter_type == 2) {
+		long res = (long)config->filter();
+		config->last_sent = (int32_t)(res / config->butterworth_len *2);
+	}
+	
+	config->update(read_time);
+	
+#if 1
 	/* most machines reading sensor values will be prompted when teh
 		sensor value changes, depending on whether this filter yields a
 		changed value. Some systems such as plugins that operate on 
@@ -426,62 +546,174 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		access the raw io value and read time but note that these 
 		values do not cause notifications when they change
 	*/
+
+	
+
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
-		o->properties.add("IOVALUE", (long)raw, SymbolTable::ST_REPLACE);
+		o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
+		o->properties.add("VALUE", (long)raw, SymbolTable::ST_REPLACE);
+		o->properties.add("Position", (long)config->last_sent, SymbolTable::ST_REPLACE);
+		o->properties.add("Velocity", (long)config->speeds.average(config->speeds.length()), SymbolTable::ST_REPLACE);
 	}
 #endif
-	config->positions.append(raw);
-	int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
-	if (config->tolerance) config->noise_tolerance = *config->tolerance;
-	if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
-		config->last_sent = mean;
-	}
 	return config->last_sent;
 }
 
 void AnalogueInput::update() {
-    config->property_changed = true;
+    config->property_changed = false;
 }
 
 class CounterInternals {
-	int32_t noise_tolerance; // filter out changes with +/- this range
-	LongBuffer positions;
+public:
+	CircularBuffer *positions;
+	const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
+	const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
+	const long *position_history; // the amount of position history to use in determining movement
+	const long *speed_tolerance; // the tolerance used in determining movement
 	int32_t last_sent; // this is the value to send unless the read value moves away from the mean
+    int32_t prev_sent; // this is the value to send unless the read value moves away from the mean
+	uint64_t last_time; // the last time we calculated speed;_
+	const long default_tolerance = 1;
+	const long default_filter_len = 8;
+	const long default_position_history = 20;
+	const long default_speed_tolerance = 10;
+	long speed;
 	uint16_t buffer_len;
-	const long *tolerance;
-	CounterInternals() : noise_tolerance(6), positions(16), last_sent(0), buffer_len(16), tolerance(0) { }
+	FloatBuffer speeds;
+	long rate_len;
+
+	CounterInternals() : positions(0), 
+	tolerance(&default_tolerance), filter_len(&default_filter_len), 
+	position_history(&default_position_history), 
+	speed_tolerance(&default_speed_tolerance),
+	last_sent(0), 
+	prev_sent(0), last_time(0), speed(0), buffer_len(200),speeds(4), rate_len(4) {
+		positions = createBuffer(buffer_len);
+	}
+
+void update(uint64_t read_time) {
+	if (prev_sent == 0) prev_sent = last_sent;
+	if (last_time == 0) {
+		last_time = read_time;
+		prev_sent = last_sent;
+	}
+	else if (read_time - last_time >= 10000) {
+/*
+		double dt = (double)(read_time - last_time);
+		double dv = (double)(last_sent - prev_sent);
+		speed = (long)( dv / dt * 1000000.0) ;
+*/
+		rate_len = findMovement(positions, 20, *position_history);
+		if (rate_len < *position_history) {
+			speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
+		}
+		else speed = 0.0;
+		speeds.append(speed);
+		last_time = read_time;
+		prev_sent = last_sent;
+	}
+}
+	
+double filter() {
+	if ((unsigned int)length(positions) < 9) return getBufferValue(positions,0);
+	double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
+	double res = 0;
+	for (unsigned int i=0; i<9; ++i) {
+		double f = (double)getBufferValue(positions, i);
+		//printf(" %.3f,%.3f ",f, f*c[i]); 
+		res += f * c[i];
+	}
+	//printf(" %.3f\n",res); 
+
+	return res;
+}
 };
 
-Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { }
+Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { 
+	internals = new CounterInternals;
+	regular_polls.insert(this);
+}
+
+void Counter::setupProperties(MachineInstance *m) {
+	const Value &v = m->getValue("tolerance");
+	if (v.kind == Value::t_integer) {
+		internals->tolerance = &v.iValue;
+		printf("Counter tolerance: %ld\n", *internals->tolerance);
+	}
+	const Value &v3 = m->getValue("filter_len");
+	if (v3.kind == Value::t_integer) {
+		internals->filter_len = &v3.iValue;
+	}
+	const Value &v4 = m->getValue("speed_tolerance");
+	if (v4.kind == Value::t_integer) {
+		internals->speed_tolerance= &v4.iValue;
+		printf("Counter speed tolerance: %ld\n", *internals->speed_tolerance);
+	}
+	const Value &v5 = m->getValue("position_history");
+	if (v5.kind == Value::t_integer) {
+		internals->position_history = &v5.iValue;
+		printf("Counter position history: %ld\n", *internals->position_history);
+	}
+}
+
 
 int32_t Counter::filter(int32_t val) {
+	addSample(internals->positions, (long)read_time, (double)val);
+
 #if 0
-	/* as for the AnalogueInput, note that these 'IO' properties do not 
-		cause value change notifications throughout clockwork 
+	if (internals->filter_type && *internals->filter_type == 0) {
+		internals->last_sent = val;
+	}
+	else if (internals->filter_type && *internals->filter_type == 1) {
+		int32_t mean = (internals->positions.average(internals->buffer_len) + 0.5f);
+		if (internals->tolerance) internals->noise_tolerance = *internals->tolerance;
+		if ( (uint32_t)abs(mean - internals->last_sent) >= internals->noise_tolerance) {
+			internals->last_sent = mean;
+		}
+	}
+	else if (internals->filter_type && *internals->filter_type == 2) {
+		long res = (long)internals->filter();
+		internals->last_sent = (int32_t)(res / internals->filter_len *2);
+	}
+#endif
+	if (*internals->tolerance>1) {
+		int32_t mean = (bufferAverage(internals->positions, *internals->filter_len) + 0.5f);
+		if ( (uint32_t)abs(mean - internals->last_sent) >= *internals->tolerance) {
+			internals->last_sent = mean;
+		}
+	}
+	else
+		internals->last_sent = val;
+	internals->update(read_time);
+
+#if 1
+	/* most machines reading sensor values will be prompted when teh
+		sensor value changes, depending on whether this filter yields a
+		changed value. Some systems such as plugins that operate on 
+		their own clock may wish to ignore the filtered value and 
+		access the raw io value and read time but note that these 
+		values do not cause notifications when they change
 	*/
+
+	
+
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
-		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
+		o->properties.add("DurationTolerance", internals->rate_len, SymbolTable::ST_REPLACE);
+		o->properties.add("VALUE", (long)val, SymbolTable::ST_REPLACE);
+		o->properties.add("Position", (long)internals->last_sent, SymbolTable::ST_REPLACE);
+		o->properties.add("Velocity", (long)internals->speeds.average(internals->speeds.length()), SymbolTable::ST_REPLACE);
 	}
 #endif
-	return IOComponent::filter(val);
-#if 0
-	config->positions.append(val);
-	int32_t mean = (config->positions.average(config->buffer_len) + 0.5f);
-	//if (config->tolerance) config->noise_tolerance = *config->tolerance;
-	if ( (uint32_t)abs(mean - config->last_sent) >= config->noise_tolerance) {
-		config->last_sent = mean;
-	}
-	return config->last_sent;
-#endif
+	return internals->last_sent;
 }
 
-CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(16) {
+CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {
     struct timeval now;
     gettimeofday(&now, 0);
     start_t = now.tv_sec * 1000000 + now.tv_usec;
@@ -1014,15 +1246,22 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
 			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
 			//  << ":" << std::dec << val <<" "; }
-			if (hardware_state == s_hardware_init 
+			if ( regular_polls.count(this) ) {
+				// this device is polled on a regular clock, do not process here
+				raw_value = val;
+				int32_t old_val = address.value;
+				address.value = val;
+			}
+			else if (hardware_state == s_hardware_init 
 				|| (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
 				//std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
 				int32_t old_val = address.value;
 				int32_t new_val = filter(val);
 				if (hardware_state == s_operational ) { //&& address.value != new_val) {
-					address.value = filter(val);
+					address.value = new_val;
 
+#if 0
 					//if (owners.empty()) std::cout << "owner is not defined\n";
 					if (address.value != old_val) {
 						std::list<MachineInstance*>::iterator owner_iter = owners.begin();
@@ -1031,6 +1270,7 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 							work_queue.push_back( new Package(this, *owner_iter++, new Message("property_change")) );
 						}
 					}
+#endif
 #if 0
 					last_event = e_none;
 					//std::cerr << " assigned " << val << " to address " << address << "\n";

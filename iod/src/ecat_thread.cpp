@@ -266,7 +266,8 @@ void EtherCATThread::operator()() {
 				else
 					global_clock += period;
 #else
-				global_clock += period;
+				//global_clock += period;
+				global_clock = microsecs();
 #endif
 				if (status == e_collect)
 					num_updates = ECInterface::instance()->collectState();
