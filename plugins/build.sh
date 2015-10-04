@@ -1,5 +1,7 @@
 #!/bin/bash
 
+trap "rm -f plugin_$$.c" 0 1 2 15
+
 usage() {
 	echo "usage: $0 script"
 	exit 2
