@@ -44,16 +44,16 @@ int check_states(void *scope)
 		setInstanceData(scope, data);
 		printf("position_check plugin initialised\n");
 		if (!getIntValue(scope, "Mark", &data->mark)) {
-			log_message(scope, "CounterSwitch Mark property is not an integer");
+			log_message(scope, "PositionCheck Mark property is not an integer");
 			data->mark = &data->dummy_mark;
 		}
 		else if (!getIntValue(scope, "Count.VALUE", &data->count)) {
-			log_message(scope, "CounterSwitch Count property is not an integer");
+			log_message(scope, "PositionCheck Count does not have an integer VALUE property");
 			data->count = &data->dummy_count;
 		}
 		{ 
 			data->machine_name = getStringValue(scope, "NAME");
-			if (!data->machine_name) data->machine_name = strdup("UNKNOWN COUNTER");
+			if (!data->machine_name) data->machine_name = strdup("UNKNOWN PositionCheck");
 		}
 		if (!getIntValue(scope, "DEBUG", &data->debug)) data->debug = 0;
 		data->dummy_mark = 0;
@@ -85,9 +85,6 @@ int check_states(void *scope)
 
 PLUGIN_EXPORT
 int poll_actions(void *scope) {
-	struct MyData *data = (struct MyData*)getInstanceData(scope);
-	if (data && data->debug && *data->debug)	
-			printf("%s poll. count: %ld mark: %ld\n", data->machine_name, *data->count, *data->mark);
 	return PLUGIN_COMPLETED;
 }
 %END_PLUGIN
