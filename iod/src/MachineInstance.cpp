@@ -1301,10 +1301,14 @@ void MachineInstance::idle() {
 			char buf[100];
 			snprintf(buf, 100, "Error: %s::idle() called but this machine is not active", _name.c_str());
 			MessageLog::instance()->add(buf);
-			DBG_MSG << buf << "\n";
 			cache->reported_error = true;
+			if (executingCommand()) {
+				snprintf(buf, 100, "Error: %s::idle() machine is not active but is executing a command", _name.c_str());
+				MessageLog::instance()->add(buf);
+			}
 		}
-		return;
+
+		if (!executingCommand())return;
 	}
 	if (!state_machine) {
 		if (LOGS(DebugExtra::instance()->DEBUG_ACTIONS)) {
@@ -1426,7 +1430,8 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		std::set<MachineInstance*>::iterator busy_it = SharedWorkSet::instance()->begin();
 		while (busy_it != SharedWorkSet::instance()->end() ) {
 			MachineInstance *mi = *busy_it;
-			mi->idle();
+			// is it possible for a non active machine to be executing a command?
+			if (mi->isActive() || mi->executingCommand()) mi->idle();
 			if (mi->state_machine && mi->state_machine->plugin)
 				mi->state_machine->plugin->poll_actions(mi);
 			if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
