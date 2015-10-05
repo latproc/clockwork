@@ -23,6 +23,7 @@ RANGECHECK MACHINE Count {
 
 	COMMAND start { active := 1; }
 	COMMAND stop { active := 0; }
+	COMMAND reset { active := 0; }
 	ENTER idle { active := 0; }
  
 	ENTER on { LOG "on: " + Count.VALUE }
