@@ -170,8 +170,10 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			status = machine->setState( value, authority );
 			if (status == Complete || status == Failed)
 				owner->stop(this);
-			else
+			else {
+				if (trigger) trigger->release();
 				trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
+			}
 			if (status == Action::Failed) {
 				char buf[100];
 				snprintf(buf, 100, "%s::setState(%s) Failed\n", machine->getName().c_str(), 
