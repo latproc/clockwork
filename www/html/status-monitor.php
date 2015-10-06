@@ -245,8 +245,8 @@ $siteurl="status-monitor.php";
 						$tabdata .= '<div class="item_img">' . button_image($point, $image_name, 'im_'.$point) . "</div>";
 					if ($type == 'AnalogueOutput') {
 						$tabdata .= '<div class="item_state" id="mc_' . $point. '">' 
-							. htmlspecialchars($curr->value) 
-							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->value .'"'
+							. htmlspecialchars($curr->VALUE) 
+							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->VALUE .'"'
 							. 'style="float:left;width:14em;"></div>';
 					}
 					else {
