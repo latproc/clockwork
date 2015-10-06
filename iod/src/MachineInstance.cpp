@@ -1297,7 +1297,7 @@ void MachineInstance::idle() {
 		return;
 	}
 	if (!is_active) {
-		if (!cache->reported_error) {
+		if (false && !cache->reported_error) {
 			char buf[100];
 			snprintf(buf, 100, "Error: %s::idle() called but this machine is not active", _name.c_str());
 			MessageLog::instance()->add(buf);
