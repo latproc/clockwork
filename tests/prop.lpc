@@ -11,8 +11,17 @@ Testbed MACHINE (tab:s1, x:3, y){
     OPTION tab tab; # dereferences machine property 'tab'
     v2 VARIABLE(tab:vars) 0;
     v3 VARIABLE(tab:vars) 0;
+
+	OPTION pname "p1";
+	OPTION p1 "up";
+	OPTION p2 "down";
+	OPTION pvalue "";
+
+	up WHEN pvalue IS "up";
+	down WHEN pvalue IS "down";
     
     ENTER INIT {
+		SET pvalue TO PROPERTY pname;
         v1 := 11;
         v2.VALUE := 12;
         v3 := 13;
@@ -22,4 +31,4 @@ Testbed MACHINE (tab:s1, x:3, y){
     
 }
 
-test Testbed;
+test Testbed(pname:"p1");
