@@ -42,7 +42,6 @@ int check_states(void *scope)
 	if (!data) {
 		data = (struct MyData*)malloc(sizeof(struct MyData));
 		setInstanceData(scope, data);
-		printf("position_check plugin initialised\n");
 		if (!getIntValue(scope, "Mark", &data->mark)) {
 			log_message(scope, "PositionCheck Mark property is not an integer");
 			data->mark = &data->dummy_mark;
@@ -60,6 +59,7 @@ int check_states(void *scope)
 		data->dummy_count = 0;
 		data->dummy_debug = 0;
 		data->last_position = *data->count;
+		printf("position_check plugin %s initialised\n", data->machine_name);
 	}
 	
 	else {
