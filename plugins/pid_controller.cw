@@ -534,6 +534,7 @@ static void stop(struct PIDData*data, void *scope) {
 
 static int sign(double val) { return (0 < val) - (val < 0); }
 
+/* select whether to use the shared settings or custom forward/reverse settings for pid constants */
 static void select_kpid(struct PIDData *data) {
 	data->Kp = (double) *data->Kp_long / 1000000.0f;
 	data->Ki = (double) *data->Ki_long / 1000000.0f;
@@ -550,6 +551,8 @@ static void select_kpid(struct PIDData *data) {
 	}
 
 }
+
+/* crawl to the stop position in either direction */
 
 static long perform_stopping(struct PIDData*data, void *scope, void* statistics_scope) {
     if (data->debug && *data->debug) fprintf(data->logfile, "%s stopping\n", data->conveyor_name);
@@ -596,25 +599,29 @@ static long perform_stopping(struct PIDData*data, void *scope, void* statistics_
 	}
 }
 
+/* handle inter-set_point speed changes by ramping the set point from the original
+    to the requested value
+*/
+
 static long check_ramp(struct PIDData *data, double set_point, uint64_t now_t, uint64_t ramp_time) {
 	if (data->debug && *data->debug)
 		fprintf(data->logfile,"%s checking for ramp end\n", data->conveyor_name);
-	/* finished ramping? */
-	if ( ( now_t - data->changing_set_point >= ramp_time * 1000 )
-		|| sign(set_point) != sign(set_point - data->speed)  ) {
-		data->changing_set_point = 0;
-		data->last_set_point = data->filtered_set_point;
-	}
-	else {
-		/* calculate the ramped set point */
-		set_point = data->last_set_point;
-		set_point += (double)( now_t - data->changing_set_point )
-        		/ ramp_time / 1000
-        		* (data->filtered_set_point - data->last_set_point);
-		if (data->debug && *data->debug)
-			fprintf(data->logfile,"%s ramping to new set point: %ld, now using: %5.2f\n",
+
+	/* finished ramping? 
+	    ramp_time - duration of the ramp
+	    data->changing_set_point - time that the set point changed (microsecs) 
+	*/
+	
+	data->sp_delta_t += delta_t; // total time spent ramping
+	if (data->sp_delta_t >= ramp_time)
+	    set_point = data->filtered_set_point;
+	else
+    	set_point = data->filtered_set_point - ( data->filtered_set_point - set_point ) * (ramp_time - data->sp_delta_t) / ramp_time;
+	
+	if (data->debug && *data->debug)
+		fprintf(data->logfile,"%s ramping to new set point: %ld, now using: %5.2f\n",
 					data->conveyor_name, data->filtered_set_point, set_point);
-	}
+
 	return set_point;
 }
 
@@ -696,9 +703,11 @@ static void init_stats(void *statistics_scope) {
 }
 
 static int within_tolerance(struct PIDData *data) {
-	return  ( *data->position < *data->stop_position  && *data->stop_position - *data->position > *data->fwd_tolerance )
+	return  ( *data->position < *data->stop_position  
+	        && *data->stop_position - *data->position <= *data->fwd_tolerance )
 	||
-	( *data->position > *data->stop_position && *data->position - *data->stop_position > *data->rev_tolerance );
+	( *data->position > *data->stop_position 
+	        && *data->position - *data->stop_position <= *data->rev_tolerance );
 }
 
 static void update_forward_power_offset(struct PIDData *data, void *scope) {
@@ -1033,7 +1042,7 @@ int poll_actions(void *scope) {
 	if (new_state == cs_position) {
 
 		/* once we are very close we no longer calculate a moving target */
-		if ( dist_to_stop >= 0 && dist_to_stop < *data->fwd_tolerance + 0.1 * set_point)  { /* 100ms */
+		if ( dist_to_stop >= 0 && dist_to_stop <= *data->fwd_tolerance + 0.1 * set_point)  { /* 100ms */
 			if (data->debug && *data->debug)
 				fprintf(data->logfile,"%s getting close (fwd) data->speed = %ld pos:%ld stop:%ld\n",
 						data->conveyor_name, data->speed, *data->position, *data->stop_position);
@@ -1041,7 +1050,7 @@ int poll_actions(void *scope) {
 			data->sub_state = is_stopping;
 			close_to_target = 1;
 			if (data->debug && *data->debug) fprintf(data->logfile,"%s stopping(fwd)\n", data->conveyor_name);
-			if ( labs(data->speed) < 40 && dist_to_stop < *data->fwd_tolerance) {
+			if ( labs(data->speed) < 40 && dist_to_stop <= *data->fwd_tolerance) {
 				if (data->debug && *data->debug) fprintf(data->logfile,"%s at position (fwd)\n", data->conveyor_name);
 				atposition(data, scope);
 				goto calculated_power;
@@ -1141,11 +1150,11 @@ int poll_actions(void *scope) {
     	if (data->ramp_start_time == 0 && set_point != 0) {
     	    /* prestart will have the conveyor moving already, allow for that and set the start time back a little */
     	    long time_offset = data->speed / set_point;
-    	    data->ramp_start_time = now_t - time_offset / curr_startup_time;
+    	    data->ramp_start_time = now_t - time_offset * curr_startup_time;
     	}
-    	long startup_time = (now_t - data->ramp_start_time + 500)/1000;
+    	//long startup_time = (now_t - data->ramp_start_time + 500)/1000;
 	    
-		ramp_up_ratio = (double)startup_time / curr_startup_time;
+		ramp_up_ratio = data->speed / set_point; 	/*(double)startup_time / curr_startup_time;*/
 		if ( sign(data->speed) == sign(set_point) && labs(data->speed) >= (long)fabs(set_point)) {
     		ramp_up_ratio = 1.0;
 		}
@@ -1158,7 +1167,7 @@ int poll_actions(void *scope) {
 		    if ( fabs(set_point) > 800.0) {
 		        double power = getBufferValueAt(data->power_records, (long)now_t - 80000);
 		        data->power_rate = power / set_point;
-		        if (fabs(data->power_rate) > 2.0) 2.0 / data->power_rate;
+		        if (fabs(data->power_rate) > 2.0) data->power_rate = 2.0 / data->power_rate;
 		        if (data->debug && *data->debug) {
 		            fprintf(data->logfile, "%s using power ratio %8.3lf from power %8.3lf", data->conveyor_name, data->power_rate, power);
 		        }
@@ -1276,8 +1285,8 @@ int poll_actions(void *scope) {
 	}
 
 	/*double Ep = next_position - data->last_position - (*data->position - data->last_position) / dt; */
-	double Ep = next_position - *data->position;
-	/* double Ep = (set_point - data->speed); */
+	/*double Ep = next_position - *data->position;*/
+	double Ep = (set_point - data->speed);
 
 	/*
 	 long changed_pos = *data->position - data->start_position;
@@ -1313,25 +1322,25 @@ int poll_actions(void *scope) {
 		setIntValue(statistics_scope, "Err_i", data->total_err);
 		setIntValue(statistics_scope, "Err_d", de);
 
-		double Dout = 0.0;
+		double Dout = data->power_rate * set_point;
 
 		if ( next_position > *data->position && data->use_Kpidf) { /* forward */
 			if (data->ramp_down_start == 0)
-				Dout = (int) (data->Kpf * Ep + data->Kif * data->total_err + data->Kdf * de);
+				Dout += (int) (data->Kpf * Ep + data->Kif * data->total_err + data->Kdf * de);
 			else
-				Dout = (int) (data->Kpf * Ep);
+				Dout += (int) (data->Kpf * Ep);
 		}
 		else if (next_position < *data->position && data->use_Kpidr) { /* reverse */
 			if (data->ramp_down_start == 0)
-				Dout = (int) (data->Kpr * Ep + data->Kir * data->total_err + data->Kdr * de);
+				Dout += (int) (data->Kpr * Ep + data->Kir * data->total_err + data->Kdr * de);
 			else
-				Dout = (int) (data->Kpr * Ep);
+				Dout += (int) (data->Kpr * Ep);
 		}
 		else { /* shared configuration */
 			if (data->ramp_down_start == 0)
-				Dout = (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de);
+				Dout += (int) (data->Kp * Ep + data->Ki * data->total_err + data->Kd * de);
 			else
-				Dout = (int) (data->Kp * Ep);
+				Dout += (int) (data->Kp * Ep);
 		}
 
 		setIntValue(statistics_scope, "Pwr", Dout);
