@@ -362,7 +362,7 @@ foreach ($tabs as $tab => $data) {
 	$config_entries = $slaves;
   if ($tab != "Messages") {
 	$rownum = 1;
-	foreach ($config_entries as $curr) {
+	if (is_array($config_entries)) foreach ($config_entries as $curr) {
 		if (!isset($curr->tab)) {
 			if ($curr->class == "MODULE")
 				$curr->tab = 'Modules';
