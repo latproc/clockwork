@@ -1232,6 +1232,15 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
                 
             }
             else {
+				if (ch_name == "PERSISTENCE_CHANNEL") {
+					if (!persistent_store()) {
+						char buf[100];
+						snprintf(buf, 100, "Persistence is not configured for channel %s", ch_name.asString().c_str());
+						MessageLog::instance()->add(buf);
+						error_str = MessageEncoding::encodeError(buf);
+						return false;
+					}
+				}
                 ChannelDefinition *defn = ChannelDefinition::find(ch_name.asString().c_str());
                 if (!defn) {
 					char buf[100];
@@ -1258,6 +1267,9 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 							std::cout << "instantiating a channel on port " << port << "\n";
 							chn = defn->instantiate(port);
 							assert(chn);
+							if (ch_name == "PERSISTENCE_CHANNEL") {
+								chn->setValue("PersistentStore", persistent_store(), Value::t_string);
+							}
 							chn->start();
 							chn->enable();
 							break;

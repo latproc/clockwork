@@ -26,6 +26,7 @@
 #include <list>
 #include <string>
 #include <unistd.h>
+#include <sys/param.h>
 
 #include <boost/utility.hpp>
 #include <boost/filesystem.hpp>
@@ -740,6 +741,26 @@ void semantic_analysis() {
 	MachineInstance::sort();
 }
 
+char *getFilePath(const char *fname, char *buf, size_t buf_size) {
+	if (!buf_size) return 0;
+	buf[0] = 0;
+	if (fname[0] == '/') /* absolute path already given */
+	{
+		if (buf_size > strlen(fname)) strncpy(buf, fname, buf_size); else return 0;
+	}
+	else {
+		size_t len;
+		if (!getcwd(buf, buf_size) || errno != 0) { return 0; }
+		len = strlen(buf);
+		if (buf_size > len + strlen(fname)+1) {
+			snprintf(buf+len, buf_size - strlen(fname)-1, "/%s", fname);
+		}
+		else return 0; /* buffer not big enough */
+	}
+	return buf;
+}
+
+
 int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
     const char *logfilename = NULL;
     long maxlogsize = 20000;
@@ -757,7 +778,19 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 /*        else if (strcmp(argv[i], "-s") == 0 && i < argc-1)
             maxlogsize = strtol(argv[++i], NULL, 10);
 */		else if (strcmp(argv[i], "-i") == 0 && i < argc-1) { // initialise from persistent store
-			set_persistent_store(argv[++i]);
+			char buf[200];
+			//if (getFilePath(argv[++i], buf, 200))
+				set_persistent_store(argv[++i] /*strdup(buf)*/);
+			/*else {
+				char err[100];
+				if (errno == 0)
+					snprintf(err, 100, "failed to get path for %s", argv[i]);
+				else
+					snprintf(err, 100, "failed to get path for %s: %s", argv[i], strerror(errno));
+
+				MessageLog::instance()->add(err);
+			}
+			 */
 		}
 		else if (strcmp(argv[i], "-c") == 0 && i < argc-1) { // debug config file
 			set_debug_config(argv[++i]);
