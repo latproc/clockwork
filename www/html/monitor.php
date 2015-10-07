@@ -25,7 +25,7 @@
  *  displays the result in user-defined tabs, along with control buttons
  */
 
-define("REQUEST_TIMEOUT", 100);
+define("REQUEST_TIMEOUT", 5000);
 define("DSN", "tcp://localhost:5555");
 
 if ((!isset($user))) {
@@ -120,7 +120,13 @@ function get_slaves_options($slaves, $selected=false) {
 
 function zmqrequest($client, $request) {
 	$read = $write = array();
+	try {
 	$client->send($request);
+	}
+	catch (ZMQSocketException $e) {
+		debug_message(var_export($e, true));
+		throw $e;
+	}
 	$poll = new ZMQPoll();
 	$poll->add($client, ZMQ::POLL_IN);
 	$events = $poll->poll($read, $write, REQUEST_TIMEOUT);
