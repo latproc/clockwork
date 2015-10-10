@@ -159,8 +159,8 @@ Channel::Channel(const std::string ch_name, const std::string type)
 			monit_subs(0), monit_pubs(0),
 			connect_responder(0), disconnect_responder(0),
 			monitor_thread(0),
-			throttle_time(0), connections(0), aborted(false), subscriber_thread(0),
-			cmd_client(0), cmd_server(0)
+			throttle_time(0), connections(0), aborted(false), subscriber_thread(0), started_(false),
+			cmd_client(0), cmd_server(0), last_throttled_send(0)
 {
 	internals = new ChannelInternals();
     if (all == 0) {
@@ -428,11 +428,20 @@ void Channel::stop() {
 }
 
 void Channel::startChannels() {
-	if (!all) return;
+	if (!all || all->size() == 0) {
+		DBG_CHANNELS << "No channels to start\n";
+		return;
+	}
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		if (!chn->started()) chn->start();
+		if (!chn->started()) { 
+			DBG_CHANNELS << "starting " << chn->getName() << "\n";
+			chn->start();
+		}
+		else {
+			DBG_CHANNELS << chn->getName() << " is already started\n";
+		}
 	}
 }
 
