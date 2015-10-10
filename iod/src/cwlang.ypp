@@ -1193,6 +1193,10 @@ SET SYMBOL TO value  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new CallMethodActionTemplate($2, $4);    
 }
+| CALL SYMBOL /* execute a command within the current machine and wait for it to complete */ {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new CallMethodActionTemplate($2, "SELF");
+}
 | SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SendMessageActionTemplate($2, $4);    
