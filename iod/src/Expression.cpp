@@ -660,6 +660,8 @@ void Stack::clear() {
 }
 
 Value Predicate::evaluate(MachineInstance *m) {
+	if (stack.stack.size() != 0)
+		stack.stack.clear();
     if (stack.stack.size() == 0)
         if (!prep(stack, this, m, true, needs_reevaluation)) {
             std::stringstream ss;

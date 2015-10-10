@@ -44,7 +44,6 @@ Action::Status LogAction::run() {
         ss << "------- " << owner->fullName() << ": " << val << " -------";
     }
     std::cout << ss.str() << "\n";
-    DBG_MSG << ss.str() << "\n";
     MessageLog::instance()->add(ss.str().c_str());
 	status = Complete;
 	owner->stop(this);
