@@ -52,13 +52,16 @@ Action::Status IncludeAction::run() {
         list_machine = owner->lookup(list_machine_name);
 
 	if (list_machine) {
-/*
+#if 0
+		{
 		std::stringstream ss;
-		ss << owner->getName() << "inserting " << entry << " kind: " << entry.kind << "\n";
+		ss << owner->getName() << " inserting " << entry << " kind: " << entry.kind << "\n";
 		char *msg = strdup(ss.str().c_str());
 		MessageLog::instance()->add(msg);
 		free(msg);
-*/
+		}
+#endif
+
 		//std::cout << owner->getName() << " inserting " << entry << " kind: " << entry.kind << "\n";
         if (list_machine->_type == "REFERENCE") {
             MachineInstance *old = 0;
@@ -66,10 +69,8 @@ Action::Status IncludeAction::run() {
                 // remove old item
                 old = list_machine->locals.at(0).machine;
                 if (old) {
-                    old->removeDependancy(list_machine);
-                    list_machine->stopListening(old);
+					list_machine->removeLocal(0);
                 }
-                list_machine->locals.clear();
             }
             /*
              This gets complicated. Clockwork doesn't have a way for values to to refer
@@ -85,14 +86,15 @@ Action::Status IncludeAction::run() {
             if (entry.kind == Value::t_symbol) {
                 std::string real_name;
                 MachineInstance *new_assignment = 0;
-                if (entry.cached_machine) {
+				if (entry.cached_machine) {
                     real_name = entry.cached_machine->getName();
                     new_assignment = entry.cached_machine;
                     list_machine->addLocal(entry,new_assignment);
                     new_assignment->addDependancy(owner);
                     owner->listenTo(new_assignment);
                 }
-                else {
+                else
+				{
                     real_name = entry.sValue;
                     new_assignment = owner->lookup(real_name);
                     bool done = false;
