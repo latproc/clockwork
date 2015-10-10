@@ -23,6 +23,7 @@
 #include "Logger.h"
 #include "IOComponent.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
 
 // -- CallMethodAction - send a command message to a machine and wait for a response
 //    the remote machine must send a reply or this action hangs forever
@@ -39,10 +40,10 @@ Action::Status CallMethodAction::run() {
 	owner->start(this);
 	if (!target_machine) target_machine = owner->lookup(target.get());
 	if (!target_machine) {
-		std::stringstream ss;
-		ss << owner->getName() << " CallMethodAction failed to find machine " << target.get();
-		std::string s(ss.str());
-		error_str = strdup(s.c_str());
+		char buf[150];
+		snprintf(buf, 100, "%s CallMethodAction failed to find machine %s", owner->getName().c_str(), target.get());
+		MessageLog::instance()->add(buf);
+		error_str = strdup(buf);
 		return Failed;
 	}
 	if (target_machine == owner) {
