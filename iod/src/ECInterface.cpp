@@ -40,6 +40,7 @@
 #include <ecrt.h>
 #include <tool/MasterDevice.h>
 #include "hw_config.h"
+#include "MessageLog.h"
 
 struct list_head {
     struct list_head *next, *prev;
@@ -66,6 +67,10 @@ uint8_t *ECInterface::domain1_pd = 0;
 
 std::vector<ECModule *> ECInterface::modules;
 
+static int slaves_not_operational = 1; // initialise to nonzero until we know for sure
+static int slaves_offline = 1;
+static bool ec_offline = true;
+
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_details(0) {
 	offsets = new unsigned int[64];
 	bit_positions = new unsigned int[64];
@@ -90,7 +95,7 @@ ECModule::~ECModule() {
 }
 
 bool ECModule::online() {
-	return slave_config_state.online;
+	return slave_config_state.online && slaves_not_operational == 0 && slaves_offline == 0;
 }
 
 bool ECModule::operational() {
@@ -583,7 +588,7 @@ void ECInterface::check_domain1_state(void)
 
     ecrt_domain_state(domain1, &ds);
 
-#if 0
+#if 1
     if (ds.working_counter != domain1_state.working_counter)
         std::cout << "Domain1: WC " << ds.working_counter << "\n";
     if (ds.wc_state != domain1_state.wc_state)
@@ -602,16 +607,28 @@ void ECInterface::check_master_state(void)
     ec_master_state_t ms;
 	memset(&ms, 0, sizeof(ec_master_state_t));
 
-    ecrt_master_state(master, &ms);
+	ecrt_master_state(master, &ms);
 
-    if (ms.slaves_responding != master_state.slaves_responding)
-        std::cout << ms.slaves_responding << " slave(s)\n";
-    if (ms.al_states != master_state.al_states)
-        std::cout << "AL states: 0x" << std::ios::hex << ms.al_states << "\n";
-    if (ms.link_up != master_state.link_up)
-        std::cout << "Link is " << (ms.link_up ? "up" : "down") << "\n";
+	if (ms.slaves_responding != master_state.slaves_responding) {
+		std::cout << ms.slaves_responding << " slave(s)\n";
+		char buf[100];
+		snprintf(buf, 100, "Number of slaves has changed from %d to %d", master_state.slaves_responding, ms.slaves_responding);
+		MessageLog::instance()->add(buf);
+	}
+	if (ms.al_states != master_state.al_states) {
+		std::cout << "AL states: 0x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
+		char buf[100];
+		snprintf(buf, 100, "EtherCAT state change: was 0x%x now 0x%x", master_state.al_states, ms.al_states);
+		MessageLog::instance()->add(buf);
+	}
+	if (ms.link_up != master_state.link_up) {
+		std::cout << "Link is " << (ms.link_up ? "up" : "down") << "\n";
+		char buf[100];
+		snprintf(buf, 100, "EtherCAT link state change was %s now %s", master_state.link_up ?"up":"down", ms.link_up?"up":"down");
+		MessageLog::instance()->add(buf);
+	}
 
-    master_state = ms;
+	master_state = ms;
 #endif
 }
 
@@ -624,18 +641,36 @@ void ECInterface::check_slave_config_states(void)
     ec_slave_config_state_t s;
 
 	std::vector<ECModule *>::iterator iter = modules.begin();
+	int i = 0;
+	slaves_not_operational = 0;
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 	    ecrt_slave_config_state(m->slave_config, &s);
+			if (!s.online) ++slaves_not_operational;
+			if (!s.online) ++slaves_offline;
 	
-	    if (s.al_state != m->slave_config_state.al_state)
+			char buf[100];
+	    if (s.al_state != m->slave_config_state.al_state) {
 	        std::cout << m->name << ": State 0x" << std::ios::hex <<  s.al_state << ".\n";
-	    if (s.online != m->slave_config_state.online)
+					snprintf(buf, 100, "Slave %d (%s) changed state was 0x%x now 0x%x", i, m->name.c_str(), 
+						m->slave_config_state.al_state, s.al_state);
+				MessageLog::instance()->add(buf);
+			}
+	    if (s.online != m->slave_config_state.online) {
 	        std::cout << m->name << ": " << (s.online ? "online" : "offline") << "\n";
-	    if (s.operational != m->slave_config_state.operational)
+				snprintf(buf, 100, "Slave %d (%s) changed online state: was %s, now %s", i, m->name.c_str(), 
+					m->slave_config_state.online?"online":"offline", s.online?"online":"offline");
+				MessageLog::instance()->add(buf);
+			}
+	    if (s.operational != m->slave_config_state.operational) {
 	        std::cout << m->name << ": " << (s.operational ? "" : "Not ") << "operational\n";
+				snprintf(buf, 100, "Slave %d (%s) changed operational state: was %s operational, now %s operational", i, m->name.c_str(), 
+					m->slave_config_state.operational?"":"not ", s.operational?"":"not ");
+				MessageLog::instance()->add(buf);
+			}
 
 	    m->slave_config_state = s;
+		++i;
 	}
 #endif
 }

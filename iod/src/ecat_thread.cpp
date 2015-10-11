@@ -60,6 +60,7 @@
 
 extern bool machine_is_ready;
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
+static bool machine_was_ready = false;
 
 EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000),last_ping(0) { 
 }
@@ -183,6 +184,7 @@ void EtherCATThread::operator()() {
             
 	uint64_t global_clock = 0;
 	bool first_run = true;
+	bool ec_ok = true; // assume all is ok with EtherCAT. If modules go offline this flips and we stop polling
 	while (!program_done && !waitForSync(*sync_sock)) ;
 	while (!program_done) {
 		//if (status == e_collect) {
@@ -231,14 +233,17 @@ void EtherCATThread::operator()() {
 			ECInterface::instance()->setReferenceTime(now % 0x100000000);
 			uint64_t period = 1000000/freq;
 			int num_updates = 0;
-			if (!machine_is_ready) {
+			if (machine_was_ready && !machine_is_ready) {
+				ec_ok = false;
+			}
+			if (!machine_was_ready && !machine_is_ready) {
 				//NB_MSG << "machine is not ready..\n";
 				ECInterface::instance()->receiveState();
 				ECInterface::instance()->sendUpdates();
 				continue;
 			}
 			else {
-				ECInterface::instance()->receiveState();
+				if (ec_ok) ECInterface::instance()->receiveState();
 #ifdef USE_DC
 				// distributed clocks. TBD
 				static uint64_t last_ref_time =  ECInterface::instance()->getReferenceTime();
@@ -269,7 +274,7 @@ void EtherCATThread::operator()() {
 				//global_clock += period;
 				global_clock = microsecs();
 #endif
-				if (status == e_collect)
+				if (ec_ok && status == e_collect)
 					num_updates = ECInterface::instance()->collectState();
 			}
 #if 0
@@ -484,12 +489,12 @@ void EtherCATThread::operator()() {
 					std::cout << "<"; display(cw_data); std::cout << "\n";
 				}
 #endif
-				if (default_data) // only update the domain if default data has been setup
+				if (ec_ok && default_data) // only update the domain if default data has been setup
 					ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 				delete cw_mask;
 				delete cw_data;
 			}
-			ECInterface::instance()->sendUpdates();
+			if (ec_ok) ECInterface::instance()->sendUpdates();
 			checkAndUpdateCycleDelay();
 		}	
 	//}
