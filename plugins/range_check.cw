@@ -26,7 +26,7 @@ RANGECHECK MACHINE Count {
 	COMMAND reset { active := 0; }
 	ENTER idle { active := 0; }
  
-	ENTER on { LOG "on: " + Count.VALUE }
+	ENTER on { LOG "on: " + Count.Position }
 }
 
 %BEGIN_PLUGIN
@@ -71,8 +71,8 @@ int check_states(void *scope)
 			log_message(scope, "RangeCheck Pos2 property is not an integer");
 			data->p2 = &data->dummy_pos;
 		}
-		if (!getIntValue(scope, "Count.VALUE", &data->count)) {
-			log_message(scope, "RangeCheck Count does not have an integer VALUE property");
+		if (!getIntValue(scope, "Count.Position", &data->count)) {
+			log_message(scope, "RangeCheck Count does not have an integer Position property");
 			data->count = &data->dummy_count;
 		}
 		{ 
