@@ -588,7 +588,7 @@ void ECInterface::check_domain1_state(void)
 
     ecrt_domain_state(domain1, &ds);
 
-#if 1
+#if 0
     if (ds.working_counter != domain1_state.working_counter)
         std::cout << "Domain1: WC " << ds.working_counter << "\n";
     if (ds.wc_state != domain1_state.wc_state)
