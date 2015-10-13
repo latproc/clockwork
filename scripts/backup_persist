@@ -1,0 +1,14 @@
+#!/bin/sh
+#
+# script to backup the persist.dat data file ona regular basis (eg through cron)
+#
+# to prepare:
+# mkdir $BACKUPDIR && cd $BACKUPDIR && git init && cp "$PERSISTFILE" . && git add "`basename '$PERSISTFILE'`"
+
+[ "$BACKUPDIR" = "" ] && BACKUPDIR=/root/settings
+[ "$PERSISTFILE" = "" ] && PERSISTFILE=/opt/latproc/code/config/persist.dat
+
+cd $BACKUPDIR || exit 2
+cp $PERSISTFILE .
+date >>/tmp/backup_persist.log 2>&1
+git commit -m "`date`" persist.dat >>/tmp/backup_persist.log 2>&1
