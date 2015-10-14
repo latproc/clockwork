@@ -431,7 +431,7 @@ public:
 	static long default_position_history;	// a default value for position_history
 	static long default_speed_tolerance;	// a default value for speed_tolerance
 	FloatBuffer speeds;
-	long rate_len;
+	int rate_len;
     
     InputFilterSettings() :property_changed(true), positions(0), 
 			last_sent(0), prev_sent(0), last_time(0),
@@ -452,7 +452,7 @@ public:
 		if (last_time == 0) {
 			last_time = read_time;
 			prev_sent = last_sent;
-			speed = 0;
+			speed = 0.0;
 			speeds.append(speed);
 		}
 		else if (read_time - last_time >= 10000) {
@@ -562,7 +562,9 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
 		o->properties.add("VALUE", (long)raw, SymbolTable::ST_REPLACE);
 		o->properties.add("Position", (long)config->last_sent, SymbolTable::ST_REPLACE);
-		o->properties.add("Velocity", (long)config->speeds.average(config->speeds.length()), SymbolTable::ST_REPLACE);
+		double v = config->speeds.average(config->speeds.length());
+		if (fabs(v)<1.0) v = 0.0;
+		o->properties.add("Velocity", (long)v, SymbolTable::ST_REPLACE);
 	}
 #endif
 	return config->last_sent;
@@ -589,7 +591,7 @@ public:
 	long speed;
 	uint16_t buffer_len;
 	FloatBuffer speeds;
-	long rate_len;
+	int rate_len;
 
 	CounterInternals() : positions(0), 
 	tolerance(&default_tolerance), filter_len(&default_filter_len), 
@@ -605,6 +607,8 @@ void update(uint64_t read_time) {
 	if (last_time == 0) {
 		last_time = read_time;
 		prev_sent = last_sent;
+		speed = 0.0;
+		speeds.append(speed);
 	}
 	else if (read_time - last_time >= 10000) {
 /*

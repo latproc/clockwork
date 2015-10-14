@@ -50,13 +50,13 @@ double Buffer::average(int n)
 {
 	boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
   double res = 0.0f;
-  if (front == -1) return 0.0f; // empty buffer
-  if (n == 0) return 0.0f;
+  if (front == -1) return 0.0; // empty buffer
+  if (n == 0) return 0.0;
   int len = length();
-  if (len <= 0) return 0.0f;
+  if (len <= 0) return 0.0;
   if (len < n) n = len;
-  return total_ / n;
-#if 0
+//  return total_ / (double)n;
+#if 1
   int i = (front + BUFSIZE - n + 1) % BUFSIZE;
   while (i != front)
   {
@@ -70,7 +70,7 @@ double Buffer::average(int n)
   std::cout << i << ":" <<getFloatAtIndex(i) << "\n";
 #endif
   res += getFloatAtIndex(i);
-  return res / n;
+  return res / (double)n;
 #endif
 }
 
