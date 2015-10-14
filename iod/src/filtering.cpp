@@ -216,5 +216,23 @@ double SampleBuffer::rate() const // returns dv/dt between the two sample positi
     return ds/dt;
 }
 
+#ifdef TESTING
+#include <iostream>
+#include <inttypes.h>
+
+int main(int argc, char *argv[]) {
+	FloatBuffer fb(4);
+	long now = 0;
+	for (int i=0; i<10; ++i) {
+		std::cout << "t: " << now << "\n";
+		fb.append( now );
+		int x = i%2-1;
+		std::cout << "x: " << x << "\n";
+		now += 10 * i%2-1;
+	}
+	std::cout << fb.average(4) << " " << (long)fb.average(4) << "\n";
+	return 0;
+}
+#endif
 
 
