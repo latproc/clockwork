@@ -84,15 +84,15 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
-	{FileLogger fl(program_name); fl.f << "sending: " << msg << "\n"; }
+	{FileLogger fl(program_name); fl.f() << "sending: " << msg << "\n"; }
 	if (options.verbose) std::cout << " sending: " << msg << "\n";
 	sendMessage(sock, msg);
 	size_t size = strlen(msg);
 	free(msg);
-	{FileLogger fl(program_name); fl.f << "getting reply:\n"; }
+	{FileLogger fl(program_name); fl.f() << "getting reply:\n"; }
 	zmq::message_t reply;
 	if (sock.recv(&reply)) {
-		{FileLogger fl(program_name); fl.f << "got reply:\n"; }
+		{FileLogger fl(program_name); fl.f() << "got reply:\n"; }
 		size = reply.size();
 		char *data = (char *)malloc(size+1);
 		memcpy(data, reply.data(), size);
@@ -106,7 +106,7 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 void process_command(zmq::socket_t &sock, std::list<Value> &params) {
 	char * data = send_command(sock, params);
 	if (data) {
-		{FileLogger fl(program_name); fl.f << "response " << data << "\n"; }
+		{FileLogger fl(program_name); fl.f() << "response " << data << "\n"; }
 		if (options.verbose) std::cout << data << "\n";
 		free(data);
 	}
@@ -117,7 +117,7 @@ void sendStatus(const char *s) {
 	sock.connect("tcp://localhost:5555");
 
 
-	{FileLogger fl(program_name); fl.f << "reporting status " << s << "\n"; }
+	{FileLogger fl(program_name); fl.f() << "reporting status " << s << "\n"; }
 	if (options.status_machine.length()) {
 		std::list<Value>cmd;
 		cmd.push_back("PROPERTY");
@@ -127,7 +127,7 @@ void sendStatus(const char *s) {
 		process_command(sock, cmd);
 	}
 	else
-		{FileLogger fl(program_name); fl.f << "no status machine" << "\n"; }
+		{FileLogger fl(program_name); fl.f() << "no status machine" << "\n"; }
 }
 
 /*
@@ -881,7 +881,7 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	{FileLogger fl(program_name); fl.f << "----- starting -----\n"; }
+	{FileLogger fl(program_name); fl.f() << "----- starting -----\n"; }
 	std::string chn_instance_name;
 	MonitorConfiguration mc;
 	if (config_filename) {
@@ -902,11 +902,11 @@ int main(int argc, char *argv[]) {
 		cmd.push_back(channel_name);
 		char *response = send_command(iod, cmd);
 		if ( !response )
-		{FileLogger fl(program_name); fl.f << "null response to channel request. exiting\n" << std::flush; sleep(2); exit(1);}
+		{FileLogger fl(program_name); fl.f() << "null response to channel request. exiting\n"; sleep(2); exit(1);}
 		else if (!*response)
-		{FileLogger fl(program_name); fl.f << "empty response to channel request. exiting\n"<< std::flush; sleep(2); exit(2);}
+		{FileLogger fl(program_name); fl.f() << "empty response to channel request. exiting\n"; sleep(2); exit(2);}
 		else
-		{FileLogger fl(program_name); fl.f << "got channel name " << response << "\n"<<std::flush; }
+		{FileLogger fl(program_name); fl.f() << "got channel name " << response << "\n"; }
 		if (options.verbose) std::cout << response << "\n";
 		cJSON *obj = cJSON_Parse(response);
 
@@ -996,7 +996,7 @@ int main(int argc, char *argv[]) {
 		}
 		catch (std::exception ex) {
 			std::cout << "polling connections: " << ex.what() << "\n";
-			{FileLogger fl(program_name); fl.f << "polling connections " << ex.what()<< "\n"<<std::flush; }
+			{FileLogger fl(program_name); fl.f() << "polling connections " << ex.what()<< "\n"; }
 			if (++exception_count <= 5 && program_state != s_finished) { usleep(400000); continue; }
 			exit(0);
 		}
