@@ -349,8 +349,8 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 					FileLogger fl(program_name);
 					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
-				usleep(10);
 				if (zmq_errno() == EFSM) throw;
+				usleep(10);
 				continue;
 			} else {
 				{
@@ -383,11 +383,11 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 					FileLogger fl(program_name); 
 					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
-				usleep(10);
 				if (zmq_errno() == EFSM) {
-					usleep(10000);
+					usleep(1000);
 					throw;
 				}
+				usleep(10);
 				continue;
 			} else {
 				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
