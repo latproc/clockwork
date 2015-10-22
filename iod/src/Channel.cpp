@@ -2148,7 +2148,7 @@ CommandSocketInfo::CommandSocketInfo(Channel* chn) : sock(0), index(0) {
 		usleep(50);
 	}
 	catch (zmq::error_t zex) {
-		char errmsg[100];
+		char errmsg[150];
 		snprintf(errmsg, 150, "Exception binding a command socket for %s: %s", chn->getName().c_str(), buf);
 		MessageLog::instance()->add(errmsg);
 		NB_MSG << errmsg << "\n";
