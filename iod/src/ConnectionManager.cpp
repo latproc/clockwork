@@ -233,6 +233,9 @@ bool SubscriptionManager::requestChannel() {
 				++error_count;
 				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
+				if (zmq_errno() == ETIMEDOUT) {
+					smi->sent_request = false;
+				}
 				if (zmq_errno() == EFSM /*EFSM*/) {
 					{
 						FileLogger fl(program_name);
@@ -256,7 +259,7 @@ bool SubscriptionManager::requestChannel() {
 		else {
         	if (len < 1000) buf[len] =0;
 					{FileLogger fl(program_name);
-					fl.f() << "safeRecv got data: " << buf << " in esiting setup\n";
+					fl.f() << "safeRecv got data: " << buf << " in waiting setup\n";
 					}
 				}
         if (len == 0) return false; // no data yet
@@ -308,7 +311,6 @@ void SubscriptionManager::configureSetupConnection(const char *host, int port) {
     
 static char *setup_url = 0;
 bool SubscriptionManager::setupConnections() {
-	// setupStatus() == SubscriptionManager::e_disconnected)  ????
 	char url[100];
 	if (setupStatus() == SubscriptionManager::e_startup ) {
 		snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), setup_port);
@@ -320,15 +322,23 @@ bool SubscriptionManager::setupConnections() {
 			setup().connect(url);
 		}
 		catch(zmq::error_t err) {
-			{FileLogger fl(program_name); fl.f() << 
+			{
+				char buf[200];
+				snprintf(buf, 200, "%s %d %s %s %s\n",
+						 "SubscriptionManager::setupConnections error ",
+						 errno,
+						 zmq_strerror(zmq_errno()),
+						 " url: ",
+						 url);
 
-				"SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << " url: " << url << "\n"; }
-			std::cerr << "SubscriptionManager::setupConnections error " << errno << ": " << zmq_strerror(errno) << " url: " << url << "\n";
+				FileLogger fl(program_name); fl.f() << buf << "\n";
+				MessageLog::instance()->add(buf);
+			}
 			return false;
 		}
 		monit_setup->setEndPoint(url);
 		setSetupStatus(SubscriptionManager::e_waiting_connect);
-		usleep(50000);
+		usleep(1000);
 	} 
 	if (requestChannel()) {
 		// define the channel
@@ -678,11 +688,29 @@ bool SubscriptionManager::checkConnections() {
 	}
 	if (monit_setup->disconnected() || monit_subs.disconnected() )
 	{
-#if 0
-		FileLogger fl(program_name); fl.f()
+#if 1
+		/*
+		 FileLogger fl(program_name); fl.f()
 			<<  ( ( monit_setup->disconnected() ) ? "setup down " : "setup up " )
 			<< ( ( monit_subs.disconnected() ) ? "subs down " : "subs up " ) << "\n";
-		if ( this->protocol == eCLOCKWORK && timer > 10000000) {
+		 */
+		uint64_t state_timeout = 0;
+		switch (setupStatus()) {
+			case e_disconnected:
+			case e_done:
+			case e_not_used:
+				break;
+			case e_waiting_connect: // allow one minute to connect to the server before restarting
+				state_timeout = 60000000;
+				break;
+			case e_settingup_subscriber:
+			case e_startup:
+			case e_waiting_setup:
+			case e_waiting_subscriber:
+				state_timeout = 10000000;
+		}
+		if ( state_timeout && (this->protocol == eCLOCKWORK || this->protocol == eCHANNEL)
+				&& microsecs() - state_start > state_timeout) {
 			{FileLogger fl(program_name); fl.f() << " waiting too long in state " << setupStatus() << ". aborting\n"; }
 			usleep(5); exit(63);
 		}
@@ -724,15 +752,34 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		//	fl.f()<< subscriber_host<<":"<<subscriber_port<< "\n";
 	}
     int rc = 0;
-    if (isClient() && num_items>2 && (monit_subs.disconnected() || monit_setup->disconnected()) )
-        rc = zmq::poll( &items[2], num_items-2, 5);
-    else
-        rc = zmq::poll(items, num_items, 5);
+
+	/* client programs that are not yet connected only monitor their own command channel for activity
+	 	and this is assumed to always be item 2 in the poll items(!) 
+	 */
+	try {
+		if (isClient() && num_items>2 && (monit_subs.disconnected() || monit_setup->disconnected()) ) {
+			assert(items[2].socket = &cmd);
+			rc = zmq::poll( &items[2], num_items-2, 5);
+		}
+		else
+			rc = zmq::poll(items, num_items, 5);
+	}
+	catch (zmq::error_t zex) {
+		char buf[200];
+		snprintf(buf, 200, "%s %s %d %s %s",
+				 channel_name.c_str(),
+				 "exception",
+				 zmq_errno(),
+				 zmq_strerror(zmq_errno()),
+				 "polling connections");
+		FileLogger fl(program_name); fl.f() << buf << "\n";
+		return false;
+	}
     if (rc == 0) return true; // no sockets have messages
 
 	char *buf;
     size_t msglen = 0;
-#if 0
+#if 1
 	if (items[0].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from clockwork\n";
 	}
@@ -817,46 +864,48 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			cmd.send(msg, strlen(msg));
 			run_status = e_waiting_cmd;
 		}
-		else if (run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
-			{
-				FileLogger fl(program_name);
-				if (isClient()) {
-					fl.f() << "incoming response from setup channel\n";
+		else if (items[0].revents & ZMQ_POLLIN) {
+			if (run_status == e_waiting_response) {
+				{
+					FileLogger fl(program_name);
+					if (isClient()) {
+						fl.f() << "incoming response from setup channel\n";
+					}
+					else {
+						fl.f() << "incoming response from subscriber\n";
+					}
 				}
-				else {
-					fl.f() << "incoming response from subscriber\n";
-				}
-			}
-			DBG_CHANNELS << "incoming response\n";
+				DBG_CHANNELS << "incoming response\n";
 
-			// note that items[0].socket is the correct socket to use. do we really
-			// need this use of setup() and subscriber()?
-			bool got_response =
-				(isClient())
-					? safeRecv(setup(), &buf, &msglen, false, 0)
-					: safeRecv(subscriber(), &buf, &msglen, false, 0);
-			if (got_response) {
-				DBG_CHANNELS << " forwarding response " << buf << "\n";
-				if (msglen && msglen<1000) {
-					cmd.send(buf, msglen);
+				// note that items[0].socket is the correct socket to use. do we really
+				// need this use of setup() and subscriber()?
+				bool got_response =
+					(isClient())
+						? safeRecv(setup(), &buf, &msglen, false, 0)
+						: safeRecv(subscriber(), &buf, &msglen, false, 0);
+				if (got_response) {
+					DBG_CHANNELS << " forwarding response " << buf << "\n";
+					if (msglen && msglen<1000) {
+						cmd.send(buf, msglen);
+					}
+					else {
+						cmd.send("error", 5);
+					}
+					run_status = e_waiting_cmd;
 				}
-				else {
-					cmd.send("error", 5);
+			}
+			else if ( items[0].revents & ZMQ_POLLIN ) {
+				char *buf;
+				size_t len;
+				bool res = safeRecv(setup(), &buf, &len, false, 0);
+				if (res) {FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";}
+				{
+					FileLogger fl(program_name);
+					fl.f() << "incoming response from setup channel not already caught. run_status: " << run_status << "\n";
+					//assert(false);
 				}
-				run_status = e_waiting_cmd;
+				delete[] buf;
 			}
-		}
-		else if ( items[0].revents & ZMQ_POLLIN ) {
-			char *buf;
-			size_t len;
-			bool res = safeRecv(setup(), &buf, &len, false, 0);
-			if (res) {FileLogger fl(program_name); fl.f() << "Clockwork message '" << buf << "' was ignored\n";}
-			{
-				FileLogger fl(program_name);
-				fl.f() << "incoming response from setup channel not already caught\n";
-				assert(false);
-			}
-			delete[] buf;
 		}
 	}
     return true;
