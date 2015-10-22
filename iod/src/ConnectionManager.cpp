@@ -772,14 +772,15 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 				 zmq_errno(),
 				 zmq_strerror(zmq_errno()),
 				 "polling connections");
-		FileLogger fl(program_name); fl.f() << buf << "\n";
+		//FileLogger fl(program_name); fl.f() << buf << "\n";
+		MessageLog::instance()->add(buf);
 		return false;
 	}
     if (rc == 0) return true; // no sockets have messages
 
 	char *buf;
     size_t msglen = 0;
-#if 1
+#if 0
 	if (items[0].revents & ZMQ_POLLIN) {
 		NB_MSG << "have message activity from clockwork\n";
 	}
