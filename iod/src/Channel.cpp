@@ -923,6 +923,7 @@ usleep(50);
 
 	//NB_MSG << name << " setup message router\n";
 
+	long poll_timeout = 1;
 	while (!aborted && communications_manager) {
 		try {
 
@@ -956,8 +957,8 @@ usleep(50);
 			}
 
 			try {
-				int rc = zmq::poll(items, num_poll_items, 1);
-				if (rc == 0) {usleep(20); continue; }
+				int rc = zmq::poll(items, num_poll_items, poll_timeout);
+				if (rc == 0) {poll_timeout = 20; continue; } else poll_timeout = 1;
 
 			}
 			catch ( zmq::error_t tex) {
@@ -1402,7 +1403,7 @@ void Channel::remove(const std::string name) {
 void Channel::setDefinition(const ChannelDefinition *def) {
 	definition_ = def;
 	if (!internals->cmd_sock_info) {
-		NB_MSG << "creating command socket info for " << name << " while setting its definition\n";
+		DBG_CHANNELS << "creating command socket info for " << name << " while setting its definition\n";
 		internals->cmd_sock_info = new CommandSocketInfo(this);
 	}
 }
@@ -2147,9 +2148,12 @@ CommandSocketInfo::CommandSocketInfo(Channel* chn) : sock(0), index(0) {
 		usleep(50);
 	}
 	catch (zmq::error_t zex) {
-		NB_MSG << "Exception binding to " << buf << "\n";
+		char errmsg[100];
+		snprintf(errmsg, 150, "Exception binding a command socket for %s: %s", chn->getName().c_str(), buf);
+		MessageLog::instance()->add(errmsg);
+		NB_MSG << errmsg << "\n";
 	}
-	NB_MSG << "Bound command channel socket (processing side) of " << chn->getName() << " to " << buf << " at index " << index << "\n";
+	DBG_CHANNELS << "Bound command channel socket (processing side) of " << chn->getName() << " to " << buf << " at index " << index << "\n";
 }
 
 CommandSocketInfo::~CommandSocketInfo() { delete sock; }
