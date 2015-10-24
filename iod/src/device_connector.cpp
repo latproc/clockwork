@@ -605,7 +605,8 @@ struct ConnectionThread {
                         if (connection == -1) {
                             std::cerr << msg_buffer << " retrying in " << (retry_delay/1000) << "ms\n";
                             usleep(retry_delay); // pause before trying again
-                            if (retry_delay < 2000000) retry_delay *= 1.2;
+                            if (retry_delay < 1000000) retry_delay *= 1.2;
+							if (retry_delay > 1000000) retry_delay = 1000000;
                             continue;
                         }
                     }
@@ -854,6 +855,8 @@ static void finish(int sig)
 static void toggle_debug(int sig)
 {
 	debug = !debug;
+	if (debug) LogState::instance()->insert(DebugExtra::instance()->DEBUG_CHANNELS);
+	else LogState::instance()->erase(DebugExtra::instance()->DEBUG_CHANNELS);
 }
 
 bool setup_signals()
@@ -886,7 +889,13 @@ int main(int argc, const char * argv[])
 
     zmq::context_t context;
     MessagingInterface::setContext(&context);
-    
+
+#if 0
+	int major, minor, patch;
+	zmq_version (&major, &minor, &patch);
+	std::cout << "ZMQ version " << major << "." << minor << "." << patch << "\n";
+#endif
+
     last_send.tv_sec = 0;
     last_send.tv_usec = 0;
     try {
@@ -1005,27 +1014,31 @@ int main(int argc, const char * argv[])
 						assert(sm);
             items[idx].socket = sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
             subs_index = idx;
+			items[idx].fd = 0;
             items[idx].socket = sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
         }
         else {
             CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
 						assert(cm);
-            items[idx].socket = *cm->setup; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+            items[idx].socket = *cm->setup;
+			items[idx].fd = 0;
+			items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
         }
-        cmd_index = idx; items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
-        num_items = idx;
+        cmd_index = idx;  items[idx].fd = 0;
+		items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+		num_items = idx;
 
-        
+
 				int error_count = 0;
         while (!done)
         {
             struct timeval now;
-						usleep(5000);
+			usleep(5000);
             gettimeofday(&now, 0);
 
             try {
                 if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
-								error_count = 0;
+				error_count = 0;
             }
             catch (std::exception e) {
 								++error_count;
