@@ -818,7 +818,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 				if (monit_setup && !monit_setup->disconnected()) {
 					if (protocol != eCHANNEL) {
 						if (setupStatus() == e_done) {
-							{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
+							//{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
 							setup().send(buf,msglen);
 							run_status = e_waiting_response;
 						}
@@ -871,6 +871,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		}
 		else if (items[0].revents & ZMQ_POLLIN) {
 			if (run_status == e_waiting_response) {
+#if 0
 				{
 					FileLogger fl(program_name);
 					if (isClient()) {
@@ -880,6 +881,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 						fl.f() << "incoming response from subscriber\n";
 					}
 				}
+#endif
 				DBG_CHANNELS << "incoming response\n";
 
 				// note that items[0].socket is the correct socket to use. do we really
