@@ -758,8 +758,12 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	 */
 	try {
 		if (isClient() && num_items>2 && (monit_subs.disconnected() || monit_setup->disconnected()) ) {
-			assert(items[2].socket = &cmd);
-			rc = zmq::poll( &items[2], num_items-2, 5);
+			int idx = -1;
+			int i=0; while (i<num_items) if (items[2].socket == &cmd) { idx=i; break; } else ++i;
+			if (idx != -1)
+				rc = zmq::poll( &items[idx], 1, 5);
+			else
+				rc = 0;
 		}
 		else
 			rc = zmq::poll(items, num_items, 5);
@@ -772,7 +776,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 				 zmq_errno(),
 				 zmq_strerror(zmq_errno()),
 				 "polling connections");
-		//FileLogger fl(program_name); fl.f() << buf << "\n";
+		FileLogger fl(program_name); fl.f() << buf << "\n";
 		MessageLog::instance()->add(buf);
 		return false;
 	}
