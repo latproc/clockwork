@@ -565,7 +565,7 @@ struct ConnectionThread {
 #else
 		pthread_setname_np(pthread_self(), thread_name_buf);
 #endif
-		
+
         try {
             gettimeofday(&last_active, 0);
             
@@ -839,6 +839,7 @@ struct ConnectionThread {
 };
 
 bool done = false;
+ConnectionThread *connection_thread = 0;
 Options *Options::instance_;
 
 static void finish(int sig)
@@ -850,6 +851,7 @@ static void finish(int sig)
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGINT, &sa, 0);
     done = true;
+	if (connection_thread) connection_thread->stop();
 }
 
 static void toggle_debug(int sig)
@@ -867,10 +869,11 @@ bool setup_signals()
 	sa.sa_flags = 0;
 	if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0)) { done = true; return false; }
 
-	sa.sa_handler = toggle_debug;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	if (sigaction(SIGUSR1, &sa, 0) ) { done = true; return false; }
+	struct sigaction sa2;
+	sa2.sa_handler = toggle_debug;
+	sigemptyset(&sa2.sa_mask);
+	sa2.sa_flags = SA_RESTART;
+	if (sigaction(SIGUSR1, &sa2, 0) ) { done = true; return false; }
 	return true;
 }
 
@@ -878,6 +881,135 @@ class PropertyStatus {
 public:
     struct timeval last_property_update;
 
+};
+
+class ProcessingThread {
+public:
+	Options &options;
+	zmq::socket_t &cmd;
+	ConnectionManager *connection_manager;
+	bool done = false;
+
+	void stop() { done = true; }
+
+	ProcessingThread(Options &opt, zmq::socket_t &command_sock,
+					 ConnectionManager *connection_mgr)
+	: options(opt), cmd(command_sock), connection_manager(connection_mgr) {
+
+	}
+	void operator()() {
+
+
+		zmq::pollitem_t *items = new zmq::pollitem_t[3];
+		memset(items, 0, sizeof(zmq::pollitem_t)*3);
+		int idx = 0;
+
+		int cmd_index = -1;
+		int subs_index = -1;
+		int num_items = 0;
+		if (options.watchProperty()) {
+			SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
+			assert(sm);
+			items[idx].socket = sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+			subs_index = idx;
+			items[idx].fd = 0;
+			items[idx].socket = sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+		}
+		else {
+			CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
+			assert(cm);
+			items[idx].socket = *cm->setup;
+			items[idx].fd = 0;
+			items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+		}
+		cmd_index = idx;  items[idx].fd = 0;
+		items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+		num_items = idx;
+
+
+		int error_count = 0;
+		while (!done)
+		{
+			struct timeval now;
+			usleep(5000);
+			gettimeofday(&now, 0);
+
+			try {
+				if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
+				error_count = 0;
+			}
+			catch (std::exception e) {
+				++error_count;
+				if (zmq_errno()) {
+					std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
+					{ FileLogger fl(program_name); fl.f() << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
+				}
+				else {
+					std::cerr << "exception when checking connections: " << e.what() << "\n";
+					{ FileLogger fl(program_name); fl.f() << "exception when checking connections: " << e.what() <<"\n"<<std::flush; }
+				}
+				if (error_count > 10) {
+					FileLogger fl(program_name); fl.f() << " too many errors. exiting."<<std::flush; sleep(2); exit(0);
+				}
+			}
+
+
+#if 0
+			// TBD once the connection is open, check that data has been received within the last second
+			DeviceStatus::State dev_stat = DeviceStatus::instance()->current();
+			if (dev_stat == DeviceStatus::e_up || dev_stat == DeviceStatus::e_connected || dev_stat == DeviceStatus::e_timeout) {
+				std::string msg;
+				struct timeval last;
+				connection_thread.get_last_message(msg, last);
+				if (last_time.tv_sec != last.tv_sec && now.tv_sec > last.tv_sec + 1) {
+					if (dev_stat == DeviceStatus::e_timeout) {
+						DBG_MSG << "Warning: Device timeout\n";
+					}
+					else {
+						DBG_MSG << "Warning: connection idle\n";
+						std::cout<< "Warning: connection idle\n";
+						exit(0);
+					}
+					last_time = last;
+				}
+			}
+#endif
+
+			//if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+
+			if (subs_index>=0 && items[subs_index].revents & ZMQ_POLLIN) {
+				char data[1000];
+				size_t len = 0;
+				try {
+					SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
+					if (sm) {
+						len = sm->subscriber().recv(data, 1000);
+						if (!len) continue;
+						data[len] = 0;
+						std::string cmd;
+						std::vector<Value>*params = 0;
+						MessageEncoding::getCommand(data, cmd, &params);
+						if (cmd == "PROPERTY") {
+							std::string prop = params->at(0).asString();
+							prop = prop + "." + params->at(1).asString();
+							if (prop == options.watchProperty()) {
+								connection_thread->send(params->at(2).asString().c_str());
+								if (debug)std::cout << "sending: " << params->at(2).asString().c_str() << "\n";
+
+							}
+						}
+						if (params) delete params;
+					}
+				}
+				catch (zmq::error_t e) {
+					if (errno == EINTR) continue;
+
+				}
+				data[len] = 0;
+			}
+			else usleep(500);
+		}
+	}
 };
 
 
@@ -971,12 +1103,11 @@ int main(int argc, const char * argv[])
         if (!setup_signals()) {
             std::cerr << "Error setting up signals " << strerror(errno) << "\n"<<std::flush;
         }
-        
-        
-        zmq::socket_t cmd(*MessagingInterface::getContext(), ZMQ_REP);
-        cmd.bind(iod_connection);
-        usleep(5000);
-        
+
+		zmq::socket_t cmd(*MessagingInterface::getContext(), ZMQ_REP);
+		cmd.bind(iod_connection);
+		usleep(5000);
+
 		ConnectionManager *connection_manager = 0;
 		try {
 			if (options.watchProperty())
@@ -992,127 +1123,26 @@ int main(int argc, const char * argv[])
 		}
 		assert(connection_manager);
 
-        ConnectionThread connection_thread;
-        boost::thread monitor(boost::ref(connection_thread));
+		connection_thread = new ConnectionThread;
+		boost::thread monitor(boost::ref(*connection_thread));
 
-        //PropertyMonitorThread watch_thread(options, connection_thread);
-        //boost::thread *watcher = 0;
-            
-        //if (options.watchProperty()) {
-        //    watcher = new boost::thread(boost::ref(watch_thread));
-        //}
+		ProcessingThread processing_thread(options, cmd, connection_manager);
+		boost::thread processing(boost::ref(processing_thread));
 
-        zmq::pollitem_t *items = new zmq::pollitem_t[3];
-        memset(items, 0, sizeof(zmq::pollitem_t)*3);
-        int idx = 0;
-        
-        int cmd_index = -1;
-        int subs_index = -1;
-        int num_items = 0;
-        if (options.watchProperty()) {
-            SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
-						assert(sm);
-            items[idx].socket = sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
-            subs_index = idx;
-			items[idx].fd = 0;
-            items[idx].socket = sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
-        }
-        else {
-            CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
-						assert(cm);
-            items[idx].socket = *cm->setup;
-			items[idx].fd = 0;
-			items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
-        }
-        cmd_index = idx;  items[idx].fd = 0;
-		items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
-		num_items = idx;
+		while (!done) {
+			usleep(100000);
+		}
+		processing_thread.stop();
+		processing.join();
 
+		//PropertyMonitorThread watch_thread(options, connection_thread);
+		//boost::thread *watcher = 0;
 
-				int error_count = 0;
-        while (!done)
-        {
-            struct timeval now;
-			usleep(5000);
-            gettimeofday(&now, 0);
+		//if (options.watchProperty()) {
+		//    watcher = new boost::thread(boost::ref(watch_thread));
+		//}
 
-            try {
-                if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
-				error_count = 0;
-            }
-            catch (std::exception e) {
-								++error_count;
-                if (zmq_errno()) {
-                    std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
-										{ FileLogger fl(program_name); fl.f() << "error: " << zmq_strerror(zmq_errno()) << "\n"<<std::flush; }
-								}
-                else {
-                    std::cerr << "exception when checking connections: " << e.what() << "\n";
-										{ FileLogger fl(program_name); fl.f() << "exception when checking connections: " << e.what() <<"\n"<<std::flush; }
-								}
-								if (error_count > 10) {
-									FileLogger fl(program_name); fl.f() << " too many errors. exiting."<<std::flush; sleep(2); exit(0);
-								}
-            }
-
-            
-#if 0
-            // TBD once the connection is open, check that data has been received within the last second
-            DeviceStatus::State dev_stat = DeviceStatus::instance()->current();
-            if (dev_stat == DeviceStatus::e_up || dev_stat == DeviceStatus::e_connected || dev_stat == DeviceStatus::e_timeout) {
-                std::string msg;
-                struct timeval last;
-                connection_thread.get_last_message(msg, last);
-                if (last_time.tv_sec != last.tv_sec && now.tv_sec > last.tv_sec + 1) {
-					if (dev_stat == DeviceStatus::e_timeout) {
-						DBG_MSG << "Warning: Device timeout\n";
-					}
-                    else {
-                        DBG_MSG << "Warning: connection idle\n";
-                        std::cout<< "Warning: connection idle\n";
-						exit(0);
-					}
-                    last_time = last;
-                }
-            }
-#endif
-
-            //if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
-            
-            if (subs_index>=0 && items[subs_index].revents & ZMQ_POLLIN) {
-                char data[1000];
-                size_t len = 0;
-                try {
-                    SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
-                    if (sm) {
-                        len = sm->subscriber().recv(data, 1000);
-                        if (!len) continue;
-                        data[len] = 0;
-                        std::string cmd;
-                        std::vector<Value>*params = 0;
-                        MessageEncoding::getCommand(data, cmd, &params);
-                        if (cmd == "PROPERTY") {
-                            std::string prop = params->at(0).asString();
-                            prop = prop + "." + params->at(1).asString();
-                            if (prop == options.watchProperty()) {
-                                connection_thread.send(params->at(2).asString().c_str());
-                                if (debug)std::cout << "sending: " << params->at(2).asString().c_str() << "\n";
-
-                            }
-                        }
-                        if (params) delete params;
-                    }
-                }
-                catch (zmq::error_t e) {
-                    if (errno == EINTR) continue;
-                    
-                }
-                data[len] = 0;
-            }
-						else usleep(500);
-        }
-
-        connection_thread.stop();
+		connection_thread->stop();
         //if (watcher) watch_thread.stop();
         monitor.join();
     }
