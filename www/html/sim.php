@@ -21,7 +21,13 @@ print <<<EOD
 		function refresh(){
 				$.get("monitor.php", { list: "json", tab: "Vis3D"}, 
 			function(data){ 
+				try {
 				res=JSON.parse(data);
+				}
+				catch (e) {
+					if (typeof alerted == "undefined" || !alerted) alert(data);
+					alerted = true;
+				}
 				//$("#xx").html("<p>AJAX result</p><pre>"+ data+ "</pre>");
 				for (var i = 0; i < res.length; i++) {
 					if (typeof res[i].model !== "undefined" 
