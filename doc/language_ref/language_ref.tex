@@ -1,0 +1,521 @@
+%% LyX 2.0.1 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage[a4paper]{geometry}
+\geometry{verbose,tmargin=1cm,bmargin=2cm,lmargin=2cm,rmargin=2cm,headheight=1cm,headsep=1cm,footskip=1cm}
+\usepackage{textcomp}
+\usepackage{slashed}
+
+\makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LyX specific LaTeX commands.
+\newcommand{\noun}[1]{\textsc{#1}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Textclass specific LaTeX commands.
+\newenvironment{lyxcode}
+{\par\begin{list}{}{
+\setlength{\rightmargin}{\leftmargin}
+\setlength{\listparindent}{0pt}% needed for AMS classes
+\raggedright
+\setlength{\itemsep}{0pt}
+\setlength{\parsep}{0pt}
+\normalfont\ttfamily}%
+ \item[]}
+{\end{list}}
+
+\makeatother
+
+\usepackage{babel}
+\begin{document}
+
+\title{Clockwork Language Reference (draft)}
+
+
+\author{Martin Leadbeater}
+
+\maketitle
+
+\section{Preface}
+
+Please note that this is a very early draft.
+
+
+\section{Introduction}
+
+Clockwork is a language intended to be used to describe systems of
+interacting components using state machines. The purpose of the language
+is to provide a platform for monitoring and control and it has currently
+been implemented as a control system using the Beckhoff EtherCAT\textregistered{}.
+
+The language provides the programmer with a means to 
+\begin{itemize}
+\item define the states of a machine in terms of conditions
+\item define commands that can be invoked on the machine
+\item define transition rules that determine what actions can be performed
+and what state transtions are allowable
+\item define state entry functions that execute when a machine enters a
+state
+\end{itemize}
+Conditions on a machine are defined in terms of the state of other
+machines and properties of itself and other machines. Machines continuously
+evaluate these conditions and automatically switch to the first state
+found that matches the condition, executing its state entry function
+as it does so. When a state includes a condition, we tend to refer
+to that as a \emph{stable }state but these could also be called \emph{automatic}
+states.
+
+A machine definition can be instantiated by providing a name, the
+name of the machine definition, also called the machine `class', and
+a list or parameters that are required by the definition. For example,
+following is a machine that monitors two inputs and turns on when
+both inputs are on:
+\begin{lyxcode}
+AndGate~MACHINE~input1,~input2
+
+\{
+\begin{lyxcode}
+on~WHEN~input1~IS~on~AND~input2~IS~on;
+
+off~DEFAULT
+\end{lyxcode}
+\}
+
+a~FLAG;
+
+b~FLAG;
+
+and\_gate~AndGate~a,~b;
+\end{lyxcode}
+The machine definition for AndGate requires two parameters for the
+two inputs and defines a condition on state `on' to activate when
+both inputs are on. The statement \noun{off} \noun{DEFAULT} defines
+a default condition on the \noun{off} state that always returns true.
+There can be only one DEFAULT state in each machine but it is not
+required.
+
+The above machine is not particularly useful; after detecting an issue,
+we may want to do something about it. The above can be adjusted to,
+for example, turn on a light when the two inputs are on, to do this,
+we add an ENTER method for the on state:
+\begin{lyxcode}
+AndGate~MACHINE~input1,~input2,~output
+
+\{
+\begin{lyxcode}
+on~WHEN~input1~IS~on~AND~input2~IS~on;
+
+off~DEFAULT
+\end{lyxcode}
+\}
+
+ENTER~on~\{~SET~output~TO~on;~\}
+
+ENTER~off~\{~SET~output~TO~off;~\}
+
+
+
+light~FLAG;
+
+a~FLAG;
+
+b~FLAG;
+
+and\_gate~AndGate~a,~b,~light;
+\end{lyxcode}
+So far we have been using FLAG machines as placeholders for machines
+that have an interface to hardware. For the sake of describing the
+language, this is sufficient and has the advantage that a command
+interface or web page can be used to alter the flags for test purposes.
+Please refer to the user manual for information about the command
+interface and the web interface.
+
+
+\subsection{Parts of a machine}
+
+The definition of a machine includes several sections:
+\begin{itemize}
+\item declaration of states
+\item definition of stable states
+\item definition of transitions
+\item definition of event handlers
+\item definition of commands
+\item export declarations
+\end{itemize}
+These sections can be mixed but the order that stable states are declared
+is important. Please refer to section \ref{sec:Machines} for more
+information about the definition of machines.
+
+
+\section{Machines\label{sec:Machines}}
+
+To define a machine use:
+
+
+\section{Details}
+
+
+\subsection{Instances of machines}
+
+Clockwork deals primarily with definitions of finite state machines
+(referred to as MACHINES in the language) and instance of those definitions.
+There is a common pattern for declaring an instance of a machine;
+providing the name and then the machine class.
+
+Names can be given for new instances of objects, by first providing
+the name, then the object and its properties and parameters, i.e.,
+\begin{quotation}
+name machine-class {[} '(' property-name ':' property-value ... ')'{]}
+parameters
+\end{quotation}
+For example, given machine classes called `MODULE' and `POINT', an
+instance can be declared in the following way.
+\begin{lyxcode}
+Beckhoff\_2008~MODULE~2
+
+NG\_Output~POINT~Beckhoff\_2008~5
+\end{lyxcode}
+define a Module and a point within that module. In the example, the
+number `2' indicates the position of the module on the bus and the
+number `5' defines the particular output id of the point that we want
+to call `NG\_Output'. After the object-class, a list of property key,value
+pairs may be given., for example
+\begin{lyxcode}
+NG\_Output~POINT~(tab:Outputs)~Beckhoff\_2008~5
+\end{lyxcode}
+describes the same point but sets a property called `tab'%
+\footnote{The web interface to cw and iod happen to use this property to group
+various items into tabs on the web page%
+} to the value `Outputs'.
+
+
+\subsection{Properties and states}
+
+We make a distinction between the state of a machine and the properties
+of the machine, in fact, we regard the state of the machine as one
+of its properties although more strictly, we should actually include
+the value of a machine's properties as part of its state. The definitions
+are 
+
+
+\subsection{Properties and parameters}
+
+As shown, the declaration of a machine may have parameters and machines
+may also have properties. Properties and parameters are distinguished
+as follows:
+\begin{itemize}
+\item properties have default values and do not have to be predeclared unless
+they are used in stable state conditions
+\item parameters generally refer to objects that the machine manipulates
+and serve to provide an internal alias for a globally defined object.
+Use of parameters provides for the reuse of machines for different
+parts of the system.
+\item when a parameter changes state, the machine receives an event that
+it may act on to perform an action.
+\item when a property of a machine or one of its parameters or local variables
+is changed, the machine reevaluates its stable states.
+\end{itemize}
+
+\section{Vocabulary}
+
+Within the program text, reserved words are presented in all capitals
+to distinguish them from user defined values. The language is case
+sensitive.
+
+
+\subsection{Glossary of Reserved Words }
+\begin{description}
+\item [{16BIT}] defines an exported modbus property as a 16bit integer
+\item [{32BIT}] defines an exported modbus property as a 32bit integer
+\item [{ALL}] used with COPY and EXTRACT to collect all matches from a
+property
+\item [{AND}] (also \&\&) used to join expressions within a condition
+\item [{AT}] used with RESUME to cause execution to resume at a nominated
+state
+\item [{BECOMES}] (also :=) used to assign values to properties
+\item [{BY}] used with INC and DEC to change the step size
+\item [{CATCH}] marks the beginning of an operation to be performed if
+any sends a particular message. {[}not implemented{]}
+\item [{COMMAND}] defined a method that does not change the state of its
+machine while it is executing.
+\item [{CONSTANT}] a predefined machine class that acts like a constant
+from a syntactic viewpoint
+\item [{COPY}] copies substrings matching a pattern from a given property
+\item [{DEC}] decrement a property
+\item [{DEFAULT}] a stable state that is evaluated last and that always
+matches
+\item [{DISABLE}]~
+\item [{DURING}] used to define a transitional state that occurs during
+the exectuion of a command
+\item [{EXECUTE}] extends the definition of a stable state to specify a
+command that should be executed when a special sub-condition becomes
+active.
+\item [{ELSE}] marks the beginning of the code that is executed when the
+IF condition evaluates to false
+\item [{ENABLE}]~
+\item [{ENTER}] defines an operation that must be performed during entry
+to a state. The ENTER function may be restricted to performing functions
+that are atomic, such as sending message. Currently, these operations
+are not restricted but cause the machine to enter an invisible substate
+of the target state.
+\item [{EXPORT}] indicates that a property should be exported to modbus
+\item [{FIND}] returns a list of objects that are in the given state, options
+may be added to restrict the range of items found {[}not implemented{]}
+\item [{FOREACH}] performs an operation for each object within the given
+list that are in a particular state {[}not implemented{]}
+\item [{GLOBALS}] lists machines, external to the current class that the
+current machine is monitoring. State changes on the machines listed
+as GLOBAL cause a reevaluation of stable states and generate events
+that can be received.
+\item [{INC}] increment a property
+\item [{IF}] used within operations (Commands and Enter functions) to provide
+for conditional behaviour
+\item [{INIT}] a predefined state that statemachines enter as soon as they
+are enabled.
+\item [{INITIAL}] defines a state as the state to use for the initial state
+of the machine.
+\item [{LOG}] emit a text string in the log
+\item [{LOCK}] provides a way to mark a protected section to prevent, for
+example, multiple machines simultaneously changing the state of a
+machine.
+\item [{MATCHES}] used in an expression to test for a property matching
+a given pattern
+\item [{MACHINE}] defines a programmed component within the system. All
+control functionality is implemented within these objects. Machines
+are based on finite statemachine concept and include both monitoring
+(automatic state switching) and control (forced state changes to cause
+actions).
+\item [{MODULE}] defines an addressable module that sits on the EtherCAT
+cabling
+\item [{NOT}] (also !)used to invert expressions within a condition
+\item [{OR}] (also ||) used to join expressions within a condition
+\item [{PERSISTENT}] a property that indicates that state changes on this
+machine will be published and at startup, this machine will be automatically
+enabled and initialised from its last known state.
+\item [{POINT}] refers to an addressable port within a module
+\item [{RAISE}] send a message that any machine may catch. It is an error
+if a message is raised but not caught. {[}not implemented{]}
+\item [{READONLY}] used in an EXPORT specification to mark the property
+as read only
+\item [{READWRITE}] used in an EXPORT specification to mark the property
+as read/write
+\item [{RESULT}] the returned value after an expression has been evaluated
+{[}not implemented{]}
+\item [{RESUME}] resumes execution of the disabled machine from the beginning
+of its current state
+\item [{RECEIVE}] indicates that a machine should be informed when a specific
+object sends a particular message. The RECEIVE statement has an associated
+set of actions that are acted when the event is collected.
+\item [{REQUIRES}] indicates that the associated condition must evaluate
+to True in order that the transition can occur or that a command can
+be executed {[}not implemented{]}
+\item [{SELF}] used in expressions to refer 
+\item [{SEND}] is used to send a message to a machine, this message must
+be captured by the machine, using a RECEIVE statement
+\item [{SET}] causes a machine to move to a given state after executing
+the optional command associated with the transition
+\item [{SHUTDOWN}] cause the clockwork daemon to exit
+\item [{SOURCE}] is a variable that holds a reference to the object that
+send the current message or issued the current command {[}not implemented{]}
+\item [{STATE}] defines a state name so that this state can be used in
+a transition or can be set by other machines.
+\item [{TAG}] links a FLAG to a sub-condition on a stable state so that
+the FLAG is automatically turned on and off to trak whether the subcondition
+is true or not.
+\item [{THEN}] marks the beginning of the code that is executed when the
+IF condition evaluates to true
+\item [{TIMER}]~
+\item [{TO}] used within a transition to indicate the destination state,
+used within a message operation to indicate the target of the message
+\item [{TRANSITION}] describes the command that can be used to move the
+machine from one state to another
+\item [{UNLOCK}] reverses the effect of LOCK, to permit other instances
+execute code in a critical section.
+\item [{USING}] as part of the transition statement, the Using clause indicates
+the command that is used for the transition
+\item [{VARIABLE}] a predefined machine class that is persistent and acts
+like a variable from a syntactic viewpoint
+\item [{WAIT}] pauses execution of the current method for the set amount
+of time
+\item [{WAITFOR}] pauses execution of the current method until the given
+machine enters the given state
+\item [{WHEN}] defines a set of conditions that indicate a machine is in
+a particular, stable state. These conditions are not evaluated when
+the machine is in a transitional state.
+\end{description}
+
+\subsection{Conditions}
+
+Conditions are lists of boolean expressions that are generally used
+to determine the current state of various parts of the machine. Conditions
+are implemented by the use of separate state machines. that contain
+a state (normally called 'true') that indicates the condition is true
+and a state (normally called 'false') that is the default.
+
+
+\subsection{Notes}
+
+An action is a list of steps, such that each step requests that a
+machine enters a state or waits for a message. Regardless of the action,
+there are two components: sending a message and waiting for a response.
+On receipt of the response, the action transitions to the next step
+in the list.
+
+When a state change request is received, the transitions on the target
+machine are searched for an action that will satisfy the requested
+state change. That action causes a further sequence of actions to
+be queued by having the machine enter a substate with each action
+sending a message and waiting for a response. 
+
+
+\section{Machines}
+
+Machines are the processing component of the latproc programming system.
+They are defined as finite state machines that are interconnected
+by message passing. A machine will automatically detect its state
+by polling input conditions that are defined to match certain configurations.
+By issuing commands, a machine can change the state of other machines
+and these changes can trigger further state changes.
+
+
+\subsection{Components and scope}
+
+The language deals with Finite State Machines, which the language
+simply calls 'Machines' and their states. The program defines a machine
+as having certain states and provides conditions and scripts that
+can identify the current state and change states.
+
+some predefined objects; Modules, Points, Machines, Values, Conditions
+and States. These objects may have parameters and may also have properties.
+Properties and parameters are distinguished as follows:
+\begin{itemize}
+\item properties have default values and do not have to be provided
+\item parameters generally refer to objects that the machine manipulates
+and serve to provide an internal alias for a globally defined object.
+Use of parameters provides for the reuse of machines for different
+parts of the system.
+\end{itemize}
+
+\subsection{Parameters}
+
+When a machine is instantiated, parameters are resolved by providing
+either a symbol name or a symbol value. The Machine Instance retains
+a list of ParameterReferences and for parameters passed by value,
+a local symbol table allocates a local name
+
+
+\subsection{States}
+
+A state is defined by a particular configuration of inputs or execution
+of an action.
+
+
+\subsection{Actions}
+
+An action is a sequence of steps that are executed in response to
+the receipt of a message, including steps taken dugin an entry function.
+
+
+\subsection{Transitions}
+
+Transitions occur automatically when a machine is idle, when it detects
+a change of state. When a transition occurs:
+\begin{itemize}
+\item the timer is reset, 
+\item the state variable 'CURRENT' is updated
+\item a state change message is queued for delivery to interested parties
+\item the entry function for the state is executed
+\end{itemize}
+
+\subsection{Events}
+
+An event corresponds to the sending of a message. Examples of events
+include timers and changes in input levels or analogue or counter
+values. Timer events are intented to trigger reasonably precisely,
+based on a fixed time after the message was sent.
+
+
+\subsection{Message Passing}
+
+Machines can send and receive messages directly, using the commands
+SEND and CALL and the handler RECEIVE or it can send messages indirectly
+by attempting to change the state of the target machine.
+
+
+\subsubsection{RECEIVE and RECEIVE..FROM}
+
+Each machine can listen for messages from any entity it knows of.
+Messages are sent when entities change state or when a script deliberately
+sends one. To listen for a message, use:
+\begin{quotation}
+RECEIVE objname.message '\{' actions '\}'
+\end{quotation}
+or
+\begin{quotation}
+RECEIVE message FROM objname '\{' actions '\}'
+\end{quotation}
+This identifies the sending entity from its local name and registers
+a listener for the \emph{entiyname\_statename\_enter} message. In
+a future release, the current machine will also registered as a dependant
+of the sender. Currently, messages are only received from parameters,
+local instances and machine instances that are specifically listed
+in GLOBALS.
+
+
+\subsubsection{SEND and SEND..TO}
+
+
+\subsection{Exceptions}
+
+{[}Note: not implemented{]}An exception is a message sent using the
+'THROW' command. It is similar to a message sent with 'SEND' except
+that there is no requirement that there is a machine listening for
+the message. Messages that are thrown are caught using the 'CATCH'
+command.
+
+
+\subsection{Statements}
+
+
+\subsection{Properties}
+
+Machine instances share some standard properties
+\begin{description}
+\item [{current}] the current state of the instance
+\item [{referers}] a list of machinesthat refer to this machine
+\item [{references}] a list of machines this one refers to
+\item [{sends}] a list of messages this machine sends
+\item [{receives}] a list of messages this machine receives
+\end{description}
+
+\subsection{Builtin classes}
+
+Builtin classes such as FLAG and BOOLEAN are readily implemented using
+the language itself. The POINT class, however is special as it provides
+an interface to hardware. Integers are currnetly implemented through
+properties.
+\begin{description}
+\item [{VARIABLE}]~
+\item [{MODULE}]~
+\item [{CONSTANT}]~
+\item [{FLAG}] two state machine with states 'on' and 'off'
+\item [{POINT}] a machine that links to a IO Point
+\end{description}
+
+\section{Other features}
+
+
+\subsection{Expressions}
+
+
+\section{Syntax}
+
+\begin{eqnarray*}
+program & = & \mathit{definition}\, program\,|\,\slashed{O}\\
+\mathcal{\mathit{definition}} & = & name\, object\, parameterlist\\
+parameters & = & parameter\,|\, parameter\,','\, parameter\\
+parameter & = & value\, parameter\,|\,\slashed{O}
+\end{eqnarray*}
+
+\end{document}

@@ -1,0 +1,726 @@
+%% LyX 2.0.5.1 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage[a4paper]{geometry}
+\geometry{verbose,tmargin=1cm,bmargin=2cm,lmargin=1cm,rmargin=1cm,headheight=1cm,headsep=1cm,footskip=1cm}
+\usepackage{graphicx}
+
+\makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LyX specific LaTeX commands.
+%% A simple dot to overcome graphicx limitations
+\newcommand{\lyxdot}{.}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Textclass specific LaTeX commands.
+\newenvironment{lyxcode}
+{\par\begin{list}{}{
+\setlength{\rightmargin}{\leftmargin}
+\setlength{\listparindent}{0pt}% needed for AMS classes
+\raggedright
+\setlength{\itemsep}{0pt}
+\setlength{\parsep}{0pt}
+\normalfont\ttfamily}%
+ \item[]}
+{\end{list}}
+
+\makeatother
+
+\usepackage{babel}
+\begin{document}
+
+\title{Communications}
+\maketitle
+\begin{abstract}
+This document describes the future communications framework for Clockwork.
+A Clockwork driver program provides a runtime environment to execute
+several machines in parallel. Each driver may communicate with other
+programs via message passing and publisher/subscriber models. 
+\end{abstract}
+
+\section{Background}
+
+The Clockwork interpreters have several communication interfaces to
+support various control protocols, web server display, system monitoring
+and to provide a commandline interface. These interfaces have been
+introduced on the basis of project requirements and are inconsistent
+in design and implementation. This document addresses the various
+communications interfaces and describes legacy and future implementations
+for
+\begin{itemize}
+\item EtherCAT
+\item Modbus
+\item commandline (iosh)
+\item Internet of Things
+\item web clients
+\end{itemize}
+
+\section{Architecture}
+
+The latproc system is to be split into a communications hub with scripting
+engines and communications modules all interconnected by a shared
+memory model and messaging system. In the first instance, Redis and
+ØMQ provide the shared memory and messaging infrastructure. The shared
+repository provides access to shared static data, it may be implemented
+in a variety of database/memory systems but the key observation is
+that the repository is not expected to notify Clockwork instances
+of data changes.
+
+\begin{figure}
+\begin{centering}
+\includegraphics{\lyxdot \lyxdot /\lyxdot \lyxdot /\lyxdot \lyxdot /\lyxdot \lyxdot /doc/communications_images/architecture1}
+\par\end{centering}
+
+\caption{Clockwork messages and data sharing}
+
+
+\end{figure}
+
+
+On startup, a Clockwork driver
+\begin{itemize}
+\item interrogates a repository for 
+
+\begin{itemize}
+\item machine definitions 
+\item interface definitions
+\end{itemize}
+\item creates shadow machines for machines that are updated externally
+\item establishes connections as described in the interface definitions
+\item begins execution of the machines
+\end{itemize}
+Note that failure to establish communications does not cause an instance
+to fail its startup; it will continue to establish the connection
+until aborted by an external source. Communication interfaces can
+be interrogated within Clockwork and the channel state can be used
+to affect the execution of the models.
+
+
+\section{Interprogram communication}
+
+
+\subsection{Interface Definitions}
+
+An interface between Clockwork drivers is introduced via the CHANNEL
+object:
+\begin{lyxcode}
+channel\_name~CHANNEL(host:hostname,~port:portname)~\{
+\begin{lyxcode}
+IDENTIFIER~id\_string~';'
+
+IDENT~short\_id\_string~';'~\#~short~form~of~above~id
+
+KEY~key\_string~';'~\#~a~preshared~key~used~in~authentication
+
+VERSION~version\_sequence~';'
+
+SHARES~block\_name,~\ldots{}~';'
+
+MONITORS~machine\_name~{[}~interface~{]},~\ldots{}~';'
+
+UPDATES~machine\_name~{[}~interface~{]},~\ldots{}~;
+
+SENDS~message\_name,~\ldots{}~';'
+
+RECEIVES~command\_name,~\ldots{}~';'
+\end{lyxcode}
+\}
+\end{lyxcode}
+A channel may specify a set of messages sent and commands received
+on the interface but there is no way to define the parameters of those
+messages or commands (TBD). The clauses are described as follows:
+\begin{description}
+\item [{IDENTIFIER}] an internal name for the channel, primarily used to
+validate that connections are talking to the channel they expect to,
+if this is not provided, the channel name is used.
+\item [{IDENT}] is provided is the shortform identifier, if not given,
+the first six characters of the IDENTIFIER are used and if that is
+not available, the first six characters of the channel name (right-padded
+with spaces). The IDENT is primarily used for filtering as all ØMQ
+messages begin with the IDENT string.
+\item [{KEY}] a pre-shared key. If the channel definition includes an IDENTIFIER
+option, both sides must be able to demonstrate that they know the
+identifier. The identifier itself should never be transmitted on the
+channel.
+\item [{VERSION}] a numeric value that provides the version of the interface
+\item [{SHARES}] lists the memory blocks that are shared between the client
+and the server. Each memory block must be known to both the server
+and client
+\item [{MONITORS}] lists the machines that the server will send updates
+for. Each listed machine may also include an interface definition
+that further describes the states and properties of the machine. Wildcards
+may be used to define the machines that can be monitored at the receiver.
+The client may request a reduced set of machines. If no MONITORS clause
+is given property and state changes will not be forwarded to the channel.
+\item [{UPDATES}] lists the machines that the client will send updates
+for. Each listed machine may also include an interface definition
+that further describes the states and properties of the machine.
+\item [{SENDS}] lists the messages that will be accepted by the server. 
+\item [{RECEIVES}] lists the messages that will be accepted by the client.
+\end{description}
+Clauses in a channel definition are all optional.
+
+By way of an example, a BIT has the interface:
+\begin{lyxcode}
+BIT~INTERFACE~\{~
+\begin{lyxcode}
+on~STATE;~off~INITIAL;~
+
+COMMAND~toggle,turnOn,turnOff;
+\end{lyxcode}
+\}
+\end{lyxcode}
+A channel definition is directional, how the clauses apply to the
+machine depends on where the machines are instantiated. A channel
+may also include templates that define the machines that are monitored
+or updated via the channel. The definition may describe the states
+to be exchanged, a state that is the startup or default state and
+the properties that are to be exchanged on the interface.
+\begin{lyxcode}
+machine\_class~INTERFACE~'\{'~
+\begin{lyxcode}
+state1~STATE~';'
+
+state2~STATE~';'
+
+initial\_state~INITIAL~';'
+
+STATES~'\{'~state3,~state4,~\ldots{}~'\}'
+
+property1~PROPERTY~{[}~READONLY~|~READWRITE~{]}~';'
+
+PROPERTIES~'\{'~property2~{[}~READONLY~|~READWRITE~{]},~\ldots{}~'\}'
+\end{lyxcode}
+'\}'
+\end{lyxcode}
+If an interface definition is provided and includes any state definitions,
+only the states defined will be exchanged. Similarly if properties
+are included in the definition, only changes to the named properties
+will be exchanged.
+
+For example, in the following definition, only the states `on' and
+`off' of the switch are communicated to the connecting machine.
+\begin{lyxcode}
+switch~INTERFACE~\{~STATES~\{~on,~off~\}~\}
+\end{lyxcode}
+If the switch enters another state (eg., disabled, no message is sent
+to the listener and the switch is assumed to be still in the last
+state communicated. (TBD)
+
+
+\subsection{Shared Memory and sampling}
+
+Clockwork is fundamentally a program that looks at changes in a memory
+map and uses those changes to affect changes in a state model of various
+simulated machines. It should be possible to share any memory block
+with clockwork, no matter the source. A block may represent a device
+or it may be divided into regions that relate to the device in some
+way, for example in with Beckhoff EtherCAT(tm) the `Module' refers
+to a physical device, in MODBUS, \emph{coils} and \emph{registers}
+refer to distinct memory regions.
+
+Each block may have properties that descibe attributes common to all
+regions in the block 
+\begin{lyxcode}
+ModbusPanel~BLOCK~\{
+\begin{lyxcode}
+X~BIT{[}256{]}~IN;
+
+Y~BIT{[}256{]}~OUT;
+
+V~WORD{[}256{]}~IN~OUT;
+\end{lyxcode}
+\}
+
+panel~ModusPanel~
+\end{lyxcode}
+Given the above definition, Clockwork may bind fields of the block
+to a machine, for example:
+\begin{lyxcode}
+start\_button~panel~X1;
+\end{lyxcode}
+defines \emph{start\_button} as a single bit object in clockwork,
+linked to coil X01 in the modbus memory block. 
+
+
+\subsection{Issues}
+\begin{enumerate}
+\item How do we manage the startup conditions? When a client connects? When
+the server restarts?
+\item How large is a beckhoff master memory block?
+\item How quickly can we send master block updates to a clockwork program.
+What latency can we expect?
+\item Properties that are updated by external machines via the PROPERTY
+command should not activate the property update until the 
+\item Clockwork drivers need a parameter to set them into insecure mode
+to allow clients to define the connection properties.
+\item If a message send fails there is no way for the clockwork program
+to know
+\item When a message arrives it should not be delivered unless the target
+machine has no active actions
+\end{enumerate}
+
+\subsection{Message Format}
+
+Communication between all components is via a structured message using
+the JSON format.
+\begin{lyxcode}
+command~string,
+
+need\_response~bool~/{*}~is~this~used/needed?~TBD~{*}/
+
+parameters~array~{[}
+\begin{lyxcode}
+item~\{
+\begin{lyxcode}
+type~B~|~BOOL~|~I~|~INTEGER~|~U~|~UNSIGNED~|~S~|~STRING~|~F~|~FLOAT~|~N~|~NAME
+
+value~<depends~on~type>
+\end{lyxcode}
+\}
+\end{lyxcode}
+{]}
+\end{lyxcode}
+Note that names conform to clockwork naming rules: ALPHA {[} ALPHA
+NUMBER \_ {]} ...
+
+
+\subsection{Dynamic configuration}
+
+A channel specification needs to be read by both ends of the channel.
+To facilitate the use of runtime sampling systems, a channel specification
+can be sent by the client when the connection is made. The channel
+specification may include interface specifications (TBD). 
+
+
+\subsection{Protocol}
+
+When a client connects to a server it is required to initiate a negotiation
+of the channel configuration for the connection. This can be done
+by a command message with the command: CHANNEL and the name of the
+channel. In this case, the server is expected to refer to its repository
+for a matching channel (and version\ldots{}). 
+
+The communications protocol is not secure; it has a simple authentication
+process that will be upgraded in the future.
+\begin{itemize}
+\item The connecting party identifies the channel to be used:
+
+\begin{lyxcode}
+CHANNEL~channel\_name~';'
+\end{lyxcode}
+
+this message is encoded using JSON:
+\begin{lyxcode}
+\{\textquotedbl{}command\textquotedbl{}:\textquotedbl{}CHANNEL\textquotedbl{},\textquotedbl{}params\textquotedbl{}:{[}\textquotedbl{}name\textquotedbl{},\textquotedbl{}myChannel\textquotedbl{}{]}\}
+\end{lyxcode}
+\item If the server does not have a matching configuration, the client may
+send the configuration (TBD do we want to allow this? Probably require
+that cw be run in an insecure mode).
+\item If a channel cannot be agreed, the connection will be terminated. 
+\item If an identifier is provided, it will be used as a pre-shared key
+to authenticate the connection. The server will send a keyword challenge
+to the client and the client will be expected to combine this with
+the secret identifier for the channel and send back an encrypted value.
+The client will also authenticate the server in the same way.
+\item If a version number is provided, both ends may emit a warning or disconnect,
+depending on other options that may be in force.
+\item The connecting party 
+\end{itemize}
+
+\section{Examples}
+
+
+\subsection{Weight sampling}
+
+Consider a weight sampling machine that is implemented with a remote
+(client) computer that communicates with the device and a master (server)
+computer that uses the sampled weight as part of its machine management. 
+
+
+\subsubsection{Shared configuration}
+
+We define a channel for communication between the computers and define
+an interface that outlines the interesting states and properties of
+the device interface. Both the client and server:
+\begin{quotation}
+ScalesChannel CHANNEL scales \{
+\begin{quotation}
+MONITORS scales ScalesInterface;
+\end{quotation}
+\}
+
+ScalesInterface INTERFACE \{
+\begin{quotation}
+PROPERTIES weight, status;
+
+stable STATE;
+
+unstable INITIAL;
+\end{quotation}
+\}
+\end{quotation}
+
+\subsubsection{Server configuration}
+
+Using this information, the master computer can define a machine that
+represents a remote scales machine conforming to the ScalesInterface
+and use this to implement some logic. The monitor uses the state of
+the remote system to determine whether the weight is valid but also
+demonstrates the use of a timer to `debounce' the remote state change:
+\begin{lyxcode}
+ScalesMachine~ScalesInterface;
+
+WeightMonitor~MACHINE~scales~\{
+\begin{lyxcode}
+waiting~WHEN~scales~IS~unstable;
+
+stablising~WHEN~scales~IS~stable~AND~TIMER~<~100;
+
+overweight~WHEN~scales~IS~stable~AND~scales.weight~>=~100;
+
+ready~WHEN~scales~IS~stable~AND~scales.weight~>=~10;
+
+underweight~WHEN~scales~IS~stable;
+\end{lyxcode}
+\}
+
+remote\_scales~ScalesMachine;
+
+monitor~WeightMonitor~remote\_scales;
+\end{lyxcode}
+The host machine executes the above without needing any additional
+implementation details for the remote device but it needs to link
+the remote scales to the channel by instantiating the channel:
+\begin{lyxcode}
+scales\_channel~ScalesChannel(port:9999)~remote\_scales;
+\end{lyxcode}
+
+\subsubsection{Client configuration}
+
+The Clockwork driver that implements the scales defines a machine
+to interpret data from the hardware. Device connector will be used
+in this case to prepare the properties of this machine (not shown
+here).
+\begin{lyxcode}
+SCALES~MACHINE~\{
+\begin{lyxcode}
+OPTION~weight~0;
+
+OPTION~status~``x'';
+
+unstable~WHEN~status~==~``U'';
+
+stable~WHEN~status~==~``S'';
+
+unknown~DEFAULT;
+\end{lyxcode}
+\}
+
+scales\_machine~SCALES;
+
+scales\_channel~ScalesChannel(host:''master'',~port:9999)~scales\_machine;
+\end{lyxcode}
+When the client driver starts, it attempts to instantiate the scales
+channel by making a connection to the host and port provided. The
+scales channel enters a 'connected' state once communication is established.
+In the situation where both sides of the channel implement the scales
+the channel enters an 'error' state.
+
+
+\subsection{System Monitoring}
+
+To setup a system monitor, a pattern can be used so that a range of
+machines can be selected without the need to name each machine. Consider
+an application that monitors a Clockwork instance to record state
+changes of a set of machines.
+\begin{lyxcode}
+MonitorChannel~CHANNEL~\{
+\begin{lyxcode}
+MONITORS~`{*}`;
+\end{lyxcode}
+\}
+\end{lyxcode}
+Note that no parameters are passed to the channel and a wildcard is
+used to specify the machines to be monitored. The client instantiates
+the MonitorChannel and when the connection is established, the server
+transmits the current state and properties of all matching machines.
+
+A wildcard can be associated with an interface, giving greater control
+of what is monitored:
+\begin{lyxcode}
+MonitorChannel~CHANNEL~\{
+\begin{lyxcode}
+OPTION~Initialisation~FALSE;
+
+MONITORS~`{*}`~MonitorInterface;
+\end{lyxcode}
+\}
+
+MonitorInterface~INTERFACE~\{
+\begin{lyxcode}
+PROPERTIES~`\textasciicircum{}{[}A-Z{]}.{*}`;
+\end{lyxcode}
+\}
+\end{lyxcode}
+In the above example, the monitor interface specifies that only properties
+with names that begin wtih a capital letter will be sent. A similar
+specification can be used for transmitted states.
+
+
+\section{Implementation}
+
+At the client end, clockwork uses the channel object to establish
+and maintain a server connection. When the connection is setup, the
+current state of the machines in the 'UPDATES' list are sent and the
+server is expected to also send the state of all the machines in the
+'MONITORS' list. When a connection breaks, the client sets the state
+of all 'MONITORS' machines to their initial/default state.
+
+At the server end, clockwork instantiates a machine for each entry
+in the 'UPDATES' list and updates the state of this machine each time
+a message is received. This local instantiation shadows the state
+of the remote machine and can be used by other local machines as normal.
+
+
+\subsection{Implementation notes}
+\begin{itemize}
+\item A MachineInterface object now subclasses MachineInstance
+\item A MachineInterface is a representative or `proxy' for a MachineInstance
+\item MachineInterface objects are distinguished when setting up a channel
+and are not normally used as a source.
+\item MachineInterface objects can be used to propagate state to other instances
+of clockwork; this is done by registering a distance (hops) to the
+actual MachineInstance that they represent
+\item There are issues with setup and teardown of connections and how this
+effects messaging. TBD
+\end{itemize}
+
+\section{Predefined Channels}
+
+
+\subsection{EtherCAT}
+
+When the EtherCAT driver connects to Clockwork, it announces the modules
+that it has control over either by providing the names from the shared
+repository or by providing the definitions directly on the channel.
+\begin{lyxcode}
+Module~BLOCK~\{
+\begin{lyxcode}
+OPTION~position~1;
+
+OPTION~alias~0;
+
+pdo1~REGION~\{
+\begin{lyxcode}
+OPTION~SM~3;
+
+OPTION~index~0x1a00;
+
+OPTION~name~``Inputs'';
+
+BIT{[}8{]};
+\end{lyxcode}
+\}
+\end{lyxcode}
+\}
+\end{lyxcode}
+A Clockwork script can bind objects to fields:
+\begin{lyxcode}
+EL1814~MODULE~1,~0;~\#~bit~0~of~module~with~position~1
+\end{lyxcode}
+The above legacy syntax is not general enough (TBD)
+
+The EtherCAT polling program communicates with clockwork via two message
+queues. Each message contains a mask and a bit set. The receiver of
+the message updates the bits in processing memory that match the mask
+and ignores other bits.
+
+In clockwork, when IO is updated, a bits are set in the mask due to
+be sent to the ethercat interface and the value is updated. When all
+components are updated in process memory, the mask and the data are
+sent to the EtherCAT interface. When the EtherCAT thread starts it
+receives an IO mask from clockwork that defines all of the bits that
+clockwork is interested in. If there are no relevant changes in the
+bitmap the thread does not send anything to clockwork. When clockwork
+updates output points, it messages the updates to the ethercat thread.
+
+TBD
+\begin{enumerate}
+\item handle queue growth - clear the queue up to the last entry in both
+directions. do we care if clockwork toggles an output faster than
+the io can detect it?
+\item in reading data changes, the queue should be 'played' through clockwork
+in order to ensure no transitions are lost.
+\end{enumerate}
+Default values
+
+When a driver starts it needs to be provided with default values for
+all analogue values. These defaults are loaded whenever there is a
+problem with communication to clockwork. 
+
+
+\subsection{Modbus}
+
+Clockwork provides a facility to export properties, states and commands
+of machines to modbus. The current syntax provides for automatically
+generated addresses but is too tightly coupled to modbus. A more general
+approach is needed (TBD)
+
+
+\subsection{Persistence}
+
+
+\section{Legacy Channels}
+
+This section is partial documentation of previous channel implementations
+
+
+\subsection{Monitor channel}
+
+This is the main channel by which state changes are published, default
+port 5557
+
+message structure:
+
+command := PROPERTY | STATE
+
+need\_response := FALSE
+
+parameters := {[} \{ N, <name> \}, \{ <type>, <value> \} {]}
+
+
+\subsection{Modbus channel}
+
+This channel is used to communicate with the modbus daemon, that daemon
+communicates to devices with the modbus protocol
+
+message structure:
+
+The following commands may be sent to the modbus daemon
+\begin{description}
+\item [{STARTUP}] tells modbus to load the configuration and obtain initial
+values for all coils etc
+\item [{DEBUG~ON}] tells modbusd to emit debug information
+\item [{DEBUG~OFF}] tells modbusd to stop emitting debug information
+\item [{UPDATE}]~
+\end{description}
+
+\subsection{Persistence channel}
+
+This is used to report changes of property values and state in persistent
+machines
+
+Message structure
+\begin{lyxcode}
+command~string,
+
+parameters~array~{[}
+\begin{lyxcode}
+item~\{
+\begin{lyxcode}
+type~B~|~BOOL~|~I~|~INTEGER~|~U~|~UNSIGNED~|~S~|~STRING~|~F~|~FLOAT~|~N~|~NAME
+
+value~<depends~on~type>
+\end{lyxcode}
+\}
+
+...
+\end{lyxcode}
+{]}
+\end{lyxcode}
+
+\subsection{Device connector}
+
+There is two way communication with device connector sending property
+commands and receiving property or state commands or messages. 
+\begin{description}
+\item [{Messages}] Device connector may simply read values and pass them
+to clockwork with no guarantee of delivery, these messages may be
+lost if something goes wrong at either end but for repetitively sampled
+data, this is not necessarirly a problem. 
+\item [{Requests}] are sent from clockwork to device connector sometime
+to be handled by device connector and sometimes to pass through to
+the device. The requests are to be formated as the device requires
+them and a reply is to be sent to clockwork, either from the device
+or from device connector. Since device connector does not know anything
+about the device, the request provides additional information.
+\item [{Replies}] are sent from device connector to clockwork. If the request
+included a boolean option ``ack\_needed'' (true), device connector
+simply sends ``OK'' when the request has been forwarded to the device.
+Otherwise, device connector forwards the request to the device and
+collects its response, using a pattern supplied in the request.
+\item [{Commands}] are sent from device connector to clockwork. Commands
+require an acknowledgment and sometimes require data. Device connector
+can be configured to supply data matching a pattern via the PROPERTY
+command or STATE command. Subexpressions in the pattern will become
+additional parameters.
+\end{description}
+
+\subsubsection{Messages}
+
+For data streaming, matched sub expressions are passed as parameters.
+?? incomplete
+
+Message structure:
+\begin{lyxcode}
+DATA~string
+
+list\_name~name,~
+
+params~array~{[}~value,~...{]}
+\end{lyxcode}
+
+\subsubsection{Requests}
+\begin{lyxcode}
+REQUEST~string
+
+id~integer
+
+params~array~{[}~value,~...~{]}
+\end{lyxcode}
+
+\subsubsection{Replies}
+
+
+\subsubsection{Commands}
+
+
+\section{Messaging system}
+
+The messaging system attempts to deal with various interprocess issues,
+using zmq for the heavy lifting but also providing application features:
+\begin{itemize}
+\item Clients negotiating a private communication channel
+\item Dealing with replies
+\end{itemize}
+All applications include the notion that some data is transitory and
+some is not, transitory data is sent without regard to whether anyone
+is listening, this is used for repeated messages such as sensor data
+streaming. For non-transitory data, a request/response method is used.
+
+
+\section{Performance}
+
+This may need to be optimised, we could use a temlpate system; a property
+message looks as follows, where the user data is given in \textbackslash{}\$1,
+\textbackslash{}\$2 etc. Note that the value (\textbackslash{}\$3)
+item needs to be converted into a JSON string with the appropriate
+escape charaters but apart from that the template can be filled fairly
+quickly.
+\begin{lyxcode}
+\{~\textquotedbl{}command\textquotedbl{}:~\textquotedbl{}PROPERTY\textquotedbl{},~\textquotedbl{}params\textquotedbl{}:~
+
+{[}
+
+\{~\textquotedbl{}type\textquotedbl{}:~\textquotedbl{}NAME\textquotedbl{},~\textquotedbl{}value\textquotedbl{}:~\$1~\},
+
+\{~\textquotedbl{}type\textquotedbl{}:~\textquotedbl{}NAME\textquotedbl{},~\textquotedbl{}value\textquotedbl{}:~\$2~\},
+
+\{~\textquotedbl{}type\textquotedbl{}:~TYPEOF(\$3),~\textquotedbl{}value\textquotedbl{}:~\$3~\}
+
+{]}~\}\end{lyxcode}
+
+\end{document}

@@ -1,0 +1,44 @@
+Analogue Conveyor Ramp Control
+
+This document describes the control of conveyors 
+using clockwork to set ramps for startup and shutdown 
+and to monitor the conveyors for proximity to stop positions.
+
+Our interface uses a set or properties that the conveyor
+control algorithm uses in its control steps.
+
+The basic state machine:
+
+Conveyor MACHINE {
+    stopped STATE;  # not moving
+    moving STATE;   # moving, potentially controlling speed
+    stopping STATE; # aiming to stop at a position
+}
+
+
+
+To stop a conveyor, 
+
+* send a stop command
+* send a halt command (to be removed)
+* set a stop position (conveyor will attempt to stop at that position)
+* change the set point for the conveyor to zero
+
+To start a conveyor,
+
+* change its stop position 
+* send a start command (this changes the set point)
+
+
+
+NOTES
+
+conveyors use position input values from analogue or digital counter inputs
+in the case of analogue inputs in particular, noise can cause 
+a conveyor to think it's moving when it isn't.  A single bit error
+on input will cause a velocity estimate followed immediately by its
+opposite.
+
+The speed for these to transitions will be the same as long as the 
+timing is identical for both transitions. Irregularities in timing
+of sensor reads will cause differences in the estimated speed.
