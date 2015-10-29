@@ -184,9 +184,7 @@ void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
 
 void SubscriptionManager::init() {
 	if (protocol == eCLOCKWORK) { // start the subscriber if necessary
-		int res;
-		res = zmq_setsockopt (subscriber_, ZMQ_SUBSCRIBE, "", 0);
-		assert (res == 0);
+		subscriber_.setsockopt (ZMQ_SUBSCRIBE, "", 0);
 	}
     boost::thread subscriber_monitor(boost::ref(monit_subs));
 	if (isClient()) boost::thread setup_monitor(boost::ref(*monit_setup));
