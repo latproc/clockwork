@@ -37,7 +37,6 @@ extern char *yytext;
 session:
 | commandline 
 | session commandline 
-|
 ;
 
 commandline: 
