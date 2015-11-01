@@ -888,13 +888,13 @@ public:
 	Options &options;
 	zmq::socket_t &cmd;
 	ConnectionManager *connection_manager;
-	bool done = false;
+	bool done;
 
 	void stop() { done = true; }
 
 	ProcessingThread(Options &opt, zmq::socket_t &command_sock,
 					 ConnectionManager *connection_mgr)
-	: options(opt), cmd(command_sock), connection_manager(connection_mgr) {
+	: options(opt), cmd(command_sock), connection_manager(connection_mgr), done(false) {
 
 	}
 	void operator()() {
