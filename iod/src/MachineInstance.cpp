@@ -1087,10 +1087,12 @@ void MachineInstance::describe(std::ostream &out) {
 	out << "---------------\n" << _name << ": " << current_state.getName() << " "
 		<< " Class: " << _type
 		<< (enabled() ? "" : " DISABLED")
-		<< (isShadow() ? " SHADOW " : " ") << "authority " << expected_authority
+		<< (isShadow() ? " SHADOW " : " ")
 		<< (isActive() ? "" : " PASSIVE") <<  "\n"
 		<< " instantiated at: " << definition_file
 		<< " line:" << definition_line << "\n";
+	if (expected_authority) out << "authority " << expected_authority << "\n";
+
 	if (locked) {
 		out << "Locked by: " << locked->getName() << "\n";
 	}
