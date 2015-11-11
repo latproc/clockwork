@@ -904,7 +904,6 @@ public:
 		memset(items, 0, sizeof(zmq::pollitem_t)*3);
 		int idx = 0;
 
-		int cmd_index = -1;
 		int subs_index = -1;
 		int num_items = 0;
 		if (options.watchProperty()) {
@@ -922,7 +921,7 @@ public:
 			items[idx].fd = 0;
 			items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		}
-		cmd_index = idx;  items[idx].fd = 0;
+		items[idx].fd = 0;
 		items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		num_items = idx;
 
