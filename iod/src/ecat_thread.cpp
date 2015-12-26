@@ -86,8 +86,8 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 		}
 		catch (zmq::error_t err) {
 			if (zmq_errno() == EINTR) { 
-				//std::cout << "ecat_thread interrupted in recv\n";
-				//usleep(50000); 
+				std::cout << "ecat_thread interrupted in recv\n";
+				usleep(50000); 
 				return false;
 				break; 
 			}
@@ -109,7 +109,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 	return false;
 }
 
-#if 0
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -142,8 +142,8 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 	memcpy(default_mask, data, len);
 
 #ifdef DEBUG
-//	std::cout << "default data: "; display(default_data); std::cout << "\n";
-//	std::cout << "default mask: "; display(default_mask); std::cout << "\n";
+	std::cout << "default data: "; display(default_data); std::cout << "\n";
+	std::cout << "default mask: "; display(default_mask); std::cout << "\n";
 #endif
 } 
 
@@ -295,7 +295,7 @@ void EtherCATThread::operator()() {
 				// so we use a try-catch around the whole process 
 
 				uint8_t stage = 1;
-#if 0
+#if 1
 				bool found_change = false;
 #endif
 				while(true) {
@@ -329,7 +329,7 @@ void EtherCATThread::operator()() {
 								memcpy(iomsg.data(), (void*)upd_data, size); 
 								sync_sock->send(iomsg, ZMQ_SNDMORE);
 								++stage;
-#if 0
+#if 1
 								if (size && last_data ==0) { 
 										last_data = new uint8_t[size];
 										memset(last_data, 0, size);
@@ -395,7 +395,7 @@ void EtherCATThread::operator()() {
 								keep_alive_stat->add(keep_alive - (this_ping_time - last_ping));
 							last_ping = this_ping_time;
 						}
-						//NB_MSG << "got response from clockwork\n";
+						NB_MSG << "got response from clockwork\n";
 					}
 				}
 				catch (zmq::error_t) {
@@ -416,8 +416,7 @@ void EtherCATThread::operator()() {
 				zmq::message_t iomsg;
 				received = recv(out_sock, iomsg);
 				if (!received) break;
-				//NB_MSG << "received output from clockwork "
-				//	<< "size: " << iomsg.size() << "\n";
+				NB_MSG << "received output from clockwork " << "size: " << iomsg.size() << "\n";
 				assert(iomsg.size() == sizeof(len));
 				memcpy(&len, iomsg.data(), iomsg.size());
 				}
@@ -467,7 +466,7 @@ void EtherCATThread::operator()() {
 				}
 	
 				//NB_MSG << "acknowledging receipt of clockwork output\n";
-#if 0
+#if 1
 				if (!default_data) {
 				  	std::cout << "received default data from driver\n";
 						display(cw_data);
@@ -483,7 +482,7 @@ void EtherCATThread::operator()() {
 					else
 						driver_state = s_driver_operational;
 				}
-#if 0
+#if 1
 				else {
 					std::cout << "!"; display(cw_mask); std::cout << "\n";
 					std::cout << "<"; display(cw_data); std::cout << "\n";

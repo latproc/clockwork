@@ -63,6 +63,9 @@ ec_domain_t *ECInterface::domain1 = NULL;
 ec_domain_state_t ECInterface::domain1_state = {};
 uint8_t *ECInterface::domain1_pd = 0;
 
+int expected_slaves = 0;
+bool all_ok = false;
+
 #ifndef EC_SIMULATOR
 
 std::vector<ECModule *> ECInterface::modules;
@@ -324,6 +327,8 @@ bool ECInterface::init() {
     else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created"
 		<< " with size " << ecrt_domain_size(domain1) << "\n";
 
+    all_ok = true; // ok to try to start processing
+
 #if 0
 	IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
 	IODCommandThread::registerCommand("MASTER", new IODCommandMasterInfo);
@@ -362,7 +367,8 @@ ECInterface *ECInterface::instance() {
 uint32_t ECInterface::getProcessDataSize() {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
-	return max - min + 1;
+	int result = max - min +1;
+	return result;
 }
 
 void ECInterface::setProcessData (uint8_t *pd) { 
@@ -390,7 +396,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 0
+#if 1
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -407,19 +413,23 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	uint8_t *pd = domain1_pd;
 	uint8_t *saved_pd = process_data;
 
-/*
-	std::cout << "updating domain (size = " << size << ")\n";
-	std::cout << "process: "; display(pd); std::cout << "\n";
-	std::cout << "   mask: "; display(mask); std::cout << "\n";
-	std::cout << "   data: "; display(data); std::cout << "\n";
-*/
+/* */
+	std::cerr << "updating domain (size = " << size << ")\n";
+	std::cerr << "process: "; display(pd); std::cout << "\n";
+	std::cerr << "   mask: "; display(mask); std::cout << "\n";
+	std::cerr << "   data: "; display(data); std::cout << "\n";
+
+	if (!all_ok || master_state.al_states != 0x88) {
+		std::cerr << "refusing to update the domain since all is not ok\n";
+	}
+/**/
 	for (unsigned int i=0; i<size; ++i) {
 		if (*mask && *data != *pd){
-/*
+/**/
 			std::cout << "at " << i << " data (" 
 				<< (unsigned int)(*data) << ") different to domain ("
 				<< (unsigned int)(*pd) << ")\n";
-*/
+/**/
 			uint8_t bitmask = 0x01;
 			int count = 0;
 			while (bitmask) {
@@ -427,14 +437,14 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 					uint8_t pdb = *pd & bitmask;
 					uint8_t db = *data & bitmask;
 					if ( pdb != db ) { // changed
-						//std::cout << "bit " << i << ":" << count << " changed to ";
+						std::cout << "bit " << i << ":" << count << " changed to ";
 						if ( db ) { 
 							*pd |= bitmask; 
-							//std::cout << "on";
+							std::cout << "on";
 						}
 						else {
 							*pd &= (uint8_t)(0xff - bitmask);
-							//std::cout << "off";
+							std::cout << "off";
 						}
 					}
 				}
@@ -448,7 +458,7 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 
 void ECInterface::receiveState() {
 	if (!master || !initialised || !active) {
-		std::cerr << "master not ready to collect state\n" << std::flush;
+		//std::cerr << "master not ready to collect state\n" << std::flush;
 		return;
 	}
 	// receive process data
@@ -494,11 +504,11 @@ int ECInterface::collectState() {
 	if ((long)domain_size < 0) {
 		return 0;
 	}
-	assert(domain_size >= (size_t)max+1);
+	assert(domain_size >= (size_t)max - min + 1);
 	if (!update_data) update_data = new uint8_t[domain_size]; 
 	if (!update_mask) update_mask = new uint8_t[domain_size]; 
-	memset(update_data, 0, domain_size);
-	memset(update_mask, 0, domain_size);
+	memset(update_data, min, domain_size);
+	memset(update_mask, min, domain_size);
 
 	// first time through, copy the domain process data to our local copy
 	// and set the process mask to include every bit we care about
@@ -523,10 +533,10 @@ int ECInterface::collectState() {
 			while (bitmask) {
 				if (*pm & bitmask ) { // we care about this bit
 					if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-#if 0
-						if (i != 47 ) // ignore analog changes on our machine
-							std::cout << "incoming bit " << i << ":" << count 
-								<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
+#if 1
+						//if (i != 47 ) // ignore analog changes on our machine
+						std::cout << "incoming bit " << i << ":" << count 
+							<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
 #endif
 						if ( *pd & bitmask ) *q |= bitmask;
 						else *q &= (uint8_t)(0xff - bitmask);
@@ -540,7 +550,7 @@ int ECInterface::collectState() {
 		}
 		++pd; ++q; ++pm; if (last_pd)++last_pd;
 	}
-#if 0
+#if 1
 	if (affected_bits) {
 		std::cout << "data: "; display(update_data); 
 		std::cout << "\nmask: "; display(update_mask);
@@ -562,13 +572,19 @@ int ECInterface::collectState() {
 	return affected_bits;
 }
 void ECInterface::sendUpdates() {
-	if (!master || !initialised || !active) {
-		std::cerr << "master not ready to send updates\n" << std::flush;
+	static unsigned long last_warning = 0;
+	struct timeval now;
+	gettimeofday(&now, 0);
+	if (!master || !initialised || !active || !all_ok || master_state.al_states != 0x88) {
+		if (now.tv_sec + 5 < last_warning) {
+			std::cerr << "master not ready to send updates\n" << std::flush;
+			char buf[100];
+			snprintf(buf, 100, "EtherCAT master is not ready to send updates\n");
+			MessageLog::instance()->add(buf);
+		}
 		return;
 	}
 #ifndef EC_SIMULATOR
-	struct timeval now;
-	gettimeofday(&now, 0);
 	ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
 	ecrt_master_sync_reference_clock(master);
 	ecrt_master_sync_slave_clocks(master);
@@ -614,18 +630,30 @@ void ECInterface::check_master_state(void)
 		char buf[100];
 		snprintf(buf, 100, "Number of slaves has changed from %d to %d", master_state.slaves_responding, ms.slaves_responding);
 		MessageLog::instance()->add(buf);
+		if (ms.slaves_responding > master_state.slaves_responding)
+			expected_slaves = ms.slaves_responding;
+		else {
+			all_ok = false; // lost a slave
+		}
 	}
 	if (ms.al_states != master_state.al_states) {
 		std::cout << "AL states: 0x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT state change: was 0x%x now 0x%x", master_state.al_states, ms.al_states);
 		MessageLog::instance()->add(buf);
+
+		if (master_state.al_states == 0x88) {
+			all_ok = false;
+		}
+
+		
 	}
 	if (ms.link_up != master_state.link_up) {
 		std::cout << "Link is " << (ms.link_up ? "up" : "down") << "\n";
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT link state change was %s now %s", master_state.link_up ?"up":"down", ms.link_up?"up":"down");
 		MessageLog::instance()->add(buf);
+		if (!ms.link_up) all_ok = false;
 	}
 
 	master_state = ms;

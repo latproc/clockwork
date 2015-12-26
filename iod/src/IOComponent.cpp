@@ -109,7 +109,7 @@ void handle_io_sampling(uint64_t io_clock) {
 	}
 }
 
-//static void display(uint8_t *p, unsigned int count = 0);
+static void display(uint8_t *p, unsigned int count = 0);
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 	uint8_t bitmask = 1<<bitpos;
@@ -119,11 +119,11 @@ void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 void copyMaskedBits(uint8_t *dest, uint8_t*src, uint8_t *mask, size_t len) {
 
 	uint8_t*result = dest;
-#if 0
+#if 1
 	std::cout << "copying masked bits: \n";
-	display(dest); std::cout << "\n";
-	display(src); std::cout << "\n";
-	display(mask); std::cout << "\n";
+	display(dest, len); std::cout << "\n";
+	display(src, len); std::cout << "\n";
+	display(mask, len); std::cout << "\n";
 #endif
 
 	while (len--) {
@@ -139,8 +139,8 @@ void copyMaskedBits(uint8_t *dest, uint8_t*src, uint8_t *mask, size_t len) {
 		}
 		++src; ++dest; ++mask;
 	}
-#if 0
-	display(result); std::cout << "\n";
+#if 1
+	display(result, len); std::cout << "\n";
 #endif
 }
 
@@ -183,7 +183,7 @@ std::set<IOComponent*> updatedComponentsIn;
 std::set<IOComponent*> updatedComponentsOut;
 bool IOComponent::updates_sent = false;
 
-#if 0
+#if 1
 static void display(uint8_t *p, unsigned int count) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -216,14 +216,14 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 
 		assert(data != io_process_data);
 
-#if 0
+#if 1
 	for (size_t ii=0; ii<data_size; ++ii) if (mask[ii]) {
 		std::cout << "IOComponent::processAll()\n";
 		std::cout << "size: " << data_size << "\n";
-		std::cout << "pdta: "; display( io_process_data); std::cout << "\n";
-		std::cout << "pmsk: "; display( io_process_mask); std::cout << "\n";
-		std::cout << "data: "; display( data); std::cout << "\n";
-		std::cout << "mask: "; display( mask); std::cout << "\n";
+		std::cout << "pdta: "; display( io_process_data, data_size); std::cout << "\n";
+		std::cout << "pmsk: "; display( io_process_mask, data_size); std::cout << "\n";
+		std::cout << "data: "; display( data, data_size); std::cout << "\n";
+		std::cout << "mask: "; display( mask, data_size); std::cout << "\n";
 		break;
 	}
 #endif
@@ -912,15 +912,15 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 			if (!mask) {mask = 0x01; ++offset; }
 		}
 	}
-	//std::cout << " Process Mask: "; display(res); std::cout << "\n";
+	std::cout << " Process Mask: "; display(res, len); std::cout << "\n";
 	return res;
 }
 
 // copy the provied data to the default data block
 void IOComponent::setDefaultData(uint8_t *data){
-#if 0
+#if 1
 	std::cout << "Setting default data to : \n";
-	display(data);
+	display(data, process_data_size);
 	std::cout << "\n";
 #endif
 	if (!default_data) 	
@@ -930,9 +930,9 @@ void IOComponent::setDefaultData(uint8_t *data){
 
 // copy the provided mask to the default data mask
 void IOComponent::setDefaultMask(uint8_t *mask){
-#if 0
+#if 1
 	std::cout << "Setting default mask to : \n";
-	display(mask);
+	display(mask, process_data_size);
 	std::cout << "\n";
 #endif
 	if (!default_mask) 
@@ -1012,7 +1012,7 @@ static uint8_t *generateUpdateMask() {
 			if (!mask) {mask = 0x01; ++offset; }
 		}
 	}
-	//std::cout << "generated mask: "; display(res); std::cout << "\n";
+	std::cout << "generated mask: "; display(res, max-min+1); std::cout << "\n";
 	return res;
 }
 
@@ -1027,9 +1027,9 @@ IOUpdate *IOComponent::getUpdates() {
 	res->size = max_offset - min_offset + 1;
 	res->data = getUpdateData();
 	res->mask = mask;
-#if 0
-	std::cout << "preparing to send " << res->size << ":"; display(res->data); 
-	std::cout << ":"; display(res->mask);
+#if 1
+	std::cout << "preparing to send " << res->size << ":"; display(res->data, process_data_size); 
+	std::cout << ":"; display(res->mask, process_data_size);
 	std::cout << "\n";
 #endif
 	return res;
@@ -1044,10 +1044,10 @@ IOUpdate *IOComponent::getDefaults() {
 	res->data = getProcessData();
 	res->mask = default_mask;
 
-#if 0
+#if 1
 	std::cout << "preparing to send defaults " << res->size << " bytes\n"; 
-	display(res->data); std::cout << "\n"; 
-	display(res->mask); std::cout << "\n";
+	display(res->data, res->size); std::cout << "\n"; 
+	display(res->mask, res->size); std::cout << "\n";
 #endif
 	return res;
 }
@@ -1072,9 +1072,10 @@ void IOComponent::setupIOMap() {
 		if (offset > max_offset) max_offset = offset;
 		if (offset < min_offset) min_offset = offset;
 	}
-	//std::cout << "min io offset: " << min_offset << "\n";
-	//std::cout << "max io offset: " << max_offset << "\n";
-	//std::cout << ( (max_offset+1)*sizeof(IOComponent*)) << " bytes reserved for index io\n";
+	if (min_offset > max_offset) min_offset = max_offset;
+	std::cout << "min io offset: " << min_offset << "\n";
+	std::cout << "max io offset: " << max_offset << "\n";
+	std::cout << ( (max_offset+1)*sizeof(IOComponent*)) << " bytes reserved for index io\n";
 
 	indexed_components = new std::vector<IOComponent*>( (max_offset+1) *8);
 
