@@ -120,7 +120,7 @@ SDOEntry::SDOEntry( ec_sdo_request_t *sdo_req)
 }
 
 
-SDOEntry::~SDOEntry() { if (data_) { delete data_; data_=0; }}
+SDOEntry::~SDOEntry() { if (data_) { delete[] data_; data_=0; }}
 
 
 #endif
@@ -372,20 +372,20 @@ uint32_t ECInterface::getProcessDataSize() {
 }
 
 void ECInterface::setProcessData (uint8_t *pd) { 
-	if (process_data) delete process_data; process_data = pd; 
+	if (process_data) delete[] process_data; process_data = pd; 
 }
 uint8_t *ECInterface::getProcessMask() { return IOComponent::getProcessMask(); }
 
 void ECInterface::setProcessMask (uint8_t *m) { 
-	if (process_mask) delete process_mask; process_mask = m; 
+	if (process_mask) delete[] process_mask; process_mask = m; 
 }
 
 void ECInterface::setUpdateData (uint8_t *ud) {
-	if (update_data) delete update_data;
+	if (update_data) delete[] update_data;
 	update_data = ud;
 }
 void ECInterface::setUpdateMask (uint8_t *m){
-	if (update_mask) delete update_mask;
+	if (update_mask) delete[] update_mask;
 	update_mask = m;
 }
 uint8_t *ECInterface::getUpdateData() { return update_data; }
@@ -419,7 +419,7 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	std::cerr << "   mask: "; display(mask); std::cout << "\n";
 	std::cerr << "   data: "; display(data); std::cout << "\n";
 
-	if (!all_ok || master_state.al_states != 0x88) {
+	if (!all_ok || master_state.al_states != 0x8) {
 		std::cerr << "refusing to update the domain since all is not ok\n";
 	}
 /**/
@@ -507,8 +507,8 @@ int ECInterface::collectState() {
 	assert(domain_size >= (size_t)max - min + 1);
 	if (!update_data) update_data = new uint8_t[domain_size]; 
 	if (!update_mask) update_mask = new uint8_t[domain_size]; 
-	memset(update_data, min, domain_size);
-	memset(update_mask, min, domain_size);
+	memset(update_data, 0, domain_size);
+	memset(update_mask, 0, domain_size);
 
 	// first time through, copy the domain process data to our local copy
 	// and set the process mask to include every bit we care about
@@ -554,28 +554,24 @@ int ECInterface::collectState() {
 	if (affected_bits) {
 		std::cout << "data: "; display(update_data); 
 		std::cout << "\nmask: "; display(update_mask);
-		std::cout << " " << affected_bits << " bits changed\n";
+		std::cout << " " << affected_bits << " bits changed (size=" << domain_size << ")\n";
 	}
 #endif
 
 	// save the domain data for the next check
-	pd = new uint8_t[max+1];
-	memcpy(pd, domain1_pd, domain_size);
+	pd = new uint8_t[max - min + 1];
+	memcpy(pd, domain1_pd+min, max - min + 1);
 	instance()->setProcessData(pd);
-	memcpy(update_data, domain1_pd, domain_size);
-//	memcpy(update_mask, getProcessMask(), domain_size); 
-	//instance()->setUpdateData(update_data);
-	//instance()->setUpdateMask(update_mask);
-
+	memcpy(update_data, domain1_pd, max - min + 1);
 #endif
 
 	return affected_bits;
 }
 void ECInterface::sendUpdates() {
-	static unsigned long last_warning = 0;
+	static time_t last_warning = 0;
 	struct timeval now;
 	gettimeofday(&now, 0);
-	if (!master || !initialised || !active || !all_ok || master_state.al_states != 0x88) {
+	if (!master || !initialised || !active || !all_ok /*|| master_state.al_states != 0x88*/) {
 		if (now.tv_sec + 5 < last_warning) {
 			std::cerr << "master not ready to send updates\n" << std::flush;
 			char buf[100];
@@ -637,12 +633,12 @@ void ECInterface::check_master_state(void)
 		}
 	}
 	if (ms.al_states != master_state.al_states) {
-		std::cout << "AL states: 0x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
+		std::cout << "AL states: 02x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT state change: was 0x%x now 0x%x", master_state.al_states, ms.al_states);
 		MessageLog::instance()->add(buf);
 
-		if (master_state.al_states == 0x88) {
+		if (master_state.al_states == 0x8) {
 			all_ok = false;
 		}
 
@@ -680,7 +676,7 @@ void ECInterface::check_slave_config_states(void)
 			char buf[100];
 	    if (s.al_state != m->slave_config_state.al_state) {
 	        std::cout << m->name << ": State 0x" << std::ios::hex <<  s.al_state << ".\n";
-					snprintf(buf, 100, "Slave %d (%s) changed state was 0x%x now 0x%x", i, m->name.c_str(), 
+					snprintf(buf, 100, "Slave %d (%s) changed state was 02x%x now 02x%x", i, m->name.c_str(), 
 						m->slave_config_state.al_state, s.al_state);
 				MessageLog::instance()->add(buf);
 			}

@@ -255,7 +255,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                 char *res = cJSON_Print(root);
                 cJSON_Delete(root);
                 result_str = res;
-                delete res;
+                free(res);
             }
             else
                 result_str = ss.str();
