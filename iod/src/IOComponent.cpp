@@ -111,7 +111,9 @@ void handle_io_sampling(uint64_t io_clock) {
 	}
 }
 
+#if VERBOSE_DEBUG
 static void display(uint8_t *p, unsigned int count = 0);
+#endif
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 	uint8_t bitmask = 1<<bitpos;
@@ -914,7 +916,9 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 			if (!mask) {mask = 0x01; ++offset; }
 		}
 	}
+#if VERBOSE_DEBUG
 	std::cout << " Process Mask: "; display(res, len); std::cout << "\n";
+#endif
 	return res;
 }
 
@@ -1014,7 +1018,9 @@ static uint8_t *generateUpdateMask() {
 			if (!mask) {mask = 0x01; ++offset; }
 		}
 	}
+#if VERBOSE_DEBUG
 	std::cout << "generated mask: "; display(res, max-min+1); std::cout << "\n";
+#endif
 	return res;
 }
 
