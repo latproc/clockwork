@@ -31,6 +31,7 @@ class MachineInstance;
 class DynamicValue;
 
 uint64_t microsecs();
+void simple_deltat(std::ostream &out, uint64_t dt);
 
 class Value {
 public:

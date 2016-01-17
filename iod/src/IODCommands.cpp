@@ -505,6 +505,39 @@ bool IODCommandFind::run(std::vector<Value> &params) {
 	return true;
 }
 
+bool IODCommandBusy::run(std::vector<Value> &params) {
+	std::ostringstream ss;
+	if (!SharedWorkSet::instance()->empty()) {
+		ss << "Busy machines: ";
+		std::set<MachineInstance*>::iterator iter = SharedWorkSet::instance()->begin();
+		const char *delim = "";
+		while (iter != SharedWorkSet::instance()->end()) {
+			MachineInstance *m = *iter++;
+			ss << delim << m->getName(); delim = ",";
+		}
+		ss << "\n\n";
+	}
+	uint64_t now = microsecs();
+	std::list<MachineInstance*>::iterator iter = MachineInstance::begin();
+	while (iter != MachineInstance::end()) {
+		MachineInstance *m = *iter++;
+		if (!m->active_actions.empty() || m->executingCommand()) {
+			ss << m->getName()
+				<< " " << m->_type << ":"
+				<< m->getCurrentStateString() << " "
+				<<  ((m->isActive())?"":"[INACTIVE] ")
+				<<  ((m->enabled())?"":"[DISABLED] ");
+			simple_deltat(ss, now - m->lastStateEvaluationTime());
+			ss << "\n";
+
+			Action *a = m->executingCommand();
+		}
+	}
+	result_str = ss.str();
+	return true;
+}
+
+
 std::set<std::string> IODCommandListJSON::no_display;
 
 cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {

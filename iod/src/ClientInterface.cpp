@@ -376,6 +376,9 @@ IODCommand *parseCommandString(const char *data) {
 	else if ( (count == 2 || count == 3) && ds == "DESCRIBE") {
 		command = new IODCommandDescribe;
 	}
+	else if (count == 2 && ds == "SHOW" && params[1] == "BUSY") {
+		command = new IODCommandBusy;
+	}
 	else if ( ds == "STATS" ) {
 		command = new IODCommandPerformance;
 	}

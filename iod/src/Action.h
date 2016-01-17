@@ -96,6 +96,7 @@ public:
 	virtual ~Action();
 
     Action*retain() { ++refs; return this; }
+	int references() { return refs; }
     virtual void release();
     
     const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
@@ -104,14 +105,8 @@ public:
 	enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
 
 	Status operator()();
-    bool complete() {
-		if(status == Running || status == Suspended) status = checkComplete();
-		return (status == Complete || status == Failed);
-	}
-    bool running() { 
-		if(status == Running || status == Suspended) status = checkComplete();
-		return status == Running; 
-	}
+	bool complete();
+	bool running();
 	bool suspended() { return status == Suspended; }
 	void suspend();
 	void resume();
@@ -125,10 +120,9 @@ public:
 	bool isBlocked() { return blocked != 0; }
 	void setBlocker(Action *a) { blocked = a; }
 	
-	void setTrigger(Trigger *t) { if (trigger == t) return; if (trigger) trigger->release(); trigger = t->retain(); }
-	Trigger *getTrigger() const { return trigger; }
-	void disableTrigger() { if (trigger) trigger->disable(); }
-    
+	void setTrigger(Trigger *t);
+	Trigger *getTrigger() const;
+	void disableTrigger();    
 
 	MachineInstance *getOwner() { return owner; }
 	bool started() { return started_; }

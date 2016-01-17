@@ -25,6 +25,7 @@
 #include <functional>
 #include <sstream>
 #include <stdio.h>
+#include <iomanip>
 #include "Logger.h"
 #include <boost/foreach.hpp>
 #include <utility>
@@ -35,6 +36,13 @@ uint64_t microsecs() {
     struct timeval now;
     gettimeofday(&now, 0);
     return now.tv_sec * 1000000L + now.tv_usec;
+}
+
+void simple_deltat(std::ostream &out, uint64_t dt) {
+	if (dt > 60000000) out << std::setprecision(3) << (float)dt/60000000.0f << "m";
+	else if (dt > 1000000) out << std::setprecision(3) << (float)dt/1000000.0f << "s";
+	else if (dt>1000) out << std::setprecision(3) << (float)dt/1000.0f << "ms";
+	else out << dt << "us";
 }
 
 Value::Value() : kind(t_empty), cached_machine(0),
