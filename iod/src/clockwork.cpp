@@ -70,7 +70,9 @@ void ClockworkProcessManager::SetTime(uint64_t t) {
 	cw->current_time = t;
 }
 
-ClockworkInterpreter::ClockworkInterpreter() : cycle_delay(0), default_poll_delay(0) {}
+ClockworkInterpreter::ClockworkInterpreter() : cycle_delay(0), default_poll_delay(0) {
+	current_time = nowMicrosecs();
+}
 
 ClockworkInterpreter* ClockworkInterpreter::instance() {
     if (!_instance) _instance = new ClockworkInterpreter;
