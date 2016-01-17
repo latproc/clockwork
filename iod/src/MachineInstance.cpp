@@ -1076,13 +1076,6 @@ MachineInstance::~MachineInstance() {
 	Dispatcher::instance()->removeReceiver(this);
 }
 
-void simple_deltat(std::ostream &out, uint64_t dt) {
-	if (dt > 60000000) out << std::setprecision(3) << (float)dt/60000000.0f << "m";
-	else if (dt > 1000000) out << std::setprecision(3) << (float)dt/1000000.0f << "s";
-	else if (dt>1000) out << std::setprecision(3) << (float)dt/1000.0f << "ms";
-	else out << dt << "us";
-}
-
 void MachineInstance::describe(std::ostream &out) {
 	out << "---------------\n" << _name << ": " << current_state.getName() << " "
 		<< " Class: " << _type

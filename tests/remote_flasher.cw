@@ -25,6 +25,7 @@ FlagInterface INTERFACE {
 */
 
 FlasherChannel CHANNEL {
+	OPTION host "192.168.4.105";
 	OPTION port 7720;
     UPDATES flasher FlagInterface;
     UPDATES flag FlagInterface;

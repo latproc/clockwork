@@ -20,6 +20,10 @@ Trigger *Trigger::release() {
 	return 0;
 }
 
+void Action::setTrigger(Trigger *t) { if (trigger == t) return; if (trigger) trigger->release(); trigger = t->retain(); }
+Trigger *Action::getTrigger() const { return trigger; }
+void Action::disableTrigger() { if (trigger) trigger->disable(); }
+
 
 const char *actionStatusName(const Action::Status &state) {
 	switch(state) {
@@ -63,6 +67,15 @@ void Action::release() {
 	}
 	if (refs == 0)
 		delete this;
+}
+
+bool Action::complete() {
+	if(status == Running || status == Suspended) status = checkComplete();
+	return (status == Complete || status == Failed);
+}
+bool Action::running() {
+	if(status == Running || status == Suspended) status = checkComplete();
+	return status == Running;
 }
 
 

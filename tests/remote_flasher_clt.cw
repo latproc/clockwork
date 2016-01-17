@@ -32,7 +32,7 @@ flasher FlasherMachine;
  by the channel configuration IDENTITIER.
 */
 
-flasher_chn FlasherChannel(host:"localhost", port:5555);
+flasher_chn FlasherChannel(host:"192.168.4.105", port:5555);
 
 /*
 The host and port provided in the channel instantiation are not the 

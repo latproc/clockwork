@@ -165,6 +165,9 @@ struct IODCommandNotice : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandBusy : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
 
 struct IODCommandFind : public IODCommand {
 	bool run(std::vector<Value> &params);
