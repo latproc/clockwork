@@ -1,6 +1,6 @@
+
 /*
   Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
-
   This file is part of Latproc
 
   Latproc is free software; you can redistribute it and/or
@@ -396,7 +396,7 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 1
+#if 0
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
@@ -413,7 +413,7 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	uint8_t *pd = domain1_pd;
 	uint8_t *saved_pd = process_data;
 
-/* */
+/* 
 	std::cerr << "updating domain (size = " << size << ")\n";
 	std::cerr << "process: "; display(pd); std::cout << "\n";
 	std::cerr << "   mask: "; display(mask); std::cout << "\n";
@@ -422,14 +422,14 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	if (!all_ok || master_state.al_states != 0x8) {
 		std::cerr << "refusing to update the domain since all is not ok\n";
 	}
-/**/
+*/
 	for (unsigned int i=0; i<size; ++i) {
 		if (*mask && *data != *pd){
-/**/
+/*
 			std::cout << "at " << i << " data (" 
 				<< (unsigned int)(*data) << ") different to domain ("
 				<< (unsigned int)(*pd) << ")\n";
-/**/
+*/
 			uint8_t bitmask = 0x01;
 			int count = 0;
 			while (bitmask) {
@@ -533,7 +533,7 @@ int ECInterface::collectState() {
 			while (bitmask) {
 				if (*pm & bitmask ) { // we care about this bit
 					if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-#if 1
+#if 0
 						//if (i != 47 ) // ignore analog changes on our machine
 						std::cout << "incoming bit " << i << ":" << count 
 							<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
@@ -550,7 +550,7 @@ int ECInterface::collectState() {
 		}
 		++pd; ++q; ++pm; if (last_pd)++last_pd;
 	}
-#if 1
+#if 0
 	if (affected_bits) {
 		std::cout << "data: "; display(update_data); 
 		std::cout << "\nmask: "; display(update_mask);

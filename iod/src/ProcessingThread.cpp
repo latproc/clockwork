@@ -679,7 +679,9 @@ void ProcessingThread::operator()()
 			if (n) { // io has indicated a change
 				if (machine_is_ready)
 				{
+#if VERBOSE_DEBUG
 					std::cout << "got masked EtherCAT data at byte " << (incoming_data_size-n) << "\n";
+#endif
 #ifdef KEEPSTATS
 					AutoStat stats(avg_io_time);
 #endif
@@ -692,7 +694,7 @@ void ProcessingThread::operator()()
 
 			if (curr_t - last_sample_poll >= 10000) {
 				last_sample_poll = curr_t;
-				//handle_io_sampling(global_clock); // devices that need a regular poll
+				handle_io_sampling(global_clock); // devices that need a regular poll
 			}
 			safeSend(ecat_sync,"go",2);
 			continue;
