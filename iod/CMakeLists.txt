@@ -12,9 +12,11 @@ set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_L
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++11-extensions -Wno-unused-variable -Wno-deprecated-register")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEEPSTATS")
-set (CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
+#set (CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
+set (CMAKE_CXX_FLAGS_DEBUG "-g ")
 set (CMAKE_CXX_FLAGS_RELEASE "-O")
-set (CMAKE_EXE_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
+#set (CMAKE_EXE_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
+set (CMAKE_EXE_FLAGS_DEBUG "-g ")
 set (CMAKE_EXE_FLAGS_RELEASE "-O")
 
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/src/)
