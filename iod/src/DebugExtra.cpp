@@ -24,8 +24,8 @@
 DebugExtra *DebugExtra::instance_ = 0;
 DebugExtra::DebugExtra()
 {
-  	DEBUG_PARSER			= LogState::instance()->define("DEBUG_PARSER");
-  	DEBUG_PREDICATES 		= LogState::instance()->define("DEBUG_PREDICATES");
+ 	DEBUG_PARSER			= LogState::instance()->define("DEBUG_PARSER");
+ 	DEBUG_PREDICATES 		= LogState::instance()->define("DEBUG_PREDICATES");
 	DEBUG_MESSAGING			= LogState::instance()->define("DEBUG_MESSAGING");
 	DEBUG_STATECHANGES		= LogState::instance()->define("DEBUG_STATECHANGES");
 	DEBUG_SCHEDULER			= LogState::instance()->define("DEBUG_SCHEDULER");
@@ -38,6 +38,6 @@ DebugExtra::DebugExtra()
 	DEBUG_MODBUS			= LogState::instance()->define("DEBUG_MODBUS");
 	DEBUG_DISPATCHER		= LogState::instance()->define("DEBUG_DISPATCHER");
 	DEBUG_CHANNELS			= LogState::instance()->define("DEBUG_CHANNELS");
-	DEBUG_CHANNELS			= LogState::instance()->define("DEBUG_ETHERCAT");
+	DEBUG_ETHERCAT			= LogState::instance()->define("DEBUG_ETHERCAT");
 }
 
