@@ -45,6 +45,7 @@
 #include "options.h"
 #include "Statistic.h"
 #include "ecat_thread.h"
+#include "DebugExtra.h"
 
 #define USE_RTC 1
 
@@ -161,7 +162,7 @@ void sync(int rtc) {
 		}
 		perror("read rtc"); exit(1); 
 	}
-	if (rc == 0) { NB_MSG << "zero bytes read from rtc\n"; }
+	if (rc == 0) { DBG_ETHERCAT << "zero bytes read from rtc\n"; }
 	if (freq != ECInterface::FREQUENCY) {
 		unsigned long saved_freq = freq;
 		freq = ECInterface::FREQUENCY;
@@ -410,7 +411,7 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 					}
 					catch (zmq::error_t err) {
 						if (zmq_errno() == EINTR) { 
-							NB_MSG << "interrupted when sending update (" << stage << ")\n";
+							DBG_ETHERCAT << "interrupted when sending update (" << stage << ")\n";
 							usleep(50); 
 							continue; 
 						}
@@ -432,15 +433,15 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 								keep_alive_stat->add(keep_alive - (this_ping_time - last_ping));
 							last_ping = this_ping_time;
 						}
-						//NB_MSG << "ecat_thread in state e_update got response from clockwork, len = " << len << "\n";
+						//DBG_ETHERCAT << "ecat_thread in state e_update got response from clockwork, len = " << len << "\n";
 					}
 				}
 				catch (zmq::error_t ex) {
 					if (zmq_errno() != EINTR) {
-						NB_MSG << "EtherCAT error " << zmq_strerror(errno) << "checking for update from clockwork\n";
+						DBG_ETHERCAT << "EtherCAT error " << zmq_strerror(errno) << "checking for update from clockwork\n";
 					}
 					else {
-						NB_MSG << "EtherCAT exception " << ex.what() 
+						DBG_ETHERCAT << "EtherCAT exception " << ex.what() 
 							<< " error " << zmq_strerror(errno) << "checking for update from clockwork\n";
 					}
 				}
@@ -458,10 +459,10 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 				zmq::message_t iomsg;
 				received = recv(out_sock, iomsg);
 				if (!received) break;
-				NB_MSG << "received output from clockwork; size: " << iomsg.size() << "\n";
+				DBG_ETHERCAT << "received output from clockwork; size: " << iomsg.size() << "\n";
 				assert(iomsg.size() == sizeof(len));
 				memcpy(&len, iomsg.data(), sizeof(len));
-				NB_MSG << "expecting incoming message len " << len << "\n";
+				DBG_ETHERCAT << "expecting incoming message len " << len << "\n";
 				}
 				int64_t more = 0;
 				size_t more_size = sizeof(more);
@@ -475,7 +476,7 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 					received = recv(out_sock, iomsg);
 					if (!received) break;
 	
-					NB_MSG << "reading packet type " << sizeof(packet_type) << " byte(s)\n";
+					DBG_ETHERCAT << "reading packet type " << sizeof(packet_type) << " byte(s)\n";
 					assert(iomsg.size() == sizeof(packet_type));
 					memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
 	{uint8_t *x = new uint8_t[100]; delete[] x; }
@@ -490,7 +491,7 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 						}
 					}
 					else {
-						NB_MSG << "WARNING: read packet type but driver is not in state init\n";
+						DBG_ETHERCAT << "WARNING: read packet type but driver is not in state init\n";
 					}
 				}
 	{uint8_t *x = new uint8_t[100]; delete[] x; }
@@ -529,7 +530,7 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 				}
 				}
 	
-				NB_MSG << "acknowledging receipt of clockwork output\n";
+				DBG_ETHERCAT << "acknowledging receipt of clockwork output\n";
 
 				safeSend(out_sock,"ok", 2);
 				assert(packet_type == DEFAULT_DATA || packet_type == PROCESS_DATA);

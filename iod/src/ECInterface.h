@@ -40,7 +40,9 @@ public:
 	unsigned int pdo_index;
 };
 
+class ECModule;
 class SDOEntry {
+	ECModule *module_;
 	uint16_t  	index_;
 	uint8_t  	subindex_;
 	uint8_t 	*data_;
@@ -53,6 +55,21 @@ class SDOEntry {
 	SDOEntry( ec_sdo_request_t *);
 	SDOEntry( uint16_t index, uint8_t subindex, const uint8_t *data, size_t size);
 	~SDOEntry();
+
+	ECModule *getModule();
+	ec_sdo_request_t *getRequest();
+  bool completed() { return done; }
+	size_t getSize() { return size_; }
+	uint16_t getIndex() { return index_; }
+	uint8_t getSubindex() { return subindex_; }
+
+	void setData(uint8_t val);
+	void setData(int8_t val);
+	void setData(uint16_t val);
+	void setData(int16_t val);
+	void setData(uint32_t val);
+	void setData(int32_t val);
+
 	private:
 	SDOEntry( const SDOEntry &);
 	SDOEntry &operator=(const SDOEntry &);
@@ -66,7 +83,6 @@ public:
 	bool ecrtSlaveConfigPdos();
 	bool online();
 	bool operational();
-	void read_sdo(ec_sdo_request_t *sdo);
 	std::ostream &operator <<(std::ostream &)const;
 public:
 	ec_slave_config_t *slave_config;
@@ -85,10 +101,6 @@ public:
 	std::string name;
 	unsigned int num_entries;
 	EntryDetails *entry_details;
-	void addSDOEntry(SDOEntry *);
-	void prepareSDORequest(uint16_t index, uint8_t subindex, size_t size);
-	std::list<SDOEntry*> initialisation_entries;
-	std::list<SDOEntry *> sdo_entries;
 };
 
 #else
@@ -165,6 +177,16 @@ public:
 	void setUpdateMask (uint8_t *m);
 	uint8_t *getUpdateData();
 	uint8_t *getUpdateMask();
+	
+  void beginModulePreparation(); // load the first SDO initialisation entry
+  bool finishedModulePreparation(); // are all the SDO init entries completed
+	void checkSDO();
+
+	void addSDOEntry(SDOEntry *);
+	SDOEntry *prepareSDORequest(ECModule *module, uint16_t index, uint8_t subindex, size_t size);
+
+	void queueInitialisationRequest(SDOEntry *entry);
+	void queueRuntimeRequest(SDOEntry *entry);
 #endif
 private:
 	ECInterface();
@@ -174,6 +196,12 @@ private:
 	uint8_t *update_data;
 	uint8_t *update_mask;
 	uint32_t reference_time;
+#ifndef EC_SIMULATOR
+	std::list<SDOEntry*> initialisation_entries;
+	std::list<SDOEntry*>::iterator current_init_entry;
+	std::list<SDOEntry*> sdo_entries;
+	std::list<SDOEntry*>::iterator current_sdo_entry;
+#endif
 };
 
 #ifdef USE_ETHERCAT

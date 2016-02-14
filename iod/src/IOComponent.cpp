@@ -1026,15 +1026,12 @@ static uint8_t *generateUpdateMask() {
 
 IOUpdate *IOComponent::getUpdates() {
 	//outputs_waiting = 0; // reset work indicator flag
-	DBG_MSG << "generating update mask\n";
 	uint8_t *mask = ::generateUpdateMask();
 	if (!mask) {
-		DBG_MSG << " no changes detected\n";
 		return 0;
 	}
 	IOUpdate *res = new IOUpdate;
 	res->size = max_offset - min_offset + 1;
-	DBG_MSG << "generating update mask\n";
 	res->data = getUpdateData();
 	res->mask = mask;
 #if VERBOSE_DEBUG
