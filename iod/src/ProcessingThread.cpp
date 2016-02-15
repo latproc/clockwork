@@ -697,7 +697,7 @@ void ProcessingThread::operator()()
 				handle_io_sampling(global_clock); // devices that need a regular poll
 			}
 			safeSend(ecat_sync,"go",2);
-			continue;
+//			continue;
 		}
 
 		if (program_done) break;
