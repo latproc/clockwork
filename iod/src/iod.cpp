@@ -184,6 +184,7 @@ class IODHardwareActivation : public HardwareActivation {
 		void operator()(void) {
 			NB_MSG << "----------- Initialising machines ------------\n";
 			//ECInterface::instance()->activate();
+			ECInterface::instance()->beginModulePreparation();
 			initialise_machines();
 		}
 };

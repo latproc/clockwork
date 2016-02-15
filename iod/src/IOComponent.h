@@ -62,7 +62,7 @@ struct MQTTTopic {
 class IOUpdate {
 public:
 	IOUpdate():size(0), data(0), mask(0) { }
-	~IOUpdate() { delete mask; }
+	~IOUpdate() { delete[] mask; }
 	uint32_t size;
 	uint8_t *data; // shared pointer to process data
 	uint8_t *mask; // allocated pointer to current mask

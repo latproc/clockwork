@@ -100,7 +100,7 @@ void initialiseOutputs() {
 	IOComponent::setDefaultData(IOComponent::getProcessData()); // takes a copy
 	uint8_t *dm = IOComponent::generateMask(default_outputs);
 	IOComponent::setDefaultMask(dm); // takes a copy
-	delete dm;
+	delete[] dm;
 } 
 
 void generateIOComponentModules()

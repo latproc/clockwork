@@ -1,6 +1,6 @@
+
 /*
   Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
-
   This file is part of Latproc
 
   Latproc is free software; you can redistribute it and/or
@@ -63,6 +63,9 @@ ec_domain_t *ECInterface::domain1 = NULL;
 ec_domain_state_t ECInterface::domain1_state = {};
 uint8_t *ECInterface::domain1_pd = 0;
 
+int expected_slaves = 0;
+bool all_ok = false;
+
 #ifndef EC_SIMULATOR
 
 std::vector<ECModule *> ECInterface::modules;
@@ -117,14 +120,44 @@ SDOEntry::SDOEntry( ec_sdo_request_t *sdo_req)
 }
 
 
-SDOEntry::~SDOEntry() { if (data_) { delete data_; data_=0; }}
+SDOEntry::~SDOEntry() { if (data_) { delete[] data_; data_=0; }}
+
+ec_sdo_request_t *SDOEntry::getRequest() { return realtime_request; }
+
+void SDOEntry::setData(uint8_t val) {
+   EC_WRITE_U8(ecrt_sdo_request_data(realtime_request), val);
+}
+
+void SDOEntry::setData(int8_t val) {
+   EC_WRITE_S8(ecrt_sdo_request_data(realtime_request), val);
+}
+
+void SDOEntry::setData(uint16_t val) {
+   EC_WRITE_U16(ecrt_sdo_request_data(realtime_request), val);
+}
+
+void SDOEntry::setData(int16_t val) {
+   EC_WRITE_S16(ecrt_sdo_request_data(realtime_request), val);
+}
+
+void SDOEntry::setData(uint32_t val) {
+   EC_WRITE_U32(ecrt_sdo_request_data(realtime_request), val);
+}
+
+void SDOEntry::setData(int32_t val) {
+   EC_WRITE_S32(ecrt_sdo_request_data(realtime_request), val);
+}
 
 
 #endif
 
 
 ECInterface::ECInterface() :initialised(0), active(false), process_data(0), process_mask(0),
-		update_data(0), update_mask(0), reference_time(0) {
+		update_data(0), update_mask(0), reference_time(0)
+#ifndef EC_SIMULATOR
+		,current_init_entry(initialisation_entries.begin()), current_sdo_entry( sdo_entries.begin() ) 
+#endif
+{
 	initialised = init();
 }
 
@@ -168,36 +201,79 @@ std::ostream &ECModule::operator <<(std::ostream & out)const {
 	return out;
 }
 
-void ECModule::prepareSDORequest(uint16_t index, uint8_t subindex, size_t size) {
-	ec_slave_config_t *x = ecrt_master_slave_config(ECInterface::master, 0, position, 
-								 vendor_id, product_code);
-    ec_slave_config_state_t s;
-    ecrt_slave_config_state(x, &s);
+SDOEntry *ECInterface::prepareSDORequest(ECModule *module, uint16_t index, uint8_t subindex, size_t size) {
+  assert(ECInterface::instance()->active == false);
+	ec_slave_config_t *x = ecrt_master_slave_config(ECInterface::master, 0, module->position, 
+								 module->vendor_id, module->product_code);
+  ec_slave_config_state_t s;
+  ecrt_slave_config_state(x, &s);
 
 	ec_sdo_request_t *sdo = ecrt_slave_config_create_sdo_request(x, index, subindex, size);
-	SDOEntry *entry = new SDOEntry(sdo);
+	return new SDOEntry(sdo);
+}
+void ECInterface::queueInitialisationRequest(SDOEntry *entry) {
+	initialisation_entries.push_back(entry);
+}
+
+void ECInterface::queueRuntimeRequest(SDOEntry *entry){
 	sdo_entries.push_back(entry);
 }
 
-void ECModule::read_sdo(ec_sdo_request_t *sdo)
+void ECInterface::beginModulePreparation() {
+	std::cerr << "beginning module preparation\n";
+	current_init_entry = initialisation_entries.begin();
+}
+
+void readValue(ec_sdo_request_t *sdo, unsigned int size) {
+	if (size == 4) {
+   fprintf(stderr, "SDO value: 0x%04X\n",
+   EC_READ_U32(ecrt_sdo_request_data(sdo)));
+	}
+	else if (size == 2) {
+   fprintf(stderr, "SDO value: 0x%08X\n",
+   EC_READ_U16(ecrt_sdo_request_data(sdo)));
+	}
+	else if (size == 1) {
+   fprintf(stderr, "SDO value: 0x%02X\n",
+   EC_READ_U8(ecrt_sdo_request_data(sdo)));
+	}
+}
+
+void ECInterface::checkSDO()
 {
-    switch (ecrt_sdo_request_state(sdo)) {
+	if (current_init_entry != initialisation_entries.end()) {
+		SDOEntry *entry = *current_init_entry;
+		if (!entry) { 
+			std::cerr << "Skipping null entry when checking SDO\n";
+			current_init_entry++; return; 
+		} // odd: no entry at this position
+
+		ec_sdo_request_t *sdo = entry->getRequest();
+
+		std::cerr << "checking SDO entry\n";
+
+		int state = 0;
+    switch ( (state=ecrt_sdo_request_state(sdo)) ) {
         case EC_REQUEST_UNUSED: // request was not used yet
-            ecrt_sdo_request_read(sdo); // trigger first read
+						std::cerr<< "SDO entry - trigger read\n";
+            ecrt_sdo_request_write(sdo); // trigger first read
             break;
         case EC_REQUEST_BUSY:
             fprintf(stderr, "Still busy...\n");
             break;
         case EC_REQUEST_SUCCESS:
-            fprintf(stderr, "SDO value: 0x%04X\n",
-                    EC_READ_U16(ecrt_sdo_request_data(sdo)));
-            ecrt_sdo_request_read(sdo); // trigger next read
+						std::cerr << "SDO entry written\n";
+						readValue(sdo, entry->getSize());
+						current_init_entry++; // prepare to get the next entry
             break;
         case EC_REQUEST_ERROR:
             fprintf(stderr, "Failed to read SDO!\n");
-            ecrt_sdo_request_read(sdo); // retry reading
+            ecrt_sdo_request_write(sdo); // retry reading
             break;
+			default:
+				std::cerr << "unexpected sdo request state: " << state << "\n";
     }
+	}
 }
 
 ECModule *ECInterface::findModule(int pos) {
@@ -225,6 +301,17 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 			if (m->alias == module->alias && m->position == module->position) return false;
 		}
 		modules.push_back(module);
+		if (module->name.substr(0,6) == "EL2535") {
+			std::cerr << "queueing a request to change EL2535 MaxCurrent\n";
+			SDOEntry *entry = prepareSDORequest(module, 0x8000, 0x10, 1);
+			entry->setData( (uint8_t)50);
+			ECInterface::instance()->queueInitialisationRequest(entry);
+			entry = prepareSDORequest(module, 0x8010, 0x10, 1);
+			entry->setData( (uint8_t)50);
+			ECInterface::instance()->queueInitialisationRequest(entry);
+		}
+		else
+			std::cerr << "No match " << module->name.substr(6) << " checking for EL2535\n";
 	}
 	
 	if (!reset_io) 
@@ -324,6 +411,8 @@ bool ECInterface::init() {
     else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created"
 		<< " with size " << ecrt_domain_size(domain1) << "\n";
 
+    all_ok = true; // ok to try to start processing
+
 #if 0
 	IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
 	IODCommandThread::registerCommand("MASTER", new IODCommandMasterInfo);
@@ -362,24 +451,25 @@ ECInterface *ECInterface::instance() {
 uint32_t ECInterface::getProcessDataSize() {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
-	return max - min + 1;
+	int result = max - min +1;
+	return result;
 }
 
 void ECInterface::setProcessData (uint8_t *pd) { 
-	if (process_data) delete process_data; process_data = pd; 
+	if (process_data) delete[] process_data; process_data = pd; 
 }
 uint8_t *ECInterface::getProcessMask() { return IOComponent::getProcessMask(); }
 
 void ECInterface::setProcessMask (uint8_t *m) { 
-	if (process_mask) delete process_mask; process_mask = m; 
+	if (process_mask) delete[] process_mask; process_mask = m; 
 }
 
 void ECInterface::setUpdateData (uint8_t *ud) {
-	if (update_data) delete update_data;
+	if (update_data) delete[] update_data;
 	update_data = ud;
 }
 void ECInterface::setUpdateMask (uint8_t *m){
-	if (update_mask) delete update_mask;
+	if (update_mask) delete[] update_mask;
 	update_mask = m;
 }
 uint8_t *ECInterface::getUpdateData() { return update_data; }
@@ -407,11 +497,15 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 	uint8_t *pd = domain1_pd;
 	uint8_t *saved_pd = process_data;
 
-/*
-	std::cout << "updating domain (size = " << size << ")\n";
-	std::cout << "process: "; display(pd); std::cout << "\n";
-	std::cout << "   mask: "; display(mask); std::cout << "\n";
-	std::cout << "   data: "; display(data); std::cout << "\n";
+/* 
+	std::cerr << "updating domain (size = " << size << ")\n";
+	std::cerr << "process: "; display(pd); std::cout << "\n";
+	std::cerr << "   mask: "; display(mask); std::cout << "\n";
+	std::cerr << "   data: "; display(data); std::cout << "\n";
+
+	if (!all_ok || master_state.al_states != 0x8) {
+		std::cerr << "refusing to update the domain since all is not ok\n";
+	}
 */
 	for (unsigned int i=0; i<size; ++i) {
 		if (*mask && *data != *pd){
@@ -448,7 +542,7 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 
 void ECInterface::receiveState() {
 	if (!master || !initialised || !active) {
-		std::cerr << "master not ready to collect state\n" << std::flush;
+		//std::cerr << "master not ready to collect state\n" << std::flush;
 		return;
 	}
 	// receive process data
@@ -466,6 +560,8 @@ void ECInterface::receiveState() {
 	check_master_state();
 	// check for islave configuration state(s) (optional)
 	check_slave_config_states();
+
+	checkSDO();
 }
 
 int ECInterface::collectState() {
@@ -494,7 +590,7 @@ int ECInterface::collectState() {
 	if ((long)domain_size < 0) {
 		return 0;
 	}
-	assert(domain_size >= (size_t)max+1);
+	assert(domain_size >= (size_t)max - min + 1);
 	if (!update_data) update_data = new uint8_t[domain_size]; 
 	if (!update_mask) update_mask = new uint8_t[domain_size]; 
 	memset(update_data, 0, domain_size);
@@ -524,9 +620,9 @@ int ECInterface::collectState() {
 				if (*pm & bitmask ) { // we care about this bit
 					if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
 #if 0
-						if (i != 47 ) // ignore analog changes on our machine
-							std::cout << "incoming bit " << i << ":" << count 
-								<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
+						//if (i != 47 ) // ignore analog changes on our machine
+						std::cout << "incoming bit " << i << ":" << count 
+							<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
 #endif
 						if ( *pd & bitmask ) *q |= bitmask;
 						else *q &= (uint8_t)(0xff - bitmask);
@@ -544,31 +640,33 @@ int ECInterface::collectState() {
 	if (affected_bits) {
 		std::cout << "data: "; display(update_data); 
 		std::cout << "\nmask: "; display(update_mask);
-		std::cout << " " << affected_bits << " bits changed\n";
+		std::cout << " " << affected_bits << " bits changed (size=" << domain_size << ")\n";
 	}
 #endif
 
 	// save the domain data for the next check
-	pd = new uint8_t[max+1];
-	memcpy(pd, domain1_pd, domain_size);
+	pd = new uint8_t[max - min + 1];
+	memcpy(pd, domain1_pd+min, max - min + 1);
 	instance()->setProcessData(pd);
-	memcpy(update_data, domain1_pd, domain_size);
-//	memcpy(update_mask, getProcessMask(), domain_size); 
-	//instance()->setUpdateData(update_data);
-	//instance()->setUpdateMask(update_mask);
-
+	memcpy(update_data, domain1_pd, max - min + 1);
 #endif
 
 	return affected_bits;
 }
 void ECInterface::sendUpdates() {
-	if (!master || !initialised || !active) {
-		std::cerr << "master not ready to send updates\n" << std::flush;
+	static time_t last_warning = 0;
+	struct timeval now;
+	gettimeofday(&now, 0);
+	if (!master || !initialised || !active || !all_ok /*|| master_state.al_states != 0x88*/) {
+		if (now.tv_sec + 5 < last_warning) {
+			std::cerr << "master not ready to send updates\n" << std::flush;
+			char buf[100];
+			snprintf(buf, 100, "EtherCAT master is not ready to send updates\n");
+			MessageLog::instance()->add(buf);
+		}
 		return;
 	}
 #ifndef EC_SIMULATOR
-	struct timeval now;
-	gettimeofday(&now, 0);
 	ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
 	ecrt_master_sync_reference_clock(master);
 	ecrt_master_sync_slave_clocks(master);
@@ -614,18 +712,30 @@ void ECInterface::check_master_state(void)
 		char buf[100];
 		snprintf(buf, 100, "Number of slaves has changed from %d to %d", master_state.slaves_responding, ms.slaves_responding);
 		MessageLog::instance()->add(buf);
+		if (ms.slaves_responding > master_state.slaves_responding)
+			expected_slaves = ms.slaves_responding;
+		else {
+			all_ok = false; // lost a slave
+		}
 	}
 	if (ms.al_states != master_state.al_states) {
-		std::cout << "AL states: 0x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
+		std::cout << "AL states: 02x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT state change: was 0x%x now 0x%x", master_state.al_states, ms.al_states);
 		MessageLog::instance()->add(buf);
+
+		if (master_state.al_states == 0x8) {
+			all_ok = false;
+		}
+
+		
 	}
 	if (ms.link_up != master_state.link_up) {
 		std::cout << "Link is " << (ms.link_up ? "up" : "down") << "\n";
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT link state change was %s now %s", master_state.link_up ?"up":"down", ms.link_up?"up":"down");
 		MessageLog::instance()->add(buf);
+		if (!ms.link_up) all_ok = false;
 	}
 
 	master_state = ms;
@@ -652,7 +762,7 @@ void ECInterface::check_slave_config_states(void)
 			char buf[100];
 	    if (s.al_state != m->slave_config_state.al_state) {
 	        std::cout << m->name << ": State 0x" << std::ios::hex <<  s.al_state << ".\n";
-					snprintf(buf, 100, "Slave %d (%s) changed state was 0x%x now 0x%x", i, m->name.c_str(), 
+					snprintf(buf, 100, "Slave %d (%s) changed state was 02x%x now 02x%x", i, m->name.c_str(), 
 						m->slave_config_state.al_state, s.al_state);
 				MessageLog::instance()->add(buf);
 			}

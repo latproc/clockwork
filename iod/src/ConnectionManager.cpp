@@ -194,13 +194,15 @@ void SubscriptionManager::init() {
 int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
 	int idx = 0;
 	if (setup_) {
-    	items[idx].socket = setup();
+		// this cast should not be necessary as there is an operator for it
+		items[idx].socket = (void*)setup(); 
 		items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
 		items[idx].fd = 0;
 		items[idx].revents = 0;
 		++idx;
 	}
-    items[idx].socket = subscriber();
+	// this cast should not be necessary as there is an operator for it
+	items[idx].socket = (void*)subscriber();
 	items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
 	items[idx].fd = 0;
 	items[idx].revents = 0;

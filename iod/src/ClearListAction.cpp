@@ -50,7 +50,7 @@ Action::Status ClearListAction::run() {
 	if (dest_machine && dest_machine->_type == "LIST" ) {
 #if 1
         // TBD needs further testing
-        for (int i=0; i<dest_machine->parameters.size(); ++i) {
+        for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
             Parameter &p = dest_machine->parameters[i];
             if (p.machine) {
                 dest_machine->stopListening(p.machine);
