@@ -25,6 +25,9 @@
 #include "Scheduler.h"
 #include "FireTriggerAction.h"
 #include "MachineInstance.h"
+#include "string.h"
+#include "stdio.h"
+#include "MessageLog.h"
 
 WaitAction::WaitAction(MachineInstance *mi, WaitActionTemplate &wat) 
 : Action(mi), wait_time(wat.wait_time), property_name(wat.property_name), use_property(false) {
@@ -44,34 +47,39 @@ Action::Status WaitAction::run() {
 	Value v;
 	owner->start(this);
     if (wait_time == -1) {
-        // lookup property
-		if (property_name.find('.') != std::string::npos) {
-			v = owner->getValue(property_name);
-			DBG_M_PROPERTIES << "looking up property " << property_name << " " << ": " << v << "\n";
-		}
+			// lookup property
+			if (property_name.find('.') != std::string::npos) {
+				v = owner->getValue(property_name);
+				DBG_M_PROPERTIES << "looking up property " << property_name << " " << ": " << v << "\n";
+			}
 		else
-	        v = owner->getValue(property_name.c_str());
-        if (v.kind != Value::t_integer) {
-            wait_time = 0;
-            DBG_M_PROPERTIES << "Error: expected an integer value for wait_time, got: " << v << "\n";
-        }
-        else
-            wait_time = v.iValue;
-    }
-    gettimeofday(&start_time, 0);
-    if (wait_time == 0) {
-		status = Complete;
-		owner->stop(this);
+			v = owner->getValue(property_name.c_str());
+			if (v.kind != Value::t_integer) {
+				wait_time = 0;
+			}
+		else
+			wait_time = v.iValue;
 	}
-	else {
+	if (wait_time <= 0) {
+		char buf[150];
+		snprintf(buf, 150, "%s executing WAIT %s: error expecting an integer value, got: %s\n", owner->getName().c_str(),
+			property_name.c_str(), v.asString().c_str());
+		MessageLog::instance()->add(buf);
+	}
+    gettimeofday(&start_time, 0);
+    if (wait_time <= 0) {
+			status = Complete;
+			owner->stop(this);
+		}
+		else {
 		status = Running;
         if (trigger) trigger->release();
 		trigger = new Trigger("Timer");
 		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, trigger)));
 		assert(!trigger->fired());
-        if (use_property) wait_time = -1; // next time, find the property value again
-	}
     DBG_M_PROPERTIES << "waiting " << wait_time << "\n";
+    if (use_property) wait_time = -1; // next time, find the property value again
+	}
     return status;
 }
 
@@ -91,6 +99,9 @@ Action::Status WaitAction::checkComplete() {
 }
 
 std::ostream &WaitAction::operator<<(std::ostream &out) const {
+	if (wait_time == -1)
+    return out << "WaitAction " << property_name;
+	else
     return out << "WaitAction " << wait_time;
 }
 
