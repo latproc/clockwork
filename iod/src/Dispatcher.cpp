@@ -115,12 +115,18 @@ void Dispatcher::deliver(Package *p)
 		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
 		assert(pgn_rc == 0);
 
-		NB_MSG << "dispatcher error: message send package ("<< *p <<") from a different thread:"
+		std::stringstream ss;
+		ss << "dispatcher error: message send package ("
+		<< *p <<") from a different thread:"
 		<< " owner: " << std::hex << " '" << owner_thread
 		<< " '" << tnam2
 		<< "' current: " << std::hex << " " << pthread_self()
 		<< " '" << tnam1 << "'"
-		<< std::dec << "\n";
+		<< std::dec;
+		char buf[1000];
+		snprintf(buf, 1000, "%s", ss.str().c_str());
+		MessageLog::instance()->add(buf);
+		std::cerr << buf << "\n";
 	}
     dispatch_socket->send(&p, sizeof(Package*));
 }

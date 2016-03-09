@@ -268,7 +268,7 @@ MoveStateAction::~MoveStateAction()
 }
 
 std::ostream &MoveStateAction::operator<<(std::ostream &out) const {
-	return out << "MoveStateAction " << target.get() << " to " << value << "\n";
+	return out << "MoveStateAction " << target.get() << " to " << value;
 }
 
 Action::Status SetIOStateAction::run() {

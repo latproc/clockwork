@@ -163,6 +163,8 @@ void sync(int rtc) {
 		perror("read rtc"); exit(1); 
 	}
 	if (rc == 0) { DBG_ETHERCAT << "zero bytes read from rtc\n"; }
+	else if (rc == sizeof(rtc_val))
+		freq = (unsigned long)rtc_val;
 	if (freq != ECInterface::FREQUENCY) {
 		unsigned long saved_freq = freq;
 		freq = ECInterface::FREQUENCY;
@@ -278,7 +280,6 @@ void EtherCATThread::operator()() {
 		sync();
 #endif
 #endif
-{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 		uint64_t now = nowMicrosecs();
 		ECInterface::instance()->setReferenceTime(now % 0x100000000);
 		uint64_t period = 1000000/freq;
@@ -450,7 +451,6 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 			// check for communication from clockwork
 			zmq::message_t output_update;
 			uint8_t packet_type = 0;
-	{uint8_t *x = new uint8_t[100]; delete[] x; }
 			
 			bool received = true;
 			while ( received) {
@@ -468,7 +468,6 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 				size_t more_size = sizeof(more);
 				out_sock.getsockopt(ZMQ_RCVMORE, &more, &more_size);
 				assert(more);
-	{uint8_t *x = new uint8_t[100]; delete[] x; }
 
 				// Packet Type
 				{
@@ -479,7 +478,6 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 					DBG_ETHERCAT << "reading packet type " << sizeof(packet_type) << " byte(s)\n";
 					assert(iomsg.size() == sizeof(packet_type));
 					memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
-	{uint8_t *x = new uint8_t[100]; delete[] x; }
 					if (driver_state == s_driver_init) {
 						if (packet_type == DEFAULT_DATA) {
 							DBG_MSG << "received initial values from clockwork; size: " 
@@ -494,7 +492,6 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 						DBG_ETHERCAT << "WARNING: read packet type but driver is not in state init\n";
 					}
 				}
-	{uint8_t *x = new uint8_t[100]; delete[] x; }
 	
 				uint8_t *cw_data = 0;
 				{

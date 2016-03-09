@@ -310,8 +310,10 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 			entry->setData( (uint8_t)50);
 			ECInterface::instance()->queueInitialisationRequest(entry);
 		}
-		else
+		else if (module->name.length() > 6)
 			std::cerr << "No match " << module->name.substr(6) << " checking for EL2535\n";
+		else
+			std::cerr << "No match " << module->name << " checking for EL2535\n";
 	}
 	
 	if (!reset_io) 
@@ -667,9 +669,11 @@ void ECInterface::sendUpdates() {
 		return;
 	}
 #ifndef EC_SIMULATOR
+#ifdef USE_DC
 	ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
 	ecrt_master_sync_reference_clock(master);
 	ecrt_master_sync_slave_clocks(master);
+#endif
     ecrt_domain_queue(domain1);
     ecrt_master_send(master);
 #endif
@@ -719,9 +723,9 @@ void ECInterface::check_master_state(void)
 		}
 	}
 	if (ms.al_states != master_state.al_states) {
-		std::cout << "AL states: 02x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
+		std::cout << "AL states: 0x" << std::ios::hex << ms.al_states << std::ios::dec<< "\n";
 		char buf[100];
-		snprintf(buf, 100, "EtherCAT state change: was 0x%x now 0x%x", master_state.al_states, ms.al_states);
+		snprintf(buf, 100, "EtherCAT state change: was 0x%04x now 0x%04x", master_state.al_states, ms.al_states);
 		MessageLog::instance()->add(buf);
 
 		if (master_state.al_states == 0x8) {
