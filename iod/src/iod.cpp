@@ -194,7 +194,7 @@ int main(int argc, char const *argv[])
 	char *pn = strdup(argv[0]);
 	program_name = strdup(basename(pn));
 	free(pn);
-std::string thread_name("Main");
+std::string thread_name("iod_main");
 #ifdef __APPLE__
 	pthread_setname_np(thread_name.c_str());
 #else

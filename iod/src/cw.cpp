@@ -146,7 +146,7 @@ int main (int argc, char const *argv[])
 	program_name = strdup(basename(pn));
 	free(pn);
 
-	std::string thread_name("Main");
+	std::string thread_name("cw_main");
 #ifdef __APPLE__
 	pthread_setname_np(thread_name.c_str());
 #else
