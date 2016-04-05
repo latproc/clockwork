@@ -834,6 +834,18 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         }
     }
 
+		bool IODCommandTriggers::run(std::vector<Value> &params) {
+			char *triggers = Trigger::getTriggers();
+			if (triggers) {
+				result_str = triggers;
+				delete[] triggers;
+			}
+			else
+				result_str = "";
+			return true;
+		}
+
+
     bool IODCommandNotice::run(std::vector<Value> &params) {
         std::stringstream msg;
         unsigned int i = 0;

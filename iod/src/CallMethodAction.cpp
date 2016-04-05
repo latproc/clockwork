@@ -70,8 +70,10 @@ Action::Status CallMethodAction::run() {
 }
 
 Action::Status CallMethodAction::checkComplete() {
-    if (status == Complete || status == Failed) return status;
-	if ( trigger->fired()) {
+  if (status == Complete || status == Failed) return status;
+	// If the action is complete it will have cleared the trigger by now. 
+	// the following test treats the Call as complete if there is no trigger
+	if ( !trigger ||  trigger->fired()) {
 		status = Action::Complete;
 		owner->stop(this);
 		return status;

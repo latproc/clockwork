@@ -40,6 +40,7 @@ struct ActionTemplate {
 };
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 
+class TriggerInternals;
 class Trigger;
 struct TriggerOwner {
     virtual ~TriggerOwner() {}
@@ -48,22 +49,19 @@ struct TriggerOwner {
 
 class Trigger {
 public:
-	Trigger() : name("inactive"), seen(false), is_active(false), owner(0), deleted(false), refs(1) {}
-	Trigger(const std::string &n) : name(n), seen(false), is_active(true), owner(0), deleted(false), refs(1) {}
-	Trigger(const Trigger &o) : name(o.name), seen(o.seen), is_active(o.is_active), owner(o.owner), deleted(false), refs(1) {}
-	Trigger &operator=(const Trigger &o) { 
-		name = o.name;
-		seen = o.seen;
-		is_active = o.is_active;
-        owner = o.owner;
-        // note: refs does not change
-		return *this;
-	}
+	Trigger();
+	Trigger(const std::string &n);
+	Trigger(const Trigger &o);
+	Trigger &operator=(const Trigger &o);
+
 	virtual ~Trigger();
 	Trigger*retain();
 	virtual Trigger *release();
+	static char *getTriggers();
+	void addHolder(Action *h);
+	void removeHolder(Action *h);
 	
-    void setOwner(TriggerOwner *new_owner) { owner = new_owner; }
+	void setOwner(TriggerOwner *new_owner) { owner = new_owner; }
 	bool enabled() const { return is_active; }
 	bool fired() const { return seen; }
 	void fire() { if (seen) return; seen = true; if (owner) owner->triggerFired(this); }
@@ -77,6 +75,7 @@ public:
 	const std::string &getName() { return name; }
 	
 protected:
+	TriggerInternals *_internals;
 	std::string name;
 	bool seen;
 	bool is_active;

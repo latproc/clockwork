@@ -177,6 +177,10 @@ struct IODCommandFreeze : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandTriggers : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 
 
 #endif

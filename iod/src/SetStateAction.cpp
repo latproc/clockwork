@@ -48,6 +48,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		MessageLog::instance()->add(msg);
 		error_str = msg;
 		status = Failed;
+		if (trigger) {
+			trigger->removeHolder(this);
+			trigger->release();
+			trigger = 0;
+		}
 		owner->stop(this);
 		return status; 
 	}
@@ -73,6 +78,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 					MessageLog::instance()->add(msg);
 					DBG_M_ACTIONS << error_str << "\n";
 					status = Failed;
+					if (trigger) {
+						trigger->removeHolder(this);
+						trigger->release();
+						trigger = 0;
+					}
 					owner->stop(this);
 					return status; 
 				}
@@ -86,6 +96,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 					error_str = msg;
 					DBG_M_ACTIONS << error_str << "\n";
 					status = Failed;
+					if (trigger) {
+						trigger->removeHolder(this);
+						trigger->release();
+						trigger = 0;
+					}
 					owner->stop(this);
 					return status;
 				}
@@ -99,6 +114,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			if (txt == value.getName()) {
 				result_str = "OK";
 				status = Complete;
+				if (trigger) {
+					trigger->removeHolder(this);
+					trigger->release();
+					trigger = 0;
+				}
 				owner->stop(this);
 				return status;
 			}
@@ -122,6 +142,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			if (machine->getCurrent() == value) {
 				DBG_M_ACTIONS << machine->getName() << " is already " << value << " skipping " << *this << "\n";
 				status = Complete;
+				if (trigger) {
+					trigger->removeHolder(this);
+					trigger->release();
+					trigger = 0;
+				}
 				owner->stop(this);
 				return status;
 			}
@@ -149,6 +174,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 								else
 									result_str = "OK";
 								if (status != Action::Running && status != Action::Suspended && owner->executingCommand() == this) {
+									if (trigger) {
+										trigger->removeHolder(this);
+										trigger->release();
+										trigger = 0;
+									}
 									owner->stop(this);
 								}
 								return status;
@@ -168,8 +198,14 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				//DBG_M_ACTIONS << "SetStateAction didn't find a transition for " << machine->getCurrent() << " to " << value << "; manually setting\n";
 			}
 			status = machine->setState( value, authority );
-			if (status == Complete || status == Failed)
+			if (trigger) {
+				trigger->removeHolder(this);
+				trigger->release();
+				trigger = 0;
+			}
+			if (status == Complete || status == Failed) {
 				owner->stop(this);
+			}
 			else {
 				if (trigger) trigger->release();
 				trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
@@ -215,11 +251,14 @@ Action::Status SetStateAction::run() {
 Action::Status SetStateAction::checkComplete() {
 	if (status == New || status == NeedsRetry) executeStateChange(true);
 	if (status == Suspended) resume();
-	if (status != Running) return status;
+	if (status != Complete && status != Running) return status;
 	if (trigger && trigger->enabled()) {
 		if (trigger->fired()) {
 			DBG_M_MESSAGING << owner->getName() << " Set State Action " << *this << " has triggered, cleaning up\n";
 			status = Complete;
+			trigger->removeHolder(this);
+			trigger->release();
+			trigger = 0;
 			owner->stop(this);
 			return status;
 		}
@@ -296,6 +335,10 @@ Action::Status SetIOStateAction::run() {
 }
 
 Action::Status SetIOStateAction::checkComplete() {
+	if (status == Complete || status == Failed) {
+		owner->stop(this);
+		return status;
+	}
 	if (status != Running && status != Suspended) return status;
 	if (state.getName() == io_interface->getStateString()) {
 		status = owner->setState( state, authority );

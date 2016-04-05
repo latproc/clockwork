@@ -223,8 +223,10 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     if (current_time <= (scheduled_time + 4)) {
 		long t = (scheduled_time - current_time) * 1000;
 		if (t<4000) t = 4000;
-		DBG_SCHEDULER << "Scheduling item for " << t << "\n";
-        Trigger *trigger = new Trigger("Timer");
+				DBG_SCHEDULER << "Scheduling item for " << t << "\n";
+				std::string trigger_name("Timer ");
+				if (target) trigger_name += target->getName();
+        Trigger *trigger = new Trigger(trigger_name);
         Scheduler::instance()->add(new ScheduledItem( t, new FireTriggerAction(target, trigger)));
         trigger = trigger->release();
     }

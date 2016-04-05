@@ -2140,7 +2140,11 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
 				// prepare a new trigger. note: very short timers will still be scheduled
 				// TBD move this outside of the loop and only apply it for the earliest timer
-				s.trigger = new Trigger("SSTimer");
+				std::string trigger_name("SSTimer ");
+				trigger_name += _name;
+				trigger_name += " ";
+				trigger_name += s.state_name;
+				s.trigger = new Trigger(trigger_name);
 				Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, s.trigger)));
 			}
 			if (s.subcondition_handlers) 
@@ -2823,6 +2827,7 @@ void MachineInstance::stop(Action *a) {
 	if (!a->started()){
 		DBG_MSG << _name << " warning: action " << *a << " was stopped but not yet started\n";
 	}
+	a->setTrigger(0);
 	a->stop();
 	bool found = false;
 	std::list<Action*>::iterator iter = active_actions.begin();
