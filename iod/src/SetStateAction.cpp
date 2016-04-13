@@ -25,6 +25,8 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 
+uint64_t nowMicrosecs();
+
 Action *SetStateActionTemplate::factory(MachineInstance *mi)
 { 
 	return new SetStateAction(mi, *this);
@@ -274,6 +276,11 @@ Action::Status SetStateAction::checkComplete() {
 			return status;
 		}
 	}
+
+	if (trigger && nowMicrosecs() - trigger->startTime() > 10000 ) {
+		trigger->report("taking a long time");
+	}
+
 	{
 		if (machine->io_interface) {
 			IOComponent *pt = machine->io_interface;

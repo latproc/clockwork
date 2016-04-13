@@ -61,9 +61,16 @@ Action::Status CallMethodAction::run() {
 		owner->stop(this);
 		return status;
 	}
-	else {
+	else if (target_machine->enabled()) {
 		setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
 		owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
+	}
+	else {
+		char buf[100];
+		snprintf(buf, 100, "Call to disabled machine: %s", target_machine->getName().c_str() );
+		MessageLog::instance()->add(buf);
+		status = Action::New;
+		return status;
 	}
 	status = Action::Running;
 	return status;
@@ -71,6 +78,9 @@ Action::Status CallMethodAction::run() {
 
 Action::Status CallMethodAction::checkComplete() {
   if (status == Complete || status == Failed) return status;
+	if (status == Action::New) {
+		if (run() == Action::New) return status;
+	}
 	// If the action is complete it will have cleared the trigger by now. 
 	// the following test treats the Call as complete if there is no trigger
 	if ( !trigger ||  trigger->fired()) {
@@ -82,8 +92,15 @@ Action::Status CallMethodAction::checkComplete() {
 }
 
 std::ostream &CallMethodAction::operator<<(std::ostream &out) const {
-    return out << "CallMethodAction " << message.get() << " on " << target.get()
-	<< ((trigger && !trigger->fired() ) ? " Waiting for trigger to fire " : (!trigger) ? " no trigger set " : "trigger fired")
-	<< "\n";
+  out << "CallMethodAction " << message.get() << " on " << target.get();
+	if (trigger) {
+		if ( !trigger->enabled() ) out << "(trigger disabled) ";
+		else {
+			if ( !trigger->fired() ) out <<  " Waiting for trigger to fire\n";
+			else out << "trigger fired\n";
+		}
+	}
+	else out << "no trigger set\n";
+	return out;
 }
 		

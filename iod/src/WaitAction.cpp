@@ -60,6 +60,9 @@ Action::Status WaitAction::run() {
     }
     gettimeofday(&start_time, 0);
     if (wait_time == 0) {
+		if (trigger && !trigger->fired() && trigger->enabled()) {
+			trigger->fire();
+		}
 		status = Complete;
 		owner->stop(this);
 	}
@@ -87,9 +90,12 @@ Action::Status WaitAction::checkComplete() {
 	if (delta >= wait_time * 1000) { status = Complete; owner->stop(this); }
 //    else DBG_M_ACTIONS << "still waiting " << (wait_time*1000-delta) << "\n";
 */
-	if (trigger && trigger->fired()) {
+	if (!trigger || (trigger && trigger->fired()) ) {
 		status = Complete;
 		owner->stop(this);
+	}
+	else if (trigger) {
+		trigger->report("not fired");
 	}
     return status;
 }

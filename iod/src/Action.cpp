@@ -10,10 +10,29 @@
 std::list<Trigger*> all_triggers;
 static boost::recursive_mutex trigger_list_mutex;
 
+uint64_t nowMicrosecs();
+
 class TriggerInternals {
 public:
 	std::list<Action*>holders;
+	uint64_t start_time;
+	uint64_t last_report;
+	TriggerInternals() {
+		start_time = nowMicrosecs();
+		last_report = 0;
+	}
 };
+
+void Trigger::report(const char *msg) {
+	uint64_t now = nowMicrosecs();
+	if (now - _internals->last_report > 1000000) {
+		NB_MSG << name << " " << msg << "\n";
+		_internals->last_report = now;
+	}
+}
+
+uint64_t Trigger::startTime() { return _internals->start_time; }
+
 
 void addTrigger(Trigger *t) {
 	boost::recursive_mutex::scoped_lock scoped_lock(trigger_list_mutex);
@@ -188,8 +207,9 @@ bool Action::complete() {
 	return (status == Complete || status == Failed);
 }
 bool Action::running() {
+	if (status == New) status = run();
 	if(status == Running || status == Suspended) status = checkComplete();
-	return status == Running;
+	return (status == Running || status == New);
 }
 
 

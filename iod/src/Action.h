@@ -73,6 +73,9 @@ public:
 		return is_active && event == name;
 	}
 	const std::string &getName() { return name; }
+
+	uint64_t startTime();
+	void report(const char *message);
 	
 protected:
 	TriggerInternals *_internals;

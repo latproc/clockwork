@@ -1337,7 +1337,7 @@ void MachineInstance::idle() {
 			}
 		}
 		else if (!curr->complete())  {
-			DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
+			//DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
 			curr->release();
 			return;
 		}
