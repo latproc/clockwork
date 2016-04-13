@@ -91,26 +91,41 @@ Trigger::~Trigger() {
 }
 
 Trigger* Trigger::retain() {
+	int holders = _internals->holders.size();
+	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
+		int x = 1; 
+	}
 	++refs;
 	if (refs == 0) { NB_MSG << "Trigger reference count is 0 after increment\n"; }
 	return this;
 }
 Trigger *Trigger::release() {
+	int holders = _internals->holders.size();
+	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
+		int x = 1; 
+	}
 	assert(refs>0);
 	if (--refs == 0)
 		delete this;
 	return 0;
 }
 
+/* setTrigger does not do a retain on the trigger. It is expected to be called from a factory that returns a new trigger */
 void Action::setTrigger(Trigger *t) { 
-	if (trigger == t) return; 
-	if (trigger) {
+	if (!trigger && !t) return;
+	if (trigger && trigger == t) {
+		NB_MSG << "Attempt to set trigger " << t->getName() << " when it is already set";
+		return; 
+	}
+	if (trigger && t) {
+		NB_MSG << "Attempt to set trigger " 
+			<< t->getName() << " when another trigger " 
+			<< trigger->getName() << " is already set";
 		trigger->removeHolder(this);
 		trigger->release(); 
 		trigger = 0;
 	}
 	if (t) {
-		trigger = t->retain(); 
 		t->addHolder(this);
 	}
 }

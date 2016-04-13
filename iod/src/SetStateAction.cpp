@@ -125,12 +125,22 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 
 			if (value == "on") {
 				machine->io_interface->turnOn();
+				status = Running;
+				setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
+				return status;
 			}
 			else if (value == "off") {
 				machine->io_interface->turnOff();
+				status = Running;
+				setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
+				return status;
 			}
-			status = Running;
-			setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
+			std::string res = "Failed to set io state to ";
+			res += value.getName();
+			res += " unknown state";
+			result_str = res.c_str();
+			status = Failed;
+			owner->stop(this);
 			return status;
 		}
 		else 
@@ -252,9 +262,10 @@ Action::Status SetStateAction::checkComplete() {
 	if (status == New || status == NeedsRetry) executeStateChange(true);
 	if (status == Suspended) resume();
 	if (status != Complete && status != Running) return status;
-	if (trigger && trigger->enabled()) {
+	if (trigger && (trigger->enabled() || trigger->fired()) ) {
 		if (trigger->fired()) {
 			DBG_M_MESSAGING << owner->getName() << " Set State Action " << *this << " has triggered, cleaning up\n";
+			NB_MSG << owner->getName() << " Set State Action " << *this << " has triggered, cleaning up\n";
 			status = Complete;
 			trigger->removeHolder(this);
 			trigger->release();
@@ -268,6 +279,12 @@ Action::Status SetStateAction::checkComplete() {
 			IOComponent *pt = machine->io_interface;
 			if (value.getName() == pt->getStateString()) {
 				status = Complete;
+				if (trigger) {
+					if (trigger->enabled() && !trigger->fired()) trigger->fire();
+					trigger->removeHolder(this);
+					trigger->release();
+					trigger = 0;
+				}
 				owner->stop(this);
 				return status;
 			}
@@ -279,6 +296,12 @@ Action::Status SetStateAction::checkComplete() {
 		else {
 			if (machine->getCurrent().getName() == value.getName()) {
 				status = Complete;
+				if (trigger) {
+					if (trigger->enabled() && !trigger->fired()) trigger->fire();
+					trigger->removeHolder(this);
+					trigger->release();
+					trigger = 0;
+				}
 				owner->stop(this);
 				return status;
 			}

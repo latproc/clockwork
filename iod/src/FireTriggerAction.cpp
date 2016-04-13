@@ -26,11 +26,15 @@
 FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t) 
 	: Action(m), trigger(t->retain()){
         if (m) t->setOwner(m);
+				t->addHolder(this);
     }
 
 FireTriggerAction::~FireTriggerAction() {
-	//DBG_ACTIONS << "Removing " << *this << "\n";
-	trigger->release();
+	DBG_ACTIONS << "Removing " << *this << "\n";
+	if (trigger) {
+		trigger->removeHolder(this);
+		trigger->release();
+	}
 }
 
 Action::Status FireTriggerAction::run() { 
@@ -43,11 +47,21 @@ Action::Status FireTriggerAction::run() {
 	DBG_SCHEDULER << owner->getName() << " triggered " << trigger->getName() << "\n";
 	trigger->fire(); 
 	status = Complete;
+	if (trigger) {
+		trigger->removeHolder(this);
+		trigger->release();
+		trigger = 0;
+	}
 	owner->stop(this);
 	return status;
 }
 
 Action::Status FireTriggerAction::checkComplete() {
+	if (trigger) {
+		trigger->removeHolder(this);
+		trigger->release();
+		trigger = 0;
+	}
 	status = Complete;
 	return status;
 }

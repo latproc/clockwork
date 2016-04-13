@@ -215,8 +215,8 @@ StableState::~StableState() {
 	if (trigger) {
 		if (trigger->enabled()) {
 			trigger->disable();
-			trigger = trigger->release();
 		}
+		trigger = trigger->release();
 	}
 	if (subcondition_handlers) {
 		subcondition_handlers->clear();
@@ -1900,12 +1900,22 @@ bool MachineInstance::stateExists(State &seek) {
 
 /*
    Machines hear messages only when registered to do so, the rules are:
+ * all messages are ignored if the machine is not enabled
  * all machines receive messages from themselves
  * machines receive messages from objects they are listening to
  * commands in the transition table are public and can be sent by anyone
  */
 bool MachineInstance::receives(const Message&m, Transmitter *from) {
-	if (!enabled()) return false;
+	if (!enabled()) {
+#if DEBUG_VERBOSE
+		char buf[100];
+		snprintf(buf, 100, "Message: %s sent from %s to disabled machine %s", m.getText().c_str(), 
+			(from) ? from->getName().c_str() : "unknown", _name.c_str());
+		MessageLog::instance()->add(buf);
+		NB_MSG << buf << "\n";
+#endif
+		return false;
+	}
 	// passive machines do not receive messages
 	//if (!is_active) return false;
 	// all active machines receive messages from themselves
@@ -2144,6 +2154,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				trigger_name += _name;
 				trigger_name += " ";
 				trigger_name += s.state_name;
+				if (s.trigger) s.trigger->release();
 				s.trigger = new Trigger(trigger_name);
 				Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, s.trigger)));
 			}
