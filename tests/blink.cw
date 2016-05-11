@@ -27,7 +27,7 @@ AltBlinker MACHINE {
   on WHEN SELF IS off AND TIMER >= 1000 || SELF IS on AND TIMER < 1000;
   off DEFAULT;
 
-  ENTER INIT { WAIT delay; }
+  ENTER INIT { WAIT DELAY; }
 }
 a AltBlinker(delay:200);
 b AltBlinker(delay:400);
@@ -37,7 +37,7 @@ PINGGENERATOR MACHINE {
   OPTION DELAY 0;
   on WHEN SELF IS off AND TIMER >= 1000 || SELF IS on AND TIMER < 1000;
   off DEFAULT;
-  ENTER INIT { WAIT delay; }
+  ENTER INIT { WAIT DELAY; }
 }
 
 PING MACHINE Slave {

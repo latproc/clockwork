@@ -39,11 +39,14 @@ void MachineCommandTemplate::setActionTemplate(ActionTemplate *at) {
 
 
 MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
-: Action(mi), command_name(mct->command_name), state_name(mct->state_name), timeout_trigger(0), switch_state(mct->switch_state) {
+: Action(mi), last_step(0), current_step(0),
+	command_name(mct->command_name), state_name(mct->state_name),
+	timeout_trigger(0), switch_state(mct->switch_state)
+{
     BOOST_FOREACH(ActionTemplate *t, mct->action_templates) {
         //DBG_M_ACTIONS << "copying action " << (*t) << " for machine " << mi->_name << "\n";
         actions.push_back(t->factory(mi));
-
+/*
 		// A THROW is implemented as a SendMessage with no destination, followed by an abort
 		// we insert the abort here if necessary.
 		SendMessageAction *sma = dynamic_cast<SendMessageAction*>(t);
@@ -51,7 +54,8 @@ MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
 			AbortActionTemplate aa;
 			actions.push_back(aa.factory(mi));
 		}
-    }
+*/
+	}
 }
 
 MachineCommand::~MachineCommand() {
@@ -78,11 +82,6 @@ void MachineCommand::setActions(std::list<Action*> &new_actions) {
 
 std::ostream &MachineCommand::operator<<(std::ostream &out)const {
 	out << "Command " << owner->getName() << "." << command_name;
-#if 0
-	BOOST_FOREACH(Action *a, actions) {
-		out << "   " << *a << "\n";
-	}
-#endif
 	return out;
 }
 
@@ -99,16 +98,24 @@ Action::Status MachineCommand::runActions() {
 		AbortAction *aa = dynamic_cast<AbortAction*>(a);
 		Action::Status stat = (*a)();
 		if (aa) {
-			current_step = actions.size()-1;
+			abort();
 			if (stat == Failed)
-				error_str = "Aborted";
+				error_str = a->error();
 			owner->stop(a);
+			last_step = current_step; // remember the command that aborted
+			current_step = actions.size();
 			status = stat;
 			return stat;
 		}
 		if (stat == Action::Failed) {
 			std::stringstream ss;
-			ss << " action: " << *a <<" running on " << owner->fullName() << " failed to start (" << a->error() << ")\n";
+			ss << " action: " << *a <<" running on " << owner->fullName();
+			if (a->aborted()) {
+				ss << " aborted (" << a->error() << ")";
+			}
+			else {
+				ss << " failed to start (" << a->error() << ")";
+			}
 			char *err_msg = strdup(ss.str().c_str());
 			MessageLog::instance()->add(err_msg);
 			error_str = err_msg;
@@ -142,7 +149,7 @@ Action::Status MachineCommand::runActions() {
         }
 #endif
 		setBlocker(0);
-        ++current_step;
+		last_step = current_step++;
         DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
     }
     DBG_M_ACTIONS << owner->getName() << " " << *this <<" completed all actions\n";
@@ -153,6 +160,7 @@ Action::Status MachineCommand::runActions() {
 Action::Status MachineCommand::run() { 
 	owner->start(this);
 	status = Running;
+	last_step = 0;
     current_step = 0;
     if (state_name.get() && strlen(state_name.get()) &&
         owner->getCurrent().getName() != state_name.get() && !switch_state) {
@@ -178,7 +186,12 @@ Action::Status MachineCommand::run() {
     // attempt to run commands until one `blocks' on a timer
 	Action::Status stat = runActions();
     if (stat  == Failed) {
-        std::stringstream ss; ss << owner->fullName() << ": " << command_name.get() << " Failed to start an action: " << *this;
+        std::stringstream ss;
+		ss << owner->fullName() << ": " << command_name.get();
+		if (last_step < actions.size() && actions[last_step]->aborted())
+			ss << " " << *actions[last_step];
+		else
+			ss << " Failed to start an action: " << *this;
         char *msg = strdup(ss.str().c_str());
         MessageLog::instance()->add(msg);
         NB_MSG << msg << "\n";

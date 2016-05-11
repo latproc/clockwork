@@ -1,3 +1,8 @@
+# A basic one-shot timer with reset
+# 
+# user start to start the timer and the timer will start running.
+# after running for timeout ms it becomes expired
+
 TIMER MACHINE {
 	OPTION timeout 1;
 	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);
@@ -7,6 +12,9 @@ TIMER MACHINE {
 	TRANSITION expired,stopped TO running ON start;
 	TRANSITION running,expired,stopped TO stopped ON reset;
 }
+
+# A cyclic set machine that goes from one state to the next everytime 
+# next command is received
 
 Stepper MACHINE {
   OPTION tab Tests;
@@ -22,7 +30,14 @@ Stepper MACHINE {
   c STATE;
 }
 
+# a machine that pretends to perform a calculation that takes 
+# a second to complete. Use the calc command to start 
+# once the calculation is complet the machine will automatically
+# reset itself ready for another command.
+# calls to calc while the machine is already running will be ignored
+
 Calc MACHINE {
+	OPTION wait_time 1000;
 	b STATE;
 	a DEFAULT;
 
@@ -52,28 +67,53 @@ TranstionTest MACHINE {
 }
 transtest TranstionTest(tab:Tests);
 
+# this monitor attempts to disrupt an operation by disabling the driver machine
+# once it sees the calculator running
 
-Test MACHINE {
+Monitor MACHINE calculator, driver {
+
+	active WHEN calculator IS running AND driver IS working;
+	idle DEFAULT;
+
+	ENTER active { DISABLE driver; }
+}
+
+# a test machine that uses CALL to wait for a long operation
+
+Test MACHINE calculator {
   
-	calculator Calc(tab:Tests);
     stepper Stepper;
 
-	done WHEN calculator IS b;
+	done WHEN calculator IS b; # not quaranteed to be noticed
 	ready DEFAULT;
     
     ENTER done {
-        CALL next ON stepper;
+        CALL next ON stepper ON ERROR bad_call ON TIMEOUT call_timeout;
     }
+
+	CATCH bad_call {
+		LOG "bad call"
+	}
+
+	CATCH call_timeout {
+		LOG "call timeout"
+	}
     
     COMMAND StepTransition { CALL next ON transtest }
 
 	working DURING go {  
 		LOG "about to calculate";
-		CALL calc ON calculator; 
-		LOG "finished calculate";
+		CALL calc ON calculator ON ERROR bad_call ON TIMEOUT call_timeout; 
+		#SEND calc TO calculator;
+		#LOG "sent calculate command";
+		#WAIT 50;
+		#WAITFOR calc IS a;
 	}
 	TRANSITION ready TO done USING go;
 }
 
-test Test(tab:Tests);
+
+calc Calc(tab:tests);
+test Test(tab:Tests) calc;
+monitor Monitor(tab:tests) calc, test;
 

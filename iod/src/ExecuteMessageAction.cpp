@@ -38,14 +38,27 @@ Action::Status ExecuteMessageAction::run() {
 	owner->start(this);
 	if (!target_machine) target_machine = owner->lookup(target.get());
 
-	if (target_machine) target_machine->execute(Message(message.get()), owner);
-	status = Action::Complete;
-	owner->stop(this);
+	if (target_machine) {
+		Status sent = target_machine->execute(Message(message.get()), owner);
+		if (sent == Failed)
+			status = Running;
+		else
+			owner->stop(this);
+	}
+	else {
+		status = Action::Complete;
+		owner->stop(this);
+	}
 	return status;
 }
 
 Action::Status ExecuteMessageAction::checkComplete() {
-	return Action::Complete;
+	Status sent = target_machine->execute(Message(message.get()), owner);
+	if (sent == Failed)
+		status = Running; // try again
+	else
+		status = sent;
+	return status;
 }
 
 std::ostream &ExecuteMessageAction::operator<<(std::ostream &out) const {

@@ -493,10 +493,10 @@ bool IODCommandFind::run(std::vector<Value> &params) {
 	std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
 	while (iter != machines.end()) {
 		MachineInstance *m = (*iter).second;
-		if (m->getName().find(params[1].asString()) != std::string::npos) {
+		if (params.size() == 1 || m->getName().find(params[1].asString()) != std::string::npos) {
 			ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") << "\n";
 		}
-		else if (m->getStateMachine() && m->getStateMachine()->name.find(params[1].asString()) != std::string::npos) {
+		else if (params.size() == 1 || (m->getStateMachine() && m->getStateMachine()->name.find(params[1].asString()) != std::string::npos )) {
 			ss << (m->getName()) << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") <<"\n";
 		}
 		iter++;

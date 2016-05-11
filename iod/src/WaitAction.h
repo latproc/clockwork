@@ -47,6 +47,7 @@ struct WaitActionTemplate : public ActionTemplate {
 
 struct WaitAction : public Action {
     WaitAction(MachineInstance *mi, WaitActionTemplate &wat);
+	~WaitAction();
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;

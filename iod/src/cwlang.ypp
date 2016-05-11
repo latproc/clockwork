@@ -71,6 +71,9 @@ PredicateOperator current_op;
     std::list<SymbolTable> property_stack;
     std::list<ChannelDefinition*> channel_definitions;
 
+static char *error_message_name = 0;
+static char *timeout_message_name = 0;
+
 MachineInstance *current_machine = 0;
 MachineClass *current_machineclass = 0;
 ChannelDefinition *current_channelclass = 0;
@@ -97,6 +100,17 @@ static MachineInstance *addMachine(const char *name, const char *type,
     }
 
     return machine;
+}
+
+static void cleanupErrorClause() {
+	if (timeout_message_name) {
+		//free(timeout_message_name);
+		timeout_message_name = 0;
+	}
+	if (error_message_name) {
+		//free(error_message_name);
+		error_message_name = 0;
+	}
 }
 
 struct Subcondition {
@@ -628,6 +642,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     properties = property_stack.back();
     property_stack.pop_back();
     if (properties.exists("TIMEOUT")) {
+		error_messages.push_back("Deprecated feature setting a timeout on a command using a TIMEOUT property");
         const Value &t = properties.lookup("TIMEOUT");
         long timeout;
         if (t.asInteger(timeout)) {
@@ -1189,13 +1204,15 @@ SET SYMBOL TO value  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5);
 }
-| CALL SYMBOL ON SYMBOL /* execute a command on a machine and wait for it to complete */ {
-    if (current_action) current_actions->push_back(current_action);
-    current_action = new CallMethodActionTemplate($2, $4);    
-}
-| CALL SYMBOL /* execute a command within the current machine and wait for it to complete */ {
+| CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new CallMethodActionTemplate($2, "SELF");
+	current_action = new CallMethodActionTemplate($2, $4, timeout_message_name, error_message_name);
+	cleanupErrorClause();
+}
+| CALL SYMBOL error_clause /* execute a command within the current machine and wait for it to complete */ {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new CallMethodActionTemplate($2, "SELF", timeout_message_name, error_message_name);
+	cleanupErrorClause();
 }
 | SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
@@ -1208,12 +1225,12 @@ SET SYMBOL TO value  {
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SendMessageActionTemplate($2, 0);
+	current_action = new AbortActionTemplate(true, $2);
 }
 | THROW STRINGVAL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SendMessageActionTemplate($2, 0);
+	current_action = new AbortActionTemplate(true, $2);
 }
 | SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);
@@ -1409,7 +1426,7 @@ SET SYMBOL TO value  {
 		current_actions->push_back(current_action); 
 		current_action = 0; 
 	}
-    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "");
+    MachineCommandTemplate *mc = new MachineCommandTemplate("if_true_command", "");
 	mc->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
@@ -1424,13 +1441,13 @@ SET SYMBOL TO value  {
 		current_actions->push_back(current_action); 
 		current_action = 0; 
 	}
-    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "");
+    MachineCommandTemplate *mc = new MachineCommandTemplate("if_true_command", "");
 	mc->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
 	current_actions = current_actions_stack.back();
 	current_actions_stack.pop_back();
-    MachineCommandTemplate *mc2 = new MachineCommandTemplate("unnamed_command", "");
+    MachineCommandTemplate *mc2 = new MachineCommandTemplate("if_false_command", "");
 	mc2->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
@@ -1445,6 +1462,35 @@ SET SYMBOL TO value  {
 |
 ;
 
+error_clause:
+ON ERROR SYMBOL error_clause {
+	if (error_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON ERROR clauses\n";
+		// TBD multiple error clauses will be implemented later
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+	}
+	else {
+		size_t len = strlen($3);
+		error_message_name = (char *)malloc(strlen($3)+1);
+		strncpy(error_message_name, $3, len+1);
+	}
+}
+| ON TIMEOUT SYMBOL error_clause {
+	if (timeout_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+	}
+	else {
+		size_t len = strlen($3);
+		timeout_message_name = (char *)malloc(strlen($3)+1);
+		strncpy(timeout_message_name, $3, len+1);
+	}
+}
+| ;
 
 local_instantiation:
 SYMBOL SYMBOL parameters  

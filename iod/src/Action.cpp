@@ -6,6 +6,8 @@
 #include "MachineInstance.h"
 #include <boost/thread/mutex.hpp>
 #include <list>
+#include "MessageLog.h"
+#include "AbortAction.h"
 
 std::list<Trigger*> all_triggers;
 static boost::recursive_mutex trigger_list_mutex;
@@ -25,7 +27,7 @@ public:
 
 void Trigger::report(const char *msg) {
 	uint64_t now = nowMicrosecs();
-	if (now - _internals->last_report > 1000000) {
+	if (now - _internals->last_report > 1000) {
 		NB_MSG << name << " " << msg << "\n";
 		_internals->last_report = now;
 	}
@@ -105,11 +107,22 @@ Trigger &Trigger::operator=(const Trigger &o) {
 }
 
 Trigger::~Trigger() {
-	//NB_MSG << "Removing trigger " << name << "\n";
+	MachineInstance *mi = dynamic_cast<MachineInstance*>(owner);
+	Action *a = dynamic_cast<Action*>(owner);
+	if (mi) {
+		NB_MSG << *mi << " Removing trigger " << name << "\n";
+	}
+	else if (a) {
+		NB_MSG << *a << " Removing trigger " << name << "\n";
+	}
+	else {
+		NB_MSG << " Removing trigger " << name << "\n";
+	}
 	removeTrigger(this);
 }
 
 Trigger* Trigger::retain() {
+	DBG_ACTIONS << name << " retain " << refs << "\n";
 	int holders = _internals->holders.size();
 	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
 		int x = 1; 
@@ -119,6 +132,7 @@ Trigger* Trigger::retain() {
 	return this;
 }
 Trigger *Trigger::release() {
+	DBG_ACTIONS << name << " release " << refs << "\n";
 	int holders = _internals->holders.size();
 	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
 		int x = 1; 
@@ -128,6 +142,35 @@ Trigger *Trigger::release() {
 		delete this;
 	return 0;
 }
+
+void Trigger::setOwner(TriggerOwner *new_owner) { owner = new_owner; }
+bool Trigger::enabled() const { return is_active; }
+bool Trigger::fired() const { return seen; }
+void Trigger::fire() { if (seen) return; seen = true; if (owner) owner->triggerFired(this); }
+void Trigger::reset() { seen = false; }
+void Trigger::enable() { is_active = true; }
+void Trigger::disable() {
+	if (is_active) { NB_MSG << "Disabling trigger: " << name << "\n"; }
+	else  { NB_MSG << "Disabling inactive trigger: " << name << "\n"; }
+	is_active = false;
+}
+const std::string& Trigger::getName() const { return name; }
+bool Trigger::matches(const std::string &event) {
+	return is_active && event == name;
+}
+//const std::string &Trigger::getName() { return name; }
+
+
+Action::Action(MachineInstance *m)
+: refs(1), owner(m), error_str(""), result_str(""), status(New),
+saved_status(Running), blocked(0), trigger(0), started_(false), timeout_msg(0), error_msg(0) {
+}
+
+
+Action::Status Action::getStatus() { return status; }
+Action *Action::blocker() { return blocked; }
+bool Action::isBlocked() { return blocked != 0; }
+void Action::setBlocker(Action *a) { blocked = a; }
 
 /* setTrigger does not do a retain on the trigger. It is expected to be called from a factory that returns a new trigger */
 void Action::setTrigger(Trigger *t) { 
@@ -146,6 +189,8 @@ void Action::setTrigger(Trigger *t) {
 	}
 	if (t) {
 		t->addHolder(this);
+		t->setOwner(this);
+		trigger = t;
 	}
 }
 
@@ -153,6 +198,10 @@ Trigger *Action::getTrigger() const { return trigger; }
 
 void Action::disableTrigger() { if (trigger) trigger->disable(); }
 
+bool Action::started() { return started_; }
+void Action::start() { started_ = true; }
+void Action::stop() { started_ = false; }
+bool Action::aborted() { return aborted_; }
 
 const char *actionStatusName(const Action::Status &state) {
 	switch(state) {
@@ -172,10 +221,18 @@ std::ostream &operator<<(std::ostream &out, const Action::Status &state) {
 }
 
 Action::~Action(){
-	//NB_MSG << "Removing action " << *this << "\n";
+	NB_MSG << owner->fullName() << " removing action " << *this << "\n";
 	if (trigger) {
-		if (trigger->getName().rfind("_done") != std::string::npos && !trigger->fired()) {
-			NB_MSG << "Trigger " << trigger->getName() << " on " << owner->getName() << " has not fired\n";
+		size_t len = trigger->getName().length();
+		if (len > 5 &&
+				trigger->getName().substr(len-5) == "_done"
+				&& !trigger->fired()) {
+			std::stringstream ss;
+			ss << "Trigger "
+			<< trigger->getName()
+			<< " on "
+			<< owner->getName() << " has not fired\n";
+			MessageLog::instance()->add(ss.str().c_str());
 		}
 		trigger->removeHolder(this);
 		trigger->release();
@@ -193,13 +250,18 @@ void Action::release() {
 	if (refs < 0) {
 		NB_MSG << "detected potential double delete of " << *this << "\n";
 	}
-	if (trigger) {
+	if (refs ==0 && trigger) {
 		trigger->removeHolder(this);
 		trigger->release();
 		trigger = 0;
 	}
 	if (refs == 0)
 		delete this;
+}
+
+void Action::setError(const std::string &err) {
+	char *buf = strdup(err.c_str());
+	error_str = buf;
 }
 
 bool Action::complete() {
@@ -233,9 +295,22 @@ void Action::resume() {
 Action::Status Action::operator()() {
 	if (status == New) {
 		start_time = microsecs();
-		status = Running;
+		status = Running; // important because run() checks the current state
 	}
 	status = run();
+/*	if (status == Failed) {
+		if (error_msg) {
+			AbortActionTemplate aat(true, error_msg->get());
+			AbortAction *aa = (AbortAction*)aat.factory(owner);
+			owner->enqueueAction(aa);
+		}
+		else if (timeout_msg) {
+			AbortActionTemplate aat(true, timeout_msg->get());
+			AbortAction *aa = (AbortAction*)aat.factory(owner);
+			owner->enqueueAction(aa);
+		}
+	}
+*/
 	return status;
 }
 
@@ -254,5 +329,5 @@ void Action::toString(char *buf, int buffer_size) {
 }
 
 void Action::abort() {
-	owner->stop(this);
+	aborted_ = true;
 }

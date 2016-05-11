@@ -77,7 +77,7 @@ public:
     virtual std::ostream &operator<<(std::ostream &out)const;
 private:
     std::vector<Action*> actions;
-    unsigned int current_step;
+    unsigned int last_step, current_step;
     CStringHolder command_name;
     CStringHolder state_name;
     Trigger *timeout_trigger;

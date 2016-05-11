@@ -77,7 +77,7 @@ Action::Status HandleMessageAction::run() {
     if (owner->debug()) {
         char buf[100];
         snprintf(buf, 100, "no handler for handling %s\n", package.message->getText().c_str() );
-        DBG_M_MESSAGING << buf << "\n";
+        DBG_M_MESSAGING << buf;
         result_str = strdup(buf);
     }
 	status = Complete;

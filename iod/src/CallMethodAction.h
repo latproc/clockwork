@@ -28,16 +28,18 @@
 class MachineInstance;
 
 struct CallMethodActionTemplate : public ActionTemplate {
-	CallMethodActionTemplate(CStringHolder msg, CStringHolder dest) : message(msg), target(dest) {}
+	CallMethodActionTemplate(CStringHolder msg, CStringHolder dest,
+							 CStringHolder timeout = "CALL_TIMEOUT", CStringHolder error = "CALL_ERROR");
     virtual Action *factory(MachineInstance *mi);
     virtual std::ostream &operator<<(std::ostream &out)const;
 	CStringHolder message;
 	CStringHolder target;
+	CStringHolder timeout_symbol;
+	CStringHolder error_symbol;
 };
 
 struct CallMethodAction: public Action {
-	CallMethodAction(MachineInstance *mi, CallMethodActionTemplate &eat)
-	: Action(mi), message(eat.message), target(eat.target), target_machine(0) { }
+	CallMethodAction(MachineInstance *mi, CallMethodActionTemplate &eat);
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;

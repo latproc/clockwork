@@ -619,10 +619,10 @@ char *MessagingInterface::send(const char *txt) {
 	}
 
     if (!is_publisher){
-        DBG_MESSAGING << "sending message " << txt << " on " << url << "\n";
+        DBG_MESSAGING << getName() << " sending message " << txt << " on " << url << "\n";
     }
     else {
-        DBG_MESSAGING << "sending message " << txt << "\n";
+        DBG_MESSAGING << getName() << " sending message " << txt << "\n";
     }
     size_t len = strlen(txt);
     

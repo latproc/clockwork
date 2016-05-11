@@ -61,18 +61,16 @@ public:
 	void addHolder(Action *h);
 	void removeHolder(Action *h);
 	
-	void setOwner(TriggerOwner *new_owner) { owner = new_owner; }
-	bool enabled() const { return is_active; }
-	bool fired() const { return seen; }
-	void fire() { if (seen) return; seen = true; if (owner) owner->triggerFired(this); }
-	void reset() { seen = false; }
-	void enable() { is_active = true; }
-	void disable() { is_active = false; }
-	const std::string& getName() const { return name; }
-	bool matches(const std::string &event) { 
-		return is_active && event == name;
-	}
-	const std::string &getName() { return name; }
+	void setOwner(TriggerOwner *new_owner);
+	bool enabled() const;
+	bool fired() const;
+	void fire();
+	void reset();
+	void enable();
+	void disable();
+	virtual const std::string& getName() const;
+	//const std::string &getName();
+	bool matches(const std::string &event);
 
 	uint64_t startTime();
 	void report(const char *message);
@@ -90,11 +88,9 @@ protected:
 // an action is started by operator(). If the action successfully starts, 
 // running() will return true. When the action is complete, complete() will
 // return true;
-class Action {
+class Action : public TriggerOwner {
 public:
-    Action(MachineInstance *m = 0)
-        : refs(1), owner(m), error_str(""), result_str(""), status(New),
-            saved_status(Running), blocked(0), trigger(0), started_(false) {}
+	Action(MachineInstance *m = 0);
 	virtual ~Action();
 
     Action*retain() { ++refs; return this; }
@@ -103,6 +99,7 @@ public:
     
     const char *error() { const char *res = error_str.get(); return (res) ? res : "" ;  }
     const char *result() { const char *res = result_str.get(); return (res) ? res : "" ;  }
+	void setError(const std::string &err);
 
 	enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
 
@@ -117,19 +114,20 @@ public:
 
 	bool debug();
 
-	Status getStatus() { return status; }
-	Action *blocker() { return blocked; }
-	bool isBlocked() { return blocked != 0; }
-	void setBlocker(Action *a) { blocked = a; }
+	Status getStatus();
+	Action *blocker();
+	bool isBlocked();
+	void setBlocker(Action *a);
 	
 	void setTrigger(Trigger *t);
 	Trigger *getTrigger() const;
 	void disableTrigger();    
 
 	MachineInstance *getOwner() { return owner; }
-	bool started() { return started_; }
-	void start() { started_ = true; }
-	void stop() { started_ = false; }
+	bool started();
+	void start();
+	void stop();
+	bool aborted();
     
     virtual void toString(char *buf, int buffer_size);
     virtual std::ostream & operator<<(std::ostream &out) const { return out << "(Action)"; }
@@ -147,6 +145,9 @@ protected:
 	Trigger *trigger;
 	uint64_t start_time;
 	bool started_;
+	bool aborted_;
+	CStringHolder *timeout_msg; // message to send on timeout
+	CStringHolder *error_msg; // message to send on error
 };
 
 std::ostream &operator<<(std::ostream &out, const Action::Status &state);

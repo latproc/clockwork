@@ -130,6 +130,10 @@ Type conversions (x AS type)
 Type extensions 
 \end_layout
 
+\begin_layout Itemize
+Records/Property Sets
+\end_layout
+
 \begin_layout Subsection
 Data
 \end_layout
@@ -479,6 +483,172 @@ Events
 Sets should send messages on state change between empty, nonempty and full.
  It may be useful to send events as each item enters/leaves but at this
  point that seems excessive and of little value.
+\end_layout
+
+\begin_layout Subsubsection
+Property Sets
+\end_layout
+
+\begin_layout Standard
+Property Sets are groups of property names that can be used to initialise
+ machines or used to change the value of several properties at the same
+ time.
+\end_layout
+
+\begin_layout Standard
+Initialising a machine will look somthing like:
+\end_layout
+
+\begin_layout LyX-Code
+Sample MACHINE WITH (a:1, b:
+\begin_inset Quotes erd
+\end_inset
+
+test
+\begin_inset Quotes erd
+\end_inset
+
+) { ...
+ }
+\end_layout
+
+\begin_layout Standard
+or 
+\end_layout
+
+\begin_layout LyX-Code
+my_properties PROPERTY_SET {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION a 1;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION b 
+\begin_inset Quotes eld
+\end_inset
+
+test
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION c REFER TO a.b; ## the when update is used the target machine will
+ read its c value from its local/param a.b
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+Sample MACHINE WITH my_properties { ...
+ }
+\end_layout
+
+\begin_layout Standard
+Property sets can be updated from a database:
+\end_layout
+
+\begin_layout LyX-Code
+COLLECT record FROM data_source INTO my_properties ON ENDOFDATA done;
+\end_layout
+
+\begin_layout LyX-Code
+UPDATE my_machine WITH my_properties [EXCLUDING name_list];
+\end_layout
+
+\begin_layout LyX-Code
+UPDATE my_machine WITH [name_list FROM] my_properties
+\end_layout
+
+\begin_layout Standard
+When a Property Set is being applied it is the changes are made to an invisible
+ data structure linked to the property set.
+ Once all of the invisible data values are updated the values are applied
+ into the machine and a property_change event is triggered.
+\end_layout
+
+\begin_layout Standard
+A normal property change that is executed while a property set is being
+ update will be handled as normal.
+ If that change updates a property that is changing within the Property
+ Set the changed value will be lost on completion of the change.
+ The effect is that the property assignments might occur out of order.
+\end_layout
+
+\begin_layout Standard
+Property Set changes may be performe against shadowed data and the update
+ will not occur until all properties are synchronised at both ends of the
+ channel.
+\end_layout
+
+\begin_layout Standard
+Partial updates from Property Sets should also be possible
+\end_layout
+
+\begin_layout LyX-Code
+COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
+\end_layout
+
+\begin_layout Subsubsection
+Data Sources
+\end_layout
+
+\begin_layout Standard
+Data sources are objects that provide data, either on a polled or automatic
+ basis.
+\end_layout
+
+\begin_layout LyX-Code
+my_data DATASOURCE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+COMMANDS { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+CONNECT, # connect to the external source
+\end_layout
+
+\begin_layout LyX-Code
+DISCONNECT, # disconnect from the external source
+\end_layout
+
+\begin_layout LyX-Code
+NEXT # attempt to get a record from the external source and update linked
+ properties
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+They can be linked to a property set:
+\end_layout
+
+\begin_layout LyX-Code
+LINK my_data TO my_properties;
+\end_layout
+
+\begin_layout LyX-Code
+LINK my_properties TO my_machine, ...;
 \end_layout
 
 \begin_layout Subsection

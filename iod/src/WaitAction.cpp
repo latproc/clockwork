@@ -31,6 +31,10 @@ WaitAction::WaitAction(MachineInstance *mi, WaitActionTemplate &wat)
 	if (wait_time == -1) use_property = true;
 }
 
+WaitAction::~WaitAction() {
+	NB_MSG << "Destructing " << *this;
+}
+
 Action *WaitActionTemplate::factory(MachineInstance *mi) { 
   return new WaitAction(mi, *this); 
 }
@@ -69,10 +73,12 @@ Action::Status WaitAction::run() {
 	else {
 		status = Running;
         if (trigger) {
+			DBG_MESSAGING << owner->getName() << " " << *this << " removing old trigger\n";
 			trigger->removeHolder(this);
 			trigger = trigger->release();
 		}
-		trigger = new Trigger("WaitTimer");
+		char buf[100]; snprintf(buf, 100, "%s WaitTimer", owner->getName().c_str());
+		trigger = new Trigger(buf);
 		trigger->addHolder(this);
 		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, trigger)));
 		assert(!trigger->fired());
@@ -90,11 +96,19 @@ Action::Status WaitAction::checkComplete() {
 	if (delta >= wait_time * 1000) { status = Complete; owner->stop(this); }
 //    else DBG_M_ACTIONS << "still waiting " << (wait_time*1000-delta) << "\n";
 */
-	if (!trigger || (trigger && trigger->fired()) ) {
+	DBG_M_MESSAGING << owner->getName() << " " << *this << " checking if complete\n";
+	if (!trigger) {
+		DBG_M_MESSAGING << owner->getName() << " " << *this << " has no trigger\n";
+		status = Complete;
+		owner->stop(this);
+	}
+	else if ( trigger && trigger->fired() ) {
+		DBG_M_MESSAGING << owner->getName() << " " << *this << " trigger has fired\n";
 		status = Complete;
 		owner->stop(this);
 	}
 	else if (trigger) {
+		DBG_M_MESSAGING << owner->getName() << " " << *this << " trigger has not fired\n";
 		trigger->report("not fired");
 	}
     return status;

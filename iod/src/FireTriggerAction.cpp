@@ -39,7 +39,9 @@ FireTriggerAction::~FireTriggerAction() {
 
 Action::Status FireTriggerAction::run() { 
 	owner->start(this);
+	//TBD why is this test for a disabled trigger here and why is it stopping but not removing the trigger?
 	if (!trigger->enabled()) {
+		//assert(false);
 		status = Complete;
 		owner->stop(this);
 		return status;

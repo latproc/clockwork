@@ -48,6 +48,7 @@
 #include "cJSON.h"
 #include "Channel.h"
 #include <boost/thread/mutex.hpp>
+#include "WaitAction.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -1326,7 +1327,7 @@ void MachineInstance::idle() {
 			start(curr);
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
-				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error() << "\n";
+				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error();
 				MessageLog::instance()->add(ss.str().c_str());
 				NB_MSG << ss.str() << "\n";
 			}
@@ -1338,6 +1339,14 @@ void MachineInstance::idle() {
 		}
 		else if (!curr->complete())  {
 			//DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
+			WaitAction *wa = dynamic_cast<WaitAction*>(curr);
+			if (wa) {
+				Trigger *action_trigger = executingCommand()->getTrigger();
+				if (!action_trigger->fired())
+					has_work = false;
+				else has_work = true;
+			}
+			else has_work = true;
 			curr->release();
 			return;
 		}
@@ -1365,7 +1374,7 @@ void MachineInstance::idle() {
 				boost::mutex::scoped_lock lock(q_mutex);
 				DBG_M_MESSAGING << _name << " has " <<  mail_queue.size() << " messages waiting\n";
 				p = new Package(mail_queue.front());
-				DBG_M_MESSAGING << _name << " found package " << p << "\n";
+				DBG_M_MESSAGING << _name << " found package " << *p << "\n";
 				mail_queue.pop_front();
 			}
 			if (p) {
@@ -1375,6 +1384,7 @@ void MachineInstance::idle() {
 		}
 	}
 	if (mail_queue.empty() && active_actions.empty()) has_work = false;
+
 	return;
 }
 // Machine idle processing
@@ -1429,9 +1439,11 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 			if (mi->isActive() || mi->executingCommand()) mi->idle();
 			if (mi->state_machine && mi->state_machine->plugin)
 				mi->state_machine->plugin->poll_actions(mi);
-			if ((mi->state_machine && mi->state_machine->plugin) || !mi->executingCommand()) {
-				busy_it = SharedWorkSet::instance()->erase(busy_it);
-				if (mi->is_active) pending_state_change.insert(mi);
+			if ((mi->state_machine && mi->state_machine->plugin)
+				|| !mi->has_work /*!mi->executingCommand()*/) {
+					busy_it = SharedWorkSet::instance()->erase(busy_it);
+				if (mi->is_active && !mi->executingCommand())
+					pending_state_change.insert(mi);
 			}
 			else busy_it++;
 		}
@@ -1928,8 +1940,14 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 		DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from " << from->getName() << "\n";
 		return true;
 	}
+	// items in the command table are public and can be sent by anyone
 	if (commands.count(m.getText()) != 0) {
-		return true;    // items in the command table are public and can be sent by anyone
+		return true;    	}
+	// RECEIVE methods are now public also, this is necessary with the
+	// current implementation of CATCH as a receive rather than a command
+	// We may change this when we add visibility modifiers
+	if (receives_functions.count(m)) {
+		return true;
 	}
 
 	// commands in the transition table are public and can be sent by anyone
@@ -2325,7 +2343,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		short_name = short_name.substr(short_name.find('.')+1);
 	}
 	if (from) {
-		DBG_M_MESSAGING << "received message " << m << " from " << from->getName() << "\n";
+		DBG_M_MESSAGING << _name << " received message " << m << " from " << from->getName() << "\n";
 	}
 	if (from == this || m.getText() == short_name) {
 		DBG_M_MESSAGING << _name << " checking transitions (" << transitions.size() << ")\n";
@@ -2495,20 +2513,26 @@ void MachineInstance::collect(const Package &package) {
 }
  */
 
-Action::Status MachineInstance::execute(const Message&m, Transmitter *from) {
+Action::Status MachineInstance::execute(const Message&m, Transmitter *from, Action *action) {
 	if (!enabled()) {
-#if 0
-		char buf[120];
-		if (from) {
-			snprintf(buf, 120, "%s failed to execute %s from %s while disabled",
-				_name.c_str(), m.getText().c_str(), from->getName().c_str() );
+#if 1
+		std::string msg(m.getText());
+		size_t len = msg.length();
+		if (len>5 && msg.substr(len-5) == "_done") {
+			char buf[120];
+			if (from) {
+				snprintf(buf, 120, "%s failed to execute %s from %s while disabled",
+					_name.c_str(), m.getText().c_str(), from->getName().c_str() );
+			}
+			else {
+				snprintf(buf, 120, "%s failed to execute %s while disabled",
+					_name.c_str(), m.getText().c_str());
+			}
+			MessageLog::instance()->add(buf);
 		}
-		else {
-			snprintf(buf, 120, "%s failed to execute %s while disabled",
-				_name.c_str(), m.getText().c_str());
-		}
-		MessageLog::instance()->add(buf);
 #endif
+		if (action)
+			action->setError("failed to receive a message while disabled");
 		return Action::Failed;
 	}
 
@@ -2653,7 +2677,7 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 		}
 	}
 	else {
-		//DBG_MSG << _name << " sending message " << *m << " to " << r->getName() << "\n";
+		DBG_MESSAGING << _name << " sending message " << *m << " to " << r->getName() << "\n";
 		if (r->enabled() || expect_reply) { // allow the call to hang here, this will change when throw works TBD
 			DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
 			Package *p = new Package(this, r, m, expect_reply);
@@ -2848,7 +2872,7 @@ void MachineInstance::stop(Action *a) {
 			if (found)
 				std::cerr << "Warning: action " << *a << " was queued twice\n";
 			iter = active_actions.erase(iter);
-			DBG_ACTIONS << "removed action " << *a << "\n";
+			DBG_ACTIONS << fullName() << " removed action " << *a << "\n";
 			a->release();
 			found = true;
 			continue;
@@ -3771,8 +3795,10 @@ const Value &MachineInstance::getValue(const std::string &property) {
 				if (state_machine) {
 					if (!state_machine->properties.exists(property.c_str())) {
 						DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
-						if (globals.exists(property.c_str()))
+						if (globals.exists(property.c_str())) {
+							DBG_PROPERTIES << _name << " found global for " << property << "\n";
 							return globals.lookup(property.c_str());
+						}
 					}
 					else {
 						DBG_M_PROPERTIES << "using property " << property << "from class\n";
@@ -3792,8 +3818,8 @@ const Value &MachineInstance::getValue(const std::string &property) {
 			if (m->state_machine->token_id == ClockworkToken::VARIABLE
 				|| m->state_machine->token_id == ClockworkToken::CONSTANT)
 				return m->getValue("VALUE");
-			else
-				return *m->getCurrentStateVal();
+			// we no longer support the idea that the property lookup process may return the state of a machine
+			//else return *m->getCurrentStateVal();
 		}
 
 	}
@@ -3904,8 +3930,8 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 			if (m->state_machine->token_id == ClockworkToken::VARIABLE
 					|| m->state_machine->token_id == ClockworkToken::CONSTANT)
 				return m->getMutableValue("VALUE");
-			else
-				return m->getCurrentStateVal();
+			//else
+			//	return m->getCurrentStateVal();
 		}
 
 	}
