@@ -55,6 +55,10 @@ Action::Status LogAction::checkComplete() {
 }
 
 std::ostream &LogAction::operator<<(std::ostream &out)const {
-    return out << "LOG " << message;
+	if (!predicate) {
+		return out << "LOG " << message;
+	}
+	Value val = predicate->evaluate(owner);
+	return out << "LOG " << val;
 }
 
