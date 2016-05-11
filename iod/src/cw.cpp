@@ -164,7 +164,6 @@ int main (int argc, char const *argv[])
 	set_debug_config("iod.conf");
 	Logger::instance()->setLevel(Logger::Debug);
 	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
-	load_debug_config();
 
 	std::list<std::string> source_files;
 	int load_result = loadOptions(argc, argv, source_files);
@@ -191,6 +190,7 @@ int main (int argc, char const *argv[])
 		Dispatcher::instance()->stop();
 		return load_result;
 	}
+	load_debug_config();
 
     if (dependency_graph()) {
         std::ofstream graph(dependency_graph());
