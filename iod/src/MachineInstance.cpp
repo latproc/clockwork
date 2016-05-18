@@ -556,8 +556,13 @@ bool MachineInstance::uses(MachineInstance *other) {
 	return other->_name < _name;
 }
 
-// return true if b depends on a
+// return true if a depends on b
 bool machine_dependencies( MachineInstance *a, MachineInstance *b) {
+	return a->uses(b);
+}
+
+// return true if b depends on a
+bool reverse_machine_dependencies( MachineInstance *a, MachineInstance *b) {
 	return b->uses(a);
 }
 
@@ -1272,8 +1277,12 @@ void MachineInstance::removeDependancy(MachineInstance *m) {
 }
 
 bool MachineInstance::dependsOn(Transmitter *m) {
-	std::set<Transmitter*>checked;
-	return checkDepend(checked, m, this);
+//	std::set<Transmitter*>checked;
+//	return checkDepend(checked, m, this);
+	if (!m) return false;
+	MachineInstance *mi = dynamic_cast<MachineInstance*>(m);
+	if (!mi) return true; // assume we depend on all low level transmitters
+	return depends.find(mi) != depends.end();
 }
 
 
@@ -3016,11 +3025,44 @@ void MachineInstance::enable() {
 		else
 			locals[i].machine->enable();
 	}
-	if (_type == "LIST") // enabling a list enables the members
-		for (unsigned int i = 0; i<parameters.size(); ++i) {
+	if (_type == "LIST") {
+		// enabling a list enables the members after sorting them into dependency order
+		std::vector<MachineInstance*> tmp(parameters.size());
+		unsigned int i = 0, j = 0;
+		while (i<parameters.size()) {
 			// parameters my be just values but if they are machines they need to be enabled
-			if (parameters[i].machine) parameters[i].machine->enable();
+			if (parameters[i].machine) {
+				tmp[j++] = parameters[i].machine;
+			}
+			++i;
 		}
+#ifdef VERBOSE_DEBUG
+		std::stringstream ss;
+		ss << "Sorting for enable: ";
+		const char *delim = "";
+		i = 0;
+		while (i<j) {
+			// parameters my be just values but if they are machines they need to be enabled
+			ss << delim << tmp[i]->getName(); delim = ",";
+			++i;
+		}
+		DBG_MSG << ss.str() << "\n";
+		ss.str("");
+		ss.clear();
+		ss << "Enabling sorted: ";
+		delim = "";
+		std::sort(tmp.begin(), tmp.begin()+j, machine_dependencies);
+		for (unsigned int i = 0; i<j; ++i) {
+			ss << delim << tmp[i]->getName(); delim = ",";
+		}
+		DBG_MSG << ss.str() << "\n";
+#else
+		std::sort(tmp.begin(), tmp.begin()+j, machine_dependencies);
+#endif
+		for (unsigned int i = 0; i<j; ++i) {
+			tmp[i]->enable();
+		}
+	}
 
 	setInitialState(true);
 	setNeedsCheck();
@@ -3065,10 +3107,44 @@ void MachineInstance::disable() {
 	}
 
 	gettimeofday(&disabled_time, 0);
-	if (_type == "LIST") // disabling a list disables the members
-		for (unsigned int i = 0; i<parameters.size(); ++i) {
-			if (parameters[i].machine) parameters[i].machine->disable();
+	if (_type == "LIST") {
+		// enabling a list enables the members after sorting them into dependency order
+		std::vector<MachineInstance*> tmp(parameters.size());
+		unsigned int i = 0, j = 0;
+		while (i<parameters.size()) {
+			// parameters my be just values but if they are machines they need to be enabled
+			if (parameters[i].machine) {
+				tmp[j++] = parameters[i].machine;
+			}
+			++i;
 		}
+#ifdef VERBOSE_DEBUG
+		std::stringstream ss;
+		ss << "Sorting for disable: ";
+		const char *delim = "";
+		i = 0;
+		while (i<j) {
+			// parameters my be just values but if they are machines they need to be enabled
+			ss << delim << tmp[i]->getName(); delim = ",";
+			++i;
+		}
+		DBG_MSG << ss.str() << "\n";
+		ss.str("");
+		ss.clear();
+		ss << "Disabling sorted: ";
+		delim = "";
+		std::sort(tmp.begin(), tmp.begin()+j, reverse_machine_dependencies);
+		for (unsigned int i = 0; i<j; ++i) {
+			ss << delim << tmp[i]->getName(); delim = ",";
+		}
+		DBG_MSG << ss.str() << "\n";
+#else
+		std::sort(tmp.begin(), tmp.begin()+j, reverse_machine_dependencies);
+#endif
+		for (unsigned int i = 0; i<j; ++i) {
+			tmp[i]->disable();
+		}
+	}
 	for (unsigned int i = 0; i<locals.size(); ++i) {
 		if (locals[i].machine) locals[i].machine->disable();
 	}
@@ -3076,7 +3152,8 @@ void MachineInstance::disable() {
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();
 	while (d_iter != depends.end()) {
 		MachineInstance *dep = *d_iter++;
-		if (dep->enabled())dep->setNeedsCheck(); // make sure dependant machines update when a property changes
+		if (dep->enabled())dep->setNeedsCheck();
+		// make sure dependant machines update when a property changes
 	}
 }
 
