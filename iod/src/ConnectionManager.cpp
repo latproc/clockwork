@@ -747,9 +747,11 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	assert(pgn_rc == 0);
 
 	if (!checkConnections() &&isClient()) {
-		//FileLogger fl(program_name); fl.f()
-		//	<< "SubscriptionManager checkConnections() failed ";
-		//	fl.f()<< subscriber_host<<":"<<subscriber_port<< "\n";
+		/*
+		FileLogger fl(program_name); fl.f()
+			<< "SubscriptionManager checkConnections() failed ";
+			fl.f()<< subscriber_host<<":"<<subscriber_port<< "\n";
+		 */
 	}
     int rc = 0;
 
@@ -759,7 +761,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	try {
 		if (isClient() && num_items>2 && (monit_subs.disconnected() || monit_setup->disconnected()) ) {
 			int idx = -1;
-			int i=0; while (i<num_items) if (items[2].socket == &cmd) { idx=i; break; } else ++i;
+			int i=0; while (i<num_items) if (items[i].socket == &cmd) { idx=i; break; } else ++i;
 			if (idx != -1)
 				rc = zmq::poll( &items[idx], 1, 5);
 			else
