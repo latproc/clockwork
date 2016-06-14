@@ -1390,6 +1390,16 @@ bool IODCommandFreeze::run(std::vector<Value> &params) {
 	return true;
 }
 
+extern bool program_done;
+
+bool IODCommandShutdown::run(std::vector<Value> &params) {
+	uint64_t start = microsecs();
+	uint64_t now = start;
+	program_done = true;
+	return true;
+}
+
+
 /*
 void sendMessage(zmq::socket_t &socket, const char *message) {
     const char *msg = (message) ? message : "";

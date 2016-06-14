@@ -424,6 +424,9 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "FREEZE") {
 		command = new IODCommandFreeze;
 	}
+	else if (ds == "SHUTDOWN") {
+		command = new IODCommandShutdown;
+	}
 	else {
 		FileLogger fl(program_name);
 		fl.f() << "Warning: no command found for " << data << "\n";

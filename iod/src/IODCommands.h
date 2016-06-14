@@ -181,6 +181,10 @@ struct IODCommandTriggers : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandShutdown : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 
 
 #endif
