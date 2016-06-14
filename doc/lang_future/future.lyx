@@ -215,6 +215,10 @@ Threaded implementation
 Executing a subexpression on the default state
 \end_layout
 
+\begin_layout Itemize
+Persistence
+\end_layout
+
 \begin_layout Subsection
 Bugs
 \end_layout
@@ -944,6 +948,38 @@ off,on has the same effect; since no value is given, it defaults to 0, 1
 
 \begin_layout Description
 on=1:1,off=0:1 is the complete specification, avoiding the use of defaults
+\end_layout
+
+\begin_layout Subsubsection
+Persistence
+\end_layout
+
+\begin_layout Standard
+Currently persistencs is a hack using a property `PERSISTENT' that causes
+ a machine to announce statue or property changes on a persitence channel
+ whenever a change occurs.
+ This is to be upgraded to become a feature of the language and the following
+ clauses will be added:
+\end_layout
+
+\begin_layout Description
+PERSISTENT means that the machine is persistent and all properties within
+ the machine are saved in the persistent store if enabled at runtime.
+ For backward compatibility the PERSISTENT property is still supported for
+ this purpose.
+\end_layout
+
+\begin_layout Description
+VOLATILE means that the given property is not included in the persistent
+ properties of a machine so these values are not written to the persistence
+ store
+\end_layout
+
+\begin_layout Description
+PRIVATE means that the named option is not visible outside of the machine
+ (even to sub-machines) and it is not published on any channel unless the
+ channel includes a specific option to include private objects (persistence,
+ samplers and debuggers may include private properties for example)
 \end_layout
 
 \begin_layout Subsection
