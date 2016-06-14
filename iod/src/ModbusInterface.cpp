@@ -157,13 +157,22 @@ void ModbusAddress::update(MachineInstance *owner, const std::string &str) {
 // find the Modbus address that has a mapped entry for the given group and address
 ModbusAddress ModbusAddress::lookup(int group, int address) {
 	std::map<int, ModbusAddress>::iterator search;
-	std::map<int, ModbusAddress> &space = automatic_mappings;
-	if (address < first_auto_address) space = user_mappings;
-
+	std::map<int, ModbusAddress> *space = &automatic_mappings;
 	int index = ( group << 16) + address;
-	search = space.find(index);
+
+
+	DBG_MODBUS << "looking up modbus " << group << ":" << address << ". Auto size: " << automatic_mappings.size() << " local mappings " << user_mappings.size() << "\n";
+	search = space->find(index);
+
+	if (search == space->end()) {
+		space = &user_mappings;
+		search = space->find(index);
+	}
+
+	//if (address < first_auto_address) space = user_mappings;
+
 	// not found? return a null result
-	if (search == space.end()) 	return ModbusAddress(); 
+	if (search == space->end()) 	return ModbusAddress();
 	return (*search).second;
 }
 
