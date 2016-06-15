@@ -64,6 +64,9 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
 
 void initialise_machine_names(char *data);
 
+char *history_file = 0; /* the full path of the command history file */
+const char *history_name = ".iosh_history";
+
 /* A static variable for holding the line. */
 static char *line_read = (char *)NULL;
 static char *last_read = (char *)NULL;
@@ -93,6 +96,8 @@ rl_gets (const char *prompt)
         }
         if (!last_read) {
             add_history (line_read);
+std::cout << "adding to history\n";
+			if (write_history(history_name) != 0) perror("writing history");
             last_read = strdup(line_read);
         }
     }
@@ -108,6 +113,10 @@ char *send_command(std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
+	if (cmd != "" && cmd != ";") {
+		cmd += ";";
+		write_history(history_file);
+	}
 	sendMessage(*psocket, msg);
 	size_t size = strlen(msg);
     free(msg);
@@ -286,6 +295,13 @@ int main(int argc, const char * argv[])
 	char *pn = strdup(argv[0]);
 	program_name = strdup(basename(pn));
 	free(pn);
+
+	const char *home_dir = getenv("HOME");
+	size_t len = strlen(home_dir)+strlen(history_name)+2;
+	history_file = new char[len];
+	snprintf(history_file, len, "%s/%s",home_dir, history_name);
+	if (read_history(history_file) != 0) 
+		printf("Error reading history from %s: %s\n",history_name, strerror(errno));
 
     context = new zmq::context_t;
     
