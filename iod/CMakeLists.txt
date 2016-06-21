@@ -148,7 +148,7 @@ set (Clockwork_Headers
 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
-	src/HandleRequestAction.h
+	src/HandleRequestAction.h src/SDOEntry.h
 )
 set (Clockwork_SRCS 
 	${Clockwork_Headers}
