@@ -1469,6 +1469,43 @@ The EtherCAT extension
 This extension provides an object of type EtherCAT_Entry when instantiated,
  this machine registers a pdo entry with ethercat, using the details provided.
  The extension also adds an SDO object for performing SDO functions.
+ Note that currently this is hard-coded into the interpreter.
+ 
+\end_layout
+
+\begin_layout Subsubsection*
+Using SDO within Clockwork
+\end_layout
+
+\begin_layout Standard
+To add an SDO entry, add an instance of a machine with class SDOENTRY in
+ the clockwork configuration.
+ The parameters of an SDOENTRY are:
+\end_layout
+
+\begin_layout Description
+module the clockwork name for the EtherCAT module that the entry is in
+\end_layout
+
+\begin_layout Description
+index the index value of the entry
+\end_layout
+
+\begin_layout Description
+subindex the subindex value of the entry
+\end_layout
+
+\begin_layout Description
+size the size (in bytes) of the entry (TBD fix this and implement support
+ for single bit SDO entries)
+\end_layout
+
+\begin_layout Standard
+The object has a VALUE property that can be set and read within the code
+ and an IOTIME that indicates the last time the entry was read from the
+ io hardware.
+ A `defautl' property can also be set to indicate that this entry is to
+ be initialised before the control logic is given access to the hardware.
 \end_layout
 
 \begin_layout Subsection
