@@ -69,6 +69,8 @@
 extern boost::mutex thread_protection_mutex;
 
 std::list<MachineInstance *>output_points;
+extern std::list<std::string>error_messages;
+extern int num_errors;
 
 void initialiseOutputs() {
 	std::list<MachineInstance *>default_outputs;
@@ -210,6 +212,8 @@ void generateIOComponentModules()
 							entry_position, module_position, name.c_str());
 					MessageLog::instance()->add(error_buf);
 					std::cerr << error_buf << "\n";
+					error_messages.push_back(error_buf);
+					++num_errors;
 					continue; // could not find this device
 				}
 				EntryDetails *ed = &module->entry_details[entry_position];

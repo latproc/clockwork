@@ -1711,7 +1711,12 @@ SYMBOL MODULE parameters ';'
 	// the following will be added to a list of new entitites and the module will be resolved later
 	std::vector<Parameter> params;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
-	SDOEntry *entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	SDOEntry *entry;
+	if (params.size() == 4)
+		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	else if (params.size() == 5)
+		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue,
+			params[4].val.iValue);
 	entry->setModuleName(params[0].val.sValue);
 
     MachineInstance *m = addMachine($1, "SDOENTRY");

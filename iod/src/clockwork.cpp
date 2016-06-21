@@ -399,6 +399,7 @@ void predefine_special_machines() {
 	mc_sdo->parameters.push_back(Parameter("INDEX"));
 	mc_sdo->parameters.push_back(Parameter("SUBINDEX"));
 	mc_sdo->parameters.push_back(Parameter("SIZE"));
+	mc_sdo->parameters.push_back(Parameter("OFFSET"));
 	mc_sdo->options["VALUE"] = 0;
 
 	MachineClass *mc_external = new MachineClass("EXTERNAL");
@@ -547,6 +548,9 @@ void semantic_analysis() {
                 || (mi->getStateMachine()->name == "COUNTERRATE"
                     && (mi->getStateMachine()->parameters.size() == 3
                     || mi->getStateMachine()->parameters.size() == 1 ) )
+				|| (mi->getStateMachine()->name == "SDOENTRY"
+					&& (mi->getStateMachine()->parameters.size() == 4
+					||  mi->getStateMachine()->parameters.size() == 5) )
             ) {
                 
             }

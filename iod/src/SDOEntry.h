@@ -35,12 +35,13 @@ class SDOEntry {
 	public:
 	enum Operation { READ, WRITE };
 	
-	SDOEntry( std::string name, ec_sdo_request_t *);
-	SDOEntry( std::string nam, uint16_t index, uint8_t subindex, const uint8_t *data, size_t size)
+//	SDOEntry( std::string name, ec_sdo_request_t *);
+	SDOEntry( std::string nam, uint16_t index, uint8_t subindex, const uint8_t *data, size_t size, uint8_t offset=0)
 #ifndef EC_SIMULATOR
 	; // implemented in ECInterface.cpp
 #else
-	: name(nam), module_(0), index_(0), subindex_(0), data_(0), size_(0), realtime_request(0), sync_done(false), error_count(0) { }
+	: name(nam), module_(0), index_(0), subindex_(0), offset_(0), 
+		data_(0), size_(0), realtime_request(0), sync_done(false), error_count(0) { }
 #endif
 	~SDOEntry();
 
@@ -61,7 +62,9 @@ class SDOEntry {
 	size_t getSize() { return size_; }
 	uint16_t getIndex() { return index_; }
 	uint8_t getSubindex() { return subindex_; }
+	uint8_t getOffset() { return offset_; }
 
+	void setData(bool val);
 	void setData(uint8_t val);
 	void setData(int8_t val);
 	void setData(uint16_t val);
@@ -89,6 +92,7 @@ class SDOEntry {
 	ECModule *module_;
 	uint16_t  	index_;
 	uint8_t  	subindex_;
+	uint8_t		offset_;
 	uint8_t 	*data_;
 	size_t  	size_;
 	ec_sdo_request_t	*realtime_request;

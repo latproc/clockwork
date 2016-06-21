@@ -111,10 +111,10 @@ bool ECModule::operational() {
 	return slave_config_state.operational;
 }
 
-SDOEntry::SDOEntry( std::string nam, uint16_t index, uint8_t subindex, const uint8_t *data, size_t size)
-		: name(nam), module_(0), index_(index), subindex_(subindex), data_(0), size_(size), 
-			realtime_request(0), sync_done(false), error_count(0) {
-	if (data) {
+SDOEntry::SDOEntry( std::string nam, uint16_t index, uint8_t subindex, const uint8_t *data, size_t size, uint8_t offset)
+		: name(nam), module_(0), index_(index), subindex_(subindex), offset_(offset), data_(0), size_(size), 
+			realtime_request(0), sync_done(false), error_count(0), op(READ), machine_instance(0) {
+	if (data && size != 0) {
 		data_ = new uint8_t[size];
 		assert(data_);
 		memcpy(data_, data, size);
@@ -122,17 +122,24 @@ SDOEntry::SDOEntry( std::string nam, uint16_t index, uint8_t subindex, const uin
 	new_sdo_entries.push_back(this);
 }
 
+#if 0
 SDOEntry::SDOEntry( std::string nam, ec_sdo_request_t *sdo_req) 
-	: name(nam), module_(0), index_(0), subindex_(0), data_(0), size_(0), 
+	: name(nam), module_(0), index_(0), subindex_(0), offset_(0), data_(0), size_(0), 
 			realtime_request(sdo_req), sync_done(false), error_count(0)
 {
 	new_sdo_entries.push_back(this);
 }
+#endif
 
 
 SDOEntry::~SDOEntry() { if (data_) { delete[] data_; data_=0; }}
 
 ec_sdo_request_t *SDOEntry::getRequest() { return realtime_request; }
+
+void SDOEntry::setData(bool val) {
+	uint8_t *data = ecrt_sdo_request_data(realtime_request);
+	EC_WRITE_BIT(data, offset_, ((val) ? 1 : 0));
+}
 
 void SDOEntry::setData(uint8_t val) {
    EC_WRITE_U8(ecrt_sdo_request_data(realtime_request), val);
@@ -287,13 +294,19 @@ ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module ) {
 								 module->vendor_id, module->product_code);
 	ec_slave_config_state_t s;
 	ecrt_slave_config_state(x, &s);
+	// the request field size must be big enough to hold the offset
+	// the EtherLab interface only provides a byte-sized interface to SDO so we convert
+	// our bit-sized fields before creating the sdo request
+	size_t sz = ((size_ + offset_ -1) / 8) + 1;
 
-	std::cerr << "Creating SDO request " << module->getName() << " 0x" << std::hex << index_ << std::dec << "\n";
-	realtime_request = ecrt_slave_config_create_sdo_request(x, index_, subindex_, size_);
+	std::cerr << "Creating SDO request " << module->getName() << " 0x" << std::hex << index_ 
+		<<":" << subindex_ << " (" << sz << ")" << std::dec << "\n";
+	realtime_request = ecrt_slave_config_create_sdo_request(x, index_, subindex_, sz);
 	prepared_sdo_entries.push_back(this);
 	return realtime_request;
 }
 
+#if 0
 SDOEntry *ECInterface::createSDORequest(std::string name, ECModule *module, uint16_t index, uint8_t subindex, size_t size) {
 	assert(module);
 	assert(ECInterface::instance()->active == false);
@@ -302,13 +315,15 @@ SDOEntry *ECInterface::createSDORequest(std::string name, ECModule *module, uint
 	ec_slave_config_state_t s;
 	ecrt_slave_config_state(x, &s);
 
-	ec_sdo_request_t *sdo = ecrt_slave_config_create_sdo_request(x, index, subindex, size);
+	ec_sdo_request_t *sdo = ecrt_slave_config_create_sdo_request(x, index, subindex, size / 8);
 	SDOEntry *entry = new SDOEntry(name, sdo);
 	entry->setModuleName("unknown"); // we don't have the clockwork name for this object yet
 	entry->setModule(module);
 	prepared_sdo_entries.push_back(entry);
 	return entry;
 }
+#endif
+
 void ECInterface::queueInitialisationRequest(SDOEntry *entry, Value val) {
 	initialisation_entries.push_back( std::make_pair(entry, val) );
 }
@@ -323,45 +338,56 @@ void ECInterface::beginModulePreparation() {
 	sdo_entry_state = e_None;
 }
 
-void readValue(ec_sdo_request_t *sdo, unsigned int size) {
-	if (size == 4) {
-		fprintf(stderr, "SDO value: 0x%04X\n",
+void readValue(ec_sdo_request_t *sdo, unsigned int size, int offset = 0) {
+	if (size == 32) {
+		fprintf(stderr, "SDO value: 0x%08X\n",
 			EC_READ_U32(ecrt_sdo_request_data(sdo)));
 	}
-	else if (size == 2) {
-		fprintf(stderr, "SDO value: 0x%08X\n",
+	else if (size == 16) {
+		fprintf(stderr, "SDO value: 0x%04X\n",
 			EC_READ_U16(ecrt_sdo_request_data(sdo)));
 	}
-	else if (size == 1) {
+	else if (size == 8) {
 		fprintf(stderr, "SDO value: 0x%02X\n",
 			EC_READ_U8(ecrt_sdo_request_data(sdo)));
+	}
+	else if (size == 1) {
+		fprintf(stderr, "SDO value: 0x%01X\n",
+			EC_READ_BIT(ecrt_sdo_request_data(sdo), offset));
 	}
 }
 
 void SDOEntry::syncValue() {
-	if (size_ == 4) {
+	if (size_ == 32) {
 		if (machine_instance)
 			machine_instance->setValue("VALUE", EC_READ_U32(ecrt_sdo_request_data(realtime_request)));
 	}
-	else if (size_ == 2) {
+	else if (size_ == 16) {
 		if (machine_instance)
 			machine_instance->setValue("VALUE", EC_READ_U16(ecrt_sdo_request_data(realtime_request)));
 	}
-	else if (size_ == 1) {
+	else if (size_ == 8) {
 		if (machine_instance)
 			machine_instance->setValue("VALUE", EC_READ_U8(ecrt_sdo_request_data(realtime_request)));
+	}
+	else if (size_ == 1) {
+		if (machine_instance)
+			machine_instance->setValue("VALUE", EC_READ_BIT(ecrt_sdo_request_data(realtime_request),offset_));
 	}
 }
 
 Value SDOEntry::readValue() {
-	if (size_ == 4) {
+	if (size_ == 32) {
 		return EC_READ_U32(ecrt_sdo_request_data(realtime_request));
 	}
-	else if (size_ == 2) {
+	else if (size_ == 16) {
 		return EC_READ_U16(ecrt_sdo_request_data(realtime_request));
 	}
-	else if (size_ == 1) {
+	else if (size_ == 8) {
 		return EC_READ_U8(ecrt_sdo_request_data(realtime_request));
+	}
+	else if (size_ == 1) {
+		return EC_READ_BIT(ecrt_sdo_request_data(realtime_request),offset_);
 	}
 	return SymbolTable::Null;
 }
@@ -399,7 +425,7 @@ void ECInterface::checkSDOUpdates()  {
 					break;
 				case SDOEntry::WRITE:
 					std::cerr << "SDO entry updates- trigger write\n";
-					readValue(sdo, entry->getSize());
+					readValue(sdo, entry->getSize(), entry->getOffset());
 					ecrt_sdo_request_write(sdo); // trigger first read
 					sdo_entry_state = e_Busy_Update;
 					break;
@@ -543,10 +569,10 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 #if 0
 		if (module->name.substr(0,6) == "EL2535") {
 			std::cerr << "queueing a request to change EL2535 MaxCurrent\n";
-			SDOEntry *entry = createSDORequest("EL2535 PortA MaxCurrent", module, 0x8000, 0x10, 1);
+			SDOEntry *entry = createSDORequest("EL2535 PortA MaxCurrent", module, 0x8000, 0x10, 8);
 			entry->setData( (uint8_t)50);
 			ECInterface::instance()->queueInitialisationRequest(entry);
-			entry = createSDORequest("EL2535 PortB MaxCurrent", module, 0x8010, 0x10, 1);
+			entry = createSDORequest("EL2535 PortB MaxCurrent", module, 0x8010, 0x10, 8);
 			entry->setData( (uint8_t)50);
 			ECInterface::instance()->queueInitialisationRequest(entry);
 		}
