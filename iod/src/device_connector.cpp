@@ -954,20 +954,20 @@ public:
 		if (options.watchProperty()) {
 			SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
 			assert(sm);
-			items[idx].socket = sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+			items[idx].socket = (void*)sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 			subs_index = idx;
 			items[idx].fd = 0;
-			items[idx].socket = sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+			items[idx].socket = (void*)sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		}
 		else {
 			CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
 			assert(cm);
-			items[idx].socket = *cm->setup;
+			items[idx].socket = (void*)*cm->setup;
 			items[idx].fd = 0;
 			items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		}
 		items[idx].fd = 0;
-		items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+		items[idx].socket = (void*)cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		num_items = idx;
 
 

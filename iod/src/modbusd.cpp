@@ -989,9 +989,9 @@ int main(int argc, const char * argv[])
 
 			zmq::pollitem_t items[] =
 			{
-				{ subscription_manager.setup(), 0, ZMQ_POLLIN, 0 },
-				{ subscription_manager.subscriber(), 0, ZMQ_POLLIN, 0 },
-				{ iosh_cmd, 0, ZMQ_POLLIN, 0 }
+				{ (void*)subscription_manager.setup(), 0, ZMQ_POLLIN, 0 },
+				{ (void*)subscription_manager.subscriber(), 0, ZMQ_POLLIN, 0 },
+				{ (void*)iosh_cmd, 0, ZMQ_POLLIN, 0 }
 			};
 			try {
 				if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {

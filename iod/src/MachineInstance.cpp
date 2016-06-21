@@ -49,6 +49,10 @@
 #include "Channel.h"
 #include <boost/thread/mutex.hpp>
 #include "WaitAction.h"
+#ifndef EC_SIMULATOR
+#include "SDOEntry.h"
+#include "ECInterface.h"
+#endif
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -4246,6 +4250,19 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		if (changed ){
 			setNeedsCheck();
 			properties.add(property, new_value, SymbolTable::ST_REPLACE);
+#ifndef EC_SIMULATOR
+			if ( property_val.token_id == ClockworkToken::tokVALUE && _type == "SDOENTRY") {
+				SDOEntry *entry = SDOEntry::find(_name);
+				if (entry) {
+					Value io_value = entry->readValue();
+					if (entry->ready()  && io_value != new_value) {
+							DBG_MSG << "updating " << _name << " io: " << io_value << " new: " << new_value << "\n";
+						ECInterface::instance()->queueInitialisationRequest(entry, new_value);
+					}
+				}
+			}
+			else 
+#endif
 			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
 				char buf[100];
 				errno = 0;

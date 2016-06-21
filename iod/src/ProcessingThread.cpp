@@ -560,7 +560,6 @@ void ProcessingThread::operator()()
 		{
 			if (!machine_is_ready)
 			{
-				std::cout << "----------- Machine is Ready --------\n";
 				machine_is_ready = true;
 				BOOST_FOREACH(std::string &error, error_messages)
 				{
@@ -568,6 +567,7 @@ void ProcessingThread::operator()()
 					MessageLog::instance()->add(error.c_str());
 				}
 				if (!have_started_clients) {
+					std::cout << "----------- Machine is Ready --------\n";
 					have_started_clients = true;
 					FileLogger fl(program_name); fl.f() << "Enabling client access\n";
 					safeSend(resource_mgr, "start", 5);
@@ -584,12 +584,12 @@ void ProcessingThread::operator()()
 
 		zmq::pollitem_t fixed_items[] =
 		{
-			{ ecat_sync, 0, ZMQ_POLLIN, 0 },
-			{ resource_mgr, 0, ZMQ_POLLIN, 0 },
-			{ dispatch_sync, 0, ZMQ_POLLIN, 0 },
-			{ sched_sync, 0, ZMQ_POLLIN, 0 },
-			{ ecat_out, 0, ZMQ_POLLIN, 0 },
-			{ command_sync, 0, ZMQ_POLLIN, 0 }
+			{ (void*)ecat_sync, 0, ZMQ_POLLIN, 0 },
+			{ (void*)resource_mgr, 0, ZMQ_POLLIN, 0 },
+			{ (void*)dispatch_sync, 0, ZMQ_POLLIN, 0 },
+			{ (void*)sched_sync, 0, ZMQ_POLLIN, 0 },
+			{ (void*)ecat_out, 0, ZMQ_POLLIN, 0 },
+			{ (void*)command_sync, 0, ZMQ_POLLIN, 0 }
 		};
 		zmq::pollitem_t items[15];
 		for (int i=0; i<6; ++i) {
@@ -617,7 +617,7 @@ void ProcessingThread::operator()()
 				int idx = 6;
 				while (csi_iter != internals->channel_sockets.end()) {
 					CommandSocketInfo *info = *csi_iter++;
-					items[idx].socket = *info->sock;
+					items[idx].socket = (void*)(*info->sock);
 					items[idx].fd = 0;
 					items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
 					items[idx].revents = 0;

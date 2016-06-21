@@ -403,6 +403,9 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "PERSISTENT") {
 		command = new IODCommandPersistentState;
 	}
+	else if (ds == "SDO") {
+		command = new IODCommandSDO;
+	}
 	else if (ds == "HELP") {
 		command = new IODCommandHelp;
 	}
@@ -492,9 +495,9 @@ void IODCommandThread::operator()() {
 		try {
 			wd->stop(); // disable the watchdog while we wait for something to do
 			zmq::pollitem_t items[] = {
-				{ cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } ,
-				{ access_req, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
-				{ command_sync, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
+				{ (void*)cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } ,
+				{ (void*)access_req, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+				{ (void*)command_sync, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
 			};
 			int rc;
 			try {
@@ -596,6 +599,6 @@ IODCommandThread::~IODCommandThread() {
 
 void IODCommandThread::stop() {
 	CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
-	if (cti->socket) cti->socket.close();
+	if ((void*)cti->socket != 0) cti->socket.close();
 }
 

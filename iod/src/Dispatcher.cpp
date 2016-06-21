@@ -131,11 +131,13 @@ void Dispatcher::deliver(Package *p)
     dispatch_socket->send(&p, sizeof(Package*));
 }
 
+/*
 void Dispatcher::deliverZ(Package *p)
 {
     DBG_DISPATCHER << "Dispatcher accepted package " << *p << "\n";
     to_deliver.push_back(p);
 }
+*/
 
 void Dispatcher::idle()
 {
@@ -186,8 +188,8 @@ void Dispatcher::idle()
 
     status = e_waiting;
     zmq::pollitem_t items[] = {  
-		{ *socket, 0, ZMQ_POLLIN, 0 }, 
-		{ command, 0, ZMQ_POLLIN, 0 },
+		{ (void*) *socket, 0, ZMQ_POLLIN, 0 }, 
+		{  (void*)command, 0, ZMQ_POLLIN, 0 }
 	};
     while (status != e_aborted)
     {
@@ -335,7 +337,7 @@ void Dispatcher::idle()
                     }
                     delete p;
                 }
-                zmq::pollitem_t skt_poll = { *socket, 0, ZMQ_POLLIN, 0 };
+                zmq::pollitem_t skt_poll = {(void*) *socket, 0, ZMQ_POLLIN, 0 };
                 items[0] = skt_poll;
                 zmq::poll( &items[0], 1, 0); // check for more incoming messages
             }

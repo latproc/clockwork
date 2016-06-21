@@ -152,26 +152,43 @@ void sync(zmq::socket_t &clock_sync) {
 #else
 #ifdef USE_RTC
 void sync(int rtc) {
-	unsigned long freq = ECInterface::FREQUENCY;
-	long rtc_val;
-	int rc = read(rtc, &rtc_val, sizeof(rtc_val));
-	if (rc == -1) { 
-		if (errno == EBADF) {
-			rtc = open("/dev/rtc", 0);
-			if (rtc == -1) { perror("open rtc"); exit(1); }
-		}
-		perror("read rtc"); exit(1); 
+
+	{
+		unsigned long val = 0; 
+		int nread = read(rtc, &val, sizeof(val));
+		if (nread<0) { perror("rtc-read"); exit(1); }
 	}
-	if (rc == 0) { DBG_ETHERCAT << "zero bytes read from rtc\n"; }
-	else if (rc == sizeof(rtc_val))
-		freq = (unsigned long)rtc_val;
-	if (freq != ECInterface::FREQUENCY) {
-		unsigned long saved_freq = freq;
-		freq = ECInterface::FREQUENCY;
-		rc = ioctl(rtc, RTC_IRQP_SET, freq);
+
+	// every 1000 times through here check and resync with the system cycle time
+	static int count = 0;
+	if (++count >= 1000) {
+		count = 0;
+		unsigned long freq = ECInterface::FREQUENCY;
+		unsigned long rtc_val;
+		int rc = ioctl(rtc, RTC_IRQP_READ, &rtc_val);
 		if (rc == -1) { 
-			perror("set rtc freq"); 
-			freq = saved_freq; // will retry
+			if (errno == EBADF) {
+				rtc = open("/dev/rtc", 0);
+				if (rtc == -1) { perror("open rtc"); exit(1); }
+			}
+			perror("read rtc"); exit(1); 
+		}
+		else 
+			freq = rtc_val;
+		if ( freq != ECInterface::FREQUENCY ) {
+			std::cout << "-------------------- adjusting frequency: " 
+				<< freq << "->" << ECInterface::FREQUENCY << "\n";
+			unsigned long saved_freq = freq;
+			freq = ECInterface::FREQUENCY;
+			rc = ioctl(rtc, RTC_IRQP_SET, freq);
+			if (rc == -1) { 
+				perror("set rtc freq"); 
+				freq = saved_freq; // will retry
+			}
+			else {
+				rc = ioctl(rtc, RTC_IRQP_READ, &rtc_val);
+				if (rc != -1) std::cout << "frequency is now " << rtc_val << "\n";
+			}
 		}
 	}
 }

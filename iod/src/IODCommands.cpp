@@ -37,6 +37,7 @@
 #include "Scheduler.h"
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
+#include "SDOEntry.h"
 #endif
 
 extern Statistics *statistics;
@@ -1362,8 +1363,8 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
             ss<< params[i] << " ";
         }
         ss << params[params.size()-1];
-        char *msg = strdup(ss.str().c_str());
         
+        char *msg = strdup(ss.str().c_str());
         if (message_handlers.count(msg)) {
             const std::string &name = message_handlers[ss.str()];
             MachineInstance *m = MachineInstance::find(name.c_str());
@@ -1374,6 +1375,8 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
             }
         }
         ss << ": Unknown command: ";
+		free(msg);
+        msg = strdup(ss.str().c_str());
         error_str = msg;
         free(msg);
         return false;
@@ -1387,6 +1390,7 @@ bool IODCommandFreeze::run(std::vector<Value> &params) {
 	while (now-start < 10000000) {
 		usleep(100000);
 	}
+	result_str = "OK";
 	return true;
 }
 
@@ -1396,9 +1400,64 @@ bool IODCommandShutdown::run(std::vector<Value> &params) {
 	uint64_t start = microsecs();
 	uint64_t now = start;
 	program_done = true;
+	result_str = "OK";
 	return true;
 }
 
+bool IODCommandSDO::run(std::vector<Value> &params) {
+#ifndef EC_SIMULATOR
+#if 0
+	if (params.size() == 2 ) {
+		Value entry_name = params[1];
+		SDOEntry *entry = SDOEntry::find(entry_name.sValue);
+		entry->setOperation(SDOEntry::READ);
+		ECInterface::instance()->queueInitialisationRequest(entry);
+		result_str = "OK";
+		return true;
+	}
+	else 
+#endif
+	if (params.size() == 3 ) {
+		Value entry_name = params[1];
+		Value new_value = params[2];
+		SDOEntry *entry = SDOEntry::find(entry_name.sValue);
+		long value;
+		if (entry && new_value.asInteger(value)) {
+#if 0
+			size_t len = entry->getSize();
+			if (len == 1) {
+				entry->setData( (uint8_t)(value & 0xff) );
+			}
+			else if (len == 2)
+				entry->setData( (uint16_t)(value & 0xffff) );
+			else if (len == 4)
+				entry->setData( (uint32_t)(value & 0xffffffff) );
+			else {
+				error_str = strdup("Unsupported size");
+				return false;
+			}
+			entry->setOperation(SDOEntry::WRITE);
+#endif
+			ECInterface::instance()->queueInitialisationRequest( entry, new_value );
+			result_str = "OK";
+			return true;
+		}
+		else {
+			std::stringstream ss;
+			ss << "No Entry named: " << entry_name.sValue;
+			error_str = strdup(ss.str().c_str());
+			return false;
+		}
+	}
+	else {
+		error_str = "usage: SDO entry new_value";
+		return false;
+	}
+#else
+	error_str = "Command disabled";
+	return false;
+#endif
+}
 
 /*
 void sendMessage(zmq::socket_t &socket, const char *message) {

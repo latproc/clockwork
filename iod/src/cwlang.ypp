@@ -41,6 +41,7 @@
 #include "MessageLog.h"
 #include "Channel.h"
 #include "AbortAction.h"
+#include "SDOEntry.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -143,7 +144,7 @@ struct Subcondition {
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
-%token LINKED
+%token LINKED SDO
 
 %union {
 	int iVal;
@@ -158,6 +159,7 @@ struct Subcondition {
 };
 
 %token <iVal> INTEGER
+%token <iVal> ADDRESS
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
 %token <pVal> PATTERN
@@ -459,6 +461,9 @@ SYMBOL {
 
 basic_value:
 INTEGER   {
+    $$ = new Value($1);
+}
+| ADDRESS	{
     $$ = new Value($1);
 }
 | STRINGVAL {
@@ -1700,9 +1705,49 @@ SYMBOL MODULE parameters ';'
     m->setDefinitionLocation(yyfilename, yylineno);
     properties.clear();
 }
+| SYMBOL SDO property_block parameters ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+	// the following will be added to a list of new entitites and the module will be resolved later
+	std::vector<Parameter> params;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
+	SDOEntry *entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	entry->setModuleName(params[0].val.sValue);
+
+    MachineInstance *m = addMachine($1, "SDOENTRY");
+    properties = property_stack.back();
+    property_stack.pop_back();
+	m->setProperties(properties);
+	std::cout << "Properties: " << properties << "\n";
+    properties.clear();
+	std::cout << "Entry default: " << m->properties.lookup("default") << "\n";
+
+
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+
+	entry->setMachineInstance(m);
+}
+| SYMBOL SDO parameters ';'
+{
+    DBG_MSG << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+	// the following will be added to a list of new entitites and the module will be resolved later
+	std::vector<Parameter> params;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
+	SDOEntry *entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	entry->setModuleName(params[0].val.sValue);
+
+    MachineInstance *m = addMachine($1, "SDOENTRY");
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+
+	entry->setMachineInstance(m);
+}
 | SYMBOL FLAG ';'
 {
-    DBG_PARSER << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
+    DBG_MSG << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
     MachineInstance *m = addMachine($1, "FLAG");
     m->properties = properties;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));

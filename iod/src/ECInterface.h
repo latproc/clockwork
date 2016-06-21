@@ -27,6 +27,8 @@
 #include "IODCommand.h"
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
+#include <map>
+#include "value.h"
 
 /* the entry details structure is used to gather extra data about
   an entry in a module that the Etherlab master structures doesn't
@@ -40,41 +42,7 @@ public:
 	unsigned int pdo_index;
 };
 
-class ECModule;
-class SDOEntry {
-	ECModule *module_;
-	uint16_t  	index_;
-	uint8_t  	subindex_;
-	uint8_t 	*data_;
-	size_t  	size_;
-	ec_sdo_request_t	*realtime_request;
-	bool done;
-	
-	public:
-	
-	SDOEntry( ec_sdo_request_t *);
-	SDOEntry( uint16_t index, uint8_t subindex, const uint8_t *data, size_t size);
-	~SDOEntry();
-
-	ECModule *getModule();
-	ec_sdo_request_t *getRequest();
-  bool completed() { return done; }
-	size_t getSize() { return size_; }
-	uint16_t getIndex() { return index_; }
-	uint8_t getSubindex() { return subindex_; }
-
-	void setData(uint8_t val);
-	void setData(int8_t val);
-	void setData(uint16_t val);
-	void setData(int16_t val);
-	void setData(uint32_t val);
-	void setData(int32_t val);
-
-	private:
-	SDOEntry( const SDOEntry &);
-	SDOEntry &operator=(const SDOEntry &);
-};
-
+class SDOEntry;
 class ECModule {
 public:
 	ECModule();
@@ -84,6 +52,7 @@ public:
 	bool online();
 	bool operational();
 	std::ostream &operator <<(std::ostream &)const;
+	const std::string &getName() const { return name; }
 public:
 	ec_slave_config_t *slave_config;
 	ec_slave_config_state_t slave_config_state;
@@ -180,12 +149,13 @@ public:
 	
   void beginModulePreparation(); // load the first SDO initialisation entry
   bool finishedModulePreparation(); // are all the SDO init entries completed
-	void checkSDO();
+	bool checkSDOInitialisation();
+	void checkSDOUpdates();
 
 	void addSDOEntry(SDOEntry *);
-	SDOEntry *prepareSDORequest(ECModule *module, uint16_t index, uint8_t subindex, size_t size);
+	static SDOEntry *createSDORequest(std::string name, ECModule *module, uint16_t index, uint8_t subindex, size_t size);
 
-	void queueInitialisationRequest(SDOEntry *entry);
+	void queueInitialisationRequest(SDOEntry *entry, Value val);
 	void queueRuntimeRequest(SDOEntry *entry);
 #endif
 private:
@@ -197,10 +167,12 @@ private:
 	uint8_t *update_mask;
 	uint32_t reference_time;
 #ifndef EC_SIMULATOR
-	std::list<SDOEntry*> initialisation_entries;
-	std::list<SDOEntry*>::iterator current_init_entry;
-	std::list<SDOEntry*> sdo_entries;
-	std::list<SDOEntry*>::iterator current_sdo_entry;
+	std::list< std::pair<SDOEntry*, Value> > initialisation_entries;
+	std::list< std::pair<SDOEntry*, Value> >::iterator current_init_entry;
+	std::list<SDOEntry*> sdo_update_entries;
+	std::list<SDOEntry*>::iterator current_update_entry;
+	enum SDOEntryState { e_None, e_Busy_Initialisation, e_Busy_Update };
+	SDOEntryState sdo_entry_state;
 #endif
 };
 

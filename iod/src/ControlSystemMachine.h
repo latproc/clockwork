@@ -58,7 +58,8 @@ public:
 
                 break;
             case s_disconnected:
-                if (!c_disconnected()) enter_unknown();
+				if (c_connected()) enter_connected();
+                else if (!c_disconnected()) enter_unknown();
         }
     }
 
@@ -74,7 +75,14 @@ protected:
 		std::cout << "Control System is connected\n "; }
     void enter_disconnected() {
         state = s_disconnected;
-        std::cout << "Control System is disconnected\n ";
+        std::cout << "Control System is disconnected\n "
+#ifndef EC_SIMULATOR
+			<< " wc_state: 0x" 
+			<< std::hex << (int)ECInterface::domain1_state.wc_state << std::dec
+#endif
+			<< " link up: "
+			<< ECInterface::master_state.link_up
+			<< "\n ";
     }
     void enter_slaves_online() {
         state = s_slaves_online;
@@ -86,7 +94,14 @@ protected:
     }
     void enter_unknown() {
         state=s_unknown;
-        std::cout << "\nControl System is in an unknown state\n ";
+        std::cout << "\nControl System is in an unknown state. " 
+#ifndef EC_SIMULATOR
+			<< " wc_state: 0x" 
+			<< std::hex << (int)ECInterface::domain1_state.wc_state << std::dec
+#endif
+			<< " link up: "
+			<< ECInterface::master_state.link_up
+			<< "\n ";
     }
 
 };

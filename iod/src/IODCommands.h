@@ -185,6 +185,9 @@ struct IODCommandShutdown : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandSDO : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
 
 
 #endif

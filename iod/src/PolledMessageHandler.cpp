@@ -57,7 +57,7 @@ zmq::pollitem_t * PolledMessageHandler::getZMQPollItems(zmq::pollitem_t *items) 
     int idx = 0;
     while (iter != handlers.end()) {
         PolledMessageHandler* pmh = *iter++;
-        if (pmh->enabled) res[idx++].socket = pmh->sock;
+        if (pmh->enabled) res[idx++].socket = (void*)pmh->sock;
     }
     if (poll_items) delete poll_items;
     poll_items = res;

@@ -189,7 +189,7 @@ ${ETHERCAT_DIR}/tool/CommandEoe.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
-${ETHERCAT_DIR}/tool/CommandIp.cpp
+#${ETHERCAT_DIR}/tool/CommandIp.cpp
 ${ETHERCAT_DIR}/tool/CommandMaster.cpp
 ${ETHERCAT_DIR}/tool/CommandPdos.cpp
 ${ETHERCAT_DIR}/tool/CommandRegRead.cpp

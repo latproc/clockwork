@@ -39,6 +39,7 @@
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
 #include <tool/MasterDevice.h>
+#include "SDOEntry.h"
 #endif
 
 #define __MAIN__
@@ -314,6 +315,10 @@ std::string thread_name("iod_main");
 	}
 #endif
 	generateIOComponentModules();
+#ifndef EC_SIMULATOR
+	// prepare all SDO entries
+	SDOEntry::resolveSDOModules(); 
+#endif
 	IOComponent::setupIOMap();
 	initialiseOutputs();
 

@@ -942,13 +942,13 @@ usleep(50);
 				items = new zmq::pollitem_t[2];
 				int idx = 0;
 				if (isClient()) {
-					items[idx].socket = communications_manager->setup();
+					items[idx].socket = (void*)communications_manager->setup();
 					items[idx].events = ZMQ_POLLIN;
 					items[idx].revents = 0;
 					items[idx].fd = 0;
 					++idx;
 				}
-				items[idx].socket = remote_sock;
+				items[idx].socket = (void*)remote_sock;
 				items[idx].events = ZMQ_POLLIN;
 				items[idx].fd = 0;
 				items[idx].revents = 0;

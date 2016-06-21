@@ -240,7 +240,7 @@ bool SubscriptionManager::requestChannel() {
 					{
 						FileLogger fl(program_name);
 						fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
-					zmq::message_t m; setup().recv(&m); 
+					zmq::message_t m; setup().recv(&m, ZMQ_DONTWAIT); 
 					return false;
 				}
 			}
@@ -559,7 +559,7 @@ void MessageRouter::poll() {
 	int *destinations = internals->destinations;
 
 
-	items[0].socket = *internals->remote;
+	items[0].socket = (void*)(*internals->remote);
 	items[0].fd = 0;
 	items[0].events = ZMQ_POLLIN;
 	items[0].revents = 0;
@@ -568,7 +568,7 @@ void MessageRouter::poll() {
 	std::map<int, RouteInfo *>::iterator iter = internals->routes.begin();
 	while ( iter != internals->routes.end()) {
 		std::pair<int, RouteInfo*>item = *iter++;
-		items[idx].socket = *(item.second)->sock;
+		items[idx].socket = (void*)(*(item.second)->sock);
 		items[idx].fd = 0;
 		items[idx].events = ZMQ_POLLIN;
 		items[idx].revents = 0;

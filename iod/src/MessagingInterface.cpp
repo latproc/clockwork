@@ -137,7 +137,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			bool got_response = false;
@@ -206,7 +206,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			bool got_response = false;
@@ -280,7 +280,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 		timeout = 500;
 	while (!MessagingInterface::aborted()) {
 		try {
-			zmq::pollitem_t items[] = { { sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			if (items[0].revents & ZMQ_POLLIN) {
@@ -682,7 +682,7 @@ char *MessagingInterface::send(const char *txt) {
     if (!is_publisher) {
         while (true) {
             try {
-                zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+                zmq::pollitem_t items[] = { { (void*)*socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
                 int n = zmq::poll( &items[0], 1, 10);
 								if (n == 0) continue;
                 if (n == 1 && items[0].revents & ZMQ_POLLIN) {

@@ -48,6 +48,7 @@
 #include "MessageLog.h"
 #include "symboltable.h"
 #include "Channel.h"
+#include "SDOEntry.h"
 
 extern int yylineno;
 extern int yycharno;
@@ -223,8 +224,8 @@ void predefine_special_machines() {
 	settings_class->properties.add("INFO", "Clockwork host", SymbolTable::ST_REPLACE);
 	settings_class->properties.add("HOST", host_name, SymbolTable::ST_REPLACE);
 	settings_class->properties.add("VERSION", "0.8", SymbolTable::ST_REPLACE);
-	settings_class->properties.add("CYCLE_DELAY", 1000, SymbolTable::ST_REPLACE);
-	settings_class->properties.add("POLLING_DELAY", 1000, SymbolTable::ST_REPLACE);
+	settings_class->properties.add("CYCLE_DELAY", 2000, SymbolTable::ST_REPLACE);
+	settings_class->properties.add("POLLING_DELAY", 2000, SymbolTable::ST_REPLACE);
 
 	MachineClass *cw_class = new MachineClass("CLOCKWORK");
 	cw_class->states.push_back("ready");
@@ -389,6 +390,16 @@ void predefine_special_machines() {
 	mc_constant->disableAutomaticStateChanges();
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
 	mc_constant->options["VALUE"] = "VAL_PARAM1";
+
+	MachineClass *mc_sdo = new MachineClass("SDOENTRY");
+	mc_sdo->states.push_back("ready");
+	mc_sdo->initial_state = State("ready");
+	mc_sdo->disableAutomaticStateChanges();
+	mc_sdo->parameters.push_back(Parameter("MODULE"));
+	mc_sdo->parameters.push_back(Parameter("INDEX"));
+	mc_sdo->parameters.push_back(Parameter("SUBINDEX"));
+	mc_sdo->parameters.push_back(Parameter("SIZE"));
+	mc_sdo->options["VALUE"] = 0;
 
 	MachineClass *mc_external = new MachineClass("EXTERNAL");
 	mc_external->options["HOST"] = "localhost";

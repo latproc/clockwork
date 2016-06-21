@@ -242,8 +242,8 @@ int main(int argc, const char * argv[]) {
     
     while (!done) {
         zmq::pollitem_t items[] = {
-            { subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
-            { subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+            { (void*)subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+            { (void*)subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
         };
         if (!subscription_manager.checkConnections()) continue;
         try {

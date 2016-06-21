@@ -127,6 +127,7 @@ RECEIVES            return RECEIVES;
 REQUIRES            return REQUIRES;
 RETURN				return RETURN;
 RESUME              return RESUME;
+SDO					return SDO;
 SELECT              return SELECT;
 SEND                return SEND;
 SENDS               return SENDS;
@@ -159,6 +160,14 @@ WITHIN              return WITHIN;
 [A-Za-z][A-Za-z0-9_.]*       { 
     yylval.sVal = strdup(yytext);
     return SYMBOL;
+}
+
+"0x"[0-9][0-9]*	{
+	long val;
+	char *p;
+	val = strtol(yytext, &p, 16);
+    yylval.iVal = val;
+    return INTEGER;
 }
 
 0           {
