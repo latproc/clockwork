@@ -28,7 +28,7 @@ public:
 void Trigger::report(const char *msg) {
 	uint64_t now = nowMicrosecs();
 	if (now - _internals->last_report > 1000) {
-		NB_MSG << name << " " << msg << "\n";
+		DBG_ACTIONS << name << " " << msg << "\n";
 		_internals->last_report = now;
 	}
 }
@@ -110,13 +110,13 @@ Trigger::~Trigger() {
 	MachineInstance *mi = dynamic_cast<MachineInstance*>(owner);
 	Action *a = dynamic_cast<Action*>(owner);
 	if (mi) {
-		NB_MSG << *mi << " Removing trigger " << name << "\n";
+		DBG_ACTIONS << *mi << " Removing trigger " << name << "\n";
 	}
 	else if (a) {
-		NB_MSG << *a << " Removing trigger " << name << "\n";
+		DBG_ACTIONS << *a << " Removing trigger " << name << "\n";
 	}
 	else {
-		NB_MSG << " Removing trigger " << name << "\n";
+		DBG_ACTIONS<< " Removing trigger " << name << "\n";
 	}
 	removeTrigger(this);
 }
@@ -150,8 +150,8 @@ void Trigger::fire() { if (seen) return; seen = true; if (owner) owner->triggerF
 void Trigger::reset() { seen = false; }
 void Trigger::enable() { is_active = true; }
 void Trigger::disable() {
-	if (is_active) { NB_MSG << "Disabling trigger: " << name << "\n"; }
-	else  { NB_MSG << "Disabling inactive trigger: " << name << "\n"; }
+	if (is_active) { DBG_ACTIONS << "Disabling trigger: " << name << "\n"; }
+	else  { DBG_ACTIONS << "Disabling inactive trigger: " << name << "\n"; }
 	is_active = false;
 }
 const std::string& Trigger::getName() const { return name; }
@@ -176,11 +176,11 @@ void Action::setBlocker(Action *a) { blocked = a; }
 void Action::setTrigger(Trigger *t) { 
 	if (!trigger && !t) return;
 	if (trigger && trigger == t) {
-		NB_MSG << "Attempt to set trigger " << t->getName() << " when it is already set";
+		DBG_ACTIONS << "Attempt to set trigger " << t->getName() << " when it is already set";
 		return; 
 	}
 	if (trigger && t) {
-		NB_MSG << "Attempt to set trigger " 
+		DBG_ACTIONS << "Attempt to set trigger " 
 			<< t->getName() << " when another trigger " 
 			<< trigger->getName() << " is already set";
 		trigger->removeHolder(this);
@@ -221,7 +221,7 @@ std::ostream &operator<<(std::ostream &out, const Action::Status &state) {
 }
 
 Action::~Action(){
-	NB_MSG << owner->fullName() << " removing action " << *this << "\n";
+	DBG_ACTIONS << owner->fullName() << " removing action " << *this << "\n";
 	if (trigger) {
 		size_t len = trigger->getName().length();
 		if (len > 5 &&
