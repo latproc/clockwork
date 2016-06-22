@@ -300,7 +300,7 @@ ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module ) {
 	size_t sz = ((size_ + offset_ -1) / 8) + 1;
 
 	std::cerr << "Creating SDO request " << module->getName() << " 0x" << std::hex << index_ 
-		<<":" << subindex_ << " (" << sz << ")" << std::dec << "\n";
+		<<":" << subindex_ << std::dec << " (" << sz << ")" << "\n";
 	realtime_request = ecrt_slave_config_create_sdo_request(x, index_, subindex_, sz);
 	prepared_sdo_entries.push_back(this);
 	return realtime_request;
@@ -424,6 +424,7 @@ void ECInterface::checkSDOUpdates()  {
 					sdo_entry_state = e_Busy_Update;
 					break;
 				case SDOEntry::WRITE:
+					assert(false); // this should not be active
 					std::cerr << "SDO entry updates- trigger write\n";
 					readValue(sdo, entry->getSize(), entry->getOffset());
 					ecrt_sdo_request_write(sdo); // trigger first read
@@ -491,12 +492,14 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 		if (sdo_entry_state == e_None) {
 			entry->setOperation(SDOEntry::WRITE);
 			if (entry->getSize() == 1)
+				entry->setData( (bool)curr.second.iValue );
+			else if (entry->getSize() == 8)
 				entry->setData( (uint8_t)curr.second.iValue );
-			else if (entry->getSize() == 2)
+			else if (entry->getSize() == 16)
 				entry->setData( (uint16_t)curr.second.iValue );
-			else if (entry->getSize() == 4)
+			else if (entry->getSize() == 32)
 				entry->setData( (uint32_t)curr.second.iValue );
-			std::cerr << "SDO entry - trigger write\n";
+			std::cerr << "SDO entry - trigger write " << curr.second << "\n";
 			readValue(sdo, entry->getSize());
 			ecrt_sdo_request_write(sdo);
 			sdo_entry_state = e_Busy_Initialisation;
@@ -531,7 +534,10 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 					<< ":" << (int)entry->getSubindex() << std::dec << "\n";
 				entry->failure();
 	            //ecrt_sdo_request_write(sdo); // retry reading
-				current_init_entry++; // move on to the next item and retry soon
+				if (entry->getErrorCount() < 4) 
+					current_init_entry++; // move on to the next item and retry soon
+				else
+					current_init_entry = initialisation_entries.erase(current_init_entry);
 				sdo_entry_state = e_None;
 	            break;
 			default:

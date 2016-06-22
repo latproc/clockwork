@@ -29,6 +29,14 @@ void append_char(int ch);
     return SYMBOL;
 }
 
+"0x"[0-9a-fA-F][0-9a-fA-F]* {
+	long val;
+	char *p;
+	val = strtol(yytext, &p, 16);
+	yylval.iVal = val;
+	return INTEGER;
+}
+
 0           {
     yylval.iVal = atoi(yytext);
     return INTEGER;

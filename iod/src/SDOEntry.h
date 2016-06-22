@@ -63,6 +63,7 @@ class SDOEntry {
 	uint16_t getIndex() { return index_; }
 	uint8_t getSubindex() { return subindex_; }
 	uint8_t getOffset() { return offset_; }
+	unsigned int getErrorCount() { return error_count; }
 
 	void setData(bool val);
 	void setData(uint8_t val);
