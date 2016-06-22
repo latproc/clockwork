@@ -410,13 +410,16 @@ void ECInterface::checkSDOUpdates()  {
 		if (sdo_entry_state == e_None && entry->machineInstance() && !entry->machineInstance()->enabled()) {
 			//std::cerr << "Skipping disabled entry when checking SDO updates\n";
 			current_update_entry++; return; 
-		}
-			
-
+	}
 		ec_sdo_request_t *sdo = entry->getRequest();
 
 		//std::cerr << "checking SDO entry " << entry->getName() << " for updates\n";
 		if (sdo_entry_state == e_None) {
+			if (entry->operation() == SDOEntry::WRITE) {
+			assert( !initialisation_entries.empty() );
+			return; // let the initialisation process deal with this update
+		}
+
 			switch (entry->operation()) {
 				case SDOEntry::READ:
 					//std::cerr << "SDO entry updates - trigger read\n";
@@ -536,8 +539,10 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 	            //ecrt_sdo_request_write(sdo); // retry reading
 				if (entry->getErrorCount() < 4) 
 					current_init_entry++; // move on to the next item and retry soon
-				else
+				else {
 					current_init_entry = initialisation_entries.erase(current_init_entry);
+					entry->setOperation(SDOEntry::READ);
+				}
 				sdo_entry_state = e_None;
 	            break;
 			default:
