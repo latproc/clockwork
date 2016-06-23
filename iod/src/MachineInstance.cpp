@@ -1452,11 +1452,17 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 			if (mi->isActive() || mi->executingCommand()) mi->idle();
 			if (mi->state_machine && mi->state_machine->plugin)
 				mi->state_machine->plugin->poll_actions(mi);
-			if ((mi->state_machine && mi->state_machine->plugin)
-				|| !mi->has_work /*!mi->executingCommand()*/) {
-					busy_it = SharedWorkSet::instance()->erase(busy_it);
-				if (mi->is_active && !mi->executingCommand())
-					pending_state_change.insert(mi);
+			if ( (mi->state_machine && mi->state_machine->plugin)
+					|| (!mi->has_work && !mi->executingCommand() ) ) 
+			{
+					if (!mi->has_work && !mi->executingCommand())  {
+						busy_it = SharedWorkSet::instance()->erase(busy_it);
+						if (mi->is_active) {
+							pending_state_change.insert(mi);
+						}
+					}
+					else
+						busy_it++;
 			}
 			else busy_it++;
 		}
