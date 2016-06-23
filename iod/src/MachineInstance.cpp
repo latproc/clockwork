@@ -2397,6 +2397,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					}
 					// the CALL method waits for a response once the executed command is complete
 					// the response will be sent after the transition to the next state is done
+#if 0
 					if (response_required && from) {
 						DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
 						std::string response = _name + "." + t.trigger.getText() + "_done";
@@ -2404,6 +2405,17 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 						ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
 						this->push(ema);
 					}
+#else
+					if (response_required && from) {
+						MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
+						assert(from_mi);
+						DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
+						std::string response = _name + "." + t.trigger.getText() + "_done";
+						ExecuteMessageActionTemplate emat(strdup(response.c_str()), "SELF");
+						ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
+						from_mi->push(ema);
+					}
+#endif
 					if (!found) {
 						DBG_M_STATECHANGES << "no stable state condition test for " << t.dest.getName() << " pushing state change\n";
 						MoveStateActionTemplate msat("SELF", t.dest.getName());

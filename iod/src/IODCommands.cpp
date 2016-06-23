@@ -477,10 +477,10 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 
 bool IODCommandList::run(std::vector<Value> &params) {
 	std::ostringstream ss;
-	std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
-	while (iter != machines.end()) {
-		MachineInstance *m = (*iter).second;
-		ss << (m->getName()) << " " << m->_type;
+	std::list< MachineInstance*>::const_iterator iter = MachineInstance::begin();
+	while (iter != MachineInstance::end()) {
+		MachineInstance *m = *iter;
+		ss << (m->fullName()) << " " << m->_type;
 		if (m->_type == "POINT") ss << " " << m->properties.lookup("tab");
 		ss << "\n";
 		iter++;

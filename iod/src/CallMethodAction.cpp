@@ -79,18 +79,23 @@ Action::Status CallMethodAction::run() {
 			owner->stop(this);
 		return status;
 	}
-	else if (target_machine->enabled()) {
-		setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
-		owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
+	else if (target_machine->enabled())
+	{
+		if (!getTrigger() || getTrigger()->fired()) {
+			setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
+			owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
+			status = Action::Running;
+		}
+		else {
+			status = New;
+		}
 	}
 	else {
 		char buf[100];
 		snprintf(buf, 100, "Call to disabled machine: %s", target_machine->getName().c_str() );
 		MessageLog::instance()->add(buf);
 		status = Action::New;
-		return status;
 	}
-	status = Action::Running;
 	return status;
 }
 
@@ -102,12 +107,21 @@ Action::Status CallMethodAction::checkComplete() {
 	}
 	// If the action is complete it will have cleared the trigger by now. 
 	// the following test treats the Call as complete if there is no trigger
-	if ( !trigger ||  trigger->fired()) {
+	if (status == New) {
+		if (!trigger || trigger->fired()) {
+			setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
+			owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
+			status = Action::Running;
+		}
+		return status;
+	}
+	if (!trigger || trigger->fired()) {
 		status = Action::Complete;
 		owner->stop(this);
 		return status;
 	}
-	return Action::Running;
+	assert(status == Action::Running);
+	return status;
 }
 
 std::ostream &CallMethodAction::operator<<(std::ostream &out) const {
@@ -116,10 +130,10 @@ std::ostream &CallMethodAction::operator<<(std::ostream &out) const {
 		if ( !trigger->enabled() ) out << "(trigger disabled) ";
 		else {
 			if ( !trigger->fired() ) out <<  " Waiting for trigger to fire\n";
-			else out << "trigger fired\n";
+			else out << "trigger fired";
 		}
 	}
-	else out << "no trigger set\n";
+	else out << "no trigger set";
 	return out;
 }
 		

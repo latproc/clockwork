@@ -96,7 +96,7 @@ Trigger::Trigger(const Trigger &o) : _internals(0), name(o.name), seen(o.seen), 
 	_internals = new TriggerInternals;
 	addTrigger(this); 
 }
-
+/*
 Trigger &Trigger::operator=(const Trigger &o) { 
 		name = o.name;
 		seen = o.seen;
@@ -105,6 +105,7 @@ Trigger &Trigger::operator=(const Trigger &o) {
         // note: refs does not change
 		return *this;
 }
+*/
 
 Trigger::~Trigger() {
 	MachineInstance *mi = dynamic_cast<MachineInstance*>(owner);
@@ -158,7 +159,6 @@ const std::string& Trigger::getName() const { return name; }
 bool Trigger::matches(const std::string &event) {
 	return is_active && event == name;
 }
-//const std::string &Trigger::getName() { return name; }
 
 
 Action::Action(MachineInstance *m)

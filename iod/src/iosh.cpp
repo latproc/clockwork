@@ -148,7 +148,7 @@ extern FILE *yyin;
 bool cmdline_done = false;
 
 void usage(const char *name) {
-	std::cout << name << " [-h host] [-p port]\n";
+	std::cout << name << " [q] [-h host] [-p port]\n";
 }
 
 std::list<char *>machine_names;
