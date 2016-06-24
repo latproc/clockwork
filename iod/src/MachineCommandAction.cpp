@@ -184,33 +184,33 @@ Action::Status MachineCommand::run() {
     }
     
     // attempt to run commands until one `blocks' on a timer
-	Action::Status stat = runActions();
+		Action::Status stat = runActions();
     if (stat  == Failed) {
-        std::stringstream ss;
-		ss << owner->fullName() << ": " << command_name.get();
-		if (last_step < actions.size() && actions[last_step]->aborted())
-			ss << " " << *actions[last_step];
-		else
-			ss << " Failed to start an action: " << *this;
-        char *msg = strdup(ss.str().c_str());
-        MessageLog::instance()->add(msg);
-        NB_MSG << msg << "\n";
-        error_str = msg;
-		status = stat;
-		owner->stop(this);
-        return Failed;
+			std::stringstream ss;
+			ss << owner->fullName() << ": " << command_name.get();
+			if (last_step < actions.size() && actions[last_step]->aborted())
+				ss << " " << *actions[last_step];
+			else
+				ss << " Failed to start an action: " << *this;
+			char *msg = strdup(ss.str().c_str());
+			MessageLog::instance()->add(msg);
+			NB_MSG << msg << "\n";
+			error_str = msg;
+			status = stat;
+			owner->stop(this);
+      return Failed;
     }
-	else if (stat == Complete) {
-		Action *curr = owner->executingCommand();
-		if (curr && curr != this) {
-			return curr->getStatus();
-		}
+		else if (stat == Complete) {
+			Action *curr = owner->executingCommand();
+			if (curr && curr != this) {
+				return curr->getStatus();
+			}
 	    if (current_step == actions.size()) {
 			status = Complete;
 			owner->stop(this);
 			//DBG_M_ACTIONS << " finished starting " << command_name.get() << "\n";
 	    }
-	}
+		}
     return status;
 }
 

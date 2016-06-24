@@ -103,6 +103,8 @@ Action::Status HandleMessageAction::checkComplete() {
 }
 
 std::ostream &HandleMessageAction::operator<<(std::ostream &out)const {
-	return out << "HandleMessage with package " << *(package.message);
+	out << "HandleMessage with package " << *(package.message);
+	if (package.transmitter) out << " from " << package.transmitter->getName() << " to " << owner->getName();
+	return out;
 }
 

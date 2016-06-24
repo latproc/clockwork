@@ -31,7 +31,7 @@ Action *ExecuteMessageActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &ExecuteMessageActionTemplate::operator<<(std::ostream &out) const {
-    return out << "ExecuteMessageActionTemplate " << message.get() << " " << target.get() << "\n";
+    return out << "ExecuteMessageActionTemplate " << message.get() << " to " << target.get();
 }
 
 Action::Status ExecuteMessageAction::run() {

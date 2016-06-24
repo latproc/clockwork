@@ -1179,7 +1179,7 @@ void MachineInstance::describe(std::ostream &out) {
 
 	if (!mail_queue.empty()) {
 		boost::mutex::scoped_lock lock(q_mutex);
-		out << "queued messages: " << mail_queue.size() << "\n";
+		out << _name << " queued messages: " << mail_queue.size() << "\n";
 		std::list<Package>::iterator evt_iter = mail_queue.begin();
 		while (evt_iter != mail_queue.end()) {
 			const Package &pkg = *evt_iter++;
@@ -1625,18 +1625,19 @@ void MachineInstance::checkPluginStates() {
 #endif
 }
 
+// Warning: max_time is ignored in this method
 bool MachineInstance::checkStableStates(uint32_t max_time) {
 	total_machines_needing_check = 0;
 	std::set<MachineInstance *>::iterator iter = MachineInstance::pending_state_change.begin();
 	while (iter != MachineInstance::pending_state_change.end() ) {
 		MachineInstance *mi = *iter;
-		if (mi->executingCommand() == 0) {
+		if (!mi->executingCommand() && mi->mail_queue.empty()) {
 			// unless the machine is disabled leave the state check on the queue until it is stable
-			if (!mi->enabled() || !mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
+			if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states || !mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
 		}
 		else if (mi->enabled()) {
 			SharedWorkSet::instance()->add(mi);
-			iter++;
+			iter = pending_state_change.erase(iter); // this machine has other work, it should no longer be on the pending state change queue
 		}
 		else
 			iter++;
@@ -2415,12 +2416,23 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					if (response_required && from) {
 						MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
 						assert(from_mi);
-						DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
+						//DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
 						std::string response = _name + "." + t.trigger.getText() + "_done";
+						DBG_MSG << _name << " command " << t.trigger.getText() << " completion requires response. sending " 
+							<< response << " to: " << from_mi->fullName() << "\n";
 						ExecuteMessageActionTemplate emat(strdup(response.c_str()), "SELF");
 						ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
 						from_mi->push(ema);
 					}
+					else if (response_required) {
+						std::stringstream ss;
+						ss << fullName() << ": command " << t.trigger.getText() << " completion requires response but the sender is not set";
+						char buf[300];
+						snprintf(buf, 300, "%s", ss.str().c_str());
+						MessageLog::instance()->add(buf);
+						DBG_MSG << buf << "\n";
+					}
+
 #endif
 					if (!found) {
 						DBG_M_STATECHANGES << "no stable state condition test for " << t.dest.getName() << " pushing state change\n";
@@ -2453,6 +2465,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
 				}
 
+#if 0
 				// there is no matching command but a completion reply has been requested
 				if (response_required && from) {
 					DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
@@ -2461,6 +2474,27 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
 					this->push(ema);
 				}
+#else
+				if (response_required && from) {
+					MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
+					assert(from_mi);
+					//DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
+					std::string response = _name + "." + t.trigger.getText() + "_done";
+					DBG_MSG << _name << " command " << t.trigger.getText() << " completion requires response. sending " 
+						<< response << " to: " << from_mi->fullName() << "\n";
+					ExecuteMessageActionTemplate emat(strdup(response.c_str()), "SELF");
+					ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
+					from_mi->push(ema);
+				}
+				else if (response_required) {
+					std::stringstream ss;
+					ss << fullName() << ": command " << t.trigger.getText() << " completion requires response but the sender is not set";
+					char buf[300];
+					snprintf(buf, 300, "%s", ss.str().c_str());
+					MessageLog::instance()->add(buf);
+					DBG_MSG << buf << "\n";
+				}
+#endif
 
 				// no matching command, just perform the transition
 				MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
@@ -2470,6 +2504,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		// no transition but this may still be a command
 		DBG_M_MESSAGING << _name << " looking for a command with name " << short_name << "\n";
 		if (commands.count(short_name)) {
+#if 0
 			if (response_required && from) {
 				DBG_M_MESSAGING << _name << " command " << short_name << " completion requires response\n";
 				std::string response = _name + "." + short_name + "_done";
@@ -2477,6 +2512,27 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 				ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
 				this->push(ema);
 			}
+#else
+			if (response_required && from) {
+				MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
+				assert(from_mi);
+				//DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
+				std::string response = _name + "." + short_name + "_done";
+				DBG_MSG << _name << " command " << short_name << " completion requires response. sending " 
+					<< response << " to: " << from_mi->fullName() << "\n";
+				ExecuteMessageActionTemplate emat(strdup(response.c_str()), "SELF");
+				ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
+				from_mi->push(ema);
+			}
+			else if (response_required) {
+				std::stringstream ss;
+				ss << fullName() << ": command " << short_name << " completion requires response but the sender is not set";
+				char buf[300];
+				snprintf(buf, 300, "%s", ss.str().c_str());
+				MessageLog::instance()->add(buf);
+				DBG_MSG << buf << "\n";
+			}
+#endif
 			return commands[short_name]->retain();
 		}
 	}
@@ -2877,7 +2933,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 	note << _name << ':' << id << " stack:\n";
 	const char *delim = "";
 	BOOST_FOREACH(Action *act, active_actions) {
-		note << delim << " " << *act;
+		note << delim << " " << *act << " status: " << act->getStatus();
 		delim = "\n";
 	}
 }
@@ -3269,11 +3325,13 @@ bool MachineInstance::setStableState() {
 	CaptureDuration cd(stable_states_stats);
 	DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()  <<")\n";
 	if (!state_machine || !state_machine->allow_auto_states) {
-		DBG_M_AUTOSTATES << _name << " aborting stable states check due to configuration\n";
+		//DBG_M_AUTOSTATES << _name << " aborting stable states check due to configuration\n";
+		DBG_MSG << _name << " aborting stable states check due to configuration\n";
 		return false;
 	}
 	if ( executingCommand() || !mail_queue.empty() ) {
-		DBG_M_AUTOSTATES << _name << " aborting stable states check due to command execution\n";
+		//DBG_M_AUTOSTATES << _name << " aborting stable states check due to command execution\n";
+		DBG_MSG << _name << " aborting stable states check due to command execution\n";
 		return false;
 	}
 	// we must not set our stable state if objects we depend on are still updating their own state
