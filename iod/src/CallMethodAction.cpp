@@ -37,8 +37,7 @@ Action *CallMethodActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &CallMethodActionTemplate::operator<<(std::ostream &out) const {
-    return out << "CallMethodActionTemplate " << message.get() << " on "
-		<< target.get() << "\n";
+    return out << "CallMethodActionTemplate " << message.get() << " on " << target.get();
 }
 
 CallMethodAction::CallMethodAction(MachineInstance *mi, CallMethodActionTemplate &eat)
@@ -81,7 +80,7 @@ Action::Status CallMethodAction::run() {
 	}
 	else if (target_machine->enabled())
 	{
-		if (!getTrigger() || getTrigger()->fired()) {
+		if (!getTrigger() || getTrigger()->fired() || !trigger->enabled()) {
 			setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
 			owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
 			status = Action::Running;
