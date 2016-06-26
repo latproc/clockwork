@@ -489,13 +489,42 @@ bool IODCommandList::run(std::vector<Value> &params) {
 	return true;
 }
 
+bool IODCommandShow::run(std::vector<Value> &params) {
+	if (params.size() != 2) {
+		error_str = "usage: SHOW machine";;
+		return false;
+	}
+	std::ostringstream ss;
+	std::map<std::string, MachineInstance *>::iterator found = machines.find(params[1].asString());
+	if (found != machines.end()) {
+		MachineInstance *m = (*found).second;
+		const Value &val = m->properties.lookup("VALUE");
+		if (val != SymbolTable::Null)
+			ss << m->getName() << " " << m->_type << " " << val <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+		else
+			ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+		result_str = ss.str();
+		return true;
+	}
+	else {
+		char buf[200];
+		snprintf(buf, 200, "Unknown device: %s", params[1].asString().c_str() );
+		error_str = buf;
+		return false;
+	}
+}
+
 bool IODCommandFind::run(std::vector<Value> &params) {
 	std::ostringstream ss;
 	std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
 	while (iter != machines.end()) {
 		MachineInstance *m = (*iter).second;
+		const Value &val = m->properties.lookup("VALUE");
 		if (params.size() == 1 || m->getName().find(params[1].asString()) != std::string::npos) {
-			ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+			if (val != SymbolTable::Null)
+				ss << m->getName() << " " << m->_type << " " << val <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+			else
+				ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") << "\n";
 		}
 		else if (params.size() == 1 || (m->getStateMachine() && m->getStateMachine()->name.find(params[1].asString()) != std::string::npos )) {
 			ss << (m->getName()) << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") <<"\n";
@@ -582,11 +611,11 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 	else 
 		cJSON_AddFalseToObject(node, "enabled");
     if (!m->io_interface) {
-        size_t len = m->getCurrent().getName().length()+1;
-		char *cs = (char*)malloc(len);
-        memcpy(cs, m->getCurrentStateString(), len);
-        cJSON_AddStringToObject(node, "state", cs);
-        free(cs);
+			size_t len = m->getCurrent().getName().length()+1;
+			char *cs = (char*)malloc(len);
+			memcpy(cs, m->getCurrentStateString(), len);
+			cJSON_AddStringToObject(node, "state", cs);
+			free(cs);
     }
     else {
            IOComponent *device = IOComponent::lookup_device(m->getName().c_str());

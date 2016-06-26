@@ -382,6 +382,9 @@ IODCommand *parseCommandString(const char *data) {
 	else if (count == 2 && ds == "SHOW" && params[1] == "TRIGGERS") {
 		command = new IODCommandTriggers;
 	}
+	else if (count == 2 && ds == "SHOW" ) {
+		command = new IODCommandShow;
+	}
 	else if ( ds == "STATS" ) {
 		command = new IODCommandPerformance;
 	}

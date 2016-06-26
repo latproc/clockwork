@@ -173,6 +173,10 @@ struct IODCommandFind : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandShow : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 struct IODCommandFreeze : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
