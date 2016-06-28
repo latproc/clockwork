@@ -588,7 +588,7 @@ A normal property change that is executed while a property set is being
 \end_layout
 
 \begin_layout Standard
-Property Set changes may be performe against shadowed data and the update
+Property Set changes may be performed against shadowed data and the update
  will not occur until all properties are synchronised at both ends of the
  channel.
 \end_layout
@@ -599,6 +599,101 @@ Partial updates from Property Sets should also be possible
 
 \begin_layout LyX-Code
 COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
+\end_layout
+
+\begin_layout Subsubsection
+Automatic properties
+\end_layout
+
+\begin_layout Standard
+Properties can be defined to be equivalent to the result of a calculation
+ by using the LET command:
+\end_layout
+
+\begin_layout LyX-Code
+LET property_name BE expression;
+\end_layout
+
+\begin_layout Standard
+When defind this way, the expression will be evaluated when necessary, for
+ example when one of its members changes.
+ The guarantee applies (at least initially) only for state calculations
+ and upon entry to a command or state-change method.
+ Automatic properties are private.
+\end_layout
+
+\begin_layout Subsubsection
+Conditional Assignment
+\end_layout
+
+\begin_layout Standard
+The conditional assignment operator provides a way to make an assignment
+ based on evaluation of conditions.
+ A synopsis is:
+\end_layout
+
+\begin_layout LyX-Code
+property =: expression1 WHEN condition1 =: expression2 WHEN condition2 ...
+ [ expressionN OTHERWISE]
+\end_layout
+
+\begin_layout Standard
+the first assignments is made based on the first condition to evaluate to
+ true when evaluated in the order written.
+ This is equivalent to:
+\end_layout
+
+\begin_layout LyX-Code
+IF condition1 property := expression1
+\end_layout
+
+\begin_layout LyX-Code
+ELSIF condition2 property := expression2
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+[ELSE property := expressionN]
+\end_layout
+
+\begin_layout Subsubsection
+Invariants
+\end_layout
+
+\begin_layout Standard
+Methods can contain declarations of invariant conditions.
+ If an invariant is evaluated as false the program cannot continue to run
+ and will enter its failsafe mode
+\end_layout
+
+\begin_layout Subsubsection
+Failsafe Mode
+\end_layout
+
+\begin_layout Standard
+A program may be configured with a failsafe mode that includes a set of
+ states and properties that can be activated whenever the program detects
+ a non-recoverable error.
+ Failsafe mode can be activated by:
+\end_layout
+
+\begin_layout Itemize
+throwing an exception that nothing catches,
+\end_layout
+
+\begin_layout Itemize
+causing an invariant to evaluate to false
+\end_layout
+
+\begin_layout Itemize
+executing a FAIL statement.
+\end_layout
+
+\begin_layout Standard
+The syntax for this feature has not been decided yet.
 \end_layout
 
 \begin_layout Subsubsection
