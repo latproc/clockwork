@@ -585,6 +585,7 @@ public:
 	const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
 	const long *position_history; // the amount of position history to use in determining movement
 	const long *speed_tolerance; // the tolerance used in determining movement
+	const long *input_scale; // input readings are divided by this amount
 	int32_t last_sent; // this is the value to send unless the read value moves away from the mean
     int32_t prev_sent; // this is the value to send unless the read value moves away from the mean
 	uint64_t last_time; // the last time we calculated speed;_
@@ -592,6 +593,7 @@ public:
 	static long default_filter_len;
 	static long default_position_history;
 	static long default_speed_tolerance;
+	static long default_input_scale;
 	long speed;
 	uint16_t buffer_len;
 	FloatBuffer speeds;
@@ -601,6 +603,7 @@ public:
 	tolerance(&default_tolerance), filter_len(&default_filter_len), 
 	position_history(&default_position_history), 
 	speed_tolerance(&default_speed_tolerance),
+	input_scale(&default_input_scale),
 	last_sent(0), 
 	prev_sent(0), last_time(0), speed(0), buffer_len(200),speeds(4), rate_len(4) {
 		positions = createBuffer(buffer_len);
@@ -650,6 +653,7 @@ long CounterInternals::default_tolerance = 1;
 long CounterInternals::default_filter_len = 8;
 long CounterInternals::default_position_history = 20;
 long CounterInternals::default_speed_tolerance = 10;
+long CounterInternals::default_input_scale = 1;
 
 Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { 
 	internals = new CounterInternals;
@@ -676,11 +680,17 @@ void Counter::setupProperties(MachineInstance *m) {
 		internals->position_history = &v5.iValue;
 		printf("Counter position history: %ld\n", *internals->position_history);
 	}
+	const Value &v6 = m->getValue("input_scale");
+	if (v6.kind == Value::t_integer) {
+		internals->input_scale = &v6.iValue;
+		printf("Counter input scale: %ld\n", *internals->input_scale);
+	}
 }
 
 
 int32_t Counter::filter(int32_t val) {
-	addSample(internals->positions, (long)read_time, (double)val);
+	double scaled_val = (double)val / (double)*internals->input_scale;
+	addSample(internals->positions, (long)read_time, scaled_val);
 
 #if 0
 	if (internals->filter_type && *internals->filter_type == 0) {
@@ -705,7 +715,7 @@ int32_t Counter::filter(int32_t val) {
 		}
 	}
 	else
-		internals->last_sent = val;
+		internals->last_sent = (*internals->input_scale == 1) ? val : (uint32_t)( scaled_val + 0.5 );
 	internals->update(read_time);
 
 #if 1
@@ -724,7 +734,7 @@ int32_t Counter::filter(int32_t val) {
 		MachineInstance *o = *owners_iter++;
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("DurationTolerance", internals->rate_len, SymbolTable::ST_REPLACE);
-		o->properties.add("VALUE", (long)val, SymbolTable::ST_REPLACE);
+		o->properties.add("VALUE", (long)scaled_val, SymbolTable::ST_REPLACE);
 		o->properties.add("Position", (long)internals->last_sent, SymbolTable::ST_REPLACE);
 		o->properties.add("Velocity", (long)internals->speeds.average(internals->speeds.length()), SymbolTable::ST_REPLACE);
 	}
