@@ -1410,6 +1410,7 @@ void Channel::setDefinition(const ChannelDefinition *def) {
 
 void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
 										const Value &val, uint64_t auth) {
+	if (m->getStateMachine() && m->getStateMachine()->private_properties.count(key.asString())) return;
 	if (communications_manager) {
 		std::string response;
 		char *cmd = 0;
@@ -1467,6 +1468,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
 void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val, uint64_t authority) {
     if (!all) return;
     std::string name = machine->fullName();
+	if (machine->getStateMachine() && machine->getStateMachine()->private_properties.count(key.asString())) return;
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
