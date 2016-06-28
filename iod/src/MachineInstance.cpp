@@ -2842,6 +2842,18 @@ void MachineClass::addProperty(const char *p) {
 	property_names.insert(p);
 }
 
+void MachineClass::addPrivateProperty(const char *p) {
+	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
+	property_names.insert(p);
+	private_properties.insert(p); //
+}
+
+void MachineClass::addPrivateProperty(const std::string &p) {
+	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
+	property_names.insert(p.c_str());
+	private_properties.insert(p); //
+}
+
 void MachineClass::addCommand(const char *p) {
 	//NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
 	command_names.insert(p);

@@ -80,7 +80,7 @@ public:
     bool add(const char *name, Value val, ReplaceMode replace_mode = ST_REPLACE);
     bool add(const std::string name, Value val, ReplaceMode replace_mode = ST_REPLACE);
     void add(const SymbolTable &orig, ReplaceMode replace_mode = ST_REPLACE); // load symbols optionally with replacement
-    const Value &lookup(Value &name);
+    const Value &lookup(const Value &name);
     const Value &lookup(const char *name);
 	Value &find(const char *name);
 	size_t count(const char *name) { return st.count(name); }

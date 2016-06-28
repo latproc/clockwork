@@ -144,7 +144,7 @@ struct Subcondition {
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
-%token LINKED SDO
+%token LINKED SDO PRIVATE
 
 %union {
 	int iVal;
@@ -218,16 +218,31 @@ SYMBOL {
 }
 ;
 
+private_option_settings:
+private_option_setting
+| private_option_settings COMMA private_option_setting
+;
+
 option_settings:
 option_setting
 | option_settings COMMA option_setting
 ;
 
+
 option_setting:
+SYMBOL value {
+	std::string name($1);
+	current_machineclass->options[name] = *$2;
+	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$2 << "\n";
+	delete $2;
+}
+
+private_option_setting:
 SYMBOL value {
     std::string name($1);
     current_machineclass->options[name] = *$2;
-    DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$2 << "\n";
+	current_machineclass->addPrivateProperty(name);
+    DBG_PARSER << current_machineclass->name << " private option: " << name << ": " << *$2 << "\n";
     delete $2;
 }
 
@@ -281,18 +296,33 @@ interface_defn_section
 interface_defn_section:
 | OPTION name_list ';' {
 	BOOST_FOREACH(std::string &name, current_name_list) {
-		NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+		//NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
 		current_machineclass->addProperty(name.c_str());
+	}
+	current_name_list.clear();
+}
+| PRIVATE OPTION name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+		current_machineclass->addPrivateProperty(name.c_str());
 	}
 	current_name_list.clear();
 }
 | OPTION SYMBOL value ';' {
 	std::string name($2);
 	current_machineclass->options[name] = *$3;
-	NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+	//NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
 	current_machineclass->addProperty(name.c_str());
 	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$3 << "\n";
 	delete $3;
+}
+| PRIVATE OPTION SYMBOL value ';' {
+	std::string name($3);
+	current_machineclass->options[name] = *$4;
+	NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+	current_machineclass->addPrivateProperty(name.c_str());
+	DBG_PARSER << current_machineclass->name << " private option: " << name << ": " << *$4 << "\n";
+	delete $4;
 }
 | COMMAND SYMBOL ';'
 | COMMANDS name_list ';' {
@@ -515,7 +545,8 @@ definition_section
 definition_section:
 GLOBAL global_references ';'
 | OPTION option_settings ';'
-| export_clause 
+| PRIVATE OPTION private_option_settings ';'
+| export_clause
 | local_machine_instantiation
 | command
 | stable_state
@@ -524,6 +555,9 @@ GLOBAL global_references ';'
 | plugin_entry
 /*| delay_entry*/
 ;
+
+option_definitions:
+
 
 export_clause:
 EXPORT access_type size_type name_list ';' {

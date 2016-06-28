@@ -109,6 +109,7 @@ ON					return ON;
 OPTION              return OPTION;
 OR                  return OR;
 PLUGIN              return PLUGIN;
+PRIVATE				return PRIVATE;
 PROPERTIES          return PROPERTIES;
 PROPERTY			return PROPERTY;
 PUBLISHER			return tokPUBLISHER;

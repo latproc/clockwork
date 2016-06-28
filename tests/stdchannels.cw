@@ -9,6 +9,18 @@ SAMPLER_CHANNEL CHANNEL {
 	IGNORES `^SYSTEM`;
 	PUBLISHER;
 }
+# Generic sampling. Any machine may be monitored at the server
+SAMPLE_PROPERTIES_CHANNEL CHANNEL {
+		OPTION host "localhost";
+		OPTION port 10709;
+		KEY "a0693d2bf6f463bf96f9d660b8e157fb";
+		VERSION "0.1.0";
+		MONITORS `.*`;
+		IGNORES STATE_CHANGES;
+		IGNORES `SYSTEM`;
+		PUBLISHER;
+}
+#
 
 # The standard definition for persistence
 PERSISTENCE_CHANNEL CHANNEL {

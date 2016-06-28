@@ -300,7 +300,7 @@ const Value &SymbolTable::lookup(const char *name) {
     return SymbolTable::Null;
 }
 
-const Value &SymbolTable::lookup(Value &name) {
+const Value &SymbolTable::lookup(const Value &name) {
     if (this != keywords) {
         const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) return res;
