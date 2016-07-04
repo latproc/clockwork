@@ -144,7 +144,7 @@ struct Subcondition {
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
-%token LINKED SDO PRIVATE
+%token LINKED SDO LOCAL
 
 %union {
 	int iVal;
@@ -218,9 +218,9 @@ SYMBOL {
 }
 ;
 
-private_option_settings:
-private_option_setting
-| private_option_settings COMMA private_option_setting
+local_option_settings:
+local_option_setting
+| local_option_settings COMMA local_option_setting
 ;
 
 option_settings:
@@ -237,7 +237,7 @@ SYMBOL value {
 	delete $2;
 }
 
-private_option_setting:
+local_option_setting:
 SYMBOL value {
     std::string name($1);
     current_machineclass->options[name] = *$2;
@@ -301,7 +301,7 @@ interface_defn_section:
 	}
 	current_name_list.clear();
 }
-| PRIVATE OPTION name_list ';' {
+| LOCAL OPTION name_list ';' {
 	BOOST_FOREACH(std::string &name, current_name_list) {
 		NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
 		current_machineclass->addPrivateProperty(name.c_str());
@@ -316,7 +316,7 @@ interface_defn_section:
 	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$3 << "\n";
 	delete $3;
 }
-| PRIVATE OPTION SYMBOL value ';' {
+| LOCAL OPTION SYMBOL value ';' {
 	std::string name($3);
 	current_machineclass->options[name] = *$4;
 	NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
@@ -545,7 +545,7 @@ definition_section
 definition_section:
 GLOBAL global_references ';'
 | OPTION option_settings ';'
-| PRIVATE OPTION private_option_settings ';'
+| LOCAL OPTION local_option_settings ';'
 | export_clause
 | local_machine_instantiation
 | command
@@ -1509,6 +1509,7 @@ ON ERROR SYMBOL error_clause {
 		// TBD multiple error clauses will be implemented later
 		MessageLog::instance()->add(ss.str().c_str());
 		error_messages.push_back(ss.str());
+		++num_errors;
 	}
 	else {
 		size_t len = strlen($3);
@@ -1522,6 +1523,7 @@ ON ERROR SYMBOL error_clause {
 		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
 		MessageLog::instance()->add(ss.str().c_str());
 		error_messages.push_back(ss.str());
+		++num_errors;
 	}
 	else {
 		size_t len = strlen($3);
@@ -1648,6 +1650,7 @@ PLUGIN STRINGVAL ';' {
 		ss << current_machineclass->name << ": " << dlerror() << "\n";
 		MessageLog::instance()->add(ss.str().c_str());
     	error_messages.push_back(ss.str());
+		++num_errors;
 		NB_MSG << ss.str() << "\n";
 	}
 }
@@ -1745,28 +1748,30 @@ SYMBOL MODULE parameters ';'
 	// the following will be added to a list of new entitites and the module will be resolved later
 	std::vector<Parameter> params;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
-	SDOEntry *entry;
+	SDOEntry *entry = 0;
 	if (params.size() == 4)
 		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
 	else if (params.size() == 5)
 		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue,
 			params[4].val.iValue);
-	entry->setModuleName(params[0].val.sValue);
+	if (entry) {
+		entry->setModuleName(params[0].val.sValue);
 
-    MachineInstance *m = addMachine($1, "SDOENTRY");
-    properties = property_stack.back();
-    property_stack.pop_back();
-	m->setProperties(properties);
-	std::cout << "Properties: " << properties << "\n";
-    properties.clear();
-	std::cout << "Entry default: " << m->properties.lookup("default") << "\n";
+		MachineInstance *m = addMachine($1, "SDOENTRY");
+		properties = property_stack.back();
+		property_stack.pop_back();
+		m->setProperties(properties);
+		std::cout << "Properties: " << properties << "\n";
+		properties.clear();
+		std::cout << "Entry default: " << m->properties.lookup("default") << "\n";
 
 
-    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
-    current_parameters.clear();
-    m->setDefinitionLocation(yyfilename, yylineno);
+		std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+		current_parameters.clear();
+		m->setDefinitionLocation(yyfilename, yylineno);
 
-	entry->setMachineInstance(m);
+		entry->setMachineInstance(m);
+	}
 }
 | SYMBOL SDO parameters ';'
 {

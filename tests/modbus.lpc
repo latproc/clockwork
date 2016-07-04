@@ -24,7 +24,8 @@ Calc MACHINE {
 calc Calc;
 
 OddNumber MACHINE {
-	OPTION last 0, VALUE 0;
+	LOCAL OPTION last 0;
+	OPTION VALUE 0;
 
 	evaluating WHEN last != VALUE;
 	ENTER evaluating { LOG VALUE; last := VALUE; }

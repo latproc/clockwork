@@ -592,6 +592,7 @@ void ProcessingThread::operator()()
 			{ (void*)command_sync, 0, ZMQ_POLLIN, 0 }
 		};
 		zmq::pollitem_t items[15];
+		memset((void*)items, 0, 15 * sizeof(zmq::pollitem_t));
 		for (int i=0; i<6; ++i) {
 			items[i] = fixed_items[i];
 		}
@@ -650,7 +651,7 @@ void ProcessingThread::operator()()
 #if 0
 		// debug code to work out what machines or systems tend to need processing
 		DBG_MSG << "handling activity " << systems_waiting
-			<< ( (items[ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
+			<< ( (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
 			<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
 			<< ( (!io_work_queue.empty()) ? " io work" : "")
 			<< ( (curr_t - last_checked_machines > machine_check_delay) ? " machines" : "")

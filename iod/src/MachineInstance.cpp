@@ -2845,19 +2845,32 @@ void MachineClass::addProperty(const char *p) {
 void MachineClass::addPrivateProperty(const char *p) {
 	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p);
-	private_properties.insert(p); //
+	local_properties.insert(p); //
 }
 
 void MachineClass::addPrivateProperty(const std::string &p) {
 	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p.c_str());
-	private_properties.insert(p); //
+	local_properties.insert(p); //
 }
 
 void MachineClass::addCommand(const char *p) {
 	//NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
 	command_names.insert(p);
 }
+
+bool MachineClass::propertyIsLocal(const char *name) const {
+	return local_properties.count(name) > 0;
+}
+
+bool MachineClass::propertyIsLocal(const std::string &name) const {
+	return local_properties.count(name) > 0;
+}
+
+bool MachineClass::propertyIsLocal(const Value &name) const {
+	return local_properties.count(name.asString()) > 0;
+}
+
 
 
 MachineEvent::MachineEvent(MachineInstance *machine, Message *message) :

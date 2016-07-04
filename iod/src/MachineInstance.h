@@ -160,7 +160,7 @@ class MachineClass {
 public:
     MachineClass(const char *class_name);
     SymbolTable properties;
-	std::set<std::string> private_properties;
+	std::set<std::string> local_properties;
     std::vector<Parameter> parameters;
     std::vector<Parameter> locals;
     std::list<State> states;
@@ -189,6 +189,9 @@ public:
 	virtual void addPrivateProperty(const char *name); // used in interfaces to list synced properties
 	virtual void addPrivateProperty(const std::string &name); // used in interfaces to list synced properties
 	virtual void addCommand(const char *name); // used in interfaces to list permitted commands
+	bool propertyIsLocal(const char *name) const;
+	bool propertyIsLocal(const std::string &name) const;
+	bool propertyIsLocal(const Value &name) const;
 
     State default_state;
 	State initial_state;

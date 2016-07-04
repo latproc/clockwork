@@ -1410,7 +1410,8 @@ void Channel::setDefinition(const ChannelDefinition *def) {
 
 void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
 										const Value &val, uint64_t auth) {
-	if (m->getStateMachine() && m->getStateMachine()->private_properties.count(key.asString())) return;
+	if (definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges)
+		|| (m->getStateMachine() && m->getStateMachine()->local_properties.count(key.asString())) ) return;
 	if (communications_manager) {
 		std::string response;
 		char *cmd = 0;
@@ -1468,7 +1469,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
 void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val, uint64_t authority) {
     if (!all) return;
     std::string name = machine->fullName();
-	if (machine->getStateMachine() && machine->getStateMachine()->private_properties.count(key.asString())) return;
+	if (machine->getStateMachine() && machine->getStateMachine()->propertyIsLocal(key)) return;
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
@@ -1485,7 +1486,9 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
 				chn->throttled_items[machine]->properties[key.asString()] = val;
 			}
 			else {
-				chn->sendPropertyChangeMessage(machine, machine->getName(), key, val, authority);
+				if ( chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges)
+					|| (machine->getStateMachine() && !machine->getStateMachine()->propertyIsLocal(key)) )
+						chn->sendPropertyChangeMessage(machine, machine->getName(), key, val, authority);
 			}
         }
     }
@@ -1512,7 +1515,10 @@ void Channel::sendThrottledUpdates() {
 				while (props_iter != props->end()) {
 					std::pair<std::string, Value> prop = *props_iter;
 					Value key(prop.first);
-					sendPropertyChangeMessage(item.second->machine,
+					MachineInstance *mi(item.second->machine);
+					if (definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges)
+						|| (mi->getStateMachine() && !mi->getStateMachine()->propertyIsLocal(key)) )
+							sendPropertyChangeMessage(item.second->machine,
 											  item.second->machine->getName(), key,
 											  prop.second);
 					if (!do_modbus)
@@ -1550,6 +1556,7 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
         Channel *chn = (*iter).second; iter++;
 			bool do_modbus = chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
 			bool do_properties = chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
+			bool do_local_properties = chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges);
 			if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
 			if (!do_modbus && !do_properties) continue;
 
@@ -1565,7 +1572,9 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
 			while (iter != mr->properties.end()) {
 				std::pair<std::string, Value> item = *iter;
 				Value key(item.first);
-				if (do_properties)
+				if (do_properties
+					&& (do_local_properties
+						|| (machine->getStateMachine() && !machine->getStateMachine()->propertyIsLocal(key))) )
 					chn->sendPropertyChangeMessage(machine, machine->getName(), key, item.second);
 				if (do_modbus)
 					machine->sendModbusUpdate(item.first, item.second);

@@ -115,7 +115,7 @@ private:
 
 class ChannelDefinition : public MachineClass, public ChannelImplementation {
 public:
-	enum Feature { ReportStateChanges, ReportPropertyChanges, ReportModbusUpdates };
+	enum Feature { ReportStateChanges, ReportPropertyChanges, ReportModbusUpdates, ReportLocalPropertyChanges };
 
 	void addFeature(Feature f);
 	void removeFeature(Feature f);
