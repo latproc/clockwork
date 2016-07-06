@@ -601,3 +601,20 @@ std::ostream &ExistsValue::operator<<(std::ostream &out ) const {
 std::ostream &operator<<(std::ostream &out, const ExistsValue &val) { return val.operator<<(out); }
 
 
+DynamicValue *ClassNameValue::clone() const { return new ClassNameValue(*this); }
+Value &ClassNameValue::operator()(MachineInstance *mi) {
+	machine = mi->lookup(machine_name);
+	if (!machine || !machine->getStateMachine())  {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for CLASS test\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = "NULL"; return last_result;
+	}
+	last_result = machine->getStateMachine()->name.c_str();
+	DBG_MSG << *this << "\n";
+	return last_result;
+}
+std::ostream &ClassNameValue::operator<<(std::ostream &out ) const {
+	return out << "CLASS OF " << machine_name << " " << last_result;
+}
+std::ostream &operator<<(std::ostream &out, const ClassNameValue &val) { return val.operator<<(out); }
+

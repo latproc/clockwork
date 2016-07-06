@@ -39,6 +39,7 @@ BY                  return BY;
 CALL				return CALL;
 CATCH				return CATCH;
 CHANNEL             return CHANNEL;
+CLASS				return CLASS;
 CLEAR               return CLEAR;
 COMMAND				return COMMAND;
 COMMANDS			return COMMANDS;

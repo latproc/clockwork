@@ -144,7 +144,7 @@ struct Subcondition {
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
-%token LINKED SDO LOCAL
+%token LINKED SDO LOCAL CLASS
 
 %union {
 	int iVal;
@@ -873,6 +873,9 @@ INTEGER   {
 }
 | SYMBOL EXISTS {
 	$$ = new Value(new ExistsValue($1));
+}
+| CLASS OF SYMBOL {
+	$$ = new Value(new ClassNameValue($3));
 }
 | COMMON BETWEEN SYMBOL AND SYMBOL {
     $$ = new Value(SymbolTable::Null);

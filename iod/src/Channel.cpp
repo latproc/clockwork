@@ -170,6 +170,19 @@ Channel::Channel(const std::string ch_name, const std::string type)
 	if (::machines.find(ch_name) == ::machines.end())
 		::machines[ch_name] = this;
 	markActive(); // this machine performs state changes in the ::idle() processing
+
+	// make sure the channel is in the LIST of channels
+	if (::machines.find("CHANNELS") != ::machines.end()) {
+		MachineInstance *channel_list = ::machines["CHANNELS"];
+		unsigned int i, n = channel_list->parameters.size();
+		for (i=0; i<n; i++) {
+			if (channel_list->parameters.at(i).val == ch_name) break;
+		}
+		if (i <= n) {
+			Value v_nam(name.c_str());
+			channel_list->addParameter(v_nam);
+		}
+	}
 }
 
 Channel::~Channel() {
@@ -1900,7 +1913,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 				}
 				else if (chn->mif) {
 					char *cmd = MessageEncoding::encodeCommand(command, params); // send command
-					DBG_CHANNELS << "Channel " << name << " sending " << cmd << "\n";
+					DBG_CHANNELS << "Channel " << chn->name << " sending " << cmd << "\n";
 					chn->mif->send(cmd);
 					free(cmd);
 				}
@@ -2121,6 +2134,7 @@ void Channel::setupShadows() {
         else if (m) {
 			m->publish();
             // this machine is a shadow
+			DBG_MSG << "Channel " << name << " adding shadow machine " << m->getName() << "\n";
 			channel_machines.insert(m);
 			m->owner_channel = this;
         }

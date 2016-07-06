@@ -412,6 +412,11 @@ void predefine_special_machines() {
 	settings->setProperties(settings_class->properties);
 	settings->setStateMachine(settings_class);
 
+	MachineInstance *channels = MachineInstanceFactory::create("CHANNELS", "LIST");
+	machines["CHANNELS"] = channels;
+	channels->setProperties(list_class->properties);
+	channels->setStateMachine(list_class);
+
 	ClockworkInterpreter::instance()->setup(settings);
 	settings->setValue("NAME", device_name());
 }

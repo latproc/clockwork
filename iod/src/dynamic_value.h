@@ -284,6 +284,22 @@ private:
     std::string kind;
 };
 
+class ClassNameValue : public DynamicValue {
+public:
+	ClassNameValue(const char *name) : machine_name(name), machine(0) { }
+	virtual ~ClassNameValue() { }
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	ClassNameValue(const CastValue &);
+
+private:
+	ClassNameValue(const DynamicValue &);
+	std::string machine_name;
+	MachineInstance *machine;
+};
+
+
 
 
 #endif

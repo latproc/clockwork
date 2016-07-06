@@ -34,8 +34,29 @@ OddNumber MACHINE {
 }
 val1 OddNumber(export:rw_reg);
 val2 OddNumber(export:rw_reg);
-	
-	
+
+PanelMonitor MACHINE {
+	LOCAL OPTION last 0, last_active 0;
+	GLOBAL CHANNELS;
+	panels LIST;
+	LOCAL OPTION className "";
+
+	# check if the panel is ok whenever the number of active channels changes or the panel is not one of the active channels
+	update WHEN SELF IS idle && TIMER > 500 || last_active != COUNT ACTIVE FROM CHANNELS;
+	ok WHEN COUNT ACTIVE FROM panels == 1;
+	idle DEFAULT;	
+
+	COMMAND check { 
+		last := SIZE OF CHANNELS;  # last should be the same as the number of channels in the iosh CHANNELS command
+		last_active := COUNT ACTIVE FROM CHANNELS; # check last_active against the channels from iosh
+		CLEAR panels; # prepare to make a list of panel channels
+		COPY ALL FROM CHANNELS TO panels WHERE CLASS OF CHANNELS.ITEM == "PANEL_CHANNEL";
+	}
+	ENTER update { CALL check ON SELF; }
+
+	ENTER INIT { className := CLASS OF SELF; }
+}
+panel_monitor PanelMonitor;
 
 Monitor MACHINE other {
 

@@ -468,6 +468,30 @@ TAKE n FROM set_name # takes n elements at random from a set
 \end_layout
 
 \begin_layout Subsubsection
+Special Sets
+\end_layout
+
+\begin_layout Description
+ALL [MACHINES]
+\end_layout
+
+\begin_layout Description
+ENABLED [MACHINES]
+\end_layout
+
+\begin_layout Description
+CHANNELS a list of all channels
+\end_layout
+
+\begin_layout Subsubsection
+Operators
+\end_layout
+
+\begin_layout Description
+CLASS
+\end_layout
+
+\begin_layout Subsubsection
 Enumeration
 \end_layout
 
@@ -1392,6 +1416,11 @@ s using internal, private instances and to only make the data available
 Date and Time functions
 \end_layout
 
+\begin_layout Standard
+Note that these properties cannot be used in WHEN clauses of automatic states
+ since they do not generate events as they change.
+\end_layout
+
 \begin_layout Description
 NOW the current time in milliseconds
 \end_layout
@@ -1442,10 +1471,6 @@ TAG machine WHENEVER condition,
 
 \begin_layout LyX-Code
 EXECUTE (DO) method EVERY duration;
-\end_layout
-
-\begin_layout Standard
-
 \end_layout
 
 \begin_layout Subsection
