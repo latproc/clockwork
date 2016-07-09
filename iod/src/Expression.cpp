@@ -697,8 +697,10 @@ ExprNode::ExprNode(const ExprNode &other) : tmpval(other.tmpval), val(other.val)
 
 ExprNode::~ExprNode() {
 	--count_instances;
+/*
 	if (last_max != max_count) {
 		DBG_MSG << "Max ExprNodes: " << max_count<<" current " << count_instances << "\n"; last_max = max_count; }
+*/
 }
 
 void Stack::clear() {

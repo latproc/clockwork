@@ -610,7 +610,6 @@ Value &ClassNameValue::operator()(MachineInstance *mi) {
 		last_result = "NULL"; return last_result;
 	}
 	last_result = machine->getStateMachine()->name.c_str();
-	DBG_MSG << *this << "\n";
 	return last_result;
 }
 std::ostream &ClassNameValue::operator<<(std::ostream &out ) const {
