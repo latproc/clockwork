@@ -626,6 +626,71 @@ COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
 \end_layout
 
 \begin_layout Subsubsection
+Dynamic values
+\end_layout
+
+\begin_layout Standard
+Some expressions include a calculation that needs to be reevaluated each
+ time the expression is evaluated, these are calculations, for example of
+ the size of a list, the class of a machine, the number of items on a list
+ that are in a given state.
+ These `dynamic values' are:
+\end_layout
+
+\begin_layout Itemize
+ANY IN
+\end_layout
+
+\begin_layout Itemize
+ALL IN
+\end_layout
+
+\begin_layout Itemize
+COUNT ..
+ FROM ..
+\end_layout
+
+\begin_layout Itemize
+SIZE OF
+\end_layout
+
+\begin_layout Itemize
+INCLUDES
+\end_layout
+
+\begin_layout Itemize
+ITEM AT
+\end_layout
+
+\begin_layout Itemize
+BITSET FROM
+\end_layout
+
+\begin_layout Itemize
+ENABLED
+\end_layout
+
+\begin_layout Itemize
+DISABLED
+\end_layout
+
+\begin_layout Itemize
+EXISTS
+\end_layout
+
+\begin_layout Itemize
+CLASS OF
+\end_layout
+
+\begin_layout Itemize
+SUM OF list
+\end_layout
+
+\begin_layout Itemize
+VALUE OF symbol
+\end_layout
+
+\begin_layout Subsubsection
 Automatic properties
 \end_layout
 

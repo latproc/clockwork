@@ -992,9 +992,9 @@ void initialise_machines() {
 				std::string name(m->fullName());
 				//if (m->owner) name += m->owner->getName() + ".";
 				//name += m->getName();
-				if (!m->isShadow())
-					m->enable();
-                std::map<std::string, std::map<std::string, Value> >::iterator found = store.init_values.find(name);
+				//if (!m->isShadow())
+				//	m->enable();
+				std::map<std::string, std::map<std::string, Value> >::iterator found = store.init_values.find(name);
                 if (found != store.init_values.end()) {
 					std::map< std::string, Value > &list((*found).second);
                     PersistentStore::PropertyPair node;
@@ -1011,6 +1011,7 @@ void initialise_machines() {
 		}
 	}
     else { // enable 'contant' machines and marked as persistent
+#if 0
 		m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
@@ -1018,6 +1019,7 @@ void initialise_machines() {
 				m->enable();
             }
         }
+#endif
     }
     
     // prepare the list of machines that will be processed at idle time

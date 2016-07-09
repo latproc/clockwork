@@ -23,13 +23,22 @@
 #include "Logger.h"
 #include "DebugExtra.h"
 
+static int count_instances = 0;
+static int max_count = 0;
+static int last_max = 0;
+
 FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t) 
 	: Action(m), trigger(t->retain()){
         if (m) t->setOwner(m);
 				t->addHolder(this);
+		++count_instances;
+		if (count_instances>max_count) max_count = count_instances;
     }
 
 FireTriggerAction::~FireTriggerAction() {
+	--count_instances;
+	if (last_max != max_count) { DBG_MSG << "Max FireTriggers: " << max_count<<"\n"; last_max = max_count; }
+
 	DBG_ACTIONS << "Removing " << *this << "\n";
 	if (trigger) {
 		trigger->removeHolder(this);

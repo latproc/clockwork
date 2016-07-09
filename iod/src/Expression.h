@@ -25,6 +25,7 @@
 #include "symboltable.h"
 #include <list>
 
+
 class MachineInstance;
 
 enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR, opNOT,
@@ -33,13 +34,13 @@ enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
 struct ExprNode {
-    ExprNode(const Value *a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
-    ExprNode(const Value &a, const Value *name = NULL) :tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
-	ExprNode(Value *a, const Value *name = NULL) : val(a), node(name), kind(t_int) {  }
-	ExprNode(Value &a, const Value *name = NULL) :tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
-	ExprNode(bool a, const Value *name = NULL) : tmpval(a), val(0), node(name), kind(t_int) { val = &tmpval; }
-    ExprNode(PredicateOperator o) : val(0), node(0), op(o), kind(t_op) { }
-    ExprNode(const ExprNode &other) : tmpval(other.tmpval), val(other.val), node(other.node), op(other.op), kind(other.kind) { if (other.val == &other.tmpval) val = &tmpval; }
+	ExprNode(const Value *a, const Value *name = NULL);
+	ExprNode(const Value &a, const Value *name = NULL);
+	ExprNode(Value *a, const Value *name = NULL);
+	ExprNode(Value &a, const Value *name = NULL);
+	ExprNode(bool a, const Value *name = NULL);
+	ExprNode(PredicateOperator o);
+	ExprNode(const ExprNode &other);
     ~ExprNode();
     Value tmpval;
     const Value *val;

@@ -74,6 +74,7 @@ public:
 
 	uint64_t startTime();
 	void report(const char *message);
+	int getRefs() { return refs; }
 	
 protected:
 	TriggerInternals *_internals;

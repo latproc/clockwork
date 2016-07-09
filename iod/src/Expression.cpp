@@ -29,6 +29,11 @@
 #include "dynamic_value.h"
 #include "MessageLog.h"
 
+
+static int count_instances = 0;
+static int max_count = 0;
+static int last_max = 0;
+
 std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
     std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
         const char *opstr;
@@ -654,7 +659,46 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
     return true;
 }
 
+ExprNode::ExprNode(const Value *a, const Value *name)
+: val(a), node(name), kind(t_int) {
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(const Value &a, const Value *name)
+:tmpval(a), val(0), node(name), kind(t_int){
+	val = &tmpval;
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(Value *a, const Value *name)
+: val(a), node(name), kind(t_int) {
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(Value &a, const Value *name) :tmpval(a), val(0), node(name), kind(t_int) {
+	val = &tmpval;
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(bool a, const Value *name) : tmpval(a), val(0), node(name), kind(t_int) {
+	val = &tmpval;
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(PredicateOperator o) : val(0), node(0), op(o), kind(t_op) {
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(const ExprNode &other) : tmpval(other.tmpval), val(other.val), node(other.node), op(other.op), kind(other.kind) {
+	if (other.val == &other.tmpval) val = &tmpval;
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+
 ExprNode::~ExprNode() {
+	--count_instances;
+	if (last_max != max_count) {
+		DBG_MSG << "Max ExprNodes: " << max_count<<" current " << count_instances << "\n"; last_max = max_count; }
 }
 
 void Stack::clear() {
