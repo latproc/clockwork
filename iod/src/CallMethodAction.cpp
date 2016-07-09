@@ -86,14 +86,19 @@ Action::Status CallMethodAction::run() {
 			status = Action::Running;
 		}
 		else {
-			status = New;
+			status = Running;
+			std::stringstream ss;
+			ss<< "NOTICE: " << *this << " calling " << message.get() << " on " << target_machine->getName() << " already has trigger that has not fired";
+			MessageLog::instance()->add(ss.str().c_str());
+			DBG_MSG << ss.str() << "\n";
 		}
 	}
 	else {
 		char buf[100];
 		snprintf(buf, 100, "Call to disabled machine: %s", target_machine->getName().c_str() );
 		MessageLog::instance()->add(buf);
-		status = Action::New;
+		status = Action::Failed;
+		error_str = strdup(buf);
 	}
 	return status;
 }

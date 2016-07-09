@@ -98,6 +98,7 @@ Action::Status MachineCommand::runActions() {
 		AbortAction *aa = dynamic_cast<AbortAction*>(a);
 		Action::Status stat = (*a)();
 		if (aa) {
+			DBG_MSG<< "ABORTING: " << *this << " at action " << *a << "\n";
 			abort();
 			if (stat == Failed)
 				error_str = a->error();

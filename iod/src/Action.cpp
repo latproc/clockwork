@@ -298,7 +298,7 @@ Action::Status Action::operator()() {
 		status = Running; // important because run() checks the current state
 	}
 	status = run();
-/*	if (status == Failed) {
+	if (status == Failed) {
 		if (error_msg) {
 			AbortActionTemplate aat(true, error_msg->get());
 			AbortAction *aa = (AbortAction*)aat.factory(owner);
@@ -310,7 +310,6 @@ Action::Status Action::operator()() {
 			owner->enqueueAction(aa);
 		}
 	}
-*/
 	return status;
 }
 
