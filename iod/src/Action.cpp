@@ -122,6 +122,19 @@ Trigger::~Trigger() {
 	}
 #endif
 	removeTrigger(this);
+#if 0
+	if (!_internals->holders.empty()) {
+		std::stringstream ss;
+		ss << "Deleting Trigger with active holders: ";
+		std::list<Action*>::const_iterator iter = _internals->holders.begin();
+		while (iter != _internals->holders.end()) {
+			ss << *(*iter++);
+		}
+		ss << "\n";
+		DBG_MSG << ss.str();
+	}
+#endif
+	delete _internals;
 }
 
 Trigger* Trigger::retain() {
