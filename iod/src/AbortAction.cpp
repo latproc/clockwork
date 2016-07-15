@@ -39,7 +39,7 @@ AbortAction::AbortAction(MachineInstance *m, const AbortActionTemplate *dat) : A
 }
 
 std::ostream &AbortAction::operator<<(std::ostream &out) const {
-	if (message.length()) out << "Throw Exception (" << message << ")";
+	if (message.length()) out << "Throw Exception (" << message << ")" << " to " << owner->getName();
 	else if (abort_fail) out << "Abort";
 	else out << "Return";
     return out;

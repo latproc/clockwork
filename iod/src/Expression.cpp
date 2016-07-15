@@ -374,7 +374,7 @@ std::ostream &operator<<(std::ostream&out, const Stack &s) {
 std::ostream &Stack::operator<<(std::ostream&out) const {
 #if 1
     // prefix
-    BOOST_FOREACH(ExprNode n, stack) {
+    BOOST_FOREACH(const ExprNode &n, stack) {
 		if (n.kind == ExprNode::t_op) {
 			out << n.op << " "; 
 		}
@@ -695,11 +695,16 @@ ExprNode::ExprNode(const ExprNode &other) : tmpval(other.tmpval), val(other.val)
 	if (count_instances>max_count) max_count = count_instances;
 }
 
+ExprNode &ExprNode::operator=(const ExprNode &other) {
+	assert(false);
+}
+
 ExprNode::~ExprNode() {
 	--count_instances;
 /*
 	if (last_max != max_count) {
-		DBG_MSG << "Max ExprNodes: " << max_count<<" current " << count_instances << "\n"; last_max = max_count; }
+		DBG_MSG << "Max ExprNodes: " << max_count<<" current " << count_instances << "\n"; last_max = max_count;
+	}
 */
 }
 
@@ -719,7 +724,8 @@ Value Predicate::evaluate(MachineInstance *m) {
         }
     //Stack work(stack);
     std::list<ExprNode>::const_iterator work = stack.stack.begin();
-    Value res = *(eval_stack(m, work).val);
+	ExprNode evaluated(eval_stack(m, work));
+    Value res = *(evaluated.val);
     struct timeval now;
     gettimeofday(&now, 0);
     long t = now.tv_sec*1000000 + now.tv_usec;

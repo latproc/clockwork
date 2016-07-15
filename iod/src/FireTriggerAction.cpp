@@ -37,8 +37,11 @@ FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t)
 
 FireTriggerAction::~FireTriggerAction() {
 	--count_instances;
-	if (last_max != max_count) { DBG_MSG << "Max FireTriggers: " << max_count<<"\n"; last_max = max_count; }
-
+/*
+	if (last_max != max_count) {
+		DBG_MSG << "Max FireTriggers: " << max_count<<"\n"; last_max = max_count;
+	}
+*/
 	DBG_ACTIONS << "Removing " << *this << "\n";
 	if (trigger) {
 		trigger->removeHolder(this);
