@@ -219,6 +219,10 @@ Executing a subexpression on the default state
 Persistence
 \end_layout
 
+\begin_layout Itemize
+Macros
+\end_layout
+
 \begin_layout Subsection
 Bugs
 \end_layout
@@ -309,6 +313,21 @@ Polling - repeatedly executing a statement
 
 \begin_layout Itemize
 Retriggering EXECUTE / TAG actions
+\end_layout
+
+\begin_layout Subsection
+Macros
+\end_layout
+
+\begin_layout Standard
+Macros provide a way to restructure the source into a form that improved
+ readability.
+ The macro facilty is simply a string replacement with the ability to substitute
+ variables within the string as it is inserted.
+\end_layout
+
+\begin_layout Subsection
+Dynamic instantiation
 \end_layout
 
 \begin_layout Standard
@@ -1703,6 +1722,125 @@ Machines should be able to be defined as extensions of existing machines.
  Some thought will be needed as to whether actions will be executed before
  or after existing actions.
  
+\end_layout
+
+\begin_layout Subsection
+Macros
+\end_layout
+
+\begin_layout Standard
+Macros replace a tagged section of the program with a user-defined scrap
+ of text, optionally substituting text in the process.
+ All characters are copied literally, including line breaks, spaced and
+ tab characters.
+ [TBD should we instead trim leading and trailing whitespace and include
+ a single space between entries when updating a macro definition?]
+\end_layout
+
+\begin_layout Standard
+A macro has the form:
+\end_layout
+
+\begin_layout LyX-Code
+DEFINE name [ '(' name1 [ ',' name1 ]...
+ ')' ] '{' text '}'
+\end_layout
+
+\begin_layout Standard
+Within the text, name1, name2 etc are replaced with the values provided
+ where the macro is to be expanded.
+\end_layout
+
+\begin_layout Standard
+To introduce a macro use:
+\end_layout
+
+\begin_layout LyX-Code
+DEFINE sum(a,b) { a + b }
+\end_layout
+
+\begin_layout Standard
+To expand the macro, use the name and parameters part of the above:
+\end_layout
+
+\begin_layout LyX-Code
+three := sum(1,2);
+\end_layout
+
+\begin_layout Standard
+A macro name may include spaces and if desired, the expansion may include
+ expansion markers '@<' and '@>' to make it clear that a macro is being
+ used.
+ For example:
+\end_layout
+
+\begin_layout LyX-Code
+DEFINE initialise the variables { x := 0; }
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+ENTER INIT { @<initialise the variables@> }
+\end_layout
+
+\begin_layout Standard
+Note that it is perfectly fine to write the following
+\end_layout
+
+\begin_layout LyX-Code
+DEFINE initialise the variables { x := 0; }
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+ENTER INIT { initialise the variables }
+\end_layout
+
+\begin_layout Standard
+Unlike other macro systems, in clockwork a macro can be reintroduced and
+ this simply adds the extra text to the macro expansion.
+ All macros are collected throughout the source before expansion begins
+ so this feature can be used to reorder the program to suit the reader if
+ desired.
+ For example, the above example might have been:
+\end_layout
+
+\begin_layout LyX-Code
+DEFINE initialise the variables { x := 0; }
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+DEFINE initialise the variables { y := 0; }
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+ENTER INIT { @<initialise the variables@> }
+\end_layout
+
+\begin_layout Standard
+In which case, the INIT method would have expanded to
+\end_layout
+
+\begin_layout LyX-Code
+ENTER INIT { x:=0;  y:=0; }
+\end_layout
+
+\begin_layout LyX-Code
+
 \end_layout
 
 \end_body

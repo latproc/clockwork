@@ -1346,6 +1346,12 @@ SET SYMBOL TO value  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new CopyPropertiesActionTemplate($4, $6);
 }
+| COPY PROPERTIES name_list FROM SYMBOL TO SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	CopyPropertiesActionTemplate *cpat = new CopyPropertiesActionTemplate($5, $7, current_name_list);
+	current_name_list.clear();
+	current_action = cpat;
+}
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soIntersect, 0, false);

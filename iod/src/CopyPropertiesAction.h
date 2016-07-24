@@ -34,15 +34,15 @@ struct CopyPropertiesActionTemplate : public ActionTemplate {
     // scope where the command is used.
     
 	CopyPropertiesActionTemplate(Value source, Value destination);
+	CopyPropertiesActionTemplate(Value source, Value destination, const std::list<std::string>&properties);
     ~CopyPropertiesActionTemplate();
     
     virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-       return out << "CopyPropertiesAction from "  << source_name << " to " << dest_name << "\n";
-    }
+	std::ostream &operator<<(std::ostream &out) const;
 
     std::string source_name;
     std::string dest_name;
+	std::list<std::string> property_list;
 };
 
 struct CopyPropertiesAction : public Action {
@@ -56,6 +56,7 @@ struct CopyPropertiesAction : public Action {
     Value dest;
     MachineInstance *source_machine;
     MachineInstance *dest_machine;
+	std::list<std::string> property_list;
 };
 
 #endif

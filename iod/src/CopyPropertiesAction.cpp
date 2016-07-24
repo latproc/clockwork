@@ -21,11 +21,16 @@
 #include "CopyPropertiesAction.h"
 #include "MachineInstance.h"
 #include "Logger.h"
+#include "MessageLog.h"
+
 
 CopyPropertiesActionTemplate::CopyPropertiesActionTemplate(Value source, Value destination)
 : source_name(source.asString()), dest_name(destination.asString()) {
 }
 
+CopyPropertiesActionTemplate::CopyPropertiesActionTemplate(Value source, Value destination, const std::list<std::string>&properties)
+: source_name(source.asString()), dest_name(destination.asString()), property_list(properties) {
+}
 CopyPropertiesActionTemplate::~CopyPropertiesActionTemplate() {
 }
                                            
@@ -33,15 +38,41 @@ Action *CopyPropertiesActionTemplate::factory(MachineInstance *mi) {
 	return new CopyPropertiesAction(mi, this);
 }
 
+std::ostream &CopyPropertiesActionTemplate::operator<<(std::ostream &out) const {
+	if (!property_list.empty()) {
+		out << "CopyProperties ";
+		const char *delim = "";
+		std::list<std::string>::const_iterator iter = property_list.begin();
+		while (iter != property_list.end()) {
+			out << delim << *iter++;
+			delim = ",";
+		}
+	}
+	else out << "CopyProperties from";
+	return out << " " << source_name << " to " << dest_name;
+}
+
+
 CopyPropertiesAction::CopyPropertiesAction(MachineInstance *m, const CopyPropertiesActionTemplate *dat)
-    : Action(m), source(dat->source_name), dest(dat->dest_name), source_machine(0),dest_machine(0) {
+    : Action(m), source(dat->source_name), dest(dat->dest_name),
+		source_machine(0),dest_machine(0), property_list(dat->property_list) {
 }
 
 CopyPropertiesAction::CopyPropertiesAction() : source_machine(0), dest_machine(0) {
 }
 
 std::ostream &CopyPropertiesAction::operator<<(std::ostream &out) const {
-	return out << "Copy Properties Action " << source << " to " << dest << "\n";
+	if (!property_list.empty()) {
+		out << "CopyProperties ";
+		const char *delim = "";
+		std::list<std::string>::const_iterator iter = property_list.begin();
+		while (iter != property_list.end()) {
+			out << delim << *iter++;
+			delim = ",";
+		}
+	}
+	else out << "CopyProperties from";
+	return out << " " << source << " to " << dest;
 }
 
 Action::Status CopyPropertiesAction::run() {
@@ -51,19 +82,49 @@ Action::Status CopyPropertiesAction::run() {
     if (!dest_machine)
         dest_machine = owner->lookup(dest);
 	if (source_machine && dest_machine) {
-        //dest_machine->properties.add(source_machine->properties);
-        SymbolTableConstIterator iter = source_machine->properties.begin();
-        while (iter != source_machine->properties.end()) {
-            const std::string &prop = (*iter).first;
-            if (prop != "STATE" && prop != "NAME") {
-                dest_machine->setValue( prop, (*iter).second);
-            }
-            iter++;
-        }
+		size_t count = 0; // how many direct symbol updates did we do?
+		if (property_list.empty()) {
+			//dest_machine->properties.add(source_machine->properties);
+			SymbolTableConstIterator iter = source_machine->properties.begin();
+			while (iter != source_machine->properties.end()) {
+				const std::string &prop = (*iter).first;
+				if (prop != "STATE" && prop != "NAME" && (!dest_machine->getStateMachine() || !dest_machine->getStateMachine()->propertyIsLocal(prop)) ) {
+					dest_machine->setValue( prop, (*iter).second);
+					++count;
+				}
+				iter++;
+			}
+		}
+		else {
+			std::list<std::string>::const_iterator iter = property_list.begin();
+			while (iter != property_list.end()) {
+				const std::string &prop = (*iter++);
+				if (prop != "STATE" && prop != "NAME") {
+					const Value &val = source_machine->properties.lookup(prop.c_str());
+					if (val != SymbolTable::Null) {
+						dest_machine->setValue( prop, val);
+					}
+					else {
+						DBG_MSG << "ignoring null property "
+								<< source_machine->getName() << "." << prop
+								<< "during " << *this << "\n";
+					}
+				}
+			}
+		}
+		if (count) {
+			dest_machine->setNeedsCheck();
+			dest_machine->notifyDependents();
+		}
         status = Complete;
 	}
-    else
+	else {
+		std::stringstream ss;
+		ss << "Error " << *this << std::flush;
+		error_str = strdup(ss.str().c_str());
+		MessageLog::instance()->add(error_str.get());
         status = Failed;
+	}
     owner->stop(this);
 	return status;
 }

@@ -20,13 +20,30 @@ Test MACHINE L_Done, L_FrontDone {
 	}
 }
 
+Settings MACHINE {
+	OPTION x 0;
+	OPTION y 0;
+	OPTION z 0;
+	LOCAL OPTION tmp 0;
+}
+settings1 Settings(x:100, y:50, z:25, tmp:7);
+settings2 Settings(x:33, y:66, z:99, tmp:8);
+
+PropertyTest MACHINE a,b {
+	COMMAND partial { COPY PROPERTIES x,z FROM a TO b; }
+	COMMAND full { COPY PROPERTIES FROM a TO b; }
+	COMMAND reset { b.x := 33; b.y:= 66; b.z := 99; }
+} 
+pt PropertyTest settings1, settings2;
+	
+
 test Test done, front_done;
 
 STARTUP MACHINE {
 	off INITIAL;
 	on STATE;
 
-	ENTER on { ENABLE done; ENABLE front_done; }
+	ENTER on { ENABLE done; ENABLE front_done; ENABLE pt;}
 }
 
 startup STARTUP;
