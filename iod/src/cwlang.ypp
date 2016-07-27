@@ -556,9 +556,6 @@ GLOBAL global_references ';'
 /*| delay_entry*/
 ;
 
-option_definitions:
-
-
 export_clause:
 EXPORT access_type size_type name_list ';' {
     DBG_PARSER << " export " << $2 << " " << $3 << " (" << current_name_list.size() << ")\n";
