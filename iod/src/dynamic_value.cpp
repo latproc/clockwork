@@ -70,6 +70,24 @@ std::ostream &AllInValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const AllInValue &val) { return val.operator<<(out); }
 
+DynamicValue *AnyEnabledDisabledValue::clone() const {
+	return new AnyEnabledDisabledValue(*this);
+}
+
+std::ostream &AnyEnabledDisabledValue::operator<<(std::ostream &out ) const {
+	return out << "ANY " << machine_list_name
+		<< ( (check_enabled) ? " ENABLED" : " DISABLED" ) << "(" << last_result <<")";
+}
+std::ostream &operator<<(std::ostream &out, const AnyEnabledDisabledValue &val) { return val.operator<<(out); }
+
+
+DynamicValue *AllEnabledDisabledValue::clone() const { return new AllEnabledDisabledValue(*this); }
+std::ostream &AllEnabledDisabledValue::operator<<(std::ostream &out ) const {
+	return out << "ALL " << machine_list_name
+		<< ( (check_enabled) ? " ENABLED" : " DISABLED" ) << "(" << last_result <<")";
+}
+std::ostream &operator<<(std::ostream &out, const AllEnabledDisabledValue &val) { return val.operator<<(out); }
+
 DynamicValue *CountValue::clone() const { return new CountValue(*this); }
 std::ostream &CountValue::operator<<(std::ostream &out ) const {
     return out << "COUNT " << state << " FROM " << machine_list_name << " (" << last_result << ")";
@@ -209,6 +227,68 @@ Value &AllInValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 
+AnyEnabledDisabledValue::AnyEnabledDisabledValue(const AnyEnabledDisabledValue &other) {
+	check_enabled = other.check_enabled;
+	machine_list_name = other.machine_list_name;
+	machine_list = 0;
+}
+
+Value &AnyEnabledDisabledValue::operator()(MachineInstance *mi) {
+
+	if (machine_list == NULL)
+		machine_list = mi->lookup(machine_list_name);
+
+	if (!machine_list) {
+		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ANY "
+		<< ( (check_enabled) ? "ENABLED" : "DISABLED" ) << " within " << mi->getName() << "\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = false; return last_result;
+	}
+
+	last_process_time = currentTime();
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
+		if (!machine_list->parameters[i].machine) continue;
+
+		if (check_enabled == machine_list->parameters[i].machine->enabled()) {
+			last_result = true; return last_result;
+		}
+	}
+	last_result = false; return last_result;
+}
+
+
+AllEnabledDisabledValue::AllEnabledDisabledValue(const AllEnabledDisabledValue &other) {
+	check_enabled = other.check_enabled;
+	machine_list_name = other.machine_list_name;
+	machine_list = 0;
+}
+
+Value &AllEnabledDisabledValue::operator()(MachineInstance *mi) {
+	if (machine_list == NULL) {
+		machine_list = mi->lookup(machine_list_name);
+	}
+	if (!machine_list) {
+		std::stringstream ss; ss << mi->getName() << " no machine "
+		<< machine_list_name << " for ALL "
+		<< ( (check_enabled) ? "ENABLED" : "DISABLED" ) <<" within " << mi->getName() << "\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = false; return last_result;
+	}
+
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {  last_result = false; return last_result; }
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
+		if (!machine_list->parameters[i].machine) continue;
+
+		if (check_enabled != machine_list->parameters[i].machine->enabled() ) {
+			last_result = false; return last_result;
+		}
+	}
+	last_result = true;
+	return last_result;
+}
 
 CountValue::CountValue(const CountValue &other) {
     state = other.state;

@@ -104,6 +104,39 @@ private:
 	const Value *state_property;
 };
 
+class AnyEnabledDisabledValue : public DynamicValue {
+public:
+	AnyEnabledDisabledValue(bool enabled, const char *list)
+	: check_enabled(enabled), machine_list_name(list), machine_list(0) {}
+	virtual ~AnyEnabledDisabledValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	AnyEnabledDisabledValue(const AnyEnabledDisabledValue &);
+
+private:
+	AnyEnabledDisabledValue(const DynamicValue &);
+	bool check_enabled;
+	std::string machine_list_name;
+	MachineInstance *machine_list;
+};
+
+class AllEnabledDisabledValue : public DynamicValue {
+public:
+	AllEnabledDisabledValue(bool enabled, const char *list)
+	: check_enabled(enabled), machine_list_name(list), machine_list(0) {}
+	virtual ~AllEnabledDisabledValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	AllEnabledDisabledValue(const AllEnabledDisabledValue &);
+
+private:
+	AllEnabledDisabledValue(const DynamicValue &);
+	bool check_enabled;
+	std::string machine_list_name;
+	MachineInstance *machine_list;
+};
 
 class CountValue : public DynamicValue {
 public:
