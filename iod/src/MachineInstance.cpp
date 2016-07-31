@@ -41,6 +41,7 @@
 #include "FireTriggerAction.h"
 #include "HandleMessageAction.h"
 #include "ExecuteMessageAction.h"
+#include "SendMessageAction.h"
 #include "CallMethodAction.h"
 #include "dynamic_value.h"
 #include "options.h"
@@ -2406,36 +2407,9 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					}
 					// the CALL method waits for a response once the executed command is complete
 					// the response will be sent after the transition to the next state is done
-#if 0
-					if (response_required && from) {
-						DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
-						std::string response = _name + "." + t.trigger.getText() + "_done";
-						ExecuteMessageActionTemplate emat(strdup(response.c_str()), strdup(from->getName().c_str()));
-						ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
-						this->push(ema);
-					}
-#else
-					if (response_required && from) {
-						MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
-						assert(from_mi);
-						//DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
-						std::string response = _name + "." + t.trigger.getText() + "_done";
-						DBG_MSG << _name << " command " << t.trigger.getText() << " completion requires response. sending " 
-							<< response << " to: " << from_mi->fullName() << "\n";
-						ExecuteMessageActionTemplate emat(strdup(response.c_str()), "SELF");
-						ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
-						from_mi->push(ema);
-					}
-					else if (response_required) {
-						std::stringstream ss;
-						ss << fullName() << ": command " << t.trigger.getText() << " completion requires response but the sender is not set";
-						char buf[300];
-						snprintf(buf, 300, "%s", ss.str().c_str());
-						MessageLog::instance()->add(buf);
-						DBG_MSG << buf << "\n";
-					}
+					if (response_required)
+						prepareCompletionMessage(from, t.trigger.getText());
 
-#endif
 					if (!found) {
 						DBG_M_STATECHANGES << "no stable state condition test for " << t.dest.getName() << " pushing state change\n";
 						MoveStateActionTemplate msat("SELF", t.dest.getName());
@@ -2466,37 +2440,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 				else {
 					DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
 				}
-
-#if 0
-				// there is no matching command but a completion reply has been requested
-				if (response_required && from) {
-					DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
-					std::string response = _name + "." + t.trigger.getText() + "_done";
-					ExecuteMessageActionTemplate emat(strdup(response.c_str()), strdup(from->getName().c_str()));
-					ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
-					this->push(ema);
-				}
-#else
-				if (response_required && from) {
-					MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
-					assert(from_mi);
-					//DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
-					std::string response = _name + "." + t.trigger.getText() + "_done";
-					DBG_MSG << _name << " command " << t.trigger.getText() << " completion requires response. sending " 
-						<< response << " to: " << from_mi->fullName() << "\n";
-					ExecuteMessageActionTemplate emat(strdup(response.c_str()), "SELF");
-					ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
-					from_mi->push(ema);
-				}
-				else if (response_required) {
-					std::stringstream ss;
-					ss << fullName() << ": command " << t.trigger.getText() << " completion requires response but the sender is not set";
-					char buf[300];
-					snprintf(buf, 300, "%s", ss.str().c_str());
-					MessageLog::instance()->add(buf);
-					DBG_MSG << buf << "\n";
-				}
-#endif
+				if (response_required)
+					prepareCompletionMessage(from, t.trigger.getText());
 
 				// no matching command, just perform the transition
 				MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
@@ -2506,35 +2451,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		// no transition but this may still be a command
 		DBG_M_MESSAGING << _name << " looking for a command with name " << short_name << "\n";
 		if (commands.count(short_name)) {
-#if 0
-			if (response_required && from) {
-				DBG_M_MESSAGING << _name << " command " << short_name << " completion requires response\n";
-				std::string response = _name + "." + short_name + "_done";
-				ExecuteMessageActionTemplate emat(strdup(response.c_str()), strdup(from->getName().c_str()));
-				ExecuteMessageAction *ema = new ExecuteMessageAction(this, emat);
-				this->push(ema);
-			}
-#else
-			if (response_required && from) {
-				MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
-				assert(from_mi);
-				//DBG_M_MESSAGING << _name << " command " << t.trigger.getText() << " completion requires response\n";
-				std::string response = _name + "." + short_name + "_done";
-				DBG_MSG << _name << " command " << short_name << " completion requires response. sending " 
-					<< response << " to: " << from_mi->fullName() << "\n";
-				ExecuteMessageActionTemplate emat(strdup(response.c_str()), "SELF");
-				ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
-				from_mi->push(ema);
-			}
-			else if (response_required) {
-				std::stringstream ss;
-				ss << fullName() << ": command " << short_name << " completion requires response but the sender is not set";
-				char buf[300];
-				snprintf(buf, 300, "%s", ss.str().c_str());
-				MessageLog::instance()->add(buf);
-				DBG_MSG << buf << "\n";
-			}
-#endif
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
 			return commands[short_name]->retain();
 		}
 	}
@@ -2579,6 +2497,28 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		}
 	}
 	return NULL;
+}
+
+void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string message) {
+	if (from) {
+		MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
+		assert(from_mi);
+		std::string response = _name + "." + message + "_done";
+		DBG_MSG << _name << " command " << message << " completion requires response. Adding command to execute "
+		<< response << " on: " << from_mi->fullName()
+		<< ( (from_mi->enabled()) ? " (enabled)\n" : " (disabled)\n");
+		ExecuteMessageActionTemplate emat(strdup(response.c_str()), from_mi);
+		ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
+		this->push(ema);
+	}
+	else {
+		std::stringstream ss;
+		ss << fullName() << ": command " << message << " completion requires response but the sender is not set";
+		char buf[300];
+		snprintf(buf, 300, "%s", ss.str().c_str());
+		MessageLog::instance()->add(buf);
+		DBG_MSG << buf << "\n";
+	}
 }
 
 /*
@@ -2773,7 +2713,11 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 			Dispatcher::instance()->deliver(p);
 		}
 		else {
-			DBG_MSG << _name << " sending " << *m << " to " << r->getName() << " failed because the target is not enabled\n";
+			char buf[120];
+			snprintf(buf, 120, "%s: sending %s to %s failed because the target is not enabled",
+					 _name.c_str(), m->getText().c_str(), r->getName().c_str());
+			MessageLog::instance()->add(buf);
+			DBG_MSG << buf << "\n";
 		}
 	}
 }
@@ -4164,6 +4108,33 @@ bool MachineInstance::hasState(const std::string &state_name) const {
 	State s(state_name.c_str());
 	return hasState(s);
 }
+
+// change batching
+bool MachineInstance::changing() {
+	return is_changing;
+}
+
+bool MachineInstance::prepare() {
+	is_changing = true;
+	return is_changing;
+}
+
+void MachineInstance::commit() {
+	setNeedsCheck();
+	notifyDependents();
+	std::map<std::string, Value>::iterator iter = changes.begin();
+	while (iter != changes.end()) {
+		setValue((*iter).first, (*iter).second);
+		iter = changes.erase(iter);
+	}
+	is_changing = false;
+}
+
+void MachineInstance::discard() {
+	changes.clear();
+	is_changing = false;
+}
+
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
 if (false){FileLogger fl(program_name);

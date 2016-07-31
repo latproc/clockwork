@@ -27,7 +27,14 @@
 #include "MessageLog.h"
 #include "Dispatcher.h"
 
-Action *SendMessageActionTemplate::factory(MachineInstance *mi) { 
+SendMessageActionTemplate::SendMessageActionTemplate(Value msg, Value dest)
+: message(msg), target(dest), target_machine(0) {}
+
+SendMessageActionTemplate::SendMessageActionTemplate(Value msg, MachineInstance *dest)
+: message(msg), target(dest->fullName()), target_machine(dest) {}
+
+
+Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
   return new SendMessageAction(mi, *this); 
 }
 
@@ -37,6 +44,9 @@ std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
 		<< ( (target != 0) ? target : "")
 		<< "\n";
 }
+
+SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
+: Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine) {}
 
 Action::Status SendMessageAction::run() {
 	owner->start(this);
@@ -98,6 +108,9 @@ Action::Status SendMessageAction::checkComplete() {
 }
 
 std::ostream &SendMessageAction::operator<<(std::ostream &out) const {
-    return out << owner->getName() << ": SendMessageAction " << message << " TO " << target << "\n";
+	if (!target_machine)
+		return out << owner->getName() << ": SendMessageAction " << message << " TO unknown target: " << target.asString() << "\n";
+	else
+		return out << owner->getName() << ": SendMessageAction " << message << " TO " << target << "\n";
 }
 		

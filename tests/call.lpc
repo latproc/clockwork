@@ -1,10 +1,10 @@
 # A basic one-shot timer with reset
 # 
-# user start to start the timer and the timer will start running.
+# use start to start the timer and the timer will start running.
 # after running for timeout ms it becomes expired
 
 TIMER MACHINE {
-	OPTION timeout 1;
+	OPTION timeout 100;
 	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);
 	running STATE;
 	stopped INITIAL;
@@ -43,7 +43,7 @@ Calc MACHINE {
 
 	running DURING calc {
 		LOG "performing a calculation";
-		WAIT 1000;
+		WAIT wait_time;
 		LOG "calculation done";
 	}
 
@@ -67,15 +67,15 @@ TranstionTest MACHINE {
 }
 transtest TranstionTest(tab:Tests);
 
-# this monitor attempts to disrupt an operation by disabling the driver machine
+# this `Disrupter' attempts to disrupt an operation by disabling the driver machine
 # once it sees the calculator running
 
-Monitor MACHINE calculator, driver {
+Disrupter MACHINE calculator, driver {
 
 	active WHEN calculator IS running AND driver IS working;
 	idle DEFAULT;
 
-	ENTER active { DISABLE driver; }
+	ENTER active { DISABLE driver; LOG "Disabled " + driver.NAME }
 }
 
 # a test machine that uses CALL to wait for a long operation
@@ -84,11 +84,13 @@ Test MACHINE calculator {
   
     stepper Stepper;
 
-	done WHEN calculator IS b; # not quaranteed to be noticed
+	done WHEN calculator IS b; # not guaranteed to be noticed
 	ready DEFAULT;
     
     ENTER done {
+		LOG "Calling 'next' on stepper";
         CALL next ON stepper ON ERROR bad_call ON TIMEOUT call_timeout;
+		LOG "Call complete";
     }
 
 	CATCH bad_call {
@@ -104,6 +106,7 @@ Test MACHINE calculator {
 	working DURING go {  
 		LOG "about to calculate";
 		CALL calc ON calculator ON ERROR bad_call ON TIMEOUT call_timeout; 
+		LOG "calculation done";
 		#SEND calc TO calculator;
 		#LOG "sent calculate command";
 		#WAIT 50;
@@ -115,5 +118,5 @@ Test MACHINE calculator {
 
 calc Calc(tab:tests);
 test Test(tab:Tests) calc;
-monitor Monitor(tab:tests) calc, test;
+disrupter Disrupter(tab:tests) calc, test;
 

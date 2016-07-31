@@ -28,16 +28,17 @@
 class MachineInstance;
 
 struct ExecuteMessageActionTemplate : public ActionTemplate {
-	ExecuteMessageActionTemplate(CStringHolder msg, CStringHolder dest) : message(msg), target(dest) {}
+	ExecuteMessageActionTemplate(CStringHolder msg, CStringHolder dest);
+	ExecuteMessageActionTemplate(CStringHolder msg, MachineInstance *dest);
     virtual Action *factory(MachineInstance *mi);
     virtual std::ostream &operator<<(std::ostream &out)const;
 	CStringHolder message;
 	CStringHolder target;
+	MachineInstance *target_machine;
 };
 
 struct ExecuteMessageAction : public Action {
-	ExecuteMessageAction(MachineInstance *mi, ExecuteMessageActionTemplate &eat)
-	: Action(mi), message(eat.message), target(eat.target), target_machine(0) { }
+	ExecuteMessageAction(MachineInstance *mi, ExecuteMessageActionTemplate &eat);
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;

@@ -1264,11 +1264,13 @@ SET SYMBOL TO value  {
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
+	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
 	current_action = new AbortActionTemplate(true, $2);
 }
 | THROW STRINGVAL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
+	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
 	current_action = new AbortActionTemplate(true, $2);
 }
 | SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
@@ -1507,6 +1509,9 @@ SET SYMBOL TO value  {
 |
 ;
 
+/* TBD fix this to only allow one generic error and one timeout clause.
+ 	Also add the ON ERROR error-name handler form.
+ */
 error_clause:
 ON ERROR SYMBOL error_clause {
 	if (error_message_name) {

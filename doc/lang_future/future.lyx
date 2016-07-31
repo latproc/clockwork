@@ -867,6 +867,28 @@ Actions are executed when a message is received by a machine.
  These actions may return a result that can be used in a property assignment.
 \end_layout
 
+\begin_layout Standard
+Steps within a function are executed until a step cannot be resolved immediately
+, for example, when a SET statement is used to set the state of another
+ machine.
+ The SET does not complete until the other machine has changed state.
+ In the current implementation, the other machine may have only started
+ to invoke its ENTER function (TBD).
+\end_layout
+
+\begin_layout Standard
+Steps may be artifically stopped by using the YIELD statement and in the
+ future functions may be interrupted because of the use of a regular I/O
+ poll.
+ 
+\end_layout
+
+\begin_layout Standard
+It should be assumed that there is no guarantee that non-blocking steps
+ of a method are always executed at once but this happens to be a property
+ of the current implementation.
+\end_layout
+
 \begin_layout Subsection
 References
 \end_layout
@@ -1025,7 +1047,7 @@ COPY PROPERTIES NAMED property_name,...
 
 \begin_layout Standard
 Note that this statement does not copy the reserved properties NAME and
- STATE.
+ STATE, other pseudo-properties like TIMER or properties marked as LOCAL.
 \end_layout
 
 \begin_layout Standard
@@ -1183,6 +1205,12 @@ PRIVATE means that the named option is not visible outside of the machine
  (even to sub-machines) and it is not published on any channel unless the
  channel includes a specific option to include private objects (persistence,
  samplers and debuggers may include private properties for example)
+\end_layout
+
+\begin_layout Description
+LOCAL means that the named option is not published on any channel unless
+ the channel includes a specific option to include local properties.
+ Local properties are still accessible to other machines.
 \end_layout
 
 \begin_layout Subsection

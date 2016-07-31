@@ -361,6 +361,7 @@ public:
 	void start(Action *a);
 	void stop(Action *a);
 	void push(Action *new_action);
+	void prepareCompletionMessage(Transmitter *from, std::string message);
 	Action *findHandler(Message&msg, Transmitter *t, bool response_required = false);
     void enqueueAction(Action *a);
 	void enqueue(const Package &package);
@@ -427,6 +428,12 @@ public:
 	bool lock(MachineInstance *requester) { if (locked && locked != requester) return false; else {locked = requester; return true; } }
 	bool unlock(MachineInstance *requester) { if (locked != requester) return false; else { locked = 0; return true; } }
     MachineInstance *locker() const { return locked; }
+
+	// change batching
+	bool changing();
+	bool prepare();
+	void commit();
+	void discard();
 	
 	// basic modbus interface
 	void sendModbusUpdate(const std::string &property_name, const Value &new_value);
@@ -526,6 +533,7 @@ public:
 	static SharedCache *shared;
 	Cache *cache;
 	unsigned int action_errors;
+	bool is_changing;
 	Channel* owner_channel;
 
 private:
@@ -543,6 +551,8 @@ protected:
     static unsigned int num_machines_with_work;
     static unsigned int total_machines_needing_check;
 	uint64_t expected_authority;
+
+	std::map<std::string, Value> changes;
 
 	friend struct SetStateAction;
 	friend struct MoveStateAction;

@@ -105,8 +105,7 @@ Action::Status MachineCommand::runActions() {
 			owner->stop(a);
 			last_step = current_step; // remember the command that aborted
 			current_step = actions.size();
-			status = stat;
-			return stat;
+			return Complete;
 		}
 		if (stat == Action::Failed) {
 			std::stringstream ss;
