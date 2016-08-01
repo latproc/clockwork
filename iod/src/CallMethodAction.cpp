@@ -88,13 +88,15 @@ Action::Status CallMethodAction::run() {
 		else {
 			status = Running;
 			std::stringstream ss;
-			ss<< "NOTICE: " << *this << " calling " << message.get() << " on " << target_machine->getName() << " already has trigger that has not fired";
+			ss<< "NOTICE: " << *this << " calling " << message.get() << " on " << target_machine->getName() << " already has trigger: "
+				<< trigger->getName() << " that has not fired";
 			MessageLog::instance()->add(ss.str().c_str());
 			DBG_MSG << ss.str() << "\n";
-/*			trigger->disable();
+			/*trigger->disable();
 			setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
 			owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
-*/		}
+			*/
+		}
 	}
 	else {
 		char buf[100];

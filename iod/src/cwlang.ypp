@@ -103,13 +103,13 @@ static MachineInstance *addMachine(const char *name, const char *type,
     return machine;
 }
 
-static void cleanupErrorClause() {
+static void cleanupErrorClause(bool deallocate = false) {
 	if (timeout_message_name) {
-		//free(timeout_message_name);
+		if (deallocate) free(timeout_message_name);
 		timeout_message_name = 0;
 	}
 	if (error_message_name) {
-		//free(error_message_name);
+		if (deallocate) free(error_message_name);
 		error_message_name = 0;
 	}
 }
@@ -657,7 +657,7 @@ state_definition ';'
 ;
 
 transitory_state:
-SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
+SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
     current_machineclass->states.push_back($1);
     current_machineclass->state_names.insert($1);
@@ -668,8 +668,9 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     current_machineclass->commands[$3] = mc;
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
+	cleanupErrorClause(true);
 }
-| SYMBOL /*state name */ DURING SYMBOL /* command */ property_block action  {
+| SYMBOL /*state name */ DURING SYMBOL /* command */ property_block error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
     current_machineclass->states.push_back($1);
     current_machineclass->state_names.insert($1);
@@ -691,6 +692,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     current_machineclass->commands[$3] = mc;
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
+	cleanupErrorClause(true);
 }
 ;
 
@@ -1070,7 +1072,7 @@ CATCH SYMBOL action {
 	}
 }
 |
-RECEIVE SYMBOL /* message */ action  {
+RECEIVE SYMBOL /* message */ error_clause action  {
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
         DBG_PARSER << *at << ", ";
@@ -1089,9 +1091,10 @@ RECEIVE SYMBOL /* message */ action  {
         error_messages.push_back(ss.str());
         ++num_errors;
     }
+	cleanupErrorClause(true);
 }
 |
-RECEIVE SYMBOL /* message */ WITHIN SYMBOL action  {
+RECEIVE SYMBOL /* message */ WITHIN SYMBOL error_clause action  {
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
         DBG_PARSER << *at << ", ";
@@ -1110,9 +1113,10 @@ RECEIVE SYMBOL /* message */ WITHIN SYMBOL action  {
         error_messages.push_back(ss.str());
         ++num_errors;
     }
+	cleanupErrorClause(true);
 }
 |
-RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ action  {
+RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ error_clause action  {
     std::stringstream ss;
     ss << $4 << "." << $2 << std::flush;
     CStringHolder msg_name = strdup(ss.str().c_str());
@@ -1135,6 +1139,7 @@ RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ action  {
         error_messages.push_back(ss.str());
         ++num_errors;
     }
+	cleanupErrorClause(true);
 }
 ;
 
@@ -1156,11 +1161,12 @@ action  {
 ;
 
 action:
-SET SYMBOL TO value  {
+SET SYMBOL TO value error_clause  {
     DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetStateActionTemplate($2, *$4);
     delete $4;
+	free(error_message_name); error_message_name = 0;
 }
 | ABORT {
 	DBG_PARSER << " abort action\n";
@@ -1251,9 +1257,10 @@ SET SYMBOL TO value  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
 }
-| SET SYMBOL TO PROPERTY SYMBOL /* set the value of a property */ {
+| SET SYMBOL TO PROPERTY SYMBOL error_clause /* set the state based on the value of a property */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5);
+	cleanupErrorClause(true);
 }
 | CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
@@ -1528,7 +1535,7 @@ error_clause:
 ON ERROR SYMBOL error_clause {
 	if (error_message_name) {
 		std::stringstream ss;
-		ss << current_machineclass->name << ": multiple ON ERROR clauses\n";
+		ss << current_machineclass->name << ": multiple ON ERROR clauses at line " << yylineno << "\n";
 		// TBD multiple error clauses will be implemented later
 		MessageLog::instance()->add(ss.str().c_str());
 		error_messages.push_back(ss.str());

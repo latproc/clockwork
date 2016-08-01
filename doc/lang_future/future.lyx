@@ -889,6 +889,30 @@ It should be assumed that there is no guarantee that non-blocking steps
  of the current implementation.
 \end_layout
 
+\begin_layout Standard
+A function may be invoked by a CALL statement in which case the calling
+ machine blocks until the function is complete.
+ On completion, a result property 'RESULT' will contain the result of the
+ function and this can be automatically assigned to a local property.
+ For example:
+\end_layout
+
+\begin_layout LyX-Code
+property := CALL method ON machine;
+\end_layout
+
+\begin_layout Standard
+which is equivalent to:
+\end_layout
+
+\begin_layout LyX-Code
+CALL method ON machine;
+\end_layout
+
+\begin_layout LyX-Code
+property := RESULT;
+\end_layout
+
 \begin_layout Subsection
 References
 \end_layout
@@ -1395,6 +1419,21 @@ CATCH error_name { ...
 \end_layout
 
 \begin_layout Standard
+Rather than having a single CATCH within the machine, an error handler may
+ be specified on the CALL:
+\end_layout
+
+\begin_layout LyX-Code
+CALL handler ON machine ON error1 {...} ON error2 {...}
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND handler { ...
+ THROW error1; ...
+ }
+\end_layout
+
+\begin_layout Standard
 Note that statements after a THROW are not executed and the handler is deemed
  to have failed.
  An ON ERROR will catch a THROWn error but it will also be caught by matching
@@ -1522,6 +1561,7 @@ Data is often modified during a process but it is not appropriate for external
  The intention is to add a facility that can be used to perform data calculation
 s using internal, private instances and to only make the data available
  externally in certain states.
+ See LOCAL, PRIVATE.
 \end_layout
 
 \begin_layout Subsection
