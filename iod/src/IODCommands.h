@@ -193,5 +193,9 @@ struct IODCommandSDO : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandToggleEtherCAT : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
 
 #endif

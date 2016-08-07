@@ -36,14 +36,15 @@
 #include <boost/thread/condition.hpp>
 #include "Statistic.h"
 #include "Statistics.h"
+#include "MachineInstance.h"
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #include <tool/MasterDevice.h>
 #include "hw_config.h"
 #include "MessageLog.h"
 #include "SDOEntry.h"
-#include "MachineInstance.h"
 #include "symboltable.h"
+#include "SetStateAction.h"
 
 struct list_head {
     struct list_head *next, *prev;
@@ -66,8 +67,10 @@ ec_domain_t *ECInterface::domain1 = NULL;
 ec_domain_state_t ECInterface::domain1_state = {};
 uint8_t *ECInterface::domain1_pd = 0;
 
-int expected_slaves = 0;
+static unsigned int expected_slaves = 0;
 bool all_ok = false;
+static bool link_was_up = false;
+static bool master_was_running = false;
 
 #ifndef EC_SIMULATOR
 
@@ -241,8 +244,26 @@ ECInterface::ECInterface() :initialised(0), active(false), process_data(0), proc
 		current_update_entry( sdo_update_entries.begin() ),
 		sdo_entry_state(e_None)
 #endif
+		, ethercat_status(0), failure_tolerance(0), failure_count(0)
 {
 	initialised = init();
+	ethercat_status = MachineInstance::find("ETHERCAT");
+	if (ethercat_status) {
+		SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "DISCONNECTED");
+		SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(ethercat_status));
+		ethercat_status->enqueueAction(ssa);
+
+		const Value &tolerance_v = ethercat_status->getValue("tolerance");
+		if (tolerance_v.kind != Value::t_integer)
+			failure_tolerance = &default_tolerance;
+		else
+			failure_tolerance = &tolerance_v.iValue;
+
+		std::cerr << "EtherCAT interface using " << *failure_tolerance
+			<< " tries before marking the master state as bad\n";
+	}
+	else
+		std::cerr << "EtherCAT interface could not find a clockwork bridge object\n";
 }
 
 #ifndef EC_SIMULATOR
@@ -642,6 +663,13 @@ bool ECInterface::activate() {
 	}
 	active = true;
     std::cerr << "done\n";
+	if (ethercat_status) {
+		SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ACTIVE");
+		SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(ethercat_status));
+		ethercat_status->enqueueAction(ssa);
+	}
+	else
+		std::cerr << "No EtherCAT clockwork bridge object defined to report status to\n";
 	
     
     if (!(domain1_pd = ecrt_domain_data(domain1))) {
@@ -692,6 +720,7 @@ bool ECInterface::init() {
 		<< " with size " << ecrt_domain_size(domain1) << "\n";
 
     all_ok = true; // ok to try to start processing
+	failure_count = 0;
 
 #if 0
 	IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
@@ -993,12 +1022,24 @@ void ECInterface::check_master_state(void)
 	if (ms.slaves_responding != master_state.slaves_responding) {
 		std::cout << ms.slaves_responding << " slave(s)\n";
 		char buf[100];
-		snprintf(buf, 100, "Number of slaves has changed from %d to %d", master_state.slaves_responding, ms.slaves_responding);
+		if (ms.slaves_responding >= expected_slaves)
+			snprintf(buf, 100, "Number of slaves has changed from %d to %d", master_state.slaves_responding, ms.slaves_responding);
+		else 
+			snprintf(buf, 100, "Number of slaves %d less than expected %d", ms.slaves_responding, expected_slaves);
 		MessageLog::instance()->add(buf);
-		if (ms.slaves_responding > master_state.slaves_responding)
+	}
+	if (ms.slaves_responding != master_state.slaves_responding || ms.slaves_responding < expected_slaves) {
+		if (ms.slaves_responding > expected_slaves)
 			expected_slaves = ms.slaves_responding;
 		else {
-			all_ok = false; // lost a slave
+			if (++failure_count > *failure_tolerance) {
+				all_ok = false; // lost a slave
+				if (ethercat_status) {
+					SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ERROR");
+					SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(ethercat_status));
+					ethercat_status->enqueueAction(ssa);
+				}
+			}
 		}
 	}
 	if (ms.al_states != master_state.al_states) {
@@ -1006,19 +1047,62 @@ void ECInterface::check_master_state(void)
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT state change: was 0x%04x now 0x%04x", master_state.al_states, ms.al_states);
 		MessageLog::instance()->add(buf);
-
-		if (master_state.al_states == 0x8) {
-			all_ok = false;
-		}
-
-		
 	}
+	if (master_was_running && ms.al_states != 0x8) {
+		if (all_ok && ++failure_count > *failure_tolerance) {
+			all_ok = false;
+			if (ethercat_status) {
+				SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ERROR");
+				SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(ethercat_status));
+				ethercat_status->enqueueAction(ssa);
+			}
+		}
+	}
+	else if (ms.al_states == 0x8)
+		master_was_running = true;
+
+	// log all changes of link state
 	if (ms.link_up != master_state.link_up) {
 		std::cout << "Link is " << (ms.link_up ? "up" : "down") << "\n";
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT link state change was %s now %s", master_state.link_up ?"up":"down", ms.link_up?"up":"down");
 		MessageLog::instance()->add(buf);
-		if (!ms.link_up) all_ok = false;
+
+		// copy link state change through to clockwork
+		MachineInstance *link_status = MachineInstance::find("ETHERCAT_LS");
+		if (link_status) {
+			if (!link_status->enabled()) link_status->enabled();
+			const char *state = ms.link_up ? "UP" : "DOWN";
+			SetStateActionTemplate ssat = SetStateActionTemplate("SELF", state);
+			SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(link_status));
+			link_status->enqueueAction(ssa);
+
+			char buf[100];
+			snprintf(buf, 100, "Info: asked link status machine to change to state %s", state);
+			MessageLog::instance()->add(buf);
+		}
+		else {
+			char buf[100];
+			snprintf(buf, 100, "Warning: no machine found to track EtherCAT link status");
+			MessageLog::instance()->add(buf);
+		}
+	}
+	// if the link changes state or if it was once up but is now down, check state 
+	if (ms.link_up != master_state.link_up || (link_was_up && !ms.link_up) ) {
+		if (!ms.link_up) {
+			if (all_ok && ++failure_count > *failure_tolerance) {
+				all_ok = false;
+				if (ethercat_status) {
+					SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ERROR");
+					SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(ethercat_status));
+					ethercat_status->enqueueAction(ssa);
+				}
+			}
+		}
+		else { // assume that now the link is backup we can reset the errors 
+			failure_count = 0;
+			link_was_up = true;
+		}
 	}
 
 	master_state = ms;

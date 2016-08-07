@@ -46,6 +46,8 @@
 #include "Statistic.h"
 #include "ecat_thread.h"
 #include "DebugExtra.h"
+#include "MachineInstance.h"
+#include "SetStateAction.h"
 
 #define USE_RTC 1
 
@@ -552,9 +554,20 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 					setDefaultData(len, cw_data, cw_mask);
 				else if (packet_type == PROCESS_DATA && driver_state == s_driver_init) {
 					if (!default_data) 
-						std::cout << "Getting process data from driver with no default set\n";
-					else
+						std::cerr << "WARNING: Getting process data from driver with no default set\n";
+					else {
 						driver_state = s_driver_operational;
+						MachineInstance *ethercat_status = MachineInstance::find("ETHERCAT");
+						if (ethercat_status) {
+							SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ACTIVE");
+							SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(ethercat_status));
+							ethercat_status->enqueueAction(ssa);
+						}
+						else {
+							DBG_ETHERCAT << "No EtherCAT clockwork bridge object defined to report status to\n";
+						}
+
+					}
 				}
 #if VERBOSE_DEBUG
 				else {

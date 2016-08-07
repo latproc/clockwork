@@ -6,13 +6,13 @@ all:
 release:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make -j 4
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make 
 
 
 debug:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Debug" ] || mkdir build/Debug
-	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make -j 4
+	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make 
 
 debug-install:	debug
 	cd build/Debug && make install

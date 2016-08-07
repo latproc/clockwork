@@ -350,7 +350,10 @@ IODCommand *parseCommandString(const char *data) {
 		command = new IODCommandTracing;
 	}
 	else if (count == 2 && ds == "TOGGLE") {
-		command = new IODCommandToggle;
+		if (params[1] == "ETHERCAT")
+			command = new IODCommandToggleEtherCAT;
+		else
+			command = new IODCommandToggle;
 	}
 	else if ( ds == "SEND") {
 		command = new IODCommandSend;

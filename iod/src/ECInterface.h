@@ -93,6 +93,8 @@ typedef struct ECPDOEntryReg{} ec_pdo_entry_reg_t;
 #include <vector>
 #include <string>
 
+class MachineInstance;
+
 class ECInterface {
 public:
 	static unsigned int FREQUENCY;
@@ -174,6 +176,10 @@ private:
 	enum SDOEntryState { e_None, e_Busy_Initialisation, e_Busy_Update };
 	SDOEntryState sdo_entry_state;
 #endif
+	MachineInstance *ethercat_status;
+	const long default_tolerance = 1;
+	const long *failure_tolerance;
+	int failure_count;
 };
 
 #ifdef USE_ETHERCAT
