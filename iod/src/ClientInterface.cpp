@@ -409,9 +409,11 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "PERSISTENT") {
 		command = new IODCommandPersistentState;
 	}
+#ifdef USE_SDO
 	else if (ds == "SDO") {
 		command = new IODCommandSDO;
 	}
+#endif //USE_SDO
 	else if (ds == "HELP") {
 		command = new IODCommandHelp;
 	}

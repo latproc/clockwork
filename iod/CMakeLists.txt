@@ -225,6 +225,12 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp ${Clock
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
 target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+
+add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp ${Clockwork_SRCS})
+#set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
+target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 )
+target_link_libraries(iod_sdo Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
+install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
 set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)

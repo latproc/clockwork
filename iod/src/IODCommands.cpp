@@ -37,7 +37,9 @@
 #include "Scheduler.h"
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
+#ifdef USE_SDO
 #include "SDOEntry.h"
+#endif //USE_SDO
 #endif
 
 extern Statistics *statistics;
@@ -1444,6 +1446,7 @@ bool IODCommandShutdown::run(std::vector<Value> &params) {
 
 bool IODCommandSDO::run(std::vector<Value> &params) {
 #ifndef EC_SIMULATOR
+#ifdef USE_SDO
 #if 0
 	if (params.size() == 2 ) {
 		Value entry_name = params[1];
@@ -1491,6 +1494,10 @@ bool IODCommandSDO::run(std::vector<Value> &params) {
 		error_str = "usage: SDO entry new_value";
 		return false;
 	}
+#else //USE_SDO
+	error_str = "Command disabled";
+	return false;
+#endif //USE_SDO
 #else
 	error_str = "Command disabled";
 	return false;

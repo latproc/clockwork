@@ -80,8 +80,10 @@ static int slaves_not_operational = 1; // initialise to nonzero until we know fo
 static int slaves_offline = 1;
 static bool ec_offline = true;
 
+#ifdef USE_SDO
 static std::list<SDOEntry *>prepared_sdo_entries;
 static std::list<SDOEntry *>new_sdo_entries;
+#endif //USE_SDO
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_details(0) {
 	offsets = new unsigned int[64];
@@ -114,6 +116,7 @@ bool ECModule::operational() {
 	return slave_config_state.operational;
 }
 
+#ifdef USE_SDO
 SDOEntry::SDOEntry( std::string nam, uint16_t index, uint8_t subindex, const uint8_t *data, size_t size, uint8_t offset)
 		: name(nam), module_(0), index_(index), subindex_(subindex), offset_(offset), data_(0), size_(size), 
 			realtime_request(0), sync_done(false), error_count(0), op(READ), machine_instance(0) {
@@ -233,6 +236,7 @@ void SDOEntry::resolveSDOModules() {
 		else iter++;
 	}
 }
+#endif //USE_SDO
 
 #endif
 
@@ -240,9 +244,11 @@ void SDOEntry::resolveSDOModules() {
 ECInterface::ECInterface() :initialised(0), active(false), process_data(0), process_mask(0),
 		update_data(0), update_mask(0), reference_time(0)
 #ifndef EC_SIMULATOR
+#ifdef USE_SDO
 		,current_init_entry(initialisation_entries.begin()), 
 		current_update_entry( sdo_update_entries.begin() ),
 		sdo_entry_state(e_None)
+#endif //USE_SDO
 #endif
 		, ethercat_status(0), failure_tolerance(0), failure_count(0)
 {
@@ -306,6 +312,7 @@ std::ostream &ECModule::operator <<(std::ostream & out)const {
 	return out;
 }
 
+#ifdef USE_SDO
 ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module ) {
 	assert(module);
 	assert(ECInterface::instance()->active == false);
@@ -326,6 +333,7 @@ ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module ) {
 	prepared_sdo_entries.push_back(this);
 	return realtime_request;
 }
+#endif //USE_SDO
 
 #if 0
 SDOEntry *ECInterface::createSDORequest(std::string name, ECModule *module, uint16_t index, uint8_t subindex, size_t size) {
@@ -345,6 +353,7 @@ SDOEntry *ECInterface::createSDORequest(std::string name, ECModule *module, uint
 }
 #endif
 
+#ifdef USE_SDO
 void ECInterface::queueInitialisationRequest(SDOEntry *entry, Value val) {
 	initialisation_entries.push_back( std::make_pair(entry, val) );
 }
@@ -572,6 +581,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 	}
 	return false;
 }
+#endif //USE_SDO
 
 ECModule *ECInterface::findModule(int pos) {
 	if (pos < 0 || (unsigned int)pos >= modules.size()) return 0;
@@ -598,21 +608,6 @@ bool ECInterface::addModule(ECModule *module, bool reset_io) {
 			if (m->alias == module->alias && m->position == module->position) return false;
 		}
 		modules.push_back(module);
-#if 0
-		if (module->name.substr(0,6) == "EL2535") {
-			std::cerr << "queueing a request to change EL2535 MaxCurrent\n";
-			SDOEntry *entry = createSDORequest("EL2535 PortA MaxCurrent", module, 0x8000, 0x10, 8);
-			entry->setData( (uint8_t)50);
-			ECInterface::instance()->queueInitialisationRequest(entry);
-			entry = createSDORequest("EL2535 PortB MaxCurrent", module, 0x8010, 0x10, 8);
-			entry->setData( (uint8_t)50);
-			ECInterface::instance()->queueInitialisationRequest(entry);
-		}
-		else if (module->name.length() > 6)
-			std::cerr << "No match " << module->name.substr(6) << " checking for EL2535\n";
-		else
-			std::cerr << "No match " << module->name << " checking for EL2535\n";
-#endif
 	}
 	
 	if (!reset_io) 
@@ -870,8 +865,10 @@ void ECInterface::receiveState() {
 	// check for islave configuration state(s) (optional)
 	check_slave_config_states();
 
+#ifdef USE_SDO
 	if (checkSDOInitialisation())
 		checkSDOUpdates();
+#endif
 }
 
 int ECInterface::collectState() {

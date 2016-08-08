@@ -1767,6 +1767,7 @@ SYMBOL MODULE parameters ';'
 }
 | SYMBOL SDO property_block parameters ';'
 {
+#ifdef USE_SDO
     DBG_PARSER << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
 	// the following will be added to a list of new entitites and the module will be resolved later
 	std::vector<Parameter> params;
@@ -1795,9 +1796,14 @@ SYMBOL MODULE parameters ';'
 
 		entry->setMachineInstance(m);
 	}
+#else
+    error_messages.push_back("Error: SDO is not supported in this version");
+    num_errors++;
+#endif //USE_SDO
 }
 | SYMBOL SDO parameters ';'
 {
+#ifdef USE_SDO
     DBG_MSG << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
 	// the following will be added to a list of new entitites and the module will be resolved later
 	std::vector<Parameter> params;
@@ -1811,6 +1817,10 @@ SYMBOL MODULE parameters ';'
     m->setDefinitionLocation(yyfilename, yylineno);
 
 	entry->setMachineInstance(m);
+#else
+    error_messages.push_back("Error: SDO is not supported in this version");
+    num_errors++;
+#endif //USE_SDO
 }
 | SYMBOL FLAG ';'
 {

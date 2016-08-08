@@ -51,7 +51,9 @@
 #include <boost/thread/mutex.hpp>
 #include "WaitAction.h"
 #ifndef EC_SIMULATOR
+#ifdef USE_SDO
 #include "SDOEntry.h"
+#endif //USE_SDO
 #include "ECInterface.h"
 #endif
 
@@ -4292,6 +4294,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 			setNeedsCheck();
 			properties.add(property, new_value, SymbolTable::ST_REPLACE);
 #ifndef EC_SIMULATOR
+#ifdef USE_SDO
 			if ( property_val.token_id == ClockworkToken::tokVALUE && _type == "SDOENTRY") {
 				SDOEntry *entry = SDOEntry::find(_name);
 				if (entry) {
@@ -4303,6 +4306,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 				}
 			}
 			else 
+#endif //USE_SDO
 #endif
 			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
 				char buf[100];

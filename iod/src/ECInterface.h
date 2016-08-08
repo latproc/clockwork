@@ -42,7 +42,9 @@ public:
 	unsigned int pdo_index;
 };
 
+#ifdef USE_SDO
 class SDOEntry;
+#endif //USE_SDO
 class ECModule {
 public:
 	ECModule();
@@ -149,6 +151,7 @@ public:
 	uint8_t *getUpdateData();
 	uint8_t *getUpdateMask();
 	
+#ifdef USE_SDO
   void beginModulePreparation(); // load the first SDO initialisation entry
   bool finishedModulePreparation(); // are all the SDO init entries completed
 	bool checkSDOInitialisation();
@@ -159,6 +162,7 @@ public:
 
 	void queueInitialisationRequest(SDOEntry *entry, Value val);
 	void queueRuntimeRequest(SDOEntry *entry);
+#endif //USE_SDO
 #endif
 private:
 	ECInterface();
@@ -169,12 +173,14 @@ private:
 	uint8_t *update_mask;
 	uint32_t reference_time;
 #ifndef EC_SIMULATOR
+#ifdef USE_SDO
 	std::list< std::pair<SDOEntry*, Value> > initialisation_entries;
 	std::list< std::pair<SDOEntry*, Value> >::iterator current_init_entry;
 	std::list<SDOEntry*> sdo_update_entries;
 	std::list<SDOEntry*>::iterator current_update_entry;
 	enum SDOEntryState { e_None, e_Busy_Initialisation, e_Busy_Update };
 	SDOEntryState sdo_entry_state;
+#endif //USE_SDO
 #endif
 	MachineInstance *ethercat_status;
 	const long default_tolerance = 1;

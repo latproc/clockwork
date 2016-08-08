@@ -48,7 +48,9 @@
 #include "MessageLog.h"
 #include "symboltable.h"
 #include "Channel.h"
+#ifdef USE_SDO
 #include "SDOEntry.h"
+#endif //USE_SDO
 
 extern int yylineno;
 extern int yycharno;
@@ -440,6 +442,7 @@ void predefine_special_machines() {
 	machines["ETHERCAT"] = miec;
 #endif
 
+#ifdef USE_SDO
 	MachineClass *mc_sdo = new MachineClass("SDOENTRY");
 	mc_sdo->states.push_back("ready");
 	mc_sdo->initial_state = State("ready");
@@ -450,6 +453,7 @@ void predefine_special_machines() {
 	mc_sdo->parameters.push_back(Parameter("SIZE"));
 	mc_sdo->parameters.push_back(Parameter("OFFSET"));
 	mc_sdo->options["VALUE"] = 0;
+#endif //USE_SDO
 
 	MachineClass *mc_external = new MachineClass("EXTERNAL");
 	mc_external->options["HOST"] = "localhost";
@@ -603,9 +607,11 @@ void semantic_analysis() {
                 || (mi->getStateMachine()->name == "COUNTERRATE"
                     && (mi->getStateMachine()->parameters.size() == 3
                     || mi->getStateMachine()->parameters.size() == 1 ) )
+#ifdef USE_SDO
 				|| (mi->getStateMachine()->name == "SDOENTRY"
 					&& (mi->getStateMachine()->parameters.size() == 4
 					||  mi->getStateMachine()->parameters.size() == 5) )
+#endif //USE_SDO
             ) {
                 
             }
