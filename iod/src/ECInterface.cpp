@@ -72,6 +72,7 @@ bool all_ok = false;
 static bool link_was_up = false;
 static bool master_was_running = false;
 
+long ECInterface::default_tolerance = 1;
 #ifndef EC_SIMULATOR
 
 std::vector<ECModule *> ECInterface::modules;

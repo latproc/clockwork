@@ -183,7 +183,7 @@ private:
 #endif //USE_SDO
 #endif
 	MachineInstance *ethercat_status;
-	const long default_tolerance = 1;
+	static long default_tolerance;
 	const long *failure_tolerance;
 	int failure_count;
 };
