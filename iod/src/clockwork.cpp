@@ -48,7 +48,9 @@
 #include "MessageLog.h"
 #include "symboltable.h"
 #include "Channel.h"
+#ifdef USE_SDO
 #include "SDOEntry.h"
+#endif //USE_SDO
 
 extern int yylineno;
 extern int yycharno;
@@ -391,6 +393,56 @@ void predefine_special_machines() {
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
 	mc_constant->options["VALUE"] = "VAL_PARAM1";
 
+#ifndef EC_SIMULATOR
+	MachineClass *mcwc = new MachineClass("ETHERCAT_WORKINGCOUNTER");
+	mcwc->states.push_back("ZERO");
+	mcwc->states.push_back("INCOMPLETE");
+	mcwc->states.push_back("COMPLETE");
+	mcwc->initial_state = State("ZERO");
+	mcwc->disableAutomaticStateChanges();
+	mcwc->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+
+	MachineClass *mcls = new MachineClass("ETHERCAT_LINKSTATUS");
+	mcls->states.push_back("DOWN");
+	mcls->states.push_back("UP");
+	mcls->initial_state = State("DOWN");
+	mcls->disableAutomaticStateChanges();
+
+	MachineClass *mcec = new MachineClass("ETHERCAT_BUS");
+	mcec->states.push_back("INIT");
+	mcec->states.push_back("DISCONNECTED");
+	mcec->states.push_back("ACTIVE");
+	mcec->states.push_back("INACTIVE");
+	mcec->states.push_back("ERROR");
+	mcec->initial_state = State("INIT");
+	mcec->properties.add("tolerance", Value(10), SymbolTable::ST_REPLACE);
+	mcec->disableAutomaticStateChanges();
+
+	MachineInstance *miwc = MachineInstanceFactory::create("ETHERCAT_WC", "ETHERCAT_WORKINGCOUNTER");
+	miwc->setProperties(mcwc->properties);
+	miwc->setStateMachine(mcwc);
+	miwc->setDefinitionLocation("Internal", 0);
+	miwc->markActive();
+	machines["ETHERCAT_WC"] = miwc;
+
+	MachineInstance *mils = MachineInstanceFactory::create("ETHERCAT_LS", "ETHERCAT_LINKSTATUS");
+	mils->setProperties(mcls->properties);
+	mils->setStateMachine(mcls);
+	mils->setDefinitionLocation("Internal", 0);
+	mils->markActive();
+	machines["ETHERCAT_LS"] = mils;
+
+	MachineInstance *miec = MachineInstanceFactory::create("ETHERCAT", "ETHERCAT_BUS");
+	miec->setProperties(mcec->properties);
+	miec->setStateMachine(mcec);
+	miec->addLocal("counter", miwc);
+	miec->addLocal("link", mils);
+	miec->setDefinitionLocation("Internal", 0);
+	miec->markActive();
+	machines["ETHERCAT"] = miec;
+#endif
+
+#ifdef USE_SDO
 	MachineClass *mc_sdo = new MachineClass("SDOENTRY");
 	mc_sdo->states.push_back("ready");
 	mc_sdo->initial_state = State("ready");
@@ -401,6 +453,7 @@ void predefine_special_machines() {
 	mc_sdo->parameters.push_back(Parameter("SIZE"));
 	mc_sdo->parameters.push_back(Parameter("OFFSET"));
 	mc_sdo->options["VALUE"] = 0;
+#endif //USE_SDO
 
 	MachineClass *mc_external = new MachineClass("EXTERNAL");
 	mc_external->options["HOST"] = "localhost";
@@ -411,6 +464,7 @@ void predefine_special_machines() {
 	machines["SYSTEM"] = settings;
 	settings->setProperties(settings_class->properties);
 	settings->setStateMachine(settings_class);
+	settings->setDefinitionLocation("Internal", 0);
 
 	MachineInstance *channels = MachineInstanceFactory::create("CHANNELS", "LIST");
 	machines["CHANNELS"] = channels;
@@ -477,7 +531,7 @@ void semantic_analysis() {
 			BOOST_FOREACH(node, mc->global_references) {
 				if (machines.count(node.first) == 0) {
 					std::stringstream ss;
-					ss << "## - Warning: Cannot find a global variable named " << node.first << "\n";
+					ss << "## - Warning: Cannot find a global machine or variable named " << node.first << "\n";
 					error_messages.push_back(ss.str());
 					++num_errors;
 				}
@@ -553,9 +607,11 @@ void semantic_analysis() {
                 || (mi->getStateMachine()->name == "COUNTERRATE"
                     && (mi->getStateMachine()->parameters.size() == 3
                     || mi->getStateMachine()->parameters.size() == 1 ) )
+#ifdef USE_SDO
 				|| (mi->getStateMachine()->name == "SDOENTRY"
 					&& (mi->getStateMachine()->parameters.size() == 4
 					||  mi->getStateMachine()->parameters.size() == 5) )
+#endif //USE_SDO
             ) {
                 
             }

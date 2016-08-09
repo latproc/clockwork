@@ -37,7 +37,9 @@
 #include "Scheduler.h"
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
+#ifdef USE_SDO
 #include "SDOEntry.h"
+#endif //USE_SDO
 #endif
 
 extern Statistics *statistics;
@@ -1424,6 +1426,15 @@ bool IODCommandFreeze::run(std::vector<Value> &params) {
 }
 
 extern bool program_done;
+extern bool all_ok;
+
+bool IODCommandToggleEtherCAT::run(std::vector<Value> &params) {
+	uint64_t start = microsecs();
+	uint64_t now = start;
+	all_ok = !all_ok;
+	result_str = "OK";
+	return true;
+}
 
 bool IODCommandShutdown::run(std::vector<Value> &params) {
 	uint64_t start = microsecs();
@@ -1435,6 +1446,7 @@ bool IODCommandShutdown::run(std::vector<Value> &params) {
 
 bool IODCommandSDO::run(std::vector<Value> &params) {
 #ifndef EC_SIMULATOR
+#ifdef USE_SDO
 #if 0
 	if (params.size() == 2 ) {
 		Value entry_name = params[1];
@@ -1482,6 +1494,10 @@ bool IODCommandSDO::run(std::vector<Value> &params) {
 		error_str = "usage: SDO entry new_value";
 		return false;
 	}
+#else //USE_SDO
+	error_str = "Command disabled";
+	return false;
+#endif //USE_SDO
 #else
 	error_str = "Command disabled";
 	return false;

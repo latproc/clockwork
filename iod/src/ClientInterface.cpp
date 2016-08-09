@@ -350,7 +350,10 @@ IODCommand *parseCommandString(const char *data) {
 		command = new IODCommandTracing;
 	}
 	else if (count == 2 && ds == "TOGGLE") {
-		command = new IODCommandToggle;
+		if (params[1] == "ETHERCAT")
+			command = new IODCommandToggleEtherCAT;
+		else
+			command = new IODCommandToggle;
 	}
 	else if ( ds == "SEND") {
 		command = new IODCommandSend;
@@ -406,9 +409,11 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "PERSISTENT") {
 		command = new IODCommandPersistentState;
 	}
+#ifdef USE_SDO
 	else if (ds == "SDO") {
 		command = new IODCommandSDO;
 	}
+#endif //USE_SDO
 	else if (ds == "HELP") {
 		command = new IODCommandHelp;
 	}

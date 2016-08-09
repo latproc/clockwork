@@ -272,6 +272,24 @@ private:
 	std::set<MachineInstance*> busy_machines; // machines that have work queued to them
 };
 
+class ActionList {
+public:
+	void push_back(Action *);
+	void push_front(Action *);
+	Action *back();
+	Action *front();
+	void pop_front();
+	size_t size();
+	bool empty();
+	std::list<Action*>::iterator begin();
+	std::list<Action*>::iterator end();
+	std::list<Action*>::iterator erase(std::list<Action*>::iterator &i);
+	void remove(Action *a);
+private:
+	boost::recursive_mutex mutex;
+	std::list<Action*>actions;
+};
+
 
 class Channel;
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
@@ -356,7 +374,7 @@ public:
     std::list<Transition> transitions;
 
     Action *executingCommand(); // returns the action currently executing
-	std::list<Action*>active_actions;
+	ActionList active_actions;
 	void displayActive(std::ostream &out);
 	void start(Action *a);
 	void stop(Action *a);

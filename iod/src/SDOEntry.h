@@ -31,6 +31,7 @@ class ec_sdo_request_t;
 #endif
 
 class ECModule;
+#ifdef USE_SDO
 class SDOEntry {
 	public:
 	enum Operation { READ, WRITE };
@@ -104,5 +105,6 @@ class SDOEntry {
 	Operation op;
 	MachineInstance *machine_instance;
 };
+#endif //USE_SDO
 
 #endif

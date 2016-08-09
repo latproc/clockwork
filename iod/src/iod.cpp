@@ -39,7 +39,9 @@
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
 #include <tool/MasterDevice.h>
+#ifdef USE_SDO
 #include "SDOEntry.h"
+#endif //USE_SDO
 #endif
 
 #define __MAIN__
@@ -185,7 +187,9 @@ class IODHardwareActivation : public HardwareActivation {
 		void operator()(void) {
 			NB_MSG << "----------- Initialising machines ------------\n";
 			//ECInterface::instance()->activate();
+#ifdef USE_SDO
 			ECInterface::instance()->beginModulePreparation();
+#endif
 			initialise_machines();
 		}
 };
@@ -316,8 +320,10 @@ std::string thread_name("iod_main");
 #endif
 	generateIOComponentModules();
 #ifndef EC_SIMULATOR
+#ifdef USE_SDO
 	// prepare all SDO entries
 	SDOEntry::resolveSDOModules(); 
+#endif //USE_SDO
 #endif
 	IOComponent::setupIOMap();
 	initialiseOutputs();

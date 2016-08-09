@@ -153,14 +153,14 @@ set (Clockwork_Headers
 set (Clockwork_SRCS 
 	${Clockwork_Headers}
 	${cw_yacc_output} ${cw_lex_output}
-	src/Action.cpp src/AbortAction.cpp
+	src/MachineInstance.cpp src/Action.cpp src/AbortAction.cpp
 	src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp src/cmdline.lpp src/CallMethodAction.cpp
 	src/Channel.cpp src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
 	src/DisableAction.cpp src/Dispatcher.cpp src/ECInterface.cpp src/EnableAction.cpp
 	src/ExecuteMessageAction.cpp src/Expression.cpp src/ExpressionAction.cpp
 	src/FireTriggerAction.cpp src/HandleMessageAction.cpp src/IOComponent.cpp src/IODCommands.cpp
 	src/IfCommandAction.cpp src/IncludeAction.cpp src/LockAction.cpp src/LogAction.cpp
-	src/MQTTInterface.cpp src/MachineCommandAction.cpp src/MachineInstance.cpp src/ModbusInterface.cpp
+	src/MQTTInterface.cpp src/MachineCommandAction.cpp src/ModbusInterface.cpp
 	src/PatternAction.cpp src/PersistentStore.cpp src/Plugin.cpp src/PolledMessageHandler.cpp
 	src/PopListAction.cpp src/PredicateAction.cpp src/ProcessingThread.cpp src/ResumeAction.cpp
 	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp src/SetOperationAction.cpp
@@ -225,6 +225,12 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp ${Clock
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
 target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+
+add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp ${Clockwork_SRCS})
+#set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
+target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 )
+target_link_libraries(iod_sdo Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
+install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
 set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)

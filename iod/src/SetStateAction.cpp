@@ -110,6 +110,12 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				DBG_M_ACTIONS << owner->fullName() << " setting state of " << machine->fullName() <<" to dereferenced value " << value << "\n";
 				new_state = value.getName();
 			}
+			else {
+				char buf[150];
+				snprintf(buf, 150, "Error: Machine %s asked to change to unknown state %s",
+					machine->getName().c_str(), deref.sValue.c_str());
+				MessageLog::instance()->add(buf);
+			}
 		}
 		if (machine->io_interface) {
 			std::string txt(machine->io_interface->getStateString());
