@@ -81,7 +81,8 @@ void MachineCommand::setActions(std::list<Action*> &new_actions) {
 
 
 std::ostream &MachineCommand::operator<<(std::ostream &out)const {
-	out << "Command " << owner->getName() << "." << command_name;
+	out << "Command " << owner->getName() << "." << command_name
+		<< " (at step " <<current_step << ")";
 	return out;
 }
 
@@ -98,8 +99,12 @@ Action::Status MachineCommand::runActions() {
 		AbortAction *aa = dynamic_cast<AbortAction*>(a);
 		Action::Status stat = (*a)();
 		if (aa) {
-			DBG_MSG<< "ABORTING: " << *this << " at action " << *a << "\n";
+			std::stringstream ss;
+			ss << "ABORTING: " << *this << " at action " << *a << "\n";
 			abort();
+			char *err_msg = strdup(ss.str().c_str());
+			MessageLog::instance()->add(err_msg);
+			error_str = err_msg;
 			if (stat == Failed)
 				error_str = a->error();
 			owner->stop(a);
@@ -132,7 +137,14 @@ Action::Status MachineCommand::runActions() {
 		}
 		Action *x = owner->executingCommand();
 		if (x==a) {
-			DBG_M_ACTIONS << "action didn't remove itself " << *a << "\n";
+			std::stringstream ss;
+			ss << owner->getName() << " " << (*this)
+				<< " action '" << *a << "' didn't remove itself, stopping it manually.";
+			char *err_msg = strdup(ss.str().c_str());
+			MessageLog::instance()->add(err_msg);
+			DBG_M_ACTIONS << err_msg << "\n";
+			free(err_msg);
+
 			owner->stop(a);
 		}
 //		x = owner->executingCommand();
