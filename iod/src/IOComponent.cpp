@@ -1114,7 +1114,6 @@ void IOComponent::setupIOMap() {
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
 		int bytes = 1;
-		//(*indexed_components)[offset*8 + bitpos] = ioc;
 		for (unsigned int i=0; i<ioc->address.bitlen; ++i) 
 			(*indexed_components)[offset*8 + bitpos + i] = ioc;
 		for (int i=0; i<bytes; ++i) {
@@ -1205,23 +1204,6 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 					while (owner_iter != owners.end()) {
 						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt)) );
 					}
-
-#if 0
-					iter = depends.begin();
-					while (iter != depends.end()) {
-						MachineInstance *m = *iter++;
-						if (std::find(owners.begin(), owners.end(), m) != owners.end()) { 
-							std::cout << m->getName() << " is an owner\n"; continue; 
-						}
-						if (m->receives(msg, this)) {
-							work_queue.push_back( new MachineEvent(m, msg) );
-						}
-						else std::cout << m->getName() << " does not receive " << evt << "\n";
-						std::cout << io_name << "(hw) telling " << m->getName() 
-							<< " it needs to check states (" << evt << ")\n";
-					}
-#endif
-
 #endif
 					if (value) evt = "on_enter";
 					else evt = "off_enter";
@@ -1229,23 +1211,6 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 					while (owner_iter != owners.end()) {
 						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt)) );
 					}
-
-#if 0
-					iter = depends.begin();
-					while (iter != depends.end()) {
-						MachineInstance *m = *iter++;
-						if (m->receives(msg, this)) {
-							m->enqueue(pkg);
-							work_queue.push_back( new MachineEvent(m, msg) );
-						}
-						else std::cout << m->getName() << " does not receive " << evt << "\n";
-						//m->execute(msg, this);
-						std::cout << io_name << "(hw) telling " << m->getName() 
-							<< " it needs to check states (" << evt << ")\n";
-						//m->setNeedsCheck();
-						//m->checkActions();
-					}
-#endif
 			}
 			address.value = value;
 	}
@@ -1278,10 +1243,6 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 			else {
 				val = 0;
 			}
-
-			//if (val) {for (int xx = 0; xx<4; ++xx) { std::cout << std::setw(2) << std::setfill('0') 
-			//	<< std::hex << (int)*((uint8_t*)(offset+xx));
-			//  << ":" << std::dec << val <<" "; }
 			if ( regular_polls.count(this) ) {
 				// this device is polled on a regular clock, do not process here
 				raw_value = val;
@@ -1296,74 +1257,26 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 				int32_t new_val = filter(val);
 				if (hardware_state == s_operational ) { //&& address.value != new_val) {
 					address.value = new_val;
-
-#if 0
-					//if (owners.empty()) std::cout << "owner is not defined\n";
-					if (address.value != old_val) {
-						std::list<MachineInstance*>::iterator owner_iter = owners.begin();
-						owner_iter = owners.begin();
-						while (owner_iter != owners.end()) {
-							work_queue.push_back( new Package(this, *owner_iter++, new Message("property_change")) );
-						}
-					}
-#endif
-#if 0
-					last_event = e_none;
-					//std::cerr << " assigned " << val << " to address " << address << "\n";
-					if (hardware_state == s_operational) {
-						const char *evt = "property_change";
-						std::list<MachineInstance*>::iterator iter = depends.begin();
-						while (iter != depends.end()) {
-							MachineInstance *m = *iter++;
-							Message msg(evt);
-							m->execute(msg, this);
-							//std::cerr << io_name << "(hw) telling " << m->getName() << " it needs to check states\n";
-							m->checkActions();
-						}
-					}
-#endif
 				}
 			}
 	}
 }
 
 void IOComponent::turnOn() { 
-	//std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
 }
 void IOComponent::turnOff() { 
-	//std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
 }
 
 void Output::turnOn() { 
-	//std::cout << "Turning on " << address.io_offset << ':' << address.io_bitpos << "\n";
-/*
-	assert(io_process_data);
-	uint8_t *offset = io_process_data + address.io_offset;
-	int bitpos = address.io_bitpos;
-	while (bitpos>=8) { 
-		++offset;
-		bitpos-=8;
-	}
-*/
 	gettimeofday(&last, 0);
 	last_event = e_on;
 	updatedComponentsOut.insert(this);
-  updates_sent = false;
+	updates_sent = false;
 	++outputs_waiting;
 	markChange();
 }
 
 void Output::turnOff() { 
-/*
-	//std::cout << "Turning off " << address.io_offset << ':' << address.io_bitpos << "\n";
-	assert(io_process_data);
-	uint8_t *offset = io_process_data + address.io_offset;
-	int bitpos = address.io_bitpos;
-	while (bitpos>=8) { 
-		++offset;
-		bitpos-=8;
-	}
-*/
 	gettimeofday(&last, 0);
 	last_event = e_off;
 	updatedComponentsOut.insert(this);
