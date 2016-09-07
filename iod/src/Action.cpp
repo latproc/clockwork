@@ -83,62 +83,20 @@ char *Trigger::getTriggers() {
 	return res;
 }
 
-Trigger::Trigger() : _internals(0), name("inactive"), seen(false), is_active(false), owner(0), deleted(false), refs(1) { 
-	_internals = new TriggerInternals;
-	addTrigger(this); 
-}
-
-Trigger::Trigger(const std::string &n) : _internals(0), name(n), seen(false), is_active(true), owner(0), deleted(false), refs(1) { 
+Trigger::Trigger(const std::string &n) : _internals(0), name(n), seen(false), owner(0),
+		deleted(false), refs(1), is_active(true) {
 	_internals = new TriggerInternals;
 	addTrigger(this); }
 
-Trigger::Trigger(const Trigger &o) : _internals(0), name(o.name), seen(o.seen), is_active(o.is_active), owner(o.owner), deleted(false), refs(1) { 
-	_internals = new TriggerInternals;
-	addTrigger(this); 
-}
-/*
-Trigger &Trigger::operator=(const Trigger &o) { 
-		name = o.name;
-		seen = o.seen;
-		is_active = o.is_active;
-        owner = o.owner;
-        // note: refs does not change
-		return *this;
-}
-*/
 
 Trigger::~Trigger() {
 	MachineInstance *mi = dynamic_cast<MachineInstance*>(owner);
 	Action *a = dynamic_cast<Action*>(owner);
-#if 0
-	if (mi) {
-		DBG_ACTIONS << *mi << " Removing trigger " << name << "\n";
-	}
-	else if (a) {
-		DBG_ACTIONS << *a << " Removing trigger " << name << "\n";
-	}
-	else {
-		DBG_ACTIONS<< " Removing trigger " << name << "\n";
-	}
-#endif
 	removeTrigger(this);
-#if 0
-	if (!_internals->holders.empty()) {
-		std::stringstream ss;
-		ss << "Deleting Trigger with active holders: ";
-		std::list<Action*>::const_iterator iter = _internals->holders.begin();
-		while (iter != _internals->holders.end()) {
-			ss << *(*iter++);
-		}
-		ss << "\n";
-		DBG_MSG << ss.str();
-	}
-#endif
 	delete _internals;
 }
 
 Trigger* Trigger::retain() {
-//	DBG_ACTIONS << name << " retain " << refs << "\n";
 	int holders = _internals->holders.size();
 	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
 		int x = 1; 
@@ -148,7 +106,6 @@ Trigger* Trigger::retain() {
 	return this;
 }
 Trigger *Trigger::release() {
-//	DBG_ACTIONS << name << " release " << refs << "\n";
 	int holders = _internals->holders.size();
 	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
 		int x = 1; 
@@ -162,12 +119,12 @@ Trigger *Trigger::release() {
 void Trigger::setOwner(TriggerOwner *new_owner) { owner = new_owner; }
 bool Trigger::enabled() const { return is_active; }
 bool Trigger::fired() const { return seen; }
-void Trigger::fire() { if (seen) return; seen = true; if (owner) owner->triggerFired(this); }
-void Trigger::reset() { seen = false; }
-void Trigger::enable() { is_active = true; }
+void Trigger::fire() {
+	if (seen) return;
+	seen = true;
+	if (owner) owner->triggerFired(this);
+}
 void Trigger::disable() {
-//	if (is_active) { DBG_ACTIONS << "Disabling trigger: " << name << "\n"; }
-//	else  { DBG_ACTIONS << "Disabling inactive trigger: " << name << "\n"; }
 	is_active = false;
 }
 const std::string& Trigger::getName() const { return name; }

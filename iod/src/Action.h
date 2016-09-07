@@ -49,10 +49,7 @@ struct TriggerOwner {
 
 class Trigger {
 public:
-	Trigger();
 	Trigger(const std::string &n);
-	Trigger(const Trigger &o);
-	Trigger &operator=(const Trigger &o);
 
 	virtual ~Trigger();
 	Trigger*retain();
@@ -65,8 +62,6 @@ public:
 	bool enabled() const;
 	bool fired() const;
 	void fire();
-	void reset();
-	void enable();
 	void disable();
 	virtual const std::string& getName() const;
 	//const std::string &getName();
@@ -80,10 +75,17 @@ protected:
 	TriggerInternals *_internals;
 	std::string name;
 	bool seen;
-	bool is_active;
     TriggerOwner *owner;
 	bool deleted;
     int refs;
+private:
+	bool is_active;
+
+	// None of these constructors and assignment operators are
+	// implemented because they are not supported
+	Trigger();
+	Trigger(const Trigger &o);
+	Trigger &operator=(const Trigger &o);
 };
 
 // an action is started by operator(). If the action successfully starts, 
