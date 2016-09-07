@@ -2591,22 +2591,32 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from, Acti
 				SetStateAction *ssa = dynamic_cast<SetStateAction*>(a);
 				CallMethodAction *cma = dynamic_cast<CallMethodAction*>(a);
 				if (ssa) {
-					if (!ssa->condition.predicate || ssa->condition(this)) {
+					if (!ssa->getCondition().predicate || ssa->getCondition()(this)) {
 						trigger->fire();
 						DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 					}
-					else
+					else {
 						DBG_M_MESSAGING << _name << " trigger message " << trigger->getName()
-							<< " arrived but condition " << *(ssa->condition.predicate) << " failed\n";
+							<< " arrived but condition " << *(ssa->getCondition().predicate) << " failed\n";
+						char buf[150];
+						snprintf(buf, 150, "%s dropped set state trigger without firing since the state condition on %s is no longer valid", fullName().c_str(), event_name.c_str());
+						MessageLog::instance()->add(buf);
+						DBG_MSG << buf << "\n";
+					}
 				}
 				else if (msa) {
-					if (!msa->condition.predicate || msa->condition(this)) {
+					if (!msa->getCondition().predicate || msa->getCondition()(this)) {
 						trigger->fire();
 						DBG_M_MESSAGING << _name << " trigger on " << *a << " fired\n";
 					}
-					else
+					else {
 						DBG_M_MESSAGING << _name << " trigger message " << trigger->getName()
-						<< " arrived but condition " << *(ssa->condition.predicate) << " failed\n";
+						<< " arrived but condition " << *(ssa->getCondition().predicate) << " failed\n";
+						char buf[150];
+						snprintf(buf, 150, "%s dropped move state trigger without firing since the state condition on %s is no longer valid", fullName().c_str(), event_name.c_str());
+						MessageLog::instance()->add(buf);
+						DBG_MSG << buf << "\n";
+					}
 				}
 				// a call method action may be waiting for this message
 				else if ( cma ) {
@@ -3494,6 +3504,9 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			if (option.second.asInteger(pd)) idle_time = pd;
 		}
 	}
+	// clone properties from the class into this instance but don't replace
+	// properties already loaded
+	properties.add(state_machine->properties, SymbolTable::NO_REPLACE);
 	properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
 	if (locals.size() == 0) {
 		BOOST_FOREACH(Parameter p, state_machine->locals) {
