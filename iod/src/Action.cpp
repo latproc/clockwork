@@ -39,9 +39,6 @@ uint64_t Trigger::startTime() { return _internals->start_time; }
 void addTrigger(Trigger *t) {
 	boost::recursive_mutex::scoped_lock scoped_lock(trigger_list_mutex);
 	all_triggers.push_back(t);
-if (t->getName() == "OCR_StatusLED.off") {
-int x = 1;
-}
 }
 
 void removeTrigger(Trigger *t) {
@@ -98,18 +95,12 @@ Trigger::~Trigger() {
 
 Trigger* Trigger::retain() {
 	int holders = _internals->holders.size();
-	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
-		int x = 1; 
-	}
 	++refs;
 	if (refs == 0) { NB_MSG << "Trigger reference count is 0 after increment\n"; }
 	return this;
 }
 Trigger *Trigger::release() {
 	int holders = _internals->holders.size();
-	if (getName().compare(0, strlen("OCR_StatusLED"), "OCR_StatusLED")  == 0) { 
-		int x = 1; 
-	}
 	assert(refs>0);
 	if (--refs == 0)
 		delete this;
@@ -169,9 +160,20 @@ Trigger *Action::getTrigger() const { return trigger; }
 void Action::disableTrigger() { if (trigger) trigger->disable(); }
 
 bool Action::started() { return started_; }
-void Action::start() { started_ = true; }
+void Action::start() { assert(!started_); started_ = true; }
 void Action::stop() { started_ = false; }
 bool Action::aborted() { return aborted_; }
+void Action::reset() {
+	status = New;
+	error_str=""; result_str="";
+	saved_status=Running; blocked=0;
+	started_=false;
+	if (trigger) {
+		trigger->removeHolder(this);
+		trigger->release();
+		trigger = 0;
+	}
+}
 
 const char *actionStatusName(const Action::Status &state) {
 	switch(state) {
@@ -263,10 +265,9 @@ void Action::resume() {
 }
 
 Action::Status Action::operator()() {
-	if (status == New) {
-		start_time = microsecs();
-		status = Running; // important because run() checks the current state
-	}
+	reset();
+	start_time = microsecs();
+	status = Running; // important because run() checks the current state
 	status = run();
 	if (status == Failed) {
 		if (error_msg) {

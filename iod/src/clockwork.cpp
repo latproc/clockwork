@@ -810,7 +810,7 @@ void semantic_analysis() {
 			if (source && source->getName() != machine) {
 				//DBG_MSG << "duplicating receive function for " << mi->getName() << " from " << source->getName() << " (" << machine << ")" << "\n";
 				event = source->getName() + "." + event;
-				mi->receives_functions[Message(event.c_str())] = rcv.second;
+				mi->receives_functions.insert(std::make_pair(Message(event.c_str()), rcv.second));
 			}
 		}
 	}

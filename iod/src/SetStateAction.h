@@ -39,6 +39,7 @@ struct SetStateActionTemplate : public ActionTemplate {
     CStringHolder target;
     Value new_state;
     std::string trigger_event;
+private:
 	Condition condition;
 };
 
@@ -48,11 +49,15 @@ struct SetStateAction : public Action {
     Status run();
     Status checkComplete();
 	void setAuthority(uint64_t auth) { authority = auth; }
-    virtual std::ostream &operator<<(std::ostream &out)const;
+
+	Condition &getCondition() { return condition; }
+
+	virtual std::ostream &operator<<(std::ostream &out)const;
     CStringHolder target;
     Value new_state; // new state as given by the program (may be a property name)
     State value;
     MachineInstance *machine;
+private:
 	Condition condition;
 protected:
 	uint64_t authority;

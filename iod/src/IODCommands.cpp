@@ -354,7 +354,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                     else
                         msg_str = "off_enter";
                     //m->mq_interface->send(new Message(msg_str.c_str()), m);
-                    m->execute(new Message(msg_str.c_str()), m->mq_interface);
+					m->execute(new Message(msg_str.c_str(), Message::ENTERMSG), m->mq_interface);
                     result_str = "OK";
                     return true;
                 }

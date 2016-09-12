@@ -1177,6 +1177,14 @@ void MachineInstance::describe(std::ostream &out) {
 		while (cmd_iter != state_machine->commands.end()) {
 			const std::pair<std::string, MachineCommandTemplate*> &curr = *cmd_iter++;
 			out << delim << curr.first;
+			const char *within_state = curr.second->getStateName().get();
+			if (within_state && *within_state) {
+				if (curr.second->switch_state)
+					out << " AUTO SWITCH to ";
+				else
+					out << " WITHIN ";
+				out << within_state;
+			}
 			delim = ", ";
 		}
 		out << "\n";
@@ -1291,7 +1299,7 @@ bool MachineInstance::dependsOn(Transmitter *m) {
 	if (!m) return false;
 	MachineInstance *mi = dynamic_cast<MachineInstance*>(m);
 	if (!mi) return true; // assume we depend on all low level transmitters
-	return depends.find(mi) != depends.end();
+	return listens.find(mi) != listens.end();
 }
 
 
@@ -1342,7 +1350,7 @@ void MachineInstance::idle() {
 		curr->retain();
 		if (curr->getStatus() == Action::New || curr->getStatus() == Action::NeedsRetry) {
 			//stop(curr); // avoid double queueing
-			start(curr);
+			//start(curr);
 			Action::Status res = (*curr)();
 			if (res == Action::Failed) {
 				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error();
@@ -1944,30 +1952,28 @@ bool MachineInstance::stateExists(State &seek) {
  */
 bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	if (!enabled()) {
-#if DEBUG_VERBOSE
-		char buf[100];
-		snprintf(buf, 100, "Message: %s sent from %s to disabled machine %s", m.getText().c_str(), 
-			(from) ? from->getName().c_str() : "unknown", _name.c_str());
-		MessageLog::instance()->add(buf);
-		NB_MSG << buf << "\n";
-#endif
 		return false;
 	}
 	// passive machines do not receive messages
 	//if (!is_active) return false;
-	// all active machines receive messages from themselves
-	if (from == this || (io_interface && from == io_interface) ) {
-		DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from itself\n";
-		return true; 
-	}    
-	// machines receive messages from objects they are listening to
-	if (std::find(listens.begin(), listens.end(), from) != listens.end()) {
-		DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from " << from->getName() << "\n";
-		return true;
+	// all active machines receive messages from themselves but now we
+	// check if there is a handler in the case of enter and leave messages
+	// enter and leave functions are no longer automatically accepted
+	if (m.isSimple()) {
+		if ( from == this || (io_interface && from == io_interface) ) {
+			DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from itself\n";
+			return true; 
+		}    
+		// machines receive messages from objects they are listening to
+		if (std::find(listens.begin(), listens.end(), from) != listens.end()) {
+			DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from " << from->getName() << "\n";
+			return true;
+		}
 	}
 	// items in the command table are public and can be sent by anyone
 	if (commands.count(m.getText()) != 0) {
-		return true;    	}
+		return true;
+	}
 	// RECEIVE methods are now public also, this is necessary with the
 	// current implementation of CATCH as a receive rather than a command
 	// We may change this when we add visibility modifiers
@@ -1981,7 +1987,11 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 		const Transition &t = *iter++;
 		if (t.trigger == m) return true;
 	}
-	DBG_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
+	DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
+	if (from && dependsOn(from)) {
+		DBG_M_MESSAGING << getName() << " depends on " << from->getName() << " registering a check\n";
+		setNeedsCheck();
+	}
 	return false;
 }
 
@@ -2062,13 +2072,15 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		/* do not send a leave message for the state if the state is not changing (ie in resume) */
 		if (enabled() && current_state != new_state && current_state.getName() != "undefined" ) {
 			std::string txt = _name + "." + current_state.getName() + "_leave";
-			Message msg(txt.c_str());
-			stat = execute(msg, this);
-			if (stat == Action::Failed || (!isActive() && stat != Action::Complete) ) {
-				char buf[200];
-				snprintf(buf, 200, "%s %s leave action did not complete (%s)", _name.c_str(), txt.c_str(), actionStatusName(stat));
-				MessageLog::instance()->add(buf);
-				NB_MSG << buf << "\n";
+			Message msg(txt.c_str(), Message::LEAVEMSG);
+			if (receives(msg, this)) {
+				stat = execute(msg, this);
+				if (stat == Action::Failed || (!isActive() && stat != Action::Complete) ) {
+					char buf[200];
+					snprintf(buf, 200, "%s %s leave action did not complete (%s)", _name.c_str(), txt.c_str(), actionStatusName(stat));
+					MessageLog::instance()->add(buf);
+					NB_MSG << buf << "\n";
+				}
 			}
 
 			std::set<MachineInstance*>::iterator dep_iter = depends.begin();
@@ -2285,7 +2297,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		/* notify everyone we are entering a state */
 
 		std::string txt = _name + "." + new_state.getName() + "_enter";
-		Message msg(txt.c_str());
+		Message msg(txt.c_str(), Message::ENTERMSG);
 		stat = execute(msg, this);
 		notifyDependents(msg);
 	}
@@ -2339,8 +2351,26 @@ void MachineInstance::notifyDependents(Message &msg){
 	}
 }
 
+Action *MachineInstance::findMatchingCommand(const std::string &command_name) {
+	// find the correct command to use based on the current state
+	std::multimap<std::string, MachineCommand*>::iterator cmd_it = commands.find(command_name);
+	while (cmd_it != commands.end()) {
+		std::pair<std::string, MachineCommand*>curr = *cmd_it++;
+		if (curr.first != command_name) break;
+		MachineCommand *cmd = curr.second;
+		DBG_M_MESSAGING << _name << " checking command " << *cmd << "\n";
+		const char *cmd_state_name = cmd->getStateName().get();
+		if ((!cmd_state_name || !*cmd_state_name) // no WITHIN clause set
+			|| cmd->autoSwitch() // uses a DURING to auto switch states (no WITHIN)
+			|| (!cmd->autoSwitch() && current_state.getName() == cmd_state_name) )
+			return cmd->retain();
+	}
+	DBG_M_ACTIONS << _name << " no command matching " << command_name << " found\n";
+	return 0;
+}
 
-/* findHandler - find a handler for a message by looking through the transition table 
+
+/* findHandler - find a handler for a message by looking through the transition table
 
    if the message not in dot-form (i.e., does not contain a dot), we search the transition
    table for a matching transition
@@ -2379,7 +2409,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					&& (!t.condition || t.condition->operator()(this))) {
 				// found match, if there is a command defined for this transition, we
 				// execute the command, otherwise we just do the state change
-				if (commands.count(t.trigger.getText())) {
+				int num_commands = commands.count(t.trigger.getText());
+				if (num_commands) {
 					DBG_M_MESSAGING << "Transition on machine " << getName() << " has a linked command; using it\n";
 					// at the end of the transition, we expect to have moved to the designated state
 					// so we ensure that happens by pushing a state change
@@ -2419,25 +2450,20 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 						DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus() << ") " << *msa << "\n";
 						this->push(msa);
 					}
-					if (commands.count(t.trigger.getText()) ) {
-						// if a modbus command, make sure it is turned off again in modbus
-						if (published && modbus_exports.count(_name + "." + t.trigger.getText())) {
-							ModbusAddress addr = modbus_exports[_name + "." + t.trigger.getText()];
-							if (addr.getSource() == ModbusAddress::command) {
-								DBG_MODBUS << _name << " turning off command coil " << addr << "\n";
-								addr.update(this, 0);
-							}
-							else {
-								NB_MSG << _name << " command " << t.trigger.getText() << " is linked to an improper address\n";
-							}
+					// if a modbus command, make sure it is turned off again in modbus
+					if (published && modbus_exports.count(_name + "." + t.trigger.getText())) {
+						ModbusAddress addr = modbus_exports[_name + "." + t.trigger.getText()];
+						if (addr.getSource() == ModbusAddress::command) {
+							DBG_MODBUS << _name << " turning off command coil " << addr << "\n";
+							addr.update(this, 0);
 						}
 						else {
-							DBG_M_MODBUS << _name << " " << t.trigger.getText() << " is not exported to modbus, no response sent\n";
+							NB_MSG << _name << " command " << t.trigger.getText() << " is linked to an improper address\n";
 						}
-						return commands[t.trigger.getText()]->retain();
 					}
-					else
-						return NULL;
+					// find the correct command to use based on the current state
+					Action *matching_command = findMatchingCommand(t.trigger.getText());
+					if (matching_command) return matching_command;
 				}
 				else {
 					DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
@@ -2453,9 +2479,15 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		// no transition but this may still be a command
 		DBG_M_MESSAGING << _name << " looking for a command with name " << short_name << "\n";
 		if (commands.count(short_name)) {
-			if (response_required)
-				prepareCompletionMessage(from, short_name);
-			return commands[short_name]->retain();
+			Action *matching_command = findMatchingCommand(short_name);
+			if (matching_command) {
+				if (response_required)
+					prepareCompletionMessage(from, short_name);
+				return matching_command;
+			}
+			else {
+				DBG_M_MESSAGING << _name << "found a command but it doesn't match state " << current_state.getName() << "\n";
+			}
 		}
 	}
 	else {
@@ -2523,30 +2555,8 @@ void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string me
 	}
 }
 
-/*
-void MachineInstance::collect(const Package &package) {
-	if (package.transmitter) {
-		if (!receives(package.message, package.transmitter)) return;
-		if (package.transmitter)
-			DBG_M_MESSAGING << _name << "Collecting package: " << package.transmitter->getName() << "." << *package.message << "\n";
-		else
-			DBG_M_MESSAGING << _name << "Collecting package: " << *package.message << "\n";
-		HandleMessageActionTemplate hmat(package);
-		HandleMessageAction *hma = new HandleMessageAction(this, hmat);
-		Action *curr = executingCommand();
-		if ( curr ) {
-			curr->suspend();
-			DBG_M_MESSAGING <<_name<< "Interrupted " << *curr << "\n";
-		}
-		DBG_M_MESSAGING << _name << " pushed " << *hma << "\n";
-		active_actions.push_back(hma);
-	}
-}
- */
-
 Action::Status MachineInstance::execute(const Message&m, Transmitter *from, Action *action) {
 	if (!enabled()) {
-#if 1
 		std::string msg(m.getText());
 		size_t len = msg.length();
 		if (len>5 && msg.substr(len-5) == "_done") {
@@ -2561,7 +2571,6 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from, Acti
 			}
 			MessageLog::instance()->add(buf);
 		}
-#endif
 		if (action)
 			action->setError("failed to receive a message while disabled");
 		return Action::Failed;
@@ -2829,6 +2838,20 @@ bool MachineClass::propertyIsLocal(const Value &name) const {
 	return local_properties.count(name.asString()) > 0;
 }
 
+MachineCommandTemplate *MachineClass::findMatchingCommand(std::string cmd_name, const char *state) {
+	// find the correct command to use based on the current state
+	std::multimap<std::string, MachineCommandTemplate*>::iterator cmd_it = commands.find(cmd_name);
+	while (cmd_it != commands.end()) {
+		std::pair<std::string, MachineCommandTemplate*>curr = *cmd_it++;
+		if (curr.first != cmd_name) break;
+		MachineCommandTemplate *cmd = curr.second;
+		if ( !state || cmd->switch_state || (!cmd->switch_state && cmd->getStateName().get() == state)  )
+			return cmd;
+	}
+	return 0;
+}
+
+
 
 
 MachineEvent::MachineEvent(MachineInstance *machine, Message *message) :
@@ -2868,47 +2891,20 @@ Action *MachineInstance::executingCommand() {
 void MachineInstance::start(Action *a) {
 	if (a->started()) return;
 	a->start();
-#if 0
-	if (!active_actions.empty()) {
-		Action *b = executingCommand();
-		if (b && b->isBlocked() && b->blocker() != a) {
-			DBG_M_ACTIONS << "WARNING: "<<_name << " is executing command " <<*b <<" when starting " << *a << "\n";
-		}
-		if (b == a) {
-			DBG_MSG << "Actions:\n";
-			BOOST_FOREACH(Action *action, active_actions) {
-				DBG_MSG << *action << "\n";
-			}
-
-			std::stringstream ss;
-			ss << fullName() << " Failed to start action: " << *a << " (" << a->getStatus() << ") already running";
-			MessageLog::instance()->add(ss.str().c_str());
-			NB_MSG << ss.str() << "\n";
-			return;
-		}
-	}
-#endif
-	DBG_M_ACTIONS << _name << " pushing " << *a << "\n";
 	if (tracing() && isTraceable()) {
 		resetTemporaryStringStream();
 		ss << "starting action: " << *a;
 		setValue("TRACE", ss.str());
 	}
-	DBG_ACTIONS << _name << " STARTING: " << *a << "\n";
+	DBG_M_ACTIONS << _name << " STARTING: " << *a << "\n";
 
 	int i=0;
-#if 0
-	size_t imax = active_actions.size()-1;
-	BOOST_FOREACH(Action *action, active_actions) {
-		if (a == action && i!= imax) {
-			NB_MSG << *a << " already queued at position " << i << " of " << active_actions.size() << "\n";
-			break;
-		}
-		++i;
-	}
-#endif
-	if (a!=executingCommand())
+	// actions execute from the back of the queue
+	// an action may have been pushed and then started or just started
+	// if it is not the item at the back of the queue we push it now
+	if (a!=executingCommand()) {
 		active_actions.push_back(a->retain());
+	}
 }
 
 void MachineInstance::displayActive(std::ostream &note) {
@@ -2920,6 +2916,7 @@ void MachineInstance::displayActive(std::ostream &note) {
 	{
 		Action *act = *iter++;
 		note << delim << " " << *act << " status: " << act->getStatus();
+		if (act->error()) note << " error: " << act->error();
 		delim = "\n";
 	}
 }
@@ -2945,7 +2942,7 @@ void MachineInstance::stop(Action *a) {
 			if (found)
 				std::cerr << "Warning: action " << *a << " was queued twice\n";
 			iter = active_actions.erase(iter);
-			DBG_ACTIONS << fullName() << " removed action " << *a << "\n";
+			DBG_M_ACTIONS << fullName() << " removed action " << *a << "\n";
 			a->release();
 			found = true;
 			continue;
@@ -3241,7 +3238,7 @@ void MachineInstance::push(Action *new_action) {
 		active_actions.back()->suspend();
 		active_actions.back()->setBlocker(new_action);
 	}
-	DBG_ACTIONS << _name << " pushing " << *new_action << "\n";
+	DBG_M_ACTIONS << _name << " pushing " << *new_action << "\n";
 	active_actions.push_back(new_action);
 	new_action->start();
 	num_machines_with_work++;
@@ -3471,8 +3468,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	BOOST_FOREACH(handler, machine_class->receives) {
 		//DBG_M_INITIALISATION << "setting receive handler for " << handler.first << "\n";
 		MachineCommand *mc = new MachineCommand(this, handler.second);
-		//mc->retain();
-		receives_functions[handler.first] = mc;
+		receives_functions.insert(std::make_pair(handler.first, mc));
 	}
 	// Warning: enter_functions are not used. TBD
 	BOOST_FOREACH(handler, machine_class->enter_functions) {
@@ -3484,7 +3480,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	BOOST_FOREACH(node, state_machine->commands) {
 		MachineCommand *mc = new MachineCommand(this, node.second);
 		mc->retain();
-		commands[node.first] = mc;
+		commands.insert(std::make_pair(node.first, mc));
 	}
 	std::pair<std::string,Value> option;
 	BOOST_FOREACH(option, machine_class->options) {

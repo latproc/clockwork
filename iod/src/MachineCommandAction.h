@@ -53,10 +53,14 @@ public:
     }
     void setActionTemplates(std::list<ActionTemplate*> &new_actions);
     void setActionTemplate(ActionTemplate *action);
+
+	CStringHolder &getStateName() { return state_name; }
     
     std::vector<ActionTemplate*> action_templates;
     CStringHolder command_name;
+private:
     CStringHolder state_name;
+public:
     long timeout;
     bool switch_state;
 };
@@ -75,10 +79,15 @@ public:
     const std::string name() const { return command_name.get(); }
     const std::string stateName() const { return state_name.get(); }
     virtual std::ostream &operator<<(std::ostream &out)const;
+
+	CStringHolder &getStateName() { return state_name; }
+	bool autoSwitch() { return switch_state; }
+
 private:
     std::vector<Action*> actions;
     unsigned int last_step, current_step;
     CStringHolder command_name;
+
     CStringHolder state_name;
     Trigger *timeout_trigger;
     bool switch_state;

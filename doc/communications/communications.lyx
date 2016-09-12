@@ -517,8 +517,22 @@ new_name IS old_name AS interface_name ';'
 \end_layout
 
 \begin_layout Standard
+TBD the above syntax provides a new name and this may not be desirable;
+ it is often preferable to define the public interface from with a machine,
+ such as by marking states as public and providing a mapping of other states.
+ In doing so, note that a machine may chose to leave some states unmapped.
+ When a machine enters an unmapped state, no state change occurs on the
+ interface so some care is required when using this feature.
+\end_layout
+
+\begin_layout Standard
 The main benefit to interfaces used this way is to provide a limited view
  of a machine, hiding its internals from samplers or other machines.
+\end_layout
+
+\begin_layout Standard
+TBD what should be done about providing multiple interfaces? Does this make
+ any sense?
 \end_layout
 
 \begin_layout Subsection

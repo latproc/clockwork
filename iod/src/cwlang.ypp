@@ -665,7 +665,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
-    current_machineclass->commands[$3] = mc;
+	current_machineclass->commands.insert(std::make_pair($3, mc));
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
 	cleanupErrorClause(true);
@@ -689,7 +689,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     properties.clear();
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
-    current_machineclass->commands[$3] = mc;
+    current_machineclass->commands.insert(std::make_pair($3, mc));
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
 	cleanupErrorClause(true);
@@ -944,8 +944,8 @@ COMMAND SYMBOL /* command name */ action {
     	}
     	DBG_PARSER << "\n";
         
-	    current_machineclass->receives[Message($2)] = mc;
-	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
 	}
     else {
         std::stringstream ss;
@@ -960,15 +960,17 @@ COMMAND SYMBOL /* command name */ action {
 	// commands are essentially messages
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
     mc->setActionTemplates(*current_actions);
-    if (current_machineclass->receives.count(Message($2)) == 0) {
+	MachineCommandTemplate *handler = current_machineclass->findMatchingCommand($2, $4);
+	//unsigned int existing_commands = current_machineclass->receives.count(Message($2));
+    if (!handler) {
     	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
     	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
     	    DBG_PARSER << *at << " ";
     	}
     	DBG_PARSER << "\n";
         
-	    current_machineclass->receives[Message($2)] = mc;
-	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+		current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+		current_machineclass->commands.insert(std::make_pair($2,mc)); // by making a command form, the command will be exported
 	}
     else {
         std::stringstream ss;
@@ -990,8 +992,8 @@ COMMAND SYMBOL /* command name */ action {
     	}
     	DBG_PARSER << "\n";
         
-	    current_machineclass->receives[Message($2)] = mc;
-	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
 	}
     else {
         std::stringstream ss;
@@ -1019,7 +1021,7 @@ ENTER SYMBOL /* state name */ action
     }
     DBG_PARSER << "\n";
 
-    current_machineclass->receives[Message(strdup(msg_name.c_str()))] = mc;
+    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
 }
 ;
 
@@ -1039,7 +1041,7 @@ LEAVE SYMBOL action
     }
     DBG_PARSER << "\n";
     
-    current_machineclass->receives[Message(strdup(msg_name.c_str()))] = mc;
+    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
 #else
     /* raise an error if cw is run on configs with LEAVE functions but the feature is not enabled */
     std::stringstream ss;
@@ -1061,7 +1063,7 @@ CATCH SYMBOL action {
 		MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
 		mc->setActionTemplates(*current_actions);
 		current_actions->clear();
-		current_machineclass->receives[Message(strdup($2))] = mc;
+		current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
 	}
 	else {
 		std::stringstream ss;
@@ -1082,7 +1084,7 @@ RECEIVE SYMBOL /* message */ error_clause action  {
         MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
-        current_machineclass->receives[Message(strdup($2))] = mc;
+        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
     }
     else {
         std::stringstream ss;
@@ -1104,7 +1106,7 @@ RECEIVE SYMBOL /* message */ WITHIN SYMBOL error_clause action  {
         MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
-        current_machineclass->receives[Message(strdup($2))] = mc;
+        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
     }
     else {
         std::stringstream ss;
@@ -1129,7 +1131,7 @@ RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ error_clause action  {
         MachineCommandTemplate *mc = new MachineCommandTemplate(msg_name.get(), "");
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
-        current_machineclass->receives[Message(strdup(msg_name.get()))] = mc;
+        current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.get())), mc));
     }
     else {
         std::stringstream ss;

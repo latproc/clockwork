@@ -28,12 +28,12 @@ static int max_count = 0;
 static int last_max = 0;
 
 FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t) 
-	: Action(m), trigger(t->retain()){
-        if (m) t->setOwner(m);
-				t->addHolder(this);
-		++count_instances;
-		if (count_instances>max_count) max_count = count_instances;
-    }
+: Action(m), trigger(t->retain()){
+	if (m) t->setOwner(m);
+	t->addHolder(this);
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
 
 FireTriggerAction::~FireTriggerAction() {
 	--count_instances;
@@ -42,7 +42,7 @@ FireTriggerAction::~FireTriggerAction() {
 		DBG_MSG << "Max FireTriggers: " << max_count<<"\n"; last_max = max_count;
 	}
 */
-	DBG_ACTIONS << "Removing " << *this << "\n";
+	DBG_M_ACTIONS << "Removing " << *this << "\n";
 	if (trigger) {
 		trigger->removeHolder(this);
 		trigger->release();
@@ -51,32 +51,24 @@ FireTriggerAction::~FireTriggerAction() {
 
 Action::Status FireTriggerAction::run() { 
 	owner->start(this);
-	//TBD why is this test for a disabled trigger here and why is it stopping but not removing the trigger?
-	if (!trigger->enabled()) {
-		//assert(false);
-		status = Complete;
-		owner->stop(this);
-		return status;
+	if (trigger->enabled()) {
+		DBG_M_ACTIONS << owner->getName() << " triggered " << trigger->getName() << "\n";
+		trigger->fire(); 
 	}
-	DBG_SCHEDULER << owner->getName() << " triggered " << trigger->getName() << "\n";
-	trigger->fire(); 
+	else {
+		//DBG_MSG << owner->getName() << " trigger " << trigger->getName() << " fired while disabled\n";
+		//assert(trigger->fired());
+	}
+	trigger->removeHolder(this);
+	trigger->release();
+	trigger = 0;
 	status = Complete;
-	if (trigger) {
-		trigger->removeHolder(this);
-		trigger->release();
-		trigger = 0;
-	}
 	owner->stop(this);
 	return status;
 }
 
 Action::Status FireTriggerAction::checkComplete() {
-	if (trigger) {
-		trigger->removeHolder(this);
-		trigger->release();
-		trigger = 0;
-	}
-	status = Complete;
+	assert(status == Complete);
 	return status;
 }
 

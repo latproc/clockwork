@@ -175,9 +175,6 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 					std::list<Transition>::iterator iter = machine->transitions.begin();
 					while (iter != machine->transitions.end()) {
 						const Transition &t = *iter++;
-						if (t.source.getName() == "ANY") {
-							;
-						}
 						if ( (t.source == machine->getCurrent() || t.source.getName() == "ANY")
 								&& (t.dest == value || t.dest.getName() == "ANY") ) {
 							if (!t.condition || (*t.condition)(owner)) {

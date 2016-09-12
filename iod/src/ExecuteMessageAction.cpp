@@ -24,7 +24,7 @@
 #include "IOComponent.h"
 #include "MachineInstance.h"
 
-// ExecuteMessageAction - immediately execute a triggers and handle a message on a machine
+// ExecuteMessageAction - immediately execute a trigger and handle a message on a machine
 ExecuteMessageActionTemplate::ExecuteMessageActionTemplate(CStringHolder msg, CStringHolder dest)
 : message(msg), target(dest), target_machine(0) {}
 
@@ -48,7 +48,8 @@ Action::Status ExecuteMessageAction::run() {
 
 	if (target_machine) {
 		status = target_machine->execute(Message(message.get()), owner);
-		if (status == Running || status == Suspended) owner->stop(this);
+		//New, Running, Complete, Failed, Suspended, NeedsRetry
+		if (status == Complete || status == Failed) owner->stop(this);
 	}
 	else {
 		status = Action::Failed;

@@ -33,18 +33,22 @@
 // Used to generate a unique id for each transmitter.
 long Transmitter::next_id;
 boost::mutex Receiver::q_mutex;
+unsigned long Message::sequence = 0; // each message has a sequence number
 
 std::set<Receiver*> Receiver::working_machines; // machines that have non-empty work queues
 
 // in this form, the message takes ownership of the parameters
-Message::Message(CStringHolder msg, std::list<Value> *param_list) :text(msg.get()), params(0) {
+Message::Message(CStringHolder msg, MessageType t, std::list<Value> *param_list)
+:kind(t), seq(++sequence), text(msg.get()), params(0) {
     params = param_list;
 }
 
 // in this form, the message takes ownership of the parameters
-Message::Message(Message *m, Parameters *p) : text(m->text), params(p) { }
+Message::Message(Message *m, MessageType t, Parameters *p)
+: kind(t), seq(++sequence), text(m->text), params(p) { }
 
-Message::Message(const Message &orig) : text(orig.text), params(0) {
+Message::Message(const Message &orig)
+: kind(orig.kind), seq(orig.seq), text(orig.text), params(0) {
     if (orig.params) {
         params = new std::list<Value>();
         std::copy(orig.params->begin(), orig.params->end(), back_inserter(*params));
@@ -52,6 +56,8 @@ Message::Message(const Message &orig) : text(orig.text), params(0) {
 }
 
 Message &Message::operator=(const Message &other){
+	kind = other.kind;
+	seq = other.seq;
     text = other.text;
     if (other.params) {
         params = new std::list<Value>();

@@ -3,11 +3,12 @@
 #include "cwlang.h"
 #include "cwlang.tab.hpp"
 void yyerror(const char *);
+
 static char *buf;
 static int buflen = 0;
 static char *bufp;
 extern YYSTYPE yylval;
-    int yycharno;
+int yycharno;
 
 void append_char(int ch);
 %}
@@ -282,4 +283,3 @@ void append_char(int ch)
 	*bufp++ = ch;
 	*bufp = 0;
 }
-

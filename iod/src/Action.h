@@ -114,6 +114,7 @@ public:
 	void resume();
 	void recover(); // debug TBD
 	void abort();
+	virtual void reset(); // reinitialise an action for reexecution
 
 	bool debug();
 

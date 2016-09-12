@@ -5,7 +5,7 @@ g2 CONSTANT(tab:vars) 9;
 s1 CONSTANT(tab:vars) "Hello";
 v1 VARIABLE(tab:vars) 13;
 
-Testbed MACHINE (tab:s1, x:3, y){
+Testbed MACHINE (tab:s1, x:3, y) p1(A:7) {
     GLOBAL g1, v1;
     OPTION z g1;
     OPTION tab tab; # dereferences machine property 'tab'
@@ -31,4 +31,5 @@ Testbed MACHINE (tab:s1, x:3, y){
     
 }
 
-test Testbed(pname:"p1");
+f FLAG;
+test Testbed(pname:"p1") f;

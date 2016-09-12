@@ -1202,14 +1202,14 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 					else evt = "off_leave";
 					std::list<MachineInstance*>::iterator owner_iter = owners.begin();
 					while (owner_iter != owners.end()) {
-						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt)) );
+						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt, Message::LEAVEMSG)) );
 					}
 #endif
 					if (value) evt = "on_enter";
 					else evt = "off_enter";
 					owner_iter = owners.begin();
 					while (owner_iter != owners.end()) {
-						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt)) );
+						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt, Message::ENTERMSG)) );
 					}
 			}
 			address.value = value;

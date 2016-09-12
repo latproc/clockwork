@@ -1,6 +1,6 @@
 #!/bin/bash
 
-trap "rm -f plugin_$$.c" 0 1 2 15
+#trap "rm -f plugin_$$.c" 0 1 2 15
 
 usage() {
 	echo "usage: $0 script"
@@ -28,9 +28,8 @@ cat "$script" | awk -v file="$script" '
 	}  
 	' >plugin_$$.c
 
-[ `uname -s` == "Linux" ] && LDFLAGS="-shared -Wall -fPIC -Wl,-soname,$out,-undefined,dynamic_lookup"
-[ `uname -s` == "Darwin" ] && LDFLAGS="-dynamiclib -Wall -pedantic -fPIC -Wl,-undefined,dynamic_lookup"
+[ `uname -s` == "Linux" ] && LDFLAGS="$LDFLAGS -shared -Wall -fPIC -Wl,-soname,$out,-undefined,dynamic_lookup"
+[ `uname -s` == "Darwin" ] && LDFLAGS="$LDFLAGS -dynamiclib -Wall -pedantic -fPIC -Wl,-undefined,dynamic_lookup"
 
-echo gcc $LDFLAGS -I /usr/local/include -I../iod/src plugin_$$.c -o "$out" 
-gcc $LDFLAGS -I../iod/src plugin_$$.c -o "$out" 
-#rm plugin_$$.c
+echo gcc $CFLAGS $LDFLAGS -I /usr/local/include -I../iod/src plugin_$$.c -o "$out" 
+gcc $CFLAGS $LDFLAGS -I../iod/src plugin_$$.c -o "$out" && rm plugin_$$.c

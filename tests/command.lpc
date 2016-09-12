@@ -28,3 +28,4 @@ RestrictedReceive MACHINE {
     # but this is not possible in the current implementation
 }
 restricted_receive RestrictedReceive;
+

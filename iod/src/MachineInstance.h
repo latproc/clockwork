@@ -166,9 +166,9 @@ public:
     std::list<State> states;
     std::set<std::string> state_names;
     std::vector<StableState> stable_states;
-    std::map<std::string, MachineCommandTemplate*> commands;
+    std::multimap<std::string, MachineCommandTemplate*> commands;
     std::map<Message, MachineCommandTemplate*> enter_functions;
-    std::map<Message, MachineCommandTemplate*> receives;
+    std::multimap<Message, MachineCommandTemplate*> receives;
 	std::map<std::string, MachineInstance*>global_references;
 	std::map<std::string, Value> options;
     std::list<Transition> transitions; 
@@ -189,6 +189,7 @@ public:
 	virtual void addPrivateProperty(const char *name); // used in interfaces to list synced properties
 	virtual void addPrivateProperty(const std::string &name); // used in interfaces to list synced properties
 	virtual void addCommand(const char *name); // used in interfaces to list permitted commands
+	MachineCommandTemplate *findMatchingCommand(std::string cmd_name, const char *state);
 	bool propertyIsLocal(const char *name) const;
 	bool propertyIsLocal(const std::string &name) const;
 	bool propertyIsLocal(const Value &name) const;
@@ -367,9 +368,9 @@ public:
     std::vector<Parameter> parameters;    
     std::vector<Parameter> locals;    
     std::vector<StableState> stable_states;
-    std::map<std::string, MachineCommand*> commands;
+    std::multimap<std::string, MachineCommand*> commands;
     std::map<Message, MachineCommand*> enter_functions;
-    std::map<Message, MachineCommand*> receives_functions;
+    std::multimap<Message, MachineCommand*> receives_functions;
     std::set<Transmitter *> listens;
     std::list<Transition> transitions;
 
@@ -441,6 +442,7 @@ public:
 	inline bool enabled() const { return is_enabled; }
 	void clearAllActions();
 	void checkActions();
+	Action *findMatchingCommand(const std::string &command_name);
 
 	// basic lock functionality 
 	bool lock(MachineInstance *requester) { if (locked && locked != requester) return false; else {locked = requester; return true; } }

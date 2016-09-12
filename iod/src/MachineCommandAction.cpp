@@ -40,7 +40,7 @@ void MachineCommandTemplate::setActionTemplate(ActionTemplate *at) {
 
 MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
 : Action(mi), last_step(0), current_step(0),
-	command_name(mct->command_name), state_name(mct->state_name),
+	command_name(mct->command_name), state_name(mct->getStateName()),
 	timeout_trigger(0), switch_state(mct->switch_state)
 {
     BOOST_FOREACH(ActionTemplate *t, mct->action_templates) {
@@ -83,6 +83,12 @@ void MachineCommand::setActions(std::list<Action*> &new_actions) {
 std::ostream &MachineCommand::operator<<(std::ostream &out)const {
 	out << "Command " << owner->getName() << "." << command_name
 		<< " (at step " <<current_step << ")";
+	if (state_name.get() && *state_name.get()) {
+		if (switch_state)
+			out << " AUTO SWITCH to " << state_name.get();
+		else
+			out << " WITHIN " << state_name.get();
+	}
 	return out;
 }
 
@@ -91,13 +97,16 @@ Action::Status MachineCommand::checkAction(Action *a, Action::Status stat) {
 }
 
 Action::Status MachineCommand::runActions() {
-    while (current_step < actions.size()) {
-        Action *a = actions[current_step]->retain();
+	while (current_step < actions.size()) {
+		Action *a = actions[current_step]->retain();
 		setBlocker(a);
 		suspend();
 		DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
-		AbortAction *aa = dynamic_cast<AbortAction*>(a);
 		Action::Status stat = (*a)();
+
+		// An abort action needs special processing to cause the action pointer
+		// to immediately move to the end of the action list
+		AbortAction *aa = dynamic_cast<AbortAction*>(a);
 		if (aa) {
 			std::stringstream ss;
 			ss << "ABORTING: " << *this << " at action " << *a << "\n";
@@ -110,6 +119,7 @@ Action::Status MachineCommand::runActions() {
 			owner->stop(a);
 			last_step = current_step; // remember the command that aborted
 			current_step = actions.size();
+			setBlocker(0);
 			return Complete;
 		}
 		if (stat == Action::Failed) {
@@ -125,11 +135,14 @@ Action::Status MachineCommand::runActions() {
 			MessageLog::instance()->add(err_msg);
 			error_str = err_msg;
 		}
-		if (stat == Action::NeedsRetry) {
-			NB_MSG << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
+		if (stat == Action::NeedsRetry || stat == Action::New) {
+			std::stringstream ss;
+			ss << " action: " << *a << " failed temporarily (" << a->error() << ")\n";
+			MessageLog::instance()->add(ss.str().c_str());
+			NB_MSG << ss.str() << "\n";
 			owner->stop(a);
-			status = Running;
-			return status; // action failed to start
+			status = Running; // the current action needs a restart so overall this command list is still running
+			return status;
 		}
 		if (!a->complete()) {
 			DBG_M_ACTIONS << "leaving action: " << *a << " to run for a while\n";
@@ -140,32 +153,15 @@ Action::Status MachineCommand::runActions() {
 			std::stringstream ss;
 			ss << owner->getName() << " " << (*this)
 				<< " action '" << *a << "' didn't remove itself, stopping it manually.";
-			char *err_msg = strdup(ss.str().c_str());
-			MessageLog::instance()->add(err_msg);
-			DBG_M_ACTIONS << err_msg << "\n";
-			free(err_msg);
-
+			MessageLog::instance()->add(ss.str().c_str());
+			DBG_M_ACTIONS << ss.str() << "\n";
 			owner->stop(a);
 		}
-//		x = owner->executingCommand();
-//		if (x==a) { DBG_M_ACTIONS << "stop doesn't work\n"; exit(2); }
-#if 0
-		if (owner->executingCommand() && owner->executingCommand() != this) {
-            std::stringstream ss;
-            ss << "ERROR: command executing (" << *owner->executingCommand() <<") is not " << *this;
-			owner->displayActive(ss);
-            char *err_msg = strdup(ss.str().c_str());
-            MessageLog::instance()->add(err_msg);
-			DBG_M_ACTIONS << err_msg << "\n";
-            free(err_msg);
-        }
-#endif
 		setBlocker(0);
 		last_step = current_step++;
         DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
     }
     DBG_M_ACTIONS << owner->getName() << " " << *this <<" completed all actions\n";
-	//owner->needs_check = true; // conservative..
     return Complete;
 }
 
@@ -196,7 +192,7 @@ Action::Status MachineCommand::run() {
     }
     
     // attempt to run commands until one `blocks' on a timer
-		Action::Status stat = runActions();
+	Action::Status stat = runActions();
     if (stat  == Failed) {
 			std::stringstream ss;
 			ss << owner->fullName() << ": " << command_name.get();
@@ -212,17 +208,17 @@ Action::Status MachineCommand::run() {
 			owner->stop(this);
       return Failed;
     }
-		else if (stat == Complete) {
-			Action *curr = owner->executingCommand();
-			if (curr && curr != this) {
-				return curr->getStatus();
-			}
-	    if (current_step == actions.size()) {
+	else if (stat == Complete) {
+		Action *curr = owner->executingCommand();
+		if (curr && curr != this) {
+			return curr->getStatus();
+		}
+		if (current_step == actions.size()) {
 			status = Complete;
 			owner->stop(this);
 			//DBG_M_ACTIONS << " finished starting " << command_name.get() << "\n";
-	    }
 		}
+	}
     return status;
 }
 
@@ -247,8 +243,16 @@ Action::Status MachineCommand::checkComplete() {
 			return status; // an action failed
 		}
         else if (a->getStatus() == Running || a->getStatus() == Suspended){
-			a->complete();
-            return a->getStatus(); // still running at step a
+			if (a->complete()) { // check current status
+				if (a->getStatus() == Failed) {
+					NB_MSG << command_name.get() << " " << a->error() << "\n";
+					owner->stop(this);
+					return status; // an action failed
+				}
+				else ++current_step; //the action is now complete.
+			}
+			else
+            	return a->getStatus(); // still running at step a
         }
         status = runActions(); // note: this increments current_step 
     }
