@@ -554,7 +554,7 @@ void ProcessingThread::operator()()
 	bool have_started_clients = false;
 	while (!program_done)
 	{
-		unsigned int machine_check_delay = internals->cycle_delay;
+		unsigned int machine_check_delay;
 		machine.idle();
 		if (machine.connected())
 		{
@@ -810,7 +810,9 @@ void ProcessingThread::operator()()
 							info = *csi_iter++;
 							sock = info->sock;
 						}
+						{
 						int rc = zmq::poll(&items[i], 1, 0);
+						}
 						if (! (items[i].revents & ZMQ_POLLIN) ) {
 							++i;
 							continue;

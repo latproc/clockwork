@@ -62,13 +62,13 @@ public:
 };
 
 bool CommandLogFilter::filter(char **buf, size_t &len, MessageHeader &mh) {
-	char *data = *buf;
+	//char *data = *buf;
 	//NB_MSG << header << mh << " " << data << "\n";
 	return true;
 }
 
 bool CommandLogFilter::filter(char **buf, size_t &len) {
-	char *data = *buf;
+	//char *data = *buf;
 	//NB_MSG << header << data << "\n";
 	return true;
 }

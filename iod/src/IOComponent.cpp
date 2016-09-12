@@ -905,7 +905,6 @@ bool IOComponent::hasUpdates() {
 
 uint8_t *generateProcessMask(uint8_t *res, size_t len) {
 	unsigned int max = IOComponent::getMaxIOOffset();
-	unsigned int min = IOComponent::getMinIOOffset();
 	// process data size
 	if (res && len != max+1) { delete[] res; res = 0; }
 	if (!res) res = new uint8_t[max+1];
@@ -958,7 +957,6 @@ void IOComponent::setDefaultMask(uint8_t *mask){
 
 uint8_t *IOComponent::generateMask(std::list<MachineInstance*> &outputs) {
 	unsigned int max = IOComponent::getMaxIOOffset();
-	unsigned int min = IOComponent::getMinIOOffset();
 	// process data size
 	uint8_t *res = new uint8_t[max+1];
 	memset(res, 0, max+1);
@@ -1004,7 +1002,6 @@ static uint8_t *generateUpdateMask() {
 	if (updatedComponentsOut.empty()) return 0;
 
 	unsigned int max = IOComponent::getMaxIOOffset();
-	unsigned int min = IOComponent::getMinIOOffset();
 	uint8_t *res = new uint8_t[max+1];
 	memset(res, 0, max+1);
 	//std::cout << "mask is " << (max+1) << " bytes\n";
@@ -1087,7 +1084,7 @@ void IOComponent::setupIOMap() {
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
-		bitpos = bitpos % 8;
+		//bitpos = bitpos % 8;
 		if (ioc->address.bitlen>=8) offset += ioc->address.bitlen/8 - 1;
 		if (offset > max_offset) max_offset = offset;
 		if (offset < min_offset) min_offset = offset;
@@ -1246,14 +1243,12 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 			if ( regular_polls.count(this) ) {
 				// this device is polled on a regular clock, do not process here
 				raw_value = val;
-				int32_t old_val = address.value;
 				address.value = val;
 			}
 			else if (hardware_state == s_hardware_init 
 				|| (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
 				//std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
-				int32_t old_val = address.value;
 				int32_t new_val = filter(val);
 				if (hardware_state == s_operational ) { //&& address.value != new_val) {
 					address.value = new_val;

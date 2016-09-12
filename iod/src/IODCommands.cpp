@@ -561,8 +561,6 @@ bool IODCommandBusy::run(std::vector<Value> &params) {
 				<<  ((m->enabled())?"":"[DISABLED] ");
 			simple_deltat(ss, now - m->lastStateEvaluationTime());
 			ss << "\n";
-
-			Action *a = m->executingCommand();
 		}
 	}
 	result_str = ss.str();
@@ -1430,7 +1428,6 @@ extern bool all_ok;
 
 bool IODCommandToggleEtherCAT::run(std::vector<Value> &params) {
 	uint64_t start = microsecs();
-	uint64_t now = start;
 	all_ok = !all_ok;
 	result_str = "OK";
 	return true;
@@ -1438,7 +1435,6 @@ bool IODCommandToggleEtherCAT::run(std::vector<Value> &params) {
 
 bool IODCommandShutdown::run(std::vector<Value> &params) {
 	uint64_t start = microsecs();
-	uint64_t now = start;
 	program_done = true;
 	result_str = "OK";
 	return true;

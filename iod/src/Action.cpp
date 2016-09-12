@@ -87,20 +87,16 @@ Trigger::Trigger(const std::string &n) : _internals(0), name(n), seen(false), ow
 
 
 Trigger::~Trigger() {
-	MachineInstance *mi = dynamic_cast<MachineInstance*>(owner);
-	Action *a = dynamic_cast<Action*>(owner);
 	removeTrigger(this);
 	delete _internals;
 }
 
 Trigger* Trigger::retain() {
-	int holders = _internals->holders.size();
 	++refs;
 	if (refs == 0) { NB_MSG << "Trigger reference count is 0 after increment\n"; }
 	return this;
 }
 Trigger *Trigger::release() {
-	int holders = _internals->holders.size();
 	assert(refs>0);
 	if (--refs == 0)
 		delete this;
