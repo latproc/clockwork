@@ -1982,10 +1982,12 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	}
 
 	// commands in the transition table are public and can be sent by anyone
-	std::list<Transition>::const_iterator iter = transitions.begin();
-	while (iter != transitions.end()) {
-		const Transition &t = *iter++;
-		if (t.trigger == m) return true;
+	if (m.isSimple()) {
+		std::list<Transition>::const_iterator iter = transitions.begin();
+		while (iter != transitions.end()) {
+			const Transition &t = *iter++;
+			if (t.trigger == m) return true;
+		}
 	}
 	DBG_M_MESSAGING << "Machine " << getName() << " ignoring " << m << " from " << ((from) ? from->getName() : "NULL") << "\n";
 	if (from && dependsOn(from)) {
@@ -2071,7 +2073,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
 		/* do not send a leave message for the state if the state is not changing (ie in resume) */
 		if (enabled() && current_state != new_state && current_state.getName() != "undefined" ) {
-			std::string txt = _name + "." + current_state.getName() + "_leave";
+			std::string txt = current_state.getName() + "_leave";
 			Message msg(txt.c_str(), Message::LEAVEMSG);
 			if (receives(msg, this)) {
 				stat = execute(msg, this);
@@ -2083,6 +2085,8 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				}
 			}
 
+			txt = _name + "." + current_state.getName() + "_leave";
+			msg = Message(txt.c_str());
 			std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 			while (dep_iter != depends.end()) {
 				MachineInstance *dep = *dep_iter++;
