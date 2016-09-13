@@ -48,6 +48,11 @@ Action::Status HandleMessageAction::run() {
 			status = Complete;
 		}
 		owner->stop(this);
+		if (package.needs_receipt) {
+			MachineInstance *mi = dynamic_cast<MachineInstance*>(package.transmitter);
+			owner->prepareCompletionMessage(mi, package.message->getText());
+		}
+
 		return status;
 	}
 

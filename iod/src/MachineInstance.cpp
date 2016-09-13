@@ -2484,9 +2484,9 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		DBG_M_MESSAGING << _name << " looking for a command with name " << short_name << "\n";
 		if (commands.count(short_name)) {
 			Action *matching_command = findMatchingCommand(short_name);
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
 			if (matching_command) {
-				if (response_required)
-					prepareCompletionMessage(from, short_name);
 				return matching_command;
 			}
 			else {
@@ -2499,6 +2499,8 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		while (iter != transitions.end()) {
 			const Transition &t = *iter++;
 			if ( (t.trigger.getText() == m.getText() || t.trigger.getText() == short_name) && current_state == t.source) {
+				if (response_required)
+					prepareCompletionMessage(from, short_name);
 				DBG_M_MESSAGING << _name << " received message" << m.getText() << "; pushing state change\n";
 				MoveStateActionTemplate msat("SELF", t.dest.getName());
 				MoveStateAction *msa = new MoveStateAction(this, msat);
@@ -2521,19 +2523,30 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 			DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
 				<< "handler: " << *((*receive_handler_i).second) << "\n";
 		}
+		if (response_required)
+			prepareCompletionMessage(from, short_name);
 		return (*receive_handler_i).second->retain();
 	}
 	else if (from == this) {
-		if (short_name == m.getText()) { return NULL; } // no other alternatives
+		if (short_name == m.getText()) {
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
+			return NULL;
+		} // no other alternatives
 		std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(short_name.c_str()));
 		if (receive_handler_i != receives_functions.end()) {
 			if (debug()){
 				DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
 					<< "handler: " << *((*receive_handler_i).second) << "\n";
 			}
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
+
 			return (*receive_handler_i).second->retain();
 		}
 	}
+	if (response_required)
+		prepareCompletionMessage(from, short_name);
 	return NULL;
 }
 
@@ -2920,7 +2933,8 @@ void MachineInstance::displayActive(std::ostream &note) {
 	{
 		Action *act = *iter++;
 		note << delim << " " << *act << " status: " << act->getStatus();
-		if (act->error()) note << " error: " << act->error();
+		const char *error_msg = act->error();
+		if (error_msg && *error_msg) note << " error: " << error_msg;
 		delim = "\n";
 	}
 }

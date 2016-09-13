@@ -170,8 +170,9 @@ Action::Status MachineCommand::run() {
 	status = Running;
 	last_step = 0;
     current_step = 0;
-    if (state_name.get() && strlen(state_name.get()) &&
-        owner->getCurrent().getName() != state_name.get() && !switch_state) {
+	const char *state_name_str = state_name.get();
+    if (state_name_str && *state_name_str &&
+        owner->getCurrent().getName() != state_name_str && !switch_state) {
         std::stringstream ss;
         ss << "Command " << (*this) << " was ignored due to a mismatch of current state (" << owner->getCurrent().getName()
             << ") and state required by the command (" << state_name << ")";
@@ -181,6 +182,7 @@ Action::Status MachineCommand::run() {
         result_str = err_msg;
 		status = Complete;
 		owner->stop(this);
+
         return status; // no steps to run
     }
     if (current_step == actions.size()) {

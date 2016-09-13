@@ -64,6 +64,7 @@ ENABLED             return ENABLED;
 ENTER               return ENTER;
 ENTRIES             return ENTRIES;
 ERROR				return ERROR;
+ERRORS				return ERRORS;
 EXECUTE				return EXECUTE;
 EXISTS				return EXISTS;
 EXPORT              return EXPORT;

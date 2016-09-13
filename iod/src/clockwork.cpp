@@ -225,7 +225,7 @@ void predefine_special_machines() {
 	settings_class->disableAutomaticStateChanges();
 	settings_class->properties.add("INFO", "Clockwork host", SymbolTable::ST_REPLACE);
 	settings_class->properties.add("HOST", host_name, SymbolTable::ST_REPLACE);
-	settings_class->properties.add("VERSION", "0.8", SymbolTable::ST_REPLACE);
+	settings_class->properties.add("VERSION", "0.9", SymbolTable::ST_REPLACE);
 	settings_class->properties.add("CYCLE_DELAY", 2000, SymbolTable::ST_REPLACE);
 	settings_class->properties.add("POLLING_DELAY", 2000, SymbolTable::ST_REPLACE);
 
