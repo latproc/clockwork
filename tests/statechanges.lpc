@@ -1,0 +1,46 @@
+# test changing into static states from an action on a stable state change
+
+AutoOff MACHINE Power, Reset, out {
+  OPTION offDelay 8000;
+
+  reset STATE;
+  interlocked WHEN out DISABLED;
+  on WHEN SELF IS on && TIMER <= offDelay;
+  off DEFAULT;
+
+  ENTER reset { SET SELF TO on; }
+
+  RECEIVE Reset.on_enter { SET SELF TO reset; }
+  RECEIVE Power.on_enter { SET SELF TO reset; }
+
+  ENTER on { SET out TO on; }
+  ENTER off { SET out TO off; }
+
+  CATCH TurningOn { LOG "caught turning on" }
+
+}
+
+DelayedSwitch MACHINE {
+    on WHEN SELF IS on || SELF IS on_requested AND TIMER>100;
+    off DEFAULT;
+    on_requested STATE;
+    
+	ENTER on { 
+		LOG "Throwing event 'TurningOn'";
+		THROW TurningOn; 
+		SET SELF TO x; 
+	}
+    on_requested DURING turnOn {  }
+    COMMAND turnOff { 
+		NewState := "off";
+		SET SELF TO NewState; 
+		LOG "turned off";
+		RETURN;
+		LOG "Should not see this";
+	}
+}
+ 
+power_switch FLAG;
+reset_button FLAG;
+light DelayedSwitch;
+auto AutoOff power_switch, reset_button, light;

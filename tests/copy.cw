@@ -1,39 +1,49 @@
-o FLAG(row:1);
-p FLAG(row:2);
-q FLAG(row:3);
-control LIST o,p,q;
-
 a FLAG(row:1,zone:6);
 b FLAG(row:2,zone:6);
 c FLAG(row:3, zone:8);
-work LIST a,b,c;
-front LIST;
-middle LIST;
-back LIST;
 
 done LIST c,b,a;
 front_done LIST;
-middle_done LIST;
-back_done LIST;
 
-Test MACHINE M_Control, L_Work, L_Front, L_Middle, L_Back, L_Done, L_FrontDone, L_MiddleDone, L_BackDone {
+Test MACHINE L_Done, L_FrontDone {
 
-	COMMAND run {
-		CLEAR L_Front;
-		COPY ALL FROM L_Work TO L_Front 
-			SELECT USING M_Control WHERE M_Control.ITEM.row == L_Work.ITEM.row;
-	}
-	COMMAND run2 {
-		CLEAR L_Front;
-		COPY ALL FROM L_Work TO L_Front 
-			SELECT USING M_Control WHERE M_Control.ITEM.row == L_Work.ITEM.row AND M_Control.ITEM IS on;
-	}
-	
+	saved LIST;
+
 	ENTER INIT {
+		CLEAR saved;
+		COPY ALL FROM L_Done TO saved;
+		n := SIZE OF saved;
+		LOG "copied " + n + " to saved";
+		LOG "copying to L_FrontDone";
 	    COPY ALL FROM L_Done TO L_FrontDone WHERE L_Done.ITEM.row == 1;
-	    COPY ALL FROM L_Done TO L_MiddleDone WHERE L_Done.ITEM.row == 2;
-	    COPY ALL FROM L_Done TO L_BackDone WHERE L_Done.ITEM.row == 3;
+		n := SIZE OF L_FrontDone;
 	}
 }
 
-test Test control, work, front, middle, back, done, front_done, middle_done, back_done;
+Settings MACHINE {
+	OPTION x 0;
+	OPTION y 0;
+	OPTION z 0;
+	LOCAL OPTION tmp 0;
+}
+settings1 Settings(x:100, y:50, z:25, tmp:7);
+settings2 Settings(x:33, y:66, z:99, tmp:8);
+
+PropertyTest MACHINE a,b {
+	COMMAND partial { COPY PROPERTIES x,z FROM a TO b; }
+	COMMAND full { COPY PROPERTIES FROM a TO b; }
+	COMMAND reset { b.x := 33; b.y:= 66; b.z := 99; }
+} 
+pt PropertyTest settings1, settings2;
+	
+
+test Test done, front_done;
+
+STARTUP MACHINE {
+	off INITIAL;
+	on STATE;
+
+	ENTER on { ENABLE done; ENABLE front_done; ENABLE pt;}
+}
+
+startup STARTUP;

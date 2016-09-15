@@ -1,4 +1,4 @@
-x VARIABLE  7;
+x VARIABLE(PERSISTENT:true) 7;
 
 Props MACHINE {
 	OPTION PERSISTENT true;
@@ -34,13 +34,14 @@ test Test(tab:Test);
 
 # this version provides transitions so SET flag TO on/off works
 PFlag2 MACHINE {
+	OPTION state "off";
 	on WHEN VALUE == 1;
 	off DEFAULT;
 	OPTION PERSISTENT "true";
 	ENTER INIT {VALUE := 0;}
 	TRANSITION off TO on USING turnOn;
 	TRANSITION on TO off USING turnOff;	
-	turningOn DURING turnOn { VALUE := 1; }
-	turningOff DURING turnOff { VALUE := 0; }
+	turningOn DURING turnOn { VALUE := 1; state := SELF.STATE; }
+	turningOff DURING turnOff { VALUE := 0; state := SELF.STATE; }
 }
 flag2 PFlag2;

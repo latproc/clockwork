@@ -24,3 +24,19 @@ test Test(tab:Tests);
 	COMMAND go { CALL next ON test }
 }
 driver Driver (tab:Tests);
+
+AutoTransition MACHINE {
+
+	off INITIAL;
+	on STATE;
+
+	COMMAND stop { SET SELF TO off; }
+
+	COMMAND turnOff { LOG "turning off" }
+	COMMAND turnOn { LOG "turning on" }
+
+	TRANSITION on TO off ON turnOff;
+	TRANSITION off TO on ON turnOn;
+}
+auto AutoTransition;
+

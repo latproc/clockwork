@@ -1,5 +1,5 @@
-#LyX 2.0 created this file. For more info see http://www.lyx.org/
-\lyxformat 413
+#LyX 2.1 created this file. For more info see http://www.lyx.org/
+\lyxformat 474
 \begin_document
 \begin_header
 \textclass article
@@ -12,13 +12,13 @@
 \font_roman default
 \font_sans default
 \font_typewriter default
+\font_math auto
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
 \font_sf_scale 100
 \font_tt_scale 100
-
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -29,15 +29,24 @@
 \use_hyperref false
 \papersize a4paper
 \use_geometry true
-\use_amsmath 1
-\use_esint 1
-\use_mhchem 1
-\use_mathdots 1
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
 \cite_engine basic
+\cite_engine_type default
+\biblio_style plain
 \use_bibtopic false
 \use_indices false
 \paperorientation portrait
 \suppress_date false
+\justification true
 \use_refstyle 1
 \index Index
 \shortcut idx
@@ -75,29 +84,43 @@ Communications
 This document describes the future communications framework for Clockwork.
  A Clockwork driver program provides a runtime environment to execute several
  machines in parallel.
- Each driver may communicate with others via message passing and publisher/subsc
-riber models.
+ Each driver may communicate with other programs via message passing and
+ publisher-subscriber models.
  
 \end_layout
 
-\begin_layout Standard
-This document explores new communication interfaces for clockwork
+\begin_layout Section
+Background
 \end_layout
 
 \begin_layout Standard
+The Clockwork interpreters have several communication interfaces to support
+ various control protocols, such as: web server display and system monitoring
+ and to provide a commandline interface.
+ These interfaces have been introduced on the basis of project requirements
+ and are inconsistent in design and implementation.
+ This document addresses the various communications interfaces and describes
+ legacy and future implementations for
+\end_layout
+
+\begin_layout Itemize
 EtherCAT
 \end_layout
 
-\begin_layout Standard
-Modbbus
+\begin_layout Itemize
+Modbus
 \end_layout
 
-\begin_layout Standard
-zeroMQ
+\begin_layout Itemize
+commandline (iosh)
 \end_layout
 
-\begin_layout Standard
+\begin_layout Itemize
 Internet of Things
+\end_layout
+
+\begin_layout Itemize
+web clients
 \end_layout
 
 \begin_layout Section
@@ -117,6 +140,15 @@ The latproc system is to be split into a communications hub with scripting
 \end_layout
 
 \begin_layout Standard
+TBD.
+ The repository is only used for configuration settings, not state; Before
+ it can be used for also holding state information, there needs to be a
+ way for programs to collect the data from the repository without losing
+ changes that occur during the collection.
+ 
+\end_layout
+
+\begin_layout Standard
 \begin_inset Float figure
 wide false
 sideways false
@@ -126,8 +158,6 @@ status open
 \align center
 \begin_inset Graphics
 	filename ../../../../doc/communications_images/architecture1.png
-	lyxscale 75
-	scale 75
 
 \end_inset
 
@@ -135,7 +165,7 @@ status open
 \end_layout
 
 \begin_layout Plain Layout
-\begin_inset Caption
+\begin_inset Caption Standard
 
 \begin_layout Plain Layout
 Clockwork messages and data sharing
@@ -155,50 +185,17 @@ Clockwork messages and data sharing
 
 \end_layout
 
-\begin_layout Standard
-On startup, a Clockwork driver
-\end_layout
-
-\begin_layout Itemize
-interrogates a repository for 
-\end_layout
-
-\begin_deeper
-\begin_layout Itemize
-machine definitions 
-\end_layout
-
-\begin_layout Itemize
-interface definitions
-\end_layout
-
-\end_deeper
-\begin_layout Itemize
-establishes connections as described in the interface definitions
-\end_layout
-
-\begin_layout Itemize
-begins execution of the machines
-\end_layout
-
-\begin_layout Standard
-Note that failure to establish communications does not cause an instance
- to fail its startup; it will continue to establish the connection until
- aborted by an external source.
- Communication interfaces can be interrogated within Clockwork and the channel
- state can be used to affect the execution of the models.
-\end_layout
-
 \begin_layout Section
 Interprogram communication
 \end_layout
 
 \begin_layout Subsection
-Interface Definitions
+Channel Definitions
 \end_layout
 
 \begin_layout Standard
-An interface between Clockwork drivers is introduced via the CHANNEL object
+An interface between Clockwork drivers or between a Clockwork driver and
+ a client is called a `channel' and is introduced via the CHANNEL object:
 \end_layout
 
 \begin_layout LyX-Code
@@ -207,17 +204,60 @@ channel_name CHANNEL(host:hostname, port:portname) {
 
 \begin_deeper
 \begin_layout LyX-Code
-MONITORS '{' machine_name [ interface ], , \SpecialChar \ldots{}
- '}'
+IDENTIFIER id_string ';'
 \end_layout
 
 \begin_layout LyX-Code
-UPDATES '{' machine_name [ interface ], \SpecialChar \ldots{}
- '}'
+IDENT short_id_string ';' # short form of above id
 \end_layout
 
 \begin_layout LyX-Code
-SENDS message_name ';'
+KEY key_string ';' # a preshared key used in authentication
+\end_layout
+
+\begin_layout LyX-Code
+VERSION version_sequence ';'
+\end_layout
+
+\begin_layout LyX-Code
+SHARES block_name, \SpecialChar \ldots{}
+ ';'
+\end_layout
+
+\begin_layout LyX-Code
+MONITORS machine_name | pattern [ interface ], \SpecialChar \ldots{}
+ ';'
+\end_layout
+
+\begin_layout LyX-Code
+UPDATES machine_name | pattern [ interface ], \SpecialChar \ldots{}
+ ;
+\end_layout
+
+\begin_layout LyX-Code
+SENDS message_name, \SpecialChar \ldots{}
+ ';'
+\end_layout
+
+\begin_layout LyX-Code
+RECEIVES command_name, \SpecialChar \ldots{}
+ ';'
+\end_layout
+
+\begin_layout LyX-Code
+KEEPALIVE ping_time ';'
+\end_layout
+
+\begin_layout LyX-Code
+PUBLISHER;
+\end_layout
+
+\begin_layout LyX-Code
+REPORTS STATE_CHANGES ',' PROPERTY_CHANGES ';'
+\end_layout
+
+\begin_layout LyX-Code
+IGNORES '`' pattern '`' ';'
 \end_layout
 
 \end_deeper
@@ -226,10 +266,174 @@ SENDS message_name ';'
 \end_layout
 
 \begin_layout Standard
-A channel definition is directional, the clauses apply to the machine that
- .
- A channel may also include templates that define the machines that are
- monitored or updated via the channel.
+A channel may specify a set of messages sent and commands received on the
+ interface but there is no way to define the parameters of those messages
+ or commands (TBD).
+ The clauses are described as follows:
+\end_layout
+
+\begin_layout Description
+IDENTIFIER an internal name for the channel, primarily used to validate
+ that connections are talking to the channel they expect to, if this is
+ not provided, the channel name is used.
+\end_layout
+
+\begin_layout Description
+IDENT is provided is the shortform identifier, if not given, the first six
+ characters of the IDENTIFIER are used and if that is not available, the
+ first six characters of the channel name (right-padded with spaces).
+ The IDENT is primarily used for filtering as all ØMQ messages begin with
+ the IDENT string.
+\end_layout
+
+\begin_layout Description
+INTERFACE defines a pseudo machine class that act to filter the view of
+ a machine.
+ See Section
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sub:Interfaces"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Description
+KEY a pre-shared key.
+ If the channel definition includes an IDENTIFIER option, both sides must
+ be able to demonstrate that they know the identifier.
+ The identifier itself should never be transmitted on the channel.
+\end_layout
+
+\begin_layout Description
+KEEPALIVE ensure there is communication on the channel at least as often
+ as the given value in ms
+\end_layout
+
+\begin_layout Description
+VERSION a numeric value that provides the version of the interface
+\end_layout
+
+\begin_layout Description
+SHARES lists the memory blocks that are shared between the client and the
+ server.
+ Each memory block must be known to both the server and client
+\end_layout
+
+\begin_layout Description
+MONITORS lists the machines that the server will send updates for.
+ Each listed machine may also include an interface definition that further
+ describes the states and properties of the machine.
+ Wildcards may be used to define the machines that can be monitored at the
+ receiver.
+ The client may request a reduced set of machines.
+ If no MONITORS clause is given property and state changes will not be forwarded
+ to the channel.
+\end_layout
+
+\begin_layout Description
+UPDATES lists the machines that the client will send updates for.
+ Each listed machine may also include an interface definition that further
+ describes the states and properties of the machine.
+\end_layout
+
+\begin_layout Description
+SENDS lists the messages that will be accepted by the server.
+ 
+\end_layout
+
+\begin_layout Description
+RECEIVES lists the messages that will be accepted by the client.
+\end_layout
+
+\begin_layout Description
+FUNCTION provides the name of a function that can be called by the client.
+ This is intended to be used by other instances of clockwork that use the
+ CALL syntax to send a message and subsequently block until the remote system
+ has completed execution of the handler.
+\end_layout
+
+\begin_layout Description
+PUBLISHER indicates the channel should use a publish/subscribe model to
+ send changes.
+ These channels do not automatically send the current state and property
+ values when the client connects
+\end_layout
+
+\begin_layout Description
+MODBUS indicates the channel should send modbus UPDATE commands for the
+ modbus daemon
+\end_layout
+
+\begin_layout Description
+REPORTS provides a list of change-types that are reported on this channel,
+ legal values are STATE_CHANGES and PROPERTY_CHANGES
+\end_layout
+
+\begin_layout Description
+IGNORES indicates the channel should ignore changes on the machines matching
+ the pattern.
+ IGNORES can also be used with STATE_CHANGES or PROPERTY_CHANGES to reverse
+ the effect of a REPORTS.
+\end_layout
+
+\begin_layout Standard
+Clauses in a channel definition are all optional.
+\end_layout
+
+\begin_layout Subsection
+Interfaces
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:Interfaces"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+An Interface define a template that indicates a public view of a machine.
+ Any machine may be viewed using an interface but it must conform (TBD)
+ with the interface definition.
+\end_layout
+
+\begin_layout Standard
+By way of an example, a BIT has the interface:
+\end_layout
+
+\begin_layout LyX-Code
+BIT INTERFACE { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+off INITIAL; on STATE; 
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND toggle,turnOn,turnOff;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+A channel definition is directional, how the clauses apply to the machine
+ depends on where the machines are instantiated.
+ 
+\end_layout
+
+\begin_layout Standard
+A channel may also include interface definitions that define the machines
+ that are monitored or updated via the channel.
  The definition may describe the states to be exchanged, a state that is
  the startup or default state and the properties that are to be exchanged
  on the interface.
@@ -266,6 +470,14 @@ PROPERTIES '{' property2 [ READONLY | READWRITE ], \SpecialChar \ldots{}
  '}'
 \end_layout
 
+\begin_layout LyX-Code
+RECEIVES message1 [ ',' message ] ';'
+\end_layout
+
+\begin_layout LyX-Code
+FUNCTION functionname ';'
+\end_layout
+
 \end_deeper
 \begin_layout LyX-Code
 '}'
@@ -288,10 +500,112 @@ switch INTERFACE { STATES { on, off } }
 \end_layout
 
 \begin_layout Standard
-If the switch enters another state (eg., disabled, no message is sent to
- the listener and the switch is assumed to be still in the last state communicat
-ed.
+If the switch enters another state (eg., disabled, the switch moves to its
+ default state.
  (TBD)
+\end_layout
+
+\begin_layout Standard
+Interfaces can be used outside of channels to hide internal states or (TBD)
+ to define requirements on machines that are passed as parameters when machines
+ are instantiated.
+ To use an interface within a clockwork program, use:
+\end_layout
+
+\begin_layout LyX-Code
+new_name IS old_name AS interface_name ';'
+\end_layout
+
+\begin_layout Standard
+TBD the above syntax provides a new name and this may not be desirable;
+ it is often preferable to define the public interface from with a machine,
+ such as by marking states as public and providing a mapping of other states.
+ In doing so, note that a machine may chose to leave some states unmapped.
+ When a machine enters an unmapped state, no state change occurs on the
+ interface so some care is required when using this feature.
+\end_layout
+
+\begin_layout Standard
+The main benefit to interfaces used this way is to provide a limited view
+ of a machine, hiding its internals from samplers or other machines.
+\end_layout
+
+\begin_layout Standard
+TBD what should be done about providing multiple interfaces? Does this make
+ any sense?
+\end_layout
+
+\begin_layout Subsection
+Shared Memory and sampling
+\end_layout
+
+\begin_layout Standard
+Clockwork is fundamentally a program that looks at changes in a memory map
+ and uses those changes to affect changes in a state model of various simulated
+ machines.
+ It should be possible to share any memory block with clockwork, no matter
+ the source.
+ A block may represent a device or it may be divided into regions that relate
+ to the device in some way, for example in with Beckhoff EtherCAT(tm) the
+ `Module' refers to a physical device, in MODBUS, 
+\emph on
+coils
+\emph default
+ and 
+\emph on
+registers
+\emph default
+ refer to distinct memory regions.
+\end_layout
+
+\begin_layout Standard
+Each block may have properties that descibe attributes common to all regions
+ in the block 
+\end_layout
+
+\begin_layout LyX-Code
+ModbusPanel BLOCK {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+X BIT[256] IN;
+\end_layout
+
+\begin_layout LyX-Code
+Y BIT[256] OUT;
+\end_layout
+
+\begin_layout LyX-Code
+V WORD[256] IN OUT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+panel ModusPanel 
+\end_layout
+
+\begin_layout Standard
+Given the above definition, Clockwork may bind fields of the block to a
+ machine, for example:
+\end_layout
+
+\begin_layout LyX-Code
+start_button panel X1;
+\end_layout
+
+\begin_layout Standard
+defines 
+\emph on
+start_button
+\emph default
+ as a single bit object in clockwork, linked to coil X01 in the modbus memory
+ block.
+ 
 \end_layout
 
 \begin_layout Subsection
@@ -301,6 +615,47 @@ Issues
 \begin_layout Enumerate
 How do we manage the startup conditions? When a client connects? When the
  server restarts?
+\end_layout
+
+\begin_layout Enumerate
+How large is a beckhoff master memory block?
+\end_layout
+
+\begin_layout Enumerate
+How quickly can we send master block updates to a clockwork program.
+ What latency can we expect?
+\end_layout
+
+\begin_layout Enumerate
+Properties that are updated by external machines via the PROPERTY command
+ should not activate the property update until the 
+\end_layout
+
+\begin_layout Enumerate
+Clockwork drivers need a parameter to set them into insecure mode to allow
+ clients to define the connection properties.
+\end_layout
+
+\begin_layout Enumerate
+If a message send fails there is no way for the clockwork program to know
+\end_layout
+
+\begin_layout Enumerate
+When a message arrives it should not be delivered unless the target machine
+ has no active actions
+\end_layout
+
+\begin_layout Enumerate
+How should default values be specified? Currently as a default property
+ on outputs only.
+\end_layout
+
+\begin_layout Enumerate
+iosh should be implemented using a command channel
+\end_layout
+
+\begin_layout Enumerate
+subscribers should not share a command channel as this is a security risk
 \end_layout
 
 \begin_layout Subsection
@@ -364,6 +719,157 @@ A channel specification needs to be read by both ends of the channel.
  can be sent by the client when the connection is made.
  The channel specification may include interface specifications (TBD).
  
+\end_layout
+
+\begin_layout Subsection
+Protocol
+\end_layout
+
+\begin_layout Standard
+On startup, a Clockwork driver
+\end_layout
+
+\begin_layout Itemize
+interrogates a repository for 
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+machine definitions 
+\end_layout
+
+\begin_layout Itemize
+channel definitions
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+establishes connections as described in the interface definitions,
+\end_layout
+
+\begin_layout Itemize
+loads current state for the external machines and
+\end_layout
+
+\begin_layout Itemize
+begins execution of the machines
+\end_layout
+
+\begin_layout Standard
+When a client connects to a server it is required to initiate a negotiation
+ of the channel configuration for the connection.
+ This can be done by a command message with the command: CHANNEL and the
+ name of the channel.
+ In this case, the server is expected to refer to its repository for a matching
+ channel (and version\SpecialChar \ldots{}
+).
+ When a client requests a new channel, the server:
+\end_layout
+
+\begin_layout Itemize
+instantiates a channel and negotiates its settings
+\end_layout
+
+\begin_layout Itemize
+creates shadow machines for machines that are updated externally and not
+ already instantiated.
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+If an interface is specified for an updated machine, the existing machine
+ will be checked against that interface and channel definition will fail
+ if the interface does not conform.
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+Note that failure to establish communications does not cause an instance
+ to fail its startup; it will continue to establish the connection until
+ aborted by an external source.
+ Communication interfaces can be interrogated within Clockwork and the channel
+ state can be used to affect the execution of the models.
+\end_layout
+
+\begin_layout Standard
+Interfaces should be configured with a heartbeat that ensures that hardware
+ drivers can reset to defaults if there is a loss of communication with
+ the control system for any reason.
+\end_layout
+
+\begin_layout Standard
+When a client disconnects or closes a channel the server:
+\end_layout
+
+\begin_layout Itemize
+disables shadow machines created for the channel
+\end_layout
+
+\begin_layout Itemize
+deregisters machines that were monitored by the channel
+\end_layout
+
+\begin_layout Standard
+Note that shadowed machines are not removed in this design, mainly because
+ the current driver was not written with this in mind.
+ The situation will be reconsidered in the future.
+\end_layout
+
+\begin_layout Standard
+The communications protocol is not secure; it has a simple authentication
+ process that will be upgraded in the future.
+\end_layout
+
+\begin_layout Itemize
+The connecting party identifies the channel to be used:
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+CHANNEL channel_name ';'
+\end_layout
+
+\begin_layout Standard
+this message is encoded using JSON:
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"CHANNEL","params":["name","myChannel"]}
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+If the server does not have a matching configuration, the client may send
+ the configuration (TBD do we want to allow this? Probably require that
+ cw be run in an insecure mode).
+\end_layout
+
+\begin_layout Itemize
+If a channel cannot be agreed, the connection will be terminated.
+ 
+\end_layout
+
+\begin_layout Itemize
+If an identifier is provided, it will be used as a pre-shared key to authenticat
+e the connection.
+ The server will send a keyword challenge to the client and the client will
+ be expected to combine this with the secret identifier for the channel
+ and send back an encrypted value.
+ The client will also authenticate the server in the same way.
+\end_layout
+
+\begin_layout Itemize
+If a version number is provided, both ends may emit a warning or disconnect,
+ depending on other options that may be in force.
+\end_layout
+
+\begin_layout Itemize
+The server responds with a name for the new instance of the channel and
+ a port number
+\end_layout
+
+\begin_layout Itemize
+The connecting machine subscribes to the named channel by 
 \end_layout
 
 \begin_layout Section
@@ -455,7 +961,7 @@ waiting WHEN scales IS unstable;
 \end_layout
 
 \begin_layout LyX-Code
-stablising WHEN scales IS stable AND TIMER < 100;
+stablising WHEN scales IS stable AND scales.TIMER < 100;
 \end_layout
 
 \begin_layout LyX-Code
@@ -591,6 +1097,8 @@ To setup a system monitor, a pattern can be used so that a range of machines
  can be selected without the need to name each machine.
  Consider an application that monitors a Clockwork instance to record state
  changes of a set of machines.
+ A wildcard can be associated with an interface, giving greater control
+ of what is monitored
 \end_layout
 
 \begin_layout LyX-Code
@@ -615,9 +1123,21 @@ ed, the server transmits the current state and properties of all matching
  machines.
 \end_layout
 
+\begin_layout Subsubsection
+Limiting monitored output
+\end_layout
+
 \begin_layout Standard
-A wildcard can be associated with an interface, giving greater control of
- what is monitored:
+In addition to the MONITORS statement, a channel may include an IGNORES
+ statement that causes the names machines to be excluded from the channel.
+ The IGNORES statement may also use a wildcard to specify the excluded machines.
+\end_layout
+
+\begin_layout Standard
+To limit the properties and states that are transmitted, machines can monitored
+ through a filter interface.
+ The effect of looking at a machine using an interface is that only states
+ and properties within the interface are visible.
 \end_layout
 
 \begin_layout LyX-Code
@@ -681,32 +1201,495 @@ At the server end, clockwork instantiates a machine for each entry in the
 \end_layout
 
 \begin_layout Subsection
+Channel classes
+\end_layout
+
+\begin_layout Subsubsection
+ConnectionManager
+\end_layout
+
+\begin_layout Subsubsection
+SubscriptionManager
+\end_layout
+
+\begin_layout Standard
+A subscription manager is a connection manager that ...
+\end_layout
+
+\begin_layout Subsubsection
+Channel Manager
+\end_layout
+
+\begin_layout Standard
+A channel manager includes a subscription manager to monitor each connection.
+ The last connection close event on a channel causes deregistration of machines.
+\end_layout
+
+\begin_layout Standard
+Given x CHANNEL { UPDATES m; }, whenever m changes state, i notifies the
+ channel instantiation and a state change is sent to the remote end of the
+ channel.
+\end_layout
+
+\begin_layout Subsection
+Commands
+\end_layout
+
+\begin_layout Standard
+The CHANNEL command is used to instantate a connection.
+ If a channel is already instantiated new connections will also subscribe
+ to that channel.
+ This works well for subscription channels such as used for persistence
+ but is not good for channels that require one-to-one communication such
+ as when two instances of clockwork are communicating directly.
+\end_layout
+
+\begin_layout Itemize
+When a channel is instantiated by the CHANNEL command at runtime, the clockwork
+ driver is the server of the channel.
+\end_layout
+
+\begin_layout Itemize
+When a channel is instantiated by script, the clockwork driver that instantiates
+ it is the client; the server will be started by subsequent use of the CHANNEL
+ command.
+\end_layout
+
+\begin_layout Itemize
+When a channel MONITORS a machine, the client of that channel uses a Subscriptio
+nManager to listen for state changes.
+\end_layout
+
+\begin_layout Itemize
+When a channel UPDATES a machine, the client sends state changes and the
+ server listens using a SubscriptionManager.
+\end_layout
+
+\begin_layout Itemize
+When a channel SHAREs a machine, both sides setup a subscription manager
+ to listen for changes to the machine
+\end_layout
+
+\begin_layout Itemize
+The server end of a channel sends state changes for monitored machines.
+ It normally does this by directed messages that expect a response upon
+ delivery.
+ If a channel is marked as PUBLISHER, multiple clients may subscribe to
+ the channel and the server sends changes using a `publish/subscribe' model
+ that does not require responses
+\end_layout
+
+\begin_layout Itemize
+When two instances of clockwork setup a channel
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+on startup, the server adds the channel definition to the list of known
+ channels
+\end_layout
+
+\begin_layout Itemize
+on startup, the client instantiates the channel subscription manager and
+ starts it
+\end_layout
+
+\begin_layout Itemize
+the client subscription manager connects to the server and requests a channel
+\end_layout
+
+\begin_layout Itemize
+the server instantiates the channel and creates a thread to communicate
+ with the client.
+\end_layout
+
+\begin_layout Itemize
+The channel thread creates a SubscriptionManager to look after the communication
+ with the client.
+ The manager will generally use a ØMQ Pair socket but if the channel is
+ marked as 'PUBLISHER', then a Publisher socket is used instead.
+\end_layout
+
+\begin_layout Itemize
+The server creates a command socket (Request/Reply) to communicate with
+ the channel server thread
+\end_layout
+
+\begin_layout Itemize
+the server passes the instantiated channel name to the client
+\end_layout
+
+\begin_layout Itemize
+the client subscriber connects to the instantiated channel
+\end_layout
+
+\begin_layout Itemize
+both client and server communicate over the subscriber socket
+\end_layout
+
+\begin_layout Itemize
+the client currently retains a connection to the 'setup' channel but should
+ not (TBD) use this socket
+\end_layout
+
+\begin_layout Itemize
+the server has no need of the setup socket
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+When a command is sent to the channel
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+the command string is parsed and an IODCommand is constructed and pushed
+ onto a pending commands queue
+\end_layout
+
+\begin_layout Itemize
+The processing thread periodically gives the channel time to process pending
+ commands
+\end_layout
+
+\begin_layout Itemize
+as commands are completed they are posted onto a queue
+\end_layout
+
+\end_deeper
+\begin_layout Subsection
 Implementation notes
 \end_layout
 
 \begin_layout Itemize
-A MachineInterface object now subclasses MachineInstance
+A MachineInterface object is now a specialisation of MachineInstance
 \end_layout
 
 \begin_layout Itemize
-A MachineInterface is a representative or `proxy' for a MachineInstance
+A MachineInterface is a representative or `proxy' for another MachineInstance
 \end_layout
 
 \begin_layout Itemize
-MachineInterface objects are distinguished when setting up a channel so
- that they are not normally used to source a channel
+MachineInterface objects are distinguished when setting up a channel and
+ are not normally used as a source.
 \end_layout
 
 \begin_layout Itemize
 MachineInterface objects can be used to propagate state to other instances
- of clockwork; this is done by registering a distance (hops) to the actual
- MachineInstance that they represent
+ of clockwork; this may be done by registering a distance (hops) to the
+ actual MachineInstance that they represent
 \end_layout
 
 \begin_layout Itemize
 There are issues with setup and teardown of connections and how this effects
  messaging.
  TBD
+\end_layout
+
+\begin_layout Itemize
+The IGNORES statement should remove the publisher setting on an instance
+ as well as removing it from the machine list for the channel
+\end_layout
+
+\begin_layout Itemize
+Channels currently share a connection to the standard command channel but
+ should have their own separate connection
+\end_layout
+
+\begin_layout Itemize
+Test channels that are marked as publishers but instantiated in clockwork
+\end_layout
+
+\begin_layout Section
+Predefined Channels
+\end_layout
+
+\begin_layout Subsection
+EtherCAT
+\end_layout
+
+\begin_layout Standard
+When the EtherCAT driver connects to Clockwork, it announces the modules
+ that it has control over either by providing the names from the shared
+ repository or by providing the definitions directly on the channel.
+ BLOCKs contain REGIONs that have a number of BITs, numbered from 1 and
+ also using default names that follow the pattern 'a','b',\SpecialChar \ldots{}
+,'aa',ab',\SpecialChar \ldots{}
+.
+\end_layout
+
+\begin_layout Standard
+TBD fix this example, the syncmanagers actually define the regions and the
+ pdos are just fields.
+\end_layout
+
+\begin_layout LyX-Code
+Module BLOCK {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION position 1;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION alias 0;
+\end_layout
+
+\begin_layout LyX-Code
+pdo1 REGION {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION SM 3;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION index 0x1a00;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION name 
+\begin_inset Quotes eld
+\end_inset
+
+Inputs
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[8] {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+INITIAL 0; # this can also be done via a prepare statement
+\end_layout
+
+\begin_layout LyX-Code
+MAP { # unnamed map, this is the default interpretation for this region
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+BIT[3];
+\end_layout
+
+\begin_layout LyX-Code
+valve BIT;
+\end_layout
+
+\begin_layout LyX-Code
+motor BIT;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[3]; # avoid warnings by labelling all 8 bits
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+byte MAP { BYTE; } // a named map, pdo1.byte interprets the region as a single
+ byte
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+The options proved in this definition are specific to the channel type,
+ EtherCAT in this case.
+ The REGION and specifications are used by clockwork to determine the memory
+ structure.
+ In the above definition, the first region in the block is labelled 'pdo1',
+ it is eight bits wide with pdo1.valve and pdo1.motor being at bits 'd' and
+ 'e'.
+\end_layout
+
+\begin_layout Standard
+A Clockwork script can bind objects to fields:
+\end_layout
+
+\begin_layout LyX-Code
+EK1814 MODULE 1, 0; # bit 0 of module with position 1
+\end_layout
+
+\begin_layout Standard
+The above legacy syntax is not general enough (TBD)
+\end_layout
+
+\begin_layout Standard
+The EtherCAT polling program communicates with clockwork via two message
+ queues.
+ Each message contains a mask and a bit set.
+ The receiver of the message updates the bits in processing memory that
+ match the mask and ignores other bits.
+\end_layout
+
+\begin_layout Standard
+In clockwork, when IO is updated, a bits are set in the mask due to be sent
+ to the ethercat interface and the value is updated.
+ When all components are updated in process memory, the mask and the data
+ are sent to the EtherCAT interface.
+ When the EtherCAT thread starts it receives an IO mask from clockwork that
+ defines all of the bits that clockwork is interested in.
+ If there are no relevant changes in the bitmap the thread does not send
+ anything to clockwork.
+ When clockwork updates output points, it messages the updates to the ethercat
+ thread.
+\end_layout
+
+\begin_layout Standard
+TBD
+\end_layout
+
+\begin_layout Enumerate
+handle queue growth - clear the queue up to the last entry in both directions.
+ do we care if clockwork toggles an output faster than the io can detect
+ it?
+\end_layout
+
+\begin_layout Enumerate
+in reading data changes, the queue should be 'played' through clockwork
+ in order to ensure no transitions are lost.
+\end_layout
+
+\begin_layout Subsubsection
+Default values
+\end_layout
+
+\begin_layout Standard
+When a driver starts it needs to be provided with default values for all
+ analogue values.
+ These defaults are loaded whenever there is a problem with communication
+ to clockwork.
+ Startup faults can cause serious issues, especially in the case of errors
+ such as incorrect defaults for analogue outputs.
+ Hardware will normally be designed with the assumption thaa the default
+ state for digital outputs is 'off'.
+ 
+\end_layout
+
+\begin_layout Standard
+Analogue values must be intialised before EtherCAT enters the operational
+ state.
+ The ethercat interface will ensure that all analogue outputs referenced
+ by the program will be correctly initialised before entering the operational
+ state.
+ The initial values can be made within the BLOCK definition, as shown above
+ but also constraints can be added so that basic control errors can be avoided.
+\end_layout
+
+\begin_layout LyX-Code
+Module BLOCK {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+[\SpecialChar \ldots{}
+]
+\end_layout
+
+\begin_layout LyX-Code
+PREPARE pdo1 INITIAL 0b00000000 MASK 0x11111111;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+# name the bits that have constraints set
+\end_layout
+
+\begin_layout LyX-Code
+valve BIT pdo1[3];
+\end_layout
+
+\begin_layout LyX-Code
+motor BIT pdo1[4];
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+MotorValveOff CONDITION valve { valve IS off }
+\end_layout
+
+\begin_layout LyX-Code
+CONSTRAINT motor1.TurnOn REQUIRES MotorValveOff;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsection
+Modbus
+\end_layout
+
+\begin_layout Standard
+Clockwork provides a facility to export properties, states and commands
+ of machines to modbus.
+ The current syntax provides for automatically generated addresses but is
+ too tightly coupled to modbus.
+ A more general approach is needed (TBD)
+\end_layout
+
+\begin_layout Subsection
+Persistence
+\end_layout
+
+\begin_layout Standard
+Devices that are persistent are loaded from a database when the program
+ starts and are constantly updated in the database as the program runs.
+ The standard persistence channel uses an option to determine which machines
+ should have their state reported through the channel.
+\end_layout
+
+\begin_layout LyX-Code
+# The standard definition for persistence
+\end_layout
+
+\begin_layout LyX-Code
+PERSISTENCE_CHANNEL CHANNEL {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION host "localhost";
+\end_layout
+
+\begin_layout LyX-Code
+MONITORS PERSISTENT == "true";
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout Section
@@ -784,6 +1767,23 @@ OFF tells modbusd to stop emitting debug information
 UPDATE 
 \end_layout
 
+\begin_layout Standard
+The modbus connection requires the client (eg panel) to send a MODBUS command
+ that identifies the group, address and value of a chanaged modbus property.
+ When clockwork has a change to report to modbus it sends an UPDATE 
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"MODBUS","params":[{"type":"INTEGER","value":0},{"type":"INTEGER","va
+lue":1000},{"type":"INTEGER","value":1}]}
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"UPDATE","params":[{"type":"INTEGER","value":0},{"type":"INTEGER","va
+lue":1000},{"type":"STRING","value":"F_GrabPanelGoodComms"},{"type":"INTEGER","v
+alue":1},{"type":"INTEGER","value":1}]}
+\end_layout
+
 \begin_layout Subsection
 Persistence channel
 \end_layout
@@ -832,6 +1832,15 @@ value <depends on type>
 \end_deeper
 \begin_layout LyX-Code
 ]
+\end_layout
+
+\begin_layout Standard
+A property command example is as follows
+\end_layout
+
+\begin_layout LyX-Code
+{"command":"PROPERTY","params":[{"type":"NAME","value":"IA_GrabIndexFreq"},{"typ
+e":"NAME","value":"position"},{"type":"INTEGER","value":3464}]}
 \end_layout
 
 \begin_layout Subsection

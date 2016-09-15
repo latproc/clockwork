@@ -3,6 +3,12 @@
 # performs the correct state changes.
 # If the test machine fails to change state it is reset and the 
 # driver locks itself into an error state.
+#
+# functions tested:
+#
+#  use of ANY .. ARE  using a property for the state being tested
+#  continued execution of scripts after a WAITFOR
+#  resetting a machine from a script
 
 f1 FLAG;
 f2 FLAG;
@@ -46,7 +52,7 @@ TestScript MACHINE test {
         WAITFOR test IS both;
         SET x1 TO off;
         WAITFOR test IS on_a;
-        INCLUDE f1 IN b;
+        INCLUDE f1 IN l2;
         WAITFOR test IS both;
         SET SELF TO ok;
     }

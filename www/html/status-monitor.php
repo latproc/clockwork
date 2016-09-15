@@ -194,7 +194,7 @@ $siteurl="status-monitor.php";
 				$module_name = $curr->module_name;
 			else 
 				$module_name = "Clockwork machines";
-			$parts = split(" ", $module_name);
+			$parts = explode(" ", $module_name);
 			$tabdata .= '<h2 style="margin: 1em 0em 0em 0em;">Module '.$module_pos.' '.$parts[0].'</h2>';
 			$tabdata .= "<div class=\"module-name\">$module_name</div>";
 		}
@@ -245,8 +245,8 @@ $siteurl="status-monitor.php";
 						$tabdata .= '<div class="item_img">' . button_image($point, $image_name, 'im_'.$point) . "</div>";
 					if ($type == 'AnalogueOutput') {
 						$tabdata .= '<div class="item_state" id="mc_' . $point. '">' 
-							. htmlspecialchars($curr->value) 
-							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->value .'"'
+							. htmlspecialchars($curr->VALUE) 
+							. '</div><div class="anaout-slider" name="' . $point . '" value="' .$curr->VALUE .'"'
 							. 'style="float:left;width:14em;"></div>';
 					}
 					else {
@@ -281,8 +281,14 @@ $siteurl="status-monitor.php";
 				$image_name = $image_prefix.".png";
 			if ($type != "AnalogueInput")
 				$display_value = htmlspecialchars($status);
-			else
-				$display_value = $curr->value;
+			else {
+				if (isset($curr->value))
+					$display_value = $curr->value;
+				else if (isset($curr->VALUE))
+					$display_value = $curr->VALUE;
+				else
+					$display_value = "UNKNOWN";
+			}
 			if (file_exists($BASE_APPDIR . "/html/img/$image_name"))
 				$tabdata .= image_html($point, $image_name, "im_".$point);
 			$tabdata .= "</div>"

@@ -1,0 +1,2038 @@
+%{
+
+#include <stdlib.h>
+#include <dlfcn.h>
+#include <stdio.h>
+#include <string.h>
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <sstream>
+#include <boost/foreach.hpp>
+#include "symboltable.h"
+#include "Logger.h"
+#include "MachineInstance.h"
+#include "Message.h"
+#include "IfCommandAction.h"
+#include "EnableAction.h"
+#include "ResumeAction.h"
+#include "DisableAction.h"
+#include "ExpressionAction.h"
+#include "LogAction.h"
+#include "PredicateAction.h"
+#include "DebugExtra.h"
+#include "LockAction.h"
+#include "UnlockAction.h"
+#include "ShutdownAction.h"
+#include "WaitAction.h"
+#include "SendMessageAction.h"
+#include "CallMethodAction.h"
+#include "MachineCommandAction.h"
+#include "PatternAction.h"
+#include "IODCommands.h"
+#include "IncludeAction.h"
+#include "dynamic_value.h"
+#include "CopyPropertiesAction.h"
+#include "SetListEntriesAction.h"
+#include "SortListAction.h"
+#include "ClearListAction.h"
+#include "SetOperationAction.h"
+#include "Plugin.h"
+#include "MessageLog.h"
+#include "Channel.h"
+#include "AbortAction.h"
+#include "SDOEntry.h"
+
+#define COMPILER_MAIN
+#include "cwlang.h"
+
+int yylex(void);
+
+extern int yylineno;
+extern int yycharno;
+extern char *yytext;
+
+int line_num = 1;   /* updated by the lexical analysis and used for error reporting */
+extern int num_errors;
+extern std::list<std::string>error_messages;
+Value current_value;
+SymbolTable properties;
+PredicateOperator current_op;
+    std::list<Value> value_stack;
+    std::list<Predicate*>expression_stack;
+    std::list<PredicateOperator> operator_stack;
+    std::list<ActionTemplate *>*current_actions = new std::list<ActionTemplate*>;
+	typedef std::list<ActionTemplate *>ActionsList;
+    std::list<ActionsList*>current_actions_stack;
+    ActionTemplate *current_action = 0;
+    std::list<Parameter> current_parameters;
+    std::list<Parameter> current_locals;
+    std::list<std::string> current_name_list;
+    std::list< std::pair<std::string, char *> > current_machine_list;
+    std::list<SymbolTable> property_stack;
+    std::list<ChannelDefinition*> channel_definitions;
+
+static char *error_message_name = 0;
+static char *timeout_message_name = 0;
+
+MachineInstance *current_machine = 0;
+MachineClass *current_machineclass = 0;
+ChannelDefinition *current_channelclass = 0;
+Channel *current_channel = 0;
+std::list<MachineClass *> all_classes;
+std::list<ChannelDefinition> all_channeldefs;
+ChannelDefinition::Feature current_feature;
+std::set<ChannelDefinition::Feature> *current_features = 0;
+//std::list<MachineDetails*>deferred_instantiations;
+    
+static MachineInstance *addMachine(const char *name, const char *type, 
+            MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
+	MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
+	machine->setDefinitionLocation(yyfilename, yylineno);
+
+		std::map<std::string, MachineInstance *>::iterator found = machines.find(name);
+    if (found == machines.end())
+        machines[name] = machine;
+    else {
+				MachineInstance *orig = (*found).second;
+        NB_MSG << yyfilename << ":" << std::setw(5) << yylineno << " " 
+					<< "Error: machine " << name << " already defined "
+					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+    }
+
+    return machine;
+}
+
+static void cleanupErrorClause(bool deallocate = false) {
+	if (timeout_message_name) {
+		if (deallocate) free(timeout_message_name);
+		timeout_message_name = 0;
+	}
+	if (error_message_name) {
+		if (deallocate) free(error_message_name);
+		error_message_name = 0;
+	}
+}
+
+struct Subcondition {
+    Predicate *predicate;
+	const char *name;
+	const char *command;
+};
+
+%}
+
+%token MODULES MODULE DEFAULTS DEFAULT
+%token STATE ENTER NUMBER SEPARATOR OEXPR EEXPR OBRACE
+%token EBRACE QUOTE LE LT GE GT NE EQ
+%token NOT SET AND OR SQUOTE LOG FLAG
+%token PROPERTY DEFINE COLLECT FROM TEST EXECUTE SPAWN RUN
+%token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
+%token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO RECEIVE
+%token DURING WAIT WAITFOR TRANSITION TAG INC DEC BY CONCAT
+%token SEND CONDITION INITSTATE IF_ ELSE ENABLE DISABLE BECOMES
+%token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
+%token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
+%token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
+%token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
+%token INCLUDES INCLUDE CREATE BITSET PROPERTIES ENTRIES SORT
+%token ENABLED DISABLED SIZE ITEM FIRST LAST
+%token COMMON BETWEEN DIFFERENCE COMBINATION CLEAR
+%token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
+%token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
+%token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
+%token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
+%token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
+%token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
+%token LINKED SDO LOCAL CLASS
+
+%union {
+	int iVal;
+	const char *sVal;
+	const char *symbol;
+    const char *pVal;
+	Predicate *expr;
+	PredicateOperator opr;
+	Value *val;
+	Parameter *param;
+	struct Subcondition *subcond;
+};
+
+%token <iVal> INTEGER
+%token <iVal> ADDRESS
+%token <symbol> SYMBOL
+%token <sVal> STRINGVAL
+%token <pVal> PATTERN
+%type <symbol> transition_state
+
+%left BECOMES
+%left OR
+%left AND
+%left GE LE EQ NE LT GT
+%left '+' '-' '|'
+%left '*' '/' '%' '&' '^'
+%nonassoc NOT
+%nonassoc UMINUS
+%nonassoc '~'
+%left IFX
+%left IFELSE
+
+%type <expr> expression 
+%type <expr> predicate
+%type <val> value
+%type <val> basic_value
+%type <param> parameter
+%type <iVal> access_type
+%type <iVal> size_type
+%type <subcond> state_subcondition
+
+%%
+
+program:
+program_section
+| program program_section
+;
+
+program_section:
+| module_block
+| module_def
+| machine_definition
+| machine_instantiation
+| route_declaration
+| channel_definition
+| interface_definition
+| error ';'
+| error '}'
+;
+
+global_references:
+global_reference 
+| global_references COMMA global_reference
+;
+
+global_reference:
+SYMBOL {
+    std::string name($1);
+    current_machineclass->global_references[name] = 0;
+    DBG_PARSER << "Reference to a global " << name << "\n";
+}
+;
+
+local_option_settings:
+local_option_setting
+| local_option_settings COMMA local_option_setting
+;
+
+option_settings:
+option_setting
+| option_settings COMMA option_setting
+;
+
+
+option_setting:
+SYMBOL value {
+	std::string name($1);
+	current_machineclass->options[name] = *$2;
+	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$2 << "\n";
+	delete $2;
+}
+
+local_option_setting:
+SYMBOL value {
+    std::string name($1);
+    current_machineclass->options[name] = *$2;
+	current_machineclass->addPrivateProperty(name);
+    DBG_PARSER << current_machineclass->name << " private option: " << name << ": " << *$2 << "\n";
+    delete $2;
+}
+
+route_declaration:
+ROUTE STRINGVAL TO SYMBOL ';' {
+    message_handlers[$2] = $4;
+}
+;
+
+machine_definition:
+definition_header '{' definition_body '}' { 
+    DBG_PARSER << "machine definition\n"; 
+    if (current_machineclass) {
+        DBG_PARSER << current_machineclass->name << "\n";
+        // save the current list of states to the class
+        // save the current list of commands to the class
+        // etc
+        if (current_locals.size()) {
+            DBG_PARSER << " num locals: " << current_locals.size() << "\n";
+            std::copy(current_locals.begin(), current_locals.end(),back_inserter(current_machineclass->locals));
+            current_locals.clear();
+        }
+        DBG_PARSER << "num receives: " << current_machineclass->receives.size() << "\n";
+        DBG_PARSER << "states: " << current_machineclass->states.size() << "\n";
+        DBG_PARSER << "num transitions: " << current_machineclass->transitions.size() << "\n";
+
+        all_classes.push_back(current_machineclass);
+        current_machineclass = NULL;
+    }
+}
+;
+
+interface_definition:
+interface_defn_header '{' interface_defn_body '}' {
+    
+}
+;
+
+interface_defn_header:
+SYMBOL INTERFACE {
+    DBG_PARSER << " interface definition "  << $1 << "\n";
+    current_machineclass = new MachineInterface($1);
+}
+;
+
+interface_defn_body:
+interface_defn_section
+| interface_defn_body interface_defn_section
+;
+
+interface_defn_section:
+| OPTION name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		//NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+		current_machineclass->addProperty(name.c_str());
+	}
+	current_name_list.clear();
+}
+| LOCAL OPTION name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+		current_machineclass->addPrivateProperty(name.c_str());
+	}
+	current_name_list.clear();
+}
+| OPTION SYMBOL value ';' {
+	std::string name($2);
+	current_machineclass->options[name] = *$3;
+	//NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+	current_machineclass->addProperty(name.c_str());
+	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$3 << "\n";
+	delete $3;
+}
+| LOCAL OPTION SYMBOL value ';' {
+	std::string name($3);
+	current_machineclass->options[name] = *$4;
+	NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+	current_machineclass->addPrivateProperty(name.c_str());
+	DBG_PARSER << current_machineclass->name << " private option: " << name << ": " << *$4 << "\n";
+	delete $4;
+}
+| COMMAND SYMBOL ';'
+| COMMANDS name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list)
+		current_machineclass->addCommand(name.c_str());
+	current_name_list.clear();
+}
+| RECEIVES name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list)
+		current_machineclass->addCommand(name.c_str());
+	current_name_list.clear();
+}
+| state_definition ';'
+;
+
+channel_definition:
+chn_definition_header '{' chn_definition_body '}' {
+}
+;
+
+chn_definition_header:
+SYMBOL CHANNEL {
+    DBG_PARSER << " channel definition "  << $1 << "\n";
+    current_channelclass = new ChannelDefinition($1);
+    
+    channel_definitions.push_back( current_channelclass );
+    current_name_list.clear();
+    current_machine_list.clear();
+}
+/*| SYMBOL CHANNEL property_block {
+    DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    current_machineclass->properties = properties;
+    properties.clear();
+}*/
+| SYMBOL CHANNEL EXTENDS SYMBOL {
+    DBG_PARSER << " channel definition "  << $1 << "\n";
+    current_channelclass = new ChannelDefinition($1);
+    channel_definitions.push_back( current_channelclass );
+    current_name_list.clear();
+    current_machine_list.clear();
+}
+/*| SYMBOL CHANNEL property_block EXTENDS SYMBOL {
+    DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    current_machineclass->properties = properties;
+    properties.clear();
+}
+*/
+;
+
+chn_definition_body:
+chn_definition_section
+| chn_definition_body chn_definition_section
+;
+
+chn_definition_section:
+  KEY STRINGVAL ';' { current_channelclass->setKey($2); }
+| IDENTIFIER STRINGVAL ';' { current_channelclass->setIdent($2); }
+| VERSION STRINGVAL ';' { current_channelclass->setVersion($2); }
+| SHARES machine_list ';'  {
+	std::list< std::pair<std::string, char *> >::iterator iter = current_machine_list.begin();
+	while (iter != current_machine_list.end() ) {
+		const std::pair< std::string, char*> &item = *iter++;
+		current_channelclass->addShares(item.first.c_str(), item.second);
+		free(item.second);
+	}
+	current_machine_list.clear();
+}
+| MONITORS name_list ';'    {
+    BOOST_FOREACH(std::string &name, current_name_list)
+        current_channelclass->addMonitor(name.c_str());
+}
+| IGNORES PATTERN ';'  {
+    current_channelclass->addIgnorePattern($2);
+}
+| IGNORES feature_list ';' {
+	if (current_features) {
+		BOOST_FOREACH(ChannelDefinition::Feature f, *current_features )
+			current_channelclass->removeFeature(f);
+		delete current_features;
+		current_features = 0;
+	}
+}
+| MONITORS PATTERN ';'  {
+    current_channelclass->addMonitorPattern($2);
+}
+| MONITORS MACHINES WITH NAME MATCHING PATTERN ';'  {
+    current_channelclass->addMonitorPattern($6);
+}
+| MONITORS MACHINES WHERE SYMBOL EQ basic_value ';'  {
+    current_channelclass->addMonitorProperty($4, *$6);
+    delete $6;
+}
+| MONITORS MACHINES WITH PROPERTY SYMBOL ';'  {
+	current_channelclass->addMonitorProperty($5, SymbolTable::Null);
+}
+| MONITORS MACHINES LINKED TO SYMBOL ';'  {
+	current_channelclass->addMonitorLinkedTo($5);
+}
+| MONITORS MACHINES WITH EXPORTS ';'  {
+    current_channelclass->addMonitorExports();
+}
+| MONITORS SYMBOL EQ basic_value ';'  {
+    current_channelclass->addMonitorProperty($2, *$4);
+    delete $4;
+}
+| UPDATES machine_list ';' {
+    std::list< std::pair<std::string, char *> >::iterator iter = current_machine_list.begin();
+    while (iter != current_machine_list.end() ) {
+        const std::pair< std::string, char*> &item = *iter++;
+        current_channelclass->addUpdates(item.first.c_str(), item.second);
+        free(item.second);
+    }
+    current_machine_list.clear();
+}
+| SENDS name_list ';'   {
+    BOOST_FOREACH(std::string &name, current_name_list)
+        current_channelclass->addSendName(name.c_str());
+}
+| RECEIVES name_list ';'    {
+    BOOST_FOREACH(std::string &name, current_name_list)
+        current_channelclass->addReceiveName(name.c_str());
+}
+| REPORTS feature_list ';' {
+	if (current_features) {
+		BOOST_FOREACH(ChannelDefinition::Feature f, *current_features )
+			current_channelclass->removeFeature(f);
+		delete current_features;
+		current_features = 0;
+	}
+}
+
+| OPTION chn_option_settings ';'
+| THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2 * 1000); }
+| tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
+| MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
+;
+
+machine_list:
+SYMBOL {
+    DBG_PARSER << " machine list: " << $1 << "\n";
+    current_machine_list.push_back( std::make_pair($1, (char*)0) );
+}
+| SYMBOL SYMBOL {
+    DBG_PARSER << " machine list: " << $1 << "\n";
+    current_machine_list.push_back( std::make_pair($1, strdup($2)) );
+}
+| machine_list COMMA SYMBOL
+{
+    DBG_PARSER << ", " << $3;
+    current_machine_list.push_back( std::make_pair($3, (char*)0));
+}
+| machine_list COMMA SYMBOL SYMBOL
+{
+    DBG_PARSER << ", " << $3 << '[' << $4 << ']';
+    current_machine_list.push_back( std::make_pair($3, strdup($4)) );
+}
+;
+
+
+
+basic_value:
+INTEGER   {
+    $$ = new Value($1);
+}
+| ADDRESS	{
+    $$ = new Value($1);
+}
+| STRINGVAL {
+    $$ = new Value($1, Value::t_string);
+}
+| SYMBOL {
+    $$ = new Value($1);
+}
+;
+
+chn_option_settings:
+chn_option_setting
+| chn_option_setting COMMA chn_option_setting
+;
+
+chn_option_setting:
+SYMBOL value {
+    current_channelclass->addOptionName($1,*$2);
+    DBG_PARSER << current_channelclass->name << " option: " << $1 << ": " << *$2 << "\n";
+    delete $2;
+}
+
+
+
+definition_header:
+SYMBOL STATEMACHINE parameters { 
+    DBG_PARSER << " machine class "  << $1 << "\n";
+    current_machineclass = new MachineClass($1);
+    std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
+    current_parameters.clear();
+}
+| SYMBOL STATEMACHINE property_block parameters  { 
+    DBG_PARSER << " machine class (with properties)  "  << $1 << "\n"; 
+    current_machineclass = new MachineClass($1);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    current_machineclass->properties = properties;
+    properties.clear();
+    std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
+    current_parameters.clear();
+}
+;
+
+definition_body:
+definition_section
+| definition_body definition_section
+;
+
+definition_section:
+GLOBAL global_references ';'
+| OPTION option_settings ';'
+| LOCAL OPTION local_option_settings ';'
+| export_clause
+| local_machine_instantiation
+| command
+| stable_state
+| transitory_state
+| transition_entry
+| plugin_entry
+/*| delay_entry*/
+;
+
+export_clause:
+EXPORT access_type size_type name_list ';' {
+    DBG_PARSER << " export " << $2 << " " << $3 << " (" << current_name_list.size() << ")\n";
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "exporting " << name << "\n";
+        int len = 1;
+        if ( $3 == WORD) len = 1;
+        else if ($3 == DOUBLEWORD) len = 2;
+        else if ($3 == STRINGTYPE) len = (int)current_value.iValue;
+        else {
+            std::cerr<< "Unexpected export size token: " << $3 << "\n";
+        }
+        if ($2 == READONLY)
+            current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::input_register, len) );
+        else if ($2 == READWRITE)
+            current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::holding_register, len) );
+        else {
+            std::cerr<< "Unexpected access type token: " << $2 << "\n";
+        }
+    }
+    current_name_list.clear();
+}
+| EXPORT STATES name_list ';' {
+    DBG_PARSER << " export " << current_name_list.size() << " states\n";
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        current_machineclass->state_exports.push_back(name);
+    }
+    current_name_list.clear();
+}
+| EXPORT COMMANDS name_list ';' {
+    DBG_PARSER << " export " << current_name_list.size() << " commands\n";
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        current_machineclass->command_exports.push_back(name);
+    }
+    current_name_list.clear();
+}
+;
+
+access_type:
+READONLY { $$ = READONLY; }
+| READWRITE { $$ = READWRITE; }
+;
+
+size_type:
+WORD { $$ = WORD; }
+| DOUBLEWORD { $$ = DOUBLEWORD; }
+| STRINGTYPE INTEGER { $$ = STRINGTYPE; current_value = $2; }
+;
+
+machine_instantiation:
+instantiation ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " " << "Instance of a machine:" << *current_machine << "\n";
+		std::map<std::string, MachineInstance *>::iterator found = machines.find(current_machine->getName());
+    if (found == machines.end())
+        machines[current_machine->getName()] = current_machine;
+    else {
+				MachineInstance *orig = (*found).second;
+        NB_MSG << yyfilename << ":" << yylineno 
+					<< " " << "Error: machine " << current_machine->getName() << " already defined "
+					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+    }
+    current_machine = NULL;
+}
+;
+
+local_machine_instantiation:
+local_instantiation ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " " << "Local instance of a machine:\n" << (*current_machine) << "\n";
+    bool found = false;
+    // check for duplicate names in local variables
+    BOOST_FOREACH(Parameter &p, current_locals) {
+        if (p.val.kind == Value::t_symbol && p.val.sValue == current_machine->getName()) {
+            std::stringstream ss;
+            ss << "## - Error: " << yyfilename << ":" << yylineno 
+                << " local machine " << current_machine->getName() << " already defined";
+            error_messages.push_back(ss.str());
+            NB_MSG << ss.str() << "\n";
+            ++num_errors;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        DBG_PARSER << "pushing local machine " << current_machine->getName() << " num_properties:" 
+            << current_machine->properties.size() << " num params: " << current_machine->parameters.size() << "\n";
+	    char *name = strdup(current_machine->getName().c_str());
+        Parameter p(name);
+        p.machine = current_machine;
+        current_locals.push_back(p);
+    }
+}
+;
+
+stable_state:
+state_definition ';'
+| stable_state_definition ';'
+;
+
+transitory_state:
+SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
+    DBG_PARSER << "command handler for command " << $3 << "\n";
+    current_machineclass->states.push_back($1);
+    current_machineclass->state_names.insert($1);
+    
+    MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
+    MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
+    mc->action_templates.push_back(state_change);
+	current_machineclass->commands.insert(std::make_pair($3, mc));
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+	cleanupErrorClause(true);
+}
+| SYMBOL /*state name */ DURING SYMBOL /* command */ property_block error_clause action  {
+    DBG_PARSER << "command handler for command " << $3 << "\n";
+    current_machineclass->states.push_back($1);
+    current_machineclass->state_names.insert($1);
+    
+    MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    if (properties.exists("TIMEOUT")) {
+		error_messages.push_back("Deprecated feature setting a timeout on a command using a TIMEOUT property");
+        const Value &t = properties.lookup("TIMEOUT");
+        long timeout;
+        if (t.asInteger(timeout)) {
+            mc->timeout = timeout;
+        }
+    }
+    properties.clear();
+    MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
+    mc->action_templates.push_back(state_change);
+    current_machineclass->commands.insert(std::make_pair($3, mc));
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+	cleanupErrorClause(true);
+}
+;
+
+state_definition:
+SYMBOL STATE {
+    current_machineclass->states.push_back($1); // add to states to permit changes to this state
+    current_machineclass->state_names.insert($1);
+}
+| SYMBOL DEFAULT {
+    DBG_PARSER << " default state " << $1 << "\n" ;
+    StableState ss;
+    ss.condition.predicate = new Predicate("DEFAULT");
+    ss.state_name = $1;
+    current_machineclass->stable_states.push_back(ss);
+    current_machineclass->states.push_back($1);// add to states to permit changes to this state
+    current_machineclass->state_names.insert($1);
+}
+| SYMBOL INITSTATE {
+    DBG_PARSER << " default state " << $1 << "\n" ;
+    current_machineclass->initial_state = $1;
+    current_machineclass->states.push_back($1);// add to states list to permit changes to this state
+    current_machineclass->state_names.insert($1);
+}
+;
+
+stable_state_definition:
+SYMBOL WHEN predicate {
+    DBG_PARSER << " state " << $1 << " when " << *$3 << "\n" ;
+    StableState ss;
+    ss.condition.predicate = $3;
+    ss.state_name = $1;
+    current_machineclass->stable_states.push_back(ss);
+    current_machineclass->states.push_back($1);// add to states to permit changes to this state
+    current_machineclass->state_names.insert($1);
+}
+| stable_state_definition COMMA state_subcondition {
+    StableState ss = current_machineclass->stable_states.back();
+	if (!ss.subcondition_handlers) ss.subcondition_handlers = new std::list<ConditionHandler>;
+	ConditionHandler ch;
+	ch.condition.predicate = $3->predicate;
+	if (strcmp($3->command, "EXECUTE") == 0) {
+		ch.command_name = $3->name;
+	}
+	else if (strcmp($3->command, "FLAG") == 0) {
+		ch.command_name = "FLAG";
+		ch.flag_name = $3->name;
+	}
+	delete $3->name;
+	DBG_PARSER << current_machineclass->name << " pushing stable state test " << ch.command_name << "\n";
+	ss.subcondition_handlers->push_back(ch);
+	delete $3;
+	current_machineclass->stable_states.pop_back();
+    current_machineclass->stable_states.push_back(ss);
+}
+;
+
+state_subcondition:
+EXECUTE SYMBOL WHEN predicate {
+    Subcondition *sc = new Subcondition;
+    sc->predicate = $4;
+    sc->name = strdup($2);
+	sc->command = "EXECUTE";
+    DBG_PARSER << " executing " << $2 << " when " << *$4 << "\n" ;
+    $$ = sc;
+}
+| TAG SYMBOL WHEN predicate {
+    Subcondition *sc = new Subcondition;
+    sc->predicate = $4;
+    sc->name = strdup($2);
+	sc->command = "FLAG";
+    DBG_PARSER << " executing " << $2 << " when " << *$4 << "\n" ;
+    $$ = sc;
+}
+;
+
+predicate:
+expression {
+    $$ = $1;
+}
+| predicate AND predicate {
+    $$ = new Predicate($1, opAND, $3);
+    /*DBG_PREDICATES << "joined " << *$1 << "\n";
+    DBG_PREDICATES << " and " << *$3 <<"\n";
+    DBG_PREDICATES << " to give " << *$$ << "\n";*/
+}
+| predicate OR predicate {
+    $$ = new Predicate($1, opOR, $3);
+    /*DBG_PREDICATES << "joined " << *$1 << "\n";
+    DBG_PREDICATES << " and " << *$3 <<"\n";
+    DBG_PREDICATES << " to give " << *$$ << "\n";*/
+}
+;
+
+expression:
+value {
+    $$ = new Predicate(*$1); delete $1;
+}
+|'(' value ')' {
+    $$ = new Predicate(*$2); delete $2;
+}
+|'(' predicate ')' {
+    $$ = $2;
+}
+| NOT expression { $$ = new Predicate(new Predicate(0), opNOT, $2); }
+| expression GE expression { $$ = new Predicate($1, opGE, $3);}
+| expression LE expression { $$ = new Predicate($1, opLE, $3);}
+| expression GT expression { $$ = new Predicate($1, opGT, $3);}
+| expression LT expression { $$ = new Predicate($1, opLT, $3);}
+| expression EQ expression { $$ = new Predicate($1, opEQ, $3);}
+| expression NE expression { $$ = new Predicate($1, opNE, $3);}
+| expression NOT GE expression %prec GE { $$ = new Predicate($1, opLT, $4);}
+| expression NOT LE expression %prec GE { $$ = new Predicate($1, opGT, $4);}
+| expression NOT GT expression %prec GE { $$ = new Predicate($1, opLE, $4);}
+| expression NOT LT expression %prec GE { $$ = new Predicate($1, opGE, $4);}
+| expression NOT EQ expression %prec GE { $$ = new Predicate($1, opNE, $4);}
+| expression '+' expression { $$ = new Predicate($1, opPlus, $3);}
+| expression '-' expression { $$ = new Predicate($1, opMinus, $3);}
+| expression '*' expression { $$ = new Predicate($1, opTimes, $3);}
+| expression '/' expression { $$ = new Predicate($1, opDivide, $3);}
+| expression '%' expression { $$ = new Predicate($1, opMod, $3);}
+| expression '&' expression { $$ = new Predicate($1, opBitAnd, $3);}
+| expression '|' expression { $$ = new Predicate($1, opBitOr, $3);}
+| expression '^' expression { $$ = new Predicate($1, opBitXOr, $3);}
+| '!' expression { $$ = new Predicate(0, opNegate, $2);}
+| '-' expression { $$ = new Predicate(new Predicate(-1), opTimes, $2);}
+| expression MATCHES PATTERN {
+    Value pat($3, Value::t_string);
+    $$ = new Predicate($1, opMatch, new Predicate( pat )); }
+;
+
+value:
+INTEGER   { 
+    $$ = new Value($1); 
+}
+| STRINGVAL {
+    $$ = new Value($1, Value::t_string); 
+}
+| SYMBOL {
+    $$ = new Value($1); 
+}
+/* redundant
+| SYMBOL INCLUDES SYMBOL {
+    $$ =  new Value(new IncludesValue($3, $1));
+}
+*/
+| SYMBOL INCLUDES value {
+    Value *v = $3;
+    $$ =  new Value(new IncludesValue(*v, $1));
+    delete v;
+}
+| ANY SYMBOL ARE SYMBOL {
+    $$ = new Value(new AnyInValue($4, $2));
+}
+| ALL SYMBOL ARE SYMBOL {
+    $$ = new Value(new AllInValue($4, $2));
+}
+| ANY SYMBOL ENABLED {
+	$$ = new Value(new AnyEnabledDisabledValue(true, $2));
+}
+| ANY SYMBOL DISABLED {
+	$$ = new Value(new AnyEnabledDisabledValue(false, $2));
+}
+| ALL SYMBOL ENABLED {
+	$$ = new Value(new AllEnabledDisabledValue(true, $2));
+}
+| ALL SYMBOL DISABLED {
+	$$ = new Value(new AllEnabledDisabledValue(false, $2));
+}
+| SIZE OF SYMBOL {
+    $$ = new Value(new SizeValue($3));
+}
+| COUNT SYMBOL FROM SYMBOL {
+    $$ = new Value(new CountValue($2,$4));
+}
+| BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
+    $$ = new Value(new BitsetValue($8,$5));
+}
+| BITSET FROM SYMBOL {
+    $$ = new Value(new BitsetValue("on",$3));
+}
+| BITSET FROM SYMBOL WITH STATES SYMBOL {
+    $$ = new Value(new BitsetValue($6,$3));
+}
+| SYMBOL ENABLED {
+    $$ = new Value(new EnabledValue($1));
+}
+| SYMBOL DISABLED {
+    $$ = new Value(new DisabledValue($1));
+}
+| SYMBOL EXISTS {
+	$$ = new Value(new ExistsValue($1));
+}
+| CLASS OF SYMBOL {
+	$$ = new Value(new ClassNameValue($3));
+}
+| COMMON BETWEEN SYMBOL AND SYMBOL {
+    $$ = new Value(SymbolTable::Null);
+}
+| DIFFERENCE BETWEEN SYMBOL AND SYMBOL {
+    $$ = new Value(SymbolTable::Null);
+}
+| COMBINATION OF SYMBOL AND SYMBOL {
+    $$ = new Value(SymbolTable::Null);
+}
+| SYMBOL BECOMES value {
+    $$ = new Value(new AssignmentValue($1, $3));
+}
+| TAKE LAST FROM SYMBOL {
+    $$ = new Value(new PopListBackValue($4));
+}
+| TAKE FIRST FROM SYMBOL {
+    $$ = new Value(new PopListFrontValue($4));
+}
+| TAKE ITEM SYMBOL FROM SYMBOL {
+    $$ = new Value(new ItemAtPosValue($5, new Value($3)));
+}
+| TAKE ITEM value FROM SYMBOL {
+    $$ = new Value(new ItemAtPosValue($5, $3));
+}
+| ITEM SYMBOL OF SYMBOL {
+    $$ = new Value(new ItemAtPosValue($4, new Value($2), false));
+}
+| ITEM value OF SYMBOL {
+    $$ = new Value(new ItemAtPosValue($4, $2, false));
+}
+| LAST OF SYMBOL {
+    $$ = new Value(new PopListBackValue($3, false));
+}
+| FIRST OF SYMBOL {
+    $$ = new Value(new PopListFrontValue($3, false));
+}
+
+command:
+enter_command
+| leave_command
+| receive_command
+| basic_command
+;
+
+basic_command:
+COMMAND SYMBOL /* command name */ action {
+	// commands are essentially messages
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+    mc->setActionTemplates(*current_actions);
+    if (current_machineclass->receives.count(Message($2)) == 0) {
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+    	    DBG_PARSER << *at << " ";
+    	}
+    	DBG_PARSER << "\n";
+        
+	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
+	}
+    else {
+        std::stringstream ss;
+        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	current_actions->clear();
+}
+| COMMAND SYMBOL /* command name */ WITHIN SYMBOL action {
+	// commands are essentially messages
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
+    mc->setActionTemplates(*current_actions);
+	MachineCommandTemplate *handler = current_machineclass->findMatchingCommand($2, $4);
+	//unsigned int existing_commands = current_machineclass->receives.count(Message($2));
+    if (!handler) {
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+    	    DBG_PARSER << *at << " ";
+    	}
+    	DBG_PARSER << "\n";
+        
+		current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+		current_machineclass->commands.insert(std::make_pair($2,mc)); // by making a command form, the command will be exported
+	}
+    else {
+        std::stringstream ss;
+        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	current_actions->clear();
+}
+| COMMAND SYMBOL /* command name */ property_block action {
+	// commands are essentially messages
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+    mc->setActionTemplates(*current_actions);
+    if (current_machineclass->receives.count(Message($2)) == 0) {
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+    	    DBG_PARSER << *at << " ";
+    	}
+    	DBG_PARSER << "\n";
+        
+	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
+	}
+    else {
+        std::stringstream ss;
+        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	current_actions->clear();
+}
+;
+
+enter_command:
+ENTER SYMBOL /* state name */ action
+{
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    std::string msg_name ($2);
+    msg_name += "_enter";
+
+    DBG_PARSER << "generating enter function " << msg_name << " for " << mc->action_templates.size() << " actions: ";
+    BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+        DBG_PARSER <<"    " << *at << "\n";
+    }
+    DBG_PARSER << "\n";
+
+    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
+}
+;
+
+leave_command:
+LEAVE SYMBOL action
+{
+#ifndef DISABLE_LEAVE_FUNCTIONS
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    std::string msg_name ($2);
+    msg_name += "_leave";
+    
+    DBG_PARSER << "generating leave function " << msg_name << " for " << mc->action_templates.size() << " actions: ";
+    BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
+        DBG_PARSER <<"    " << *at << "\n";
+    }
+    DBG_PARSER << "\n";
+    
+    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
+#else
+    /* raise an error if cw is run on configs with LEAVE functions but the feature is not enabled */
+    std::stringstream ss;
+    ss << "## - Error: " << yyfilename << ":"<< yylineno << " LEAVE methods are disabled in this version ";
+    DBG_PARSER << ss.str() << "\n";
+    error_messages.push_back(ss.str());
+    ++num_errors;
+#endif
+}
+
+receive_command:
+CATCH SYMBOL action {
+	DBG_PARSER << "catching " << $2 << " for " << current_actions->size() << " actions: ";
+	BOOST_FOREACH(ActionTemplate *at, *current_actions) {
+		DBG_PARSER << *at << ", ";
+	}
+	DBG_PARSER << "\n";
+	if (current_machineclass->receives.count(Message($2)) == 0) {
+		MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+		mc->setActionTemplates(*current_actions);
+		current_actions->clear();
+		current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
+	}
+	else {
+		std::stringstream ss;
+		ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a RECEIVES/CATCH handler for " << $2;
+		DBG_PARSER << ss.str() << "\n";
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+}
+|
+RECEIVE SYMBOL /* message */ error_clause action  {
+    DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
+    BOOST_FOREACH(ActionTemplate *at, *current_actions) {
+        DBG_PARSER << *at << ", ";
+    }
+    DBG_PARSER << "\n";
+    if (current_machineclass->receives.count(Message($2)) == 0) {
+        MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
+        mc->setActionTemplates(*current_actions);
+        current_actions->clear();
+        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
+    }
+    else {
+        std::stringstream ss;
+        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a RECEIVES handler for " << $2;
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	cleanupErrorClause(true);
+}
+|
+RECEIVE SYMBOL /* message */ WITHIN SYMBOL error_clause action  {
+    DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
+    BOOST_FOREACH(ActionTemplate *at, *current_actions) {
+        DBG_PARSER << *at << ", ";
+    }
+    DBG_PARSER << "\n";
+    if (current_machineclass->receives.count(Message($2)) == 0) {
+        MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
+        mc->setActionTemplates(*current_actions);
+        current_actions->clear();
+        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
+    }
+    else {
+        std::stringstream ss;
+        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a RECEIVES handler for " << $2;
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	cleanupErrorClause(true);
+}
+|
+RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ error_clause action  {
+    std::stringstream ss;
+    ss << $4 << "." << $2 << std::flush;
+    CStringHolder msg_name = strdup(ss.str().c_str());
+    DBG_PARSER << "receiving " << msg_name.get() << " for " << current_actions->size() << " actions: ";
+    BOOST_FOREACH(ActionTemplate *at, *current_actions) {
+        DBG_PARSER << *at << " ";
+    }
+    DBG_PARSER << "\n";
+    if (current_machineclass->receives.count(Message(msg_name.get())) == 0) {
+        MachineCommandTemplate *mc = new MachineCommandTemplate(msg_name.get(), "");
+        mc->setActionTemplates(*current_actions);
+        current_actions->clear();
+        current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.get())), mc));
+    }
+    else {
+        std::stringstream ss;
+        ss << "Error: " << yyfilename << ":" << yylineno 
+            << ": Already have a RECEIVES handler for " << msg_name.get();
+        DBG_PARSER << ss.str() << "\n";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+	cleanupErrorClause(true);
+}
+;
+
+action_list:
+action  { 
+	current_actions_stack.push_back(current_actions);
+	current_actions = new std::list<ActionTemplate*>;
+	DBG_PARSER << "** created new action stack\n"; 
+    if (current_action) {
+		current_actions->push_back(current_action); 
+		current_action = 0; 
+	}
+}
+| action_list ';' action
+| error ';'
+| error '}'
+;
+
+;
+
+action:
+SET SYMBOL TO value error_clause  {
+    DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetStateActionTemplate($2, *$4);
+    delete $4;
+	free(error_message_name); error_message_name = 0;
+}
+| ABORT {
+	DBG_PARSER << " abort action\n";
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new AbortActionTemplate;
+}
+| RETURN {
+	DBG_PARSER << " return action\n";
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new AbortActionTemplate(false); // do not regard this as an action failure
+}
+| WAIT value /* wait for timer */ {
+    DBG_PARSER << " wait action: wait " << *$2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new WaitActionTemplate(*$2);
+    delete $2; 
+}
+| LOCK SYMBOL /* obtain a lock on a machine */ {
+    DBG_PARSER << " lock : " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LockActionTemplate($2); 
+}
+| UNLOCK SYMBOL /* release the lock on a machine */ {
+    DBG_PARSER << " unlock : " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new UnlockActionTemplate($2); 
+}
+| ENABLE SYMBOL /* enable a machine */ { 
+    DBG_PARSER << " enable action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new EnableActionTemplate($2); 
+}
+| ENABLE SYMBOL WHERE SYMBOL EQ value /* enable a machine */ {
+    DBG_PARSER << " enable action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new EnableActionTemplate($2, $4, $6); 
+}
+| RESUME SYMBOL /* resume a machine */ { 
+    DBG_PARSER << " resume action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ResumeActionTemplate($2, ""); 
+}
+| RESUME SYMBOL WHERE SYMBOL EQ value /* resume a machine */ {
+    DBG_PARSER << " resume action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ResumeActionTemplate($2, "", $4, $6); 
+}
+| RESUME SYMBOL AT SYMBOL /* resume a machine from a given state */ { 
+    DBG_PARSER << " resume action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ResumeActionTemplate($2, $4); 
+}
+| DISABLE SYMBOL /* enable a machine */ { 
+    DBG_PARSER << " disable action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new DisableActionTemplate($2); 
+}
+| DISABLE SYMBOL WHERE SYMBOL EQ value  /* enable a machine */ { 
+    DBG_PARSER << " disable action: " << $2 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new DisableActionTemplate($2, $4, $6);
+}
+| SHUTDOWN /* cause the interpreter to exit */ {
+    DBG_PARSER << " shutdown action " << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ShutdownActionTemplate(); 
+}
+| WAITFOR SYMBOL EQ SYMBOL /* wait for object to be in a state */ { 
+    DBG_PARSER << " wait for action: wait for " << $2 << " to be " << $4 << "\n"; 
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new WaitForActionTemplate($2, $4); 
+}
+| INC SYMBOL /* increment a property */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opInc);
+}
+| INC SYMBOL BY value /* increment a property */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opInc, *$4);
+    delete $4;
+}
+| DEC SYMBOL BY value /* decrement a property */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opDec, *$4);
+    delete $4;
+}
+| SYMBOL BECOMES expression /* set the value of a property */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
+}
+| SET SYMBOL TO PROPERTY SYMBOL error_clause /* set the state based on the value of a property */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5);
+	cleanupErrorClause(true);
+}
+| CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new CallMethodActionTemplate($2, $4, timeout_message_name, error_message_name);
+	cleanupErrorClause();
+}
+| CALL SYMBOL error_clause /* execute a command within the current machine and wait for it to complete */ {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new CallMethodActionTemplate($2, "SELF", timeout_message_name, error_message_name);
+	cleanupErrorClause();
+}
+| SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SendMessageActionTemplate($2, $4);    
+}
+| SEND STRINGVAL TO SYMBOL /* send a generic message/command */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SendMessageActionTemplate($2, $4);
+}
+| THROW SYMBOL /* send a generic message/command */ {
+	DBG_PARSER << "adding THROW " << $2 << "\n";
+	if (current_action) current_actions->push_back(current_action);
+	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
+	current_action = new AbortActionTemplate(true, $2);
+}
+| THROW STRINGVAL /* send a generic message/command */ {
+	DBG_PARSER << "adding THROW " << $2 << "\n";
+	if (current_action) current_actions->push_back(current_action);
+	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
+	current_action = new AbortActionTemplate(true, $2);
+}
+| SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new CopyPatternActionTemplate($1, $4, $6);    
+}
+| SYMBOL BECOMES COPY ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new CopyAllPatternActionTemplate($1, $5, $7);    
+}
+| SYMBOL BECOMES EXTRACT PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExtractPatternActionTemplate($1, $4, $6);    
+}
+| SYMBOL BECOMES EXTRACT ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExtractAllPatternActionTemplate($1, $5, $7);    
+}
+| CREATE SYMBOL WITH COUNT SYMBOL IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LogActionTemplate(new Predicate("COUNT"));
+}
+| CREATE SYMBOL WITH COPY INTEGER FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LogActionTemplate(new Predicate("COPY"));
+}
+| CREATE SYMBOL WITH TAKE INTEGER FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LogActionTemplate(new Predicate("TAKE"));
+}
+| INCLUDE SYMBOL IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new IncludeActionTemplate($4, $2);
+}
+| INCLUDE value IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    Value *v = $2;
+    current_action = new IncludeActionTemplate($4, *v);
+    delete v;
+}
+| PUSH SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new IncludeActionTemplate($4, $2);
+}
+| PUSH value TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    Value *v = $2;
+    current_action = new IncludeActionTemplate($4, *v);
+    delete v;
+}
+| CLEAR SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ClearListActionTemplate($2);
+}
+| ASSIGN SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new IncludeActionTemplate($4, $2);
+}
+| SET ENTRIES OF SYMBOL FROM BITSET SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetListEntriesActionTemplate($7, $4);
+}
+| REPLACE PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ReplacePatternActionTemplate($2, $4, $6);    
+}
+| REPLACE ALL PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ReplaceAllPatternActionTemplate($3, $5, $7);    
+}
+| COPY PROPERTIES FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new CopyPropertiesActionTemplate($4, $6);
+}
+| COPY PROPERTIES name_list FROM SYMBOL TO SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	CopyPropertiesActionTemplate *cpat = new CopyPropertiesActionTemplate($5, $7, current_name_list);
+	current_name_list.clear();
+	current_action = cpat;
+}
+| COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soIntersect, 0, false);
+}
+| COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soIntersect, 0, false);
+}
+| COPY ALL FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $9, $6, "", soIntersect, $11, false);
+}
+| COPY value FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, $9, $6, "", soIntersect, $11, false);
+    delete $2;
+}
+| MOVE ALL FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $9, $6, "", soIntersect, $11, true);
+}
+| MOVE value FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, $9, $6, "", soIntersect, $11, true);
+    delete $2;
+}
+| COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL  /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soDifference, 0, false);
+}
+| COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soDifference, 0, false);
+}
+| COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL  /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soUnion, 0, false);
+}
+| COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL USING SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soUnion, 0, false);
+}
+| COPY ITEM value FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $5, SymbolTable::Null, $7, "", soSelect, 0, false, *$3, *$3);
+    delete $3;
+}
+| COPY ITEMS value TO value OF SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $7, SymbolTable::Null, $9, "", soSelect, 0, false, *$3, *$5);
+    delete $3; delete $5;
+}
+| COPY ALL FROM SYMBOL TO SYMBOL /*property*/{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, 0, false);
+}
+| COPY value FROM SYMBOL TO SYMBOL{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, 0, false);
+    delete $2;
+}
+| COPY ALL FROM SYMBOL TO SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8, false);
+}
+| COPY value FROM SYMBOL TO SYMBOL WHERE predicate{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, false);
+    delete $2;
+}
+| MOVE ALL FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, 0, true);
+}
+| MOVE value FROM SYMBOL TO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, 0, true);
+    delete $2;
+}
+| MOVE ALL FROM SYMBOL TO SYMBOL WHERE predicate {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
+}
+| MOVE value FROM SYMBOL TO SYMBOL WHERE predicate{
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
+    delete $2;
+}
+| SORT SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SortListActionTemplate($2, "VALUE");
+}
+| SORT SYMBOL BY PROPERTY SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SortListActionTemplate($2, $5);
+}
+/*
+| TAKE LAST FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new PopBackActionTemplate($4);
+}
+| TAKE FIRST FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new PopFrontActionTemplate($4);
+}
+| TAKE ITEM INTEGER FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new GetListItemActionTemplate($5, $3);
+}
+*/
+| LOG expression /* log message to stdout */ {
+    if (current_action) current_actions->push_back(current_action);
+    DBG_PARSER << " log action: log " << *$2 << "\n";
+    current_action = new LogActionTemplate($2);
+    //delete $2; no delete, ownership is passed to the current_action;
+}
+| IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
+   DBG_PARSER << " IF action: " << *$3 << "\n";
+    if (current_action) {
+		current_actions->push_back(current_action); 
+		current_action = 0; 
+	}
+    MachineCommandTemplate *mc = new MachineCommandTemplate("if_true_command", "");
+	mc->setActionTemplates(*current_actions);
+	current_actions->clear();
+	delete current_actions;
+	current_actions = current_actions_stack.back();
+	current_actions_stack.pop_back();
+	DBG_PARSER << "** popped old action list\n";
+    current_action = new IfCommandActionTemplate($3, mc) ;
+}
+| IF_ '(' predicate ')' '{' action_list '}' ELSE '{' action_list '}' %prec IFELSE {
+    DBG_PARSER << " IFELSE action: " << *$3 << "\n";
+    if (current_action) {
+		current_actions->push_back(current_action); 
+		current_action = 0; 
+	}
+    MachineCommandTemplate *mc = new MachineCommandTemplate("if_true_command", "");
+	mc->setActionTemplates(*current_actions);
+	current_actions->clear();
+	delete current_actions;
+	current_actions = current_actions_stack.back();
+	current_actions_stack.pop_back();
+    MachineCommandTemplate *mc2 = new MachineCommandTemplate("if_false_command", "");
+	mc2->setActionTemplates(*current_actions);
+	current_actions->clear();
+	delete current_actions;
+	current_actions = current_actions_stack.back();
+	current_actions_stack.pop_back();
+	DBG_PARSER << "** popped old action list\n";
+    current_action = new IfElseCommandActionTemplate($3, mc2, mc) ;
+}
+| '{' action_list '}' {
+    if (current_action) current_actions->push_back(current_action); current_action = 0; 
+}
+|
+;
+
+/* TBD fix this to only allow one generic error and one timeout clause.
+ 	Also add the ON ERROR error-name handler form.
+ */
+error_clause:
+IGNORE ERRORS {
+	if (error_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON ERROR clauses at line " << yylineno << "\n";
+		// TBD multiple error clauses will be implemented later
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	else {
+		error_message_name = strdup("IGNORE");
+	}
+}
+| ON ERROR SYMBOL error_clause {
+	if (error_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON ERROR clauses at line " << yylineno << "\n";
+		// TBD multiple error clauses will be implemented later
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	else {
+		size_t len = strlen($3);
+		error_message_name = (char *)malloc(strlen($3)+1);
+		strncpy(error_message_name, $3, len+1);
+	}
+}
+| ON TIMEOUT SYMBOL error_clause {
+	if (timeout_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	else {
+		size_t len = strlen($3);
+		timeout_message_name = (char *)malloc(strlen($3)+1);
+		strncpy(timeout_message_name, $3, len+1);
+	}
+}
+| ;
+
+local_instantiation:
+SYMBOL SYMBOL parameters  
+{
+    current_machine = MachineInstanceFactory::create($1, $2, MachineInstance::MACHINE_TEMPLATE);
+    std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
+    current_parameters.clear();
+    
+    current_machine->setDefinitionLocation(yyfilename, yylineno);
+    properties.clear(); // NOTE: properties should be empty here, anyway
+}
+| SYMBOL SYMBOL property_block parameters 
+{
+    DBG_PARSER << "local variable with properties\n";
+    current_machine = MachineInstanceFactory::create($1, $2, MachineInstance::MACHINE_TEMPLATE);
+    std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
+    current_parameters.clear();
+    current_machine->setDefinitionLocation(yyfilename, yylineno);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    current_machine->setProperties(properties);
+    properties.clear();
+}
+| SYMBOL CONDITION WHEN expression
+{
+    DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
+    current_machine = MachineInstanceFactory::create($1, "CONDITION", MachineInstance::MACHINE_TEMPLATE);
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(current_machine->parameters));
+    current_parameters.clear();
+    current_machine->setDefinitionLocation(yyfilename, yylineno);
+    // conditions have a stable state of "true" and "false"
+    StableState ss;
+    ss.condition.predicate = $4;
+    ss.state_name = "true";
+    current_machine->stable_states.push_back(ss);
+    current_machineclass->state_names.insert("true");
+    properties.clear();
+}
+| SYMBOL CONDITION parameters WHEN expression
+{
+	DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
+	current_machine = MachineInstanceFactory::create($1, "CONDITION", MachineInstance::MACHINE_TEMPLATE);
+	std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(current_machine->parameters));
+	current_parameters.clear();
+	current_machine->setDefinitionLocation(yyfilename, yylineno);
+	// conditions have a stable state of "true" and "false"
+	StableState ss;
+	ss.condition.predicate = $5;
+	ss.state_name = "true";
+	current_machine->stable_states.push_back(ss);
+	current_machineclass->state_names.insert("true");
+	properties.clear();
+}
+;
+
+/* an instantiation may be of a channel and we cannot construct the machine
+ * until we know.  These items are pushed to a queue for instantiation after all files 
+ * have been processed.
+ */
+instantiation:
+SYMBOL SYMBOL parameters
+{
+	//deferred_instantiations.push_back(new MachineDetails($1, $2, current_parameters.end,
+ 	//	__FILE__, __LINE__, properties,
+	//	MachineInstance::MACHINE_INSTANCE));
+	//current_machine = 0;
+	current_machine = MachineInstanceFactory::create($1, $2);
+    std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
+    current_parameters.clear();
+	current_machine->setDefinitionLocation(yyfilename, yylineno);
+    properties.clear();
+}
+| SYMBOL SYMBOL property_block parameters 
+{
+	//deferred_instantiations.push_back(new MachineDetails($1, $2, current_parameters.end,
+	//__FILE__, __LINE__, properties,
+	//MachineInstance::MACHINE_INSTANCE));
+	//current_machine = 0;
+    current_machine = MachineInstanceFactory::create($1, $2);
+    std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
+    current_parameters.clear();
+    current_machine->setDefinitionLocation(yyfilename, yylineno);
+    properties = property_stack.back();
+    property_stack.pop_back();
+    current_machine->setProperties(properties);
+    properties.clear();
+}
+;
+
+/*delay_entry:
+tokPOLLING_DELAY INTEGER ';' {
+    current_machineclass->polling_delay = $2;
+}
+*/
+
+plugin_entry:
+PLUGIN STRINGVAL ';' {
+    const char *library_name = $2;
+		void *mylib_handle = PluginManager::instance()->findPlugin(current_machineclass->name);
+		if (!mylib_handle) {
+			mylib_handle = dlopen(library_name, RTLD_NOW);
+    	if (mylib_handle) {
+        PluginManager::instance()->registerPlugin(current_machineclass->name, mylib_handle);
+			}
+		}
+    if (mylib_handle) {
+        plugin_func state_check = (plugin_func)dlsym(mylib_handle, "check_states");
+        plugin_func poll_actions = (plugin_func)dlsym(mylib_handle, "poll_actions");
+        plugin_filter filter = (plugin_filter)dlsym(mylib_handle, "filter");
+
+        Plugin *pi = new Plugin(state_check, poll_actions, filter);
+        current_machineclass->plugin = pi;
+    }
+	else {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": " << dlerror() << "\n";
+		MessageLog::instance()->add(ss.str().c_str());
+    	error_messages.push_back(ss.str());
+		++num_errors;
+		NB_MSG << ss.str() << "\n";
+	}
+}
+;
+
+module_block:
+MODULES '{' module_instances '}'
+;
+
+module_instances:
+parameters ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " module definition (in modules section)" <<current_value <<  "\n";
+    MachineInstance *m = addMachine(current_parameters.front().val.sValue.c_str(), "MODULE");
+    if (current_parameters.size()) {
+        Parameter p = current_parameters.front();
+        current_parameters.pop_front();
+        m->properties = p.properties;
+    }
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    current_value = Value();
+    properties.clear();
+}
+| module_instances parameters ';' 
+{
+    DBG_PARSER << std::setw(5) << yylineno << " module definition (in modules section)" <<current_value <<  "\n";
+    MachineInstance *m = addMachine(current_parameters.front().val.sValue.c_str(), "MODULE");
+    if (current_parameters.size()) {
+        Parameter p = current_parameters.front();
+        current_parameters.pop_front();
+        m->properties = p.properties;
+    }
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    current_value = Value();
+    properties.clear();
+}
+;
+
+parameters:
+parameter
+| parameters COMMA parameter
+;
+
+parameter:
+value {
+    current_value = *$1;
+    DBG_PARSER << std::setw(5) << yylineno << " "  << "Symbol, value: " << *$1 << "\n"; 
+    current_parameters.push_back(Parameter(*$1));
+    $$ = new Parameter(*$1);
+    delete $1;
+}
+| SYMBOL property_block {
+    current_value = $1;
+    properties = property_stack.back();
+    property_stack.pop_back();
+    DBG_PARSER << std::setw(5) << yylineno << " "  << "Symbol, value: " << $1 << '[' << properties << "]\n"; 
+    current_parameters.push_back(Parameter($1, properties));
+    $$ = new Parameter($1, properties);
+    properties.clear();
+}
+| {}
+;
+
+module_def:
+SYMBOL MODULE parameters ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " module definition (standalone) " << $1 << "\n";
+    MachineInstance *m = addMachine($1, "MODULE");
+    m->properties = property_stack.back();
+    property_stack.pop_back();
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    //m->addParameter(current_value);
+    m->setDefinitionLocation(yyfilename, yylineno);
+    current_value = Value();
+    properties.clear();
+}
+| SYMBOL MODULE property_block parameters ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " module definition with properties (standalone) " << $1 << "\n";
+    MachineInstance *m = addMachine($1, "MODULE");
+    properties = property_stack.back();
+    property_stack.pop_back();
+    m->properties = properties;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+    properties.clear();
+}
+| SYMBOL SDO property_block parameters ';'
+{
+#ifdef USE_SDO
+    DBG_PARSER << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+	// the following will be added to a list of new entitites and the module will be resolved later
+	std::vector<Parameter> params;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
+	SDOEntry *entry = 0;
+	if (params.size() == 4)
+		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	else if (params.size() == 5)
+		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue,
+			params[4].val.iValue);
+	if (entry) {
+		entry->setModuleName(params[0].val.sValue);
+
+		MachineInstance *m = addMachine($1, "SDOENTRY");
+		properties = property_stack.back();
+		property_stack.pop_back();
+		m->setProperties(properties);
+		std::cout << "Properties: " << properties << "\n";
+		properties.clear();
+		std::cout << "Entry default: " << m->properties.lookup("default") << "\n";
+
+
+		std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+		current_parameters.clear();
+		m->setDefinitionLocation(yyfilename, yylineno);
+
+		entry->setMachineInstance(m);
+	}
+#else
+    error_messages.push_back("Error: SDO is not supported in this version");
+    num_errors++;
+#endif //USE_SDO
+}
+| SYMBOL SDO parameters ';'
+{
+#ifdef USE_SDO
+    DBG_MSG << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+	// the following will be added to a list of new entitites and the module will be resolved later
+	std::vector<Parameter> params;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
+	SDOEntry *entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	entry->setModuleName(params[0].val.sValue);
+
+    MachineInstance *m = addMachine($1, "SDOENTRY");
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+
+	entry->setMachineInstance(m);
+#else
+    error_messages.push_back("Error: SDO is not supported in this version");
+    num_errors++;
+#endif //USE_SDO
+}
+| SYMBOL FLAG ';'
+{
+    DBG_MSG << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
+    MachineInstance *m = addMachine($1, "FLAG");
+    m->properties = properties;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+    properties.clear();
+}
+| SYMBOL FLAG property_block ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " flag with properties (standalone) " << $1 << "\n";
+    MachineInstance *m = addMachine($1, "FLAG");
+    properties = property_stack.back();
+    property_stack.pop_back();
+    m->properties = properties;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+    properties.clear();
+}
+| SYMBOL CONDITION parameters WHEN expression ';'
+{
+    DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
+    MachineInstance *m = addMachine($1, "CONDITION");
+    m->properties = properties;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+    // conditions have a stable state of "true" and "false"
+    StableState ss;
+    ss.condition.predicate = $5;
+    ss.state_name = "true";
+    current_machineclass->stable_states.push_back(ss);
+    current_machineclass->states.push_back("true");// add to states to permit changes to this state
+    current_machineclass->state_names.insert("true");
+    properties.clear();
+}
+| SYMBOL CONDITION WHEN expression ';'
+{
+	DBG_PARSER << std::setw(5) << yylineno << " condition " << $1 << "\n";
+	MachineInstance *m = addMachine($1, "CONDITION");
+	m->properties = properties;
+	std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+	current_parameters.clear();
+	m->setDefinitionLocation(yyfilename, yylineno);
+	// conditions have a stable state of "true" and "false"
+	StableState ss;
+	ss.condition.predicate = $4;
+	ss.state_name = "true";
+	current_machineclass->stable_states.push_back(ss);
+	current_machineclass->states.push_back("true");// add to states to permit changes to this state
+	current_machineclass->state_names.insert("true");
+	properties.clear();
+}
+;
+
+property_block:
+'(' properties ')'
+{
+    DBG_PARSER << "properties " << properties << "\n";
+    property_stack.push_back(properties);
+    properties.clear();
+}
+;
+
+properties:
+property
+| properties COMMA property 
+;
+
+property:
+SYMBOL PROPSEP value
+{
+    DBG_PARSER << "property: " << $1 << " = " << *$3 << "\n";
+    properties.add($1, *$3);
+    delete $3;
+}
+| SYMBOL {
+    DBG_PARSER << "property: " << $1 << " = 0\n";
+    properties.add($1, 0);
+}
+;
+
+feature_list:
+feature_list_item {
+	if (!current_features) current_features = new std::set<ChannelDefinition::Feature>();
+	current_features->insert(current_feature);
+}
+| feature_list COMMA feature_list_item {
+	if (!current_features) current_features = new std::set<ChannelDefinition::Feature>();
+	current_features->insert(current_feature);
+}
+;
+
+feature_list_item:
+STATE_CHANGES { current_feature = ChannelDefinition::ReportStateChanges; }
+| PROPERTY_CHANGES { current_feature = ChannelDefinition::ReportPropertyChanges; }
+;
+
+name_list:
+SYMBOL {
+	DBG_PARSER << " name list: " << $1 << "\n";
+	current_name_list.push_back($1);
+}
+| name_list COMMA SYMBOL
+{
+	DBG_PARSER << ", " << $3;
+	current_name_list.push_back($3);
+}
+;
+state_list:
+transition_state {
+    DBG_PARSER << " name list: " << $1 << "\n";
+    current_name_list.push_back($1);
+}
+| state_list COMMA SYMBOL
+{
+    DBG_PARSER << ", " << $3;
+    current_name_list.push_back($3);
+}
+;
+
+transition_state:
+SYMBOL {
+    $$ = $1;
+}
+| ANY {
+    $$ = "ANY";
+}
+;
+
+transition_entry:
+transition ';'
+;
+
+transition:
+TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << " using " << $6 << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+    }
+    current_name_list.clear();
+}
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+    }
+    current_name_list.clear();
+}
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */
+    USING SYMBOL /* received event */ REQUIRES predicate /* rule */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "using " << $6 << "requiring " << *($8) << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+    }
+    current_name_list.clear();
+}
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */
+    ON SYMBOL /* received event */ REQUIRES predicate /* rule */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "requiring " << *($8) << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+    }
+    current_name_list.clear();
+}
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */
+{
+    BOOST_FOREACH(std::string &name, current_name_list) {
+        DBG_PARSER << "adding transition " << name << " to " << $4 << "requiring " << *($6) << "\n";
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6));
+    }
+    current_name_list.clear();
+}
+;
+
+%%
+void yyerror(const char *str)
+{
+    std::stringstream ss;
+    ss << "## - Error: " << yyfilename << ":" << yylineno << ": " << str << " at token: " << yytext;
+    error_messages.push_back(ss.str());
+    std::cerr << ss.str() << "\n";
+    num_errors++;
+}
+

@@ -1,3 +1,9 @@
+FlasherOne MACHINE { 
+	on WHEN SELF IS on AND TIMER < 1000 OR SELF IS off AND TIMER>=1000;
+	off DEFAULT;
+}
+flasher1 FlasherOne;
+
 # this machine tests a cycle of events that use an execute and a transition table
 # to drive the state machine.
 
@@ -6,6 +12,7 @@
 Flasher MACHINE {
 	on WHEN SELF IS on, EXECUTE flip WHEN SELF IS on && TIMER>=1000;
 	off WHEN SELF IS off, EXECUTE flip WHEN SELF IS off && TIMER>=1000;
+	stopped STATE;
 	COMMAND flip { SEND next TO SELF }
 	COMMAND flipOn { SET SELF TO on;}
 	COMMAND flipOff { SET SELF TO off; }

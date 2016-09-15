@@ -4,11 +4,14 @@ OUT_1 FLAG(tab:Outputs);
 OUT_2 FLAG(tab:Outputs);
 
 A CONSTANT(tab:Tests, export:reg) 123;
-B VARIABLE(tab:Tests, export:rw_reg) 456;
+B VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 456;
 C CONSTANT(tab:Tests, export:reg32) 554343;
-D VARIABLE(tab:Tests, export:rw_reg32) 10;
+D VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg32) 10;
 E CONSTANT(tab:Tests, export:str, strlen:30) "This is a message";
-F VARIABLE(tab:Tests, export:rw_str, strlen:25) "Another test message";
+F VARIABLE(tab:Tests, PERSISTENT:true, export:rw_str, strlen:25) "Another test message";
+
+PanelScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
+RequestScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
 
 Calc MACHINE {
 
@@ -21,7 +24,8 @@ Calc MACHINE {
 calc Calc;
 
 OddNumber MACHINE {
-	OPTION last 0, VALUE 0;
+	LOCAL OPTION last 0;
+	OPTION VALUE 0;
 
 	evaluating WHEN last != VALUE;
 	ENTER evaluating { LOG VALUE; last := VALUE; }
@@ -30,8 +34,29 @@ OddNumber MACHINE {
 }
 val1 OddNumber(export:rw_reg);
 val2 OddNumber(export:rw_reg);
-	
-	
+
+PanelMonitor MACHINE {
+	LOCAL OPTION last 0, last_active 0;
+	GLOBAL CHANNELS;
+	panels LIST;
+	LOCAL OPTION className "";
+
+	# check if the panel is ok whenever the number of active channels changes or the panel is not one of the active channels
+	update WHEN SELF IS idle && TIMER > 500 || last_active != COUNT ACTIVE FROM CHANNELS;
+	ok WHEN COUNT ACTIVE FROM panels == 1;
+	idle DEFAULT;	
+
+	COMMAND check { 
+		last := SIZE OF CHANNELS;  # last should be the same as the number of channels in the iosh CHANNELS command
+		last_active := COUNT ACTIVE FROM CHANNELS; # check last_active against the channels from iosh
+		CLEAR panels; # prepare to make a list of panel channels
+		COPY ALL FROM CHANNELS TO panels WHERE CLASS OF CHANNELS.ITEM == "PANEL_CHANNEL";
+	}
+	ENTER update { CALL check ON SELF; }
+
+	ENTER INIT { className := CLASS OF SELF; }
+}
+panel_monitor PanelMonitor;
 
 Monitor MACHINE other {
 
@@ -43,14 +68,22 @@ sample_flag2 FLAG (export:rw, tab:Tests);
 
 }
 monitor Monitor(tab:Outputs) flash1;
+sample_flag3 FLAG (export:ro, tab:Tests);
+sample_flag4 FLAG (export:rw, tab:Tests);
 
 count FLAG (export:rw, tab:Tests); # counter should count while this is on
 Counter MACHINE run_flag {
 	OPTION i 0;
+	OPTION direction 1;
+	stop WHEN direction > 0 AND i > 25000 OR direction < 0 AND i <= 0;
+	reversing WHEN run_flag IS on AND i>0 AND direction<0;
 	counting WHEN run_flag IS on;
 	check STATE;
 	idle DEFAULT;
-	ENTER counting { i := i+1; LOG i; SET SELF TO check;}
+	ENTER stop { direction := direction * - 1  }
+	ENTER reversing { i := i - 1; SET SELF TO check; }
+	ENTER counting { i := i+1;   SET SELF TO check; }
+	ENTER check { B := i }
 }
 counter Counter count;
 
@@ -65,7 +98,7 @@ Error MACHINE {
 }
 M_Error Error;
 
-RESPONSE VARIABLE(export:rw) "";
+RESPONSE VARIABLE(PERSISTENT:true, export:rw) "";
 
 Flash MACHINE (delay:500)output {
 
@@ -79,7 +112,7 @@ Flash MACHINE (delay:500)output {
     OPTION b 30;
     EXPORT RW 16BIT a,b;
 
-    started_flag FLAG(tab:Outputs, export:ro);
+    started_flag FLAG(tab:Outputs, export:rw);
     error_flag FLAG(tab:Outputs, export:ro);
 
 #    timed_out WHEN started_flag IS on && TIMER >= 1000;

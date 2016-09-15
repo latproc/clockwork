@@ -1,0 +1,12 @@
+
+PWM_Enable SDO EL2535, 0x7000, 0x06, 1;
+PWM_MaxCurrent SDO EL2535, 0x8000 ,0x10, 8;
+#PWM_MaxCurrent SDO(default:50) EL2535, 0x8000 ,0x10, 8;
+PWM_Offset SDO EL2535, 0x8000 ,0x0b, 16;
+PWM_Gain SDO EL2535, 0x8000 ,0x0c, 32;
+PWM_Info1 SDO EL2535, 0x8000, 0x21, 8;
+PWM_Info2 SDO EL2535, 0x8000, 0x22, 8;
+PWM_FactoryOffset SDO EL2535, 0x800f ,0x01, 16;
+PWM_FactoryGain SDO EL2535, 0x800f ,0x02, 16;
+PWM_NominalCurrent SDO EL2535, 0x800f ,0x06, 16;
+

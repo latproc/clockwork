@@ -6,6 +6,7 @@
 *.exe
 *.o
 *.so
+*.so.*
 *.dSYM
 a.out
 *.tab.cpp
@@ -26,6 +27,7 @@ nohup.out
 *.rar
 *.tar
 *.zip
+*.tgz
 
 # Logs and databases #
 ######################
@@ -45,5 +47,21 @@ Thumbs.db
 
 # Temporary editor files
 ._*
-*.lyx~
+*.lyx?
 .~*
+
+#project build files
+iod/build/
+iod/xcode/
+modbus/build/
+modbus/xcode/
+etc/
+bin/
+
+#project runtime scraps
+modbus_mappings.bak
+persist.dat
+webio.db
+devices.dat
+states.dat
+persist_scratch_*

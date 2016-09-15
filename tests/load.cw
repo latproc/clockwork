@@ -11,30 +11,33 @@ ENTER starting { SET SELF TO running }
 test Test;
 
 %BEGIN_PLUGIN
+#include <sys/time.h>
+#include <stdlib.h>
+#include <Plugin.h>
 
 PLUGIN_EXPORT
-int CheckStates(PluginScope *scope)
+int CheckStates(cwpi_Scope scope)
 {
-    time_t now = time(NULL);
+    time_t now = time(0);
     char *buf = (char*)malloc(30);
     ctime_r(&now, buf);
-    scope->setValue("time", buf);
+    setStringValue(scope, "time", buf);
     free(buf);
-	scope->changeState("done");
+	changeState(scope, "done");
     return PLUGIN_COMPLETED;
 }
 
-struct MyData : public PluginData {
+struct MyData {
 	long count;
 };
 
 PLUGIN_EXPORT
-int PollActions(PluginScope* scope) {
-//	MyData *data = scope->getInstanceData();
-//	if (!data) { data = new MyData; scope->setInstanceData(data);
+int PollActions(cwpi_Scope scope) {
+	struct MyData *data = getInstanceData(scope);
+	if (!data) { data = malloc(sizeof(struct MyData)); setInstanceData(scope, data); }
+	
 	static long count = 0;
-	std::string property("count");
-    scope->setValue(property, ++count);
+	setIntValue(scope, "count", ++count);
 	return PLUGIN_COMPLETED;
 }
 

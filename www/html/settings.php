@@ -1,4 +1,10 @@
 <?php session_start();
+
+function myexception_handler(Exception $ex) {
+    echo "Uncaught exception: ". $ex->getMessage() . "\n";
+}
+set_exception_handler('myexception_handler');
+
 $BASE_APPDIR="/opt/latproc/www";
 $APPDIR = $BASE_APPDIR . "/app";
 date_default_timezone_set("Australia/Adelaide");
@@ -26,8 +32,9 @@ function __autoload($class_name) {
       }
    }
 if ( isset($_SESSION['user']) ) $user = $_SESSION['user']; 
+error_reporting(E_ALL);
 $APP_DEBUG_MESSAGES = Array();
-$DEBUG_MESSAGES_ENABLED = false;
+$DEBUG_MESSAGES_ENABLED = true;
 function debug_message($msg) {
     global $APP_DEBUG_MESSAGES; 
     $APP_DEBUG_MESSAGES[] = $msg;

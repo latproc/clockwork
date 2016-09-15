@@ -17,11 +17,20 @@ in2 POINT EK1814, 5;
 in3 POINT EK1814, 6;
 in4 POINT EK1814, 7;
 
-pressure_Underrange STATUS_FLAG EL3051, 0, 0;
-pressure_Overrange STATUS_FLAG EL3051, 0, 1;
-#pressure_Limit1 STATUS_FLAG EL3051, 0, 2;
-#pressure_Limit2 STATUS_FLAG EL3051, 0, 3;
-pressure_Error STATUS_FLAG EL3051, 0, 4;
-pressure_TxPDO_State STATUS_FLAG EL3051, 0, 7;
-pressure_TxPDO_Toggle STATUS_FLAG EL3051, 0, 8;
-pressure ANALOGINPUT EL3051, 0, 9;
+inputs LIST in1, in2, in3, in4, pressure, pressure_Underrange, pressure_Overrange;
+outputs LIST out1, out2, out3, out4;
+
+pressure_Underrange POINT EL3051, 0;
+pressure_Overrange POINT EL3051, 1;
+#pressure_Limit1 POINT EL3051, 2;
+#pressure_Limit2 POINT EL3051, 3;
+pressure_Error POINT EL3051, 4;
+#pressure_TxPDO_State POINT EL3051, 7;
+#pressure_TxPDO_Toggle POINT EL3051, 8;
+ANALOGIN_SETTINGS MACHINE { idle INITIAL; }
+pressure_settings ANALOGIN_SETTINGS;
+pressure ANALOGINPUT EL3051, 9, pressure_settings;
+
+SpeedSettings MACHINE { idle INITIAL; }
+a1speed_settings SpeedSettings;
+pressure_rate RATEESTIMATOR pressure,a1speed_settings;

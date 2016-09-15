@@ -5,14 +5,23 @@ g2 CONSTANT(tab:vars) 9;
 s1 CONSTANT(tab:vars) "Hello";
 v1 VARIABLE(tab:vars) 13;
 
-Testbed MACHINE (tab:s1, x:3, y){
+Testbed MACHINE (tab:s1, x:3, y) p1(A:7) {
     GLOBAL g1, v1;
     OPTION z g1;
     OPTION tab tab; # dereferences machine property 'tab'
     v2 VARIABLE(tab:vars) 0;
     v3 VARIABLE(tab:vars) 0;
+
+	OPTION pname "p1";
+	OPTION p1 "up";
+	OPTION p2 "down";
+	OPTION pvalue "";
+
+	up WHEN pvalue IS "up";
+	down WHEN pvalue IS "down";
     
     ENTER INIT {
+		SET pvalue TO PROPERTY pname;
         v1 := 11;
         v2.VALUE := 12;
         v3 := 13;
@@ -22,4 +31,5 @@ Testbed MACHINE (tab:s1, x:3, y){
     
 }
 
-test Testbed;
+f FLAG;
+test Testbed(pname:"p1") f;

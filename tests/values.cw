@@ -10,7 +10,8 @@ Test MACHINE {
 	ENTER INIT { 
 		LOG "one"; 
 		LOG "two " + 2; 
-		LOG "now: " + YEAR + "/" + MONTH + "/" + DAY + " " + HOUR + ":" + MINUTE + ":" + SECONDS + " " + TIMEZONE;
+		LOG "now: " + YEAR + "/" + MONTH + "/" + DAY + " " 
+			+ HOUR + ":" + MINUTE + ":" + SECONDS + " " + TIMEZONE;
 		LOG "now: " +YR +MONTH+" "+ (((HOUR*60)+MINUTE)*60 + SECONDS);
 		LOG TIMESTAMP + " test"; 
 
@@ -28,3 +29,5 @@ Test MACHINE {
 	}
 }
 logger Test(tab:tests);
+
+

@@ -1,3 +1,12 @@
+# This machine tests the use of automatic (so-called 'stable') states
+# with passive states. It will move from state to state on receipt of
+# commands A, B or C because of the transition table.  
+#
+# Note that when the property = 'last' becomes 'b' the machine 
+# automatically transitions to state x. Since x is not 
+# referenced in the transition table, there is no way for
+# the machine to leave that state.
+
 Test MACHINE {
 	a STATE;
 	b STATE;

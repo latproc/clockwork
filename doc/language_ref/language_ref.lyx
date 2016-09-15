@@ -1,5 +1,5 @@
-#LyX 2.0 created this file. For more info see http://www.lyx.org/
-\lyxformat 413
+#LyX 2.1 created this file. For more info see http://www.lyx.org/
+\lyxformat 474
 \begin_document
 \begin_header
 \textclass article
@@ -12,13 +12,13 @@
 \font_roman default
 \font_sans default
 \font_typewriter default
+\font_math auto
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
 \font_sf_scale 100
 \font_tt_scale 100
-
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -29,15 +29,24 @@
 \use_hyperref false
 \papersize a4paper
 \use_geometry true
-\use_amsmath 1
-\use_esint 1
-\use_mhchem 1
-\use_mathdots 1
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
 \cite_engine basic
+\cite_engine_type default
+\biblio_style plain
 \use_bibtopic false
 \use_indices false
 \paperorientation portrait
 \suppress_date false
+\justification true
 \use_refstyle 1
 \index Index
 \shortcut idx
@@ -478,13 +487,13 @@ status open
 \align center
 \begin_inset Tabular
 <lyxtabular version="3" rows="12" columns="6">
-<features tabularvalignment="middle">
-<column alignment="center" valignment="top" width="0">
-<column alignment="center" valignment="top" width="0">
-<column alignment="center" valignment="top" width="0">
+<features rotate="0" tabularvalignment="middle">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
 <column alignment="center" valignment="top" width="4cm">
-<column alignment="center" valignment="top" width="0">
-<column alignment="center" valignment="top" width="0">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
 <row>
 <cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -1166,7 +1175,7 @@ returns the bitwise inverse of the rhs
 \end_layout
 
 \begin_layout Plain Layout
-\begin_inset Caption
+\begin_inset Caption Standard
 
 \begin_layout Plain Layout
 Expression operators
@@ -1293,7 +1302,7 @@ In the above example, the keyword `SELF' refers to the current state of
  statement causes the state to change to the named state.
 \end_layout
 
-\begin_layout Standard
+\begin_layout Subsubsection
 Stable States
 \end_layout
 
@@ -1555,13 +1564,35 @@ TRANSITION b TO c ON next REQUIRES b_finished IS on;
 TRANSITION c TO a ON next REQUIRES c_finished IS on;
 \end_layout
 
-\begin_layout LyX-Code
- 
-\end_layout
-
 \end_deeper
 \begin_layout LyX-Code
 } 
+\end_layout
+
+\begin_layout Subsection
+State Transitions
+\end_layout
+
+\begin_layout Standard
+When a machine changes state, several stages occur: 
+\end_layout
+
+\begin_layout Enumerate
+if the machine has a leave action it is started
+\end_layout
+
+\begin_layout Enumerate
+when the leave action is completed the current state of the machine is changed
+\end_layout
+
+\begin_layout Enumerate
+once the machine state has changed the enter action for the state is started
+ if there is one
+\end_layout
+
+\begin_layout Enumerate
+if the machine has dependencies those machines are told the machine is entering
+ a state
 \end_layout
 
 \begin_layout Subsection
@@ -1590,6 +1621,23 @@ Commands are lists of actions that are executed in response to receipt of
 \begin_layout Standard
 Note: there is currently no way to abort the exectuion of a command, this
  feature will be added in future.
+\end_layout
+
+\begin_layout Standard
+The mechanism for this will be to add clauses to identify timeouts or other
+ conditions:
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND example { statements }, EXECUTE command WHEN predicate
+\end_layout
+
+\begin_layout Standard
+or
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND example { statements }, THROW error WHEN predicate
 \end_layout
 
 \begin_layout Subsection
@@ -1827,6 +1875,11 @@ BY used with INC and DEC to change the step size
 \end_layout
 
 \begin_layout Description
+CALL sends a message to a machine and waits for completion of handlers attached
+ to that message.
+\end_layout
+
+\begin_layout Description
 CATCH marks the beginning of an operation to be performed if any sends a
  particular message.
  [not implemented]
@@ -1855,7 +1908,10 @@ DEFAULT a stable state that is evaluated last and that always matches
 \end_layout
 
 \begin_layout Description
-DISABLE
+DISABLE is used to make a machine unable to respond to requests to change
+ state or process commands.
+ Properties of a disabled machine can still be changed.
+ The machine stays in the state it was is when it was disabled/ 
 \end_layout
 
 \begin_layout Description
@@ -1874,7 +1930,11 @@ ELSE marks the beginning of the code that is executed when the IF condition
 \end_layout
 
 \begin_layout Description
-ENABLE
+ENABLE makes a machine able to respond to requests and changes state.
+ The machine enters its initial state and executes the initial state entry
+ method.
+ The leave event to the previous state is also executed and the message
+ is sent to dependent machines.
 \end_layout
 
 \begin_layout Description
@@ -2288,6 +2348,28 @@ entiyname_statename_enter
 
 \begin_layout Subsubsection
 SEND and SEND..TO
+\end_layout
+
+\begin_layout Subsubsection
+CALL
+\end_layout
+
+\begin_layout Standard
+The CALL statement acts like theSEND except that the statement hangs and
+ waits for a response from the target.
+ There are a few forms:
+\end_layout
+
+\begin_layout Standard
+CALL command
+\end_layout
+
+\begin_layout Standard
+CALL command ON ERROR CALL command
+\end_layout
+
+\begin_layout Standard
+CALL command, EXECUTE command WHEN predicate
 \end_layout
 
 \begin_layout Subsection

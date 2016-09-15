@@ -37,6 +37,7 @@ test Driver test_switch;
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <Plugin.h>
 
 struct MyData {
 	long *set_point;
@@ -48,6 +49,7 @@ PLUGIN_EXPORT
 int check_states(void *scope)
 {
 	struct MyData *data = (struct MyData*)getInstanceData(scope);
+	char *current;
 	if (!data) {
 		data = (struct MyData*)malloc(sizeof(struct MyData));
 		setInstanceData(scope, data);
@@ -71,8 +73,8 @@ plugin_init_error:
 	}
 continue_plugin:
 
-	char *current = getState(scope);
-	printf("test: %s %ld\n", (current)? current : "null", *data->count);
+	current = getState(scope);
+	/*printf("test: %s %ld\n", (current)? current : "null", *data->count);*/
 	if (current && strcmp(current, "waiting") == 0 && *data->count >= *data->mark ) {
 		printf("changing to state on\n");
 		int x = changeState(scope, "on");

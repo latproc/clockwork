@@ -18,7 +18,7 @@ if ((!isset($user))) {
 	<html> <head> 
 	</head>
 	<body>
-	<div>Please <a href="login.php">Login</a></div>
+	<div>Please <a href="admin.php">Login</a></div>
 	</body></html>
 EOD;
 	return;
@@ -162,6 +162,7 @@ $banner = "<p>Logged in as " . $user->getName() . ". <a href=\"admin.php?m=logou
 if ($user->isAdministrator()) {
 	$banner .= '&nbsp;&nbsp;<a href="admin.php?registration">Administration</a>';
 }
+$banner .= "&nbsp;&nbsp;<a href=\"monitor.php\">Monitor</a>";
 $banner .= "<p>";
 
 print <<<EOD

@@ -1,3 +1,15 @@
+# this machine sets state based on a local value and global flag
+GlobalTest MACHINE {
+	GLOBAL flag;
+	OPTION x 3;
+
+	on WHEN x >4 AND flag IS on;
+	off WHEN x <2 AND flag IS on;
+	unknown DEFAULT;
+}
+gt GlobalTest;
+flag FLAG;
+
 # this test machine takes three other flag machines and sets its 
 # state based on the number of flags set
 
@@ -31,11 +43,12 @@ Test MACHINE a, b, c{
 On MACHINE { 
 	on DEFAULT;
 }
-on On;
 
 Off MACHINE {
 	off DEFAULT;
 }
+# should the following instantiations issue a warning? 
+on On;
 off Off;
 
 
