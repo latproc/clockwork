@@ -165,6 +165,7 @@ Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
         // the remaining values are all time fields
+        static time_t last = 0L;
         time_t now = time(0);
         struct tm lt;
         localtime_r(&now, &lt);

@@ -357,7 +357,7 @@ struct ModbusServerThread {
 							snprintf(buf, 19, "%d.%d", 1, addr);
 							std::string addr_str(buf);
 							if (active_addresses.find(addr_str) != active_addresses.end() ) 
-								if (DEBUG_VERBOSE_TOPLC) 
+								if (DEBUG_BASIC) 
 									std::cout << timestamp << " connection " << conn << " read discrete " << addr  
 									<< " (" << (int)(modbus_mapping->tab_input_bits[addr]) <<")"
 								<< "\n";
@@ -462,7 +462,7 @@ struct ModbusServerThread {
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
 	char *msg = MessagingInterface::encodeCommand("MODBUS", group, addr, new_value);
-	//sendIODMessage(msg);
+	sendIODMessage(msg);
 	//std::stringstream ss;
 	//ss << "MODBUS " << group << " " << addr << " " << new_value;
 	//std::string s(ss.str());
@@ -563,9 +563,6 @@ bool setup_signals()
 }
 
 int main(int argc, const char * argv[]) {
-		zmq::context_t context;
-		MessagingInterface::setContext(&context);
-
     struct timeval now;
     gettimeofday(&now, 0);
     start_t = now.tv_sec*1000000 + now.tv_usec;
@@ -655,58 +652,55 @@ int main(int argc, const char * argv[]) {
         int res;
 		std::stringstream ss;
 		ss << "tcp://localhost:" << cw_in;
-        zmq::socket_t subscriber (*MessagingInterface::getContext(), ZMQ_SUB);
+        zmq::context_t context (1);
+        zmq::socket_t subscriber (context, ZMQ_SUB);
         res = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
         assert (res == 0);
         subscriber.connect(ss.str().c_str());
         //subscriber.connect("ipc://ecat.ipc");
         while (!done) {
-					zmq::message_t update;
-					if (!subscriber.recv(&update)) continue;
-					long len = update.size();
-					std::vector<Value> params(0);
-					{
-					char *data = (char *)malloc(len+1);
-					memcpy(data, update.data(), len);
-					data[len] = 0;
-					if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
+            zmq::message_t update;
+			if (!subscriber.recv(&update)) continue;
+			long len = update.size();
+           	char *data = (char *)malloc(len+1);
+           	memcpy(data, update.data(), len);
+           	data[len] = 0;
+						if (DEBUG_BASIC) std::cout << "recieved: "<<data<<" from clockwork\n";
 
-					std::list<Value> parts;
-					int count = 0;
-					std::string ds;
-					{
-						std::list<Value> *param_list = 0;
-						if (MessagingInterface::getCommand(data, ds, &param_list)) {
-							params.push_back(ds);
-							if (param_list) {
-								std::list<Value>::const_iterator iter = param_list->begin();
-								while (iter != param_list->end()) {
-									const Value &v  = *iter++;
-									params.push_back(v);
-								}
-							}
-							count = params.size();
-						}
-						else {
-							std::istringstream iss(data);
-							while (iss >> ds) {
-								parts.push_back(ds.c_str());
-								++count;
-							}
-							std::copy(parts.begin(), parts.end(), std::back_inserter(params));
-						}
-						if (param_list) delete param_list;
-					}
-					free(data);
-					}
-					std::string cmd(params[0].asString());
+            std::list<Value> parts;
+            int count = 0;
+            std::string ds;
+            std::vector<Value> params(0);
+            {
+                std::list<Value> *param_list = 0;
+                if (MessagingInterface::getCommand(data, ds, &param_list)) {
+                    params.push_back(ds);
+                    if (param_list) {
+                        std::list<Value>::const_iterator iter = param_list->begin();
+                        while (iter != param_list->end()) {
+                            const Value &v  = *iter++;
+                            params.push_back(v);
+                        }
+                    }
+                    count = params.size();
+                }
+                else {
+                    std::istringstream iss(data);
+                    while (iss >> ds) {
+                        parts.push_back(ds.c_str());
+                        ++count;
+                    }
+                    std::copy(parts.begin(), parts.end(), std::back_inserter(params));
+                }
+            }
+            std::string cmd(params[0].asString());
 
-					//std::istringstream iss(data);
-					//std::string cmd;
-					//iss >> cmd;
-					if (cmd == "UPDATE") {
-					int group, addr, len, value;
-					std::string name;
+            //std::istringstream iss(data);
+			//std::string cmd;
+			//iss >> cmd;
+			if (cmd == "UPDATE") {
+            	int group, addr, len, value;
+				std::string name;
 				
 				assert(params.size() >= 6);
 				assert(params[1].kind == Value::t_integer);

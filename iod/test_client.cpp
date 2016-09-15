@@ -25,7 +25,8 @@
 int main ()
 {
     //  Prepare our context and socket
-    zmq::socket_t socket (*MessagingInterface::getContext(), ZMQ_REQ);
+    zmq::context_t context (1);
+    zmq::socket_t socket (context, ZMQ_REQ);
 
     std::cout << "Connecting to io daemon ..." << std::endl;
     socket.connect ("tcp://localhost:5555");

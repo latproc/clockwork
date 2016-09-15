@@ -35,7 +35,6 @@
 #include "MessageLog.h"
 
 MessagingInterface *MessagingInterface::current = 0;
-zmq::context_t *MessagingInterface::context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 
 MessagingInterface *MessagingInterface::getCurrent() {
@@ -60,9 +59,10 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
 }
 
 MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto) 
-		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false), connection(-1) {
+		: Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false), connection(-1) {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
-	    socket = new zmq::socket_t(*getContext(), ZMQ_PUB);
+	    context = new zmq::context_t(num_threads);
+	    socket = new zmq::socket_t(*context, ZMQ_PUB);
 	    is_publisher = true;
 	    std::stringstream ss;
 	    ss << "tcp://*:" << port;
@@ -75,10 +75,11 @@ MessagingInterface::MessagingInterface(int num_threads, int port, Protocol proto
 }
 
 MessagingInterface::MessagingInterface(std::string host, int remote_port, Protocol proto) 
-		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false), connection(-1), hostname(host), port(remote_port) {
+		:Receiver("messaging_interface"), protocol(proto), context(0), socket(0),is_publisher(false), connection(-1), hostname(host), port(remote_port) {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
 	    if (host == "*") {
-	        socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUB);
+	        context = new zmq::context_t(1);
+	        socket = new zmq::socket_t(*context, ZMQ_PUB);
 	        is_publisher = true;
 	        std::stringstream ss;
 	        ss << "tcp://*:" << port;
@@ -86,6 +87,7 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 	        socket->bind(url.c_str());
 	    }
 	    else {
+	        context = new zmq::context_t(1);
 	        std::stringstream ss;
 	        ss << "tcp://" << host << ":" << port;
 	        url = ss.str();
@@ -99,7 +101,7 @@ MessagingInterface::MessagingInterface(std::string host, int remote_port, Protoc
 
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ) {
-	    socket = new zmq::socket_t(*getContext(), ZMQ_REQ);
+	    socket = new zmq::socket_t(*context, ZMQ_REQ);
 	    is_publisher = false;
 	    socket->connect(url.c_str());
 	    int linger = 0;
@@ -125,6 +127,7 @@ MessagingInterface::~MessagingInterface() {
 	}
     if (MessagingInterface::current == this) MessagingInterface::current = 0;
     delete socket;
+    delete context;
 }
 
 bool MessagingInterface::receives(const Message&, Transmitter *t) {
@@ -156,7 +159,7 @@ char *MessagingInterface::send(const char *txt) {
             if (zmq_errno())
                 std::cerr << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
             else
-                std::cerr << "Exception when sending " << url << ": " << e.what() << " " << (4-retries)<< "\n";
+                std::cerr << "Exception when sending " << url << ": " << e.what() << "\n";
         }
     }
     retries = 4;
@@ -166,7 +169,7 @@ char *MessagingInterface::send(const char *txt) {
                 bool expect_reply = true;
                 while (expect_reply) {
                     zmq::pollitem_t items[] = { { *socket, 0, ZMQ_POLLIN, 0 } };
-                    zmq::poll( &items[0], 1, 500);
+                    zmq::poll( &items[0], 1, 500000);
                     if (items[0].revents & ZMQ_POLLIN) {
                         zmq::message_t reply;
                         if (socket->recv(&reply)) {

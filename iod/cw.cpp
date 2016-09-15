@@ -62,7 +62,6 @@
 #include "ClientInterface.h"
 #include "MQTTInterface.h"
 #include "MessageLog.h"
-#include "MessagingInterface.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -259,8 +258,6 @@ void ProcessingThread::operator()()  {
 
 int main (int argc, char const *argv[])
 {
-	zmq::context_t *context = new zmq::context_t(1);
-	MessagingInterface::setContext(context);
 	Logger::instance();
     MessageLog::setMaxMemory(10000);
 
@@ -462,6 +459,11 @@ int main (int argc, char const *argv[])
             processMonitor.data_ready = true;
             io_updated.notify_one();
         }
+//        if (ECInterface::sig_alarms == user_alarms) {
+//            boost::mutex::scoped_lock lock(model_mutex);
+//            model_updated.wait(model_mutex);
+//        }
+        //usleep(200);
         if (processing_sequence != processMonitor.sequence) { // did the model update?
             ECInterface::instance()->sendUpdates();
             ++processing_sequence;
@@ -472,32 +474,14 @@ int main (int argc, char const *argv[])
         
         // use the clockwork interpreter's current cycle delay
         Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-        int64_t delay = 100;
+        long delay = 100;
         if (cycle_delay_v && cycle_delay_v->iValue >= 100) delay = cycle_delay_v->iValue;
-        if (delay-delta > 50){
-            delay = delay-delta-5;
-            struct timespec sleep_time;
-            sleep_time.tv_sec = delay / 1000000;
-            sleep_time.tv_nsec = (delay * 1000) % 1000000000L;
-            int rc;
-            struct timespec remaining;
-            while ( (rc = nanosleep(&sleep_time, &remaining) == -1) ) {
-                sleep_time = remaining;
-            }
-        }
+        if (delay-delta > 50)
+            usleep(delay-delta-5);
         then = now;
     }
     MQTTInterface::instance()->stop();
     processMonitor.stop();
-    stateMonitor.stop();
-    kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
-    monitor.join();
-	try {
-        delete context;
-    }
-    catch (zmq::error_t) {
-
-    }
     process.join();
     stateMonitor.stop();
     monitor.join();

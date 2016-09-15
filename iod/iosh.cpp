@@ -264,8 +264,6 @@ void initialise_commands() {
 
 int main(int argc, const char * argv[])
 {
-		zmq::context_t context;
-		MessagingInterface::setContext(&context);
     try {
 		int port = 5555;
 		bool quiet = false;
@@ -291,7 +289,8 @@ int main(int argc, const char * argv[])
 			<< "\nEnter HELP; for help. Note that ';' is required at the end of each command\n"
 			<< "  use exit; or ctrl-D to exit this program\n\n";
 		}
-		zmq::socket_t socket (*MessagingInterface::getContext(), ZMQ_REQ);
+		zmq::context_t context (1);
+		zmq::socket_t socket (context, ZMQ_REQ);
 		int linger = 0; // do not wait at socket close time
 		socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 		psocket = &socket;

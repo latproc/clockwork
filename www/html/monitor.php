@@ -237,10 +237,10 @@ if (json_last_error() != JSON_ERROR_NONE) {
 	display_json_error($res, $reply);
 	$slaves = array();
 }
-/*$debug_messages .= "<literal>";
+$debug_messages .= "<literal>";
 $debug_messages .= " " . count($slaves) . " slaves found\n";
 $debug_messages .= $reply . "</literal><br>\n";
-*/
+
 /* each tab has a 'refresh' button that refreshes all tabs and navigates
 	back to the tab the user was on. This can be improved with a bit of
 	javascripting one day.

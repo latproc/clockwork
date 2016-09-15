@@ -388,7 +388,6 @@ void ECInterface::check_slave_config_states(void)
 }
 
 bool ECInterface::start() {
-#if 0
     struct sigaction sa;
     struct itimerval tv;
     sa.sa_handler = signal_handler;
@@ -413,12 +412,10 @@ bool ECInterface::start() {
 		std::cerr << "Failed to start timer: " << strerror(errno) << "\n";
         return false;
     }
-#endif
 	return true;
 }
 
 bool ECInterface::stop() {
-#if 0
     struct itimerval tv;
     tv.it_interval.tv_sec = 0;
     tv.it_interval.tv_usec = 0;
@@ -428,6 +425,5 @@ bool ECInterface::stop() {
 		std::cerr << "Failed to stop timer: " << strerror(errno) << "\n";
         return false;
     }
-#endif
 	return true;
 }

@@ -53,7 +53,8 @@ struct CommandThreadInternals : public ClientInterfaceInternals {
 
 void IODCommandThread::operator()() {
     std::cout << "------------------ Command Thread Started -----------------\n";
-    zmq::socket_t socket (*MessagingInterface::getContext(), ZMQ_REP);
+    zmq::context_t context (3);
+    zmq::socket_t socket (context, ZMQ_REP);
     int linger = 0; // do not wait at socket close time
     socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
     std::stringstream sn;
@@ -66,7 +67,7 @@ void IODCommandThread::operator()() {
         try {
             
              zmq::pollitem_t items[] = { { socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
-             zmq::poll( &items[0], 1, 500);
+             zmq::poll( &items[0], 1, 500*1000);
              if ( !(items[0].revents & ZMQ_POLLIN) ) continue;
 
         	zmq::message_t request;
@@ -79,6 +80,7 @@ void IODCommandThread::operator()() {
             char *data = (char *)malloc(size+1);
             memcpy(data, request.data(), size);
             data[size] = 0;
+std::cout << data << "\n";
             
             std::list<Value> parts;
             int count = 0;
