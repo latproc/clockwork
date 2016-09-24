@@ -76,6 +76,8 @@ public:
     void removeMonitorProperty(const char *, const Value &);
     void removeMonitorExports();
 
+	void processChannelIgnoresList();
+
     void modified();
     void checked();
 
@@ -139,6 +141,8 @@ public:
     void addSendName(const char *);
     void addReceiveName(const char *);
     void addOptionName(const char *n, Value &v);
+
+	void processIgnoresPatternList(std::set<std::string>::const_iterator first, std::set<std::string>::const_iterator last, Channel *chn) const;
 
 	MachineClass* interfaceFor(const char *monitored_machine) const;
 
@@ -358,7 +362,13 @@ protected:
 	SequenceNumber seqno;
 	uint64_t last_throttled_send;
 
+	// these are cached values updated by setupFilters() each time the channel changes
+	bool does_monitor;
+	bool does_share;
+	bool does_update;
+
 	friend class SyncRemoteStatesAction;
+	friend class ChannelDefinition;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

@@ -91,7 +91,7 @@ void Receiver::enqueue(const Package &package) {
 }
 
 std::ostream &Message::operator<<(std::ostream &out) const  {
-    out << text;
+    out << text << " " << kind << " ";
     return out;
 }
 

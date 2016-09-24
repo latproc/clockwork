@@ -405,7 +405,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 				}
                 else if (params.size() == 4 || params.size() == 5) {
                     if (m->debug()) {
-                        DBG_MSG << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
+                        DBG_PROPERTIES << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
                     }
 					long authority = 0;
 					bool use_authority = false;

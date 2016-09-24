@@ -160,7 +160,8 @@ Channel::Channel(const std::string ch_name, const std::string type)
 			connect_responder(0), disconnect_responder(0),
 			monitor_thread(0),
 			throttle_time(0), connections(0), aborted(false), subscriber_thread(0), started_(false),
-			cmd_client(0), cmd_server(0), last_throttled_send(0)
+			cmd_client(0), cmd_server(0), last_throttled_send(0),
+			does_monitor(false), does_share(false), does_update(false)
 {
 	internals = new ChannelInternals();
     if (all == 0) {
@@ -1504,6 +1505,9 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
 						chn->sendPropertyChangeMessage(machine, machine->getName(), key, val, authority);
 			}
         }
+		else {
+			DBG_CHANNELS << "filters do not allow " << name << "\n";
+		}
     }
 }
 
@@ -1596,15 +1600,17 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
 			found = chn->throttled_items.erase(found);
 			delete mr;
 		}
+		else {
+			DBG_CHANNELS << "filters do not allow " << name << "\n";
+		}
     }
 }
 
 bool Channel::matches(MachineInstance *machine, const std::string &name) {
-    if (definition()->monitors_names.count(name))
+	// the setupFilters() method will have added machines that are allowed on the channel
+    if (channel_machines.count(machine))
         return true;
-    else if (channel_machines.count(machine))
-        return true;
-    return false; // only test the channel instance if the channel definition matches
+    return false;
 }
 
 bool Channel::patternMatches(const std::string &machine_name) {
@@ -1626,28 +1632,33 @@ bool Channel::patternMatches(const std::string &machine_name) {
     }
     return false;
 }
-
+/*
 bool Channel::doesUpdate() {
-    return definition()->updates_names.empty();
+    return does_update;
 }
 
 bool Channel::doesShare() {
-	return definition()->shares_names.empty();
+	return does_share;
 }
 
 bool Channel::doesMonitor() {
-    return  monitors_exports || definition()->monitors_exports
-        || ! (definition()->monitors_names.empty() && definition()->monitors_patterns.empty() && definition()->monitors_properties.empty()
-              && monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty());
+	if (!does_monitor) {
+		DBG_CHANNELS << name << " does not monitor machines\n";
+	}
+	return does_monitor;
 }
+*/
 
 bool Channel::filtersAllow(MachineInstance *machine) {
-		if (!definition()->monitor_linked.empty() && ( machine->_type == "INPUTBIT" || machine->_type == "INPUTREGISTER") ) return false;
+	if (!definition()->monitor_linked.empty() && ( machine->_type == "INPUTBIT" || machine->_type == "INPUTREGISTER") ) return false;
     if ((definition()->monitors_exports || monitors_exports) && !machine->modbus_exports.empty())
         return true;
     
-    if (!matches(machine, name)) return false;
-    
+    if (!matches(machine, name))
+		return false;
+
+	return true;
+/*
     if (monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty())
         return true;
     
@@ -1667,6 +1678,7 @@ bool Channel::filtersAllow(MachineInstance *machine) {
         // TBD check properties
     }
     return false;
+*/
 }
 
 Channel *Channel::findByType(const std::string kind) {
@@ -1783,6 +1795,9 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
             }
 			free(cmdstr);
         }
+		else {
+			DBG_CHANNELS << "filters do not allow " << machine_name << "\n";
+		}
     }
 }
 
@@ -1851,6 +1866,9 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
 			MessageLog::instance()->add(buf);
 		}
 		free(cmdstr);
+	}
+	else {
+		DBG_CHANNELS << "filters do not allow " << machine_name << "\n";
 	}
 }
 
@@ -1949,11 +1967,17 @@ void ChannelDefinition::addShare(const char *nm, const char *if_nm) {
 }
 void ChannelImplementation::addMonitor(const char *s) {
     DBG_CHANNELS << "add monitor for " << s << "\n";
+	// if this name had previously been removed there may be a filter for it so we remove that
+	std::string pat = "^"; pat += s; pat += "$";
+	if (ignores_patterns.count(pat)) {
+		DBG_CHANNELS << "removing ignores pattern " << pat << "\n";
+		ignores_patterns.erase(pat);
+	}
     monitors_names.insert(s);
     modified();
 }
 void ChannelImplementation::addIgnorePattern(const char *s) {
-    DBG_CHANNELS << "add " << s << " to ignore list\n";
+    DBG_CHANNELS << "adding " << s << " to ignore pattern list\n";
 	ignores_patterns.insert(s);
     modified();
 }
@@ -1963,23 +1987,30 @@ void ChannelImplementation::removeIgnorePattern(const char *s) {
     modified();
 }
 void ChannelImplementation::removeMonitor(const char *s) {
-    DBG_CHANNELS << "remove monitor for " << s;
+    DBG_CHANNELS  << s;
 	if (monitors_names.count(s)) {
 	    monitors_names.erase(s);
     	modified();
-		DBG_CHANNELS << "\n";
+		DBG_CHANNELS << "removed monitor for " << s<< "\n";
 	}
 	else {
-		DBG_CHANNELS << "...not found\n";
+		DBG_CHANNELS << "remove monitor for " << s << "...not found adding ignore pattern\n";
 		std::string pattern = "^";
 		pattern += s;
 		pattern += "$";
 		addIgnorePattern(pattern.c_str());
+		modified();
 	}
 }
 void ChannelImplementation::addMonitorPattern(const char *s) {
-    monitors_patterns.insert(s);
-    modified();
+	if (ignores_patterns.count(s)) {
+		ignores_patterns.erase(s);
+		modified();
+	}
+	if (!monitors_patterns.count(s)) {
+		monitors_patterns.insert(s);
+		modified();
+	}
 }
 void ChannelImplementation::addMonitorProperty(const char *key, const Value &val) {
     monitors_properties[key] = val;
@@ -1991,21 +2022,35 @@ void ChannelImplementation::removeMonitorProperty(const char *key, const Value &
     //TBD Bug here, we should be using a set< pair<string, Value> >, not a map
 }
 void ChannelImplementation::addMonitorExports() {
-    monitors_exports = true;
-    modified();
+	if (!monitors_exports) {
+		monitors_exports = true;
+		modified();
+	}
 }
 void ChannelImplementation::removeMonitorExports() {
-    monitors_exports = false;
-    modified();
+	if (monitors_exports) {
+		monitors_exports = false;
+		modified();
+	}
 }
 
 void ChannelImplementation::addMonitorLinkedTo(const char *machine_name) {
-	monitor_linked.insert(machine_name);
+	if (monitor_linked.count(machine_name) == 0) {
+		monitor_linked.insert(machine_name);
+		modified();
+	}
 }
 
 void ChannelImplementation::removeMonitorPattern(const char *s) {
-    monitors_patterns.erase(s);
-    modified();
+	if (monitors_patterns.count(s) > 0) {
+		monitors_patterns.erase(s);
+		modified();
+	}
+	else {
+		DBG_CHANNELS << " adding ignore pattern for " << s << "\n";
+		ignores_patterns.insert(s);
+		modified();
+	}
 }
 void ChannelDefinition::addUpdates(const char *nm, const char *if_nm) {
     updates_names[nm] = if_nm;
@@ -2225,6 +2270,7 @@ void Channel::handleChannels() {
     while (iter != all->end()) {
         const std::pair<std::string, Channel *> &item = *iter++;
         Channel *chn = item.second;
+		chn->setupFilters();
         chn->checkCommunications();
 		if (chn->throttledItemsReady(now)) {
 			chn->sendThrottledUpdates();
@@ -2335,6 +2381,7 @@ void Channel::setupAllShadows() {
 }
 
 void Channel::setupFilters() {
+	if (last_modified < last_checked) return;
     checked();
     // check if this channel monitors exports and if so, add machines that have exports
     if (definition()->monitors_exports || monitors_exports) {
@@ -2391,15 +2438,6 @@ void Channel::setupFilters() {
             DBG_CHANNELS << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
         }
     }
-    iter = definition()->monitors_names.begin();
-    while (iter != definition()->monitors_names.end()) {
-        const std::string &name = *iter++;
-        MachineInstance *machine = MachineInstance::find(name.c_str());
-        if (machine && !this->channel_machines.count(machine)) {
-            machine->publish();
-            this->channel_machines.insert(machine);
-        }
-    }
     std::map<std::string, Value>::const_iterator prop_iter = definition()->monitors_properties.begin();
     while (prop_iter != definition()->monitors_properties.end()) {
         const std::pair<std::string, Value> &item = *prop_iter++;
@@ -2420,28 +2458,78 @@ void Channel::setupFilters() {
             }
         }
     }
-    
-    iter = definition()->ignores_patterns.begin();
-    while (iter != definition()->ignores_patterns.end()) {
-	    const std::string &pattern = *iter++;
-	    rexp_info *rexp = create_pattern(pattern.c_str());
-	    if (!rexp->compilation_error) {
-		    std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
-		    while (machines != MachineInstance::end()) {
-			    MachineInstance *machine = *machines++;
-			    if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
-				    if (this->channel_machines.count(machine)) {
-					    //DBG_CHANNELS << "unpublished " << machine->getName() << "\n";
-					    machine->unpublish();
-					    this->channel_machines.erase(machine);
-				    }
-			    }
-		    }
-	    }
-	    else {
-		    MessageLog::instance()->add(rexp->compilation_error);
-		    DBG_CHANNELS << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
-	    }
-    }
+
+	// ignore machines based on patterns in the channel definition
+	definition()->processIgnoresPatternList(definition()->ignores_patterns.begin(),
+											definition()->ignores_patterns.end(), this);
+
+	// include machines specifically named in the channel definition
+	iter = definition()->monitors_names.begin();
+	while (iter != definition()->monitors_names.end()) {
+		const std::string &name = *iter++;
+		MachineInstance *machine = MachineInstance::find(name.c_str());
+		if (machine && !this->channel_machines.count(machine)) {
+			machine->publish();
+			this->channel_machines.insert(machine);
+		}
+	}
+
+	//ignore machines added to the channel instance
+	definition()->processIgnoresPatternList(ignores_patterns.begin(), ignores_patterns.end(), this);
+
+	// include machines specifically named in the channel definition
+	iter = monitors_names.begin();
+	while (iter != monitors_names.end()) {
+		const std::string &name = *iter++;
+		MachineInstance *machine = MachineInstance::find(name.c_str());
+		if (machine && !this->channel_machines.count(machine)) {
+			machine->publish();
+			this->channel_machines.insert(machine);
+		}
+	}
+
+	does_monitor = monitors_exports || definition()->monitors_exports
+	|| ! (definition()->monitors_names.empty() && definition()->monitors_patterns.empty()
+		  && definition()->monitors_properties.empty() && definition()->ignores_patterns.empty()
+		  && ignores_patterns.empty()
+		  && monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty() );
+
+	does_update = definition()->updates_names.empty();
+	does_share = definition()->shares_names.empty();
+
 }
+
+void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_iterator iter,
+												  std::set<std::string>::const_iterator last,
+												  Channel *chn) const {
+	while (iter != last) {
+		const std::string &pattern = *iter++;
+		DBG_CHANNELS << "setupFilters() processing pattern " << pattern << "\n";
+		rexp_info *rexp = create_pattern(pattern.c_str());
+		if (!rexp->compilation_error) {
+			std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
+			while (machines != MachineInstance::end()) {
+				MachineInstance *machine = *machines++;
+				if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
+					if (chn->channel_machines.count(machine)) {
+						DBG_CHANNELS << "unpublished " << machine->getName() << "\n";
+						machine->unpublish();
+						chn->channel_machines.erase(machine);
+					}
+					else {
+						DBG_CHANNELS << "ignore pattern " << pattern << " matches " << machine->fullName() << " but it is not monitored\n";
+					}
+				}
+				else {
+					DBG_CHANNELS << machine->getName() << " does not match " << pattern << "\n";
+				}
+			}
+		}
+		else {
+			MessageLog::instance()->add(rexp->compilation_error);
+			DBG_CHANNELS << "Channel error: " << name << " " << rexp->compilation_error << "\n";
+		}
+	}
+}
+
 

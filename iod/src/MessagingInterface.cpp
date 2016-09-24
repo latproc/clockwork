@@ -542,7 +542,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
             test_bind.disconnect(address_buf);
-            std::cerr << "found available port " << res << "\n";
+            DBG_CHANNELS << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
