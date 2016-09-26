@@ -43,10 +43,7 @@ FireTriggerAction::~FireTriggerAction() {
 	}
 */
 	DBG_M_ACTIONS << "Removing " << *this << "\n";
-	if (trigger) {
-		trigger->removeHolder(this);
-		trigger->release();
-	}
+	cleanupTrigger();
 }
 
 Action::Status FireTriggerAction::run() { 
@@ -59,9 +56,7 @@ Action::Status FireTriggerAction::run() {
 		//DBG_MSG << owner->getName() << " trigger " << trigger->getName() << " fired while disabled\n";
 		//assert(trigger->fired());
 	}
-	trigger->removeHolder(this);
-	trigger->release();
-	trigger = 0;
+	cleanupTrigger();
 	status = Complete;
 	owner->stop(this);
 	return status;

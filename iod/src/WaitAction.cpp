@@ -74,8 +74,7 @@ Action::Status WaitAction::run() {
 		status = Running;
         if (trigger) {
 			DBG_MESSAGING << owner->getName() << " " << *this << " removing old trigger\n";
-			trigger->removeHolder(this);
-			trigger = trigger->release();
+			cleanupTrigger();
 		}
 		char buf[100]; snprintf(buf, 100, "%s WaitTimer", owner->getName().c_str());
 		trigger = new Trigger(buf);

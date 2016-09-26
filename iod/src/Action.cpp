@@ -138,16 +138,19 @@ void Action::setTrigger(Trigger *t) {
 //		DBG_ACTIONS << "Attempt to set trigger " << t->getName() << " when it is already set";
 		return; 
 	}
-	if (trigger && t) {
-//		DBG_ACTIONS << "Attempt to set trigger " << t->getName() << " when another trigger " << trigger->getName() << " is already set";
-		trigger->removeHolder(this);
-		trigger->release(); 
-		trigger = 0;
-	}
+	cleanupTrigger();
 	if (t) {
 		t->addHolder(this);
 		t->setOwner(this);
 		trigger = t;
+	}
+}
+
+void Action::cleanupTrigger() {
+	if (trigger) {
+		trigger->removeHolder(this);
+		trigger->release();
+		trigger = 0;
 	}
 }
 
@@ -164,11 +167,7 @@ void Action::reset() {
 	error_str=""; result_str="";
 	saved_status=Running; blocked=0;
 	started_=false;
-	if (trigger) {
-		trigger->removeHolder(this);
-		trigger->release();
-		trigger = 0;
-	}
+	cleanupTrigger();
 }
 
 const char *actionStatusName(const Action::Status &state) {
@@ -202,9 +201,7 @@ Action::~Action(){
 			<< owner->getName() << " has not fired\n";
 			MessageLog::instance()->add(ss.str().c_str());
 		}
-		trigger->removeHolder(this);
-		trigger->release();
-		trigger = 0;
+		cleanupTrigger();
 	}
 }
 

@@ -125,7 +125,8 @@ public:
 	
 	void setTrigger(Trigger *t);
 	Trigger *getTrigger() const;
-	void disableTrigger();    
+	void disableTrigger();
+	void cleanupTrigger();
 
 	MachineInstance *getOwner() { return owner; }
 	bool started();
