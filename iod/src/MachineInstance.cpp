@@ -464,7 +464,14 @@ void MachineInstance::enqueue(const Package &package) {
 	setNeedsCheck();
 }
 
-bool MachineInstance::workToDo() { 
+bool MachineInstance::workToDo() {
+	if (!pending_events.empty()) { DBG_MSG << "!pending_events.empty()\n"; }
+	if (!SharedWorkSet::instance()->empty()) { DBG_MSG << "!SharedWorkSet::instance()->empty()\n"; }
+	if (!pending_state_change.empty()) { DBG_MSG << "!pending_state_change.empty()\n"; }
+	if (num_machines_with_work + total_machines_needing_check > 0) {
+		DBG_MSG << "num_machines_with_work + total_machines_needing_check > 0 ("
+			<< num_machines_with_work <<"," <<  total_machines_needing_check << ") > 0\n";
+	}
 	return !pending_events.empty() || !SharedWorkSet::instance()->empty() || !pending_state_change.empty()
 				|| num_machines_with_work + total_machines_needing_check > 0; 
 }
@@ -1394,19 +1401,17 @@ void MachineInstance::idle() {
 		}
 	}
 	while (!mail_queue.empty()){
-		if (!mail_queue.empty()) {
-			Package *p = 0;
-			{
-				boost::mutex::scoped_lock lock(q_mutex);
-				DBG_M_MESSAGING << _name << " has " <<  mail_queue.size() << " messages waiting\n";
-				p = new Package(mail_queue.front());
-				DBG_M_MESSAGING << _name << " found package " << *p << "\n";
-				mail_queue.pop_front();
-			}
-			if (p) {
-				handle(p->message, p->transmitter, p->needs_receipt);
-				delete p;
-			}
+		Package *p = 0;
+		{
+			boost::mutex::scoped_lock lock(q_mutex);
+			DBG_M_MESSAGING << _name << " has " <<  mail_queue.size() << " messages waiting\n";
+			p = new Package(mail_queue.front());
+			DBG_M_MESSAGING << _name << " found package " << *p << "\n";
+			mail_queue.pop_front();
+		}
+		if (p) {
+			handle(p->message, p->transmitter, p->needs_receipt);
+			delete p;
 		}
 	}
 	if (mail_queue.empty() && active_actions.empty()) has_work = false;
@@ -1454,6 +1459,7 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		if (mi) mi->setNeedsCheck();
 	}
 
+	num_machines_with_work = 0;
 	process_time = nowMicrosecs();
 	boost::recursive_mutex &mutex = SharedWorkSet::instance()->getMutex();
 	{
@@ -1462,7 +1468,11 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		while (busy_it != SharedWorkSet::instance()->end() ) {
 			MachineInstance *mi = *busy_it;
 			// is it possible for a non active machine to be executing a command?
-			if (mi->isActive() || mi->executingCommand()) mi->idle();
+			if (mi->isActive() || mi->executingCommand()) {
+				mi->idle();
+				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
+					++num_machines_with_work;
+			}
 			if (mi->state_machine && mi->state_machine->plugin)
 				mi->state_machine->plugin->poll_actions(mi);
 			if ( (mi->state_machine && mi->state_machine->plugin)
@@ -1553,7 +1563,6 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 			if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
 				m->state_machine->plugin->poll_actions(m);
 				++total_plugins_with_work;
-				//TBD                ++num_machines_with_work;
 			}
 			if (m->hasWork() || !m->active_actions.empty()) {
 				DBG_ACTIONS << m->getName() << " has work\n";
@@ -1967,6 +1976,9 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 		// machines receive messages from objects they are listening to
 		if (std::find(listens.begin(), listens.end(), from) != listens.end()) {
 			DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from " << from->getName() << "\n";
+			if (m.getText() == "in.off_leave") {
+				int x = 1;
+			}
 			return true;
 		}
 	}
@@ -2086,7 +2098,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			}
 
 			txt = _name + "." + current_state.getName() + "_leave";
-			msg = Message(txt.c_str());
+			msg = Message(txt.c_str(), Message::LEAVEMSG);
 			std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 			while (dep_iter != depends.end()) {
 				MachineInstance *dep = *dep_iter++;
@@ -2422,6 +2434,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 
 					// find state condition
 					bool found = false;
+					IfCommandAction *change_state_action = 0;
 					for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 						StableState &s = stable_states[ss_idx];
 						if (s.state_name == t.dest.getName()) {
@@ -2433,15 +2446,22 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 									ch.triggered = false;
 								}
 							}
-							MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
-							MachineCommandTemplate mc("stable_state_test", "");
-							mc.setActionTemplate(&temp);
-							IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
-							Action *a = new IfCommandAction(this, &ifcat);
-							this->push(a);
+							if (change_state_action == 0) {
+								MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
+								MachineCommandTemplate mc("stable_state_test", "");
+								mc.setActionTemplate(&temp);
+								IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
+								change_state_action = new IfCommandAction(this, &ifcat);
+							}
+							else {
+								// update the action to or with another condition
+								Predicate *p = new Predicate(change_state_action->condition.predicate, opOR,new Predicate(*s.condition.predicate) );
+								change_state_action->condition.predicate = p;
+							}
 							found = true;
 						}
 					}
+					if (change_state_action) this->enqueueAction(change_state_action);
 					// the CALL method waits for a response once the executed command is complete
 					// the response will be sent after the transition to the next state is done
 					if (response_required)
@@ -2782,12 +2802,7 @@ void MachineClass::enableAutomaticStateChanges() {
 }
 
 bool MachineClass::isStableState(State &state) {
-	std::vector<StableState>::iterator iter = stable_states.begin();
-	while (iter != stable_states.end()) {
-		StableState &s = *iter++;
-		if (s.state_name == state.getName()) return true;
-	}
-	return false;
+	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
 }
 
 const State *MachineClass::findState(const char *seek) const {
@@ -3363,6 +3378,7 @@ bool MachineInstance::setStableState() {
 						DBG_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name 
 							<< " due to condition: " << *s.condition.predicate << "\n";
 						char *sn = strdup(s.state_name.c_str());
+#if 0
 						MoveStateActionTemplate temp(_name.c_str(), sn );
 						state_change = new MoveStateAction(this, temp);
 						Action::Status action_status;
@@ -3376,6 +3392,10 @@ bool MachineInstance::setStableState() {
 						//if (action_status == Action::Complete || action_status == Action::Failed) {
 						state_change->release();
 						state_change = 0;
+#else
+						SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name );
+						enqueueAction(ssat.factory(this)); // execute this state change next time actions are processed
+#endif
 					}
 					else {
 						DBG_AUTOSTATES << " already there\n";
@@ -3386,20 +3406,20 @@ bool MachineInstance::setStableState() {
 							if (v.kind == Value::t_integer && v.iValue < next_timer)
 								next_timer = v.iValue;
 						}
-					}
-					if (s.uses_timer) {
-						DBG_SCHEDULER << _name << "[" << current_state.getName() 
+						if (s.subcondition_handlers) {
+							std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+							while (iter != s.subcondition_handlers->end()) {
+								ConditionHandler *ch = &(*iter++);
+								DBG_AUTOSTATES << "checking "
+								<< (*ch).condition.last_evaluation
+								<< "\n";
+								if (!ch->check(this)) ch->condition.predicate->scheduleTimerEvents(this);
+							}
+						}
+						if (s.uses_timer) {
+							DBG_SCHEDULER << _name << "[" << current_state.getName()
 							<< "] scheduling condition tests for state " << s.state_name << "\n";
-						s.condition.predicate->scheduleTimerEvents(this);
-					}
-					if (s.subcondition_handlers) {
-						std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
-						while (iter != s.subcondition_handlers->end()) {
-							ConditionHandler *ch = &(*iter++);
-							DBG_AUTOSTATES << "checking "
-							<< (*ch).condition.last_evaluation
-							<< "\n";
-							if (!ch->check(this)) ch->condition.predicate->scheduleTimerEvents(this);
+							s.condition.predicate->scheduleTimerEvents(this);
 						}
 					}
 					found_match = true;
@@ -4116,16 +4136,6 @@ bool MachineInstance::hasState(const State &test) const {
 	if (state_machine) {
 		const State *s = state_machine->findState(test);
 		if (s) return true;
-
-		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-			if (stable_states[ss_idx].state_name == test.getName()) {
-				// TBD remove this code
-				//all stable states should have been registered in the machines state table
-				// this test is to verify that
-				assert(false);
-				return true;
-			}
-		}
 	}
 	else {
 		char buf[100];

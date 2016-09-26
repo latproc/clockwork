@@ -50,11 +50,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		MessageLog::instance()->add(msg);
 		error_str = msg;
 		status = Failed;
-		if (trigger) {
-			trigger->removeHolder(this);
-			trigger->release();
-			trigger = 0;
-		}
+		cleanupTrigger();
 		owner->stop(this);
 		return status; 
 	}
@@ -80,11 +76,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 					MessageLog::instance()->add(msg);
 					DBG_M_ACTIONS << error_str << "\n";
 					status = Failed;
-					if (trigger) {
-						trigger->removeHolder(this);
-						trigger->release();
-						trigger = 0;
-					}
+					cleanupTrigger();
 					owner->stop(this);
 					return status; 
 				}
@@ -98,11 +90,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 					error_str = msg;
 					DBG_M_ACTIONS << error_str << "\n";
 					status = Failed;
-					if (trigger) {
-						trigger->removeHolder(this);
-						trigger->release();
-						trigger = 0;
-					}
+					cleanupTrigger();
 					owner->stop(this);
 					return status;
 				}
@@ -122,12 +110,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			if (txt == value.getName()) {
 				result_str = "OK";
 				status = Complete;
-				if (trigger) {
-					trigger->removeHolder(this);
-					trigger->release();
-					trigger = 0;
-				}
-				owner->stop(this);
+				cleanupTrigger();
 				return status;
 			}
 
@@ -160,11 +143,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			if (machine->getCurrent() == value) {
 				DBG_M_ACTIONS << machine->getName() << " is already " << value << " skipping " << *this << "\n";
 				status = Complete;
-				if (trigger) {
-					trigger->removeHolder(this);
-					trigger->release();
-					trigger = 0;
-				}
+				cleanupTrigger();
 				owner->stop(this);
 				return status;
 			}
@@ -189,11 +168,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 								else
 									result_str = "OK";
 								if (status != Action::Running && status != Action::Suspended && owner->executingCommand() == this) {
-									if (trigger) {
-										trigger->removeHolder(this);
-										trigger->release();
-										trigger = 0;
-									}
+									cleanupTrigger();
 									owner->stop(this);
 								}
 								return status;
@@ -213,11 +188,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				//DBG_M_ACTIONS << "SetStateAction didn't find a transition for " << machine->getCurrent() << " to " << value << "; manually setting\n";
 			}
 			status = machine->setState( value, authority );
-			if (trigger) {
-				trigger->removeHolder(this);
-				trigger->release();
-				trigger = 0;
-			}
+			cleanupTrigger();
 			if (status == Complete || status == Failed) {
 				owner->stop(this);
 			}
@@ -230,6 +201,23 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				snprintf(buf, 100, "%s::setState(%s) Failed\n", machine->getName().c_str(), 
 					value.getName().c_str() );
 				error_str = (const char *)buf;
+			}
+			if (status == Complete) {
+				owner->stop(this);
+				State value(new_state.sValue.c_str());
+				if (owner->getStateMachine()->isStableState(value)) {
+					std::multimap<std::string, StableState>::iterator iter(owner->getStateMachine()->stable_state_xref.find(new_state.sValue));
+					while (iter != owner->getStateMachine()->stable_state_xref.end()) {
+						const std::pair<std::string, StableState> &node(*iter++);
+						if (node.second.state_name != new_state.sValue) break;
+						if (node.second.uses_timer) {
+							DBG_SCHEDULER << owner->fullName() << "[" << owner->current_state.getName()
+							<< "] scheduling condition tests for state " << node.second.state_name << "\n";
+							node.second.condition.predicate->scheduleTimerEvents(owner);
+						}
+					}
+				}
+
 			}
 			return status;
 		}
@@ -272,9 +260,7 @@ Action::Status SetStateAction::checkComplete() {
 			DBG_M_MESSAGING << owner->getName() << " Set State Action " << *this << " has triggered, cleaning up\n";
 			NB_MSG << owner->getName() << " Set State Action " << *this << " has triggered, cleaning up\n";
 			status = Complete;
-			trigger->removeHolder(this);
-			trigger->release();
-			trigger = 0;
+			cleanupTrigger();
 			owner->stop(this);
 			return status;
 		}
@@ -291,9 +277,7 @@ Action::Status SetStateAction::checkComplete() {
 				status = Complete;
 				if (trigger) {
 					if (trigger->enabled() && !trigger->fired()) trigger->fire();
-					trigger->removeHolder(this);
-					trigger->release();
-					trigger = 0;
+					cleanupTrigger();
 				}
 				owner->stop(this);
 				return status;
@@ -308,9 +292,7 @@ Action::Status SetStateAction::checkComplete() {
 				status = Complete;
 				if (trigger) {
 					if (trigger->enabled() && !trigger->fired()) trigger->fire();
-					trigger->removeHolder(this);
-					trigger->release();
-					trigger = 0;
+					cleanupTrigger();
 				}
 				owner->stop(this);
 				return status;

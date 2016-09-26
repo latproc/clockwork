@@ -73,7 +73,7 @@ uint64_t clockwork_watchdog_timer = 0;
 
 extern void handle_io_sampling(uint64_t clock);
 
-#undef KEEPSTATS
+#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
 
@@ -599,12 +599,13 @@ void ProcessingThread::operator()()
 		int dynamic_poll_start_idx = 6;
 
 		char buf[100];
-		int poll_wait = 2 * internals->cycle_delay / 1000; // millisecs
-		machine_check_delay = internals->cycle_delay;
-		if (poll_wait == 0) poll_wait = 1;
+		int poll_wait = internals->cycle_delay / 1000; // millisecs
+		machine_check_delay = internals->cycle_delay / 5;
+		//if (poll_wait == 0) poll_wait = 1;
 		uint64_t curr_t = 0;
 		int systems_waiting = 0;
 		uint64_t last_sample_poll = 0;
+		bool machines_have_work;
 		while (!program_done)
 		{
 			curr_t = nowMicrosecs();
@@ -628,18 +629,26 @@ void ProcessingThread::operator()()
 			}
 
 			internals->process_manager.SetTime(curr_t);
+
+			machines_have_work = MachineInstance::workToDo();
+			if (machines_have_work)
+				poll_wait = 0;
+			else
+				poll_wait = internals->cycle_delay / 1000;
+
 			//if (Watchdog::anyTriggered(curr_t))
 			//	Watchdog::showTriggered(curr_t, true);
 			systems_waiting = pollZMQItems(poll_wait, items, 6 + internals->channel_sockets.size(), 
 				ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
 			//	<< " waiting: " << systems_waiting << "\n";
-			if (systems_waiting > 0) break;
+			if (systems_waiting > 0 || status == e_waiting) break;
 			if (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
-			if (curr_t - last_checked_machines > machine_check_delay && MachineInstance::workToDo() ) break;
-			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
+			if (curr_t - last_checked_machines > machine_check_delay || machines_have_work ) break;
+			if (!MachineInstance::pluginMachines().empty()) break;  //&& curr_t - last_checked_plugins >= 1000) break;
 #ifdef KEEPSTATS
 			avg_poll_time.update();
+			usleep(10);
 			avg_poll_time.start();
 #endif
 		}
@@ -648,23 +657,29 @@ void ProcessingThread::operator()()
 		avg_poll_time.update();
 #endif
 
-#if 0
+#if 1
 		// debug code to work out what machines or systems tend to need processing
-		DBG_MSG << "handling activity " << systems_waiting
-			<< ( (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
-			<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
-			<< ( (!io_work_queue.empty()) ? " io work" : "")
-			<< ( (curr_t - last_checked_machines > machine_check_delay) ? " machines" : "")
-			<< ( (curr_t - last_checked_plugins >= 10000) ? " plugins" : "")
-			<< "\n";
-		if (IOComponent::updatesWaiting()) {
-			extern std::set<IOComponent*> updatedComponentsOut;
-			std::set<IOComponent*>::iterator iter = updatedComponentsOut.begin();
-			while (iter != updatedComponentsOut.end()) std::cout << " " << (*iter++)->io_name;
-			std::cout << " \n";
+		{
+			if (systems_waiting > 0 || !io_work_queue.empty() || (machines_have_work || processing_state != eIdle || status != e_waiting) ) {
+				DBG_MSG << "handling activity. zmq: " << systems_waiting << " state: " << processing_state << " substate: " << status
+					<< ( (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
+					<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
+					<< ( (!io_work_queue.empty()) ? " io work" : "")
+					<< ( (curr_t - last_checked_machines > machine_check_delay && machines_have_work) ? " machines" : "")
+					<< ( (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
+					<< "\n";
+			}
+			if (IOComponent::updatesWaiting()) {
+				extern std::set<IOComponent*> updatedComponentsOut;
+				std::set<IOComponent*>::iterator iter = updatedComponentsOut.begin();
+				while (iter != updatedComponentsOut.end()) std::cout << " " << (*iter++)->io_name;
+				std::cout << " \n";
+			}
 		}
 #endif
 
+		if (systems_waiting == 0 && processing_state == eIdle && status == e_waiting)
+			int x = 1;
 		/* this loop prioritises ethercat processing but if a certain
 			number of ethercat cycles have been processed with no 
 			other activities being given time, we give other jobs
@@ -715,12 +730,15 @@ void ProcessingThread::operator()()
 		}
 		
 		if (program_done) break;
-		if (processing_state == eIdle && !MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) {
+		if (!MachineInstance::pluginMachines().empty()) {
+			if (processing_state == eIdle  && curr_t - last_checked_plugins >= 1000) {
 #ifdef KEEPSTATS
-			AutoStat stats(avg_plugin_time);
+				AutoStat stats(avg_plugin_time);
 #endif
-			MachineInstance::checkPluginStates();
+				MachineInstance::checkPluginStates();
+			}
 		}
+		else last_checked_plugins = curr_t;
 
 		if (status == e_waiting) {
 #ifdef KEEPSTATS
@@ -932,28 +950,35 @@ void ProcessingThread::operator()()
 			status = e_waiting_sched;
 		}
 
-		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && MachineInstance::workToDo() )
+		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && machines_have_work )
 		{
 
 			if (processing_state == eIdle)
 				processing_state = ePollingMachines;
-			if (processing_state == ePollingMachines)
-			{
+			const int num_loops = 1;
+			for (int i=0; i<num_loops; ++i) {
+				if (processing_state == ePollingMachines)
+				{
+	#ifdef KEEPSTATS
+					avg_clockwork_time.start();
+	#endif
+					if (MachineInstance::processAll(150000, MachineInstance::NO_BUILTINS))
+						processing_state = eStableStates;
+				}
+				if (processing_state == eStableStates)
+				{
+					if (MachineInstance::checkStableStates(150000)) {
+						if (i<num_loops-1)
+							processing_state = ePollingMachines;
+						else {
+							processing_state = eIdle;
+							last_checked_machines = curr_t; // check complete
 #ifdef KEEPSTATS
-				avg_clockwork_time.start();
+							avg_clockwork_time.update();
 #endif
-				if (MachineInstance::processAll(150000, MachineInstance::NO_BUILTINS))
-					processing_state = eStableStates;
-			}
-			if (processing_state == eStableStates)
-			{
-				if (MachineInstance::checkStableStates(150000)) {
-					processing_state = eIdle;
-					last_checked_machines = curr_t; // check complete
-#ifdef KEEPSTATS
-					avg_clockwork_time.update();
-#endif
-					;				}
+						}
+					}
+				}
 			}
 		}
 		if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&

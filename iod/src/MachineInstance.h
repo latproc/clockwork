@@ -165,7 +165,8 @@ public:
     std::vector<Parameter> locals;
     std::list<State> states;
     std::set<std::string> state_names;
-    std::vector<StableState> stable_states;
+	std::multimap<std::string, StableState> stable_state_xref;
+	std::vector<StableState> stable_states;
     std::multimap<std::string, MachineCommandTemplate*> commands;
     std::map<Message, MachineCommandTemplate*> enter_functions;
     std::multimap<Message, MachineCommandTemplate*> receives;
