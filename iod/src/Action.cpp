@@ -135,7 +135,7 @@ void Action::setBlocker(Action *a) { blocked = a; }
 void Action::setTrigger(Trigger *t) { 
 	if (!trigger && !t) return;
 	if (trigger && trigger == t) {
-//		DBG_ACTIONS << "Attempt to set trigger " << t->getName() << " when it is already set";
+		DBG_ACTIONS << "Attempt to set trigger " << t->getName() << " when it is already set";
 		return; 
 	}
 	cleanupTrigger();

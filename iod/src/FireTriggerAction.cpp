@@ -28,7 +28,7 @@ static int max_count = 0;
 static int last_max = 0;
 
 FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t) 
-: Action(m), trigger(t->retain()){
+: Action(m),  pending_trigger(t->retain()) {
 	if (m) t->setOwner(m);
 	t->addHolder(this);
 	++count_instances;
@@ -48,6 +48,8 @@ FireTriggerAction::~FireTriggerAction() {
 
 Action::Status FireTriggerAction::run() { 
 	owner->start(this);
+	Action::setTrigger(pending_trigger->retain());
+	pending_trigger = pending_trigger->release();
 	if (trigger->enabled()) {
 		DBG_M_ACTIONS << owner->getName() << " triggered " << trigger->getName() << "\n";
 		trigger->fire(); 

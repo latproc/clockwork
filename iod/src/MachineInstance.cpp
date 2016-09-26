@@ -3388,7 +3388,6 @@ bool MachineInstance::setStableState() {
 						else {
 							DBG_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
 						}
-						free(sn);
 						//if (action_status == Action::Complete || action_status == Action::Failed) {
 						state_change->release();
 						state_change = 0;
@@ -3396,6 +3395,7 @@ bool MachineInstance::setStableState() {
 						SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name );
 						enqueueAction(ssat.factory(this)); // execute this state change next time actions are processed
 #endif
+						free(sn);
 					}
 					else {
 						DBG_AUTOSTATES << " already there\n";

@@ -33,7 +33,7 @@ struct FireTriggerAction : public Action {
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
 
-	Trigger *trigger;
+	Trigger *pending_trigger; // the trigger is held here and loaded into the action on run()
 };
 
 #endif
