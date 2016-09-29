@@ -56,6 +56,7 @@
 #endif //USE_SDO
 #include "ECInterface.h"
 #endif
+#include "ProcessingThread.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -363,18 +364,23 @@ void MachineInstance::setNeedsCheck() {
 	if (!needs_check) { 
 		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n"; 
 		++total_machines_needing_check;
+		if (_name == "trans")
+			int x = 1;
 	}
 	if (!active_actions.empty() || !mail_queue.empty()) {
 		//DBG_MSG << _name << " queued for action processing\n";
 		SharedWorkSet::instance()->add(this);
+		ProcessingThread::activate(this);
 	}
 	else if (getStateMachine()->allow_auto_states) {
 		//DBG_MSG << _name << " queued for stable state checks\n";
 		pending_state_change.insert(this);
+		ProcessingThread::activate(this);
 	}
 	else {
 		//DBG_MSG << _name << " queued for action processing\n";
 		SharedWorkSet::instance()->add(this);
+		ProcessingThread::activate(this);
 	}
 	next_poll = 0;
 	if (state_machine->token_id == ClockworkToken::LIST) {
@@ -391,16 +397,6 @@ void MachineInstance::setNeedsCheck() {
 			if (dep->is_enabled) dep->setNeedsCheck();
 		}
 	}
-#if 0
-	if (io_interface) {
-		DBG_MSG << _name << " has hw io, updating dependent machines\n";
-		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
-		while (dep_iter != depends.end()) {
-			MachineInstance *dep = *dep_iter++;
-			if (dep->is_enabled) dep->setNeedsCheck();
-		}
-	}
-#endif
 }
 
 std::string &MachineInstance::fullName() const {
@@ -457,6 +453,7 @@ void MachineInstance::enqueueAction(Action *a){
 	DBG_ACTIONS << _name << " New Action queued: " << *a << "\n";
 	has_work = true;
 	SharedWorkSet::instance()->add(this);
+	ProcessingThread::activate(this);
 }
 
 void MachineInstance::enqueue(const Package &package) {
@@ -522,6 +519,7 @@ void MachineInstance::checkActions() {
 	num_machines_with_work++;
 	has_work = true;
 	SharedWorkSet::instance()->add(this);
+	ProcessingThread::activate(this);
 	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << SharedWorkSet::instance()->size() << "\n";
 }
 
@@ -1318,7 +1316,14 @@ void MachineInstance::resetNeedsCheck() {
 	needs_check = 0;
 }
 
+bool MachineInstance::queuedForStableStateTest() {
+	return pending_state_change.count(this);
+}
+
+
 void MachineInstance::idle() {
+	ProcessingThread::suspend(this);
+
 	if (error_state) {
 		return;
 	}
@@ -1415,6 +1420,8 @@ void MachineInstance::idle() {
 		}
 	}
 	if (mail_queue.empty() && active_actions.empty()) has_work = false;
+	if (has_work)
+		ProcessingThread::activate(this);
 
 	return;
 }
@@ -1443,7 +1450,7 @@ uint64_t total_processing_time = 0;
 long total_aborts = 0;
 
 #if 1
-bool MachineInstance::processAll(uint32_t max_time, PollType which) {
+bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which) {
 
 	uint64_t start_processing = nowMicrosecs();
 	process_time = start_processing;
@@ -1459,19 +1466,23 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 		if (mi) mi->setNeedsCheck();
 	}
 
+
 	num_machines_with_work = 0;
 	process_time = nowMicrosecs();
-	boost::recursive_mutex &mutex = SharedWorkSet::instance()->getMutex();
+	//boost::recursive_mutex &mutex(SharedWorkSet::instance()->getMutex());
 	{
-		boost::recursive_mutex::scoped_lock lock(mutex);
-		std::set<MachineInstance*>::iterator busy_it = SharedWorkSet::instance()->begin();
-		while (busy_it != SharedWorkSet::instance()->end() ) {
+		//boost::recursive_mutex::scoped_lock lock(mutex);
+		//std::set<MachineInstance*>::iterator busy_it = SharedWorkSet::instance()->begin();
+		//while (busy_it != SharedWorkSet::instance()->end() ) {
+
+		std::set<MachineInstance*>::iterator busy_it = to_process.begin();
+		while (busy_it != to_process.end() ) {
 			MachineInstance *mi = *busy_it;
 			// is it possible for a non active machine to be executing a command?
-			if (mi->isActive() || mi->executingCommand()) {
+			if (mi->isActive() || mi->executingCommand() || !mi->mail_queue.empty()) {
 				mi->idle();
-				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
-					++num_machines_with_work;
+//				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
+//					++num_machines_with_work;
 			}
 			if (mi->state_machine && mi->state_machine->plugin)
 				mi->state_machine->plugin->poll_actions(mi);
@@ -1479,9 +1490,11 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
 					|| (!mi->has_work && !mi->executingCommand() ) ) 
 			{
 					if (!mi->has_work && !mi->executingCommand())  {
-						busy_it = SharedWorkSet::instance()->erase(busy_it);
+						SharedWorkSet::instance()->remove(mi);
+						busy_it = to_process.erase(busy_it);
 						if (mi->is_active) {
 							pending_state_change.insert(mi);
+							ProcessingThread::activate(mi);
 						}
 					}
 					else
@@ -1648,21 +1661,20 @@ void MachineInstance::checkPluginStates() {
 }
 
 // Warning: max_time is ignored in this method
-bool MachineInstance::checkStableStates(uint32_t max_time) {
+bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process, uint32_t max_time) {
 	total_machines_needing_check = 0;
-	std::set<MachineInstance *>::iterator iter = MachineInstance::pending_state_change.begin();
-	while (iter != MachineInstance::pending_state_change.end() ) {
-		MachineInstance *mi = *iter;
+	std::set<MachineInstance *>::iterator iter = to_process.begin();
+	while (iter != to_process.end() ) {
+		MachineInstance *mi = *iter++;
 		if (!mi->executingCommand() && mi->mail_queue.empty()) {
 			// unless the machine is disabled leave the state check on the queue until it is stable
-			if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states || !mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
+			if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states || !mi->setStableState()) pending_state_change.erase(mi);
 		}
 		else if (mi->enabled()) {
 			SharedWorkSet::instance()->add(mi);
-			iter = pending_state_change.erase(iter); // this machine has other work, it should no longer be on the pending state change queue
+			pending_state_change.erase(mi); // this machine has other work, it should no longer be on the pending state change queue
+			ProcessingThread::activate(mi);
 		}
-		else
-			iter++;
 	}
 	return true;
 }
@@ -2740,6 +2752,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
 	enqueueAction(hma);
 	SharedWorkSet::instance()->add(this);
+	ProcessingThread::activate(this);
 }
 
 void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) {
@@ -3277,6 +3290,7 @@ void MachineInstance::push(Action *new_action) {
 	num_machines_with_work++;
 	has_work = true;
 	SharedWorkSet::instance()->add(this);
+	ProcessingThread::activate(this);
 	if (tracing() && isTraceable()) {
 		resetTemporaryStringStream();
 		ss << "starting action: " << *new_action;
@@ -3302,6 +3316,8 @@ void MachineInstance::updateLastEvaluationTime() {
 
 bool MachineInstance::setStableState() {
 	bool changed_state = false;
+	ProcessingThread::suspend(this); // assume this machine will not have anything else to do after checking states
+
 	CaptureDuration cd(stable_states_stats);
 	DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()  <<")\n";
 	if (!state_machine || !state_machine->allow_auto_states) {

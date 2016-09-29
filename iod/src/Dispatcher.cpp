@@ -33,6 +33,7 @@
 #include <zmq.hpp>
 #include "Channel.h"
 #include <pthread.h>
+#include "ProcessingThread.h"
 
 Dispatcher *Dispatcher::instance_ = NULL;
 
@@ -314,6 +315,7 @@ void Dispatcher::idle()
                             if (mi)
                             {
 								SharedWorkSet::instance()->add(mi);
+								ProcessingThread::activate(mi);
                                 Action *curr = mi->executingCommand();
                                 if (curr)
                                 {

@@ -344,6 +344,13 @@ if (num_errors > 0) {
 #endif
 
 	std::cout << "-------- Initialising ---------\n";
+
+	std::cout << "-------- Starting Command Interface ---------\n";
+	ControlSystemMachine machine;
+	IODCommandThread *stateMonitor = IODCommandThread::instance();
+	IODHardwareActivation iod_activation;
+	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
+
 	ECInterface::instance()->activate();
 
 	setup_signals();
@@ -354,14 +361,6 @@ if (num_errors > 0) {
 
 	std::cout << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
-
-
-	std::cout << "-------- Starting Command Interface ---------\n";
-	ControlSystemMachine machine;
-	IODCommandThread *stateMonitor = IODCommandThread::instance();
-	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(&machine, iod_activation, *stateMonitor);
-
 
 	boost::thread monitor(boost::ref(*stateMonitor));
 	usleep(50000); // give time before starting the processin g thread

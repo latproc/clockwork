@@ -75,13 +75,13 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen);
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader header);
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block,
-			  size_t &response_len, uint64_t timeout);
-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout);
-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, MessageHeader &hdr);
+			  size_t &response_len, int64_t timeout);
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout);
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout, MessageHeader &hdr);
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, MessageHeader header,
-				 uint32_t timeout_us = 0);
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us = 0);
+				 int32_t timeout_us = 0);
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us = 0);
 
 class MessagingInterface : public Receiver {
 public:

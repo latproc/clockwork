@@ -131,6 +131,7 @@ public:
     virtual bool receives(const Message&, Transmitter *t) = 0;
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false ) = 0;
 	virtual void enqueue(const Package &package);
+	bool hasMail() { return !mail_queue.empty(); }
     long getId() const { return id; }
 protected:
 		

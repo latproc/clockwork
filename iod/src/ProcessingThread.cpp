@@ -35,6 +35,7 @@
 #include <map>
 #include <utility>
 #include <fstream>
+#include <set>
 #include "cJSON.h"
 
 #include "MachineInstance.h"
@@ -137,6 +138,11 @@ public:
 	ProcessingThreadInternals() : sequence(0), cycle_delay(1000),
 		processing_wd("Processing Loop Watchdog", 2000) { }
 };
+
+ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface) {
+	ProcessingThread *pt = new ProcessingThread(m, activator,cmd_interface);
+	return *pt;
+}
 
 ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface)
 : internals(0), machine(*m), status(e_waiting),
@@ -460,6 +466,16 @@ void ProcessingThread::setProcessingThreadInstance( ProcessingThread* pti) {
 	instance_ = pti;
 }
 
+void ProcessingThread::activate(MachineInstance *m) {
+	boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
+	instance()->runnable.insert(m);
+}
+
+void ProcessingThread::suspend(MachineInstance *m) {
+	instance()->runnable.erase(m);
+}
+
+
 void ProcessingThread::operator()()
 {
 
@@ -630,22 +646,26 @@ void ProcessingThread::operator()()
 
 			internals->process_manager.SetTime(curr_t);
 
-			machines_have_work = MachineInstance::workToDo();
+			//machines_have_work = MachineInstance::workToDo();
+			machines_have_work = !runnable.empty();
 			if (machines_have_work)
 				poll_wait = 0;
-			else
-				poll_wait = internals->cycle_delay / 1000;
+			else {
+				//poll_wait = internals->cycle_delay / 1000;
+				//if (poll_wait == 0) poll_wait = 10;
+				poll_wait = 100;
+			}
 
 			//if (Watchdog::anyTriggered(curr_t))
 			//	Watchdog::showTriggered(curr_t, true);
 			systems_waiting = pollZMQItems(poll_wait, items, 6 + internals->channel_sockets.size(), 
 				ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
-			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
-			//	<< " waiting: " << systems_waiting << "\n";
-			if (systems_waiting > 0 || status == e_waiting) break;
+
+			//if (systems_waiting > 0 || status == e_waiting) break;
+			//if (curr_t - last_checked_machines > machine_check_delay || machines_have_work ) break;
+			if (systems_waiting > 0 || machines_have_work) break;
 			if (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
-			if (curr_t - last_checked_machines > machine_check_delay || machines_have_work ) break;
-			if (!MachineInstance::pluginMachines().empty()) break;  //&& curr_t - last_checked_plugins >= 1000) break;
+			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
 #ifdef KEEPSTATS
 			avg_poll_time.update();
 			usleep(10);
@@ -665,7 +685,8 @@ void ProcessingThread::operator()()
 					<< ( (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
 					<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
 					<< ( (!io_work_queue.empty()) ? " io work" : "")
-					<< ( (curr_t - last_checked_machines > machine_check_delay && machines_have_work) ? " machines" : "")
+					//<< ( (curr_t - last_checked_machines > machine_check_delay && machines_have_work) ? " machines" : "")
+					<< ( (machines_have_work) ? " machines" : "")
 					<< ( (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
 					<< "\n";
 			}
@@ -718,6 +739,7 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
+			NB_MSG << " processing io changes\n";
 #ifdef KEEPSTATS
 			AutoStat stats(avg_iowork_time);
 #endif
@@ -754,7 +776,7 @@ void ProcessingThread::operator()()
 #ifdef KEEPSTATS
 				AutoStat stats(avg_cmd_processing);
 #endif
-				//NB_MSG << "Processing: incoming data from client\n";
+				NB_MSG << "Processing: incoming data from client\n";
 				size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
 				if (len) status = e_waiting_cmd;
 			}
@@ -772,6 +794,7 @@ void ProcessingThread::operator()()
 			}
 		}
 		if (status == e_handling_dispatch) {
+			NB_MSG << " processing dispatcher\n";
 			if (processing_state != eIdle) {
 				// cannot process dispatch events at present
 				status = e_waiting;
@@ -962,21 +985,58 @@ void ProcessingThread::operator()()
 	#ifdef KEEPSTATS
 					avg_clockwork_time.start();
 	#endif
-					if (MachineInstance::processAll(150000, MachineInstance::NO_BUILTINS))
-						processing_state = eStableStates;
+					std::set<MachineInstance *> to_process;
+					{
+						boost::mutex::scoped_lock(runnable_mutex);
+						std::set<MachineInstance *>::iterator iter = runnable.begin();
+						while (iter != runnable.end()) {
+							MachineInstance *mi = *iter;
+							if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail())
+								to_process.insert(mi);
+							if (!mi->queuedForStableStateTest()) {
+								iter = runnable.erase(iter);
+							}
+							else iter++;
+						}
+					}
+
+					if (!to_process.empty()) {
+						NB_MSG << "processing machines\n";
+						MachineInstance::processAll(to_process, 150000, MachineInstance::NO_BUILTINS);
+					}
+					processing_state = eStableStates;
 				}
 				if (processing_state == eStableStates)
 				{
-					if (MachineInstance::checkStableStates(150000)) {
-						if (i<num_loops-1)
-							processing_state = ePollingMachines;
-						else {
-							processing_state = eIdle;
-							last_checked_machines = curr_t; // check complete
-#ifdef KEEPSTATS
-							avg_clockwork_time.update();
-#endif
+					std::set<MachineInstance *> to_process;
+					{	boost::mutex::scoped_lock(runnable_mutex);
+						std::set<MachineInstance *>::iterator iter = runnable.begin();
+						while (iter != runnable.end()) {
+							MachineInstance *mi = *iter;
+							if (mi->executingCommand() || !mi->pendingEvents().empty()) {
+								iter++;
+								continue;
+							}
+							if (mi->queuedForStableStateTest()) {
+								to_process.insert(mi);
+								iter = runnable.erase(iter);
+							}
+							else iter++;
 						}
+					}
+
+					if (!to_process.empty()) {
+						NB_MSG << "processing stable states\n";
+						MachineInstance::checkStableStates(to_process, 150000);
+					}
+					if (i<num_loops-1)
+						processing_state = ePollingMachines;
+					else {
+						processing_state = eIdle;
+						last_checked_machines = curr_t; // check complete
+#ifdef KEEPSTATS
+						avg_clockwork_time.update();
+#endif
 					}
 				}
 			}

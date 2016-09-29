@@ -332,7 +332,7 @@ int main (int argc, char const *argv[])
 
 	IODCommandThread *stateMonitor = IODCommandThread::instance();
 	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(&machine, iod_activation, *stateMonitor);
+	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
 
 	//zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
 	//resource_mgr.bind("inproc://resource_mgr");
@@ -370,7 +370,7 @@ int main (int argc, char const *argv[])
         MQTTInterface::instance()->collectState();
 
         //sim_io.send("ecat", 4);
-        safeRecv(sim_io, buf, 10, false, response_len, 100000);
+        safeRecv(sim_io, buf, 10, false, response_len, 100);
         struct timeval now;
         gettimeofday(&now,0);
         

@@ -121,7 +121,7 @@ void MessageHeader::reply() {
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout) {
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -187,7 +187,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	return false;
 }
 
-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, MessageHeader &header) {
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout, MessageHeader &header) {
 	//    struct timeval now;
 	//    gettimeofday(&now, 0);
 	//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
@@ -267,7 +267,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	return false;
 }
 
-bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
+bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, int64_t timeout) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -282,7 +282,9 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 		try {
 			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
-			if (!n && block) continue;
+			if (!n && block) {
+				usleep(10); continue;
+			}
 			if (items[0].revents & ZMQ_POLLIN) {
 				//{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
 				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
@@ -398,7 +400,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
-				 uint32_t timeout_us, MessageHeader header) {
+				 int32_t timeout_us, MessageHeader header) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -411,14 +413,14 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
 	size_t len;
 	MessageHeader response_header;
 	//bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, int *source) {
-	if (safeRecv(sock, &buf, &len, true, (uint64_t)timeout_us, response_header)) {
+	if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us, response_header)) {
 		response = buf;
 		return true;
 	}
 	return false;
 }
 
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us) {
+bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -429,7 +431,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, ui
 
 	char *buf = 0;
 	size_t len = 0;
-	if (safeRecv(sock, &buf, &len, true, (uint64_t)timeout_us)) {
+	if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us)) {
 		response = buf;
 		return true;
 	}

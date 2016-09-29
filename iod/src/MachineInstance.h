@@ -405,10 +405,10 @@ public:
 	void resetNeedsCheck();
 	void resetTemporaryStringStream();
 
-    static bool processAll(uint32_t max_time, PollType which);
+    static bool processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which);
 	//static void updateAllTimers(PollType which);
 	//void updateTimer(long dt);
-	static bool checkStableStates(uint32_t max_time);
+	static bool checkStableStates(std::set<MachineInstance *> &to_process, uint32_t max_time);
 	static void checkPluginStates();
 	static size_t countAutomaticMachines() { return automatic_machines.size(); }
 	static void displayAutomaticMachines();
@@ -502,7 +502,9 @@ public:
     virtual void setNeedsCheck();
     uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
-    
+
+	bool queuedForStableStateTest();
+
     virtual long filter(long val) { return val; }
     
     void publish();
@@ -533,7 +535,7 @@ protected:
 	std::vector<std::string>state_names; // used for mapping modbus offsets to states
 	std::vector<std::string>command_names; // used for mapping modbus offsets to states
 	ModbusAddressable::ExportType modbus_exported;
-	
+
 	int error_state; // error number of the current error if any
 	State saved_state; // save state before error
 	Value current_state_val;
