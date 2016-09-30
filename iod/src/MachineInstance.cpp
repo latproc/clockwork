@@ -3410,7 +3410,7 @@ bool MachineInstance::setStableState() {
 								<< "\n";
 								if (tracing() && isTraceable()) {
 									resetTemporaryStringStream();
-									ss << current_state.getName() <<"->" << s.state_name << " " << (*ch).condition;
+									ss << current_state.getName() <<"->" << s.state_name << " " << *ch->condition.predicate;
 									setValue("TRACE", ss.str());
 								}
 								if (!ch->check(this)) ch->condition.predicate->scheduleTimerEvents(this);
