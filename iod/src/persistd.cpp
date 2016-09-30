@@ -245,7 +245,10 @@ int main(int argc, const char * argv[]) {
             { (void*)subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
             { (void*)subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
         };
-        if (!subscription_manager.checkConnections()) continue;
+		if (!subscription_manager.checkConnections()) {
+			usleep(100);
+			continue;
+		}
         try {
             int rc = zmq::poll( &items[0], 2, 500);
             if (need_refresh) {
