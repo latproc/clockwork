@@ -57,7 +57,7 @@ public:
 	std::set<MachineInstance*>::iterator end() { return runnable.end(); }
 
 private:
-    
+	static ProcessingThread *instance_;
 	ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface);
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);

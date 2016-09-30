@@ -214,6 +214,13 @@ std::string thread_name("iod_main");
 	MessageLog::setMaxMemory(10000);
 	Scheduler::instance();
 
+	std::cout << "-------- Creating Command Interface ---------\n";
+	ControlSystemMachine machine;
+	IODCommandThread *stateMonitor = IODCommandThread::instance();
+	IODHardwareActivation iod_activation;
+	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
+
+
 	Logger::instance()->setLevel(Logger::Debug);
 	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
 
@@ -344,12 +351,6 @@ if (num_errors > 0) {
 #endif
 
 	std::cout << "-------- Initialising ---------\n";
-
-	std::cout << "-------- Starting Command Interface ---------\n";
-	ControlSystemMachine machine;
-	IODCommandThread *stateMonitor = IODCommandThread::instance();
-	IODHardwareActivation iod_activation;
-	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
 
 	ECInterface::instance()->activate();
 

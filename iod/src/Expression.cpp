@@ -28,6 +28,7 @@
 #include "FireTriggerAction.h"
 #include "dynamic_value.h"
 #include "MessageLog.h"
+#include "ProcessingThread.h"
 
 
 static int count_instances = 0;
@@ -146,13 +147,13 @@ const Value &Predicate::getTimerValue() {
 
 void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer events that trigger the supplied machine
 {
-    long scheduled_time = -10000;
+    long scheduled_time = -100000;
     long current_time = 0;
     // below, we check the clauses of this predicate and if we find a timer test
     // we set the above variables. At the end of the method, we actually set the timer
 	
 
-	if (left_p && left_p) left_p->scheduleTimerEvents(target);
+	if (left_p) left_p->scheduleTimerEvents(target);
 
     // clauses like (machine.TIMER >= 10)
     if (left_p
@@ -225,15 +226,23 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
     //TBD there is an issue with testing current_time <= scheduled_time because there may have been some
     // processing delays and current time may already be a little > scheduled time. This is especially
     // true on slow clock cycles. For now we reschedule the trigger for up to 2ms past the necessary time.
-    if (current_time <= (scheduled_time + 4)) {
+    //if (current_time <= (scheduled_time + 1)) {
+		
 		long t = (scheduled_time - current_time) * 1000;
-		if (t<4000) t = 4000;
-				DBG_SCHEDULER << "Scheduling item for " << t << "\n";
+		if (t > 0) {
+				//if (t<1000) t = 1000;
+				DBG_SCHEDULER << "Predicate scheduling item for " << t << "\n";
 				std::string trigger_name("Timer ");
 				if (target) trigger_name += target->getName();
         Trigger *trigger = new Trigger(trigger_name);
         Scheduler::instance()->add(new ScheduledItem( t, new FireTriggerAction(target, trigger)));
         trigger = trigger->release();
+		}
+		// to allow for the above processing delays we keep the target runnable
+		else if (t >= -2000) {
+			ProcessingThread::activate(target);
+		}
+#if 0
     }
     else if (scheduled_time > 0) {
 		struct timeval now;
@@ -243,6 +252,7 @@ void Predicate::scheduleTimerEvents(MachineInstance *target) // setup timer even
         DBG_SCHEDULER << "no event scheduled for " << ( (target)?target->getName() : "unknown" ) 
 			<< ".  over time by " << (int64_t)(current_time - scheduled_time)  << ". last eval: " << delta << "\n";
     }
+#endif
     if (right_p) right_p->scheduleTimerEvents(target);
 }
 

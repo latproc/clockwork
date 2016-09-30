@@ -74,7 +74,7 @@ uint64_t clockwork_watchdog_timer = 0;
 
 extern void handle_io_sampling(uint64_t clock);
 
-#define KEEPSTATS
+//#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
 
@@ -140,8 +140,8 @@ public:
 };
 
 ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface) {
-	ProcessingThread *pt = new ProcessingThread(m, activator,cmd_interface);
-	return *pt;
+	if (!instance_) instance_ = new ProcessingThread(m, activator,cmd_interface);
+	return *instance_;
 }
 
 ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface)
@@ -458,7 +458,7 @@ static void setStatus(ProcessingThread::Status &s, Watchdog &wd, const Processin
 }
 #endif
 
-ProcessingThread *instance_ = 0;
+ProcessingThread *ProcessingThread::instance_ = 0;
 ProcessingThread *ProcessingThread::instance() {
 	return instance_;
 }
@@ -647,7 +647,16 @@ void ProcessingThread::operator()()
 			internals->process_manager.SetTime(curr_t);
 
 			//machines_have_work = MachineInstance::workToDo();
-			machines_have_work = !runnable.empty();
+			{
+				static size_t last_runnable_count = 0;
+				boost::mutex::scoped_lock(runnable_mutex);
+				machines_have_work = !runnable.empty();
+				size_t runnable_count = runnable.size();
+				if (runnable_count != last_runnable_count) {
+					DBG_MSG << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
+					last_runnable_count = runnable_count;
+				}
+			}
 			if (machines_have_work)
 				poll_wait = 0;
 			else {
@@ -677,7 +686,7 @@ void ProcessingThread::operator()()
 		avg_poll_time.update();
 #endif
 
-#if 1
+#if 0
 		// debug code to work out what machines or systems tend to need processing
 		{
 			if (systems_waiting > 0 || !io_work_queue.empty() || (machines_have_work || processing_state != eIdle || status != e_waiting) ) {
@@ -739,7 +748,7 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
-			NB_MSG << " processing io changes\n";
+			DBG_MSG << " processing io changes\n";
 #ifdef KEEPSTATS
 			AutoStat stats(avg_iowork_time);
 #endif
@@ -776,7 +785,7 @@ void ProcessingThread::operator()()
 #ifdef KEEPSTATS
 				AutoStat stats(avg_cmd_processing);
 #endif
-				NB_MSG << "Processing: incoming data from client\n";
+				//NB_MSG << "Processing: incoming data from client\n";
 				size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
 				if (len) status = e_waiting_cmd;
 			}
@@ -794,7 +803,7 @@ void ProcessingThread::operator()()
 			}
 		}
 		if (status == e_handling_dispatch) {
-			NB_MSG << " processing dispatcher\n";
+			DBG_MSG << " processing dispatcher\n";
 			if (processing_state != eIdle) {
 				// cannot process dispatch events at present
 				status = e_waiting;
@@ -1001,7 +1010,7 @@ void ProcessingThread::operator()()
 					}
 
 					if (!to_process.empty()) {
-						NB_MSG << "processing machines\n";
+						//NB_MSG << "processing machines\n";
 						MachineInstance::processAll(to_process, 150000, MachineInstance::NO_BUILTINS);
 					}
 					processing_state = eStableStates;
@@ -1026,7 +1035,7 @@ void ProcessingThread::operator()()
 					}
 
 					if (!to_process.empty()) {
-						NB_MSG << "processing stable states\n";
+						DBG_MSG << "processing stable states\n";
 						MachineInstance::checkStableStates(to_process, 150000);
 					}
 					if (i<num_loops-1)

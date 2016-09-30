@@ -250,36 +250,6 @@ void StableState::triggerFired(Trigger *trig) {
 	if (owner) owner->setNeedsCheck();
 }
 
-#if 0
-// TBD This method isn't used in the current code
-void StableState::refreshTimer() {
-	// prepare a new trigger. note: very short timers will still be scheduled
-	trigger = new Trigger("SSRefreshTimer");
-	long trigger_time;
-
-	// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
-	//   we should trigger at v.iValue+1
-	if (timer_val.kind == Value::t_symbol) {
-		Value v = owner->getValue(timer_val.sValue);
-		if (v.kind != Value::t_integer) {
-			NB_MSG << owner->getName() << " Error: timer value for state " << state_name << " is not numeric\n";
-			NB_MSG << "timer_val: " << timer_val << " lookup value: " << v << " type: " << v.kind << "\n";
-			return;
-		}
-		else
-			trigger_time = v.iValue;
-	}
-	else if (timer_val.kind == Value::t_integer)
-		trigger_time = timer_val.iValue;
-	else {
-		DBG_SCHEDULER << owner->getName() << " Warning: timer value for state " << state_name << " is not numeric\n";
-		NB_MSG << "timer_val: " << timer_val << " type: " << timer_val.kind << "\n";
-		return;
-	}
-	DBG_SCHEDULER << owner->getName() << " Scheduling timer for " << timer_val*1000 << "us\n";
-	Scheduler::instance()->add(new ScheduledItem(trigger_time*1000, new FireTriggerAction(owner, trigger)));
-}
-#endif
 std::map<std::string, MachineInstance*> machines;
 std::map<std::string, MachineClass*> machine_classes;
 
@@ -2237,9 +2207,13 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				trigger_name += _name;
 				trigger_name += " ";
 				trigger_name += s.state_name;
-				if (s.trigger) s.trigger->release();
-				s.trigger = new Trigger(trigger_name);
-				Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, s.trigger)));
+				if (s.trigger) { s.trigger->release(); s.trigger = 0; }
+				if (timer_val > 0) {
+					s.trigger = new Trigger(trigger_name);
+					Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, s.trigger)));
+				}
+				else if (timer_val >= -2)
+					ProcessingThread::activate(this);
 			}
 			if (s.subcondition_handlers) 
 			{
@@ -2297,9 +2271,14 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 							}
 							if (timer_val < LONG_MAX) {
 								ch.timer_val = timer_val;
-								DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
-								ch.trigger = new Trigger("SubconditionTimer");
-								Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
+								if (timer_val > 0) {
+									DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
+									ch.trigger = new Trigger("SubconditionTimer");
+									Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
+								}
+								else if (timer_val >= -2) {
+									ProcessingThread::activate(this);
+								}
 							}
 
 						}
@@ -2976,7 +2955,7 @@ void MachineInstance::stop(Action *a) {
 	//	active_actions.pop_back();
 	//    a->release();
 	if (!a->started()){
-		DBG_MSG << _name << " warning: action " << *a << " was stopped but not yet started\n";
+//		DBG_MSG << _name << " warning: action " << *a << " was stopped but not yet started\n";
 	}
 	a->setTrigger(0);
 	a->stop();
@@ -3429,6 +3408,11 @@ bool MachineInstance::setStableState() {
 								DBG_AUTOSTATES << "checking "
 								<< (*ch).condition.last_evaluation
 								<< "\n";
+								if (tracing() && isTraceable()) {
+									resetTemporaryStringStream();
+									ss << current_state.getName() <<"->" << s.state_name << " " << (*ch).condition;
+									setValue("TRACE", ss.str());
+								}
 								if (!ch->check(this)) ch->condition.predicate->scheduleTimerEvents(this);
 							}
 						}

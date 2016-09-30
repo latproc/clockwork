@@ -58,7 +58,6 @@ Action::Status FireTriggerAction::run() {
 		//DBG_MSG << owner->getName() << " trigger " << trigger->getName() << " fired while disabled\n";
 		//assert(trigger->fired());
 	}
-	cleanupTrigger();
 	status = Complete;
 	owner->stop(this);
 	return status;
