@@ -1,4 +1,11 @@
+Pulse MACHINE { 
+	on WHEN SELF IS off AND TIMER>=1000;
+	off DEFAULT;
+}
+flasher0 Pulse;
+
 FlasherOne MACHINE { 
+	inactive INITIAL; inactive WHEN SELF IS inactive;
 	on WHEN SELF IS on AND TIMER < 1000 OR SELF IS off AND TIMER>=1000;
 	off DEFAULT;
 }

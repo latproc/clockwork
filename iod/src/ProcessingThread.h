@@ -52,6 +52,7 @@ public:
 			zmq::socket_t &sched, zmq::socket_t &ecat_out);
 
     void waitForCommandProcessing(zmq::socket_t &resource_mgr);
+	static uint64_t programStartTime() { return instance()->program_start; }
 
 	std::set<MachineInstance*>::iterator begin() { return runnable.begin(); }
 	std::set<MachineInstance*>::iterator end() { return runnable.end(); }
@@ -63,6 +64,7 @@ private:
     ProcessingThread &operator=(const ProcessingThread &other);
 	HardwareActivation &activate_hardware;
 	IODCommandThread &command_interface;
+	uint64_t program_start;
 
 	boost::recursive_mutex runnable_mutex;
 	std::set<MachineInstance*> runnable;

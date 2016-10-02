@@ -36,12 +36,13 @@
 struct ScheduledItem {
 	Package *package;
 	Action *action;
-	struct timeval delivery_time;
+	uint64_t delivery_time;
 	// this operator produces a reverse ordering because the standard priority queue is a max value queue.
 	bool operator<(const ScheduledItem& other) const;
 	bool operator>=(const ScheduledItem& other) const;
-	ScheduledItem(long when, Package *p);
-	ScheduledItem(long when, Action *a);
+	ScheduledItem(long delay, Package *p);
+	ScheduledItem(long delay, Action *a);
+	ScheduledItem(uint64_t starting, long delay, Action *a);
 	~ScheduledItem();
     std::ostream &operator <<(std::ostream &out) const;
 
@@ -85,7 +86,7 @@ public:
 	void add(ScheduledItem*);
 	ScheduledItem *next() const;
 	void pop();
-	bool ready();
+	bool ready(uint64_t start);
     void idle();
 	bool empty() { return items.empty(); }
     int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
@@ -94,7 +95,8 @@ public:
 	void operator()();
 	void stop();
 	int64_t getNextDelay();
-    
+	int64_t getNextDelay(uint64_t start);
+
 protected:
 	SchedulerInternals *internals;
     Scheduler();
@@ -102,7 +104,7 @@ protected:
 	static Scheduler *instance_;
     //std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
     PriorityQueue items;
-	struct timeval next_time;
+	uint64_t next_time;
 	enum State { 
 		e_waiting,  // waiting for something to do
 		e_have_work, // new items have been pushed and need to be checked
@@ -113,7 +115,7 @@ protected:
 	zmq::socket_t update_sync;
 	zmq::socket_t *update_notify;
 	long next_delay_time;
-	unsigned long notification_sent; // the scheduler has been notified that an item is scheduled
+	uint64_t notification_sent; // the scheduler has been notified that an item is scheduled
 
 	friend class PriorityQueue;
 };

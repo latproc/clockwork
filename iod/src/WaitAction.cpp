@@ -79,7 +79,10 @@ Action::Status WaitAction::run() {
 		char buf[100]; snprintf(buf, 100, "%s WaitTimer", owner->getName().c_str());
 		trigger = new Trigger(buf);
 		trigger->addHolder(this);
-		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, trigger)));
+		if (owner->getName() == "trans")
+			int x = 1;
+		FireTriggerAction *fta = new FireTriggerAction(owner, trigger);
+		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, fta));
 		assert(!trigger->fired());
 		if (use_property) wait_time = -1; // next time, find the property value again
 	}

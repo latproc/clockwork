@@ -125,6 +125,11 @@ Action::Action(MachineInstance *m)
 saved_status(Running), blocked(0), trigger(0), started_(false), timeout_msg(0), error_msg(0) {
 }
 
+Action::Action(MachineInstance *m, Trigger *t)
+: refs(1), owner(m), error_str(""), result_str(""), status(New),
+saved_status(Running), blocked(0), trigger(t), started_(false), timeout_msg(0), error_msg(0) {
+}
+
 
 Action::Status Action::getStatus() { return status; }
 Action *Action::blocker() { return blocked; }

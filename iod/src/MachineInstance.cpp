@@ -2164,6 +2164,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		   unsigned long ealiestTimer = (unsigned long) -1L;
 		 */
 
+		uint64_t stable_state_timer_base = microsecs();
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 			StableState &s = stable_states[ss_idx];
 			if (s.uses_timer) {
@@ -2210,7 +2211,10 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				if (s.trigger) { s.trigger->release(); s.trigger = 0; }
 				if (timer_val > 0) {
 					s.trigger = new Trigger(trigger_name);
-					Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, s.trigger)));
+					if (getName() == "trans")
+						int x = 1;
+					FireTriggerAction *fta = new FireTriggerAction(this, s.trigger);
+					Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
 				}
 				else if (timer_val >= -2)
 					ProcessingThread::activate(this);
@@ -2273,8 +2277,11 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 								ch.timer_val = timer_val;
 								if (timer_val > 0) {
 									DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
+									if (_name == "trans")
+										int x = 1;
 									ch.trigger = new Trigger("SubconditionTimer");
-									Scheduler::instance()->add(new ScheduledItem(timer_val*1000, new FireTriggerAction(this, ch.trigger)));
+									FireTriggerAction *fta = new FireTriggerAction(this, ch.trigger);
+									Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
 								}
 								else if (timer_val >= -2) {
 									ProcessingThread::activate(this);
@@ -3393,7 +3400,7 @@ bool MachineInstance::setStableState() {
 						free(sn);
 					}
 					else {
-						DBG_AUTOSTATES << " already there\n";
+						DBG_AUTOSTATES << _name << " is already in " << s.state_name << " checking subconditions\n";
 						// reschedule timer triggers for this state
 						if (s.uses_timer) {
 							DBG_SCHEDULER << _name << " should retrigger timer for " << s.state_name << "("<<s.timer_val<< ")"<< "\n";

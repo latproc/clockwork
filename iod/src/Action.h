@@ -94,6 +94,7 @@ private:
 class Action : public TriggerOwner {
 public:
 	Action(MachineInstance *m = 0);
+	Action(MachineInstance *m, Trigger *t);
 	virtual ~Action();
 
     Action*retain() { ++refs; return this; }

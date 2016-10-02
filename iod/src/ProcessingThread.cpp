@@ -146,8 +146,9 @@ ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActi
 
 ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator, IODCommandThread &cmd_interface)
 : internals(0), machine(*m), status(e_waiting),
-	activate_hardware(activator), command_interface(cmd_interface)
+activate_hardware(activator), command_interface(cmd_interface), program_start(0)
 {
+	program_start = microsecs();
 	internals = new ProcessingThreadInternals();
 }
 

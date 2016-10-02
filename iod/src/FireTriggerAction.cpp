@@ -69,8 +69,10 @@ Action::Status FireTriggerAction::checkComplete() {
 }
 
 std::ostream& FireTriggerAction::operator<<(std::ostream &out) const {
-	out << owner->getName() << " FireTrigger Action " << ((trigger) ? trigger->getName() : "(no trigger)")  << ","
-		<< " enabled: " << ((trigger) ? trigger->enabled() : false)  << ","
+	Trigger *t = trigger;
+	if (!t) t = pending_trigger;
+	out << owner->getName() << " FireTrigger Action " << ((t) ? t->getName() : "(no trigger)")  << ","
+		<< " enabled: " << ((t) ? t->enabled() : false)  << ","
 		<< " status: " << status  << ","
         << " owner: " << owner->getName()  << ","
 		<< " owner state: " << owner->getCurrent().getName();
