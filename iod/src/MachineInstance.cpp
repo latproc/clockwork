@@ -162,15 +162,29 @@ bool ConditionHandler::check(MachineInstance *machine) {
 			std::cerr << machine->getName() << " error: flag " << flag_name << " not found\n";
 		else {
 			if (condition(machine)) {
-				const State *on = flag->state_machine->findState("on");
-				if (!flag->isActive()) flag->setState(*on);
-				else {
-					// execute this state change once all other actions are complete
-					SetStateActionTemplate ssat("SELF", "on" );
-					flag->enqueueAction(ssat.factory(flag));
+				if (strcmp("on", flag->getCurrentStateString())) {
+					if (tracing() && machine->isTraceable()) {
+						machine->resetTemporaryStringStream();
+						machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
+						machine->setValue("TRACE", machine->ss.str());
+					}
+					const State *on = flag->state_machine->findState("on");
+					if (!flag->isActive()) {
+						flag->setState(*on);
+					}
+					else {
+						// execute this state change once all other actions are complete
+						SetStateActionTemplate ssat("SELF", "on" );
+						flag->enqueueAction(ssat.factory(flag));
+					}
 				}
 			}
-			else {
+			else if (strcmp("off", flag->getCurrentStateString())) {
+				if (tracing() && machine->isTraceable()) {
+					machine->resetTemporaryStringStream();
+					machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
+					machine->setValue("TRACE", machine->ss.str());
+				}
 				const State *off = flag->state_machine->findState("off");
 				if (!flag->isActive()) flag->setState(*off);
 				else {

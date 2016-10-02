@@ -393,6 +393,7 @@ void Scheduler::idle() {
 				delete item;
 				++items_found;
 			}
+			last_poll = nowMicrosecs();
 			is_ready = ready(last_poll);
 		}
 		//if (items_found)

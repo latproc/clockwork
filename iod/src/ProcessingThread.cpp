@@ -74,7 +74,7 @@ uint64_t clockwork_watchdog_timer = 0;
 
 extern void handle_io_sampling(uint64_t clock);
 
-//#define KEEPSTATS
+#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
 
@@ -320,7 +320,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 									ecat_sync.recv(&message);
 									size_t msglen = message.size();
 #if VERBOSE_DEBUG
-DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
+									DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 #endif
 									assert(msglen == incoming_data_size);
 									if (!incoming_process_mask) incoming_process_mask = new uint8_t[msglen];
@@ -618,7 +618,6 @@ void ProcessingThread::operator()()
 		char buf[100];
 		int poll_wait = internals->cycle_delay / 1000; // millisecs
 		machine_check_delay = internals->cycle_delay / 5;
-		//if (poll_wait == 0) poll_wait = 1;
 		uint64_t curr_t = 0;
 		int systems_waiting = 0;
 		uint64_t last_sample_poll = 0;
@@ -654,15 +653,13 @@ void ProcessingThread::operator()()
 				machines_have_work = !runnable.empty();
 				size_t runnable_count = runnable.size();
 				if (runnable_count != last_runnable_count) {
-					DBG_MSG << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
+					//DBG_MSG << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
 					last_runnable_count = runnable_count;
 				}
 			}
 			if (machines_have_work)
 				poll_wait = 0;
 			else {
-				//poll_wait = internals->cycle_delay / 1000;
-				//if (poll_wait == 0) poll_wait = 10;
 				poll_wait = 100;
 			}
 
@@ -671,14 +668,12 @@ void ProcessingThread::operator()()
 			systems_waiting = pollZMQItems(poll_wait, items, 6 + internals->channel_sockets.size(), 
 				ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 
-			//if (systems_waiting > 0 || status == e_waiting) break;
-			//if (curr_t - last_checked_machines > machine_check_delay || machines_have_work ) break;
-			if (systems_waiting > 0 || machines_have_work) break;
+			if (systems_waiting > 0 || (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) break;
 			if (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
 			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
 #ifdef KEEPSTATS
 			avg_poll_time.update();
-			usleep(10);
+			usleep(1);
 			avg_poll_time.start();
 #endif
 		}
@@ -695,7 +690,6 @@ void ProcessingThread::operator()()
 					<< ( (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
 					<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
 					<< ( (!io_work_queue.empty()) ? " io work" : "")
-					//<< ( (curr_t - last_checked_machines > machine_check_delay && machines_have_work) ? " machines" : "")
 					<< ( (machines_have_work) ? " machines" : "")
 					<< ( (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
 					<< "\n";
@@ -768,6 +762,7 @@ void ProcessingThread::operator()()
 				AutoStat stats(avg_plugin_time);
 #endif
 				MachineInstance::checkPluginStates();
+				last_checked_plugins = curr_t;
 			}
 		}
 		else last_checked_plugins = curr_t;
@@ -983,7 +978,8 @@ void ProcessingThread::operator()()
 			status = e_waiting_sched;
 		}
 
-		if (status == e_waiting && curr_t - last_checked_machines >= machine_check_delay && machine_is_ready && machines_have_work )
+		if (status == e_waiting && machine_is_ready 
+			&& machines_have_work && curr_t - last_checked_machines >= machine_check_delay)
 		{
 
 			if (processing_state == eIdle)
@@ -1011,7 +1007,7 @@ void ProcessingThread::operator()()
 					}
 
 					if (!to_process.empty()) {
-						//NB_MSG << "processing machines\n";
+						DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
 						MachineInstance::processAll(to_process, 150000, MachineInstance::NO_BUILTINS);
 					}
 					processing_state = eStableStates;
@@ -1036,7 +1032,7 @@ void ProcessingThread::operator()()
 					}
 
 					if (!to_process.empty()) {
-						DBG_MSG << "processing stable states\n";
+						DBG_SCHEDULER << "processing stable states\n";
 						MachineInstance::checkStableStates(to_process, 150000);
 					}
 					if (i<num_loops-1)
@@ -1064,7 +1060,9 @@ void ProcessingThread::operator()()
 			if (update_state == s_update_idle) {
 				IOUpdate *upd = 0;
 				if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
+#if VERBOSE_DEBUG
 					std::cout << "Sending defaults to EtherCAT\n";
+#endif
 					upd = IOComponent::getDefaults();
 					assert(upd);
 #if VERBOSE_DEBUG

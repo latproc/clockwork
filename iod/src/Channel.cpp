@@ -2099,7 +2099,10 @@ void Channel::enableShadows() {
 			if ( (isClient() && authority == machine_auth)
 				|| ( definition()->authority == machine_auth)) {
 				DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
-				channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+				if (channel_machines.count(ms) == 0) {
+					channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+					modified();
+				}
 				EnableActionTemplate ea(ms->getName().c_str());
 				enqueueAction(ea.factory(ms));
 			}
@@ -2115,7 +2118,10 @@ void Channel::enableShadows() {
 			if (isClient()) ms->requireAuthority(machine_auth);
 			if (authority == machine_auth) {
 				DBG_CHANNELS << "Channel " << name << " enabling shadow machine " << ms->getName() << "\n";
-				channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+				if (channel_machines.count(ms) == 0) {
+					channel_machines.insert(ms); // ensure the channel is linked to the shadow machine
+					modified();
+				}
 				EnableActionTemplate ea(ms->getName().c_str());
 				enqueueAction(ea.factory(ms));
 			}
@@ -2174,6 +2180,7 @@ void Channel::setupShadows() {
             if (!channel_machines.count(m)) {
                 m->publish();
                 channel_machines.insert(m);
+				modified();
             }
         }
         else if (m) {
@@ -2181,6 +2188,7 @@ void Channel::setupShadows() {
             // this machine is a shadow
 			DBG_MSG << "Channel " << name << " adding shadow machine " << m->getName() << "\n";
 			channel_machines.insert(m);
+			modified();
 			m->owner_channel = this;
         }
     }
@@ -2194,6 +2202,7 @@ void Channel::setupShadows() {
 			if (!channel_machines.count(m)) {
 				m->publish();
 				channel_machines.insert(m);
+				modified();
 			}
 		}
 		else if (m) {
@@ -2270,7 +2279,7 @@ void Channel::handleChannels() {
     while (iter != all->end()) {
         const std::pair<std::string, Channel *> &item = *iter++;
         Channel *chn = item.second;
-		chn->setupFilters();
+		    chn->setupFilters();
         chn->checkCommunications();
 		if (chn->throttledItemsReady(now)) {
 			chn->sendThrottledUpdates();
@@ -2382,7 +2391,6 @@ void Channel::setupAllShadows() {
 
 void Channel::setupFilters() {
 	if (last_modified < last_checked) return;
-    checked();
     // check if this channel monitors exports and if so, add machines that have exports
     if (definition()->monitors_exports || monitors_exports) {
         std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
@@ -2496,7 +2504,7 @@ void Channel::setupFilters() {
 
 	does_update = definition()->updates_names.empty();
 	does_share = definition()->shares_names.empty();
-
+	checked();
 }
 
 void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_iterator iter,
