@@ -718,7 +718,8 @@ bool SubscriptionManager::checkConnections() {
 		if (monit_setup->disconnected() && monit_subs.disconnected()) return false;
 	}
 	if (monit_setup->disconnected()) {
-		FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n"; 
+		FileLogger fl(program_name); fl.f() << "SubscriptionManager disconnected from server clockwork\n";
+		usleep(100);
 		return false;
 	}
 

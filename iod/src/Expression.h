@@ -64,6 +64,13 @@ struct Stack {
         Stack &operator=(const Stack&other);
 };
 
+struct PredicateTimerDetails {
+	int64_t delay;
+	std::string label;
+	PredicateTimerDetails(int64_t dly, const std::string &lbl) :  delay(dly), label(lbl) { }
+	void setup(int64_t dly, const std::string &lbl) { delay = dly; label = lbl; }
+};
+
 struct Predicate {
     Predicate *left_p;
     PredicateOperator op;
@@ -110,7 +117,7 @@ struct Predicate {
      */
 	bool usesTimer(Value &val) const; // recursively search for use of TIMER
     void findTimerClauses(std::list<Predicate*>&clauses);
-    void scheduleTimerEvents(MachineInstance *target); // setup timer events that trigger the supplied machine
+    PredicateTimerDetails *scheduleTimerEvents(PredicateTimerDetails *earliest, MachineInstance *target); // setup timer events that trigger the supplied machine
     void clearTimerEvents(MachineInstance *target); // clear all timer events scheduled for the supplid machine
     
     int priority; // used for the default predicate

@@ -24,6 +24,8 @@
 #include "IOComponent.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
+#include "Scheduler.h"
+#include "FireTriggerAction.h"
 
 uint64_t nowMicrosecs();
 
@@ -207,14 +209,22 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				State value(new_state.sValue.c_str());
 				if (owner->getStateMachine()->isStableState(value)) {
 					std::multimap<std::string, StableState>::iterator iter(owner->getStateMachine()->stable_state_xref.find(new_state.sValue));
+					PredicateTimerDetails *ptd = 0;
 					while (iter != owner->getStateMachine()->stable_state_xref.end()) {
 						const std::pair<std::string, StableState> &node(*iter++);
 						if (node.second.state_name != new_state.sValue) break;
 						if (node.second.uses_timer) {
 							DBG_SCHEDULER << owner->fullName() << "[" << owner->current_state.getName()
 							<< "] scheduling condition tests for state " << node.second.state_name << "\n";
-							node.second.condition.predicate->scheduleTimerEvents(owner);
+							ptd = node.second.condition.predicate->scheduleTimerEvents(ptd, owner);
 						}
+					}
+					if (ptd) {
+						Trigger *trigger = new Trigger(ptd->label);
+						FireTriggerAction *fta = new FireTriggerAction(owner, trigger);
+						Scheduler::instance()->add(new ScheduledItem(ptd->delay, fta));
+						trigger->release();
+						delete ptd;
 					}
 				}
 

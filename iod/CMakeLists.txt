@@ -11,7 +11,7 @@ set (CMAKE_VERBOSE_MAKEFILE false)
 set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++11-extensions -Wno-unused-variable -Wno-deprecated-register")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEEPSTATS")
+#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEEPSTATS")
 #set (CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
 set (CMAKE_CXX_FLAGS_DEBUG "-g ")
 set (CMAKE_CXX_FLAGS_RELEASE "-O")
@@ -189,7 +189,7 @@ ${ETHERCAT_DIR}/tool/CommandEoe.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
-#${ETHERCAT_DIR}/tool/CommandIp.cpp
+${ETHERCAT_DIR}/tool/CommandIp.cpp
 ${ETHERCAT_DIR}/tool/CommandMaster.cpp
 ${ETHERCAT_DIR}/tool/CommandPdos.cpp
 ${ETHERCAT_DIR}/tool/CommandRegRead.cpp

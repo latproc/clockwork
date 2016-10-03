@@ -6,7 +6,7 @@ all:
 release:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make 
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make -j 3
 
 
 debug:

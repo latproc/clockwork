@@ -74,7 +74,7 @@ uint64_t clockwork_watchdog_timer = 0;
 
 extern void handle_io_sampling(uint64_t clock);
 
-#define KEEPSTATS
+//#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
 
@@ -817,7 +817,7 @@ void ProcessingThread::operator()()
 			}
 		}
 
-		if (status == e_waiting) {
+		if (status == e_waiting && systems_waiting > 0) {
 			// check the command interface and any command channels for activity
 			bool have_command = false;
 			if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {

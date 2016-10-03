@@ -2173,16 +2173,14 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				ma.update(this, 1);
 			}
 		}
-		/* TBD optimise the timer triggers to only schedule the earliest trigger
-		   StableState *earliestTimerState = NULL;
-		   unsigned long ealiestTimer = (unsigned long) -1L;
-		 */
+		/* TBD optimise the timer triggers to only schedule the earliest trigger */
+		StableState *earliestTimerState = NULL;
+		int64_t earliestTimer = (unsigned long) 100000000L;
 
 		uint64_t stable_state_timer_base = microsecs();
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 			StableState &s = stable_states[ss_idx];
 			if (s.uses_timer) {
-				long timer_val;
 				// first disable any trigger that may still be enabled
 				if ( s.trigger) {
 					DBG_M_SCHEDULER << _name << " clearing trigger for state " << s.state_name << "\n";
@@ -2193,6 +2191,8 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 					s.trigger = s.trigger->release();
 				}
 				s.condition.predicate->clearTimerEvents(this);
+
+				int64_t timer_val;
 
 				// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
 				//   we should trigger at v.iValue+1
@@ -2215,25 +2215,14 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				}
 				if (s.condition.predicate->op == opGT) timer_val++;
 				else if (s.condition.predicate->op == opLT) --timer_val;
-				DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
-				// prepare a new trigger. note: very short timers will still be scheduled
-				// TBD move this outside of the loop and only apply it for the earliest timer
-				std::string trigger_name("SSTimer ");
-				trigger_name += _name;
-				trigger_name += " ";
-				trigger_name += s.state_name;
-				if (s.trigger) { s.trigger->release(); s.trigger = 0; }
-				if (timer_val > 0) {
-					s.trigger = new Trigger(trigger_name);
-					if (getName() == "trans")
-						int x = 1;
-					FireTriggerAction *fta = new FireTriggerAction(this, s.trigger);
-					Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
+
+				if (timer_val < earliestTimer || earliestTimerState == 0) {
+					earliestTimerState = &s;
+					earliestTimer = timer_val;
 				}
-				else if (timer_val >= -2)
-					ProcessingThread::activate(this);
+
 			}
-			if (s.subcondition_handlers) 
+			if (s.subcondition_handlers)
 			{
 				std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 				while (iter != s.subcondition_handlers->end()) {
@@ -2241,7 +2230,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 					//setup triggers for subcondition handlers
 
 					if (ch.uses_timer) {
-						long timer_val;
+						int64_t timer_val;
 						ch.reset();
 						if (s.state_name == current_state.getName()) {
 							// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
@@ -2287,7 +2276,11 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 									continue;
 								}
 							}
-							if (timer_val < LONG_MAX) {
+							if (timer_val < LONG_MAX && timer_val < earliestTimer) {
+								earliestTimerState = &s;
+								earliestTimer = timer_val;
+							}
+#if 0
 								ch.timer_val = timer_val;
 								if (timer_val > 0) {
 									DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
@@ -2301,7 +2294,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 									ProcessingThread::activate(this);
 								}
 							}
-
+#endif
 						}
 					}
 					else if (ch.command_name == "FLAG") {
@@ -2311,6 +2304,28 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 					}
 				}
 			}
+		}
+		if (earliestTimerState) {
+			StableState s(*earliestTimerState);
+			int64_t timer_val = earliestTimer;
+
+			DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
+			// prepare a new trigger. note: very short timers will still be scheduled
+			// TBD move this outside of the loop and only apply it for the earliest timer
+			std::string trigger_name("SSTimer ");
+			trigger_name += _name;
+			trigger_name += " ";
+			trigger_name += s.state_name;
+			if (s.trigger) { s.trigger->release(); s.trigger = 0; }
+			if (timer_val > 0) {
+				s.trigger = new Trigger(trigger_name);
+				if (getName() == "trans")
+					int x = 1;
+				FireTriggerAction *fta = new FireTriggerAction(this, s.trigger);
+				Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
+			}
+			else if (timer_val >= -2)
+				ProcessingThread::activate(this);
 		}
 
 
@@ -3366,6 +3381,7 @@ bool MachineInstance::setStableState() {
 		bool found_match = false;
 		const long MAX_TIMER = 100000000L;
 		long next_timer = MAX_TIMER; // during the search, we find the shortest timer value and schedule a wake-up
+		PredicateTimerDetails *ptd = 0;
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 			StableState &s = stable_states[ss_idx];
 			// the following test should be enabled but there is currently a situation that 
@@ -3434,13 +3450,13 @@ bool MachineInstance::setStableState() {
 									ss << current_state.getName() <<"->" << s.state_name << " " << *ch->condition.predicate;
 									setValue("TRACE", ss.str());
 								}
-								if (!ch->check(this)) ch->condition.predicate->scheduleTimerEvents(this);
+								if (!ch->check(this)) ptd = ch->condition.predicate->scheduleTimerEvents(ptd, this);
 							}
 						}
 						if (s.uses_timer) {
 							DBG_SCHEDULER << _name << "[" << current_state.getName()
 							<< "] scheduling condition tests for state " << s.state_name << "\n";
-							s.condition.predicate->scheduleTimerEvents(this);
+							ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
 						}
 					}
 					found_match = true;
@@ -3451,7 +3467,7 @@ bool MachineInstance::setStableState() {
 					if (s.uses_timer) {
 						DBG_SCHEDULER << _name  << "[" << current_state.getName() 
 							<< "] scheduling condition tests for state " << s.state_name << "\n";
-						s.condition.predicate->scheduleTimerEvents(this);
+						ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
 						//Value v = s.timer_val;
 						// there is a bug here; if the timer used in this state is on a different machine
 						// the schedule we generate has to be based on the timer of the other machine.
@@ -3489,7 +3505,8 @@ bool MachineInstance::setStableState() {
 						MachineInstance *flag = lookup(ch.flag_name);
 						if (flag) {
 							const State *s = flag->state_machine->findState("off");
-							flag->setState(*s);
+							if (strcmp("off", flag->getCurrentStateString()))
+								flag->setState(*s);
 						}
 						else
 							std::cerr << _name << " error: flag " << ch.flag_name << " not found\n"; 
@@ -3497,19 +3514,16 @@ bool MachineInstance::setStableState() {
 				}
 			}
 		}
-	}
-#if 0
-	if (!needs_check) { BOOST_FOREACH(Transmitter *t, listens) {
-		MachineInstance *m = dynamic_cast<MachineInstance *>(t);
-		if (m && m!= this && m->state_machine && m->state_machine-> allow_auto_states && m->needs_check) {
-			DBG_M_AUTOSTATES << _name << " waiting for " << m->getName() << " to stablize \n";
-			//needs_check = true;
-			return;
+		if (ptd) {
+			Trigger *trigger = new Trigger(ptd->label);
+			FireTriggerAction *fta = new FireTriggerAction(this, trigger);
+			Scheduler::instance()->add(new ScheduledItem(ptd->delay, fta));
+			trigger->release();
+			delete ptd;
 		}
-	}}
-#endif
-	return changed_state;
 	}
+	return changed_state;
+}
 
 void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	//if (state_machine) return;
