@@ -50,6 +50,7 @@ struct TriggerOwner {
 class Trigger {
 public:
 	Trigger(const std::string &n);
+	Trigger(TriggerOwner *, const std::string &n);
 
 	virtual ~Trigger();
 	Trigger*retain();
@@ -70,6 +71,8 @@ public:
 	uint64_t startTime();
 	void report(const char *message);
 	int getRefs() { return refs; }
+
+  std::ostream & operator<<(std::ostream &out) const;
 	
 protected:
 	TriggerInternals *_internals;
@@ -87,6 +90,7 @@ private:
 	Trigger(const Trigger &o);
 	Trigger &operator=(const Trigger &o);
 };
+std::ostream &operator<<(std::ostream &out, const Trigger &t);
 
 // an action is started by operator(). If the action successfully starts, 
 // running() will return true. When the action is complete, complete() will

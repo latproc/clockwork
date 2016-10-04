@@ -915,9 +915,11 @@ void RateEstimatorInstance::idle() {
 		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
 			setValue("VALUE", pos);
 		if (pos != settings->last_pos || settings->velocity) {
-			Trigger *trigger = new Trigger("RateEstimatorTimer");
-			Scheduler::instance()->add(
-				new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
+			Trigger *trigger = new Trigger(this, "RateEstimatorTimer");
+			Scheduler::instance()->add(new ScheduledItem(10000, trigger));
+
+			//Scheduler::instance()->add(
+			//	new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
 			trigger->release();
 		}
 		settings->last_pos = pos;
@@ -2286,7 +2288,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 									DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
 									if (_name == "trans")
 										int x = 1;
-									ch.trigger = new Trigger("SubconditionTimer");
+									ch.trigger = new Trigger(this, "SubconditionTimer");
 									FireTriggerAction *fta = new FireTriggerAction(this, ch.trigger);
 									Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
 								}
@@ -2318,11 +2320,10 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			trigger_name += s.state_name;
 			if (s.trigger) { s.trigger->release(); s.trigger = 0; }
 			if (timer_val > 0) {
-				s.trigger = new Trigger(trigger_name);
-				if (getName() == "trans")
-					int x = 1;
-				FireTriggerAction *fta = new FireTriggerAction(this, s.trigger);
-				Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
+				s.trigger = new Trigger(this, trigger_name);
+				//FireTriggerAction *fta = new FireTriggerAction(this, s.trigger);
+				//Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
+				Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, s.trigger));
 			}
 			else if (timer_val >= -2)
 				ProcessingThread::activate(this);
@@ -3515,9 +3516,10 @@ bool MachineInstance::setStableState() {
 			}
 		}
 		if (ptd) {
-			Trigger *trigger = new Trigger(ptd->label);
-			FireTriggerAction *fta = new FireTriggerAction(this, trigger);
-			Scheduler::instance()->add(new ScheduledItem(ptd->delay, fta));
+			Trigger *trigger = new Trigger(this, ptd->label);
+			//FireTriggerAction *fta = new FireTriggerAction(this, trigger);
+			//Scheduler::instance()->add(new ScheduledItem(ptd->delay, fta));
+			Scheduler::instance()->add(new ScheduledItem(ptd->delay, trigger));
 			trigger->release();
 			delete ptd;
 		}
@@ -3738,7 +3740,7 @@ Trigger *MachineInstance::setupTrigger(const std::string &machine_name, const st
 	trigger_name += message;
 	trigger_name += suffix;
 	DBG_M_MESSAGING << _name << " is waiting for message " << trigger_name << " from " << machine_name << "\n";
-	return new Trigger(trigger_name);
+	return new Trigger(this, trigger_name);
 }
 
 const Value *MachineInstance::resolve(std::string property) {

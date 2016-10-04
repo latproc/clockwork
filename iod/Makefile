@@ -8,6 +8,8 @@ release:
 	[ -d "build/Release" ] || mkdir build/Release
 	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make -j 3
 
+release-install:
+	cd build/Release && make install
 
 debug:
 	[ -d "build" ] || mkdir build

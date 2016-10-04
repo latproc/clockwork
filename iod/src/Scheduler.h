@@ -36,13 +36,16 @@
 struct ScheduledItem {
 	Package *package;
 	Action *action;
+	Trigger *trigger;
 	uint64_t delivery_time;
 	// this operator produces a reverse ordering because the standard priority queue is a max value queue.
 	bool operator<(const ScheduledItem& other) const;
 	bool operator>=(const ScheduledItem& other) const;
 	ScheduledItem(long delay, Package *p);
 	ScheduledItem(long delay, Action *a);
+	ScheduledItem(long delay, Trigger *t);
 	ScheduledItem(uint64_t starting, long delay, Action *a);
+	ScheduledItem(uint64_t starting, long delay, Trigger *t);
 	~ScheduledItem();
     std::ostream &operator <<(std::ostream &out) const;
 

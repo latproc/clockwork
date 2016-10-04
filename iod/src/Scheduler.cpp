@@ -77,7 +77,7 @@ std::string Scheduler::getStatus() {
 	ss << buf << "\n";
     std::list<ScheduledItem*>::const_iterator iter = items.queue.begin();
 	while (iter != items.queue.end()) {
-        ScheduledItem *item = *iter++;
+		ScheduledItem *item = *iter++;
 		ss << *item << "\n";
 	}
 	ss << std::ends;
@@ -150,30 +150,42 @@ bool PriorityQueue::check() const {
 	return true;
 }
 
-ScheduledItem::ScheduledItem(long delay, Package *p) :package(p), action(0) {
+ScheduledItem::ScheduledItem(long delay, Package *p) :package(p), action(0), trigger(0) {
 	delivery_time = calcDeliveryTime(delay);
 	DBG_SCHEDULER << "scheduled package: " << delivery_time << "\n";
 }
 
-ScheduledItem::ScheduledItem(long delay, Action *a) :package(0), action(a) {
+ScheduledItem::ScheduledItem(long delay, Action *a) :package(0), action(a), trigger(0) {
 	delivery_time = calcDeliveryTime(delay);
 	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
 }
 
-ScheduledItem::ScheduledItem(uint64_t starting, long delay, Action *a) : package(0), action(a) {
+ScheduledItem::ScheduledItem(long delay, Trigger *t) :package(0), action(0), trigger(t->retain()) {
+	delivery_time = calcDeliveryTime(delay);
+	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+}
+
+ScheduledItem::ScheduledItem(uint64_t starting, long delay, Action *a) : package(0), action(a), trigger(0) {
+	delivery_time = starting + delay;
+	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+}
+
+ScheduledItem::ScheduledItem(uint64_t starting, long delay, Trigger *t) : package(0), action(0), trigger(t->retain()) {
 	delivery_time = starting + delay;
 	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
 }
 
 
 ScheduledItem::~ScheduledItem() {
+	if (trigger) trigger->release();
+	trigger = 0;
 }
 
 std::ostream &ScheduledItem::operator <<(std::ostream &out) const {
 	uint64_t now = microsecs();
 	int64_t delta = delivery_time - now;
 	out << delivery_time << " (" << delta << ") ";
-	if (package) out << *package; else if (action) out << *action;
+	if (package) out << *package; else if (action) out << *action; else if (trigger) out << *trigger;
 	return out;
 }
 
@@ -259,29 +271,6 @@ void Scheduler::add(ScheduledItem*item) {
 	}
 #endif
 }
-
-/*
-std::ostream &Scheduler::operator<<(std::ostream &out) const  {
-    std::list<ScheduledItem*>::const_iterator iter = items.begin();
-	while (iter != items.queue.end()) {
-        ScheduledItem *item = *iter++;
-        struct timeval now;
-        gettimeofday(&now, 0);
-        long dt = get_diff_in_microsecs(&item->delivery_time, &now);
-		out << "Scheduler: {" << item->delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << item->delivery_time.tv_usec
-                << " (" << dt << "usec) }" << "\n  ";
-		if (item->package) out << *(item->package);
-		else if (item->action) out << *(item->action);
-        break;
-	}
-    out << " (" << items.size() << " items)\n";
-    return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
-    return m.operator<<(out);
-}
- */
 
 bool Scheduler::ready(uint64_t start) {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
@@ -380,7 +369,15 @@ void Scheduler::idle() {
 				pop();
 			}
 			next_time = 0;
-			if (item->package) {
+			if (item->trigger) {
+				if (item->trigger->enabled()) {
+					DBG_SCHEDULER << "Scheduler firing trigger " << item->trigger->getName() << "\n";
+					item->trigger->fire();
+				}
+				delete item;
+				++items_found;
+			}
+			else if (item->package) {
 				DBG_SCHEDULER << "Scheduler activating package on " << item->package->receiver->getName() << "\n";
 				item->package->receiver->handle(item->package->message, item->package->transmitter);
 				delete item->package;

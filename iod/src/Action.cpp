@@ -83,8 +83,14 @@ char *Trigger::getTriggers() {
 Trigger::Trigger(const std::string &n) : _internals(0), name(n), seen(false), owner(0),
 		deleted(false), refs(1), is_active(true) {
 	_internals = new TriggerInternals;
-	addTrigger(this); }
+	addTrigger(this);
+}
 
+Trigger::Trigger(TriggerOwner *own, const std::string &n): _internals(0), name(n), seen(false), owner(own),
+		deleted(false), refs(1), is_active(true) {
+	_internals = new TriggerInternals;
+	addTrigger(this);
+}
 
 Trigger::~Trigger() {
 	removeTrigger(this);
@@ -101,6 +107,14 @@ Trigger *Trigger::release() {
 	if (--refs == 0)
 		delete this;
 	return 0;
+}
+std::ostream & Trigger::operator<<(std::ostream &out) const {
+	out << "Trigger " << name << " fired: " << seen << " active: " << is_active;
+	return out;
+}
+
+std::ostream &operator<<(std::ostream &out, const Trigger &t) {
+	return t.operator<<(out);
 }
 
 void Trigger::setOwner(TriggerOwner *new_owner) { owner = new_owner; }
