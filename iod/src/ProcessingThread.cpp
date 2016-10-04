@@ -743,7 +743,7 @@ void ProcessingThread::operator()()
 
 		if (program_done) break;
 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
-			DBG_MSG << " processing io changes\n";
+			//DBG_MSG << " processing io changes\n";
 #ifdef KEEPSTATS
 			AutoStat stats(avg_iowork_time);
 #endif
@@ -799,7 +799,7 @@ void ProcessingThread::operator()()
 			}
 		}
 		if (status == e_handling_dispatch) {
-			DBG_MSG << " processing dispatcher\n";
+			//DBG_MSG << " processing dispatcher\n";
 			if (processing_state != eIdle) {
 				// cannot process dispatch events at present
 				status = e_waiting;
