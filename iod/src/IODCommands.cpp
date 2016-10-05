@@ -1211,7 +1211,11 @@ bool IODCommandChannels::run(std::vector<Value> &params) {
 	std::string result;
 	std::map<std::string, Channel*>::iterator iter = channels->begin();
 	while (iter != channels->end()) {
-		result += (*iter).first + " " + (*iter).second->getCurrentStateString() + "\n";
+		result += (*iter).first + " " + (*iter).second->getCurrentStateString()
+//			+ " " + ((*iter).second->doesMonitor() ? "M" : "")
+//			+ " " + ((*iter).second->doesShare() ? "S" : "")
+//			+ " " + ((*iter).second->doesUpdate() ? "U" : "")
+			+ "\n";
 		iter++;
 	}
 	result_str = result;

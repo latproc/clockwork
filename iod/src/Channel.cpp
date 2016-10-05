@@ -145,7 +145,7 @@ MachineRef::MachineRef() : refs(1) {
 MachineRecord::MachineRecord(MachineInstance *m) : machine(m), last_sent(0) {
 }
 
-ChannelImplementation::ChannelImplementation() : monitors_exports(false), authority(0) {
+ChannelImplementation::ChannelImplementation() : monitors_exports(false), last_modified(0), last_checked(0), authority(0) {
 	authority = random();
 }
 
@@ -1194,6 +1194,7 @@ void ChannelDefinition::instantiateInterfaces() {
 			MachineInstance *found = MachineInstance::find(instance_name.first.c_str());
 			if (!found) { // instantiate a shadow to represent this machine
 				if (item.second) {
+					DBG_CHANNELS << "instantiating shadow machine " << instance_name.second << "\n";
 					MachineInstance *m = MachineInstanceFactory::create(instance_name.first.c_str(),
 																		instance_name.second.asString().c_str(),
 																		MachineInstance::MACHINE_SHADOW);
@@ -1632,7 +1633,7 @@ bool Channel::patternMatches(const std::string &machine_name) {
     }
     return false;
 }
-/*
+
 bool Channel::doesUpdate() {
     return does_update;
 }
@@ -1645,9 +1646,11 @@ bool Channel::doesMonitor() {
 	if (!does_monitor) {
 		DBG_CHANNELS << name << " does not monitor machines\n";
 	}
+	else {
+		DBG_CHANNELS << name << " monitoring " << channel_machines.size() << " machines\n";
+	}
 	return does_monitor;
 }
-*/
 
 bool Channel::filtersAllow(MachineInstance *machine) {
 	if (!definition()->monitor_linked.empty() && ( machine->_type == "INPUTBIT" || machine->_type == "INPUTREGISTER") ) return false;
@@ -2391,6 +2394,7 @@ void Channel::setupAllShadows() {
 
 void Channel::setupFilters() {
 	if (last_modified < last_checked) return;
+	DBG_CHANNELS << name << " setting up filters\n";
     // check if this channel monitors exports and if so, add machines that have exports
     if (definition()->monitors_exports || monitors_exports) {
         std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
@@ -2502,8 +2506,8 @@ void Channel::setupFilters() {
 		  && ignores_patterns.empty()
 		  && monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty() );
 
-	does_update = definition()->updates_names.empty();
-	does_share = definition()->shares_names.empty();
+	does_update = !definition()->updates_names.empty();
+	does_share = !definition()->shares_names.empty();
 	checked();
 }
 
