@@ -650,14 +650,14 @@ void ProcessingThread::operator()()
 			{
 				static size_t last_runnable_count = 0;
 				boost::mutex::scoped_lock(runnable_mutex);
-				machines_have_work = !runnable.empty();
+				machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
 				size_t runnable_count = runnable.size();
 				if (runnable_count != last_runnable_count) {
 					//DBG_MSG << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
 					last_runnable_count = runnable_count;
 				}
 			}
-			if (machines_have_work)
+			if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty())
 				poll_wait = 0;
 			else {
 				poll_wait = 100;
