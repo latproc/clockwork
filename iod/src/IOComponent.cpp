@@ -32,6 +32,7 @@
 #include <ecrt.h>
 #endif
 #include "buffering.c"
+#include "ProcessingThread.h"
 
 #define VERBOSE_DEBUG 0
 
@@ -1001,6 +1002,7 @@ static uint8_t *generateUpdateMask() {
 	//std::cout << "generating mask\n";
 	if (updatedComponentsOut.empty()) return 0;
 
+	unsigned int min = IOComponent::getMinIOOffset();
 	unsigned int max = IOComponent::getMaxIOOffset();
 	uint8_t *res = new uint8_t[max+1];
 	memset(res, 0, max+1);
@@ -1199,6 +1201,7 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 					else evt = "off_leave";
 					std::list<MachineInstance*>::iterator owner_iter = owners.begin();
 					while (owner_iter != owners.end()) {
+            ProcessingThread::activate(*owner_iter);
 						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt, Message::LEAVEMSG)) );
 					}
 #endif
