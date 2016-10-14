@@ -113,6 +113,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				result_str = "OK";
 				status = Complete;
 				cleanupTrigger();
+        owner->stop(this);
 				return status;
 			}
 
@@ -195,7 +196,6 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 				owner->stop(this);
 			}
 			else {
-				if (trigger) trigger->release();
 				trigger = owner->setupTrigger(machine->getName(), value.getName(), "");
 			}
 			if (status == Action::Failed) {
