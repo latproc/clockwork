@@ -1,10 +1,30 @@
 # tests of exceptions
 #
 
+Logger MACHINE { RECEIVE test { LOG "test message received"; } }
+
+DisabledReceiverTest MACHINE {
+
+	logger Logger;
+
+	ENTER INIT {DISABLE logger; }
+
+	COMMAND test { SEND test TO logger }
+
+	RECEIVE DisabledMessageTargetException {
+		LOG "target was disabled"
+	}
+}
+
+
+drTest DisabledReceiverTest;
+
+	
+
 AbortTest MACHINE {
 	OPTION count 0;
 
-	tick WHEN SELF IS idle AND TIMER > 1000;
+	tick WHEN SELF IS idle AND TIMER >= 1000;
 	idle DEFAULT;
 
 ENTER tick {

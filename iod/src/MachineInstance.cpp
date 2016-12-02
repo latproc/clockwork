@@ -2805,6 +2805,8 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 					 _name.c_str(), m->getText().c_str(), r->getName().c_str());
 			MessageLog::instance()->add(buf);
 			DBG_MSG << buf << "\n";
+			Package *p = new Package(this, this, new Message("DisabledMessageTargetException"), false);
+			Dispatcher::instance()->deliver(p);
 		}
 	}
 }
@@ -3381,8 +3383,8 @@ bool MachineInstance::setStableState() {
 	else {
 		bool found_match = false;
 		const long MAX_TIMER = 100000000L;
-		long next_timer = MAX_TIMER; // during the search, we find the shortest timer value and schedule a wake-up
 		PredicateTimerDetails *ptd = 0;
+		StableState *active_state = 0;
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 			StableState &s = stable_states[ss_idx];
 			// the following test should be enabled but there is currently a situation that 
@@ -3390,9 +3392,10 @@ bool MachineInstance::setStableState() {
 			//		if ( (s.trigger && s.trigger->enabled() && s.trigger->fired() && s.condition(this) )
 			//			|| (!s.trigger && s.condition(this)) ) {
 			if (!found_match) {
-				if (s.condition(this)) {
+				bool ss_condition_true = s.condition(this);
+				if (ss_condition_true) {
 					DBG_M_PREDICATES << _name << "." << s.state_name <<" condition " << *s.condition.predicate << " returned true\n";
-					bool x = s.condition(this);
+					active_state = &s;
 					if (current_state.getName() != s.state_name) {
 						DBG_M_AUTOSTATES << " changing state\n";
 						changed_state = true;
@@ -3433,17 +3436,19 @@ bool MachineInstance::setStableState() {
 					else {
 						DBG_AUTOSTATES << _name << " is already in " << s.state_name << " checking subconditions\n";
 						// reschedule timer triggers for this state
+/*
 						if (s.uses_timer) {
 							DBG_SCHEDULER << _name << " should retrigger timer for " << s.state_name << "("<<s.timer_val<< ")"<< "\n";
 							Value v = getValue(s.timer_val.sValue);
 							if (v.kind == Value::t_integer && v.iValue < next_timer)
 								next_timer = v.iValue;
 						}
+*/
 						if (s.subcondition_handlers) {
 							std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 							while (iter != s.subcondition_handlers->end()) {
 								ConditionHandler *ch = &(*iter++);
-								DBG_AUTOSTATES << "checking "
+								DBG_AUTOSTATES << "checking subcondition: "
 								<< (*ch).condition.last_evaluation
 								<< "\n";
 								if (tracing() && isTraceable()) {
@@ -3461,7 +3466,7 @@ bool MachineInstance::setStableState() {
 						}
 					}
 					found_match = true;
-					continue; // skip to the end of the stable state loop
+					break; // skip to the end of the stable state loop
 				}
 				else {
 					DBG_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
@@ -3469,45 +3474,31 @@ bool MachineInstance::setStableState() {
 						DBG_SCHEDULER << _name  << "[" << current_state.getName() 
 							<< "] scheduling condition tests for state " << s.state_name << "\n";
 						ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
-						//Value v = s.timer_val;
-						// there is a bug here; if the timer used in this state is on a different machine
-						// the schedule we generate has to be based on the timer of the other machine.
-						//if (v.kind == Value::t_integer && v.iValue < next_timer) {
-						// we would like to say  next_timer = v.iValue; here but since we have already been in this
-						// state for some time we need to say:
-						//    Value current_timer = *getTimerVal();
-						//    next_timer = v.iValue - current_timer.iValue;
-						//}
 					}
 				}
 
 			}
-			if (next_timer < MAX_TIMER) {
-				/*
-				   If only we could now just schedule a timer event:
-				   Trigger *trigger = new Trigger("Timer");
-				   Scheduler::instance()->add(new ScheduledItem(next_timer*1000, new FireTriggerAction(owner, trigger)));
-				   unfortunately, the current code still has a bug because the 'uses_timer' flag of stable states
-				   simply indicates that the state depends on *something* that uses a timer but that may be another
-				   machine and that machine may not be in the state we are interested in.
-
-				   Workaround for now: check stable states every millisecond or so if any state uses a timer.
-				 */
-				  /*Trigger *trigger = new Trigger("Timer");
-				    Scheduler::instance()->add(new ScheduledItem(1000, new FireTriggerAction(this, trigger)));
-				    trigger->release();*/
-			}
+		}
+		/*
+			we have now determined whether to change state or not and in the case where we are 
+			going to change state we reset subcondition flags (ref TAG keyword) on all states
+			that have them except the newly active state
+		*/
+		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+			StableState &s = stable_states[ss_idx];
 			// this state is not active so ensure its subcondition flags are turned off
-			if (s.subcondition_handlers) {
+			if (s.subcondition_handlers && changed_state && active_state != &s) {
 				std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 				while (iter != s.subcondition_handlers->end()) {
 					ConditionHandler&ch = *iter++;
 					if (ch.command_name == "FLAG" ) {
 						MachineInstance *flag = lookup(ch.flag_name);
 						if (flag) {
-							const State *s = flag->state_machine->findState("off");
-							if (strcmp("off", flag->getCurrentStateString()))
-								flag->setState(*s);
+							const State *off = flag->state_machine->findState("off");
+							if (strcmp("off", flag->getCurrentStateString())) {
+								DBG_AUTOSTATES << "turning flag off since the state " << s.state_name << " is not active\n";
+								flag->setState(*off);
+							}
 						}
 						else
 							std::cerr << _name << " error: flag " << ch.flag_name << " not found\n"; 
@@ -3517,8 +3508,6 @@ bool MachineInstance::setStableState() {
 		}
 		if (ptd) {
 			Trigger *trigger = new Trigger(this, ptd->label);
-			//FireTriggerAction *fta = new FireTriggerAction(this, trigger);
-			//Scheduler::instance()->add(new ScheduledItem(ptd->delay, fta));
 			Scheduler::instance()->add(new ScheduledItem(ptd->delay, trigger));
 			trigger->release();
 			delete ptd;
