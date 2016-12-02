@@ -162,8 +162,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 		//std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
         if ( (right_p->entry.kind == Value::t_symbol
 			&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
-            || right_p->entry.asInteger(scheduled_time))
+            || right_p->entry.asInteger(scheduled_time)) {
             current_time = target->getTimerVal()->iValue;
+			if (op == opGT || op == opLE) ++scheduled_time;
+		}
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
@@ -180,7 +182,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
             std::string machine_name(left_p->entry.sValue);
             machine_name.erase(pos);
             timed_machine = target->lookup(machine_name);
-            if (timed_machine) current_time = timed_machine->getTimerVal()->iValue;
+            if (timed_machine) {
+				current_time = timed_machine->getTimerVal()->iValue;
+				if (op == opGT || op == opLE) ++scheduled_time;
+			}
         }
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
@@ -194,8 +199,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 		//std::cout << "checking timers on " << left_p->entry << "\n";
         if ( (left_p->entry.kind == Value::t_symbol
 				&& target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
-				|| left_p->entry.asInteger(scheduled_time))
+				|| left_p->entry.asInteger(scheduled_time)) {
             current_time = target->getTimerVal()->iValue;
+			if (op == opGT || op == opLE) ++scheduled_time;
+		}
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
@@ -214,7 +221,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
             std::string machine_name(right_p->entry.sValue);
             machine_name.erase(pos);
             timed_machine = target->lookup(machine_name);
-            if (timed_machine) current_time = timed_machine->getTimerVal()->iValue;
+            if (timed_machine) {
+				current_time = timed_machine->getTimerVal()->iValue;
+				if (op == opGT || op == opLE) ++scheduled_time;
+			}
         }
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
