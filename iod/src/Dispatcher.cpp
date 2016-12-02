@@ -36,6 +36,7 @@
 #include "ProcessingThread.h"
 
 Dispatcher *Dispatcher::instance_ = NULL;
+//boost::mutex Dispatcher::delivery_mutex;
 
 void DispatchThread::operator()()
 {
@@ -104,11 +105,10 @@ void Dispatcher::removeReceiver(Receiver*r)
 
 void Dispatcher::deliver(Package *p)
 {
-	if (dispatch_socket == 0) {
-		owner_thread = pthread_self();
-		dispatch_socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
-    	dispatch_socket->connect("inproc://dispatcher");
-	}
+//		owner_thread = pthread_self();
+		zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_PUSH);
+    	sock.connect("inproc://dispatcher");
+#if 0
 	if (owner_thread != pthread_self()) {
 		char tnam1[100], tnam2[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
@@ -129,7 +129,8 @@ void Dispatcher::deliver(Package *p)
 		MessageLog::instance()->add(buf);
 		std::cerr << buf << "\n";
 	}
-    dispatch_socket->send(&p, sizeof(Package*));
+#endif
+    sock.send(&p, sizeof(Package*));
 }
 
 /*
