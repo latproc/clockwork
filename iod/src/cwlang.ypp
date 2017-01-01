@@ -284,6 +284,15 @@ interface_defn_header '{' interface_defn_body '}' {
 interface_defn_header:
 SYMBOL INTERFACE {
     DBG_PARSER << " interface definition "  << $1 << "\n";
+	MachineClass *cls = MachineClass::find($1);
+	if (cls) {
+		std::stringstream ss;
+		ss << "## - Error: " << yyfilename << ":" << yylineno 
+		ss << " Interface " << $1 << " already defined";
+		error_messages.push_back(ss.str());
+		NB_MSG << ss.str() << "\n";
+		++num_errors;
+	}
     current_machineclass = new MachineInterface($1);
 }
 ;
@@ -566,7 +575,7 @@ EXPORT access_type size_type name_list ';' {
         else if ($3 == DOUBLEWORD) len = 2;
         else if ($3 == STRINGTYPE) len = (int)current_value.iValue;
         else {
-            std::cerr<< "Unexpected export size token: " << $3 << "\n";
+            std::ckrr<< "Unexpected export size token: " << $3 << "\n";
         }
         if ($2 == READONLY)
             current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::input_register, len) );
