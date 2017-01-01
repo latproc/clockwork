@@ -53,7 +53,7 @@ CallMethodAction::CallMethodAction(MachineInstance *mi, CallMethodActionTemplate
 
 Action::Status CallMethodAction::run() {
 	owner->start(this);
-	if (!target_machine) target_machine = owner->lookup(target.get());
+	target_machine = owner->lookup(target.get());
 	if (!target_machine) {
 		char buf[150];
 		snprintf(buf, 100, "%s CallMethodAction failed to find machine %s",
