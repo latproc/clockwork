@@ -288,7 +288,7 @@ SYMBOL INTERFACE {
 	if (cls) {
 		std::stringstream ss;
 		ss << "## - Error: " << yyfilename << ":" << yylineno 
-		ss << " Interface " << $1 << " already defined";
+			<< " Interface " << $1 << " already defined";
 		error_messages.push_back(ss.str());
 		NB_MSG << ss.str() << "\n";
 		++num_errors;
@@ -575,7 +575,7 @@ EXPORT access_type size_type name_list ';' {
         else if ($3 == DOUBLEWORD) len = 2;
         else if ($3 == STRINGTYPE) len = (int)current_value.iValue;
         else {
-            std::ckrr<< "Unexpected export size token: " << $3 << "\n";
+            std::cerr<< "Unexpected export size token: " << $3 << "\n";
         }
         if ($2 == READONLY)
             current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::input_register, len) );
