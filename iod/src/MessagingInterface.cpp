@@ -129,26 +129,20 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
 
 	*response_len = 0;
-	int retries = 5;
 	if (block && timeout == 0) timeout = 500;
-
-	int64_t more = 0;
-	size_t more_size = sizeof (more);
 
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
-			bool got_response = false;
-			bool got_address = false;
 			if (items[0].revents & ZMQ_POLLIN) {
 
 				bool done = false;
 				zmq::message_t message;
 				while (!done) {
 					{
-					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+					if ( (sock.recv(&message, ZMQ_DONTWAIT)) ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							//{ FileLogger fl(program_name); fl.f() << "Error: unexpected message header\n"; }
 							continue;
@@ -198,11 +192,8 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n"; }
 
 	*response_len = 0;
-	int retries = 5;
 	if (block && timeout == 0) timeout = 500;
 
-	int64_t more = 0;
-	size_t more_size = sizeof (more);
 
 	while (!MessagingInterface::aborted()) {
 		try {
@@ -210,7 +201,9 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			bool got_response = false;
+#if 0
 			bool got_address = false;
+#endif
 			if (items[0].revents & ZMQ_POLLIN) {
 
 				bool done = false;

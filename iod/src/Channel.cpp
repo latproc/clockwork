@@ -170,7 +170,7 @@ Channel::Channel(const std::string ch_name, const std::string type)
     (*all)[name] = this;
 	if (::machines.find(ch_name) == ::machines.end())
 		::machines[ch_name] = this;
-	markActive(); // this machine performs state changes in the ::idle() processing
+	//markActive(); // this machine performs state changes in the ::idle() processing
 
 	// make sure the channel is in the LIST of channels
 	if (::machines.find("CHANNELS") != ::machines.end()) {
@@ -583,13 +583,13 @@ ChannelDefinition::ChannelDefinition(const char *n, ChannelDefinition *prnt)
 		: MachineClass(n),parent(prnt), ignore_response(false) {
     if (!all) all = new std::map< std::string, ChannelDefinition* >;
     (*all)[n] = this;
-	states.push_back("DISCONNECTED");
-	states.push_back("CONNECTED");
-	states.push_back("CONNECTING");
-	states.push_back("WAITSTART");
-	states.push_back("UPLOADING");
-	states.push_back("DOWNLOADING");
-	states.push_back("ACTIVE");
+	addState("DISCONNECTED");
+	addState("CONNECTED");
+	addState("CONNECTING");
+	addState("WAITSTART");
+	addState("UPLOADING");
+	addState("DOWNLOADING");
+	addState("ACTIVE");
 	default_state = State("DISCONNECTED");
 	initial_state = State("DISCONNECTED");
 	features.insert(ReportPropertyChanges);
@@ -1163,10 +1163,10 @@ void ChannelDefinition::instantiateInterfaces() {
             if (!found) { // instantiate a shadow to represent this machine
                 if (item.second) {
 					DBG_CHANNELS << "Instantiating SHADOW " << instance_name.first << " for Channel " << item.second->name << "\n";
-                    MachineInstance *m = MachineInstanceFactory::create(instance_name.first.c_str(),
-							instance_name.second.asString().c_str(),
-							MachineInstance::MACHINE_SHADOW);
-                    m->setDefinitionLocation("dynamic", 0);
+					MachineInstance *m = MachineInstanceFactory::create(instance_name.first.c_str(),
+					instance_name.second.asString().c_str(),
+					MachineInstance::MACHINE_SHADOW);
+					m->setDefinitionLocation("dynamic", 0);
 					m->requireAuthority(item.second->authority);
 					{
 						FileLogger fl(program_name);
@@ -1174,20 +1174,20 @@ void ChannelDefinition::instantiateInterfaces() {
 							<< " requires authority " << item.second->authority << "\n";
 					}
 					MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
-                    m->setProperties(mc->properties);
-                    m->setStateMachine(mc);
-                    m->setValue("startup_enabled", false);
-                    machines[instance_name.first] = m;
-                    ::machines[instance_name.first] = m;
-                }
-                else {
-                    char buf[150];
-                    snprintf(buf, 150, "Error: no interface named %s", item.first.c_str());
-                    MessageLog::instance()->add(buf);
+					m->setProperties(mc->properties);
+					m->setStateMachine(mc);
+					m->setValue("startup_enabled", false);
+					machines[instance_name.first] = m;
+					::machines[instance_name.first] = m;
+				}
+				else {
+					char buf[150];
+					snprintf(buf, 150, "Error: no interface named %s", item.first.c_str());
+					MessageLog::instance()->add(buf);
 					DBG_CHANNELS << buf << "\n";
-                }
-            }
-        }
+				}
+			}
+		}
 		std::map<std::string, Value>::iterator i_shared = item.second->shares_names.begin();
 		while (i_shared != item.second->shares_names.end()) {
 			const std::pair<std::string, Value> &instance_name = *i_shared++;
@@ -1219,12 +1219,12 @@ void ChannelDefinition::instantiateInterfaces() {
 				}
 			}
 		}
-    }
-    // channels automatically setup monitoring on machines they update
-    // when the channel is instantiated. At startup, however, some machines
-    // may not have been defined when the channel is created so we need
-    // to do an extra pass here.
-    Channel::setupAllShadows();
+	}
+	// channels automatically setup monitoring on machines they update
+	// when the channel is instantiated. At startup, however, some machines
+	// may not have been defined when the channel is created so we need
+	// to do an extra pass here.
+	Channel::setupAllShadows();
 }
 
 Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {

@@ -36,6 +36,13 @@ public:
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const Statistic &other);
 
+	void reset() {
+    	sum = 0;
+		count = 0;
+		min_value = LONG_MAX;
+		max_value = LONG_MIN;
+	}
+
 	void add(long new_value) {
 		++count;
 		sum += new_value;

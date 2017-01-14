@@ -9,6 +9,7 @@
 class HardwareActivation {
 	public:
 		virtual ~HardwareActivation() {}
+		virtual bool initialiseHardware() { return true;}
 		virtual void operator()(void) { }
 };
 
@@ -40,7 +41,7 @@ public:
     ControlSystemMachine &machine;
     
     enum Status { e_waiting, e_handling_ecat, e_start_handling_commands,
-				e_handling_cmd, e_waiting_cmd, e_command_done, 
+				e_handling_cmd, e_command_done, 
 				e_handling_dispatch,
 				e_handling_sched, e_waiting_sched } ;
     Status status;

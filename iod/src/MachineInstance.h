@@ -163,7 +163,7 @@ public:
 	std::set<std::string> local_properties;
     std::vector<Parameter> parameters;
     std::vector<Parameter> locals;
-    std::list<State> states;
+    std::list<State *> states;
     std::set<std::string> state_names;
 	std::multimap<std::string, StableState> stable_state_xref;
 	std::vector<StableState> stable_states;
@@ -179,8 +179,10 @@ public:
     static std::map<std::string, MachineClass> machine_classes;
     void defaultState(State state);
 	bool isStableState(State &state);
+	void addState(const char *name);
     const State *findState(const char *name) const;
 	const State *findState(const State &seek) const;
+    State *findMutableState(const char *name);
 	virtual ~MachineClass() { all_machine_classes.remove(this); }
 	void disableAutomaticStateChanges();
 	void enableAutomaticStateChanges();
@@ -219,19 +221,6 @@ public:
 //	void addProperty(const char *name);
 //	void addCommand(const char *name);
 };
-
-/*
- 
- // flag is an internal machine class that implements a boolean switch
- MachineClass flag;
- flag.states.push_back("on");
- flag.states.push_back("off");
- flag.receives["turnOn"] = Action("set_state", "on");
- flag.receives["turnOff"] = Action("set_state", "off");
- 
- // Action(
- 
- */
 
 struct HardwareAddress {
     int io_offset;
@@ -417,6 +406,9 @@ public:
 	static MachineInstance *find(const char *name);
 	static std::list<MachineInstance*>::iterator begin() { return all_machines.begin(); }
 	static std::list<MachineInstance*>::iterator end()  { return all_machines.end(); }
+
+	static std::list<MachineInstance*>::iterator io_modules_begin() { return io_modules.begin(); }
+	static std::list<MachineInstance*>::iterator io_modules_end()  { return io_modules.end(); }
     
     static std::list<MachineInstance*>::iterator begin_active() { return active_machines.begin(); }
     static std::list<MachineInstance*>::iterator end_active() { return active_machines.end(); }
@@ -570,6 +562,7 @@ protected:
     static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
     static std::set<MachineInstance*> pending_state_change; // machines that need to check their stable states
     static std::set<MachineInstance*> plugin_machines; // machines that have plugins
+    static std::list<MachineInstance*> io_modules; // machines of type MODULE
     static std::list<Package*> pending_events; // machines that shadow remote machines
     static unsigned int num_machines_with_work;
     static unsigned int total_machines_needing_check;

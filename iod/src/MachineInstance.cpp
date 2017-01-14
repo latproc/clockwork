@@ -50,6 +50,7 @@
 #include "Channel.h"
 #include <boost/thread/mutex.hpp>
 #include "WaitAction.h"
+#include "ControlSystemMachine.h"
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
 #include "SDOEntry.h"
@@ -270,6 +271,7 @@ std::map<std::string, MachineClass*> machine_classes;
 // All machine instances automatically join and leave this list. 
 // During the poll process, all machines in this list have their idle() called.
 std::list<MachineInstance*> MachineInstance::all_machines;
+std::list<MachineInstance*> MachineInstance::io_modules;
 std::list<MachineInstance*> MachineInstance::automatic_machines;
 std::list<MachineInstance*> MachineInstance::active_machines;
 std::list<MachineInstance*> MachineInstance::shadow_machines;
@@ -473,6 +475,7 @@ void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, uns
 }
 #endif
 
+#if 0
 bool TriggeredAction::active() {
 	std::set<IOComponent*>::iterator iter = trigger_on.begin();
 	while (iter != trigger_on.end()) {
@@ -488,7 +491,7 @@ bool TriggeredAction::active() {
 	}
 	return true;
 }
-
+#endif
 
 void MachineInstance::triggerFired(Trigger *trig) {
 	static const std::string str_publish("publish");
@@ -1025,6 +1028,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
+	if (_type == "MODULE") io_modules.push_back(this);
 	if (instance_type == MACHINE_INSTANCE) {
 		all_machines.push_back(this);
 		Dispatcher::instance()->addReceiver(this);
@@ -1068,6 +1072,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
+	if (_type == "MODULE") io_modules.push_back(this);
 	if (instance_type == MACHINE_INSTANCE) {
 		all_machines.push_back(this);
 		Dispatcher::instance()->addReceiver(this);
@@ -1435,7 +1440,6 @@ long total_process_calls = 0;
 uint64_t total_processing_time = 0;
 long total_aborts = 0;
 
-#if 1
 bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which) {
 
 	uint64_t start_processing = nowMicrosecs();
@@ -1511,109 +1515,6 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 #endif
 	return true;
 }
-#else
-bool MachineInstance::processAll(uint32_t max_time, PollType which) {
-	std::list<Package*>::iterator evt_iter = pending_events.begin();
-	while (evt_iter != pending_events.end()) {
-		Package *pkg = *evt_iter;
-		evt_iter = pending_events.erase(evt_iter);
-		MachineInstance *mi = dynamic_cast<MachineInstance*>(pkg->receiver);
-		if (mi) mi->execute(*(pkg->message), pkg->transmitter);
-		delete pkg;
-	}
-
-	static int point_token = ClockworkToken::POINT;
-	static std::list<MachineInstance *>::iterator iter = active_machines.begin();
-	bool builtins = false;
-	if (iter == active_machines.begin()) {
-		struct timeval now;
-		gettimeofday(&now, NULL);
-		saved_loop_count = loop_count;
-		process_time = now.tv_sec * 1000000 + now.tv_usec;
-		if (which == BUILTINS)
-			builtins = true;
-		if (last_num_machines_with_work == 0 && num_machines_with_work == 0) {
-			shortcuts++;
-			return true;
-		}
-		else DBG_AUTOSTATES << num_machines_with_work << " machines with work at MachineInstance::processAll\n";
-		last_num_machines_with_work = num_machines_with_work;
-		num_machines_with_work = 0; // counts how many machines have work remaining at the end of this process
-	}
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-	const int block_size = 20;
-	int count = block_size;
-	while (iter != active_machines.end()) {
-		/* To compute a counterrate, the device needs a continual suppliy of input readings. 
-		   The process of polling the hardware will normally do this but when running a simulation
-		   we need some help. The following hack provides the solution until a proper method can be developed.
-		 */
-		MachineInstance *m = *iter++;
-		bool point = m->state_machine->token_id == point_token;
-		if ( (builtins && point) || (!builtins && (!point || m->mq_interface) && m->enabled() ) ) {
-			if (m->hasWork()) { /*std::cout << m->_name << " has work\n";*/ ++total_machines_with_work; }
-			if (m->hasWork() || !m->active_actions.empty() ) {
-				DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << "\n";
-				m->idle();
-				++total_idle_calls;
-			}
-			if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
-				m->state_machine->plugin->poll_actions(m);
-				++total_plugins_with_work;
-			}
-			if (m->hasWork() || !m->active_actions.empty()) {
-				DBG_ACTIONS << m->getName() << " has work\n";
-				++num_machines_with_work;
-				DBG_ACTIONS << m->_name << " ADDED to machines with work " << num_machines_with_work << "\n";
-			}
-		}
-		count--;
-		if (count<=0) {
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-			if (now_t - start_processing > max_time) {
-				total_processing_time += now_t - start_processing;
-				total_aborts++;
-				return false; // ran out of time to finish
-			}
-			count = block_size;
-		}
-	}
-	if (num_machines_with_work == 0) {
-		DBG_ACTIONS << " no more actions outstanding\n";
-	}
-	else {
-		DBG_ACTIONS << " more actions to run\n";
-	}
-	gettimeofday(&now, NULL);
-	uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-	total_processing_time += now_t - start_processing;
-	++loop_count; // completed a pass through all machines
-	total_process_calls += loop_count - saved_loop_count;
-#if 0
-	if (!shared->system) shared->system = MachineInstance::find("SYSTEM");
-	MachineInstance *system = shared->system;
-	assert(system);
-	if (loop_count % 100 == 1) {
-		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
-		system->setValue("AVG_MACHINES_WITH_WORK_PER_KCYCLE", total_machines_with_work*1000 / loop_count);
-		system->setValue("AVG_WORK_PER_KCYCLE", total_idle_calls*1000 / loop_count);
-		system->setValue("CYCLES", loop_count);
-		system->setValue("AVG_PLUGIN_WORK_PER_KCYCLE", total_plugins_with_work * 1000 / loop_count);
-		system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
-		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", (long)(total_processing_time * 1000 / loop_count));
-		system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
-	}
-#endif
-	iter = active_machines.begin(); // prepare for the next cycle
-	return true; // complete the cycle
-}
-#endif
-
-#if 1
 
 void MachineInstance::checkPluginStates() {
 	//std::list<uint64_t> stats;
@@ -1635,15 +1536,6 @@ void MachineInstance::checkPluginStates() {
 		//uint64_t delta = nowMicrosecs() - start;
 		//stats.push_back(delta);
 	}
-#if 0
-  std::list<uint64_t>::iterator iter = stats.begin();
-  while (iter != stats.end()) {
-		uint64_t x = *iter++;
-		std::cout << x << " ";
-	}
-	if (!stats.empty()) std::cout << "\n";
-	DBG_MSG << "-- " << (nowMicrosecs() - start_processing) << "\n";
-#endif
 }
 
 // Warning: max_time is ignored in this method
@@ -1664,66 +1556,6 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
 	}
 	return true;
 }
-#else
-
-bool MachineInstance::checkStableStates(uint32_t max_time) {
-#ifdef USE_EXPERIMENTAL_IDLE_LOOP
-	if (last_machines_needing_check == 0 && total_machines_needing_check == 0) return true;
-#endif
-	last_machines_needing_check = total_machines_needing_check;
-	DBG_AUTOSTATES << total_machines_needing_check << " machines need state check in checkStableStates\n";
-	total_machines_needing_check = 0;
-	static std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
-
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-	const int block_size = 5;
-	int count = block_size;
-	while (iter != MachineInstance::automatic_machines.end()) {
-		MachineInstance *m = *iter++;
-		DBG_AUTOSTATES  << " check stable states: " << m->getName() << "\n";
-		if ( m->enabled() && m->executingCommand() == NULL
-				&& (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= start_processing )
-		{
-			DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
-			m->setStableState();
-			if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
-				m->state_machine->plugin->state_check(m);
-				DBG_AUTOSTATES  << "flagging state checks for " << m->getName() << " because it has a plugin\n";
-				++total_machines_needing_check;
-			}
-			else if (m->enabled() && m->executingCommand() == NULL
-					&& (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ))
-			{
-				DBG_AUTOSTATES  << "flagging state checks for " << m->getName() << " because it is a condition or needs a check\n";
-				++total_machines_needing_check;
-			}
-		}
-		else {
-			if (m->needsCheck()) {
-				DBG_AUTOSTATES  << m->getName() << " not checked\n";
-			}
-		}
-		count--;
-		if (count<=0) {
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-			if (now_t - start_processing > max_time) {
-				DBG_AUTOSTATES << " aborting stable state checks\n";
-				return false; // ran out of time to finish
-			}
-			count = block_size;
-		}
-	}
-	iter = MachineInstance::automatic_machines.begin();
-	if (total_machines_needing_check == 0) {
-		DBG_AUTOSTATES << " all states are stable (" << automatic_machines.size() << " machines)\n";
-	}
-	return true;
-}
-#endif
 
 void MachineInstance::displayAutomaticMachines() {
 	BOOST_FOREACH(MachineInstance *m, MachineInstance::automatic_machines) {
@@ -1939,9 +1771,9 @@ std::ostream &MachineInstance::operator<<(std::ostream &out)const  {
 bool MachineInstance::stateExists(State &seek) {
 	//return (state_machine->state_names.count(seek.getName()) != 0);
 
-	std::list<State>::const_iterator iter = state_machine->states.begin();
+	std::list<State *>::const_iterator iter = state_machine->states.begin();
 	while (iter != state_machine->states.end()) {
-		if (*iter == seek) return true;
+		if ( *(*iter) == seek) return true;
 		iter++;
 	}
 	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
@@ -2153,6 +1985,11 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		DBG_STATECHANGES << fullName() << " changing from " << current_state << " to " << new_state << "\n";
 		current_state = new_state;
 		current_state_val = new_state.getName();
+
+		// call the internal enter function for the machine if available
+		const State *machine_class_state = state_machine->findState(new_state);
+		if (machine_class_state) machine_class_state->enter(0);
+
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
 		// publish the state change if we are a publisher
 		if (mq_interface) {
@@ -2453,6 +2290,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					&& (!t.condition || t.condition->operator()(this))) {
 				// found match, if there is a command defined for this transition, we
 				// execute the command, otherwise we just do the state change
+				bool state_change_ok = true;
 				int num_commands = commands.count(t.trigger.getText());
 				if (num_commands) {
 					DBG_M_MESSAGING << "Transition on machine " << getName() << " has a linked command; using it\n";
@@ -2518,14 +2356,35 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					if (matching_command) return matching_command;
 				}
 				else {
-					DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
+
+#ifndef EC_SIMULATOR
+					if (state_machine->name == "ETHERCAT_BUS") {
+						if (short_name == "activate" 
+								&& (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED") ) {
+							ProcessingThread::instance()->machine.requestActivation(true);
+							ProcessingThread::activate(this);
+						}
+						else if (short_name == "deactivate" && current_state.getName() == "ACTIVE") {
+							ProcessingThread::instance()->machine.requestDeactivation(true);
+							ProcessingThread::activate(this);
+						}
+					}
+					else
+#endif
+						DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
 				}
 				if (response_required)
 					prepareCompletionMessage(from, t.trigger.getText());
 
-				// no matching command, just perform the transition
-				MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
-				return new MoveStateAction(this, temp);
+				if (state_change_ok) {
+					// no matching command, just perform the transition
+					MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
+					return new MoveStateAction(this, temp);
+				}
+				else {
+					SendMessageActionTemplate ssat("StateChangeFailureException", this);
+					return new SendMessageAction(this, ssat);
+				}
 			}
 		}
 		// no transition but this may still be a command
@@ -2571,6 +2430,17 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 			DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
 				<< "handler: " << *((*receive_handler_i).second) << "\n";
 		}
+#ifndef EC_SIMULATOR
+		if (state_machine && state_machine->name == "ETHERCAT_BUS") {
+			if (short_name == "activate" 
+				&& (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED") ) {
+				ProcessingThread::instance()->machine.requestActivation(true);
+			}
+			else if (short_name == "deactivate" && current_state.getName() == "ACTIVE")
+				ProcessingThread::instance()->machine.requestDeactivation(true);
+			return NULL;
+		}
+#endif
 		if (response_required)
 			prepareCompletionMessage(from, short_name);
 		return (*receive_handler_i).second->retain();
@@ -2815,7 +2685,7 @@ MachineClass::MachineClass(const char *class_name) : default_state("unknown"), i
 	name(class_name), allow_auto_states(true), token_id(0), plugin(0),
 	polling_delay(0)
 {
-	states.push_back("INIT");
+	addState("INIT");
 	token_id = Tokeniser::instance()->getTokenId(class_name);
 	all_machine_classes.push_back(this);
 }
@@ -2836,21 +2706,34 @@ bool MachineClass::isStableState(State &state) {
 	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
 }
 
-const State *MachineClass::findState(const char *seek) const {
-	std::list<State>::const_iterator iter = states.begin();
+void MachineClass::addState(const char *name) {
+	states.push_back(new State(name));
+}
+
+State *MachineClass::findMutableState(const char *seek) {
+	std::list<State *>::const_iterator iter = states.begin();
 	while (iter != states.end()) {
-		const State &s = *iter++;
-		if (s.getName() == seek) return &s;
+		State *s = *iter++;
+		if (s->getName() == seek) return s;
+	}
+	return 0;
+}
+
+const State *MachineClass::findState(const char *seek) const {
+	std::list<State *>::const_iterator iter = states.begin();
+	while (iter != states.end()) {
+		const State *s = *iter++;
+		if (s->getName() == seek) return s;
 	}
 	return 0;
 }
 
 const State *MachineClass::findState(const State &seek) const {
-	std::list<State>::const_iterator iter = states.begin();
+	std::list<State*>::const_iterator iter = states.begin();
 	while (iter != states.end()) {
-		const State &s = *iter++;
-		if (s == seek) {
-			return &s;
+		const State *s = *iter++;
+		if (*s == seek) {
+			return s;
 		}
 	}
 	return 0;
@@ -3049,10 +2932,12 @@ void MachineInstance::markActive() {
 	if (state_machine && state_machine->plugin) markPlugin();
 }
 
+#if 0
 void MachineInstance::markPassive() {
 	is_active = false;
 	active_machines.remove(this);
 }
+#endif
 
 void MachineInstance::markPlugin() {
 	plugin_machines.insert(this);
@@ -4127,11 +4012,11 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 const Value *MachineInstance::lookupState(const std::string &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
-		std::list<State>::iterator iter = state_machine->states.begin();
+		std::list<State*>::iterator iter = state_machine->states.begin();
 		while (iter != state_machine->states.end()) {
-			State &s = *iter++;
-			if (s.getName() == state_name) {
-				return s.getNameValue();
+			State *s = *iter++;
+			if (s->getName() == state_name) {
+				return s->getNameValue();
 			}
 		}
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
@@ -4144,11 +4029,11 @@ const Value *MachineInstance::lookupState(const std::string &state_name) {
 const Value *MachineInstance::lookupState(const Value &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
-		std::list<State>::iterator iter = state_machine->states.begin();
+		std::list<State*>::iterator iter = state_machine->states.begin();
 		while (iter != state_machine->states.end()) {
-			State &s = *iter++;
-			if (s.getId() == state_name.token_id) {
-				return s.getNameValue();
+			State *s = *iter++;
+			if (s->getId() == state_name.token_id) {
+				return s->getNameValue();
 			}
 		}
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {

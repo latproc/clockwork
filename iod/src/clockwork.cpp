@@ -48,9 +48,15 @@
 #include "MessageLog.h"
 #include "symboltable.h"
 #include "Channel.h"
+#include "Message.h"
+#include "MachineCommandAction.h"
+
+#ifndef EC_SIMULATOR
+#include "ECInterface.h"
 #ifdef USE_SDO
 #include "SDOEntry.h"
 #endif //USE_SDO
+#endif
 
 extern int yylineno;
 extern int yycharno;
@@ -59,7 +65,7 @@ extern FILE *yyin;
 int yyparse();
 int yylex(void);
 SymbolTable globals;
-
+static bool cw_framework_initialised = false;
 
 std::list<std::string>error_messages;
 int num_errors = 0;
@@ -98,7 +104,6 @@ void usage(int argc, char const *argv[])
     std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store] [-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize] \n";
 }
 
-
 static void listDirectory( const std::string pathToCheck, std::list<std::string> &file_list)
 {
     boost::filesystem::path dir(pathToCheck.c_str());
@@ -115,7 +120,8 @@ static void listDirectory( const std::string pathToCheck, std::list<std::string>
             else if (file_stat.st_mode & S_IFDIR){
                 listDirectory(path_str, file_list);
             }
-            else if (boost::filesystem::exists(file.path()) && file.path().extension() == ".lpc")
+            else if (boost::filesystem::exists(file.path()) && 
+				(file.path().extension() == ".lpc" || file.path().extension() == ".cw") )
             {
                 file_list.push_back( file.path().native() );
             }
@@ -219,7 +225,7 @@ void predefine_special_machines() {
 	int err = gethostname(host_name, 100);
 	if (err == -1) strcpy(host_name, "localhost");
 	MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
-	settings_class->states.push_back("ready");
+	settings_class->addState("ready");
 	settings_class->default_state = State("ready");
 	settings_class->initial_state = State("ready");
 	settings_class->disableAutomaticStateChanges();
@@ -230,7 +236,7 @@ void predefine_special_machines() {
 	settings_class->properties.add("POLLING_DELAY", 2000, SymbolTable::ST_REPLACE);
 
 	MachineClass *cw_class = new MachineClass("CLOCKWORK");
-	cw_class->states.push_back("ready");
+	cw_class->addState("ready");
 	cw_class->default_state = State("ready");
 	cw_class->initial_state = State("ready");
 	cw_class->disableAutomaticStateChanges();
@@ -241,8 +247,8 @@ void predefine_special_machines() {
 	MachineClass *point_class = new MachineClass("POINT");
 	point_class->parameters.push_back(Parameter("module"));
 	point_class->parameters.push_back(Parameter("offset"));
-	point_class->states.push_back("on");
-	point_class->states.push_back("off");
+	point_class->addState("on");
+	point_class->addState("off");
 	point_class->default_state = State("off");
 	point_class->initial_state = State("off");
 	point_class->disableAutomaticStateChanges();
@@ -251,8 +257,8 @@ void predefine_special_machines() {
 	point_class->parameters.push_back(Parameter("module"));
 	point_class->parameters.push_back(Parameter("offset"));
 	point_class->parameters.push_back(Parameter("entry"));
-	point_class->states.push_back("on");
-	point_class->states.push_back("off");
+	point_class->addState("on");
+	point_class->addState("off");
 	point_class->default_state = State("off");
 	point_class->initial_state = State("off");
 	point_class->disableAutomaticStateChanges();
@@ -262,8 +268,8 @@ void predefine_special_machines() {
 	ain_class->parameters.push_back(Parameter("module"));
 	ain_class->parameters.push_back(Parameter("offset"));
 	ain_class->parameters.push_back(Parameter("filter_settings"));
-	ain_class->states.push_back("stable");
-	ain_class->states.push_back("unstable");
+	ain_class->addState("stable");
+	ain_class->addState("unstable");
 	ain_class->default_state = State("stable");
 	ain_class->initial_state = State("stable");
 	ain_class->disableAutomaticStateChanges();
@@ -275,9 +281,9 @@ void predefine_special_machines() {
 	MachineClass *cnt_class = new MachineClass("COUNTER");
 	cnt_class->parameters.push_back(Parameter("module"));
 	cnt_class->parameters.push_back(Parameter("offset"));
-	cnt_class->states.push_back("stable");
-	cnt_class->states.push_back("unstable");
-	cnt_class->states.push_back("off");
+	cnt_class->addState("stable");
+	cnt_class->addState("unstable");
+	cnt_class->addState("off");
 	cnt_class->default_state = State("off");
 	cnt_class->initial_state = State("off");
 	cnt_class->disableAutomaticStateChanges();
@@ -289,9 +295,9 @@ void predefine_special_machines() {
 	MachineClass *re_class = new MachineClass("RATEESTIMATOR");
 	re_class->parameters.push_back(Parameter("position_input"));
 	re_class->parameters.push_back(Parameter("settings"));
-	re_class->states.push_back("stable");
-	re_class->states.push_back("unstable");
-	re_class->states.push_back("off");
+	re_class->addState("stable");
+	re_class->addState("unstable");
+	re_class->addState("off");
 	re_class->default_state = State("off");
 	re_class->initial_state = State("off");
 	re_class->disableAutomaticStateChanges();
@@ -302,9 +308,9 @@ void predefine_special_machines() {
 	cr_class->parameters.push_back(Parameter("position_output"));
 	cr_class->parameters.push_back(Parameter("module"));
 	cr_class->parameters.push_back(Parameter("offset"));
-	cr_class->states.push_back("stable");
-	cr_class->states.push_back("unstable");
-	cr_class->states.push_back("off");
+	cr_class->addState("stable");
+	cr_class->addState("unstable");
+	cr_class->addState("off");
 	cr_class->default_state = State("off");
 	cr_class->initial_state = State("off");
 	cr_class->disableAutomaticStateChanges();
@@ -314,8 +320,8 @@ void predefine_special_machines() {
 	MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
 	aout_class->parameters.push_back(Parameter("module"));
 	aout_class->parameters.push_back(Parameter("offset"));
-	aout_class->states.push_back("stable");
-	aout_class->states.push_back("unstable");
+	aout_class->addState("stable");
+	aout_class->addState("unstable");
 	aout_class->default_state = State("stable");
 	aout_class->initial_state = State("stable");
 	aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
@@ -326,29 +332,33 @@ void predefine_special_machines() {
 	pid_class->parameters.push_back(Parameter("settings"));
 	pid_class->parameters.push_back(Parameter("position"));
 	pid_class->parameters.push_back(Parameter("speed"));
-	pid_class->states.push_back("stable");
-	pid_class->states.push_back("unstable");
+	pid_class->addState("stable");
+	pid_class->addState("unstable");
 	pid_class->default_state = State("stable");
 	pid_class->initial_state = State("stable");
 	pid_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
 	MachineClass *list_class = new MachineClass("LIST");
-	list_class->states.push_back("empty");
-	list_class->states.push_back("nonempty");
+	list_class->addState("empty");
+	list_class->addState("nonempty");
 	list_class->default_state = State("empty");
 	list_class->initial_state = State("empty");
 	//list_class->disableAutomaticStateChanges();
 	list_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
 	MachineClass *ref_class = new MachineClass("REFERENCE");
-	ref_class->states.push_back("ASSIGNED");
-	ref_class->states.push_back("EMPTY");
+	ref_class->addState("ASSIGNED");
+	ref_class->addState("EMPTY");
 	ref_class->default_state = State("EMPTY");
 	ref_class->initial_state = State("EMPTY");
 	//ref_class->disableAutomaticStateChanges();
 
 	MachineClass *module_class = new MachineClass("MODULE");
 	module_class->disableAutomaticStateChanges();
+	module_class->addState("PREOP");
+	module_class->addState("BOOT");
+	module_class->addState("SAFEOP");
+	module_class->addState("OP");
 
 	MachineClass *publisher_class = new MachineClass("PUBLISHER");
 	publisher_class->parameters.push_back(Parameter("broker"));
@@ -366,13 +376,13 @@ void predefine_special_machines() {
 	broker_class->disableAutomaticStateChanges();
 
 	MachineClass *cond = new MachineClass("CONDITION");
-	cond->states.push_back("true");
-	cond->states.push_back("false");
+	cond->addState("true");
+	cond->addState("false");
 	cond->default_state = State("false");
 
 	MachineClass *flag = new MachineClass("FLAG");
-	flag->states.push_back("on");
-	flag->states.push_back("off");
+	flag->addState("on");
+	flag->addState("off");
 	flag->default_state = State("off");
 	flag->initial_state = State("off");
 	flag->disableAutomaticStateChanges();
@@ -380,14 +390,14 @@ void predefine_special_machines() {
 	flag->transitions.push_back(Transition(State("on"), State("off"), Message("turnOff")));
 
 	MachineClass *mc_variable = new MachineClass("VARIABLE");
-	mc_variable->states.push_back("ready");
+	mc_variable->addState("ready");
 	mc_variable->initial_state = State("ready");
 	mc_variable->disableAutomaticStateChanges();
 	mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
 	mc_variable->options["VALUE"] = "VAL_PARAM1";
 
 	MachineClass *mc_constant = new MachineClass("CONSTANT");
-	mc_constant->states.push_back("ready");
+	mc_constant->addState("ready");
 	mc_constant->initial_state = State("ready");
 	mc_constant->disableAutomaticStateChanges();
 	mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
@@ -395,41 +405,53 @@ void predefine_special_machines() {
 
 #ifndef EC_SIMULATOR
 	MachineClass *mcwc = new MachineClass("ETHERCAT_WORKINGCOUNTER");
-	mcwc->states.push_back("ZERO");
-	mcwc->states.push_back("INCOMPLETE");
-	mcwc->states.push_back("COMPLETE");
+	mcwc->addState("ZERO");
+	mcwc->addState("INCOMPLETE");
+	mcwc->addState("COMPLETE");
 	mcwc->initial_state = State("ZERO");
 	mcwc->disableAutomaticStateChanges();
 	mcwc->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
 	MachineClass *mcls = new MachineClass("ETHERCAT_LINKSTATUS");
-	mcls->states.push_back("DOWN");
-	mcls->states.push_back("UP");
+	mcls->addState("DOWN");
+	mcls->addState("UP");
 	mcls->initial_state = State("DOWN");
 	mcls->disableAutomaticStateChanges();
 
 	MachineClass *mcec = new MachineClass("ETHERCAT_BUS");
-	mcec->states.push_back("INIT");
-	mcec->states.push_back("DISCONNECTED");
-	mcec->states.push_back("ACTIVE");
-	mcec->states.push_back("INACTIVE");
-	mcec->states.push_back("ERROR");
+	{
+		State *init = mcec->findMutableState("INIT");
+		if (!init) {
+			init = new State("INIT");
+			mcec->states.push_back(init);
+		}
+		init->setEnterFunction(ECInterface::setup); 
+	}
+	mcec->addState("DISCONNECTED");
+	mcec->addState("CONNECTED");
+	mcec->addState("CONFIG");
+	mcec->addState("ACTIVE");
+	mcec->addState("ERROR");
 	mcec->initial_state = State("INIT");
 	mcec->properties.add("tolerance", Value(10), SymbolTable::ST_REPLACE);
 	mcec->disableAutomaticStateChanges();
+	MachineCommandTemplate *mc = new MachineCommandTemplate("activate", "");
+	mcec->receives.insert(std::make_pair(Message("activate"), mc));
+	mc = new MachineCommandTemplate("deactivate", "");
+	mcec->receives.insert(std::make_pair(Message("deactivate"), mc));
+//	mcec->transitions.push_back(Transition(State("CONFIG"), State("ACTIVE"), Message("activate")));
+//	mcec->transitions.push_back(Transition(State("ACTIVE"), State("CONFIG"), Message("deactivate")));
 
 	MachineInstance *miwc = MachineInstanceFactory::create("ETHERCAT_WC", "ETHERCAT_WORKINGCOUNTER");
 	miwc->setProperties(mcwc->properties);
 	miwc->setStateMachine(mcwc);
 	miwc->setDefinitionLocation("Internal", 0);
-	miwc->markActive();
 	machines["ETHERCAT_WC"] = miwc;
 
 	MachineInstance *mils = MachineInstanceFactory::create("ETHERCAT_LS", "ETHERCAT_LINKSTATUS");
 	mils->setProperties(mcls->properties);
 	mils->setStateMachine(mcls);
 	mils->setDefinitionLocation("Internal", 0);
-	mils->markActive();
 	machines["ETHERCAT_LS"] = mils;
 
 	MachineInstance *miec = MachineInstanceFactory::create("ETHERCAT", "ETHERCAT_BUS");
@@ -438,13 +460,12 @@ void predefine_special_machines() {
 	miec->addLocal("counter", miwc);
 	miec->addLocal("link", mils);
 	miec->setDefinitionLocation("Internal", 0);
-	miec->markActive();
 	machines["ETHERCAT"] = miec;
 #endif
 
 #ifdef USE_SDO
 	MachineClass *mc_sdo = new MachineClass("SDOENTRY");
-	mc_sdo->states.push_back("ready");
+	mc_sdo->addState("ready");
 	mc_sdo->initial_state = State("ready");
 	mc_sdo->disableAutomaticStateChanges();
 	mc_sdo->parameters.push_back(Parameter("MODULE"));
@@ -488,7 +509,7 @@ void semantic_analysis() {
 			error_messages.push_back(ss.str());
 		}
         else
-			machine_instances[m->getName()] = m;
+			machine_instances[m->fullName()] = m;
         iter++;
     }
     
@@ -946,17 +967,20 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 
 int loadConfig(std::list<std::string> &files) {
     struct timeval now_tv;
-    int opened_file = 0;
     tzset(); /* this initialises the tz info required by ctime().  */
     gettimeofday(&now_tv, NULL);
     srandom(now_tv.tv_usec);
     
-    int modbus_result = load_preset_modbus_mappings();
-    if (modbus_result) return modbus_result;
+	if (!cw_framework_initialised) {
+	    int modbus_result = load_preset_modbus_mappings();
+	    if (modbus_result) return modbus_result;
     
-	predefine_special_machines();
+		predefine_special_machines();
+		cw_framework_initialised = true;
+	}
 
     /* load configuration from files named on the commandline */
+    int opened_file = 0;
     std::list<std::string>::iterator f_iter = files.begin();
     while (f_iter != files.end())
     {
@@ -994,9 +1018,6 @@ int loadConfig(std::list<std::string> &files) {
         }
         f_iter++;
     }
-    
-    /* if we weren't given a config file to use, read config data from stdin */
-    //if (!opened_file) yyparse();
     
     if (!opened_file) return 1;
     
@@ -1084,6 +1105,8 @@ void initialise_machines() {
     int num_active = 0;
     while (m_iter != MachineInstance::end()) {
         MachineInstance *mi = *m_iter++;
+		mi->markActive();
+#if 0
         if (!mi->receives_functions.empty() || mi->commands.size()
             || (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
             || mi->isModbusExported()
@@ -1107,6 +1130,7 @@ void initialise_machines() {
             DBG_INITIALISATION << mi->getName() << " is passive\n";
             ++num_passive;
         }
+#endif
     }
     NB_MSG << num_passive << " passive and " << num_active << " active machines\n";
 

@@ -5,6 +5,7 @@ set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.1)
 
 cmake_policy(SET CMP0008 OLD)
+cmake_policy(SET CMP0015 NEW)
 
 set (CMAKE_VERBOSE_MAKEFILE false)
 
@@ -28,44 +29,45 @@ configure_file (
 )
 
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
-FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem REQUIRED )
+FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem REQUIRED)
 FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
+FIND_PACKAGE(LibXml2)
 
 set(HEADER_FILES
-    ${CLOCKWORK_DIR}/MessagingInterface.h
-    ${CLOCKWORK_DIR}/SocketMonitor.h
-    ${CLOCKWORK_DIR}/ConnectionManager.h
-    ${CLOCKWORK_DIR}/MessageLog.h
-    ${CLOCKWORK_DIR}/MessageEncoding.h
-    ${CLOCKWORK_DIR}/regular_expressions.h
-    ${CLOCKWORK_DIR}/Logger.h
-    ${CLOCKWORK_DIR}/anet.h
-    ${CLOCKWORK_DIR}/cJSON.h
-    ${CLOCKWORK_DIR}/DebugExtra.h
-    ${CLOCKWORK_DIR}/value.h
-    ${CLOCKWORK_DIR}/symboltable.h
-    ${CLOCKWORK_DIR}/rate.h
+	${CLOCKWORK_DIR}/MessagingInterface.h
+	${CLOCKWORK_DIR}/SocketMonitor.h
+	${CLOCKWORK_DIR}/ConnectionManager.h
+	${CLOCKWORK_DIR}/MessageLog.h
+	${CLOCKWORK_DIR}/MessageEncoding.h
+	${CLOCKWORK_DIR}/regular_expressions.h
+	${CLOCKWORK_DIR}/Logger.h
+	${CLOCKWORK_DIR}/anet.h
+	${CLOCKWORK_DIR}/cJSON.h
+	${CLOCKWORK_DIR}/DebugExtra.h
+	${CLOCKWORK_DIR}/value.h
+	${CLOCKWORK_DIR}/symboltable.h
+	${CLOCKWORK_DIR}/rate.h
 	${CLOCKWORK_DIR}/watchdog.h
-    ${CLOCKWORK_DIR}/Message.h
+	${CLOCKWORK_DIR}/Message.h
     )
 
 add_library (Clockwork 
-    ${CLOCKWORK_DIR}/MessagingInterface.cpp 
-    ${CLOCKWORK_DIR}/MessageLog.cpp 
-    ${CLOCKWORK_DIR}/MessageEncoding.cpp 
-    ${CLOCKWORK_DIR}/regular_expressions.cpp 
+	${CLOCKWORK_DIR}/MessagingInterface.cpp 
+	${CLOCKWORK_DIR}/MessageLog.cpp 
+	${CLOCKWORK_DIR}/MessageEncoding.cpp 
+	${CLOCKWORK_DIR}/regular_expressions.cpp 
 	${CLOCKWORK_DIR}/CommandManager.cpp
 	${CLOCKWORK_DIR}/SocketMonitor.cpp
 	${CLOCKWORK_DIR}/ConnectionManager.cpp
-    ${CLOCKWORK_DIR}/Logger.cpp
-    ${CLOCKWORK_DIR}/anet.c
-    ${CLOCKWORK_DIR}/cJSON.c
-    ${CLOCKWORK_DIR}/DebugExtra.cpp
-    ${CLOCKWORK_DIR}/value.cpp 
-    ${CLOCKWORK_DIR}/symboltable.cpp
-    ${CLOCKWORK_DIR}/rate.cpp
-    ${CLOCKWORK_DIR}/Message.cpp 
+	${CLOCKWORK_DIR}/Logger.cpp
+	${CLOCKWORK_DIR}/anet.c
+	${CLOCKWORK_DIR}/cJSON.c
+	${CLOCKWORK_DIR}/DebugExtra.cpp
+	${CLOCKWORK_DIR}/value.cpp 
+	${CLOCKWORK_DIR}/symboltable.cpp
+	${CLOCKWORK_DIR}/rate.cpp
+	${CLOCKWORK_DIR}/Message.cpp 
 	${CLOCKWORK_DIR}/watchdog.cpp
 	${HEADER_FILES}
 )
@@ -218,18 +220,24 @@ INCLUDE_DIRECTORIES(${ETHERCAT_DIR})
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/tool)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/include)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/master)
+include_directories("${LIBXML2_INCLUDE_DIR}")
 LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
+LINK_DIRECTORIES("LIBXML2_LIBRARIES")
 
-add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp ${Clockwork_SRCS})
+add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp 
+	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
+)
 #set_target_properties (iod PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
-target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
+target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" xml2 ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
-add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp ${Clockwork_SRCS})
+add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp 
+	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
+)
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 )
-target_link_libraries(iod_sdo Clockwork ec_tool "ethercat" "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
+target_link_libraries(iod_sdo Clockwork ec_tool "ethercat" "dl" "zmq" xml2 ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 

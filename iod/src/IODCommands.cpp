@@ -176,7 +176,6 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 bool IODCommandEnable::run(std::vector<Value> &params) {
 	std::cout << "received iod command ENABLE " << params[1] << "\n";
 	if (params.size() == 2) {
-		DBG_MSG << "enabling " << params[1] << "\n";
 		MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 		if (m && !m->enabled()) {
 			m->enable();

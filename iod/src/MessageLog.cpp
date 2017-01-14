@@ -5,7 +5,9 @@
 #include <algorithm>
 #include "Logger.h"
 
-unsigned int MessageLog::max_memory = 1024*1024;
+static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete x; }
+
+unsigned int MessageLog::max_memory = 2048*1024;
 MessageLog * MessageLog::instance_ = 0;
 boost::mutex MessageLog::mutex_;
 
@@ -26,13 +28,18 @@ void MessageLog::add(const char *text) {
 	boost::mutex::scoped_lock lock(mutex_);
 	strncat(buf, text,  len);
     size_t extra = strlen(buf) + 1 + sizeof(LogEntry);
-    std::list<LogEntry*>::iterator iter = entries.begin();
-    while (iter != entries.end()  && current_memory + extra > max_memory) {
-        LogEntry *e = *iter;
-        current_memory -= e->size();
-        iter = entries.erase(iter);
-        delete e;
-    }
+	if (current_memory + extra > max_memory) {
+		MEMCHECK();
+	    std::list<LogEntry*>::iterator iter = entries.begin();
+	    while (iter != entries.end()  && current_memory + extra > max_memory) {
+	        LogEntry *e = *iter;
+		//std::cout << "trimming log; removing entry " << e->getText() << "\n";
+	        current_memory -= e->size();
+	        iter = entries.erase(iter);
+	        delete e;
+			MEMCHECK();
+	    }
+	}
     entries.push_back(new LogEntry(buf));
     current_memory += extra;
 }

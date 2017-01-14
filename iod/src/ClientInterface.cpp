@@ -43,7 +43,7 @@
 
 
 uint64_t client_watchdog_timer = 0;
-extern bool machine_is_ready;
+//extern bool machine_is_ready;
 static Watchdog *wd;
 
 IODCommandThread *IODCommandThread::instance_;
@@ -455,7 +455,7 @@ void IODCommandThread::operator()() {
     pthread_setname_np(pthread_self(), "iod command interface");
 #endif
 
-		wd = new Watchdog("Command Thread Watchdog", 600, false);
+	wd = new Watchdog("Command Thread Watchdog", 600, false);
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
@@ -558,11 +558,13 @@ void IODCommandThread::operator()() {
 			if ( items[0].revents & ZMQ_POLLIN) {
 				zmq::message_t request;
 				if (!cti->socket.recv (&request)) continue; // interrupted system call
+#if 0
 				if (!machine_is_ready) {
 					const char *tosend = "Ignored during startup";
 					safeSend(cti->socket, tosend, strlen(tosend));
 					continue;
 				}
+#endif
 				size_t size = request.size();
 				char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
 				memcpy(data, request.data(), size);

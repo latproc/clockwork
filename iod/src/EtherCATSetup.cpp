@@ -64,7 +64,10 @@
 #include "MessagingInterface.h"
 #include "ecat_thread.h"
 #include "ProcessingThread.h"
-
+#ifndef EC_SIMULATOR
+#include <ecrt.h>
+#include "ethercat_xml_parser.h"
+#endif
 
 extern boost::mutex thread_protection_mutex;
 
@@ -105,23 +108,25 @@ void initialiseOutputs() {
 	delete[] dm;
 } 
 
-void generateIOComponentModules()
+void cleanupIOComponentModules() {
+	IOComponent::reset();
+}
+	
+
+void generateIOComponentModules( std::map<unsigned int, DeviceInfo*> slave_configuration )
 {
-	std::list<Output *> output_list;
+	cleanupIOComponentModules();
 	{
 		boost::mutex::scoped_lock lock(thread_protection_mutex);
+		output_points.clear();
 
-		int remaining = machines.size();
-		std::cout << remaining << " Machines\n";
 		std::cout << "Linking clockwork machines to hardware\n";
-		std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
-		while (iter != machines.end())
+		std::list<MachineInstance*>::iterator iter = MachineInstance::begin();
+		while (iter != MachineInstance::end())
 		{
 			const int error_buf_size = 100;
 			char error_buf[error_buf_size];
-			MachineInstance *m = (*iter).second;
-			iter++;
-			--remaining;
+			MachineInstance *m = *iter++;
 			if ( (m->_type == "POINT" || m->_type == "ANALOGINPUT"  || m->_type == "COUNTERRATE"
 						|| m->_type == "COUNTER" 
 						|| m->_type == "STATUS_FLAG" || m->_type == "ANALOGOUTPUT" ) && m->parameters.size() > 1)
@@ -223,7 +228,7 @@ void generateIOComponentModules()
 
 				if (direction == EC_DIR_OUTPUT)
 				{
-#if 0
+#if 1
 					std::cerr << "Adding new output device " << m->getName()
 						<< " position: " << entry_position
 						<< " name: " << module->entry_details[offset_idx].name
@@ -240,7 +245,6 @@ void generateIOComponentModules()
 					if (bitlen == 1)
 					{
 						Output *o = new Output(addr);
-						output_list.push_back(o);
 						IOComponent::devices[m->getName().c_str()] = o;
 						o->setName(m->getName().c_str());
 						m->io_interface = o;
@@ -250,7 +254,6 @@ void generateIOComponentModules()
 					else
 					{
 						AnalogueOutput *o = new AnalogueOutput(addr);
-						output_list.push_back(o);
 						IOComponent::devices[m->getName().c_str()] = o;
 						o->setName(m->getName().c_str());
 						m->io_interface = o;
@@ -343,7 +346,6 @@ void generateIOComponentModules()
 #endif
 			}
 		}
-		assert(remaining==0);
 	}
 }
 
