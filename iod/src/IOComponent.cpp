@@ -370,11 +370,13 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		return;
 //	std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
 #ifdef USE_EXPERIMENTAL_IDLE_LOOP
+	// look at the components that changed and remove them from the outgoing queue as long as the 
+	// outputs have been sent to the hardware
 	std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
 	while (iter != updatedComponentsIn.end()) {
 		IOComponent *ioc = *iter++;
 		ioc->read_time = io_clock;
-//		std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
+		std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
 		//if (ioc->last_event == e_none)  {
 			updatedComponentsIn.erase(ioc); 
 			if (updates_sent && updatedComponentsOut.count(ioc)) {
@@ -382,8 +384,21 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 				updatedComponentsOut.erase(ioc);
 			}
 		//}
-		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
+			else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
 		updated_machines.insert(ioc);
+	}
+	// for machines with updates to send, if these machines already have the same value
+	// as the hardware (and updates have been sent) we also remove them from the
+	// outgoing queue
+	if (updates_sent) {
+		iter = updatedComponentsOut.begin();
+		while (iter != updatedComponentsOut.end()) {
+			IOComponent *ioc = *iter++;
+			if (ioc->pending_value == (uint32_t)ioc->address.value) {
+				std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
+				updatedComponentsOut.erase(ioc);
+			}
+		}
 	}
 #else
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();

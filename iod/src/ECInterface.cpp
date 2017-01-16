@@ -686,16 +686,29 @@ void ECInterface::configureModules() {
 
 		for(unsigned int i=0; i<m->sync_count; ++i) {
 			int res;
+			ec_direction_t dir = m->syncs[i].dir;
+			if (dir == EC_DIR_OUTPUT)
+				m->syncs[i].watchdog_mode = EC_WD_ENABLE;
+
 			res = ecrt_slave_config_sync_manager(m->slave_config, m->syncs[i].index,
 				m->syncs[i].dir, m->syncs[i].watchdog_mode);
+			if (res < 0) {
+				char buf[100];
+				snprintf(buf, 100, "Error %d setting WD enable state on sync manager %d for module %d\n",
+					res, i, m->position);
+				MessageLog::instance()->add(buf);
+			}
 			if (m->syncs[i].n_pdos && m->syncs[i].pdos)
 				ecrt_slave_config_pdo_assign_clear(m->slave_config, m->syncs[i].index);
 
-#if 1
+#if 0
 			if (m->syncs[i].dir == EC_DIR_OUTPUT && m->syncs[i].n_pdos > 0){
 				res = ecrt_slave_config_sync_manager(m->slave_config, i, EC_DIR_OUTPUT, EC_WD_ENABLE);
 				if (res < 0) {
-					std::cout << "Error: " << res << " setting enabling WD on sync manager " << i << "\n";
+					char buf[100];
+					snprintf(buf, 100, "Error %d setting WD enable state on sync manager %d for module %d\n",
+						res, i, m->slave_config->position);
+					MessageLog::instance()->add(buf);
 				}
 			}
 #endif

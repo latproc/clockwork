@@ -74,10 +74,11 @@ uint64_t clockwork_watchdog_timer = 0;
 
 extern void handle_io_sampling(uint64_t clock);
 
-//#define KEEPSTATS
+#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
-static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete x; }
+#define MEMCHECK()
+//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete x; }
 
 unsigned int CommandSocketInfo::last_idx = 5;
 
@@ -337,7 +338,7 @@ DBG_MSG << "unexpected stage " << (int)stage << "\n";
 	return res;
 }
 
-
+#if 0
 const long *setupPropertyRef(const char *machine_name, const char *property_name) {
 	MachineInstance *system = MachineInstance::find(machine_name);
 	if (!system) return 0;
@@ -417,6 +418,7 @@ private:
 	uint64_t start_time;
 	AutoStatStorage &storage_;
 };
+#endif
 
 #if 0
 static void setStatus(ProcessingThread::Status &s, Watchdog &wd, const ProcessingThread::Status new_state) {
@@ -448,6 +450,35 @@ void ProcessingThread::suspend(MachineInstance *m) {
 	instance()->runnable.erase(m);
 }
 
+void ProcessingThread::HandleIncomingEtherCatData( std::set<IOComponent *> &io_work_queue,
+		uint64_t curr_t, uint64_t last_sample_poll, AutoStatStorage &avg_io_time) {
+	IOLockHelper io_lock;
+	static unsigned long total_mp_time = 0;
+	static unsigned long mp_count = 0;
+	uint8_t *mask_p = incoming_process_mask;
+	int n = incoming_data_size;
+	while (n && *mask_p == 0) { ++mask_p; --n; }
+	if (n) { // io has indicated a change
+		if (machine_is_ready)
+		{
+#if VERBOSE_DEBUG
+			std::cout << "Processing got masked EtherCAT data at byte " << (incoming_data_size-n) << "\n";
+#endif
+#ifdef KEEPSTATS
+			AutoStat stats(avg_io_time);
+#endif
+			IOComponent::processAll( global_clock, incoming_data_size, incoming_process_mask, 
+					incoming_process_data, io_work_queue);
+		}
+		else
+			std::cout << "Processing received EtherCAT data but machine is not ready\n";
+
+	}
+	if (curr_t - last_sample_poll >= 10000) {
+		last_sample_poll = curr_t;
+		handle_io_sampling(global_clock); // devices that need a regular poll
+	}
+}
 
 void ProcessingThread::operator()()
 {
@@ -545,14 +576,14 @@ void ProcessingThread::operator()()
 	while (!program_done)
 	{
 		MEMCHECK();
-	    if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit) {
+		if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit) {
 			IOLockHelper io_lock;
 			// attempt to initialise the hardware interface. If this
 			// works we move the IOComponent module's state along
 			// so that IOComponents can be linked
 			if (incoming_process_data) { delete incoming_process_data; incoming_process_data = 0; }
 			if (incoming_process_mask) { delete incoming_process_mask; incoming_process_mask = 0; }
-	        if (activate_hardware.initialiseHardware()) {
+			if (activate_hardware.initialiseHardware()) {
 				IOComponent::setHardwareState(IOComponent::s_hardware_init);
 				//std::cout << "Activating hardware\n";
 				//activate_hardware();
@@ -576,7 +607,7 @@ void ProcessingThread::operator()()
 				machine_is_ready = false;
 			}
 		}
-			
+
 
 #ifdef KEEPSTATS
 		avg_poll_time.start();
@@ -601,14 +632,17 @@ void ProcessingThread::operator()()
 		char buf[100];
 		int poll_wait = internals->cycle_delay / 1000; // millisecs
 		machine_check_delay = internals->cycle_delay / 5;
-		uint64_t curr_t = 0;
 		int systems_waiting = 0;
+		uint64_t curr_t = 0;
 		uint64_t last_sample_poll = 0;
 		bool machines_have_work;
 		while (!program_done)
 		{
 			MEMCHECK();
 			curr_t = nowMicrosecs();
+			internals->process_manager.SetTime(curr_t);
+			//TBD add a guard here to detect/prevent rapid cycling
+
 			for (int i=0; i<6; ++i) {
 				items[i] = fixed_items[i];
 			}
@@ -628,8 +662,6 @@ void ProcessingThread::operator()()
 				}
 			}
 
-			internals->process_manager.SetTime(curr_t);
-
 			//machines_have_work = MachineInstance::workToDo();
 			{
 				static size_t last_runnable_count = 0;
@@ -642,7 +674,7 @@ void ProcessingThread::operator()()
 				}
 			}
 			if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty())
-				poll_wait = 0;
+				poll_wait = 1;
 			else {
 				poll_wait = 100;
 			}
@@ -684,6 +716,7 @@ void ProcessingThread::operator()()
 			if (IOComponent::updatesWaiting()) {
 				extern std::set<IOComponent*> updatedComponentsOut;
 				std::set<IOComponent*>::iterator iter = updatedComponentsOut.begin();
+				std::cout << updatedComponentsOut.size() << " entries in updatedComponentsOut:\n";
 				while (iter != updatedComponentsOut.end()) std::cout << " " << (*iter++)->io_name;
 				std::cout << " \n";
 			}
@@ -699,32 +732,7 @@ void ProcessingThread::operator()()
 		*/
 		if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)
 		{
-			IOLockHelper io_lock;
-			static unsigned long total_mp_time = 0;
-			static unsigned long mp_count = 0;
-			uint8_t *mask_p = incoming_process_mask;
-			int n = incoming_data_size;
-			while (n && *mask_p == 0) { ++mask_p; --n; }
-			if (n) { // io has indicated a change
-				if (machine_is_ready)
-				{
-#if VERBOSE_DEBUG
-					std::cout << "Processing got masked EtherCAT data at byte " << (incoming_data_size-n) << "\n";
-#endif
-#ifdef KEEPSTATS
-					AutoStat stats(avg_io_time);
-#endif
-					IOComponent::processAll( global_clock, incoming_data_size, incoming_process_mask, 
-						incoming_process_data, io_work_queue);
-				}
-				else
-					std::cout << "Processing received EtherCAT data but machine is not ready\n";
-
-			}
-			if (curr_t - last_sample_poll >= 10000) {
-				last_sample_poll = curr_t;
-				handle_io_sampling(global_clock); // devices that need a regular poll
-			}
+			HandleIncomingEtherCatData(io_work_queue, curr_t, last_sample_poll, avg_io_time);
 			safeSend(ecat_sync,"go",2);
 		}
 
@@ -768,10 +776,11 @@ void ProcessingThread::operator()()
 #ifdef KEEPSTATS
 				AutoStat stats(avg_cmd_processing);
 #endif
-				NB_MSG << "Warning: ignoring incoming data from client\n";
 				size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
 				if (len) {
-					NB_MSG << buf << "\n";
+					char msgbuf[200];
+					snprintf(msgbuf, 100, "Warning: processing thread ignoring incoming data '%.*s' from client\n", (int)len, msgbuf);
+					MessageLog::instance()->add(msgbuf);
 				}
 			}
 		}
