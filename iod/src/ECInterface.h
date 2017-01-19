@@ -150,7 +150,6 @@ public:
 	bool addModule(ECModule *m, bool reset_io);
 	bool online();
 	bool operational();
-	static std::vector<ECModule *>modules;
 	//bool configurePDOs();
 	static ECModule *findModule(unsigned int position);
 
@@ -195,6 +194,7 @@ private:
 	uint8_t *update_mask;
 	uint32_t reference_time;
 #ifndef EC_SIMULATOR
+	static std::vector<ECModule *>modules;
 #ifdef USE_SDO
 	std::list< std::pair<SDOEntry*, Value> > initialisation_entries;
 	std::list< std::pair<SDOEntry*, Value> >::iterator current_init_entry;

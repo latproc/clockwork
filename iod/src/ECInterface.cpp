@@ -1162,11 +1162,11 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 */
 	for (unsigned int i=0; i<size; ++i) {
 		if (*mask && *data != *pd){
-/* */
+/*
 			std::cout << "at " << i << " data (" 
 				<< (unsigned int)(*data) << ") different to domain ("
 				<< (unsigned int)(*pd) << ")\n";
-/* */
+*/
 			uint8_t bitmask = 0x01;
 			int count = 0;
 			while (bitmask) {

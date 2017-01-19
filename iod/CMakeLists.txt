@@ -150,7 +150,7 @@ set (Clockwork_Headers
 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
-	src/HandleRequestAction.h src/SDOEntry.h
+	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
 )
 set (Clockwork_SRCS 
 	${Clockwork_Headers}
@@ -169,7 +169,7 @@ set (Clockwork_SRCS
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp 
-	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp
+	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
@@ -191,7 +191,7 @@ ${ETHERCAT_DIR}/tool/CommandEoe.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
-#${ETHERCAT_DIR}/tool/CommandIp.cpp
+${ETHERCAT_DIR}/tool/CommandIp.cpp
 ${ETHERCAT_DIR}/tool/CommandMaster.cpp
 ${ETHERCAT_DIR}/tool/CommandPdos.cpp
 ${ETHERCAT_DIR}/tool/CommandRegRead.cpp

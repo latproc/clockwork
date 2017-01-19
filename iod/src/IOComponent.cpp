@@ -376,15 +376,13 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 	while (iter != updatedComponentsIn.end()) {
 		IOComponent *ioc = *iter++;
 		ioc->read_time = io_clock;
-		std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
-		//if (ioc->last_event == e_none)  {
-			updatedComponentsIn.erase(ioc); 
-			if (updates_sent && updatedComponentsOut.count(ioc)) {
-				std::cout << "output request for " << ioc->io_name << " resolved\n";
-				updatedComponentsOut.erase(ioc);
-			}
-		//}
-			else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
+		//std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
+		updatedComponentsIn.erase(ioc); 
+		if (updates_sent && updatedComponentsOut.count(ioc)) {
+			//std::cout << "output request for " << ioc->io_name << " resolved\n";
+			updatedComponentsOut.erase(ioc);
+		}
+		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
 		updated_machines.insert(ioc);
 	}
 	// for machines with updates to send, if these machines already have the same value
@@ -395,7 +393,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		while (iter != updatedComponentsOut.end()) {
 			IOComponent *ioc = *iter++;
 			if (ioc->pending_value == (uint32_t)ioc->address.value) {
-				std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
+				//std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
 				updatedComponentsOut.erase(ioc);
 			}
 		}
@@ -1233,9 +1231,11 @@ void IOComponent::markChange() {
 		// only outputs will have an e_on or e_off event queued, 
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
+/*
 			std::cout << "IOComponent::markChange setting bit " 
 				<< (offset - update_data) << ":" << bitpos 
 				<< " for " << io_name << "\n";
+*/
 			set_bit(offset, bitpos, 1);			
 			updatesSent(false);
 		}
@@ -1247,9 +1247,11 @@ void IOComponent::markChange() {
 	}
 	else {
 		if (last_event == e_change) {
+/*
 			std::cerr << " marking change to " << pending_value 
 				<< " at offset " << (unsigned long)(offset - update_data)
 			    << " for " << io_name << "\n";
+*/
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
