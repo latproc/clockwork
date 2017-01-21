@@ -1,7 +1,9 @@
-#LyX 2.1 created this file. For more info see http://www.lyx.org/
-\lyxformat 474
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
 \begin_document
 \begin_header
+\save_transient_properties true
+\origin unavailable
 \textclass article
 \use_default_options true
 \maintain_unincluded_children false
@@ -9,16 +11,16 @@
 \language_package default
 \inputencoding auto
 \fontencoding global
-\font_roman default
-\font_sans default
-\font_typewriter default
-\font_math auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
-\font_sf_scale 100
-\font_tt_scale 100
+\font_sf_scale 100 100
+\font_tt_scale 100 100
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -200,6 +202,10 @@ An interface between Clockwork drivers or between a Clockwork driver and
 
 \begin_layout LyX-Code
 channel_name CHANNEL(host:hostname, port:portname) {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -220,27 +226,27 @@ VERSION version_sequence ';'
 \end_layout
 
 \begin_layout LyX-Code
-SHARES block_name, \SpecialChar \ldots{}
+SHARES block_name, \SpecialChar ldots
  ';'
 \end_layout
 
 \begin_layout LyX-Code
-MONITORS machine_name | pattern [ interface ], \SpecialChar \ldots{}
+MONITORS machine_name | pattern [ interface ], \SpecialChar ldots
  ';'
 \end_layout
 
 \begin_layout LyX-Code
-UPDATES machine_name | pattern [ interface ], \SpecialChar \ldots{}
+UPDATES machine_name | pattern [ interface ], \SpecialChar ldots
  ;
 \end_layout
 
 \begin_layout LyX-Code
-SENDS message_name, \SpecialChar \ldots{}
+SENDS message_name, \SpecialChar ldots
  ';'
 \end_layout
 
 \begin_layout LyX-Code
-RECEIVES command_name, \SpecialChar \ldots{}
+RECEIVES command_name, \SpecialChar ldots
  ';'
 \end_layout
 
@@ -296,7 +302,7 @@ INTERFACE defines a pseudo machine class that act to filter the view of
 
 \begin_inset CommandInset ref
 LatexCommand ref
-reference "sub:Interfaces"
+reference "subsec:Interfaces"
 
 \end_inset
 
@@ -390,7 +396,7 @@ Clauses in a channel definition are all optional.
 Interfaces
 \begin_inset CommandInset label
 LatexCommand label
-name "sub:Interfaces"
+name "subsec:Interfaces"
 
 \end_inset
 
@@ -409,6 +415,10 @@ By way of an example, a BIT has the interface:
 
 \begin_layout LyX-Code
 BIT INTERFACE { 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -441,6 +451,10 @@ A channel may also include interface definitions that define the machines
 
 \begin_layout LyX-Code
 machine_class INTERFACE '{' 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -457,7 +471,7 @@ initial_state INITIAL ';'
 \end_layout
 
 \begin_layout LyX-Code
-STATES '{' state3, state4, \SpecialChar \ldots{}
+STATES '{' state3, state4, \SpecialChar ldots
  '}'
 \end_layout
 
@@ -466,7 +480,7 @@ property1 PROPERTY [ READONLY | READWRITE ] ';'
 \end_layout
 
 \begin_layout LyX-Code
-PROPERTIES '{' property2 [ READONLY | READWRITE ], \SpecialChar \ldots{}
+PROPERTIES '{' property2 [ READONLY | READWRITE ], \SpecialChar ldots
  '}'
 \end_layout
 
@@ -565,6 +579,10 @@ Each block may have properties that descibe attributes common to all regions
 
 \begin_layout LyX-Code
 ModbusPanel BLOCK {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -677,11 +695,19 @@ need_response bool /* is this used/needed? TBD */
 
 \begin_layout LyX-Code
 parameters array [
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
 item {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -731,6 +757,10 @@ On startup, a Clockwork driver
 
 \begin_layout Itemize
 interrogates a repository for 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -761,7 +791,7 @@ When a client connects to a server it is required to initiate a negotiation
  This can be done by a command message with the command: CHANNEL and the
  name of the channel.
  In this case, the server is expected to refer to its repository for a matching
- channel (and version\SpecialChar \ldots{}
+ channel (and version\SpecialChar ldots
 ).
  When a client requests a new channel, the server:
 \end_layout
@@ -773,6 +803,10 @@ instantiates a channel and negotiates its settings
 \begin_layout Itemize
 creates shadow machines for machines that are updated externally and not
  already instantiated.
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -822,6 +856,10 @@ The communications protocol is not secure; it has a simple authentication
 
 \begin_layout Itemize
 The connecting party identifies the channel to be used:
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -900,6 +938,10 @@ We define a channel for communication between the computers and define an
 
 \begin_layout Quotation
 ScalesChannel CHANNEL scales {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -914,6 +956,10 @@ MONITORS scales ScalesInterface;
 
 \begin_layout Quotation
 ScalesInterface INTERFACE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -953,6 +999,10 @@ ScalesMachine ScalesInterface;
 
 \begin_layout LyX-Code
 WeightMonitor MACHINE scales {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1012,6 +1062,10 @@ The Clockwork driver that implements the scales defines a machine to interpret
 
 \begin_layout LyX-Code
 SCALES MACHINE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1103,6 +1157,10 @@ To setup a system monitor, a pattern can be used so that a range of machines
 
 \begin_layout LyX-Code
 MonitorChannel CHANNEL {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1142,6 +1200,10 @@ To limit the properties and states that are transmitted, machines can monitored
 
 \begin_layout LyX-Code
 MonitorChannel CHANNEL {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1160,6 +1222,10 @@ MONITORS `*` MonitorInterface;
 
 \begin_layout LyX-Code
 MonitorInterface INTERFACE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1281,6 +1347,10 @@ The server end of a channel sends state changes for monitored machines.
 
 \begin_layout Itemize
 When two instances of clockwork setup a channel
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1339,6 +1409,10 @@ the server has no need of the setup socket
 \end_deeper
 \begin_layout Itemize
 When a command is sent to the channel
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1408,13 +1482,101 @@ Predefined Channels
 EtherCAT
 \end_layout
 
+\begin_layout Subsubsection
+EtherCAT machines
+\end_layout
+
+\begin_layout Standard
+When built with the EtherCAT(tm) extension, clockwork can support basic
+ EtherCAT communication.
+ The following machines are included.
+\end_layout
+
+\begin_layout Description
+ETHERCAT is the overall state manager for the EtherCAT environment
+\end_layout
+
+\begin_layout Description
+ETHERCAT_WC is the machine that tracks the working counter state
+\end_layout
+
+\begin_layout Description
+ETHERCAT_LS tracks the status of the ethernet link
+\end_layout
+
+\begin_layout Standard
+Various EtherCAT based machines such as POINTs are marked such that they
+ depend on ethercat.
+ The ETHERCAT machine and all devices that depend on it are automatically
+ started and initialised during the startup of the system.
+\end_layout
+
+\begin_layout Standard
+Devices on the EtherCAT bus sometimes need initialisation before processing
+ begins, in this case it is necessary to implement a STARTUP machine to
+ provide a finer control of the startup process.
+\end_layout
+
+\begin_layout Standard
+The ETHERCAT machine is an instance of ETHERCAT_BUS and has an interface
+ as follows.
+\end_layout
+
+\begin_layout LyX-Code
+ETHERCAT_BUS MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION tolerance 10;
+\end_layout
+
+\begin_layout LyX-Code
+INIT INITIAL;
+\end_layout
+
+\begin_layout LyX-Code
+DISCONNECTED STATE;
+\end_layout
+
+\begin_layout LyX-Code
+ACTIVE STATE;
+\end_layout
+
+\begin_layout LyX-Code
+INACTIVE STATE;
+\end_layout
+
+\begin_layout LyX-Code
+ERROR STATE;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsubsection
+EtherCAT domains
+\end_layout
+
+\begin_layout Standard
+Currently the clockwork implementation of EtherCAT supports only a single
+ EtherCAT domain.
+ 
+\end_layout
+
+\begin_layout Subsubsection
+EtherCAT memory
+\end_layout
+
 \begin_layout Standard
 When the EtherCAT driver connects to Clockwork, it announces the modules
  that it has control over either by providing the names from the shared
  repository or by providing the definitions directly on the channel.
  BLOCKs contain REGIONs that have a number of BITs, numbered from 1 and
- also using default names that follow the pattern 'a','b',\SpecialChar \ldots{}
-,'aa',ab',\SpecialChar \ldots{}
+ also using default names that follow the pattern 'a','b',\SpecialChar ldots
+,'aa',ab',\SpecialChar ldots
 .
 \end_layout
 
@@ -1425,6 +1587,10 @@ TBD fix this example, the syncmanagers actually define the regions and the
 
 \begin_layout LyX-Code
 Module BLOCK {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1438,6 +1604,10 @@ OPTION alias 0;
 
 \begin_layout LyX-Code
 pdo1 REGION {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1463,6 +1633,10 @@ Inputs
 
 \begin_layout LyX-Code
 BIT[8] {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1472,6 +1646,10 @@ INITIAL 0; # this can also be done via a prepare statement
 
 \begin_layout LyX-Code
 MAP { # unnamed map, this is the default interpretation for this region
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1602,11 +1780,15 @@ Analogue values must be intialised before EtherCAT enters the operational
 
 \begin_layout LyX-Code
 Module BLOCK {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
-[\SpecialChar \ldots{}
+[\SpecialChar ldots
 ]
 \end_layout
 
@@ -1676,6 +1858,10 @@ Devices that are persistent are loaded from a database when the program
 
 \begin_layout LyX-Code
 PERSISTENCE_CHANNEL CHANNEL {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1803,11 +1989,19 @@ command string,
 
 \begin_layout LyX-Code
 parameters array [
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
 item {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper

@@ -1,7 +1,9 @@
-#LyX 2.1 created this file. For more info see http://www.lyx.org/
-\lyxformat 474
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
 \begin_document
 \begin_header
+\save_transient_properties true
+\origin unavailable
 \textclass article
 \use_default_options true
 \maintain_unincluded_children false
@@ -9,16 +11,16 @@
 \language_package default
 \inputencoding auto
 \fontencoding global
-\font_roman default
-\font_sans default
-\font_typewriter default
-\font_math auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
-\font_sf_scale 100
-\font_tt_scale 100
+\font_sf_scale 100 100
+\font_tt_scale 100 100
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -565,6 +567,10 @@ or
 
 \begin_layout LyX-Code
 my_properties PROPERTY_SET {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -815,11 +821,19 @@ Data sources are objects that provide data, either on a polled or automatic
 
 \begin_layout LyX-Code
 my_data DATASOURCE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
 COMMANDS { 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1291,6 +1305,10 @@ Clockwork 1.0 introduces exception and error handling
 
 \begin_layout LyX-Code
 TRY {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1305,6 +1323,10 @@ statement-list
 
 \begin_layout LyX-Code
 WHEN TIMER >= timeout {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1323,6 +1345,10 @@ RETURN; # successful completion
 
 \begin_layout LyX-Code
 CATCH message {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1472,12 +1498,16 @@ Type extensions provide for adding parameters, statements to the handlers
 \end_layout
 
 \begin_layout LyX-Code
-A MACHINE { \SpecialChar \ldots{}
+A MACHINE { \SpecialChar ldots
  };
 \end_layout
 
 \begin_layout LyX-Code
 B MACHINE EXTENDS A <additional parameters> {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1790,6 +1820,37 @@ Machines should be able to be defined as extensions of existing machines.
  Some thought will be needed as to whether actions will be executed before
  or after existing actions.
  
+\end_layout
+
+\begin_layout Subsection
+Introspection
+\end_layout
+
+\begin_layout Standard
+Clockwork already has facilities to enable and disable parts of the executing
+ machine.
+ To make it easier to address groups of machines some facilities will be
+ added tselect machines within the current instance:
+\end_layout
+
+\begin_layout LyX-Code
+points LIST FROM SELECT MACHINES OF TYPE POINT;
+\end_layout
+
+\begin_layout LyX-Code
+outputs LIST FROM SELECT MACHINES WITH NAME MATCHING `^O_`;
+\end_layout
+
+\begin_layout Standard
+or 
+\end_layout
+
+\begin_layout LyX-Code
+points LIST;
+\end_layout
+
+\begin_layout LyX-Code
+SELECT MACHINES OF TYPE POINT INTO points;
 \end_layout
 
 \begin_layout Subsection
