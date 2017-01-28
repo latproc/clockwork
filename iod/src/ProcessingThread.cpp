@@ -78,7 +78,7 @@ extern void handle_io_sampling(uint64_t clock);
 
 #define VERBOSE_DEBUG 0
 #define MEMCHECK()
-//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete x; }
+//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 unsigned int CommandSocketInfo::last_idx = 5;
 

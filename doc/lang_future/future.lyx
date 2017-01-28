@@ -1,7 +1,9 @@
-#LyX 2.1 created this file. For more info see http://www.lyx.org/
-\lyxformat 474
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
 \begin_document
 \begin_header
+\save_transient_properties true
+\origin unavailable
 \textclass article
 \use_default_options true
 \maintain_unincluded_children false
@@ -9,16 +11,16 @@
 \language_package default
 \inputencoding auto
 \fontencoding global
-\font_roman default
-\font_sans default
-\font_typewriter default
-\font_math auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
-\font_sf_scale 100
-\font_tt_scale 100
+\font_sf_scale 100 100
+\font_tt_scale 100 100
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -87,6 +89,15 @@ Martin Leadbeater
 \begin_layout Abstract
 This paper describes various language features that will be added to Clockwork
  in the future
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset toc
+LatexCommand tableofcontents
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Section
@@ -369,6 +380,86 @@ The way property values are stored in machines desparately needs an overhaul;
  time.
 \end_layout
 
+\begin_layout Subsubsection
+Floating point values
+\end_layout
+
+\begin_layout Standard
+Within clockwork, floating point values are used as in the following examples:
+\end_layout
+
+\begin_layout LyX-Code
+OPTION x 1.0;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION y 1.;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION z 1.3E3;
+\end_layout
+
+\begin_layout Standard
+Usage
+\end_layout
+
+\begin_layout LyX-Code
+OPTION a 1;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION x 1.3;
+\end_layout
+
+\begin_layout LyX-Code
+a := a + x; /* a converted to float with value 2.3 */
+\end_layout
+
+\begin_layout LyX-Code
+a := INT(a+x);
+\end_layout
+
+\begin_layout LyX-Code
+a := a + x AS INTEGER;
+\end_layout
+
+\begin_layout LyX-Code
+a := (a + x) AS INTEGER;
+\end_layout
+
+\begin_layout Subsubsection
+Type translation
+\end_layout
+
+\begin_layout Standard
+Values are typed internally and can be forcibly converted from one type
+ to another via the AS operator:
+\end_layout
+
+\begin_layout LyX-Code
+a := b AS INTEGER;
+\end_layout
+
+\begin_layout LyX-Code
+b := a AS FLOAT
+\end_layout
+
+\begin_layout Standard
+Numeric values can be combined in expressions without specific type casting
+ and the rules for determining resultant types are:
+\end_layout
+
+\begin_layout Itemize
+string expressions cause numeric values to be converted to strings in the
+ result
+\end_layout
+
+\begin_layout Itemize
+when a floating point value is used in an subexpression, the subexpression
+ type is converted to floating point
+\end_layout
+
 \begin_layout Subsection
 Floating point calculations
 \end_layout
@@ -565,6 +656,10 @@ or
 
 \begin_layout LyX-Code
 my_properties PROPERTY_SET {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -815,11 +910,19 @@ Data sources are objects that provide data, either on a polled or automatic
 
 \begin_layout LyX-Code
 my_data DATASOURCE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
 COMMANDS { 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1291,6 +1394,10 @@ Clockwork 1.0 introduces exception and error handling
 
 \begin_layout LyX-Code
 TRY {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1305,6 +1412,10 @@ statement-list
 
 \begin_layout LyX-Code
 WHEN TIMER >= timeout {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1323,6 +1434,10 @@ RETURN; # successful completion
 
 \begin_layout LyX-Code
 CATCH message {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1472,12 +1587,16 @@ Type extensions provide for adding parameters, statements to the handlers
 \end_layout
 
 \begin_layout LyX-Code
-A MACHINE { \SpecialChar \ldots{}
+A MACHINE { \SpecialChar ldots
  };
 \end_layout
 
 \begin_layout LyX-Code
 B MACHINE EXTENDS A <additional parameters> {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper

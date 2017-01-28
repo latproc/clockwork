@@ -231,7 +231,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
     return Null;
 }
 
-bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
+bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         std::string s(name);
         st[s] = val;
@@ -244,7 +244,7 @@ bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
     }
 }
 
-bool SymbolTable::add(const std::string name, Value val, ReplaceMode replace_mode) {
+bool SymbolTable::add(const std::string name, const Value &val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
     	st[name] = val;
         stok[Tokeniser::instance()->getTokenId(name)] = val;

@@ -30,7 +30,9 @@ class MachineInstance;
 
 enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR, opNOT,
 	opUnaryMinus, opPlus, opMinus, opTimes, opDivide, opMod, opAssign, opMatch,
-    opBitAnd, opBitOr, opBitXOr, opNegate, opAny, opAll, opCount, opIncludes };
+    opBitAnd, opBitOr, opBitXOr, opNegate, opAny, opAll, opCount, opIncludes,
+	opInteger, opFloat
+};
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
 struct ExprNode {
@@ -38,6 +40,9 @@ struct ExprNode {
 	ExprNode(const Value &a, const Value *name = NULL);
 	ExprNode(Value *a, const Value *name = NULL);
 	ExprNode(Value &a, const Value *name = NULL);
+	ExprNode(long a, const Value *name = NULL);
+	ExprNode(float a, const Value *name = NULL);
+	ExprNode(double a, const Value *name = NULL);
 	ExprNode(bool a, const Value *name = NULL);
 	ExprNode(PredicateOperator o);
 	ExprNode(const ExprNode &other);

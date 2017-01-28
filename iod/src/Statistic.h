@@ -53,20 +53,20 @@ public:
 	void report(std::ostream &out) {
         if (count == 0) { out << text << "\tNo data\n"; }
 		else {
-			float ave = (count==0) ? 0 : sum/count;
+			double ave = (count==0) ? 0 : sum/count;
 			out << text << '\t' << count << '\t' << min_value << '\t' << max_value << '\t' << ave << "\n";
 		}
 	}
     void reportArray(cJSON *obj) {
-        float ave = (count==0) ? 0 : sum/count;
+        double ave = (count==0) ? 0 : sum/count;
         cJSON_AddItemToArray(obj, cJSON_CreateNumber(count));
         cJSON_AddItemToArray(obj, cJSON_CreateNumber(min_value));
         cJSON_AddItemToArray(obj, cJSON_CreateNumber(max_value));
-        cJSON_AddItemToArray(obj, cJSON_CreateNumber(ave));
-        cJSON_AddItemToArray(obj, cJSON_CreateNumber(sum));
+        cJSON_AddItemToArray(obj, cJSON_CreateDouble(ave));
+        cJSON_AddItemToArray(obj, cJSON_CreateDouble(sum));
     }
     void report(cJSON *obj) {
-        float ave = (count==0) ? 0 : sum/count;
+        double ave = (count==0) ? 0 : sum/count;
         cJSON_AddNumberToObject(obj, "count", count);
         cJSON_AddNumberToObject(obj, "min", min_value);
         cJSON_AddNumberToObject(obj, "max", max_value);
@@ -74,10 +74,10 @@ public:
         cJSON_AddNumberToObject(obj, "sum", sum);
     }
 #if 0	
-	float rollingAverage(){
+	double rollingAverage(){
 		int c=periods.size();
 		if(c==0)return 0.0f;
-		float s=0.0f;
+		double s=0.0f;
 		for(int i=0;i<c;i++){
 			s+=average(i);
 		}
@@ -105,17 +105,17 @@ public:
 	}
     const std::string &getName() const { return text; }
     int getCount() { return count; }
-    float getSum() { return sum; }
+    double getSum() { return sum; }
     
 private:
     Statistic(const Statistic &orig);
 
     std::string text;
-	float sum;
+	double sum;
 	int count;
 	long min_value;
 	long max_value;
-	float ssq;
+	double ssq;
 	static std::list<Statistic *> stats;
 };
 

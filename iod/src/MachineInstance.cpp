@@ -4353,8 +4353,8 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 				value = "UNKNOWN";
 		}
 		cJSON *item = cJSON_CreateArray();
-		cJSON_AddItemToArray(item, cJSON_CreateNumber(group));
-		cJSON_AddItemToArray(item, cJSON_CreateNumber(addr));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(group));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(addr));
 		if (owner) {
 			std::string name(owner->getName());
 			name += ".";
@@ -4374,11 +4374,13 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 			cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
 			//out << group << " " << addr << " " << full_name << " " << length << " " << value <<"\n";
 		}
-		cJSON_AddItemToArray(item, cJSON_CreateNumber(length));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(length));
 		if (value.kind == Value::t_string || value.kind == Value::t_symbol)
 			cJSON_AddItemToArray(item, cJSON_CreateString(value.sValue.c_str()));
+		else if (value.kind == Value::t_float)
+			cJSON_AddItemToArray(item, cJSON_CreateLong((long)trunc(value.fValue)));
 		else
-			cJSON_AddItemToArray(item, cJSON_CreateNumber(value.iValue));
+			cJSON_AddItemToArray(item, cJSON_CreateLong(value.iValue));
 		cJSON_AddItemToArray(json_array, item);
 		iter++;
 	}

@@ -100,6 +100,8 @@ Value eval(Predicate *p, MachineInstance *m){
             case opBitOr: res = l | r; break;
             case opBitXOr: res = l ^ r; break;
             case opNegate: res = ~r; break;
+			case opInteger: res = r.trunc(); break;
+			case opFloat: res = r.toFloat(); break;
 			case opAssign: res = r; break; // TBD
             case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
             case opAny:

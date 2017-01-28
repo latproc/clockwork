@@ -50,7 +50,7 @@ struct list_head {
 #endif
 
 #define VERBOSE_DEBUG 0
-static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete x; }
+//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 extern boost::mutex ecat_mutex;
 extern boost::condition_variable_any ecat_polltime;

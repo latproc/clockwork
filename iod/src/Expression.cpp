@@ -61,6 +61,8 @@ std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.oper
             case opBitOr: opstr = "|"; break;
             case opNegate: opstr = "~"; break;
             case opBitXOr: opstr = "^"; break;
+			case opInteger: opstr = "AS INTEGER"; break;
+			case opFloat: opstr = "AS FLOAT"; break;
             case opAny: opstr = "ANY"; break;
             case opAll: opstr = "ALL"; break;
             case opCount: opstr = "COUNT"; break;
@@ -277,7 +279,8 @@ void Predicate::clearTimerEvents(MachineInstance *target) // clear all timer eve
 std::ostream &Predicate::operator <<(std::ostream &out) const {
     if (left_p) {
         out << "(";
-		if (op != opNOT) left_p->operator<<(out); // ignore the lhs for NOT operators
+		if (op != opNOT && op != opInteger && op != opFloat)
+			left_p->operator<<(out); // ignore the lhs for NOT operators
         out << " " << op << " ";
         if (right_p) right_p->operator<<(out);
         out << ")";
@@ -302,6 +305,9 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
 Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0) {
 	if (other.left_p) left_p = new Predicate( *(other.left_p) );
 	op = other.op;
+	if (op == opInteger) {
+
+	}
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
     if (other.entry.dyn_value) {
@@ -413,7 +419,8 @@ std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iter
     const ExprNode &n = *iter++;
     if (n.kind == ExprNode::t_op) {
         out << "(";
-        if (n.op != opNOT) // ignore lhs for the not operator
+        if (n.op != opNOT && n.op != opInteger && n.op != opFloat)
+			// ignore lhs for the not operator
             traverse(out, iter, end);
         out <<" " << n.op << " " ;
         traverse(out, iter, end);
@@ -539,6 +546,19 @@ void prep(Predicate *p, MachineInstance *m, bool left);
 
 ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter){
     ExprNode o(*stack_iter++);
+#if 0
+	std::cout << "popped node: ";
+	if (o.kind == ExprNode::t_int) {
+		if (o.node)
+			std::cout << "val: " << *o.node;
+		else
+			std::cout << "null";
+
+	}
+	else
+		std::cout << "op: " << o.op;
+	std::cout << "\n";
+#endif
     if (o.kind != ExprNode::t_op) {
         if (o.val && o.val->kind == Value::t_dynamic) {
             o.val->dynamicValue()->operator()(m);
@@ -548,6 +568,12 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     }
     Value lhs, rhs;
     ExprNode b(eval_stack(m, stack_iter));
+#if 0
+	if (b.node)
+		std::cout << " eval stack (b): " << *b.node << "\n";
+	else
+		std::cout << " evaluated b: null\n";
+#endif
     assert(b.kind != ExprNode::t_op);
     if (b.val && b.val->kind == Value::t_dynamic) {
         rhs = b.val->dynamicValue()->operator()(m);
@@ -556,6 +582,12 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     }
     else if (b.val) rhs = *b.val;
     ExprNode a(eval_stack(m, stack_iter));
+#if 0
+	if (a.node)
+		std::cout << " eval stack (a): " << *a.node << "\n";
+	else
+		std::cout << " evaluated a: null\n";
+#endif
     assert(a.kind != ExprNode::t_op);
     if (a.val && a.val->kind == Value::t_dynamic) {
         lhs = a.val->dynamicValue()->operator()(m);
@@ -581,10 +613,12 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         case opBitOr: return lhs | rhs;
         case opNegate: return ~ rhs;
         case opBitXOr: return lhs ^ rhs;
+		case opInteger: return rhs.trunc();
+		case opFloat: return rhs.toFloat();
 		case opAssign:return rhs;
 		case opMatch: {
 			assert(a.val); assert(b.val);
-			return matches(a.val->asString().c_str(), b.val->asString().c_str());
+			return (bool)matches(a.val->asString().c_str(), b.val->asString().c_str());
 		}
         case opAny:
         case opCount:
@@ -649,6 +683,14 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
 		//std::cout << " pushing 'true'\n";
 		stack.push(ExprNode(SymbolTable::True));
 		//std::cout << " resolving right tree\n";
+		if (!prep(stack, p->right_p, m, false, reevaluate)) return false;
+		//std::cout << " pushing operator " << p->op << "\n";
+		stack.push(p->op);
+	}
+	else if (p->op == opInteger || p->op == opFloat) {
+		//std::cout << " pushing 'true'\n";
+		stack.push(ExprNode(SymbolTable::True));
+		//std::cout << " resolving right tree\n";
         if (!prep(stack, p->right_p, m, false, reevaluate)) return false;
 		//std::cout << " pushing operator " << p->op << "\n";
         stack.push(p->op);
@@ -660,7 +702,8 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
             return false; //result = &p->entry;
         }
         p->last_calculation = result;
-        //std::cout << " result: " << *result << "\n";
+		p->cached_entry = result;
+        //std::cout << "pushing result: " << *result << "\n";
         if (p->dyn_value) {
             stack.push(ExprNode(result, p->dyn_value));
         }
@@ -694,7 +737,26 @@ ExprNode::ExprNode(Value &a, const Value *name) :tmpval(a), val(0), node(name), 
 	++count_instances;
 	if (count_instances>max_count) max_count = count_instances;
 }
-ExprNode::ExprNode(bool a, const Value *name) : tmpval(a), val(0), node(name), kind(t_int) {
+ExprNode::ExprNode(long a, const Value *name)
+: tmpval(a), val(0), node(name), kind(t_int) {
+	val = &tmpval;
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(float a, const Value *name)
+: tmpval(a), val(0), node(name), kind(t_int) {
+	val = &tmpval;
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(double a, const Value *name)
+: tmpval(a), val(0), node(name), kind(t_int) {
+	val = &tmpval;
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
+ExprNode::ExprNode(bool a, const Value *name)
+	: tmpval(a), val(0), node(name), kind(t_int) {
 	val = &tmpval;
 	++count_instances;
 	if (count_instances>max_count) max_count = count_instances;
@@ -776,9 +838,13 @@ bool Condition::operator()(MachineInstance *m) {
         long t = now.tv_sec*1000000 + now.tv_usec;
         predicate->last_evaluation_time = t;
         last_evaluation = ss.str();
-	    if (last_result.kind == Value::t_bool) return last_result.bValue;
-		else
-			std::cout << "warning:  last result kind is not bool: " << last_result << "\n";
+	    if (last_result.kind == Value::t_bool)
+			return last_result.bValue;
+		else {
+			std::stringstream ss;
+			ss << "warning:  last result of " << *predicate << " is not boolean: " << last_result << "\n";
+			MessageLog::instance()->add(ss.str().c_str());
+		}
 	}
     return false;
 }

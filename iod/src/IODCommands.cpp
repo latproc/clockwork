@@ -595,6 +595,8 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 	    std::pair<std::string, Value> item(*st_iter++);
 	    if (item.second.kind == Value::t_integer)
 	        cJSON_AddNumberToObject(node, item.first.c_str(), item.second.iValue);
+		else if (item.second.kind == Value::t_float)
+			cJSON_AddItemToObject(node, item.first.c_str(), cJSON_CreateDouble(item.second.fValue));
 	    else
 	        cJSON_AddStringToObject(node, item.first.c_str(), item.second.asString().c_str());
     }

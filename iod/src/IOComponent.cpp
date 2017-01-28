@@ -36,7 +36,7 @@
 #include "ProcessingThread.h"
 
 #define VERBOSE_DEBUG 0
-static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete x; }
+static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN

@@ -144,10 +144,11 @@ struct Subcondition {
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
-%token LINKED SDO LOCAL CLASS
+%token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 
 %union {
 	int iVal;
+	double fVal;
 	const char *sVal;
 	const char *symbol;
     const char *pVal;
@@ -158,8 +159,9 @@ struct Subcondition {
 	struct Subcondition *subcond;
 };
 
-%token <iVal> INTEGER
+%token <iVal> INTEGERVAL
 %token <iVal> ADDRESS
+%token <fVal> FLOATVAL
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
 %token <pVal> PATTERN
@@ -174,6 +176,7 @@ struct Subcondition {
 %nonassoc NOT
 %nonassoc UMINUS
 %nonassoc '~'
+%nonassoc AS
 %left IFX
 %left IFELSE
 
@@ -470,7 +473,7 @@ chn_definition_section:
 }
 
 | OPTION chn_option_settings ';'
-| THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2 * 1000); }
+| THROTTLE INTEGERVAL ';' { current_channelclass->setThrottleTime($2 * 1000); }
 | tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
 | MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
 ;
@@ -499,8 +502,11 @@ SYMBOL {
 
 
 basic_value:
-INTEGER   {
+INTEGERVAL   {
     $$ = new Value($1);
+}
+| FLOATVAL {
+	$$ = new Value($1);
 }
 | ADDRESS	{
     $$ = new Value($1);
@@ -611,7 +617,7 @@ READONLY { $$ = READONLY; }
 size_type:
 WORD { $$ = WORD; }
 | DOUBLEWORD { $$ = DOUBLEWORD; }
-| STRINGTYPE INTEGER { $$ = STRINGTYPE; current_value = $2; }
+| STRINGTYPE INTEGERVAL { $$ = STRINGTYPE; current_value = $2; }
 ;
 
 machine_instantiation:
@@ -825,6 +831,8 @@ value {
 | expression '&' expression { $$ = new Predicate($1, opBitAnd, $3);}
 | expression '|' expression { $$ = new Predicate($1, opBitOr, $3);}
 | expression '^' expression { $$ = new Predicate($1, opBitXOr, $3);}
+| expression AS INTEGER { $$ = new Predicate(0, opInteger, $1); }
+| expression AS FLOAT { $$ = new Predicate(0, opFloat, $1); }
 | '!' expression { $$ = new Predicate(0, opNegate, $2);}
 | '-' expression { $$ = new Predicate(new Predicate(-1), opTimes, $2);}
 | expression MATCHES PATTERN {
@@ -833,8 +841,11 @@ value {
 ;
 
 value:
-INTEGER   { 
+INTEGERVAL   { 
     $$ = new Value($1); 
+}
+| FLOATVAL {
+	$$ = new Value($1);
 }
 | STRINGVAL {
     $$ = new Value($1, Value::t_string); 
@@ -947,12 +958,11 @@ COMMAND SYMBOL /* command name */ action {
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     if (current_machineclass->receives.count(Message($2)) == 0) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
     	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << *at << " ";
+    	    DBG_PARSER << "\t"<< *at << "\n";
     	}
-    	DBG_PARSER << "\n";
-        
+
 	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
 	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
 	}
@@ -972,12 +982,11 @@ COMMAND SYMBOL /* command name */ action {
 	MachineCommandTemplate *handler = current_machineclass->findMatchingCommand($2, $4);
 	//unsigned int existing_commands = current_machineclass->receives.count(Message($2));
     if (!handler) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
     	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << *at << " ";
+    	    DBG_PARSER << "\t" << *at << "\n";
     	}
-    	DBG_PARSER << "\n";
-        
+
 		current_machineclass->receives.insert(std::make_pair(Message($2), mc));
 		current_machineclass->commands.insert(std::make_pair($2,mc)); // by making a command form, the command will be exported
 	}
@@ -995,11 +1004,10 @@ COMMAND SYMBOL /* command name */ action {
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     if (current_machineclass->receives.count(Message($2)) == 0) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
     	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << *at << " ";
+    	    DBG_PARSER << *at << "\n";
     	}
-    	DBG_PARSER << "\n";
         
 	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
 	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
@@ -1329,11 +1337,11 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("COUNT"));
 }
-| CREATE SYMBOL WITH COPY INTEGER FROM SYMBOL {
+| CREATE SYMBOL WITH COPY INTEGERVAL FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("COPY"));
 }
-| CREATE SYMBOL WITH TAKE INTEGER FROM SYMBOL {
+| CREATE SYMBOL WITH TAKE INTEGERVAL FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("TAKE"));
 }
@@ -1492,7 +1500,7 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PopFrontActionTemplate($4);
 }
-| TAKE ITEM INTEGER FROM SYMBOL {
+| TAKE ITEM INTEGERVAL FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new GetListItemActionTemplate($5, $3);
 }
@@ -1682,7 +1690,7 @@ SYMBOL SYMBOL parameters
 ;
 
 /*delay_entry:
-tokPOLLING_DELAY INTEGER ';' {
+tokPOLLING_DELAY INTEGERVAL ';' {
     current_machineclass->polling_delay = $2;
 }
 */

@@ -33,6 +33,7 @@ ANY                 return ANY;
 ARE                 return ARE;
 ASSIGN              return ASSIGN;
 AT                  return AT;
+AS					return AS;
 BECOMES             return BECOMES;
 BETWEEN             return BETWEEN;
 BITSET              return BITSET;
@@ -72,6 +73,7 @@ EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;
 EXTRACT             return EXTRACT;
 FIRST               return FIRST;
+FLOAT				return FLOAT;
 FROM				return FROM;
 GLOBAL              return GLOBAL;
 GROUP               return GROUP;
@@ -81,6 +83,7 @@ INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;
 INTERFACE           return INTERFACE;
+INTEGER				return INTEGER;
 ITEM                return ITEM;
 ITEMS               return ITEMS;
 IDENTIFIER          return IDENTIFIER;
@@ -177,17 +180,40 @@ WITHIN              return WITHIN;
 	char *p;
 	val = strtol(yytext, &p, 16);
     yylval.iVal = val;
-    return INTEGER;
+    return INTEGERVAL;
+}
+
+0\.0 {
+	yylval.fVal = atof(yytext);
+	return FLOATVAL;
+}
+
+0\. {
+	yylval.fVal = atof(yytext);
+	return FLOATVAL;
+}
+
+[-]{0,1}[1-9][0-9]*[.][0-9]* {
+	yylval.fVal = atof(yytext);
+	std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+	return FLOATVAL;
+}
+
+[-]{0,1}[1-9][0-9]*[.][0-9]*E[0-9]{1,3} {
+	yylval.fVal = atof(yytext);
+	std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+	return FLOATVAL;
 }
 
 0           {
-    yylval.iVal = atoi(yytext);
-    return INTEGER;
+	yylval.iVal = atoi(yytext);
+	return INTEGERVAL;
 }
+
 
 [-]{0,1}[1-9][0-9]* {
     yylval.iVal = atoi(yytext);
-    return INTEGER;
+    return INTEGERVAL;
 }
 
 "%BEGIN_PLUGIN"			BEGIN PLUGIN_CODE;

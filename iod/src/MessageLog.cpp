@@ -5,7 +5,7 @@
 #include <algorithm>
 #include "Logger.h"
 
-static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete x; }
+static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 unsigned int MessageLog::max_memory = 2048*1024;
 MessageLog * MessageLog::instance_ = 0;

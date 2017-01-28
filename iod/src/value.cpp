@@ -26,17 +26,22 @@
 #include <sstream>
 #include <stdio.h>
 #include <iomanip>
+#include <math.h>
+#include <limits.h>
 #include "Logger.h"
 #include <boost/foreach.hpp>
 #include <utility>
 #include "DebugExtra.h"
 #include "dynamic_value.h"
+#include "MessageLog.h"
 
 uint64_t microsecs() {
     struct timeval now;
     gettimeofday(&now, 0);
     return now.tv_sec * 1000000L + now.tv_usec;
 }
+
+static const double ZERO_DISTANCE = 1.0E-5;
 
 void simple_deltat(std::ostream &out, uint64_t dt) {
 	if (dt > 60000000) out << std::setprecision(3) << (float)dt/60000000.0f << "m";
@@ -66,6 +71,17 @@ Value::Value(unsigned int v) : kind(t_integer),
 Value::Value(unsigned long v) : kind(t_integer),
         iValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
 
+
+Value::Value(float v) : kind(t_float),
+		fValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
+			std::cout << "new float value: " << fValue << "\n";
+}
+
+Value::Value(double v) : kind(t_float),
+		fValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
+			std::cout << "new float value: " << fValue << "\n";
+}
+
 Value::Value(const char *str, Kind k)
     : kind(k), sValue(str), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
         if (kind == t_symbol) token_id = Tokeniser::instance()->getTokenId(str);
@@ -93,7 +109,7 @@ Value::~Value() {
     if (kind == t_dynamic) { if (dyn_value) dyn_value = dyn_value->deref(); }
 }
 
-Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),
+Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),fValue(other.fValue),
     sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValue::ref(other.dyn_value)),
     cached_value(0), token_id(other.token_id) {
 //    if (kind == t_list) {
@@ -127,6 +143,9 @@ Value &Value::operator=(const Value &orig){
         case t_integer:
             iValue = orig.iValue;
             break;
+		case t_float:
+			fValue = orig.fValue;
+			break;
         case t_string:
             sValue = orig.sValue;
             break;
@@ -178,6 +197,16 @@ Value &Value::operator=(unsigned long val) {
     return *this;
 }
 
+Value &Value::operator=(float val) {
+	*this = Value(val);
+	return *this;
+}
+
+Value &Value::operator=(double val) {
+	*this = Value(val);
+	return *this;
+}
+
 Value &Value::operator=(const char *val) {
     *this = Value(val);
     return *this;
@@ -188,7 +217,23 @@ Value &Value::operator=(std::string val) {
     return *this;
 }
 
+long Value::trunc() const {
+	if (kind == t_integer) return iValue;
+	if (kind == t_float) return (long)::trunc(fValue);
+	return 0;
+};
 
+long Value::round(int digits) const {
+	if (kind == t_integer) return iValue;
+	if (kind == t_float) return (long)::round(fValue);
+	return 0;
+}
+
+double Value::toFloat() const {
+	if (kind == t_integer) return iValue;
+	if (kind == t_float) return fValue;
+	return 0.0;
+}
 
 
 std::string Value::name() const {
@@ -228,12 +273,23 @@ bool Value::operator>=(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
-		long x,y;
-		if (asInteger(x) && other.asInteger(y)) 
-			return x >= y;
-		else 
-			return false;
+	if (a != b && (a == t_string || b == t_string) ) {
+
+		if (a == t_float || b == t_float) {
+			double x,y;
+			if (asFloat(x) && other.asFloat(y))
+				return x >= y;
+			else
+				return false;
+		}
+
+		if (a == t_integer || b == t_integer ) {
+			long x,y;
+			if (asInteger(x) && other.asInteger(y)) 
+				return x >= y;
+			else 
+				return false;
+		}
 	}
 
 	if (a != b) return false;
@@ -242,6 +298,9 @@ bool Value::operator>=(const Value &other) const {
             break;
         case t_integer: 
 			return iValue >= other.iValue;
+			break;
+		case t_float:
+			return fValue >= other.fValue;
 			break;
         case t_symbol:
         case t_string: return sValue >= other.sValue;
@@ -259,12 +318,22 @@ bool Value::operator<=(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
-		long x,y;
-		if (asInteger(x) && other.asInteger(y)) 
-			return x <= y;
-		else 
-			return false;
+	if (a != b && (a == t_string || b == t_string) ) {
+		if (a == t_float || b == t_float) {
+			double x,y;
+			if (asFloat(x) && other.asFloat(y))
+				return x <= y;
+			else
+				return false;
+		}
+
+		if (a == t_integer || b == t_integer) {
+			long x,y;
+			if (asInteger(x) && other.asInteger(y)) 
+				return x <= y;
+			else 
+				return false;
+		}
 	}
 
 	if (a != b) return false;
@@ -273,6 +342,9 @@ bool Value::operator<=(const Value &other) const {
             break;
         case t_integer: 
 			return iValue <= other.iValue;
+			break;
+		case t_float:
+			return fValue <= other.fValue;
 			break;
 		case t_symbol:
         case t_string: return sValue <= other.sValue;
@@ -293,19 +365,32 @@ bool Value::operator==(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
-		long x,y;
-		if (asInteger(x) && other.asInteger(y)) 
-			return x == y;
-		else 
-			return false;
+	if (a != b && (a == t_string || b == t_string) ) {
+		if (a == t_float || b == t_float) {
+			double x,y;
+			if (asFloat(x) && other.asFloat(y))
+				return x == y || fabs(x - y) <= ZERO_DISTANCE;
+			else
+				return false;
+		}
+
+		if (a == t_integer || b == t_integer) {
+			long x,y;
+			if (asInteger(x) && other.asInteger(y)) 
+				return x == y;
+			else 
+				return false;
+		}
 	}
 
     if (a != b) return false; // different types cannot be equal (yet)
     switch (a) {
         case t_empty: return b == t_empty;
             break;
-        case t_integer: 
+		case t_float:
+			return fValue == other.fValue || fabs(fValue - other.fValue) <= ZERO_DISTANCE;
+			break;
+        case t_integer:
 			return iValue == other.iValue;
 			break;
 		case t_symbol: assert(false); return token_id == other.token_id;
@@ -328,12 +413,21 @@ bool Value::operator!=(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_integer || b == t_integer) && (a == t_string || b == t_string) ) {
-		long x,y;
-		if (asInteger(x) && other.asInteger(y)) 
-			return x != y;
-		else 
-			return true;
+	if (a != b && (a == t_string || b == t_string)) {
+		if (a == t_float || b == t_float  ) {
+			double x,y;
+			if (asFloat(x) && other.asFloat(y))
+				return x != y && fabs(x-y) > ZERO_DISTANCE;
+			else
+				return true;
+		}
+		if (a == t_integer || b == t_integer  ) {
+			long x,y;
+			if (asInteger(x) && other.asInteger(y)) 
+				return x != y;
+			else 
+				return true;
+		}
 	}
 
 	if (a != b) return true;
@@ -342,6 +436,9 @@ bool Value::operator!=(const Value &other) const {
             break;
         case t_integer: 
 			return iValue != other.iValue;
+			break;
+		case t_float:
+			return fValue != other.fValue && fabs(fValue - other.fValue) > ZERO_DISTANCE;
 			break;
 		case t_symbol:
             assert(false);
@@ -420,38 +517,130 @@ namespace ValueOperations {
 	};
 
 	struct Sum : public ValueOperation {
-		Value operator()(const Value &a, const Value &b) const { 
-			return a.iValue + b.iValue; 
+		Value operator()(const Value &a, const Value &b) const {
+			if (a.kind == Value::t_integer) {
+				if (b.kind == Value::t_integer)
+					return a.iValue + b.iValue;
+				else if (b.kind == Value::t_float)
+					return b.fValue + (double)a.iValue;
+				else return a.iValue;
+			}
+			else if (a.kind == Value::t_float) {
+				if (b.kind == Value::t_float)
+					return a.fValue + b.fValue;
+				else if (b.kind == Value::t_integer)
+					return a.fValue + (double)b.iValue;
+				else
+					return a.fValue;
+			}
+			else if (b.kind == Value::t_integer)
+				return b.iValue;
+			else if (b.kind == Value::t_float)
+				return b.fValue;
+			return 0;
 		}
 	};
 
 	struct Minus : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const { 
-			return a.iValue - b.iValue; 
+			if (a.kind == Value::t_integer) {
+				if (b.kind == Value::t_integer)
+					return a.iValue - b.iValue;
+				else if (b.kind == Value::t_float)
+					return (double)a.iValue - b.fValue;
+				else return a.iValue;
+			}
+			else if (a.kind == Value::t_float) {
+				if (b.kind == Value::t_float)
+					return a.fValue - b.fValue;
+				else if (b.kind == Value::t_integer)
+					return a.fValue - (double)b.iValue;
+				else
+					return a.fValue;
+			}
+			else if (b.kind == Value::t_integer)
+				return -b.iValue;
+			else if (b.kind == Value::t_float)
+				return -b.fValue;
+			return 0;
 		}
 	};
 
 	struct Multiply : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const { 
-			return a.iValue * b.iValue; 
+			if (a.kind == Value::t_integer) {
+				if (b.kind == Value::t_integer)
+					return a.iValue * b.iValue;
+				else if (b.kind == Value::t_float)
+					return b.fValue * (double)a.iValue;
+				else return 0;
+			}
+			else if (a.kind == Value::t_float) {
+				if (b.kind == Value::t_float)
+					return a.fValue * b.fValue;
+				else if (b.kind == Value::t_integer)
+					return a.fValue * (double)b.iValue;
+				else
+					return 0;
+			}
+			return 0;
 		}
 	};
 
 	struct Divide : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const { 
-			if (b.iValue == 0) 
-				return 0;
-			else 
-				return a.iValue / b.iValue; 
+			if (a.kind == Value::t_integer) {
+				if (a.iValue == 0) return 0;
+				if (b.kind == Value::t_integer) {
+					if (b.iValue == 0) {
+						if (a.iValue < 0) return INT_MIN; else return INT_MAX;
+					}
+					else
+						return a.iValue / b.iValue;
+				}
+				else if (b.kind == Value::t_float)
+					if (b.fValue == 0) {
+						if (a.iValue < 0) return INT_MIN; else return INT_MAX;
+					}
+					else
+						return (double)a.iValue / b.fValue;
+				else return 0;
+			}
+			else if (a.kind == Value::t_float) {
+				if (a.fValue == 0) return 0.0;
+				if (b.kind == Value::t_float) {
+					if (b.fValue == 0.0) {
+						if (a.fValue < 0) return INT_MIN; else return INT_MAX;
+					}
+					else
+						return a.fValue / b.fValue;
+				}
+				else if (b.kind == Value::t_integer)
+					if (b.iValue == 0) {
+						if (a.fValue < 0) return INT_MIN; else return INT_MAX;
+					}
+					else
+						return a.fValue / b.iValue;
+				else
+					return 0;
+			}
+			return 0;
 		}
 	};
 
 	struct Modulus : public ValueOperation {
-		Value operator()(const Value &a, const Value &b) const { 
+		Value operator()(const Value &a, const Value &b) const {
+			if (b.kind != Value::t_integer) return a;
 			if (b.iValue == 0)
 				return 0;
-			else
-				return a.iValue % b.iValue; 
+			else {
+				if (a.kind == Value::t_integer)
+					return a.iValue % b.iValue;
+				else if (a.kind == Value::t_float)
+					return (long)trunc(a.fValue) % b.iValue;
+				else
+					return 0;
+			}
 		}
 	};
 
@@ -477,30 +666,38 @@ namespace ValueOperations {
 using namespace ValueOperations;
 
 struct TypeFix {
-	Value operator()(const Value &a, ValueOperation *op, const Value &b) const {
+	Value operator()(const Value &a, ValueOperation *op, const Value &b) {
 		if (a.kind != b.kind) {
 			long x;
 			if (a.kind == Value::t_integer && (b.kind == Value::t_string || b.kind == Value::t_symbol) ) {
 				if (stringToLong(b.sValue, x))  {
-					Value v(x);
-					return (*op)(a, v);
+					v_ = x;
+					return (*op)(a, v_);
 				}
 				else {
 					DBG_PREDICATES << "Trying to add a string and value but the string does not contain a number\n";
 					return a;
 				}
 			}
+			else if (a.kind == Value::t_string || a.kind == Value::t_symbol) {
+				return a.sValue + b.asString();
+			}
+			/*
 			else if (b.kind == Value::t_integer && (a.kind == Value::t_string || a.kind == Value::t_symbol) ){
 				if (stringToLong(a.sValue, x)) {
-					Value v(x);
-					return (*op)(v, b);
+					v_ = x;
+					return (*op)(v_, b);
 				}
 				else {
 					//DBG_PREDICATES << "Trying to add a string and value but the string does not contain a number\n";
-                    Value s(a);
-					return s.operator+(b.asString());
+                    v_ = a;
+					v_ = v_.operator+(b.asString());
 				}
 			}
+			 */
+			else if ( (a.kind == Value::t_integer && b.kind == Value::t_float)
+					 ||(a.kind == Value::t_float && b.kind == Value::t_integer) )
+					 return (*op)(a,b);
 			else {
 				DBG_PREDICATES << " type clash, returning lhs a is" <<a.kind << " and b is " << b.kind << "\n";
 				return a;
@@ -509,28 +706,21 @@ struct TypeFix {
 		DBG_PREDICATES << "invalid call to TypeFix operator when type are the same for: " << a << " and " << b << "\n";
 		return a; // invalid usage
 	}
+	Value &value() { return v_; }
+private:
+	Value v_;
 };
 
-
 Value &Value::operator+(const Value &other) {
-	if ( ( (kind != t_symbol && kind != t_string) || (other.kind != t_symbol && other.kind != t_string) )
-        && kind != other.kind) {
+	if ( kind != other.kind) {
 		Sum op;
 		TypeFix tf;
-		Value new_value = tf(*this, &op, other);
-        if (new_value.kind == t_integer) {
-            iValue = new_value.iValue;
-            kind = t_integer;
-        }
-        else {
-            sValue = new_value.asString();
-            kind = t_string;
-            token_id = 0;
-        }
-		return *this;
+		Value v(tf(*this, &op, other));
+		return operator=(v);
 	}
 	switch(kind) {
 		case t_integer: iValue += other.iValue; break;
+		case t_float: fValue += other.fValue; break;
 		case t_bool: bValue |= other.bValue;
 		case t_symbol:
 		case t_string: sValue += other.asString(); token_id = 0; break;
@@ -542,6 +732,7 @@ Value &Value::operator+(const Value &other) {
 Value Value::operator-(void) const {
 	switch(kind) {
 		case t_integer: return Value(-iValue);
+		case t_float: return Value(-fValue); break;
 		case t_symbol:
 		case t_string:
 				long x;
@@ -557,12 +748,11 @@ Value &Value::operator-(const Value &other) {
 	if (kind != other.kind) {
 		Minus op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+        return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue -= other.iValue; break;
+		case t_float: iValue -= other.iValue; break;
 		case t_bool: bValue |= other.bValue;
 		default: ;
 	}
@@ -573,12 +763,11 @@ Value &Value::operator*(const Value &other) {
 	if (kind != other.kind) {
 		Multiply op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue *= other.iValue; break;
+		case t_float: fValue *= other.fValue; break;
 		case t_bool: bValue &= other.bValue;
 		default: ;
 	}
@@ -589,12 +778,25 @@ Value &Value::operator/(const Value &other) {
 	if (kind != other.kind) {
 		Divide op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
-		case t_integer: if (other.iValue == 0) iValue = 0; else iValue /= other.iValue; break;
+		case t_integer:
+			if (iValue != 0) {
+				if (other.iValue == 0) {
+					if (iValue < 0) iValue = INT_MIN; else iValue = INT_MAX;
+				}
+				else iValue /= other.iValue;
+			}
+			break;
+		case t_float:
+			if (fValue != 0) {
+				if (other.fValue == 0) {
+					if (fValue < 0) fValue = INT_MIN; else fValue = INT_MAX;
+				}
+				else fValue /= other.fValue;
+			}
+			break;
 		case t_bool: bValue &= other.bValue;
 		default: ;
 	}
@@ -605,9 +807,7 @@ Value &Value::operator%(const Value &other) {
 	if (kind != other.kind) {
 		Modulus op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue % other.iValue; break;
@@ -690,6 +890,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
     switch(kind) {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
+		case t_float: out << std::setprecision(3) << fValue; break;
         case t_symbol: out << sValue; break;
         case t_string: out <<'"'<< sValue << '"'; break;
 #if 0
@@ -759,6 +960,12 @@ std::string Value::asString() const {
             snprintf(buf, 25, "%ld", iValue);
             return buf;
         }
+		case t_float:
+		{
+			char buf[25];
+			snprintf(buf, 25, "%6.3lf", fValue);
+			return buf;
+		}
         case t_empty: return "null";
         case t_symbol:
         case t_string:
@@ -802,3 +1009,25 @@ bool Value::asInteger(long &x) const {
 	}
 	return false;
 }
+
+bool Value::asFloat(double &x) const {
+	if (kind == t_integer) {
+		x = (double)iValue;
+		return true;
+	}
+	if (kind == t_string || kind == t_symbol) {
+		char *p;
+		const char *v = sValue.c_str();
+		x = strtod(v, &p);
+		if (*p == 0) return true;
+		if (p != v )
+			return false;
+		return false;
+	}
+	else if (kind == t_bool) {
+		x = (bValue) ? 1.0 : 0.0;
+		return true;
+	}
+	return false;
+}
+
