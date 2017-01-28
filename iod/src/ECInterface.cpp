@@ -1573,30 +1573,30 @@ void ECInterface::check_slave_config_states(void)
 		if (!s.online) { ++slaves_not_operational; ++slaves_offline; }
 	
 		if (s.al_state != m->slave_config_state.al_state) {
-			MEMCHECK();
+			//MEMCHECK();
 			std::cout << "ecat_thread: " << m->name 
 					<< ": State 0x" << std::ios::hex <<  s.al_state << ".\n";
 					snprintf(buf, BUFSIZE, "Slave %d (%s) changed state was 02x%x now 02x%x", i, m->name.c_str(), 
 						m->slave_config_state.al_state, s.al_state);
 				MessageLog::instance()->add(buf);
-			MEMCHECK();
+			//MEMCHECK();
 		}
 		if (s.online != m->slave_config_state.online) {
-			MEMCHECK();
+			//MEMCHECK();
 			std::cout << "ecat_thread: " << m->name 
 					<< ": " << (s.online ? "online" : "offline") << "\n";
 				snprintf(buf, BUFSIZE, "Slave %d (%s) changed online state: was %s, now %s", i, m->name.c_str(), 
 					m->slave_config_state.online?"online":"offline", s.online?"online":"offline");
 				MessageLog::instance()->add(buf);
-			MEMCHECK();
+			//MEMCHECK();
 			}
 		if (s.operational != m->slave_config_state.operational) {
-			MEMCHECK();
+			//MEMCHECK();
 			std::cout << m->name << ": " << (s.operational ? "" : "Not ") << "operational\n";
 			snprintf(buf, BUFSIZE, "Slave %d (%s) changed operational state: was %s operational, now %s operational", i, m->name.c_str(), 
 				m->slave_config_state.operational?"":"not ", s.operational?"":"not ");
 			MessageLog::instance()->add(buf);
-			MEMCHECK();
+			//MEMCHECK();
 		}
 
 		m->slave_config_state = s;
