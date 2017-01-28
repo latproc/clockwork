@@ -74,12 +74,10 @@ Value::Value(unsigned long v) : kind(t_integer),
 
 Value::Value(float v) : kind(t_float),
 		fValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
-			std::cout << "new float value: " << fValue << "\n";
 }
 
 Value::Value(double v) : kind(t_float),
 		fValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
-			std::cout << "new float value: " << fValue << "\n";
 }
 
 Value::Value(const char *str, Kind k)
@@ -890,7 +888,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
     switch(kind) {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
-		case t_float: out << std::setprecision(3) << fValue; break;
+				case t_float: out << std::setprecision(8) << fValue; break;
         case t_symbol: out << sValue; break;
         case t_string: out <<'"'<< sValue << '"'; break;
 #if 0
