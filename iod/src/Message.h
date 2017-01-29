@@ -132,6 +132,7 @@ public:
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false ) = 0;
 	virtual void enqueue(const Package &package);
 	bool hasMail() { return !mail_queue.empty(); }
+	bool hasPending(const Message &msg);
     long getId() const { return id; }
 protected:
 		

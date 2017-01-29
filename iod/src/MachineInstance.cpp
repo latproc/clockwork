@@ -4284,6 +4284,11 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 					Channel::sendModbusUpdate(this, property_name, new_value);
 				}
 			}
+			{
+				Message changed_msg("PROPERTY_CHANGE");
+				if (receives(changed_msg, this) && !hasPending(changed_msg))
+					enqueue(Package(this, this, changed_msg));
+			}
 		}
 		// only tell dependent machines to recheck predicates if the property
 		// actually changes value
