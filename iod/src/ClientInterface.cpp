@@ -443,7 +443,7 @@ IODCommand *parseCommandString(const char *data) {
 		fl.f() << "Warning: no command found for " << data << "\n";
 		command = new IODCommandUnknown;
 	}
-	command->setParameters(params);
+	if (command) command->setParameters(params);
 	return command;
 }
 

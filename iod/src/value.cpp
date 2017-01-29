@@ -702,6 +702,7 @@ struct TypeFix {
 			}
 		}
 		DBG_PREDICATES << "invalid call to TypeFix operator when type are the same for: " << a << " and " << b << "\n";
+		assert(false);
 		return a; // invalid usage
 	}
 	Value &value() { return v_; }
