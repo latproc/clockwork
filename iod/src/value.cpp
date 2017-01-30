@@ -35,6 +35,9 @@
 #include "dynamic_value.h"
 #include "MessageLog.h"
 
+static bool stringToLong(const std::string &s, long &x);
+static bool stringToFloat(const std::string &s, double &x);
+
 uint64_t microsecs() {
     struct timeval now;
     gettimeofday(&now, 0);
@@ -230,6 +233,16 @@ long Value::round(int digits) const {
 double Value::toFloat() const {
 	if (kind == t_integer) return iValue;
 	if (kind == t_float) return fValue;
+	double x;
+	if (kind == t_string) {
+		std::cerr << "Warning: converting a string to float\n";
+		if (stringToFloat(sValue, x))
+			return x;
+	}
+	else if (kind == t_symbol) {
+		std::cerr << "Warning: converting a string to float when passed a symbol\n";
+	}
+	assert(false);
 	return 0.0;
 }
 
@@ -503,6 +516,18 @@ static bool stringToLong(const std::string &s, long &x) {
 	x = strtol(str, &end, 0);
 	if (*end) {
 		DBG_PREDICATES << "str to long parsed " << (end-str) << " chars but did not hit the end of string '" << str << "'\n";
+		assert(false);
+	}
+	return *end == 0;
+}
+
+static bool stringToFloat(const std::string &s, double &x) {
+	const char *str = s.c_str();
+	char *end;
+	x = strtod(str, &end);
+	if (*end) {
+		DBG_PREDICATES << "str to float parsed " << (end-str) << " chars but did not hit the end of string '" << str << "'\n";
+		assert(false);
 	}
 	return *end == 0;
 }
@@ -667,9 +692,15 @@ struct TypeFix {
 	Value operator()(const Value &a, ValueOperation *op, const Value &b) {
 		if (a.kind != b.kind) {
 			long x;
-			if (a.kind == Value::t_integer && (b.kind == Value::t_string || b.kind == Value::t_symbol) ) {
-				if (stringToLong(b.sValue, x))  {
+			double x_float;
+			if ( (a.kind == Value::t_integer || a.kind == Value::t_float) 
+					&& (b.kind == Value::t_string || b.kind == Value::t_symbol) ) {
+				if (a.kind == Value::t_integer && stringToLong(b.sValue, x))  {
 					v_ = x;
+					return (*op)(a, v_);
+				}
+				else if (a.kind == Value::t_float && stringToFloat(b.sValue, x_float))  {
+					v_ = x_float;
 					return (*op)(a, v_);
 				}
 				else {
@@ -760,6 +791,7 @@ Value &Value::operator-(const Value &other) {
 
 Value &Value::operator*(const Value &other) {
 	if (kind != other.kind) {
+		assert(kind != t_string && kind != t_symbol);
 		Multiply op;
 		TypeFix tf;
 		return operator=(tf(*this, &op, other));

@@ -318,6 +318,8 @@ void Value::addItem(Value next_value) {
     else {
         if (kind == t_integer)
             listValue.push_front(Value(iValue));
+        else if (kind == t_float)
+            listValue.push_front(Value(fValue));
         else if (kind == t_string)
             listValue.push_front(Value(sValue.c_str()));
         

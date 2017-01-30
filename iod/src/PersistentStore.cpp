@@ -2,7 +2,7 @@
 #include <string.h>
 #include <boost/foreach.hpp>
 #include <errno.h>
-
+#include <iomanip>
 #include <utility>
 #include <string>
 #include <iostream>
@@ -55,15 +55,23 @@ void PersistentStore::load() {
 			value_str = vp;
 
 		long i_value;
+		double d_value;
 		char *endp;
-		i_value = strtol(value_str.c_str(), &endp, 10);
+		d_value = strtod(value_str.c_str(), &endp);
 		if (*endp == 0) {
-			insert(name, property, i_value);
-			//std::cout << name << "." << property << ":" << i_value << "\n";
+				insert(name, property, d_value);
+				std::cout << name << "." << property << ":" << std::setprecision(10) << d_value << "\n";
 		}
 		else {
-			insert(name, property, Value(value_str.c_str(), kind).asString());
-			//std::cout << name << "." << property << ":" << value_str << "\n";
+			i_value = strtol(value_str.c_str(), &endp, 10);
+			if (*endp == 0) {
+				insert(name, property, i_value);
+				std::cout << name << "." << property << ":" << i_value << "\n";
+			}
+			else {
+				insert(name, property, Value(value_str.c_str(), kind).asString());
+				std::cout << name << "." << property << ":" << value_str << "\n";
+			}
 		}
 	}
 	store.close();
@@ -104,7 +112,9 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
 				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
 			}
 			else if (entry.second.kind == Value::t_bool
-					 || entry.second.kind == Value::t_integer ) {
+					 || entry.second.kind == Value::t_integer 
+					 || entry.second.kind == Value::t_float
+					) {
 				//std::cout << prop.first << " " << entry.first << " " << entry.second << " bool/int\n";
 				out << prop.first << " " << entry.first << " " << entry.second << "\n";
 			}

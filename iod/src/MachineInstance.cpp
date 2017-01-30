@@ -3719,7 +3719,7 @@ const Value *MachineInstance::resolve(std::string property) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " " << res->asString() << "\n";
+				DBG_M_PROPERTIES << "found property " << property << " (type: " << res->kind << ") " << res->asString() << "\n";
 				return res;
 			}
 		}
@@ -3787,7 +3787,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 		MachineInstance *other = lookup(name);
 		if (other) {
 			const Value &v = other->getValue(prop);
-			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
+			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " (type: " << v.kind << ") "<< " in machine " << name << " with value " << v << "\n";
 			return v;
 		}
 		else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
@@ -3878,7 +3878,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
+				DBG_M_PROPERTIES << "found property " << property << " (type: " << x.kind << ") "<< x.asString() << "\n";
 				return x;
 			}
 		}
@@ -3907,7 +3907,8 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 		MachineInstance *other = lookup(name);
 		if (other) {
 			Value *v = other->getMutableValue(prop.c_str());
-			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << *v << "\n";
+			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " (type: " 
+				<< v->kind << ") in machine " << name << " with value " << *v << "\n";
 			return v;
 		}
 		else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
@@ -3990,7 +3991,8 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
+				DBG_M_PROPERTIES << "found property " << property << " (type: " 
+						<< x.kind << ") " << x.asString() << "\n";
 				return &x;
 			}
 		}
@@ -4286,7 +4288,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 			}
 			{
 				Message changed_msg("PROPERTY_CHANGE");
-				if (receives(changed_msg, this) && !hasPending(changed_msg))
+				if (receives_functions.count(changed_msg) && !hasPending(changed_msg))
 					enqueue(Package(this, this, changed_msg));
 			}
 		}

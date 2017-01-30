@@ -136,7 +136,10 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings)
                             store.insert(machine.asString(), property.asString(), json_val->valuestring);
                             break;
                         case cJSON_Number:
-                            store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._int);
+														if (json_val->valueNumber.kind == cJSON_Number_int_t)
+                            	store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._int);
+														else
+                            	store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._double);
                             break;
                         case cJSON_True:
                             store.insert(machine.asString(), property.asString(), true);

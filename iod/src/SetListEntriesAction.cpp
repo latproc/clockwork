@@ -66,6 +66,9 @@ Action::Status SetListEntriesAction::run() {
         if (source.kind == Value::t_integer) {
             setListEntries((unsigned long)source.iValue);
         }
+        else if (source.kind == Value::t_float) {
+            setListEntries((unsigned long)source.fValue);
+        }
         else if (source.kind == Value::t_symbol) {
             const char *src = source.asString().c_str();
             

@@ -122,8 +122,15 @@ AssignmentValue::AssignmentValue(const AssignmentValue &other) {
 }
 Value &AssignmentValue::operator()() {
     MachineInstance *mi = getScope();
-    if (src.kind == Value::t_symbol)
+    if (src.kind == Value::t_symbol) {
         last_result = mi->getValue(src.sValue);
+				if (last_result == SymbolTable::Null) {
+					std::cerr << "assignment of " << src.sValue << " yielded a null\n";
+				}
+				else {
+					std::cerr << "assigning: " << last_result << " ("<<last_result.kind<<") to " << dest_name << "\n";
+				}
+		}
     else
         last_result = src;
     mi->setValue(dest_name, last_result);

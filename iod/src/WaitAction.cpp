@@ -54,8 +54,12 @@ Action::Status WaitAction::run() {
 			DBG_M_PROPERTIES << "looking up property " << property_name << " " << ": " << v << "\n";
 		}
 		else
-	        v = owner->getValue(property_name.c_str());
-        if (v.kind != Value::t_integer) {
+	      v = owner->getValue(property_name.c_str());
+        if (v.kind == Value::t_float) {
+            DBG_M_PROPERTIES << "Error: expected an integer value for wait_time, got: " << v << "\n";
+						wait_time = v.trunc();
+				}
+        else if (v.kind != Value::t_integer) {
             wait_time = 0;
             DBG_M_PROPERTIES << "Error: expected an integer value for wait_time, got: " << v << "\n";
         }

@@ -50,7 +50,9 @@ Value resolve(Predicate *p, MachineInstance *m) {
 			Value prop = m->getValue(v.sValue); // property lookup
 			if (prop != SymbolTable::Null) {
 				if (m && m->debug() ) {
-					DBG_PREDICATES << "Using property " << p->entry << " to resolve search (" << prop << ")\n";
+					DBG_PREDICATES << "Using property " << p->entry 
+						<< " to resolve search (" << prop << ", type: " << prop.kind << ")"
+						<< ")\n";
 				}
 				return prop;
 			}
@@ -119,7 +121,7 @@ Value eval(Predicate *p, MachineInstance *m){
 	    }
 		
 		if (m && m->debug()) {
-			if (p->op == opNOT) {
+			if (p->op == opNOT || p->op == opInteger || p->op == opFloat) {
 				DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
 			}
 			else {
@@ -168,10 +170,13 @@ Action::Status PredicateAction::run() {
 			}
 		}
 		else {
-            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to " << val << "\n";
+            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to " 
+							<< val << " (type: " << val.kind << ")\n";
 			owner->setValue(name, val);
 		}
 	}
+	else
+	  assert(false);
 	status = Complete;
 	owner->stop(this);
 	return status;
