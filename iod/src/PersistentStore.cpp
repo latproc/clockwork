@@ -35,6 +35,7 @@ void PersistentStore::load() {
 	std::ifstream store(file_name.c_str());
 	if (!store.is_open()) return;
 	char buf[400];
+	std::cout << std::fixed;
 	while (store.getline(buf, 400, '\n')) {
 		char value_buf[400];
 		std::istringstream in(buf);
@@ -60,7 +61,7 @@ void PersistentStore::load() {
 		d_value = strtod(value_str.c_str(), &endp);
 		if (*endp == 0) {
 				insert(name, property, d_value);
-				std::cout << name << "." << property << ":" << std::setprecision(10) << d_value << "\n";
+				std::cout << name << "." << property << ":" << std::setprecision(5) << d_value << "\n";
 		}
 		else {
 			i_value = strtol(value_str.c_str(), &endp, 10);

@@ -921,7 +921,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
     switch(kind) {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
-				case t_float: out << std::setprecision(8) << fValue; break;
+		case t_float: out << std::setprecision(3) << std::fixed << fValue; break;
         case t_symbol: out << sValue; break;
         case t_string: out <<'"'<< sValue << '"'; break;
 #if 0

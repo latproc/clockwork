@@ -3,7 +3,7 @@
 Sample MACHINE {
 	OPTION i 7;
 	OPTION x 0.1;
-	OPTION y 1;
+	OPTION y 1.0;
 	OPTION z 1.1E3;
 	OPTION z1 1.E4;
 	OPTION K1 1000.34;
@@ -48,6 +48,10 @@ Sample MACHINE {
 		LOG "x as int: " + x;
 		x := x AS FLOAT;
 		LOG "x as float: " + x;
+
+		y := 100.0;
+		x := y AS FLOAT;
+		LOG "y: " + y + " y as float: " + x;
 	}
 
 	COMMAND compare {
@@ -59,23 +63,23 @@ Sample MACHINE {
 }
 sample Sample;
 
-Line MACHINE {
-	OPTION MAX 10000;
-	OPTION MIN -10000;
-	OPTION x1 0.0, x2 0.0, y1 0.0, y2 0.0, m 0.0;
-	RECEIVE PROPERTY_CHANGE {
-		IF (x2-x1 == 0.0) { m := MAX; RETURN; };
-		m := (x2 - x1) AS FLOAT / (y2 - y1);
-	}
+Settings MACHINE {
+	OPTION k1 10000.0, k2 100.0;
 }
-line Line;
-
-Cast MACHINE {
+	
+Cast MACHINE settings{
 	OPTION x 1.1;
+	OPTION y 0, z 0;
+	OPTION res 0;
 	OPTION i 0;
 	COMMAND test {
-		i := x AS INTEGER;
+		IF (1 == 1) {
+			i := x AS INTEGER;
+			y := settings.k1 AS FLOAT;
+			z := y * 105 AS FLOAT;
+			x := z;
+		}
 	}
 }
-
-cast Cast;
+settings Settings;
+cast Cast settings;
