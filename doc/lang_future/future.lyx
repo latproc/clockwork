@@ -417,7 +417,7 @@ a := a + x; /* a converted to float with value 2.3 */
 \end_layout
 
 \begin_layout LyX-Code
-a := INT(a+x);
+a := INT(a+x); /* INT is an alias for INTEGER */
 \end_layout
 
 \begin_layout LyX-Code
@@ -426,6 +426,10 @@ a := a + x AS INTEGER;
 
 \begin_layout LyX-Code
 a := (a + x) AS INTEGER;
+\end_layout
+
+\begin_layout Standard
+The precedence of AS is 
 \end_layout
 
 \begin_layout Subsubsection
@@ -460,14 +464,9 @@ when a floating point value is used in an subexpression, the subexpression
  type is converted to floating point
 \end_layout
 
-\begin_layout Subsection
-Floating point calculations
-\end_layout
-
-\begin_layout Standard
-Clockwork is very weak when manipulating floating point data.
- Currently all calculations are done using integer arithmetic and the type
- system needs to be updated to fix this.
+\begin_layout Itemize
+floating point values will be displayed in fixed-point notation from clockwork
+ (hard-coded at 3 decimal places at present
 \end_layout
 
 \begin_layout Subsection
@@ -611,6 +610,11 @@ There should be a way to trigger events for each item in a set:
 
 \begin_layout LyX-Code
 EACH item IN set DO command
+\end_layout
+
+\begin_layout Standard
+at present, a message can be sent to all members of a set by sending the
+ message to the set
 \end_layout
 
 \begin_layout Subsubsection
