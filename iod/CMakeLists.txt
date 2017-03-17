@@ -52,11 +52,11 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/Message.h
     )
 
-add_library (Clockwork 
-	${CLOCKWORK_DIR}/MessagingInterface.cpp 
-	${CLOCKWORK_DIR}/MessageLog.cpp 
-	${CLOCKWORK_DIR}/MessageEncoding.cpp 
-	${CLOCKWORK_DIR}/regular_expressions.cpp 
+add_library (Clockwork
+	${CLOCKWORK_DIR}/MessagingInterface.cpp
+	${CLOCKWORK_DIR}/MessageLog.cpp
+	${CLOCKWORK_DIR}/MessageEncoding.cpp
+	${CLOCKWORK_DIR}/regular_expressions.cpp
 	${CLOCKWORK_DIR}/CommandManager.cpp
 	${CLOCKWORK_DIR}/SocketMonitor.cpp
 	${CLOCKWORK_DIR}/ConnectionManager.cpp
@@ -64,10 +64,10 @@ add_library (Clockwork
 	${CLOCKWORK_DIR}/anet.c
 	${CLOCKWORK_DIR}/cJSON.c
 	${CLOCKWORK_DIR}/DebugExtra.cpp
-	${CLOCKWORK_DIR}/value.cpp 
+	${CLOCKWORK_DIR}/value.cpp
 	${CLOCKWORK_DIR}/symboltable.cpp
 	${CLOCKWORK_DIR}/rate.cpp
-	${CLOCKWORK_DIR}/Message.cpp 
+	${CLOCKWORK_DIR}/Message.cpp
 	${CLOCKWORK_DIR}/watchdog.cpp
 	${HEADER_FILES}
 )
@@ -104,7 +104,7 @@ set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
 #   SOURCE ${CLOCKWORK_DIR}/cwlang.lpp
-   COMMAND ${FLEX_EXECUTABLE} 
+   COMMAND ${FLEX_EXECUTABLE}
    ARGS -o${CMAKE_BINARY_DIR}/cwlang.yy.cpp
 		${CLOCKWORK_DIR}/cwlang.lpp
 		#   TARGET ClockworkParser
@@ -113,8 +113,8 @@ set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
 # Create custom command for bison/yacc (note the DEPENDS)
  ADD_CUSTOM_COMMAND(
 #   SOURCE ${CLOCKWORK_DIR}/cwlang.ypp
-   COMMAND ${BISON_EXECUTABLE} 
-   ARGS -y 
+   COMMAND ${BISON_EXECUTABLE}
+   ARGS -y
         -o ${CMAKE_BINARY_DIR}/cwlang.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cwlang.ypp
 		#TARGET ClockworkParser
@@ -133,7 +133,7 @@ SET_SOURCE_FILES_PROPERTIES(${cw_yacc_output} GENERATED)
 INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
 
 set (Clockwork_Headers
-	src/Action.h			src/AbortAction.h	src/Expression.h		src/MachineInstance.h		src/SetListEntriesAction.h	src/cJSON.h
+	src/Action.h			src/AbortAction.h	src/Expression.h	src/Transition.h	src/MachineInstance.h		src/SetListEntriesAction.h	src/cJSON.h
 	src/CallMethodAction.h		src/ExpressionAction.h		src/Message.h			src/SetOperationAction.h	src/clockwork.h
 	src/Channel.h			src/FireTriggerAction.h		src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
 	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h		src/ShutdownAction.h		src/cwlang.h
@@ -152,10 +152,10 @@ set (Clockwork_Headers
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
 	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
 )
-set (Clockwork_SRCS 
+set (Clockwork_SRCS
 	${Clockwork_Headers}
 	${cw_yacc_output} ${cw_lex_output}
-	src/MachineInstance.cpp src/Action.cpp src/AbortAction.cpp
+	src/Transition.cpp src/MachineInstance.cpp src/Action.cpp src/AbortAction.cpp
 	src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp src/cmdline.lpp src/CallMethodAction.cpp
 	src/Channel.cpp src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
 	src/DisableAction.cpp src/Dispatcher.cpp src/ECInterface.cpp src/EnableAction.cpp
@@ -168,7 +168,7 @@ set (Clockwork_SRCS
 	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp src/SetOperationAction.cpp
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
-	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp 
+	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
@@ -178,7 +178,7 @@ target_link_libraries(cw Clockwork "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
-add_library (ec_tool 
+add_library (ec_tool
 ${ETHERCAT_DIR}/tool/CommandAlias.cpp
 ${ETHERCAT_DIR}/tool/CommandConfig.cpp
 ${ETHERCAT_DIR}/tool/Command.cpp
@@ -224,7 +224,7 @@ include_directories("${LIBXML2_INCLUDE_DIR}")
 LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
 LINK_DIRECTORIES("LIBXML2_LIBRARIES")
 
-add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp 
+add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
 #set_target_properties (iod PROPERTIES EXCLUDE_FROM_ALL TRUE)
@@ -232,7 +232,7 @@ set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
 target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" xml2 ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
-add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp 
+add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
@@ -246,7 +246,7 @@ set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
 # SOURCE ${CLOCKWORK_DIR}/cmdline.lpp
-   COMMAND ${FLEX_EXECUTABLE} 
+   COMMAND ${FLEX_EXECUTABLE}
    ARGS -o${CMAKE_BINARY_DIR}/cmdline.yy.cpp
 		${CLOCKWORK_DIR}/cmdline.lpp
 		#TARGET ClockworkParser
@@ -255,8 +255,8 @@ set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
 # Create custom command for bison/yacc (note the DEPENDS)
  ADD_CUSTOM_COMMAND(
 #   SOURCE ${CLOCKWORK_DIR}/cmdline.ypp
-   COMMAND ${BISON_EXECUTABLE} 
-   ARGS -y 
+   COMMAND ${BISON_EXECUTABLE}
+   ARGS -y
         -o ${CMAKE_BINARY_DIR}/cmdline.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cmdline.ypp
 		#TARGET ClockworkParser
@@ -280,5 +280,5 @@ target_link_libraries(persistd Clockwork "zmq" ${Boost_LIBRARIES} )
 add_executable(modbusd src/modbusd.cpp )
 target_link_libraries(modbusd Clockwork modbus "zmq" ${Boost_LIBRARIES} )
 
-install(TARGETS cw iosh device_connector modbusd persistd 
+install(TARGETS cw iosh device_connector modbusd persistd
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})

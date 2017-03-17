@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -41,6 +41,7 @@
 #include "Statistic.h"
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
+#include "Transition.h"
 
 extern SymbolTable globals;
 
@@ -52,27 +53,15 @@ struct MoveStateAction;
 extern std::map<std::string, MachineInstance*>machines;
 extern std::map<std::string, MachineClass*> machine_classes;
 
-class Transition {
-public:
-    State source;
-    State dest;
-    Message trigger;
-    Condition *condition;
-    Transition(State s, State d, Message t, Predicate *p=0);
-    Transition(const Transition &other);
-    Transition &operator=(const Transition &other);
-    ~Transition();
-};
-
 class ConditionHandler {
 public:
 	ConditionHandler(const ConditionHandler &other);
 	ConditionHandler &operator=(const ConditionHandler &other);
 	ConditionHandler() : timer_val(0), timer_op(opGE), action(0), trigger(0), uses_timer(false), triggered(false) {}
-    
+
     bool check(MachineInstance *machine);
     void reset();
-    
+
 	Condition condition;
 	std::string command_name;
 	std::string flag_name;
@@ -95,16 +84,16 @@ public:
 		condition(p), uses_timer(false), timer_val(0),
 			trigger(0), subcondition_handlers(0), owner(0), name(s)
  	{
-		uses_timer = p->usesTimer(timer_val); 
+		uses_timer = p->usesTimer(timer_val);
 	}
 
-	StableState(const char *s, Predicate *p, Predicate *q) 
+	StableState(const char *s, Predicate *p, Predicate *q)
 		: state_name(s),
 			condition(p), uses_timer(false), timer_val(0), trigger(0),
 			subcondition_handlers(0), owner(0), name(s) {
-		uses_timer = p->usesTimer(timer_val); 
+		uses_timer = p->usesTimer(timer_val);
 	}
-    
+
     ~StableState();
 
     bool operator<(const StableState &other) const {  // used for std::sort
@@ -114,12 +103,12 @@ public:
     std::ostream &operator<< (std::ostream &out)const { return out << name; }
 	StableState& operator=(const StableState* other);
     StableState (const StableState &other);
-        
+
     void setOwner(MachineInstance *m) { owner = m; }
     void fired(Trigger *trigger);
     void triggerFired(Trigger *trigger);
     void refreshTimer();
-	
+
 	std::string state_name;
 	Condition condition;
 	bool uses_timer;
@@ -152,7 +141,7 @@ public:
 	std::string property_name;
 	ModbusAddress::Group kind;
 	int size; // number of units
-	ModbusAddressTemplate(const std::string &property, ModbusAddress::Group g, int n_units) 
+	ModbusAddressTemplate(const std::string &property, ModbusAddress::Group g, int n_units)
 		: property_name(property), kind(g), size(n_units) {	}
 };
 
@@ -172,7 +161,7 @@ public:
     std::multimap<Message, MachineCommandTemplate*> receives;
 	std::map<std::string, MachineInstance*>global_references;
 	std::map<std::string, Value> options;
-    std::list<Transition> transitions; 
+    std::list<Transition> transitions;
 	std::list<ModbusAddressTemplate> exports;
 	std::vector<std::string> state_exports;
 	std::vector<std::string> command_exports;
@@ -291,13 +280,13 @@ public:
 protected:
     MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
     MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
-    
+
 public:
 	virtual ~MachineInstance();
 	virtual Receiver *asReceiver() { return this; }
 	class SharedCache;
 	class Cache;
-    
+
     void triggerFired(Trigger *trig);
 
     void addParameter(Value param, MachineInstance *machine = 0);
@@ -305,13 +294,13 @@ public:
     void addLocal(Value param, MachineInstance *machine = 0);
     void removeLocal(int index);
     void setProperties(const SymbolTable &props);
-    
+
     // record where in the program this machine was defined
     void setDefinitionLocation(const char *file, int line_no);
-    
+
     // tbd record which parts of the program refer to this machine
     //void addReferenceLocation(const char *file, int line_no);
-    
+
     std::ostream &operator<<(std::ostream &out)const;
     void describe(std::ostream& out);
 
@@ -339,7 +328,7 @@ public:
     const Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
     virtual void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
     const Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
-    
+
     void setStateMachine(MachineClass *machine_class);
     bool stateExists(State &s);
 	bool hasState(const State &s) const;
@@ -351,12 +340,12 @@ public:
     bool setStableState(); // returns true if a state change was made
 	virtual bool isShadow(); // is this machine a shadow instance?
 	virtual Channel* ownerChannel();
-    
+
     std::string &fullName() const;
 	std::string modbusName(const std::string &property, const Value & property_val);
     std::string _type;
-    std::vector<Parameter> parameters;    
-    std::vector<Parameter> locals;    
+    std::vector<Parameter> parameters;
+    std::vector<Parameter> locals;
     std::vector<StableState> stable_states;
     std::multimap<std::string, MachineCommand*> commands;
     std::map<Message, MachineCommand*> enter_functions;
@@ -376,20 +365,20 @@ public:
 	void enqueue(const Package &package);
 	State &getCurrent() { return current_state; }
 	const char *getCurrentStateString() { return current_state.getName().c_str(); }
-	
+
 	void addDependancy(MachineInstance *m);
 	void removeDependancy(MachineInstance *m);
-	
+
 	// this depends on machine m if it is in m's list of dependants or if the machine
 	// is in this machines listen list.
 	bool dependsOn(Transmitter *m);
 
 	// indicate that dependent machine should check their state
-    void notifyDependents(); 
+    void notifyDependents();
 
 	// forward the message to dependents and notify them to check their state
-    void notifyDependents(Message &msg); 
-	
+    void notifyDependents(Message &msg);
+
 	bool needsCheck();
 	void resetNeedsCheck();
 	void resetTemporaryStringStream();
@@ -402,21 +391,21 @@ public:
 	static size_t countAutomaticMachines() { return automatic_machines.size(); }
 	static void displayAutomaticMachines();
 	static void displayAll();
-    
+
 	static MachineInstance *find(const char *name);
 	static std::list<MachineInstance*>::iterator begin() { return all_machines.begin(); }
 	static std::list<MachineInstance*>::iterator end()  { return all_machines.end(); }
 
 	static std::list<MachineInstance*>::iterator io_modules_begin() { return io_modules.begin(); }
 	static std::list<MachineInstance*>::iterator io_modules_end()  { return io_modules.end(); }
-    
+
     static std::list<MachineInstance*>::iterator begin_active() { return active_machines.begin(); }
     static std::list<MachineInstance*>::iterator end_active() { return active_machines.end(); }
     static void addActiveMachine(MachineInstance* m) { active_machines.push_back(m); }
     void markActive();
     void markPassive();
 	void markPlugin();
-    
+
 	MachineClass *getStateMachine() const { return state_machine; }
 	void setInitialState( bool resume = false);
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
@@ -426,7 +415,7 @@ public:
 
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;
-	
+
 	virtual void enable();
 	virtual void resume();
 	void resume(const State &state);
@@ -437,7 +426,7 @@ public:
 	void checkActions();
 	Action *findMatchingCommand(const std::string &command_name);
 
-	// basic lock functionality 
+	// basic lock functionality
 	bool lock(MachineInstance *requester) { if (locked && locked != requester) return false; else {locked = requester; return true; } }
 	bool unlock(MachineInstance *requester) { if (locked != requester) return false; else { locked = 0; return true; } }
     MachineInstance *locker() const { return locked; }
@@ -447,7 +436,7 @@ public:
 	bool prepare();
 	void commit();
 	void discard();
-	
+
 	// basic modbus interface
 	void sendModbusUpdate(const std::string &property_name, const Value &new_value);
 	ModbusAddress addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name);
@@ -465,9 +454,9 @@ public:
 	void setNeedsThrottle(bool which);
 	void requireAuthority(uint64_t auth);
 	uint64_t requiredAuthority();
-    
+
     bool isTraceable() { return is_traceable.bValue; }
-	
+
 	// error states are outside of the normal processing for a state machine;
 	// they cause other processing to halt and trigger receipt of a message: ERROR
 	bool inError();
@@ -490,7 +479,7 @@ public:
 	struct timeval disabled_time; // time the current state started
 
 	static void sort();
-    
+
     virtual void setNeedsCheck();
     uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
@@ -498,10 +487,10 @@ public:
 	bool queuedForStableStateTest();
 
     virtual long filter(long val) { return val; }
-    
+
     void publish();
     void unpublish();
-    
+
     static void forceStableStateCheck();
     static void forceIdleCheck();
     static bool workToDo();
@@ -512,12 +501,14 @@ protected:
 	int needs_check;
 public:
 	bool uses_timer;
-	
+
 protected:
 	InstanceType my_instance_type;
     MoveStateAction *state_change; // this is set during change between stable states
     MachineClass *state_machine;
     State current_state;
+	uint64_t setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer);
+	Action *findReceiveHandler(Transmitter *from, const Message &m, const std::string short_name, bool response_required);
 	virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
     virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
 	bool is_enabled;
@@ -628,7 +619,7 @@ private:
     CounterRateInstance &operator=(const CounterRateInstance &orig);
     CounterRateInstance(const CounterRateInstance &other);
     CounterRateFilterSettings *settings;
-    
+
     friend class MachineInstanceFactory;
 };
 
@@ -648,7 +639,7 @@ private:
     RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);
     RateEstimatorInstance(const RateEstimatorInstance &other);
     CounterRateFilterSettings *settings;
-    
+
     friend class MachineInstanceFactory;
 };
 
