@@ -42,6 +42,7 @@
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include "Transition.h"
+#include "ConditionHandler.h"
 
 extern SymbolTable globals;
 
@@ -52,26 +53,6 @@ struct MoveStateAction;
 
 extern std::map<std::string, MachineInstance*>machines;
 extern std::map<std::string, MachineClass*> machine_classes;
-
-class ConditionHandler {
-public:
-	ConditionHandler(const ConditionHandler &other);
-	ConditionHandler &operator=(const ConditionHandler &other);
-	ConditionHandler() : timer_val(0), timer_op(opGE), action(0), trigger(0), uses_timer(false), triggered(false) {}
-
-    bool check(MachineInstance *machine);
-    void reset();
-
-	Condition condition;
-	std::string command_name;
-	std::string flag_name;
-	Value timer_val;
-    PredicateOperator timer_op;
-	Action *action;
-	Trigger *trigger;
-	bool uses_timer;
-	bool triggered;
-};
 
 class StableState : public TriggerOwner {
 public:
