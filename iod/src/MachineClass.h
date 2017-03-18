@@ -13,6 +13,7 @@
 #include "value.h"
 #include "Transition.h"
 #include "State.h"
+#include "StableState.h"
 
 // modbus interfacing
 class ModbusAddressTemplate {

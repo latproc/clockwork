@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -35,6 +35,7 @@
 #include "Channel.h"
 #include "MessagingInterface.h"
 #include "Scheduler.h"
+#include "SharedWorkSet.h"
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
 #ifdef USE_SDO
@@ -252,7 +253,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                 std::istringstream iss(ss.str());
                 char buf[500];
                 while (iss.getline(buf, 500, '\n')) {
-                    cJSON_AddItemToArray(root, cJSON_CreateString(buf));                
+                    cJSON_AddItemToArray(root, cJSON_CreateString(buf));
                 }
                 char *res = cJSON_Print(root);
                 cJSON_Delete(root);
@@ -332,7 +333,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 				error_str = "Usage: toggle device_name";
 				return false;
 		    }
-				
+
             Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(params[1].asString()));
             if (device) {
                 if (device->isOn()) device->turnOff();
@@ -390,7 +391,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 			error_str = "Error: Unknown device";
 			return false;
 		}
-		
+
 	}
 
     bool IODCommandProperty::run(std::vector<Value> &params) {
@@ -441,7 +442,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 #if 0
 				// Disabled the following feature
 				else {
-                    // extra parameters implies the value contains spaces so 
+                    // extra parameters implies the value contains spaces so
 					// we find the tail of the parameter string and use that for the property value
                     size_t pos = raw_message_.find(params[2].asString().c_str());
                     if (pos == std::string::npos) {
@@ -589,7 +590,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 		}
 	}
  #endif
- 
+
     SymbolTableConstIterator st_iter = m->properties.begin();
     while (st_iter != m->properties.end()) {
 	    std::pair<std::string, Value> item(*st_iter++);
@@ -607,9 +608,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         cJSON_AddStringToObject(node, "executing", ss.str().c_str());
 	}
 
-	if (m->enabled()) 
+	if (m->enabled())
 		cJSON_AddTrueToObject(node, "enabled");
-	else 
+	else
 		cJSON_AddFalseToObject(node, "enabled");
     if (!m->io_interface) {
 			size_t len = m->getCurrent().getName().length()+1;
@@ -708,7 +709,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 
 
 /*
-	send a message. The message may be in one of the forms: 
+	send a message. The message may be in one of the forms:
 		machine-object.command or
 		object.command
 */
@@ -727,7 +728,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                 if (m) machine_name = m->fullName();
             }
         }
-		
+
         // we may have found the target machine already in the
         // message routing table. if not, continue searching
         if (!m) {
@@ -737,7 +738,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
                 error_str = "Usage: SEND machine.command | SEND command TO machine ";
                 return false;
             }
-            
+
             // if the SEND machine.command syntax was used, we keep everything after the last '.'
             // if SEND command TO machine was used, we don't touch the command string
             if (params.size() == 2) {
@@ -802,11 +803,11 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         //if (params.size() == 4) {
         MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
         if (m && m->_type == "LIST") {
-            
+
             for (unsigned int i=2; i<params.size(); ++i) {
                 m->addParameter(params[i]);
             }
-            
+
             result_str = "OK";
             return true;
         }
@@ -837,13 +838,13 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             result_str = "OK";
             return true;
         }
-        
+
         bool use_json = params.size() >= 2 && params[1].asString() == "JSON";
         long num = 0;
         unsigned int idx = 1;
         if (params.size() > idx && params[idx].asString() == "JSON") { use_json = true; ++idx; }
         if (params.size() > idx && params[idx].asInteger(num)) { ++idx; }
-        
+
         cJSON *result = log->toJSON((unsigned int)num);
         if (result) {
             if (use_json) {
@@ -903,7 +904,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 
     bool IODCommandHelp::run(std::vector<Value> &params) {
         std::stringstream ss;
-        ss 
+        ss
 		 << "Commands: \n"
 		 << "DEBUG machine on|off\n"
 		 << "DEBUG debug_group on|off\n"
@@ -943,7 +944,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
             cJSON_AddStringToObject(info, "VERSION", version);
             res = cJSON_Print(info);
             cJSON_Delete(info);
-            
+
         }
         else {
             res = (char *)malloc(100);
@@ -1138,7 +1139,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     bool IODCommandSchedulerState::run(std::vector<Value> &params) {
 		std::stringstream ss;
 		ss << "Status: " <<  Scheduler::instance()->getStatus() << "\n";
-		if (!Scheduler::instance()->empty()) 
+		if (!Scheduler::instance()->empty())
 			ss << "next: " << *(Scheduler::instance()->next());
 		result_str = ss.str();
 		return true;
@@ -1190,7 +1191,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 			Statistic::reportAll(stats);
 			cJSON_AddItemToArray(result, stats);
 		}
-		
+
         //std::string s(out.str());
         if (result) {
             char *r_str = cJSON_Print(result);
@@ -1208,7 +1209,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 bool IODCommandChannels::run(std::vector<Value> &params) {
 	std::map< std::string, Channel* > *channels = Channel::channels();
 	if (!channels) {result_str = "No channels"; return true; }
-	
+
 	std::string result;
 	std::map<std::string, Channel*>::iterator iter = channels->begin();
 	while (iter != channels->end()) {
@@ -1309,7 +1310,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
                     result_str = "OK";
                     return true;
                 }
-                
+
             }
             else {
 				if (ch_name == "PERSISTENCE_CHANNEL") {
@@ -1328,7 +1329,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
                     error_str = MessageEncoding::encodeError(buf);
                     return false;
                 }
-				
+
                 chn = Channel::findByType(ch_name.asString());
 				if (!chn) {
 					std::cout << "no channel found, creating one\n";
@@ -1337,7 +1338,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 					//Value portval = (defn->properties.exists("port")) ? defn->properties.lookup("port") : SymbolTable::Null;
 					Value portval = defn->getValue("port");
 					std::cout << "default port for channel: " << portval << "\n";
-					if (portval == SymbolTable::Null || !portval.asInteger(port)) 
+					if (portval == SymbolTable::Null || !portval.asInteger(port))
 						port = Channel::uniquePort();
 					else {
 						NB_MSG << " using default channel port: " << port << " for channel " << ch_name << "\n";
@@ -1397,7 +1398,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
             ss<< params[i] << " ";
         }
         ss << params[params.size()-1];
-        
+
         char *msg = strdup(ss.str().c_str());
         if (message_handlers.count(msg)) {
             const std::string &name = message_handlers[ss.str()];
@@ -1457,7 +1458,7 @@ bool IODCommandSDO::run(std::vector<Value> &params) {
 		result_str = "OK";
 		return true;
 	}
-	else 
+	else
 #endif
 	if (params.size() == 3 ) {
 		Value entry_name = params[1];
@@ -1523,6 +1524,3 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
     }
 }
  */
-
-
-

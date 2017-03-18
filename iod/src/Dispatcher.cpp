@@ -34,6 +34,7 @@
 #include "Channel.h"
 #include <pthread.h>
 #include "ProcessingThread.h"
+#include "SharedWorkSet.h"
 
 Dispatcher *Dispatcher::instance_ = NULL;
 //boost::mutex Dispatcher::delivery_mutex;
@@ -144,7 +145,7 @@ void Dispatcher::deliverZ(Package *p)
 void Dispatcher::idle()
 {
     socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PULL);
-	
+
 	try {
     socket->bind("inproc://dispatcher");
 	}
@@ -161,17 +162,17 @@ void Dispatcher::idle()
     command.bind("inproc://dispatcher_cmd");
 
 	// the clockwork driver calls our start() method and that blocks until
-	// we get to this point. Note that this thread will then 
+	// we get to this point. Note that this thread will then
 	// block until it gets a sync-start from the driver.
     started = true;
 	DBG_MSG << "Dispatcher started\n";
-	
+
 	char buf[11];
 	size_t response_len = 0;
 	safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
 	buf[response_len]= 0;
 	NB_MSG << "Dispatcher got sync start: " << buf << "\n";
-	
+
     /*
     { // wait for a start command
     char cmd[10];
@@ -184,13 +185,13 @@ void Dispatcher::idle()
 
 	/* this module waits for a start from clockwork and then starts looking for input on its
 		command socket and its message socket (e_waiting). When either a command or message is detected
-		it requests time from clockwork (e_waiting_cw). Clockwork in responds and the module 
+		it requests time from clockwork (e_waiting_cw). Clockwork in responds and the module
 		reads the incoming request and processes it (e_running)
 	 */
 
     status = e_waiting;
-    zmq::pollitem_t items[] = {  
-		{ (void*) *socket, 0, ZMQ_POLLIN, 0 }, 
+    zmq::pollitem_t items[] = {
+		{ (void*) *socket, 0, ZMQ_POLLIN, 0 },
 		{  (void*)command, 0, ZMQ_POLLIN, 0 }
 	};
     while (status != e_aborted)
@@ -229,7 +230,7 @@ void Dispatcher::idle()
                 {
                     //MachineInstance::forceStableStateCheck();
                     //MachineInstance::forceIdleCheck();
-                    
+
                     DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
                     Receiver *to = p->receiver;
                     Transmitter *from = p->transmitter;
@@ -355,4 +356,3 @@ void Dispatcher::idle()
         }
     }
 }
-

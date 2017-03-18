@@ -46,25 +46,20 @@
 #include "StableState.h"
 #include "Parameter.h"
 #include "MachineClass.h"
+#include "ActionList.h"
 
 extern SymbolTable globals;
 
 class MachineInstance;
 class MachineClass;
-
 struct MoveStateAction;
+class IOComponent;
+class MQTTModule;
+struct cJSON;
+class Channel;
 
 extern std::map<std::string, MachineInstance*>machines;
 extern std::map<std::string, MachineClass*> machine_classes;
-
-class MachineInterface : public MachineClass {
-public:
-    MachineInterface(const char *class_name);
-    virtual ~MachineInterface();
-    static std::map<std::string, MachineInterface *> all_interfaces;
-//	void addProperty(const char *name);
-//	void addCommand(const char *name);
-};
 
 struct HardwareAddress {
     int io_offset;
@@ -73,172 +68,119 @@ struct HardwareAddress {
 	HardwareAddress() : io_offset(0), io_bitpos(0) {}
 };
 
-class IOComponent;
-class MQTTModule;
-struct cJSON;
-
-class MachineEvent {
-public:
-	MachineInstance *mi;
-	Message *msg;
-	MachineEvent(MachineInstance *, Message *);
-	MachineEvent(MachineInstance *, const Message &);
-	~MachineEvent();
-private:
-	MachineEvent(const MachineEvent&);
-	MachineEvent &operator=(const MachineEvent&);
-};
-
-class SharedWorkSet {
-public:
-	static SharedWorkSet *instance();
-	void add(MachineInstance *m);
-	void remove(MachineInstance *m);
-	std::set<MachineInstance*>::iterator erase(std::set<MachineInstance*>::iterator &iter);
-	bool empty();
-	size_t size();
-	std::set<MachineInstance*>::iterator begin();
-	std::set<MachineInstance*>::iterator end();
-	boost::recursive_mutex &getMutex() { return mutex; }
-private:
-	static SharedWorkSet *instance_;
-	boost::recursive_mutex mutex;
-	SharedWorkSet() {}
-	std::set<MachineInstance*> busy_machines; // machines that have work queued to them
-};
-
-class ActionList {
-public:
-	void push_back(Action *);
-	void push_front(Action *);
-	Action *back();
-	Action *front();
-	void pop_front();
-	size_t size();
-	bool empty();
-	std::list<Action*>::iterator begin();
-	std::list<Action*>::iterator end();
-	std::list<Action*>::iterator erase(std::list<Action*>::iterator &i);
-	void remove(Action *a);
-private:
-	boost::recursive_mutex mutex;
-	std::list<Action*>actions;
-};
-
-
-class Channel;
 class MachineInstance : public Receiver, public ModbusAddressable, public TriggerOwner {
     friend class MachineInstanceFactory;
 public:
-    enum PollType { BUILTINS, NO_BUILTINS};
+  enum PollType { BUILTINS, NO_BUILTINS};
 	enum InstanceType { MACHINE_INSTANCE, MACHINE_TEMPLATE, MACHINE_SHADOW };
 protected:
-    MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
-    MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+  MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
+  MachineInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+
+  class SharedCache;
+  class Cache;
 
 public:
-	virtual ~MachineInstance();
-	virtual Receiver *asReceiver() { return this; }
-	class SharedCache;
-	class Cache;
+  virtual ~MachineInstance();
+  virtual Receiver *asReceiver() { return this; }
 
-    void triggerFired(Trigger *trig);
+  void triggerFired(Trigger *trig);
 
-    void addParameter(Value param, MachineInstance *machine = 0);
-    void removeParameter(int which);
-    void addLocal(Value param, MachineInstance *machine = 0);
-    void removeLocal(int index);
-    void setProperties(const SymbolTable &props);
+  void addParameter(Value param, MachineInstance *machine = 0);
+  void removeParameter(int which);
+  void addLocal(Value param, MachineInstance *machine = 0);
+  void removeLocal(int index);
+  void setProperties(const SymbolTable &props);
 
-    // record where in the program this machine was defined
-    void setDefinitionLocation(const char *file, int line_no);
+  // record where in the program this machine was defined
+  void setDefinitionLocation(const char *file, int line_no);
 
-    // tbd record which parts of the program refer to this machine
-    //void addReferenceLocation(const char *file, int line_no);
+  // tbd record which parts of the program refer to this machine
+  //void addReferenceLocation(const char *file, int line_no);
 
-    std::ostream &operator<<(std::ostream &out)const;
-    void describe(std::ostream& out);
+  std::ostream &operator<<(std::ostream &out)const;
+  void describe(std::ostream& out);
 
-	static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
+  static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
 
-    virtual bool receives(const Message&, Transmitter *t);
-	Action::Status execute(const Message&m, Transmitter *from, Action *action = 0);
-    virtual void handle(const Message&, Transmitter *from, bool send_receipt = false);
-	virtual void sendMessageToReceiver(Message *m, Receiver *r = NULL, bool expect_reply = false);
+  virtual bool receives(const Message&, Transmitter *t);
+  Action::Status execute(const Message&m, Transmitter *from, Action *action = 0);
+  virtual void handle(const Message&, Transmitter *from, bool send_receipt = false);
+  virtual void sendMessageToReceiver(Message *m, Receiver *r = NULL, bool expect_reply = false);
 
-    virtual void idle();
-		//virtual bool hasWork() { return has_work; }
-	void collect(const Package &package);
+  virtual void idle();
+  //virtual bool hasWork() { return has_work; }
+  void collect(const Package &package);
 
-	std::map<std::string, MachineInstance *> localised_names;
-	MachineInstance *lookup_cache_miss(const std::string &seek_machine_name);
-    MachineInstance *lookup(Parameter &param);
-    MachineInstance *lookup(Value &val);
-    MachineInstance *lookup(const char *);
-    MachineInstance *lookup(const std::string &name);
-	Value *getMutableValue(const char *prop);
-	const Value &getValue(const char *prop); // provides the current value of an object accessible in the scope of this machine
-    const Value &getValue(const std::string &property); // provides the current value of an object accessible in the scope of this machine
-    const Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
-    const Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
-    virtual void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
-    const Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
+  std::map<std::string, MachineInstance *> localised_names;
+  MachineInstance *lookup_cache_miss(const std::string &seek_machine_name);
+  MachineInstance *lookup(Parameter &param);
+  MachineInstance *lookup(Value &val);
+  MachineInstance *lookup(const char *);
+  MachineInstance *lookup(const std::string &name);
+  Value *getMutableValue(const char *prop);
+  const Value &getValue(const char *prop); // provides the current value of an object accessible in the scope of this machine
+  const Value &getValue(const std::string &property); // provides the current value of an object accessible in the scope of this machine
+  const Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
+  const Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
+  virtual void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
+  const Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
 
-    void setStateMachine(MachineClass *machine_class);
-    bool stateExists(State &s);
-	bool hasState(const State &s) const;
-    bool hasState(const std::string &state_name) const;
-	const Value *lookupState(const std::string &state_name);
-	const Value *lookupState(const Value &);
-    void listenTo(MachineInstance *m);
-    void stopListening(MachineInstance *m);
-    bool setStableState(); // returns true if a state change was made
-	virtual bool isShadow(); // is this machine a shadow instance?
-	virtual Channel* ownerChannel();
+  void setStateMachine(MachineClass *machine_class);
+  bool stateExists(State &s);
+  bool hasState(const State &s) const;
+  bool hasState(const std::string &state_name) const;
+  const Value *lookupState(const std::string &state_name);
+  const Value *lookupState(const Value &);
+  void listenTo(MachineInstance *m);
+  void stopListening(MachineInstance *m);
+  bool setStableState(); // returns true if a state change was made
+  virtual bool isShadow(); // is this machine a shadow instance?
+  virtual Channel* ownerChannel();
 
-    std::string &fullName() const;
-	std::string modbusName(const std::string &property, const Value & property_val);
-    std::string _type;
-    std::vector<Parameter> parameters;
-    std::vector<Parameter> locals;
-    std::vector<StableState> stable_states;
-    std::multimap<std::string, MachineCommand*> commands;
-    std::map<Message, MachineCommand*> enter_functions;
-    std::multimap<Message, MachineCommand*> receives_functions;
-    std::set<Transmitter *> listens;
-    std::list<Transition> transitions;
+  std::string &fullName() const;
+  std::string modbusName(const std::string &property, const Value & property_val);
+  std::string _type;
+  std::vector<Parameter> parameters;
+  std::vector<Parameter> locals;
+  std::vector<StableState> stable_states;
+  std::multimap<std::string, MachineCommand*> commands;
+  std::map<Message, MachineCommand*> enter_functions;
+  std::multimap<Message, MachineCommand*> receives_functions;
+  std::set<Transmitter *> listens;
+  std::list<Transition> transitions;
 
-    Action *executingCommand(); // returns the action currently executing
-	ActionList active_actions;
-	void displayActive(std::ostream &out);
-	void start(Action *a);
-	void stop(Action *a);
-	void push(Action *new_action);
-	void prepareCompletionMessage(Transmitter *from, std::string message);
-	Action *findHandler(Message&msg, Transmitter *t, bool response_required = false);
-    void enqueueAction(Action *a);
-	void enqueue(const Package &package);
-	State &getCurrent() { return current_state; }
-	const char *getCurrentStateString() { return current_state.getName().c_str(); }
+  Action *executingCommand(); // returns the action currently executing
+  ActionList active_actions;
+  void displayActive(std::ostream &out);
+  void start(Action *a);
+  void stop(Action *a);
+  void push(Action *new_action);
+  void prepareCompletionMessage(Transmitter *from, std::string message);
+  Action *findHandler(Message&msg, Transmitter *t, bool response_required = false);
+  void enqueueAction(Action *a);
+  void enqueue(const Package &package);
+  State &getCurrent() { return current_state; }
+  const char *getCurrentStateString() { return current_state.getName().c_str(); }
 
-	void addDependancy(MachineInstance *m);
-	void removeDependancy(MachineInstance *m);
+  void addDependancy(MachineInstance *m);
+  void removeDependancy(MachineInstance *m);
 
 	// this depends on machine m if it is in m's list of dependants or if the machine
 	// is in this machines listen list.
 	bool dependsOn(Transmitter *m);
 
 	// indicate that dependent machine should check their state
-    void notifyDependents();
+  void notifyDependents();
 
 	// forward the message to dependents and notify them to check their state
-    void notifyDependents(Message &msg);
+  void notifyDependents(Message &msg);
 
 	bool needsCheck();
 	void resetNeedsCheck();
 	void resetTemporaryStringStream();
 
-    static bool processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which);
+  static bool processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which);
 	//static void updateAllTimers(PollType which);
 	//void updateTimer(long dt);
 	static bool checkStableStates(std::set<MachineInstance *> &to_process, uint32_t max_time);
@@ -254,11 +196,11 @@ public:
 	static std::list<MachineInstance*>::iterator io_modules_begin() { return io_modules.begin(); }
 	static std::list<MachineInstance*>::iterator io_modules_end()  { return io_modules.end(); }
 
-    static std::list<MachineInstance*>::iterator begin_active() { return active_machines.begin(); }
-    static std::list<MachineInstance*>::iterator end_active() { return active_machines.end(); }
-    static void addActiveMachine(MachineInstance* m) { active_machines.push_back(m); }
-    void markActive();
-    void markPassive();
+  static std::list<MachineInstance*>::iterator begin_active() { return active_machines.begin(); }
+  static std::list<MachineInstance*>::iterator end_active() { return active_machines.end(); }
+  static void addActiveMachine(MachineInstance* m) { active_machines.push_back(m); }
+  void markActive();
+  void markPassive();
 	void markPlugin();
 
 	MachineClass *getStateMachine() const { return state_machine; }
@@ -266,7 +208,7 @@ public:
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
 	Value *getCurrentStateVal() { return &current_state_val; }
-    Value *getCurrentValue() { return &current_value_holder; }
+  Value *getCurrentValue() { return &current_value_holder; }
 
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;
@@ -274,7 +216,7 @@ public:
 	virtual void enable();
 	virtual void resume();
 	void resume(const State &state);
-    void resumeAll(); // resume all disable sub-machines
+  void resumeAll(); // resume all disable sub-machines
 	void disable();
 	inline bool enabled() const { return is_enabled; }
 	void clearAllActions();
@@ -284,7 +226,7 @@ public:
 	// basic lock functionality
 	bool lock(MachineInstance *requester) { if (locked && locked != requester) return false; else {locked = requester; return true; } }
 	bool unlock(MachineInstance *requester) { if (locked != requester) return false; else { locked = 0; return true; } }
-    MachineInstance *locker() const { return locked; }
+  MachineInstance *locker() const { return locked; }
 
 	// change batching
 	bool changing();
@@ -310,7 +252,7 @@ public:
 	void requireAuthority(uint64_t auth);
 	uint64_t requiredAuthority();
 
-    bool isTraceable() { return is_traceable.bValue; }
+  bool isTraceable() { return is_traceable.bValue; }
 
 	// error states are outside of the normal processing for a state machine;
 	// they cause other processing to halt and trigger receipt of a message: ERROR
@@ -335,22 +277,22 @@ public:
 
 	static void sort();
 
-    virtual void setNeedsCheck();
-    uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
-    void updateLastEvaluationTime();
+  virtual void setNeedsCheck();
+  uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
+  void updateLastEvaluationTime();
 
 	bool queuedForStableStateTest();
 
-    virtual long filter(long val) { return val; }
+  virtual long filter(long val) { return val; }
 
-    void publish();
-    void unpublish();
+  void publish();
+  void unpublish();
 
-    static void forceStableStateCheck();
-    static void forceIdleCheck();
-    static bool workToDo();
-	static std::list<Package*>& pendingEvents();
-    static std::set<MachineInstance*>& pluginMachines();
+  static void forceStableStateCheck();
+  static void forceIdleCheck();
+  static bool workToDo();
+  static std::list<Package*>& pendingEvents();
+  static std::set<MachineInstance*>& pluginMachines();
 
 protected:
 	int needs_check;
@@ -358,29 +300,29 @@ public:
 	bool uses_timer;
 
 protected:
-	InstanceType my_instance_type;
-    MoveStateAction *state_change; // this is set during change between stable states
-    MachineClass *state_machine;
-    State current_state;
-	uint64_t setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer);
-	Action *findReceiveHandler(Transmitter *from, const Message &m, const std::string short_name, bool response_required);
-	virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
-    virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
-	bool is_enabled;
-	Value state_timer;
-	MachineInstance *locked;
-	ModbusAddress modbus_address;
-	std::vector<std::string>state_names; // used for mapping modbus offsets to states
-	std::vector<std::string>command_names; // used for mapping modbus offsets to states
-	ModbusAddressable::ExportType modbus_exported;
+  InstanceType my_instance_type;
+  MoveStateAction *state_change; // this is set during change between stable states
+  MachineClass *state_machine;
+  State current_state;
+  uint64_t setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer);
+  Action *findReceiveHandler(Transmitter *from, const Message &m, const std::string short_name, bool response_required);
+  virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
+  virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
+  bool is_enabled;
+  Value state_timer;
+  MachineInstance *locked;
+  ModbusAddress modbus_address;
+  std::vector<std::string>state_names; // used for mapping modbus offsets to states
+  std::vector<std::string>command_names; // used for mapping modbus offsets to states
+  ModbusAddressable::ExportType modbus_exported;
 
-	int error_state; // error number of the current error if any
-	State saved_state; // save state before error
-	Value current_state_val;
-    bool is_active; // is this machine active or passive?
-    Value current_value_holder;
-	std::stringstream ss; // saves recreating string stream for temporary use
-    uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
+  int error_state; // error number of the current error if any
+  State saved_state; // save state before error
+  Value current_state_val;
+  bool is_active; // is this machine active or passive?
+  Value current_value_holder;
+  std::stringstream ss; // saves recreating string stream for temporary use
+  uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
 public:
 	Statistic stable_states_stats;
 	Statistic message_handling_stats;
@@ -399,97 +341,97 @@ public:
 
 private:
 	static std::map<std::string, HardwareAddress> hw_names;
-    MachineInstance &operator=(const MachineInstance &orig);
-    MachineInstance(const MachineInstance &other);
+  MachineInstance &operator=(const MachineInstance &orig);
+  MachineInstance(const MachineInstance &other);
 protected:
-    static std::list<MachineInstance*> all_machines;
-    static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
-    static std::list<MachineInstance*> active_machines; // machines that require idle() processing
-    static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
-    static std::set<MachineInstance*> pending_state_change; // machines that need to check their stable states
-    static std::set<MachineInstance*> plugin_machines; // machines that have plugins
-    static std::list<MachineInstance*> io_modules; // machines of type MODULE
-    static std::list<Package*> pending_events; // machines that shadow remote machines
-    static unsigned int num_machines_with_work;
-    static unsigned int total_machines_needing_check;
-	uint64_t expected_authority;
+  static std::list<MachineInstance*> all_machines;
+  static std::list<MachineInstance*> automatic_machines; // machines with auto state changes enabled
+  static std::list<MachineInstance*> active_machines; // machines that require idle() processing
+  static std::list<MachineInstance*> shadow_machines; // machines that shadow remote machines
+  static std::set<MachineInstance*> pending_state_change; // machines that need to check their stable states
+  static std::set<MachineInstance*> plugin_machines; // machines that have plugins
+  static std::list<MachineInstance*> io_modules; // machines of type MODULE
+  static std::list<Package*> pending_events; // machines that shadow remote machines
+  static unsigned int num_machines_with_work;
+  static unsigned int total_machines_needing_check;
+  uint64_t expected_authority;
 
-	std::map<std::string, Value> changes;
+  std::map<std::string, Value> changes;
 
-	friend struct SetStateAction;
-	friend struct MoveStateAction;
-	friend struct SetIOStateAction;
-	friend struct ExpressionAction;
-	friend struct IODCommandToggle;
-    friend struct IODCommandSetStatus;
-    friend class ConditionHandler;
-    friend class SetListEntriesAction;
-    friend class PopListBackValue;
-    friend class PopListFrontValue;
-    friend class ItemAtPosValue;
-    friend void fixListState(MachineInstance &list);
-	friend void initialiseOutputs();
+  friend struct SetStateAction;
+  friend struct MoveStateAction;
+  friend struct SetIOStateAction;
+  friend struct ExpressionAction;
+  friend struct IODCommandToggle;
+  friend struct IODCommandSetStatus;
+  friend class ConditionHandler;
+  friend class SetListEntriesAction;
+  friend class PopListBackValue;
+  friend class PopListFrontValue;
+  friend class ItemAtPosValue;
+  friend void fixListState(MachineInstance &list);
+  friend void initialiseOutputs();
 
-	friend int changeState(void *s, const char *new_state);
+  friend int changeState(void *s, const char *new_state);
 };
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
 
 class MachineShadowInstance : public MachineInstance {
 protected:
-    MachineShadowInstance(InstanceType instance_type = MACHINE_INSTANCE);
-    MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+  MachineShadowInstance(InstanceType instance_type = MACHINE_INSTANCE);
+  MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 
 private:
-    MachineShadowInstance &operator=(const MachineShadowInstance &orig);
-    MachineShadowInstance(const MachineShadowInstance &other);
-    MachineShadowInstance *settings;
+  MachineShadowInstance &operator=(const MachineShadowInstance &orig);
+  MachineShadowInstance(const MachineShadowInstance &other);
+  MachineShadowInstance *settings;
 
 public:
-    MachineShadowInstance();
-    ~MachineShadowInstance();
-    virtual void idle();
-	virtual bool isShadow() { return true; }
+  MachineShadowInstance();
+  ~MachineShadowInstance();
+  virtual void idle();
+  virtual bool isShadow() { return true; }
 
-	virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
-	virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
+  virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
+  virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
 
 
-    friend class MachineInstanceFactory;
+  friend class MachineInstanceFactory;
 };
 
 class CounterRateFilterSettings;
 class CounterRateInstance : public MachineInstance {
 protected:
-    CounterRateInstance(InstanceType instance_type = MACHINE_INSTANCE);
-    CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+  CounterRateInstance(InstanceType instance_type = MACHINE_INSTANCE);
+  CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 public:
-    ~CounterRateInstance();
-    void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
-    long filter(long val);
-    virtual void idle();
-	//virtual bool hasWork();
-    CounterRateFilterSettings *getSettings() { return settings; }
+  ~CounterRateInstance();
+  void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
+  long filter(long val);
+  virtual void idle();
+  //virtual bool hasWork();
+  CounterRateFilterSettings *getSettings() { return settings; }
 private:
-    CounterRateInstance &operator=(const CounterRateInstance &orig);
-    CounterRateInstance(const CounterRateInstance &other);
-    CounterRateFilterSettings *settings;
+  CounterRateInstance &operator=(const CounterRateInstance &orig);
+  CounterRateInstance(const CounterRateInstance &other);
+  CounterRateFilterSettings *settings;
 
-    friend class MachineInstanceFactory;
+  friend class MachineInstanceFactory;
 };
 
 class RateEstimatorInstance : public MachineInstance {
 protected:
-    RateEstimatorInstance(InstanceType instance_type = MACHINE_INSTANCE);
-    RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
+  RateEstimatorInstance(InstanceType instance_type = MACHINE_INSTANCE);
+  RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 public:
-    ~RateEstimatorInstance();
-    void setValue(const std::string &property, Value new_value, uint64_t authority =0);
-    long filter(long val);
-    virtual void setNeedsCheck();
-    virtual void idle();
-	//virtual bool hasWork();
-    CounterRateFilterSettings *getSettings() { return settings; }
+  ~RateEstimatorInstance();
+  void setValue(const std::string &property, Value new_value, uint64_t authority =0);
+  long filter(long val);
+  virtual void setNeedsCheck();
+  virtual void idle();
+  //virtual bool hasWork();
+  CounterRateFilterSettings *getSettings() { return settings; }
 private:
     RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);
     RateEstimatorInstance(const RateEstimatorInstance &other);
@@ -528,24 +470,5 @@ public:
     static MachineInstance *create(MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
     static MachineInstance *create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
 };
-
-// during the parsing process we build a list of
-// things to instantiate but don't actually do it until
-// all files have been loaded.
-
-class MachineDetails {
-	std::string machine_name;
-	std::string machine_class;
-	std::list<Parameter> parameters;
-	std::string source_file;
-	int source_line;
-	SymbolTable properties;
-	MachineInstance::InstanceType instance_type;
-
-	MachineDetails(const char *nam, const char *cls, std::list<Parameter> &params,
-				   const char *sf, int sl, SymbolTable &props, MachineInstance::InstanceType kind);
-	MachineInstance *instantiate();
-};
-
 
 #endif

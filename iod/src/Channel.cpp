@@ -18,6 +18,8 @@
 #include "SyncRemoteStatesAction.h"
 #include "DebugExtra.h"
 #include "ProcessingThread.h"
+#include "SharedWorkSet.h"
+#include "MachineInterface.h"
 
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
@@ -36,13 +38,13 @@ State ChannelImplementation::ACTIVE("ACTIVE");
 
 class chn_scoped_lock {
 public:
-	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) { 
+	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) {
 //		NB_MSG << location << " LOCKING...\n";
-		lock.lock(); 
+		lock.lock();
 //		NB_MSG << location << " LOCKED...\n";
 	}
-	~chn_scoped_lock() { 
-		lock.unlock(); 
+	~chn_scoped_lock() {
+		lock.unlock();
 //		NB_MSG << location << " UNLOCKED\n";
 		}
 	std::string location;
@@ -449,7 +451,7 @@ void Channel::startChannels() {
     std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		if (!chn->started()) { 
+		if (!chn->started()) {
 			DBG_CHANNELS << "starting " << chn->getName() << "\n";
 			chn->start();
 		}
@@ -629,7 +631,7 @@ ChannelDefinition *ChannelDefinition::find(const char *name) {
     return (*found).second;
 }
 Channel *ChannelDefinition::instantiate(unsigned int port) {
-    
+
     Channel *chn = Channel::findByType(name);
     if (!chn) chn = Channel::create(port, this);
 	if (chn) Channel::setupCommandSockets();
@@ -764,7 +766,7 @@ void Channel::stopServer() {
 
 void Channel::checkStateChange(std::string event) {
 	DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << name << "\n";
-	
+
 	if (current_state == ChannelImplementation::DISCONNECTED) {
 		checkCommunications();
 	}
@@ -1048,7 +1050,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 	if (!subscriber_thread) {
 		DBG_CHANNELS << tnam << " Channel " << name << " sendMessage() sending " << msg << " directly\n";
 		//return ::sendMessage(msg, sock, response, source);
-		
+
 		safeSend(sock, msg, strlen(msg), header);
 		usleep(10);
 		zmq::message_t resp;
@@ -1580,7 +1582,7 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
 
         if (!chn->channel_machines.count(machine))
             continue;
-				
+
 		if (!chn->throttle_time) continue;
 
 		std::map<MachineInstance *, MachineRecord*>::iterator found = chn->throttled_items.find(machine);
@@ -1656,7 +1658,7 @@ bool Channel::filtersAllow(MachineInstance *machine) {
 	if (!definition()->monitor_linked.empty() && ( machine->_type == "INPUTBIT" || machine->_type == "INPUTREGISTER") ) return false;
     if ((definition()->monitors_exports || monitors_exports) && !machine->modbus_exports.empty())
         return true;
-    
+
     if (!matches(machine, name))
 		return false;
 
@@ -1664,18 +1666,18 @@ bool Channel::filtersAllow(MachineInstance *machine) {
 /*
     if (monitors_names.empty() && monitors_patterns.empty() && monitors_properties.empty())
         return true;
-    
+
     // apply channel specific filters
     size_t n = monitors_names.count(name);
     if (!monitors_names.empty() && n)
         return true;
-    
+
     // if patterns are given and this machine doesn't match anything else, we try patterns
     if (!monitors_patterns.empty()) {
         if (patternMatches(machine->getName()))
             return true;
     }
-    
+
     // if properties are given and this machine doesn't match anything else, we try properties
     if (!monitors_properties.empty()) {
         // TBD check properties
@@ -2173,7 +2175,7 @@ void Channel::setupShadows() {
         MessageLog::instance()->add(buf);
         return;
     }
-    
+
     std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
     while (iter != definition()->updates_names.end()) {
         const std::pair< std::string, Value> item = *iter++;
@@ -2543,5 +2545,3 @@ void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_i
 		}
 	}
 }
-
-

@@ -59,6 +59,8 @@
 #endif
 #include "ProcessingThread.h"
 #include "Transition.h"
+#include "SharedWorkSet.h"
+#include "MachineInterface.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -68,6 +70,18 @@ Value *MachineInstance::polling_delay = 0;
 
 unsigned int MachineInstance::num_machines_with_work = 1; // machine idle processing will occur if this value is non zero
 unsigned int MachineInstance::total_machines_needing_check = 1;
+
+class MachineEvent {
+public:
+	MachineInstance *mi;
+	Message *msg;
+	MachineEvent(MachineInstance *, Message *);
+	MachineEvent(MachineInstance *, const Message &);
+	~MachineEvent();
+private:
+	MachineEvent(const MachineEvent&);
+	MachineEvent &operator=(const MachineEvent&);
+};
 
 class MachineInstance::SharedCache {
 public:
@@ -106,45 +120,7 @@ std::list<MachineInstance*> MachineInstance::shadow_machines;
 std::set<MachineInstance*> MachineInstance::plugin_machines;
 std::list<Package*> MachineInstance::pending_events;
 std::set<MachineInstance*> MachineInstance::pending_state_change;
-std::map<std::string, MachineInterface *> MachineInterface::all_interfaces;
 std::map<std::string, HardwareAddress> MachineInstance::hw_names;
-
-
-SharedWorkSet *SharedWorkSet::instance_ = 0;
-
-SharedWorkSet *SharedWorkSet::instance() {
-	if (!instance_) instance_ = new SharedWorkSet();
-	return instance_;
-}
-
-
-void SharedWorkSet::add(MachineInstance *m) {
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	busy_machines.insert(m);
-}
-
-void SharedWorkSet::remove(MachineInstance *m) {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	busy_machines.erase(m);
-}
-
-std::set<MachineInstance*>::iterator SharedWorkSet::erase(std::set<MachineInstance*>::iterator &iter) {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	return busy_machines.erase(iter);
-}
-
-bool SharedWorkSet::empty() {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	return busy_machines.empty();
-}
-
-size_t SharedWorkSet::size() {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	return busy_machines.size();
-}
-
-std::set<MachineInstance*>::iterator SharedWorkSet::begin() { return busy_machines.begin(); }
-std::set<MachineInstance*>::iterator SharedWorkSet::end() { return busy_machines.end(); }
 
 
 /* Factory methods */
@@ -2516,26 +2492,6 @@ MachineEvent::MachineEvent(MachineInstance *machine, const Message &message) :
 
 MachineEvent::~MachineEvent() { delete msg; }
 
-MachineInterface::MachineInterface(const char *class_name) : MachineClass(class_name) {
-	if (all_interfaces.count(class_name) != 0) {
-		NB_MSG << "interface " << class_name << " is already defined\n";
-	}
-	all_interfaces[class_name] = this;
-}
-
-MachineInterface::~MachineInterface() {
-	all_interfaces.erase(this->name);
-}
-/*
-void MachineInterface::addProperty(const char *name) {
-	property_names.insert(name);
-}
-
-void MachineInterface::addCommand(const char *name) {
-	command_names.insert(name);
-}
-*/
-
 
 Action *MachineInstance::executingCommand() {
 	if (!active_actions.empty()) return active_actions.back();
@@ -4556,82 +4512,4 @@ void MachineInstance::resetError() {
 
 void MachineInstance::ignoreError() {
 	error_state = 0;
-}
-
-MachineDetails::MachineDetails(const char *nam, const char *cls, std::list<Parameter> &params,
-			   const char *sf, int sl, SymbolTable &props, MachineInstance::InstanceType kind)
-: machine_name(nam), machine_class(cls), source_file(sf), source_line(sl),
-instance_type(kind)
-{
-	std::copy(parameters.begin(), parameters.end(),  back_inserter(parameters));
-
-	SymbolTableConstIterator iter = props.begin();
-	while (iter != props.end()) {
-		const std::pair<std::string, Value> &p = *iter;
-		properties.push_back(p);
-		iter++;
-	}
-}
-
-MachineInstance *MachineDetails::instantiate() {
-	MachineInstance *machine = MachineInstanceFactory::create(machine_name.c_str(),
-		machine_class.c_str(), instance_type);
-	machine->setDefinitionLocation(source_file.c_str(), source_line);
-	std::copy(parameters.begin(), parameters.end(),  back_inserter(machine->parameters));
-	machine->setProperties(properties);
-	return machine;
-}
-
-void ActionList::push_back(Action *a) {
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.push_back(a);
-}
-
-void ActionList::push_front(Action *a){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.push_front(a);
-}
-
-Action *ActionList::back(){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.back();
-}
-
-Action *ActionList::front(){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.front();
-}
-void ActionList::pop_front(){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.pop_front();
-}
-
-size_t ActionList::size(){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.size();
-}
-
-bool ActionList::empty(){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.empty();
-}
-
-std::list<Action*>::iterator ActionList::begin(){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.begin();
-}
-
-std::list<Action*>::iterator ActionList::end(){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.end();
-}
-
-std::list<Action*>::iterator ActionList::erase(std::list<Action*>::iterator &i){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.erase (i);
-}
-
-void ActionList::remove(Action *a){
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.remove(a);
 }
