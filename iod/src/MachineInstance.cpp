@@ -111,38 +111,6 @@ std::ostream &operator<<(std::ostream &out, const ActionTemplate &a) {
 	return a.operator<<(out);
 }
 
-std::ostream &operator<<(std::ostream &out, const StableState &ss) {
-	return ss.operator<<(out);
-}
-
-StableState::~StableState() {
-	if (trigger) {
-		if (trigger->enabled()) {
-			trigger->disable();
-		}
-		trigger = trigger->release();
-	}
-	if (subcondition_handlers) {
-		subcondition_handlers->clear();
-		delete subcondition_handlers;
-	}
-}
-
-	StableState::StableState (const StableState &other)
-: state_name(other.state_name), condition(other.condition),
-	uses_timer(other.uses_timer), timer_val(0), trigger(0), subcondition_handlers(0), owner(other.owner)
-{
-	if (other.subcondition_handlers) {
-		subcondition_handlers = new std::list<ConditionHandler>;
-		std::copy(other.subcondition_handlers->begin(), other.subcondition_handlers->end(), back_inserter(*subcondition_handlers));
-	}
-}
-
-
-void StableState::triggerFired(Trigger *trig) {
-	if (owner) owner->setNeedsCheck();
-}
-
 std::map<std::string, MachineInstance*> machines;
 std::map<std::string, MachineClass*> machine_classes;
 
@@ -2125,17 +2093,18 @@ Action *MachineInstance::findMatchingCommand(const std::string &command_name) {
 	return 0;
 }
 
-Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m, const std::string short_name, bool response_required) {
-std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(m.getText().c_str()));
-if (receive_handler_i != receives_functions.end()) {
-	if (debug()) {
-		DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
-		<< "handler: " << *((*receive_handler_i).second) << "\n";
+Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
+			const std::string short_name, bool response_required) {
+	std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(m.getText().c_str()));
+	if (receive_handler_i != receives_functions.end()) {
+		if (debug()) {
+			DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
+				<< "handler: " << *((*receive_handler_i).second) << "\n";
 		}
 #ifndef EC_SIMULATOR
 		if (state_machine && state_machine->name == "ETHERCAT_BUS") {
 			if (short_name == "activate"
-				&& (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED") ) {
+					&& (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED") ) {
 				ProcessingThread::instance()->machine.requestActivation(true);
 			}
 			else if (short_name == "deactivate" && current_state.getName() == "ACTIVE")
@@ -2144,30 +2113,31 @@ if (receive_handler_i != receives_functions.end()) {
 		}
 #endif
 		if (response_required)
-		prepareCompletionMessage(from, short_name);
+			prepareCompletionMessage(from, short_name);
 		return (*receive_handler_i).second->retain();
-		}
-		else if (from == this) {
-			if (short_name == m.getText()) {
-				if (response_required)
-					prepareCompletionMessage(from, short_name);
-				return NULL;
-			} // no other alternatives
-			std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(short_name.c_str()));
-			if (receive_handler_i != receives_functions.end()) {
-				if (debug()){
-					DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
+	}
+	else if (from == this) {
+		if (short_name == m.getText()) {
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
+			return NULL;
+		} // no other alternatives
+		std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(short_name.c_str()));
+		if (receive_handler_i != receives_functions.end()) {
+			if (debug()){
+				DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
 					<< "handler: " << *((*receive_handler_i).second) << "\n";
-				}
-				if (response_required)
-					prepareCompletionMessage(from, short_name);
-
-				return (*receive_handler_i).second->retain();
 			}
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
+
+			return (*receive_handler_i).second->retain();
 		}
-		if (response_required)
+	}
+	if (response_required)
 		prepareCompletionMessage(from, short_name);
-		}
+	return NULL;
+}
 
 /* findHandler - find a handler for a message by looking through the transition table
 
