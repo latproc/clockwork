@@ -135,7 +135,8 @@ INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
 set (Clockwork_Headers
 	src/Action.h			src/AbortAction.h	src/Expression.h	src/Transition.h	src/ConditionHandler.h
   src/MachineInstance.h		src/SetListEntriesAction.h	src/cJSON.h src/StableState.h
-	src/CallMethodAction.h		src/ExpressionAction.h		src/Message.h			src/SetOperationAction.h	src/clockwork.h
+	src/CallMethodAction.h		src/ExpressionAction.h		src/Message.h
+  src/SetOperationAction.h	src/clockwork.h src/Parameter.h src/MachineClass.h
 	src/Channel.h			src/FireTriggerAction.h		src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
 	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h		src/ShutdownAction.h		src/cwlang.h
 	src/ClientInterface.h		src/IOComponent.h		src/MessagingInterface.h	src/SimulatedRawInput.h		src/domain.h
@@ -157,7 +158,7 @@ set (Clockwork_SRCS
 	${Clockwork_Headers}
 	${cw_yacc_output} ${cw_lex_output}
 	src/Transition.cpp src/MachineInstance.cpp src/Action.cpp src/AbortAction.cpp
-  src/ConditionHandler.cpp src/StableState.cpp
+  src/ConditionHandler.cpp src/StableState.cpp src/Parameter.cpp src/MachineClass.cpp
 	src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp src/cmdline.lpp src/CallMethodAction.cpp
 	src/Channel.cpp src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
 	src/DisableAction.cpp src/Dispatcher.cpp src/ECInterface.cpp src/EnableAction.cpp
