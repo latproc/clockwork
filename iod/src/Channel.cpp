@@ -20,6 +20,7 @@
 #include "ProcessingThread.h"
 #include "SharedWorkSet.h"
 #include "MachineInterface.h"
+#include "MachineShadowInstance.h"
 
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;

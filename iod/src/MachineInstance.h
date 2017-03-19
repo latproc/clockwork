@@ -377,69 +377,6 @@ protected:
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
 
-class MachineShadowInstance : public MachineInstance {
-protected:
-  MachineShadowInstance(InstanceType instance_type = MACHINE_INSTANCE);
-  MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
-
-private:
-  MachineShadowInstance &operator=(const MachineShadowInstance &orig);
-  MachineShadowInstance(const MachineShadowInstance &other);
-  MachineShadowInstance *settings;
-
-public:
-  MachineShadowInstance();
-  ~MachineShadowInstance();
-  virtual void idle();
-  virtual bool isShadow() { return true; }
-
-  virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
-  virtual Action::Status setState(const char *new_state, uint64_t authority = 0, bool resume = false);
-
-
-  friend class MachineInstanceFactory;
-};
-
-class CounterRateFilterSettings;
-class CounterRateInstance : public MachineInstance {
-protected:
-  CounterRateInstance(InstanceType instance_type = MACHINE_INSTANCE);
-  CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
-public:
-  ~CounterRateInstance();
-  void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
-  long filter(long val);
-  virtual void idle();
-  //virtual bool hasWork();
-  CounterRateFilterSettings *getSettings() { return settings; }
-private:
-  CounterRateInstance &operator=(const CounterRateInstance &orig);
-  CounterRateInstance(const CounterRateInstance &other);
-  CounterRateFilterSettings *settings;
-
-  friend class MachineInstanceFactory;
-};
-
-class RateEstimatorInstance : public MachineInstance {
-protected:
-  RateEstimatorInstance(InstanceType instance_type = MACHINE_INSTANCE);
-  RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
-public:
-  ~RateEstimatorInstance();
-  void setValue(const std::string &property, Value new_value, uint64_t authority =0);
-  long filter(long val);
-  virtual void setNeedsCheck();
-  virtual void idle();
-  //virtual bool hasWork();
-  CounterRateFilterSettings *getSettings() { return settings; }
-private:
-    RateEstimatorInstance &operator=(const RateEstimatorInstance &orig);
-    RateEstimatorInstance(const RateEstimatorInstance &other);
-    CounterRateFilterSettings *settings;
-
-    friend class MachineInstanceFactory;
-};
-
 #include "dynamic_value.h"
 class MachineValue : public DynamicValue {
 public:
