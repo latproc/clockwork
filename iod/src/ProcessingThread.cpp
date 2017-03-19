@@ -212,7 +212,6 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 		MEMCHECK();
 		try
 		{
-{uint8_t *chk = new uint8_t[1000]; memset(chk, 0, 1000); delete[] chk; }
 			long len = 0;
 			char buf[10];
 			res = zmq::poll(&items[0], num_items, poll_wait);
@@ -305,7 +304,8 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 									break;
 								}
 							default: {
-DBG_MSG << "unexpected stage " << (int)stage << "\n";
+								DBG_MSG << "unexpected stage " << (int)stage << "\n";
+								assert(stage<=4);
 								};
 						}
 						break;
@@ -337,101 +337,6 @@ DBG_MSG << "unexpected stage " << (int)stage << "\n";
 	}
 	return res;
 }
-
-#if 0
-const long *setupPropertyRef(const char *machine_name, const char *property_name) {
-	MachineInstance *system = MachineInstance::find(machine_name);
-	if (!system) return 0;
-	const Value &prop(system->getValue(property_name));
-	if (prop == SymbolTable::Null) {
-		system->setValue(property_name, 0);
-		const Value &prop(system->getValue(property_name));
-		if (prop.kind != Value::t_integer) return 0;
-		return &prop.iValue;
-	}
-	if (prop.kind != Value::t_integer) return 0;
-	return &prop.iValue;
-}
-
-class AutoStatStorage {
-public:
-	// auto stats are linked to system properties
-	AutoStatStorage(const char *time_name, const char *rate_name, unsigned int reset_every = 100)
-	: start_time(0), last_update(0), total_polls(0), total_time(0),
-		total_delays(0), rate_property(0), time_property(0),reset_point(reset_every)
-	{
-		if (time_name) time_property = setupPropertyRef("SYSTEM", time_name);
-		if (rate_name) rate_property = setupPropertyRef("SYSTEM", rate_name);
-	}
-	void reset() { last_update = 0; total_polls = 0; total_time = 0; }
-	void update(uint64_t now, uint64_t duration) {
-		++total_polls;
-		if (reset_point && total_polls>reset_point) {
-			total_time = 0;
-			total_polls = 1;
-		}
-		if (time_property) {
-			total_time += duration;
-			long *tp = (long*)time_property;
-			*tp = total_time / total_polls;
-		}
-		if (rate_property) {
-			uint64_t delay = now - last_update;
-			total_delays += delay;
-			long *rp = (long*)rate_property;
-			*rp = total_delays / total_polls;
-		}
-	}
-	bool running() { return start_time != 0; };
-	void start() { start_time = nowMicrosecs(); }
-	void stop() {
-		if (start_time) {
-			uint64_t now = nowMicrosecs(); update(now, now-start_time);
-			start_time = 0;
-		}
-	}
-	void update() {
-		uint64_t now = nowMicrosecs();
-		if (start_time) {update(now, now-start_time); }
-		start_time = now;
-	}
-protected:
-	uint64_t start_time;
-	uint64_t last_update;
-	uint32_t total_polls;
-	uint64_t total_time;
-	uint64_t total_delays;
-	const long *rate_property;
-	const long *time_property;
-	unsigned int reset_point;
-};
-
-class AutoStat {
-public:
-	AutoStat(AutoStatStorage &storage) : storage_(storage) { start_time = nowMicrosecs(); }
-	~AutoStat() {
-		uint64_t now = nowMicrosecs();
-		storage_.update(now, now-start_time);
-	}
-
-private:
-	uint64_t start_time;
-	AutoStatStorage &storage_;
-};
-#endif
-
-#if 0
-static void setStatus(ProcessingThread::Status &s, Watchdog &wd, const ProcessingThread::Status new_state) {
-	if (s != new_state) {
-		if (new_state == ProcessingThread::Status::e_waiting) {
-			wd.poll();
-		}
-		s = new_state;
-	}
-	else if (s == ProcessingThread::Status::e_waiting)
-		wd.poll();
-}
-#endif
 
 ProcessingThread *ProcessingThread::instance_ = 0;
 ProcessingThread *ProcessingThread::instance() {
@@ -622,11 +527,9 @@ void ProcessingThread::operator()()
 			{ (void*)ecat_out, 0, ZMQ_POLLIN, 0 },
 			{ (void*)command_sync, 0, ZMQ_POLLIN, 0 }
 		};
-		zmq::pollitem_t items[15];
-		memset((void*)items, 0, 15 * sizeof(zmq::pollitem_t));
-		for (int i=0; i<6; ++i) {
-			items[i] = fixed_items[i];
-		}
+		const int max_poll_sockets = 15;
+		zmq::pollitem_t items[max_poll_sockets];
+		memset((void*)items, 0, max_poll_sockets * sizeof(zmq::pollitem_t));
 		int dynamic_poll_start_idx = 6;
 
 		char buf[100];
@@ -636,6 +539,7 @@ void ProcessingThread::operator()()
 		uint64_t curr_t = 0;
 		uint64_t last_sample_poll = 0;
 		bool machines_have_work;
+		int num_channels = 0;
 		while (!program_done)
 		{
 			MEMCHECK();
@@ -643,14 +547,14 @@ void ProcessingThread::operator()()
 			internals->process_manager.SetTime(curr_t);
 			//TBD add a guard here to detect/prevent rapid cycling
 
-			for (int i=0; i<6; ++i) {
+			for (int i=0; i<dynamic_poll_start_idx; ++i) {
 				items[i] = fixed_items[i];
 			}
 
 			// add the channel sockets to our poll info
 			{
 				std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
-				int idx = 6;
+				int idx = dynamic_poll_start_idx;
 				while (csi_iter != internals->channel_sockets.end()) {
 					CommandSocketInfo *info = *csi_iter++;
 					items[idx].socket = (void*)(*info->sock);
@@ -658,8 +562,9 @@ void ProcessingThread::operator()()
 					items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
 					items[idx].revents = 0;
 					idx++;
-					if (idx == 15) break;
+					if (idx == max_poll_sockets) break;
 				}
+				num_channels = idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
 			}
 
 			//machines_have_work = MachineInstance::workToDo();
@@ -681,7 +586,7 @@ void ProcessingThread::operator()()
 
 			//if (Watchdog::anyTriggered(curr_t))
 			//	Watchdog::showTriggered(curr_t, true);
-			systems_waiting = pollZMQItems(poll_wait, items, 6 + internals->channel_sockets.size(), 
+			systems_waiting = pollZMQItems(poll_wait, items, 6 + num_channels,
 				ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 
 			if (systems_waiting > 0 
@@ -823,7 +728,7 @@ void ProcessingThread::operator()()
 				have_command = true;
 			}
 			else {
-				for (unsigned int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + internals->channel_sockets.size(); ++i) {
+				for (unsigned int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + num_channels; ++i) {
 					if (items[i].revents & ZMQ_POLLIN) {
 						//NB_MSG << "Processing thread has a command from a channel command interface\n";
 						have_command = true;

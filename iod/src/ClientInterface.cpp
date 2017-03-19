@@ -498,7 +498,7 @@ void IODCommandThread::operator()() {
 	} while (strcmp(start_cli, "start") != 0);
 
     enum {e_running, e_wait_processing_start, e_wait_processing, e_responding} status = e_running; //are we holding shared resources?
-		int poll_time = 2;
+	int poll_time = 2;
     while (!done) {
 		try {
 			wd->stop(); // disable the watchdog while we wait for something to do
@@ -511,7 +511,7 @@ void IODCommandThread::operator()() {
 			try {
 				rc = zmq::poll( &items[0], 3, poll_time);
 				if (poll_time < 20) poll_time += 1;
-				if (!rc) continue;
+				if (!rc) { usleep(100); continue; }
 				if (rc == -1 && errno == EAGAIN) continue;
 				if (done) break;
 			}

@@ -6,7 +6,7 @@
 Blinker MACHINE {
   OPTION delay 10;
   on STATE;
-  off INITIAL;
+  off STATE;
 
   ENTER on { WAIT delay; SEND turnOff TO SELF; }
   ENTER off { WAIT delay; SEND turnOn TO SELF; }

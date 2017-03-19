@@ -1780,14 +1780,8 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
             else if (chn->communications_manager
                   && chn->communications_manager->setupStatus() == SubscriptionManager::e_done ) {
 
-				//if (!chn->definition()->isPublisher()) {
-				//	std::string response;
-					safeSend(*chn->cmd_client, cmdstr, strlen(cmdstr),
-							 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
-				//}
-				//else {
-				//	safeSend(*chn->cmd_server, cmdstr, strlen(cmdstr) );
-				//}
+				safeSend(*chn->cmd_client, cmdstr, strlen(cmdstr),
+						 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
             }
             else if (chn->mif) {
                 chn->mif->send(cmdstr);

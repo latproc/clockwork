@@ -45,24 +45,6 @@ zmq::context_t *MessagingInterface::zmq_context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 bool MessagingInterface::abort_all = false;
 
-const int MessageHeader::NEED_REPLY = 1;
-
-const int MessageHeader::SOCK_REMOTE = 9;
-const int MessageHeader::SOCK_CW = 1;
-const int MessageHeader::SOCK_CHAN = 2;
-const int MessageHeader::SOCK_CTRL = 3;
-
-uint32_t MessageHeader::last_id = 0;
-
-std::ostream &MessageHeader::operator<<(std::ostream &out) const  {
-	out << dest<<":" << source<<":" << options;
-	return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const MessageHeader&mh) {
-	return mh.operator<<(out);
-}
-
 uint64_t nowMicrosecs() {
 	struct timeval now;
 	gettimeofday(&now, 0);
@@ -94,30 +76,6 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 	int64_t t = now_t - then_t;
 	return t;
 }
-
-MessageHeader::MessageHeader(uint32_t dst, uint32_t src, bool need_reply)
-		: msgid(++last_id), dest(dst), source(src), start_time(microsecs()), arrival_time(0), options(0)
-{
-	if (need_reply) options |= NEED_REPLY;
-}
-
-MessageHeader::MessageHeader() : msgid(++last_id), dest(0), source(0), start_time(microsecs()), arrival_time(0), options(0){}
-
-void MessageHeader::needReply(bool needs) {
-	if (needs) options|=NEED_REPLY;
-	else options &= (-1 ^ NEED_REPLY);
-}
-
-bool MessageHeader::needsReply() {
-	return ((options & NEED_REPLY) == NEED_REPLY);
-}
-
-void MessageHeader::reply() {
-	uint32_t tmp = dest;
-	dest = source;
-	source = tmp;
-}
-
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
