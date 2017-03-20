@@ -99,6 +99,7 @@ public:
 	void stop();
 	int64_t getNextDelay();
 	int64_t getNextDelay(uint64_t start);
+	void setThreadRef(boost::thread &ref);
 
 protected:
 	SchedulerInternals *internals;

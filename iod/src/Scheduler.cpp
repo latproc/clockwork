@@ -28,6 +28,7 @@
 #include "MessageLog.h"
 #include <zmq.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/chrono.hpp>
 #include <assert.h>
 #include "watchdog.h"
 #include "ProcessingThread.h"
@@ -38,7 +39,9 @@ static Watchdog *wd = 0;
 
 class SchedulerInternals {
 public:
+	SchedulerInternals() :thread_ptr(0) { }
 	boost::recursive_mutex q_mutex;
+	boost::thread *thread_ptr;
 };
 
 #if 0
@@ -67,12 +70,13 @@ std::string Scheduler::getStatus() {
 	char buf[300];
 	if (state == e_running) 
 		snprintf(buf, 300, "busy");
-	else
+	else {
 		snprintf(buf, 300, "state: %d, is ready: %d"
 			" items: %ld, now: %ld\n"
 			"last notification: %10.6f\nwait time: %10.6f",
 				 state, ready(now), items.size(), (now - ProcessingThread::programStartTime()),
 				(float)notification_sent/1000000.0f, (float)wait_duration/1000000.0f);
+	}
 	std::stringstream ss;
 	ss << buf << "\n";
     std::list<ScheduledItem*>::const_iterator iter = items.queue.begin();
@@ -201,6 +205,11 @@ Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getC
 	next_time = 0;
 }
 
+void Scheduler::setThreadRef(boost::thread &ref) {
+	internals->thread_ptr = &ref;
+}
+
+
 bool CompareSheduledItems::operator()(const ScheduledItem *a, const ScheduledItem *b) const {
     bool result = (*a) >= (*b);
     return result;
@@ -214,12 +223,16 @@ int64_t Scheduler::getNextDelay() {
 }
 
 int64_t Scheduler::getNextDelay(uint64_t start) {
-	if (empty()) return -1;
+	if (empty())
+		return -1;
 	ScheduledItem *top = next();
-	return top->delivery_time- start;
+	int64_t res = top->delivery_time- start;
+	if (res<0) return 0;
+	return res;
 }
 
 void Scheduler::add(ScheduledItem*item) {
+	next_delay_time = getNextDelay();
 	ScheduledItem *top = 0;
 	{
 		boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
@@ -229,7 +242,11 @@ void Scheduler::add(ScheduledItem*item) {
 	}
 	top = next();
 	next_time = top->delivery_time;
-	next_delay_time = getNextDelay();
+	long delay = next_time - nowMicrosecs();
+	if (delay < next_delay_time && delay>=0 && next_delay_time>=0) {
+		next_delay_time = delay;
+		if (internals->thread_ptr) internals->thread_ptr->interrupt();
+	}
 #if 0
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	long wait_duration = nowMicrosecs() - last_notification;
@@ -300,7 +317,8 @@ void Scheduler::idle() {
 	sync.bind("inproc://scheduler_sync");
 	char buf[10];
 	size_t response_len = 0;
-	while (!  safeRecv(sync, buf, 10, true, response_len, 0)) usleep(100);
+	while (!  safeRecv(sync, buf, 10, true, response_len, 0))
+		boost::this_thread::sleep_for(boost::chrono::microseconds(100));
 	NB_MSG << "Scheduler started\n";
 
 	state = e_waiting;
@@ -310,37 +328,16 @@ void Scheduler::idle() {
 		next_delay_time = getNextDelay(last_poll);
 		if (!ready(last_poll) && state == e_waiting) {
 			wd->stop();
+			try {
 			long delay = next_delay_time;
-			if (delay>1500) usleep(1000); else usleep(100);
-#if 0
-			notification_sent = 0; // checking now, if more items are pushed we will want to know
-			bool no_items = false;
-			{
-				boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
-				no_items = items.empty();
+			if (delay == -1)
+				boost::this_thread::sleep_for(boost::chrono::seconds(1));
+			else if (delay>0)
+				boost::this_thread::sleep_for(boost::chrono::microseconds(delay));
 			}
-			if (no_items) {
-				// empty, just wait for someone to add some work
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 5)) {
-					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
+			catch (boost::thread_interrupted ex) {
+				// permit interruption
 			}
-			else if (delay <= 0) {
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 0)) {
-					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
-			}
-			else if (delay < 1000) {
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 0)) {
-					//std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
-				usleep((unsigned int)delay);
-			}
-			else
-				if (!safeRecv(update_sync, buf, 10, false, response_len, delay/1000)) {
-					//std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
-#endif
 		}
 		last_poll = nowMicrosecs();
 		is_ready = ready(last_poll);

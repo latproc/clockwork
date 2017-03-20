@@ -342,7 +342,8 @@ int main (int argc, char const *argv[])
     
 	DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
-    
+	Scheduler::instance()->setThreadRef(scheduler_thread);
+
 	DBG_INITIALISATION << "-------- Starting Command Interface ---------\n";
 	boost::thread monitor(boost::ref(*stateMonitor));
 

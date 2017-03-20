@@ -4,6 +4,10 @@ project (Latproc)
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.1)
 
+if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+endif()
+
 cmake_policy(SET CMP0008 OLD)
 cmake_policy(SET CMP0015 NEW)
 
@@ -29,7 +33,7 @@ configure_file (
 )
 
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
-FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem REQUIRED)
+FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono REQUIRED)
 FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
