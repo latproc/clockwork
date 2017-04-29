@@ -1784,7 +1784,13 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
 						 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
             }
             else if (chn->mif) {
-                chn->mif->send(cmdstr);
+#if 0
+				chn->mif->send(cmdstr);
+#else
+				safeSend(*chn->mif->getSocket(), cmdstr, strlen(cmdstr),
+						 MessageHeader(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false));
+
+#endif
             }
             else {
                 char buf[150];
