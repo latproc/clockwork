@@ -58,16 +58,16 @@ void PersistentStore::load() {
 		long i_value;
 		double d_value;
 		char *endp;
-		d_value = strtod(value_str.c_str(), &endp);
+		i_value = strtol(value_str.c_str(), &endp, 10);
 		if (*endp == 0) {
-				insert(name, property, d_value);
-				std::cout << name << "." << property << ":" << std::setprecision(5) << d_value << "\n";
+			insert(name, property, i_value);
+			std::cout << name << "." << property << ":" << i_value << "\n";
 		}
 		else {
-			i_value = strtol(value_str.c_str(), &endp, 10);
+			d_value = strtod(value_str.c_str(), &endp);
 			if (*endp == 0) {
-				insert(name, property, i_value);
-				std::cout << name << "." << property << ":" << i_value << "\n";
+					insert(name, property, d_value);
+					std::cout << name << "." << property << ":" << std::setprecision(5) << d_value << "\n";
 			}
 			else {
 				insert(name, property, Value(value_str.c_str(), kind).asString());
