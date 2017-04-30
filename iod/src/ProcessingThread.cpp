@@ -243,7 +243,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 									// clock
 									ecat_sync.recv(&message);
 									size_t msglen = message.size();
-#if VERBOSE_DEBUG
+#if VERBOSE_DEBUGx
 DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 #endif
 									assert(msglen == sizeof(global_clock));
@@ -256,7 +256,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 									// data length
 									ecat_sync.recv(&message);
 									size_t msglen = message.size();
-#if VERBOSE_DEBUG
+#if VERBOSE_DEBUGx
 DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 #endif
 									assert(msglen == sizeof(incoming_data_size));
@@ -272,7 +272,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 									zmq::message_t message;
 									ecat_sync.recv(&message);
 									size_t msglen = message.size();
-#if VERBOSE_DEBUG
+#if VERBOSE_DEBUGx
 DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 #endif
 									assert(msglen == incoming_data_size);
@@ -291,7 +291,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 									assert(more);
 									ecat_sync.recv(&message);
 									size_t msglen = message.size();
-#if VERBOSE_DEBUG
+#if VERBOSE_DEBUGx
 									DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 #endif
 									assert(msglen == incoming_data_size);

@@ -2870,7 +2870,6 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
 	if (locals.size() == 0) {
 		BOOST_FOREACH(Parameter p, state_machine->locals) {
-			DBG_MSG << "cloning machine '" << p.val.sValue << "'\n";
 			Parameter newp(p.val.sValue.c_str());
 			if (!p.machine) {
 				DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter " << p.val.sValue << "\n";

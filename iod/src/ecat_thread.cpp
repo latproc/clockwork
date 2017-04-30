@@ -245,8 +245,8 @@ int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clo
 			case 1:
 			{
 #if VERBOSE_DEBUG
-DBG_MSG << " send stage: " << (int)stage << " " << sizeof(global_clock) << "\n";
-{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
+//DBG_MSG << " send stage: " << (int)stage << " " << sizeof(global_clock) << "\n";
+//{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 				zmq::message_t iomsg(sizeof(global_clock));
 				memcpy(iomsg.data(), (void*)&global_clock, sizeof(global_clock) ); 
@@ -256,8 +256,8 @@ DBG_MSG << " send stage: " << (int)stage << " " << sizeof(global_clock) << "\n";
 			case 2:
 			{
 #if VERBOSE_DEBUG
-DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
-{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
+//DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
+//{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 				zmq::message_t iomsg(4);
 				memcpy(iomsg.data(), (void*)&size, 4); 
@@ -267,8 +267,8 @@ DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
 			case 3:
 			{
 #if VERBOSE_DEBUG
-DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
-{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
+//DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
+//{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 				uint8_t *upd_data = ECInterface::instance()->getUpdateData();
 #if VERBOSE_DEBUG
@@ -284,7 +284,6 @@ DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
 				++stage;
 #if VERBOSE_DEBUG
 				if (size && last_data ==0) { 
-					std::cout << "alocating comparison buffers\n";
 					last_data = new uint8_t[size];
 					memset(last_data, 0, size);
 					dbg_mask = new uint8_t[size];
@@ -292,27 +291,23 @@ DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
 					cmp_data = new uint8_t[size];
 					memset(cmp_data, 0, size);
 				}
-				else
-					std::cout << "using existing buffers\n";
-{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 				if (size) {
 					uint8_t *p = upd_data, *q = cmp_data, *msk = dbg_mask;
 					for (size_t ii=0; ii<size; ++ii) *q++ = *p++ & *msk++;
 					if (memcmp( cmp_data, last_data, size) != 0) {
 						found_change = true;
-						std::cout << " "; display(dbg_mask, size); std::cout << "\n";
-						std::cout << ">"; display(upd_data, size); std::cout << "\n";
+						std::cout << "ec "; display(dbg_mask, size); std::cout << "\n";
+						std::cout << "ec>"; display(upd_data, size); std::cout << "\n";
 					}
 					else found_change = false;
 					memcpy(last_data, cmp_data, size);
 				}
-{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 			}
 			case 4:
 			{
 #if VERBOSE_DEBUG
-DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
+//DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 #endif
 				zmq::message_t iomsg(size);
 				uint8_t *mask = ECInterface::instance()->getUpdateMask(); 
@@ -320,9 +315,9 @@ DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 				sync_sock->send(iomsg);
 #if VERBOSE_DEBUG
 				if (found_change) {
-					std::cout << "&"; display(mask, size); std::cout << "\n";
+					std::cout << "ec&"; display(mask, size); std::cout << "\n";
 				}
-{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
+//{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 				++stage;
 				break;
@@ -480,6 +475,11 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 				display(cw_data, len);
 				std::cout << "\n";
 		}
+  else if (packet_type == PROCESS_DATA) {
+        std::cout << "p:";
+				display(cw_data, len);
+        std::cout << "\n";
+  }
 #endif
 
 		more = 0;
@@ -533,8 +533,25 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 			std::cout << "<"; display(cw_data, len); std::cout << "\n";
 		}
 #endif
-		if (ec_ok && default_data) // only update the domain if default data has been setup
+		if (ec_ok && default_data) { // only update the domain if default data has been setup
 			ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+#if VERBOSE_DEBUG
+      // check if our mask is not the same as the data that cw has
+      // 
+      if (last_data) {
+        bool done_header = false;
+				uint8_t *upd_data = ECInterface::instance()->getUpdateData();
+
+        for (size_t i = 0; i<len; ++i) {
+          if (cw_data[i] != upd_data[i]) {
+            if (!done_header) { done_header = true; std::cout << "process data diffs at bytes: "; }
+            std::cout << i << " ";
+          }
+        } 
+        if (done_header) std::cout << "\n";
+      }
+#endif
+    }
 		else if (!default_data)
 			std::cout << "ecat_thread: no default data set yet, cannot update domain\n";
 		delete[] cw_mask;

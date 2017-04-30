@@ -50,6 +50,9 @@ struct list_head {
 #endif
 
 #define VERBOSE_DEBUG 0
+#if VERBOSE_DEBUG
+static void display(uint8_t *p, size_t n);
+#endif
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 extern boost::mutex ecat_mutex;
@@ -1107,7 +1110,15 @@ uint32_t ECInterface::getProcessDataSize() {
 }
 
 void ECInterface::setProcessData (uint8_t *pd) { 
-	if (process_data) delete[] process_data; process_data = pd;
+	if (process_data) delete[] process_data; 
+  process_data = pd;
+#if VERBOSE_DEBUG
+	if (process_data) {
+    std::cout << "set process data (" << ecrt_domain_size(domain1) << ") ";
+    display(process_data, ecrt_domain_size(domain1));
+    std::cout << "\n";
+  }
+#endif
 }
 
 void ECInterface::setAppProcessMask(uint8_t *new_mask, size_t size) { 
@@ -1126,10 +1137,12 @@ void ECInterface::setUpdateData (uint8_t *ud) {
 	if (update_data) delete[] update_data;
 	update_data = ud;
 }
+/*
 void ECInterface::setUpdateMask (uint8_t *m){
 	if (update_mask) delete[] update_mask;
 	update_mask = m;
 }
+*/
 uint8_t *ECInterface::getUpdateData() { return update_data; }
 uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 
@@ -1138,9 +1151,9 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 0
-static void display(uint8_t *p) {
-	for (int i=min_io_index; i<=max_io_index; ++i) 
+#if 1
+static void display(uint8_t *p, size_t n) {
+	for (int i=0; i<n; ++i) 
 		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 	std::cout << std::dec;
 }
@@ -1263,7 +1276,10 @@ int ECInterface::collectState() {
 #endif
 
 	// workout what io components need to process updates
-	if (!domain1_pd) return 0;
+	if (!domain1_pd) {
+    assert(instance()->getProcessData() == 0);
+    return 0;
+  }
 	uint8_t *pd = domain1_pd;
 	int affected_bits = 0;
 
@@ -1289,28 +1305,48 @@ int ECInterface::collectState() {
 	uint8_t *pm = getProcessMask(); // these are the important bits
 	uint8_t *q = update_data; // convenience pointer
 
-	assert(pm);
+#if VERBOSE_DEBUG
+  if (last_pd) {
+    std::cout << "last:";
+    display(last_pd, domain_size);
+  }
+  std::cout << "\ncurr:";
+  display(pd, domain_size);
+  std::cout << "\n";
+#endif
 
-	for (unsigned int i=min; i<=max; ++i) {
+	assert(pm);
+  assert(min == 0);
+	for (unsigned int i=0; i<domain_size; ++i) {
 		update_mask[i] = 0; // assume no updates in this octet
 		if (!last_pd) { // first time through, copy all the domain data and mask
 			update_data[i] = domain1_pd[i]; //TBD & *pm;
 			update_mask[i] = *pm;
 			affected_bits++;
+#if VERBOSE_DEBUG
+      std::cout << "init update data from process byte " 
+        << i << ": " <<std::hex <<(int)domain1_pd[i] << std::dec<< "\n";
+#endif
 		}
-		else if (*last_pd != domain1_pd[i]){
+		else if (last_pd[i] != domain1_pd[i]){
 			uint8_t bitmask = 0x01;
 			int count = 0;
+#if VERBOSE_DEBUG
+        std::cout << " offset " << i << " data 0x" << std::hex << (int)*pd
+          << " (was " << (int)last_pd[i] << ")"
+          << " process mask: 0x" << (int)*pm << std::dec << "\n";
+#endif
 			while (bitmask) {
 				if (*pm & bitmask ) { // we care about this bit
-					if ( (*pd & bitmask) != (*last_pd & bitmask) ) { // changed
-#if 0
-						//if (i != 47 ) // ignore analog changes on our machine
+          //if (i == 24) std::cout << "caring about bit " << (int)bitmask <<  "\n";
+					if ( ((*pd) & bitmask) != ( (last_pd[i]) & bitmask) ) { // changed
+#if VERBOSE_DEBUG
+						//if (i == 24 ) // ignore analog changes on our machine
 						std::cout << "incoming bit " << i << ":" << count 
-							<< " changed to " << ((*pd & bitmask)?1:0) << "\n";
+							<< " changed to " << (( (*pd) & bitmask)?1:0) << "\n";
 #endif
-						if ( *pd & bitmask ) *q |= bitmask;
-						else *q &= (uint8_t)(0xff - bitmask);
+						if ( (*pd) & bitmask ) *q |= bitmask;
+						else *q &= ((uint8_t)0xff - bitmask);
 						update_mask[i] |= bitmask;
 						++affected_bits;
 					}
@@ -1319,22 +1355,28 @@ int ECInterface::collectState() {
 				++count;
 			}
 		}
-		++pd; ++q; ++pm; if (last_pd)++last_pd;
+		++pd; ++q; ++pm; //if (last_pd)++last_pd;
 	}
 #if 0
 	if (affected_bits) {
-		std::cout << "data: "; display(update_data); 
-		std::cout << "\nmask: "; display(update_mask);
+		std::cout << "data: "; display(update_data, domain_size);
+		std::cout << "\nmask: "; display(update_mask, domain_size);
 		std::cout << " " << affected_bits << " bits changed (size=" << domain_size << ")\n";
 	}
 #endif
 
 	// save the domain data for the next check
-	pd = new uint8_t[max - min + 1];
-	memcpy(pd, domain1_pd+min, max - min + 1);
-	instance()->setProcessData(pd);
-	memcpy(update_data, domain1_pd, max - min + 1);
+#if VERBOSE_DEBUG
+  std::cout << "setting process data\n";
 #endif
+	pd = new uint8_t[domain_size];
+	memcpy(pd, domain1_pd, domain_size);
+	instance()->setProcessData(pd);
+#if VERBOSE_DEBUG
+  std::cout << "copied new domain data: "; display(pd, domain_size); std::cout << "\n";
+#endif
+	memcpy(update_data, domain1_pd, domain_size);
+#endif //EC_SIMULATOR
 
 	return affected_bits;
 }

@@ -36,7 +36,7 @@
 #include "ProcessingThread.h"
 
 #define VERBOSE_DEBUG 0
-static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
+//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
@@ -186,6 +186,23 @@ void IOComponent::setHardwareState(IOComponent::HardwareState state) {
 
 IOComponent::DeviceList IOComponent::devices;
 
+uint8_t *IOComponent::getProcessData() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return io_process_data; 
+}
+uint8_t *IOComponent::getProcessMask() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return io_process_mask; 
+}
+uint8_t *IOComponent::getDefaultData() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return default_data; 
+}
+uint8_t *IOComponent::getDefaultMask() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return default_mask; 
+}
+
 void IOComponent::reset() {
 	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 	processing_queue.clear();
@@ -302,7 +319,8 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 			if (*m) notifyComponentsAt(i);
 		}
 		if (*m && *p==*q) {
-			std::cout<<"warning: incoming_data == process_data but mask indicates a change\n";
+			std::cout<<"warning: incoming_data == process_data but mask indicates a change at offset " 
+        << (int)(m-mask) << " data " << (int)(*p) << "\n";
 		}
 		if (*p != *q && *m) { // copy masked bits if any
 			uint8_t bitmask = 0x01;
@@ -457,12 +475,15 @@ void IOComponent::setupProperties(MachineInstance *m) {
 
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
-	out << "readtime: " << (io_clock-read_time) << " [" << address.description<<" "
+	out << "readtime: " << (io_clock-read_time) << " [" << address.description<<", "
 		<<address.module_position << " "
 		<< address.io_offset << ':' 
 		<< address.io_bitpos << "." 
 		<< address.bitlen << "]=" 
 		<< address.value;
+  if (address.bitlen == 1 && io_process_data)  {
+    out << " (" << (bool)(io_process_data[address.io_offset] & (1<<address.io_bitpos)) << ")";
+  }
 	return out;
 }
 
@@ -1117,14 +1138,14 @@ IOUpdate *IOComponent::getUpdates() {
 	if (!mask) {
 		return 0;
 	}
-	MEMCHECK();
+	//MEMCHECK();
 	IOUpdate *res = new IOUpdate;
-	MEMCHECK();
+	//MEMCHECK();
 	res->setSize(max_offset - min_offset + 1);
 	res->setData(getUpdateData());
-	MEMCHECK();
+	//MEMCHECK();
 	res->setMask(mask);
-	MEMCHECK();
+	//MEMCHECK();
 #if VERBOSE_DEBUG
 	std::cout << std::flush 
 		<< "IOComponent::getUpdates preparing to send " << res->size() << " d:"; 
@@ -1133,7 +1154,7 @@ IOUpdate *IOComponent::getUpdates() {
 	display(res->mask(), process_data_size);
 	std::cout << "\n" << std::flush;
 #endif
-	MEMCHECK();
+	//MEMCHECK();
 	return res;
 }
 

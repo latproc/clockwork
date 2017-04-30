@@ -238,8 +238,8 @@ SYMBOL value {
 	std::string name($1);
 	Value v(*$2);
 	current_machineclass->options[name] = v;
-	NB_MSG << current_machineclass->name << " option: "
-		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
+//	NB_MSG << current_machineclass->name << " option: "
+//		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
 	delete $2;
 }
 
@@ -249,8 +249,8 @@ SYMBOL value {
 	Value v(*$2);
 	current_machineclass->options[name] = v;
 	current_machineclass->addPrivateProperty(name);
-	NB_MSG << current_machineclass->name << " local option: "
-		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
+//	NB_MSG << current_machineclass->name << " local option: "
+//		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
 	delete $2;
 }
 
@@ -320,7 +320,7 @@ interface_defn_section:
 }
 | LOCAL OPTION name_list ';' {
 	BOOST_FOREACH(std::string &name, current_name_list) {
-		NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+//		NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
 		current_machineclass->addPrivateProperty(name.c_str());
 	}
 	current_name_list.clear();
@@ -329,9 +329,9 @@ interface_defn_section:
 	std::string name($2);
 	Value v(*$3);
 	current_machineclass->options[name] = *$3;
-	NB_MSG << "Adding property " << name
-		<< " value: " << *$3 << " (type: " << v.kind << ")"
-		<< " to interface " << current_machineclass->name << "\n";
+//	NB_MSG << "Adding property " << name
+//		<< " value: " << *$3 << " (type: " << v.kind << ")"
+//		<< " to interface " << current_machineclass->name << "\n";
 	current_machineclass->addProperty(name.c_str());
 	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$3 << "\n";
 	delete $3;
@@ -339,7 +339,7 @@ interface_defn_section:
 | LOCAL OPTION SYMBOL value ';' {
 	std::string name($3);
 	current_machineclass->options[name] = *$4;
-	NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+//	NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
 	current_machineclass->addPrivateProperty(name.c_str());
 	DBG_PARSER << current_machineclass->name << " private option: " << name << ": " << *$4 << "\n";
 	delete $4;
@@ -854,15 +854,15 @@ INTEGERVAL   {
 }
 | FLOATVAL {
 	$$ = new Value($1);
-	NB_MSG << " created float value: " << *$$ << " (type: " << $$->kind << ")\n";
+//	NB_MSG << " created float value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 | STRINGVAL {
     $$ = new Value($1, Value::t_string);
-	NB_MSG << " created string value: " << *$$ << " (type: " << $$->kind << ")\n";
+//	NB_MSG << " created string value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 | SYMBOL {
     $$ = new Value($1);
-	NB_MSG << " created symbol value: " << *$$ << " (type: " << $$->kind << ")\n";
+//	NB_MSG << " created symbol value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 /* redundant
 | SYMBOL INCLUDES SYMBOL {

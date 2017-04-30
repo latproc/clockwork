@@ -96,11 +96,11 @@ public:
 	static void setupIOMap();
 	static int getMinIOOffset();
 	static int getMaxIOOffset();
-	static uint8_t *getProcessData() { return io_process_data; }
-	static uint8_t *getProcessMask() { return io_process_mask; }
+	static uint8_t *getProcessData();
+	static uint8_t *getProcessMask();
 	static uint8_t *getUpdateData();
-	static uint8_t *getDefaultData() { return default_data; }
-	static uint8_t *getDefaultMask() { return default_mask; }
+	static uint8_t *getDefaultData();
+	static uint8_t *getDefaultMask();
 	static void setDefaultData(uint8_t *);
 	static void setDefaultMask(uint8_t *);
 	static int notifyComponentsAt(unsigned int offset);
