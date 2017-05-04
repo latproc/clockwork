@@ -55,9 +55,6 @@ static void display(uint8_t *p, size_t n);
 #endif
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
-extern boost::mutex ecat_mutex;
-extern boost::condition_variable_any ecat_polltime;
-
 extern Statistics *statistics;
 void signal_handler(int signum);
 
@@ -85,6 +82,7 @@ static uint64_t last_update = 0;
 long ECInterface::default_tolerance = 1;
 #ifndef EC_SIMULATOR
 
+static boost::recursive_mutex modules_mutex;
 std::vector<ECModule *> ECInterface::modules;
 
 static int slaves_not_operational = 1; // initialise to nonzero until we know for sure
@@ -597,6 +595,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 #endif //USE_SDO
 
 ECModule *ECInterface::findModule(unsigned int pos) {
+	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	if (pos < 0 || (unsigned int)pos >= modules.size()) return 0;
 	for (unsigned int i = 0; i<modules.size(); ++i) {
 		ECModule *m = modules.at(i);
@@ -615,6 +614,7 @@ ECModule *ECInterface::findModule(unsigned int pos) {
 
 void ECInterface::registerModules() {
 
+	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	for (unsigned int mi = 0; mi < modules.size(); ++mi)
 	{
 		ECModule *m = findModule(mi);
@@ -668,6 +668,7 @@ void ECInterface::registerModules() {
 
 void ECInterface::configureModules() {
 
+	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	for (unsigned int mi = 0; mi < modules.size(); ++mi)
 	{
 		ECModule *m = findModule(mi);
@@ -843,6 +844,7 @@ void ECInterface::configureModules() {
 bool ECInterface::addModule(ECModule *module, bool reset_io) {
 	
 	if (module) {
+		boost::recursive_mutex::scoped_lock lock(modules_mutex);
 		std::cout << "adding module " << module->name << " to io\n";
 		std::vector<ECModule *>::iterator iter = modules.begin();
 		while (iter != modules.end()){
@@ -896,14 +898,17 @@ bool ECInterface::deactivate() {
 
 	std::cout << "cleaning up old io components,\n";
 	setProcessData(0);
-	std::cout << "removing ethercat modules instances\n";
-	std::vector<ECModule *>::iterator iter = modules.begin();
-	while (iter != modules.end()){
-		ECModule *m = *iter++;
-		std::cout << "deleting module " << m->name << "\n";
-		delete m;
+	{
+		boost::recursive_mutex::scoped_lock lock(modules_mutex);
+		std::cout << "removing ethercat modules instances\n";
+		std::vector<ECModule *>::iterator iter = modules.begin();
+		while (iter != modules.end()){
+			ECModule *m = *iter++;
+			std::cout << "deleting module " << m->name << "\n";
+			delete m;
+		}
+		modules.clear();
 	}
-	modules.clear();
 	domain1_pd = 0;
 
 	// recreate the domain that was removed by the above.
@@ -956,6 +961,7 @@ bool ECInterface::activate() {
 }
 
 bool ECInterface::online() {
+	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	std::vector<ECModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
@@ -971,6 +977,7 @@ bool ECInterface::online() {
 }
 
 bool ECInterface::operational() {
+	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	std::vector<ECModule *>::iterator iter = modules.begin();
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
@@ -1151,9 +1158,9 @@ uint8_t *ECInterface::getUpdateMask() { return update_mask; }
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if 1
+#if VERBOSE_DEBUG
 static void display(uint8_t *p, size_t n) {
-	for (int i=0; i<n; ++i) 
+	for (unsigned int i=0; i<n; ++i) 
 		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 	std::cout << std::dec;
 }
@@ -1220,7 +1227,7 @@ void ECInterface::receiveState() {
 		uint64_t now = microsecs();
 		int64_t dt = now - last_update;
 		if (dt < 100) {
-			std::cout << "recv too quick " << dt << "..delaying\n";
+			//std::cout << "recv too quick " << dt << "..delaying\n";
 			usleep(100);
 			now = microsecs();
 			dt = now - last_update;
@@ -1588,6 +1595,7 @@ void ECInterface::check_slave_config_states(void)
 #ifndef EC_SIMULATOR
     ec_slave_config_state_t s;
 
+	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	std::vector<ECModule *>::iterator iter = modules.begin();
 	int i = 0;
 	slaves_not_operational = 0;
@@ -1596,6 +1604,13 @@ void ECInterface::check_slave_config_states(void)
 	while (iter != modules.end()){
 		ECModule *m = *iter++;
 
+		if (!m) {
+      char buf[100];
+      snprintf(buf, 100, "null module in module list at position %d\n", i);
+      //MessageLog::instance()->add(buf);
+			std::cout << buf;
+			assert(m != 0);
+		}
 		if (!m->slave_config) {
 			std::cout << "module " << m->name << " not active yet..skipping\n";
 			continue; 
