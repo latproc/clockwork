@@ -331,7 +331,7 @@ void Scheduler::idle() {
 			try {
 			long delay = next_delay_time;
 			if (delay == -1)
-				boost::this_thread::sleep_for(boost::chrono::seconds(1));
+				boost::this_thread::sleep_for(boost::chrono::microseconds(100));
 			else if (delay>0)
 				boost::this_thread::sleep_for(boost::chrono::microseconds(delay));
 			}
