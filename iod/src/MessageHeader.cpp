@@ -30,14 +30,14 @@ std::ostream &operator<<(std::ostream &out, const MessageHeader&mh) {
 
 
 MessageHeader::MessageHeader(uint32_t dst, uint32_t src, bool need_reply)
-: msgid(++last_id), dest(dst), source(src), start_time(microsecs()), arrival_time(0), options(0)
+: msgid(++last_id), dest(dst), source(src), start_time(0), arrival_time(0), options(0)
 {
-	if (first_message_time == 0) first_message_time = start_time;
+	//if (first_message_time == 0) first_message_time = start_time;
 	if (need_reply) options |= NEED_REPLY;
 }
 
-MessageHeader::MessageHeader() : msgid(++last_id), dest(0), source(0), start_time(microsecs()), arrival_time(0), options(0){
-	if (first_message_time == 0) first_message_time = start_time;
+MessageHeader::MessageHeader() : msgid(++last_id), dest(0), source(0), start_time(0), arrival_time(0), options(0){
+	//if (first_message_time == 0) first_message_time = start_time;
 }
 
 void MessageHeader::needReply(bool needs) {

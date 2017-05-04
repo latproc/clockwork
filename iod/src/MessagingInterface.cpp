@@ -275,6 +275,8 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 	if (header.dest || header.source) {
 		stage = e_sending_source;
 	}
+	if (header.start_time == 0)
+		header.start_time = microsecs();
 
 	while (!MessagingInterface::aborted()) {
 		try {
@@ -395,7 +397,7 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
     ss << host << ":" << port;
     std::string id = ss.str();
     if (interfaces.count(id) == 0) {
-        MessagingInterface *res = new MessagingInterface(host, port, MessagingInterface::DEFERRED_START, proto);
+        MessagingInterface *res = new MessagingInterface(host, port, MessagingInterface::IMMEDIATE_START, proto);
         interfaces[id] = res;
         return res;
     }
