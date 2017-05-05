@@ -802,7 +802,11 @@ void ProcessingThread::operator()()
 
 								if (mh.needsReply() || mh.getId() == default_id) {
 									char *response = strdup(command->result());
-									safeSend(*sock, response, strlen(response));
+									MessageHeader rh(mh);
+									rh.source = mh.dest;
+									rh.dest = mh.source;
+									rh.start_time = microsecs();
+									safeSend(*sock, response, strlen(response), rh);
 									free(response);
 								}
 								else {
@@ -815,7 +819,11 @@ void ProcessingThread::operator()()
 								if (mh.needsReply() || mh.getId() == default_id) {
 									char *response = new char[len+40];
 									snprintf(response, len+40, "Unrecognised command: %s", buf);
-									safeSend(*sock, response, strlen(response));
+									MessageHeader rh(mh);
+									rh.source = mh.dest;
+									rh.dest = mh.source;
+									rh.start_time = microsecs();
+									safeSend(*sock, response, strlen(response),rh);
 									delete[] response;
 								}
 								else {

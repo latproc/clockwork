@@ -570,6 +570,7 @@ void IODCommandThread::operator()() {
 				memcpy(data, request.data(), size);
 				data[size] = 0;
 				MessageHeader mh;
+				mh.start_time = microsecs();
 				mh.needReply(true);
 				safeSend(command_sync, data, size, mh);
 				free(data);

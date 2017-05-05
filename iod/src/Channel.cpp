@@ -1012,6 +1012,7 @@ usleep(50);
 						mh.dest = MessageHeader::SOCK_CHAN;
 						mh.source = MessageHeader::SOCK_CTRL;
 						mh.needReply(false);
+						mh.start_time = microsecs();
 						safeSend(remote_sock, "ack", 3, mh);
 					}
 				}

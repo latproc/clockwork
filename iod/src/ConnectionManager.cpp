@@ -624,15 +624,19 @@ void MessageRouter::poll() {
 						fl.f() << "Filtering " <<buf << "\n";
 					}
 					filter = *found_filter;
-					if ( filter->filter(&buf, len, mh ) )
+					if ( filter->filter(&buf, len, mh ) ) {
+						mh.start_time = microsecs();
 						safeSend(*dest, buf, len, mh);
+					}
 				}
 				else {
 					NB_MSG << "forwarding " << buf << " to " << mh.dest << "\n";
+					mh.start_time = microsecs();
 					safeSend(*dest, buf, len, mh);
 				}
 			}
 			else if (internals->default_dest) {
+				mh.start_time = microsecs();
 				safeSend(*internals->default_dest, buf, len);
 			}
 #if 1
@@ -659,8 +663,10 @@ void MessageRouter::poll() {
 					MessageFilter *filter = *fi++;
 					if ( !(filter->filter(&buf, len, mh))) do_send = false;
 				}
-				if (do_send)
+				if (do_send) {
+					mh.start_time = microsecs();
 					safeSend(*internals->remote, buf, len, mh);
+				}
 				else
 					NB_MSG << "dropped message due to filter\n";
 			}

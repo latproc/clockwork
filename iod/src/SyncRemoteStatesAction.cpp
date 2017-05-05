@@ -106,6 +106,7 @@ Action::Status SyncRemoteStatesAction::execute()
 		if (internals->message_state == SyncRemoteStatesActionInternals::e_sending) {
 			char *current_message = *(*internals->iter);
 			internals->header.needReply(false);
+			internals->header.start_time = microsecs();
 			safeSend(*internals->sock, current_message, strlen(current_message), internals->header);
 			free( current_message );
 			*internals->iter = internals->messages.erase(*internals->iter);
@@ -138,6 +139,7 @@ Action::Status SyncRemoteStatesAction::execute()
 					internals->header.dest = MessageHeader::SOCK_CTRL;
 					internals->header.dest = MessageHeader::SOCK_CTRL;
 					internals->header.needReply(true);
+					internals->header.start_time = microsecs();
 					safeSend(*internals->sock, "done", 4, internals->header);
 					internals->process_state = SyncRemoteStatesActionInternals::ps_waiting_ack;
 				}

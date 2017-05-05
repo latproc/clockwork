@@ -264,7 +264,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 	return false;
 }
 
-void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader header) {
+void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const MessageHeader &header) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -275,8 +275,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 	if (header.dest || header.source) {
 		stage = e_sending_source;
 	}
-	if (header.start_time == 0)
-		header.start_time = microsecs();
+	assert(header.start_time != 0);
 
 	while (!MessagingInterface::aborted()) {
 		try {
@@ -349,7 +348,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
-				 int32_t timeout_us, MessageHeader header) {
+				 int32_t timeout_us, const MessageHeader &header) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);

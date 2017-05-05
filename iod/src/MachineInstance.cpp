@@ -2206,6 +2206,7 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 		MachineInstance *mi = dynamic_cast<MachineInstance*>(r);
 		if (mi) {
 			MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+			mh.start_time = microsecs();
 			Channel::sendCommand(mi, "SEND", params, mh); // empty command parameter list
 		}
 		else {
