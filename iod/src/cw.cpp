@@ -66,8 +66,6 @@
 #include "ProcessingThread.h"
 #include <libgen.h>
 
-const char *program_name;
-
 bool program_done = false;
 bool machine_is_ready = false;
 

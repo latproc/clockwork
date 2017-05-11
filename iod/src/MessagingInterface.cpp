@@ -40,6 +40,8 @@
 #include "Channel.h"
 #include "string.h"
 
+const char *program_name;
+
 MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
