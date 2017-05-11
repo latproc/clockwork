@@ -60,7 +60,6 @@
 
 namespace po = boost::program_options;
 
-const char *program_name;
 
 static boost::condition_variable_any cond;
 

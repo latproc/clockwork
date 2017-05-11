@@ -72,7 +72,6 @@
 #include "Channel.h"
 #include "ethercat_xml_parser.h"
 
-const char *program_name = 0;
 bool program_done = false;
 bool machine_is_ready = false;
 

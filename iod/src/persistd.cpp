@@ -46,7 +46,6 @@
 
 namespace po = boost::program_options;
 
-const char *program_name;
 
 bool done = false;
 zmq::socket_t *cmd_socket = 0;

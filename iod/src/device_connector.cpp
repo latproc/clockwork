@@ -59,7 +59,6 @@
 #include <pthread.h>
 
 volatile bool debug = false;
-const char *program_name = "device_connector";
 
 class DeviceStatus {
 public:
