@@ -973,14 +973,12 @@ public:
 		int error_count = 0;
 		while (!done)
 		{
-//			std::cout << "p." << std::flush;
 			struct timeval now;
-			usleep(5000);
 			gettimeofday(&now, 0);
 			if (done) break;
 
 			try {
-				if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
+				if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(500); continue;}
 				error_count = 0;
 			}
 			catch (std::exception e) {
@@ -1021,8 +1019,6 @@ public:
 				}
 			}
 #endif
-
-			//if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
 
 			if (subs_index>=0 && items[subs_index].revents & ZMQ_POLLIN) {
 				char data[1000];
