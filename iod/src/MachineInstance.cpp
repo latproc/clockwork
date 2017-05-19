@@ -678,6 +678,15 @@ void MachineInstance::describe(std::ostream &out) {
 				out << locals[i].val <<"  Missing machine\n";
 		}
 	}
+	if (modbus_exports.size()) {
+		out << "Exports:\n  ";
+		std::map<std::string, ModbusAddress >::const_iterator iter = modbus_exports.begin();
+		while (iter != modbus_exports.end()) {
+			out << (*iter++).first;
+			if (iter != modbus_exports.end()) out << ",";
+		}
+		out << "\n";
+	}
 	if (published) { out << "  published (" << published << ")\n"; }
 	if (listens.size()) {
 		out << "Listening to: \n";
