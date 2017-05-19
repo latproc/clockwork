@@ -325,7 +325,7 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "GET" && count==3) {
 		command = new IODCommandGetProperty;
 	}
-	else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
+	else if (ds == "MODBUS" && (count == 2 || count == 3) && params[1] == "EXPORT") {
 		command = new IODCommandModbusExport;
 	}
 	else if (ds == "MODBUS" && count == 2 && params[1] == "REFRESH") {

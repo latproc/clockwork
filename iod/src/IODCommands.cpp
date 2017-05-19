@@ -1091,6 +1091,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     bool IODCommandModbusExport::run(std::vector<Value> &params) {
 
 		const char *file_name = modbus_map();
+		if (params.size() == 3) {
+			file_name = params[2].asString().c_str();
+		}
 		const char *backup_file_name = "modbus_mappings.bak";
 		if (rename(file_name, backup_file_name)) {
 			std::cerr << "file rename error: " << strerror(errno) << "\n";
