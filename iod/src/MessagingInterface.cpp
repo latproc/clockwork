@@ -123,7 +123,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				}
 				usleep(10000);
 			}
-			return (response_len == 0) ? false : true;
+			return (*response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";

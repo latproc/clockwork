@@ -901,12 +901,10 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 						: safeRecv(subscriber(), &buf, &msglen, false, 0);
 				if (got_response) {
 					DBG_CHANNELS << " forwarding response " << buf << "\n";
-					if (msglen && msglen<1000) {
+					if (msglen)
 						cmd.send(buf, msglen);
-					}
-					else {
-						cmd.send("error", 5);
-					}
+					else
+						cmd.send("", 0);
 					run_status = e_waiting_cmd;
 				}
 			}
