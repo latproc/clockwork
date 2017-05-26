@@ -173,6 +173,7 @@ Action::Status MachineCommand::run() {
 	const char *state_name_str = state_name.get();
     if (state_name_str && *state_name_str &&
         owner->getCurrent().getName() != state_name_str && !switch_state) {
+		/*
         std::stringstream ss;
         ss << "Command " << (*this) << " was ignored due to a mismatch of current state (" << owner->getCurrent().getName()
             << ") and state required by the command (" << state_name << ")";
@@ -180,6 +181,7 @@ Action::Status MachineCommand::run() {
         MessageLog::instance()->add(err_msg);
         DBG_M_ACTIONS << err_msg << "\n";
         result_str = err_msg;
+		*/
 		status = Complete;
 		owner->stop(this);
 
