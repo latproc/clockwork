@@ -277,6 +277,11 @@ Value Value::operator[](int index) {
 }
 #endif
 
+bool numeric_types(Value::Kind a, Value::Kind b) {
+	return (a == Value::t_integer || a == Value::t_float)
+	&& (b == Value::t_integer || b == Value::t_float);
+}
+
 bool Value::operator>=(const Value &other) const {
     Kind a = kind;
 	Kind b = other.kind;
@@ -284,7 +289,7 @@ bool Value::operator>=(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_string || b == t_string) ) {
+	if (numeric_types(a,b) || (a != b && (a == t_string || b == t_string)) ) {
 
 		if (a == t_float || b == t_float) {
 			double x,y;
@@ -329,7 +334,7 @@ bool Value::operator<=(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_string || b == t_string) ) {
+	if (numeric_types(a,b) || (a != b && (a == t_string || b == t_string)) ) {
 		if (a == t_float || b == t_float) {
 			double x,y;
 			if (asFloat(x) && other.asFloat(y))
@@ -376,7 +381,7 @@ bool Value::operator==(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_string || b == t_string) ) {
+	if (numeric_types(a,b) || (a != b && (a == t_string || b == t_string)) ) {
 		if (a == t_float || b == t_float) {
 			double x,y;
 			if (asFloat(x) && other.asFloat(y))
@@ -424,7 +429,7 @@ bool Value::operator!=(const Value &other) const {
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
-	if (a != b && (a == t_string || b == t_string)) {
+	if (numeric_types(a,b) || (a != b && (a == t_string || b == t_string))) {
 		if (a == t_float || b == t_float  ) {
 			double x,y;
 			if (asFloat(x) && other.asFloat(y))
@@ -1042,6 +1047,10 @@ bool Value::asInteger(long &x) const {
 }
 
 bool Value::asFloat(double &x) const {
+	if (kind == t_float) {
+		x = fValue;
+		return true;
+	}
 	if (kind == t_integer) {
 		x = (double)iValue;
 		return true;

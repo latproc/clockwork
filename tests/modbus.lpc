@@ -12,6 +12,7 @@ OUT_1 FLAG(tab:Outputs);
 OUT_2 FLAG(tab:Outputs);
 
 A CONSTANT(tab:Tests, export:reg) 123;
+AA CONSTANT(tab:Tests, export:reg) 3531;
 B VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 456;
 C CONSTANT(tab:Tests, export:reg32) 554343;
 D VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg32) 10;
@@ -32,7 +33,7 @@ Calc MACHINE {
 calc Calc;
 
 #device connector interface
-DeviceInterface MACHINE {
+DeviceInterface MACHINE output {
 	queue LIST;
 	busy WHEN queue IS NOT empty;
 	idle DEFAULT;
@@ -40,12 +41,26 @@ DeviceInterface MACHINE {
 	ENTER busy { 
 		tmp := TAKE FIRST FROM queue; 
 		x := COPY ALL `[0-9]` FROM tmp;
-		B.VALUE := 0 + x;
+		output.VALUE := 0 + x;
 		SET SELF TO idle;
 	}
 }
-dev DeviceInterface;
+dev DeviceInterface B;
+bmon OutputMonitor B;
 
+OutputMonitor MACHINE output {
+    EXPORT RW 16BIT Value;
+	EXPORT STATES low,med,high;
+	OPTION Value 0;
+	OPTION tab Tests;
+	high WHEN output >= 750;
+	med WHEN output >= 500;
+	low DEFAULT;
+
+	ENTER high { Value := 750; }
+	ENTER med { Value := 500; }
+	ENTER low { Value := 250; }
+}
 
 OddNumber MACHINE {
 	LOCAL OPTION last 0;
@@ -115,9 +130,10 @@ Error MACHINE {
 	EXPORT READONLY STRING 40 cause;
 	EXPORT READONLY STRING 40 name;
 	EXPORT READWRITE STRING 40 tune;
-	error FLAG(export:ro,tab:Test);
+	error FLAG(export:ro,tab:Tests);
 	OPTION cause "No Error";
 	OPTION name "Error";
+	OPTION tune "No tune";
 	ENTER INIT { SET error TO on }
 }
 M_Error Error;
