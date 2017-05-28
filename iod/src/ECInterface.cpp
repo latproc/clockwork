@@ -1612,7 +1612,7 @@ void ECInterface::check_slave_config_states(void)
 			assert(m != 0);
 		}
 		if (!m->slave_config) {
-			std::cout << "module " << m->name << " not active yet..skipping\n";
+			//std::cout << "module " << m->name << " not active yet..skipping\n";
 			continue; 
 		}
 		// check for errors
