@@ -739,7 +739,7 @@ void loadData(const char *initial_settings)
 			int value;
 			std::string name;
 			iss >> group >> addr >> kind >> name >> len >> value;
-			if (debug) std::cout << name << ": " << group << " " << kind " " << addr << " " << len << " " << value <<  "\n";
+			if (debug) std::cout << name << ": " << group << " " << kind << " " << addr << " " << len << " " << value <<  "\n";
 			if (kind == 7) len = 2; // float
 			insert(group, addr-1, value, len);
 		}
