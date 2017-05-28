@@ -18,6 +18,7 @@ C CONSTANT(tab:Tests, export:reg32) 554343;
 D VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg32) 10;
 E CONSTANT(tab:Tests, export:str, strlen:30) "This is a message";
 F VARIABLE(tab:Tests, PERSISTENT:true, export:rw_str, strlen:25) "Another test message";
+G VARIABLE(tab:Tests, export:float32) 1;
 
 PanelScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
 RequestScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;

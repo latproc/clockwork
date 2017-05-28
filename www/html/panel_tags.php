@@ -61,10 +61,26 @@ function zmqrequest($client, $request) {
 	}
 	return false;
 }
+function exportTypeToStr($kind) {
+	switch($kind) {
+		case 0: return 'None'; break;
+		case 1:
+		case 2:	return 'Discrete'; break;
+		case 3: return 'Signed_int_16'; break;
+		case 4: return 'Signed_int_32'; break;
+		case 5: return 'Signed_int_16'; break;
+		case 6: return 'Signed_int_32'; break;
+		case 7: return 'Floating_PT_32'; break;
+		case 8: return 'Ascii_string'; break;
+		default: return 'Unknown';
+	}
+}
 function modbusToPanel($device, $curr) {
+	// group, address, export_type, name, len
 	$row = array();
-	$n=$curr[3];
-	$type="Unknown";
+	$n=$curr[4];
+	$type=exportTypeToStr($curr[2]);
+	/*
 	if ($curr[0] == 0 || $curr[0] == 1)
 		$type='Discrete';
 	else if ($curr[0] == 3 || $curr[0] == 4) {
@@ -74,10 +90,11 @@ function modbusToPanel($device, $curr) {
 		else if ($n > 2)
 			$type = 'Ascii_string';
 	}
+	 */
 	$row = array();
 	$row[] = 211;
 	$row[] = $device;
-	$row[] = $curr[2];
+	$row[] = $curr[3];
 	$row[] = $type;
 	$row[] = $n;
 	$row[] = 'FALSE';

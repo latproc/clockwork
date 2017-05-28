@@ -28,12 +28,18 @@
 /* when a Modbus addressable object changes value, it informs the interface by calling update()
 	
 */
+struct ModbusExport {
+	enum Type {none, discrete, coil, reg, reg32, rw_reg, rw_reg32, float32, str};
+};
+
 class ModbusAddressDetails {
 public:
 	short group;
 	short address;
 	short len;
-	ModbusAddressDetails(short grp, short addr, short n) : group(grp), address(addr), len(n) {}
+	ModbusExport::Type exType;
+	ModbusAddressDetails(short grp, short addr, ModbusExport::Type exportType, short n)
+		: group(grp), address(addr), len(n), exType(exportType) {}
 	ModbusAddressDetails() : group(0), address(0), len(0) {}
 };
 
@@ -49,8 +55,11 @@ public:
 
 	bool operator==(const ModbusAddress &other) const;
 	
-	ModbusAddress() : group(none), address(0), allocated(0), offset(0),source(unknown) {}
-	ModbusAddress(Group group, int address, int len, ModbusAddressable *owner, Source source, const std::string &name, int offset = 0);
+	ModbusAddress() : group(none), address(0), allocated(0),
+		exportType(ModbusExport::none), offset(0), source(unknown) {}
+	ModbusAddress(Group group, int address, int len, ModbusAddressable *owner,
+				  Source source, const std::string &name,
+				  ModbusExport::Type exType, int offset = 0);
 	
 	static ModbusAddress lookup(int, int address);
 
@@ -60,16 +69,19 @@ public:
 	int getBaseAddress() const { return address - offset;}
 	int getOffset() const { return offset; }
 	int length() const { return allocated; }
+	ModbusExport::Type kind() { return exportType; }
 	Source getSource() const { return source; }
 	void setName(const std::string &n) { name = n; }
 	const std::string &getName() const { return name; }
 	
 	static int next(Group g);
-	static ModbusAddress alloc(Group g, unsigned int n, ModbusAddressable *owner, Source src, const std::string &full_name);
+	static ModbusAddress alloc(Group g, unsigned int n, ModbusAddressable *owner, Source src, const std::string &full_name, ModbusExport::Type exType);
 	
 	void update(MachineInstance *owner,Group g, int addr, const char *value, int len);
+	void update(MachineInstance *owner, Group g, int addr, double new_value, int len);
 	void update(MachineInstance *owner, Group g, int addr, int new_value, int len);
 	void update(MachineInstance *owner, int offset, int new_value, int len);
+	void update(MachineInstance *owner, double new_value);
 	void update(MachineInstance *owner, int new_value);
 	void update(MachineInstance *owner, const std::string &value);
 	
@@ -99,6 +111,7 @@ private:
 	Group group;
 	int address;
 	int allocated;
+	ModbusExport::Type exportType;
 	int offset;
 	Source source;
 	
@@ -120,7 +133,6 @@ ModbusAddress::Group groupFromInt(int g);
 
 class ModbusAddressable {
 public:
-	enum ExportType {none, discrete, coil, reg, reg32, rw_reg, rw_reg32, str};
 	virtual ~ModbusAddressable();
 	void updateModbus(int new_value);
 	virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value) {} // sent to the owner when the interface changes a value

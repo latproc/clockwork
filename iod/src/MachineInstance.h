@@ -236,17 +236,18 @@ public:
 
 	// basic modbus interface
 	void sendModbusUpdate(const std::string &property_name, const Value &new_value);
-	ModbusAddress addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name);
+	ModbusAddress addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, ModbusAddressable *owner, ModbusExport::Type kind, ModbusAddress::Source src, const std::string &full_name);
 	std::map<std::string, ModbusAddress >modbus_exports;
 	std::map<int, std::string>modbus_addresses;
 	void setupModbusInterface();
-	void setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, int size);
+	void setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp,
+									ModbusExport::Type, int size);
 	void refreshModbus(cJSON *json_array); // update all exported values
 	int getModbusValue(ModbusAddress &addr, unsigned int offset, int len);
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value);
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value);
 	void exportModbusMapping(std::ostream &out);
-	bool isModbusExported() { return modbus_exported != none; }
+	bool isModbusExported() { return modbus_exported != ModbusExport::none; }
 	bool needsThrottle();
 	void setNeedsThrottle(bool which);
 	void requireAuthority(uint64_t auth);
@@ -314,7 +315,7 @@ protected:
   ModbusAddress modbus_address;
   std::vector<std::string>state_names; // used for mapping modbus offsets to states
   std::vector<std::string>command_names; // used for mapping modbus offsets to states
-  ModbusAddressable::ExportType modbus_exported;
+  ModbusExport::Type modbus_exported;
 
   int error_state; // error number of the current error if any
   State saved_state; // save state before error

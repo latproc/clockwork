@@ -558,7 +558,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	is_enabled(false),
 	state_timer(0),
 	locked(0),
-	modbus_exported(none),
+	modbus_exported(ModbusExport::none),
 	saved_state("undefined"),
 	current_state_val("undefined"),
 	is_active(false),
@@ -603,7 +603,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	is_enabled(false),
 	state_timer(0),
 	locked(0),
-	modbus_exported(none),
+	modbus_exported(ModbusExport::none),
 	saved_state("undefined"),
 	current_state_val("undefined"),
 	is_active(false),
@@ -1587,7 +1587,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		// until later, if the state actually changes
 
 		// update the Modbus interface for self
-		if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
+		if (published && (modbus_exported == ModbusExport::discrete || modbus_exported == ModbusExport::coil) ) {
 			if (!modbus_exports.count(_name)) {
 				char buf[100];
 				snprintf(buf, 100, "%s Internal Error: modbus export info not found", getName().c_str());
@@ -3530,7 +3530,18 @@ fl.f() << _name << " Sending modbus update " << property_name  << " " << new_val
 		case ModbusAddress::coil:
 		case ModbusAddress::input_register:
 		case ModbusAddress::holding_register: {
-			if (new_value.kind == Value::t_integer) {
+			if (new_value.kind == Value::t_float) {
+				double floatVal;
+				if (ma.length() == 1 || ma.length() == 2) {
+					if (new_value.asFloat(floatVal)) {
+						ma.update(this, floatVal);
+					}
+					else {
+						DBG_M_MODBUS << property_name << " does not have an integer value\n";
+					}
+				}
+			}
+			else if (new_value.kind == Value::t_integer) {
 				long intVal;
 				if (ma.length() == 1 || ma.length() == 2) {
 					if (new_value.asInteger(intVal)) {
@@ -3546,7 +3557,7 @@ fl.f() << _name << " Sending modbus update " << property_name  << " " << new_val
 				char *res;
 				val = strtol(new_value.sValue.c_str(), &res, 10);
 				if (errno == 0 && *res == 0) // complete string parsed as a number
-					ma.update(this, val);
+					ma.update(this, (int)val);
 				else
 					ma.update(this, new_value.sValue);
 			}
@@ -3745,6 +3756,8 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 			NB_MSG << full_name << " index ("<<group<<"," <<addr<<")" << (*iter).first << " should be " << (*iter).second << "\n";
 		}
 		int length = info.length();
+		if (info.kind() == ModbusExport::float32)
+			length = 2;
 		Value value(0);
 		switch(info.getSource()) {
 			case ModbusAddress::machine:
@@ -3786,6 +3799,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 		cJSON *item = cJSON_CreateArray();
 		cJSON_AddItemToArray(item, cJSON_CreateLong(group));
 		cJSON_AddItemToArray(item, cJSON_CreateLong(addr));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(info.kind()));
 		if (owner) {
 			std::string name(owner->getName());
 			name += ".";
@@ -3826,19 +3840,23 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 		//assert((int)info.getGroup() == group);
 		//assert(info.getAddress() == addr);
 		const char *data_type;
-		switch(ModbusAddress::toGroup(group)) {
-			case ModbusAddress::discrete: data_type = "Discrete"; break;
-			case ModbusAddress::coil: data_type = "Discrete"; break;
-			case ModbusAddress::input_register:
-			case ModbusAddress::holding_register:
-						  if (info.length() == 1)
-							  data_type = "Signed_int_16";
-						  else if (info.length() == 2)
-							  data_type = "Signed_int_32";
-						  else
-							  data_type = "Ascii_String";
-						  break;
-			default: data_type = "Unknown";
+		if (info.kind() == ModbusExport::float32)
+			data_type = "Floating_PT_32";
+		else {
+			switch(ModbusAddress::toGroup(group)) {
+				case ModbusAddress::discrete: data_type = "Discrete"; break;
+				case ModbusAddress::coil: data_type = "Discrete"; break;
+				case ModbusAddress::input_register:
+				case ModbusAddress::holding_register:
+					  if (info.length() == 1)
+						  data_type = "Signed_int_16";
+					  else if (info.length() == 2)
+						  data_type = "Signed_int_32";
+					  else
+						  data_type = "Ascii_String";
+					  break;
+				default: data_type = "Unknown";
+			}
 		}
 		if (owner)
 			out << group << ":" << std::setfill('0') << std::setw(5) << addr
@@ -3866,24 +3884,29 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 // Modbus
 
 
-ModbusAddress MachineInstance::addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n,
-		ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name) {
+ModbusAddress MachineInstance::addModbusExport(std::string name,
+											   ModbusAddress::Group g,
+											   unsigned int n,
+											   ModbusAddressable *owner,
+											   ModbusExport::Type kind,
+											   ModbusAddress::Source src,
+											   const std::string &full_name) {
 	if (ModbusAddress::preset_modbus_mapping.count(full_name) != 0) {
 		ModbusAddressDetails info = ModbusAddress::preset_modbus_mapping[full_name];
 		DBG_MODBUS << _name << " " << name << " has predefined address: " << info.group<<":"<<std::setfill('0')<<std::setw(5)<<info.address << "\n";
-		ModbusAddress addr(ModbusAddress::toGroup(info.group), info.address, info.len, owner, src, full_name);
+		ModbusAddress addr(ModbusAddress::toGroup(info.group), info.address, info.len, owner, src, full_name, kind);
 		modbus_exports[name] = addr;
 		return addr;
 	}
 	else {
-		ModbusAddress addr = ModbusAddress::alloc(g, n, this, src, full_name);
+		ModbusAddress addr = ModbusAddress::alloc(g, n, this, src, full_name, kind);
 		DBG_MODBUS << _name << " " << name << " allocated new address " << addr << "\n";
 		modbus_exports[name] = addr;
 		return addr;
 	}
 }
 
-void MachineInstance::setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, int size) {
+void MachineInstance::setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, ModbusExport::Type kind, int size) {
 	std::string full_name;
 	if (owner) full_name = owner->getName() + ".";
 	std::string name;
@@ -3891,19 +3914,19 @@ void MachineInstance::setupModbusPropertyExports(std::string property_name, Modb
 	name += property_name;
 	switch(grp) {
 		case ModbusAddress::discrete:
-			addModbusExport(name, ModbusAddress::discrete, size, this, ModbusAddress::property, full_name+name);
+			addModbusExport(name, ModbusAddress::discrete, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::coil:
-			addModbusExport(name, ModbusAddress::coil, size, this, ModbusAddress::property, full_name+name);
+			addModbusExport(name, ModbusAddress::coil, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::input_register:
-			addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name);
+			addModbusExport(name, ModbusAddress::input_register, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::holding_register:
-			addModbusExport(name, ModbusAddress::holding_register, size, this, ModbusAddress::property, full_name+name);
+			addModbusExport(name, ModbusAddress::holding_register, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::string:
-			addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name);
+			addModbusExport(name, ModbusAddress::input_register, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		default: ;
 	}
@@ -3922,7 +3945,7 @@ void MachineInstance::setupModbusInterface() {
 	long str_length = 0;
 
 	// workout the export type for this machine
-	ExportType export_type = none;
+	ModbusExport::Type export_type = ModbusExport::none;
 
 	bool exported = properties.exists("export");
 	if (exported) {
@@ -3933,31 +3956,31 @@ void MachineInstance::setupModbusInterface() {
 				if (type != SymbolTable::Null) {
 					if (type == "Input") {
 						self_discrete = true;
-						export_type=discrete;
+						export_type=ModbusExport::discrete;
 					}
 					else if (type == "Output") {
 						if (export_type_val=="rw") {
 							self_coil = true;
-							export_type=coil;
+							export_type=ModbusExport::coil;
 						}
 						else {
 							self_discrete = true;
-							export_type=coil;
+							export_type=ModbusExport::coil;
 						}
 					}
 					else if (type=="AnalogueInput") {
 						self_reg = true;
-						export_type=reg;
+						export_type=ModbusExport::reg;
 					}
 					else if (type=="AnalogueOutput") {
 						// default to readonly export
 						if (export_type_val=="rw") {
 							self_rwreg = true;
-							export_type=rw_reg;
+							export_type=ModbusExport::rw_reg;
 						}
 						else {
 							self_reg = true;
-							export_type=reg;
+							export_type=ModbusExport::reg;
 						}
 					}
 				}
@@ -3965,39 +3988,43 @@ void MachineInstance::setupModbusInterface() {
 			else
 				if (export_type_val=="rw") {
 					self_coil = true;
-					export_type=coil;
+					export_type=ModbusExport::coil;
 				}
 				else if (export_type_val=="reg") {
 					self_reg = true;
-					export_type=reg;
+					export_type=ModbusExport::reg;
 				}
 				else if (export_type_val=="rw_reg") {
 					self_rwreg = true;
-					export_type=rw_reg;
+					export_type=ModbusExport::rw_reg;
 				}
 				else if (export_type_val=="reg32") {
 					self_reg = true;
-					export_type=reg32;
+					export_type=ModbusExport::reg32;
 				}
 				else if (export_type_val=="rw_reg32") {
 					self_rwreg = true;
-					export_type=rw_reg32;
+					export_type=ModbusExport::rw_reg32;
+				}
+				else if (export_type_val=="float32") {
+					self_rwreg = true;
+					export_type=ModbusExport::float32;
 				}
 				else if (export_type_val=="str") {
 					const Value &export_size = properties.lookup("strlen");
 					self_reg = true;
-					export_type=str;
+					export_type=ModbusExport::str;
 					export_size.asInteger(str_length);
 				}
 				else if (export_type_val=="rw_str") {
 					const Value &export_size = properties.lookup("strlen");
 					self_rwreg = true;
-					export_type=str;
+					export_type=ModbusExport::str;
 					export_size.asInteger(str_length);
 				}
 				else {
 					self_discrete = true;
-					export_type=discrete;
+					export_type=ModbusExport::discrete;
 				}
 		}
 	}
@@ -4010,35 +4037,35 @@ void MachineInstance::setupModbusInterface() {
 	if (_type != "VARIABLE" && _type != "CONSTANT") {
 		// exporting 'self' (either 'on' state or 'VALUE' property depending on export type)
 		if (self_coil) {
-			modbus_address = addModbusExport(_name, ModbusAddress::coil, 1, this, ModbusAddress::machine, full_name);
+			modbus_address = addModbusExport(_name, ModbusAddress::coil, 1, this, export_type, ModbusAddress::machine, full_name);
 		}
 		else if (self_discrete) {
-			modbus_address = addModbusExport(_name, ModbusAddress::discrete, 1, this, ModbusAddress::machine, full_name);
+			modbus_address = addModbusExport(_name, ModbusAddress::discrete, 1, this, export_type, ModbusAddress::machine, full_name);
 			//addModbusExportname(_name].setName(full_name);
 		}
 		else if (self_reg) {
 			int len = 1;
-			if (export_type == reg) {
+			if (export_type == ModbusExport::reg) {
 				len = 1;
 			}
-			else if (export_type == reg32) {
+			else if (export_type == ModbusExport::reg32) {
 				len = 2;
 			}
-			else if (export_type == str && str_length == 0) {
+			else if (export_type == ModbusExport::str && str_length == 0) {
 				len=80;
 			}
-			modbus_address = addModbusExport(_name, ModbusAddress::input_register, len, this, ModbusAddress::machine, full_name);
+			modbus_address = addModbusExport(_name, ModbusAddress::input_register, len, this, export_type, ModbusAddress::machine, full_name);
 			//modbus_exports[_name].setName(full_name);
 		}
 		else if (self_rwreg) {
 			int len = 1;
-			if (export_type == rw_reg32) {
+			if (export_type == ModbusExport::rw_reg32) {
 				len = 2;
 			}
-			else if (export_type == str && str_length == 0) {
+			else if (export_type == ModbusExport::str && str_length == 0) {
 				len=80;
 			}
-			addModbusExport(_name, ModbusAddress::holding_register, len, this, ModbusAddress::machine, full_name);
+			addModbusExport(_name, ModbusAddress::holding_register, len, this, export_type, ModbusAddress::machine, full_name);
 			//modbus_exports[name(_name].setName(full_name);
 		}
 	}
@@ -4046,51 +4073,54 @@ void MachineInstance::setupModbusInterface() {
 	// exported states
 	BOOST_FOREACH(std::string s, state_machine->state_exports) {
 		std::string name = _name + "." + s;
-		addModbusExport(name, ModbusAddress::discrete, 1, this, ModbusAddress::state, full_name+"."+s);
+		addModbusExport(name, ModbusAddress::discrete, 1, this, ModbusExport::discrete, ModbusAddress::state, full_name+"."+s);
 		//modbus_exports[name(name].setName(full_name+"."+s);
 	}
 
 	// exported commands
 	BOOST_FOREACH(std::string s, state_machine->command_exports) {
 		std::string name = _name + "." + s;
-		addModbusExport(name, ModbusAddress::coil, 1, this, ModbusAddress::command, full_name+"."+s);
+		addModbusExport(name, ModbusAddress::coil, 1, this, ModbusExport::discrete, ModbusAddress::command, full_name+"."+s);
 		//addModbusExportname(name].setName(full_name+"."+s);
 	}
 
 	if (_type == "VARIABLE" || _type == "CONSTANT") {
 		std::string property_name(_name);
 		switch(export_type) {
-			case none: break;
-			case discrete:
-				   setupModbusPropertyExports(property_name, ModbusAddress::discrete, 1);
+			case ModbusExport::none: break;
+			case ModbusExport::discrete:
+				setupModbusPropertyExports(property_name, ModbusAddress::discrete, ModbusExport::discrete, 1);
 				   break;
-			case coil:
-				   setupModbusPropertyExports(property_name, ModbusAddress::coil, 1);
+			case ModbusExport::coil:
+				setupModbusPropertyExports(property_name, ModbusAddress::coil, ModbusExport::coil, 1);
 				   break;
-			case reg:
-				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 1);
+			case ModbusExport::reg:
+				setupModbusPropertyExports(property_name, ModbusAddress::input_register, ModbusExport::reg, 1);
 				   break;
-			case rw_reg:
-				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 1);
+			case ModbusExport::rw_reg:
+				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::rw_reg, 1);
 				   break;
-			case reg32:
-				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 2);
+			case ModbusExport::reg32:
+				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, ModbusExport::reg32, 2);
 				   break;
-			case rw_reg32:
-				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 2);
+			case ModbusExport::rw_reg32:
+				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::rw_reg32, 2);
 				   break;
-			case str:
+			case ModbusExport::float32:
+				setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::float32, 2);
+				break;
+			case ModbusExport::str:
 				   if (self_reg)
-					   setupModbusPropertyExports(property_name, ModbusAddress::input_register, (int)str_length);
+					   setupModbusPropertyExports(property_name, ModbusAddress::input_register, ModbusExport::str, (int)str_length);
 				   else
-					   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, (int)str_length);
+					   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::str, (int)str_length);
 				   break;
 		}
 	}
 
 	BOOST_FOREACH(ModbusAddressTemplate mat, state_machine->exports) {
 		//if (export_type == none) continue;
-		setupModbusPropertyExports(mat.property_name, mat.kind, mat.size);
+		setupModbusPropertyExports(mat.property_name, mat.grp, mat.exType, mat.size);
 	}
 
 	assert(modbus_addresses.size() == 0);

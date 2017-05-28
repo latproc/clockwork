@@ -193,13 +193,32 @@ int load_preset_modbus_mappings() {
 						++errors;
 						continue;
 					}
-					if (generate_length && type == "Signed_int_32") length = 2;
+					if (generate_length) {
+						if (type == "Signed_int_32") length=2;
+						else if (type == "Floating_PT_32") length = 1;
+					}
 					if (group_num == 0) { if (addr_num >= max_coil) max_coil = addr_num+1; }
 					else if (group_num == 1) { if (addr_num >= max_disc) max_disc = addr_num+1; }
 					else if (group_num == 3) { if (addr_num >= max_input) max_input = addr_num+1; }
 					else if (group_num == 4) { if (addr_num >= max_holding) max_holding = addr_num+1; }
+					ModbusExport::Type exportType(ModbusExport::discrete);
+					if (type == "Signed_int_16") {
+						if (group_num == 3)
+							exportType = ModbusExport::reg;
+						else
+							exportType = ModbusExport::rw_reg;
+					}
+					if (type == "Signed_int_32") {
+						if (group_num == 3)
+							exportType = ModbusExport::reg32;
+						else
+							exportType = ModbusExport::rw_reg32;
+					}
+					if (type == "Floating_PT_32") {
+						exportType = ModbusExport::float32;
+					}
 					DBG_MODBUS << "Loaded modbus mapping " << group_num << " " << addr << " " << length << "\n";
-					ModbusAddressDetails details(group_num, addr_num, length);
+					ModbusAddressDetails details(group_num, addr_num, exportType, length);
 					ModbusAddress::preset_modbus_mapping[name] = details;
 				}
 			}

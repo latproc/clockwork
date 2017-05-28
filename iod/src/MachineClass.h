@@ -21,10 +21,11 @@ public:
     //Group - discrete, coil, etc
     //Size - number of units of the address type (always 1 for discretes and coils)
 	std::string property_name;
-	ModbusAddress::Group kind;
+	ModbusAddress::Group grp;
+	ModbusExport::Type exType;
 	int size; // number of units
-	ModbusAddressTemplate(const std::string &property, ModbusAddress::Group g, int n_units)
-		: property_name(property), kind(g), size(n_units) {	}
+	ModbusAddressTemplate(const std::string &property, ModbusAddress::Group g, ModbusExport::Type kind, int n_units)
+		: property_name(property), grp(g), exType(kind), size(n_units) {	}
 };
 
 class MachineCommandTemplate;
