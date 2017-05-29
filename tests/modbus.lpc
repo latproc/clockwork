@@ -24,7 +24,8 @@ PanelScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
 RequestScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
 
 Calc MACHINE {
-
+	OPTION Pi 3.14192654;
+	EXPORT READONLY FLOAT32 Pi;
     GLOBAL D;
     go DEFAULT;
     ENTER go { offdelay := D * 60000; }

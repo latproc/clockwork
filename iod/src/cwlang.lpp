@@ -73,6 +73,7 @@ EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;
 EXTRACT             return EXTRACT;
 FIRST               return FIRST;
+FLOAT32			return FLOAT32;
 FLOAT				return FLOAT;
 FROM				return FROM;
 GLOBAL              return GLOBAL;

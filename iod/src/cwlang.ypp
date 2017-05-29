@@ -146,6 +146,7 @@ struct Subcondition {
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
+%token FLOAT32
 
 %union {
 	int iVal;
@@ -588,13 +589,13 @@ EXPORT access_type size_type name_list ';' {
 		ModbusExport::Type exType(ModbusExport::none);
 		if ( $3 == WORD) { len = 1; exType = ModbusExport::reg; }
 		else if ($3 == DOUBLEWORD) { len = 2; exType = ModbusExport::reg32; }
-		else if ($3 == FLOAT) { len = 2; exType = ModbusExport::float32; }
+		else if ($3 == FLOAT32) { len = 2; exType = ModbusExport::float32; }
 		else if ($3 == STRINGTYPE) { len = (int)current_value.iValue; exType = ModbusExport::str; }
-        else {
-            std::cerr<< "Unexpected export size token: " << $3 << "\n";
-        }
-		if ($3 == FLOAT)
-		current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::holding_register, ModbusExport::float32, 2) );
+		else {
+			std::cerr<< "Unexpected export size token: " << $3 << "\n";
+		}
+		if ($3 == FLOAT32)
+			current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::holding_register, ModbusExport::float32, 2) );
 		else if ($2 == READONLY)
             current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::input_register, exType, len) );
         else if ($2 == READWRITE)
@@ -630,6 +631,7 @@ size_type:
 WORD { $$ = WORD; }
 | DOUBLEWORD { $$ = DOUBLEWORD; }
 | STRINGTYPE INTEGERVAL { $$ = STRINGTYPE; current_value = $2; }
+| FLOAT32 { $$ = FLOAT32; }
 ;
 
 machine_instantiation:
