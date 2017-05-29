@@ -1050,19 +1050,22 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 				// the address found will refer to the base address, so we provide the actual offset
 				assert(address == found.getAddress());
     		if (params[3].kind == Value::t_integer) {
-       		found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (int)params[3].iValue);
-        }
-        else if (params[3].kind == Value::t_bool) {
-        	found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (params[3].bValue) ? 1 : 0);
+				found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (int)params[3].iValue);
+			}
+			else if (params[3].kind == Value::t_float) {
+					found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (float)params[3].fValue);
 				}
-        else if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
-                long val;
+			else if (params[3].kind == Value::t_bool) {
+				found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (params[3].bValue) ? 1 : 0);
+			}
+			else if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
+				long val;
                 if (params[3].asInteger(val))
 	       		found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), (int)val);
 					else
 	       		found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()), params[3].sValue.c_str());
- 				}
-				else {
+			}
+			else {
 					std::stringstream ss;
 					ss << "unexpected value type " << params[3].kind << " for modbus value\n";
 					std::cout << ss.str() << "\n";

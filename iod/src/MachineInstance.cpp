@@ -4249,6 +4249,37 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 	}
 }
 
+void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, float new_value) {
+	std::string name(fullName());
+	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
+	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
+	if (!modbus_addresses.count(index)) {
+		NB_MSG << name << " Error: bad modbus address lookup for " << base_addr << "\n";
+		return;
+	}
+	const std::string &item_name = modbus_addresses[index];
+	if (!modbus_exports.count(item_name)) {
+		NB_MSG << name << " Error: bad modbus name lookup for " << item_name << "\n";
+		return;
+	}
+	ModbusAddress addr = modbus_exports[item_name];
+	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";
+
+	if (addr.getGroup() == ModbusAddress::holding_register) {
+		DBG_MODBUS << name << " holding register update\n";
+		std::string property_name = modbus_addresses[index];
+		DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+		if (property_name == _name)
+			setValue("VALUE", new_value);
+		else
+			setValue(property_name, new_value);
+	}
+	else {
+		NB_MSG << name << " unexpected modbus group " << addr.getGroup() << " for write operation (float) " << addr << "\n";
+	}
+}
+
+
 int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {
 	int pos = (addr.getGroup() << 16) + addr.getAddress() + offset;
 	if (!modbus_addresses.count(pos)) {

@@ -245,6 +245,7 @@ public:
 	void refreshModbus(cJSON *json_array); // update all exported values
 	int getModbusValue(ModbusAddress &addr, unsigned int offset, int len);
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value);
+	void modbusUpdated(ModbusAddress &addr, unsigned int offset, float new_value);
 	void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value);
 	void exportModbusMapping(std::ostream &out);
 	bool isModbusExported() { return modbus_exported != ModbusExport::none; }
