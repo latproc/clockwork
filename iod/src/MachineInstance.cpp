@@ -3823,7 +3823,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 		if (value.kind == Value::t_string || value.kind == Value::t_symbol)
 			cJSON_AddItemToArray(item, cJSON_CreateString(value.sValue.c_str()));
 		else if (value.kind == Value::t_float)
-			cJSON_AddItemToArray(item, cJSON_CreateLong((long)trunc(value.fValue)));
+			cJSON_AddItemToArray(item, cJSON_CreateDouble(value.fValue));
 		else
 			cJSON_AddItemToArray(item, cJSON_CreateLong(value.iValue));
 		cJSON_AddItemToArray(json_array, item);
