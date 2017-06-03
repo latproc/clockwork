@@ -718,7 +718,8 @@ bool SubscriptionManager::checkConnections() {
 		if ( state_timeout && (this->protocol == eCLOCKWORK || this->protocol == eCHANNEL)
 				&& microsecs() - state_start > state_timeout) {
 			{FileLogger fl(program_name); fl.f() << " waiting too long in state " << setupStatus() << ". aborting\n"; }
-			usleep(5); exit(63);
+			usleep(5);
+			setSetupStatus(e_startup);
 		}
 #endif
 		if (monit_setup->disconnected() && monit_subs.disconnected()) return false;

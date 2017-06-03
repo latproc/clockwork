@@ -280,6 +280,16 @@ bool SymbolTable::exists(int tok) {
     return stok.find(tok) != stok.end();
 }
 
+const Value &SymbolTable::find(const char *name) const {
+	if (this != keywords) {
+		Value &res = keywords->find(name);
+		if (res != SymbolTable::Null) return res;
+	}
+	SymbolTableConstIterator iter = st.find(name);
+	if (iter != st.end()) return (*iter).second;
+	return NullValue;
+}
+
 Value &SymbolTable::find(const char *name) {
 	if (this != keywords) {
 		Value &res = keywords->find(name);

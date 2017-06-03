@@ -558,9 +558,13 @@ char *MessagingInterface::send(const char *txt) {
 	if (owner_thread != pthread_self()) {
 		char tnam1[100], tnam2[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
-		assert(pgn_rc == 0);
+		if (pgn_rc != 0)  {
+			NB_MSG << "Warning: Error code " << pgn_rc << " returned when getting thread name\n";
+		}
 		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
-		assert(pgn_rc == 0);
+		if (pgn_rc != 0) {
+			NB_MSG << "Warning: Error code " << pgn_rc << " returned when getting thread name\n";
+		}
 
 		NB_MSG << "error: message send ("<< txt <<") from a different thread:"
 		<< " owner: " << std::hex << " '" << owner_thread
