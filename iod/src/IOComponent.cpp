@@ -318,10 +318,10 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		if (!last_process_data) {
 			if (*m) notifyComponentsAt(i);
 		}
-		if (*m && *p==*q) {
-			std::cout<<"warning: incoming_data == process_data but mask indicates a change at byte "
-			<< (int)(m-mask) << std::setw(2) <<  std::hex << " value: 0x" << (int)(*m) << std::dec << "\n";
-		}
+//		if (*m && *p==*q) {
+//			std::cout<<"warning: incoming_data == process_data but mask indicates a change at byte "
+//			<< (int)(m-mask) << std::setw(2) <<  std::hex << " value: 0x" << (int)(*m) << std::dec << "\n";
+//		}
 		if (*p != *q && *m) { // copy masked bits if any
 			uint8_t bitmask = 0x01;
 			int j = 0;

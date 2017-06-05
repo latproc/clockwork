@@ -2233,11 +2233,13 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 			Dispatcher::instance()->deliver(p);
 		}
 		else {
+#if 0
 			char buf[120];
 			snprintf(buf, 120, "%s: sending %s to %s failed because the target is not enabled",
 					 _name.c_str(), m->getText().c_str(), r->getName().c_str());
 			MessageLog::instance()->add(buf);
 			DBG_MSG << buf << "\n";
+#endif
 			Package *p = new Package(this, this, new Message("DisabledMessageTargetException"), false);
 			Dispatcher::instance()->deliver(p);
 		}
