@@ -429,6 +429,7 @@ std::string thread_name("iod_main");
 
 	std::cout << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
+	Scheduler::instance()->setThreadRef(scheduler_thread);
 
 	boost::thread monitor(boost::ref(*stateMonitor));
 	usleep(50000); // give time before starting the processin g thread
