@@ -74,7 +74,7 @@ uint64_t clockwork_watchdog_timer = 0;
 
 extern void handle_io_sampling(uint64_t clock);
 
-#define KEEPSTATS
+//#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
 #define MEMCHECK()
@@ -399,9 +399,9 @@ void ProcessingThread::operator()()
 	Statistic::add(cycle_delay_stat);
 	long delta, delta2;
 
+	AutoStatStorage avg_io_time("AVG_IO_TIME", 0);
 #ifdef KEEPSTATS
 	AutoStatStorage avg_poll_time("AVG_POLL_TIME", 0);
-	AutoStatStorage avg_io_time("AVG_IO_TIME", 0);
 	AutoStatStorage avg_iowork_time("AVG_IOWORK_TIME", 0);
 	AutoStatStorage avg_plugin_time("AVG_PLUGIN_TIME", 0);
 	AutoStatStorage avg_cmd_processing("AVG_PROCESSING_TIME", 0);
@@ -539,7 +539,7 @@ void ProcessingThread::operator()()
 		uint64_t curr_t = 0;
 		uint64_t last_sample_poll = 0;
 		bool machines_have_work;
-		int num_channels = 0;
+		unsigned int num_channels = 0;
 		while (!program_done)
 		{
 			MEMCHECK();

@@ -216,7 +216,7 @@ bool CompareSheduledItems::operator()(const ScheduledItem *a, const ScheduledIte
 }
 
 int64_t Scheduler::getNextDelay() {
-	if (empty()) return -1;
+	if (empty()) return 1000000;
     ScheduledItem *top = next();
 	next_time = top->delivery_time;
 	return next_time - nowMicrosecs();
@@ -224,10 +224,9 @@ int64_t Scheduler::getNextDelay() {
 
 int64_t Scheduler::getNextDelay(uint64_t start) {
 	if (empty())
-		return -1;
+		return 1000000;
 	ScheduledItem *top = next();
 	int64_t res = top->delivery_time- start;
-	if (res<0) return 0;
 	return res;
 }
 
@@ -237,13 +236,12 @@ void Scheduler::add(ScheduledItem*item) {
 	{
 		boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 		DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
-		//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
 		items.push(item);
 	}
 	top = next();
 	next_time = top->delivery_time;
 	long delay = next_time - nowMicrosecs();
-	if (delay < next_delay_time && delay>=0 && next_delay_time>=0) {
+	if (delay <= next_delay_time || next_delay_time <= 0) { // && delay>=0 && next_delay_time>=0) {
 		next_delay_time = delay;
 		if (internals->thread_ptr) internals->thread_ptr->interrupt();
 	}
@@ -330,9 +328,7 @@ void Scheduler::idle() {
 			wd->stop();
 			try {
 			long delay = next_delay_time;
-			if (delay == -1)
-				boost::this_thread::sleep_for(boost::chrono::microseconds(100));
-			else if (delay>0)
+			if (delay>10)
 				boost::this_thread::sleep_for(boost::chrono::microseconds(delay));
 			}
 			catch (boost::thread_interrupted ex) {
