@@ -77,6 +77,7 @@ DeviceInfo::DeviceInfo(uint64_t pc, uint64_t rn, const char *which)
 	: product_code(pc), revision_no(rn), selected_alt_sm(-1), selected_alt_sm_name(which) { }
 
 DeviceInfo::~DeviceInfo() { }
+std::ostream &operator<<(std::ostream &out, const DeviceInfo &dev) { return dev.operator<<(out); }
 
 static const std::string deviceKey("Device");
 static const std::string moduleKey("Module");
@@ -284,9 +285,9 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 								current_device->revision_no = 0;
 						}
 						else {
-//							std::cout << "no match for device with pc: " << std::hex
-//								<< pc << "/" << rn << std::dec << " ("
-//								<< attributes["ProductCode"] << "/" << attributes["RevisionNo"] << std::dec << ")\n";
+							std::cout << "no match for device with pc: " << std::hex
+								<< pc << "/" << rn << std::dec << " ("
+								<< attributes["ProductCode"] << "/" << attributes["RevisionNo"] << std::dec << ")\n";
 						}
 					}
 					else if (nameKey == name) { 

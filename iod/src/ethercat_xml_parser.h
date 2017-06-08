@@ -79,7 +79,19 @@ struct DeviceInfo {
 	DeviceInfo(uint64_t pc, uint64_t rn);
 	DeviceInfo(uint64_t pc, uint64_t rn, const char *which);
 	~DeviceInfo();
+	bool operator==(const DeviceInfo &other) { 
+		return other.product_code == product_code 
+			&& other.revision_no == revision_no;
+			//&& other.selected_alt_sm_name == selected_alt_sm_name;
+	}
+	std::ostream &operator<<(std::ostream & out) const{
+		out << "DeviceInfo: 0x" << std::hex << product_code << ":" << revision_no;
+		if (selected_alt_sm >= -1) out << "/" << selected_alt_sm_name;
+		return out;
+	}
 };
+
+std::ostream &operator<<(std::ostream &out, const DeviceInfo &dev);
 
 class DeviceConfigurator {
 public:

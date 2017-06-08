@@ -663,6 +663,7 @@ void ECInterface::registerModules() {
 				}
 			}
 		}
+		assert(module_offset_idx<64);
 	}
 }
 
