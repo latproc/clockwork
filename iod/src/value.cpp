@@ -787,7 +787,7 @@ Value &Value::operator-(const Value &other) {
 	}
 	switch(kind) {
 		case t_integer: iValue -= other.iValue; break;
-		case t_float: iValue -= other.iValue; break;
+		case t_float: fValue -= other.fValue; break;
 		case t_bool: bValue |= other.bValue;
 		default: ;
 	}
@@ -847,6 +847,10 @@ Value &Value::operator%(const Value &other) {
 	}
 	switch(kind) {
 		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue % other.iValue; break;
+		case t_float: 
+			if (other.fValue == 0.0) iValue = 0; else iValue = ( (long)fValue) % other.iValue; 
+			kind = t_integer; // modulus returns an integer result
+			break;
 		case t_bool: bValue ^= other.bValue;
 		default: ;
 	}
