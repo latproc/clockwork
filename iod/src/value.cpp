@@ -930,7 +930,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
     switch(kind) {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
-		case t_float: out << std::setprecision(3) << std::fixed << fValue; break;
+		case t_float: out << std::setprecision(6) << std::fixed << fValue; break;
         case t_symbol: out << sValue; break;
         case t_string: out <<'"'<< sValue << '"'; break;
 #if 0
@@ -1003,7 +1003,7 @@ std::string Value::asString() const {
 		case t_float:
 		{
 			char buf[25];
-			snprintf(buf, 25, "%6.3lf", fValue);
+			snprintf(buf, 25, "%6.6lf", fValue);
 			return buf;
 		}
         case t_empty: return "null";

@@ -650,11 +650,11 @@ void ECInterface::registerModules() {
 							<< " at index " 
 							<< std::hex
 							<< "0x" << m->syncs[i].pdos[j].index << " " 
+							<< std::dec
 							<< " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex 
 							<< " length " << (int)m->syncs[i].pdos[j].entries[k].bit_length
 							<< " offset: " << res 
 							<< " bitpos: " << m->bit_positions[module_offset_idx]
-							<< std::dec
 							<< " " << m->entry_details[module_offset_idx].name
 							<< "\n";
 						m->offsets[module_offset_idx] = res;

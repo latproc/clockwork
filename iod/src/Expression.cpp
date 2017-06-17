@@ -151,6 +151,8 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 {
     long scheduled_time = -100000;
     long current_time = 0;
+	MachineInstance *timed_machine = 0; // the machine that the timer is on if not SELF
+
     // below, we check the clauses of this predicate and if we find a timer test
     // we set the above variables. At the end of the method, we actually set the timer
 
@@ -179,7 +181,6 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 				&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
 				|| right_p->entry.asInteger(scheduled_time)) {
             // lookup the machine
-            MachineInstance *timed_machine = 0;
             size_t pos = left_p->entry.sValue.find('.');
             std::string machine_name(left_p->entry.sValue);
             machine_name.erase(pos);
@@ -218,7 +219,6 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
             || left_p->entry.asInteger(scheduled_time)
 			) {
             // lookup and cache the machine
-            MachineInstance *timed_machine = 0;
             size_t pos = right_p->entry.sValue.find('.');
             std::string machine_name(right_p->entry.sValue);
             machine_name.erase(pos);
@@ -241,13 +241,21 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 	if (scheduled_time != -100000) {
 		long t = (scheduled_time - current_time) * 1000;
 		if (t > 0) {
-			DBG_SCHEDULER << "Predicate scheduling item for " << t << "\n";
 			std::string trigger_name("Timer ");
 			if (target) trigger_name += target->getName();
+			if (timed_machine) { trigger_name += " "; trigger_name += timed_machine->getName(); }
+			DBG_SCHEDULER << "Predicate scheduling item " << trigger_name << " for "
+				<< t << " (=" << scheduled_time << " - " << current_time
+				<< ")\n";
 			if (!earliest)
 				earliest = new PredicateTimerDetails(t, trigger_name);
-			else
+			else if (earliest->delay > t) {
+				DBG_SCHEDULER << "found a closer event in " << t << "us\n";
 				earliest->setup(t, trigger_name);
+			}
+			else {
+				DBG_SCHEDULER << "skipping event in " << t << "us as an earlier one exists\n";
+			}
 
 			//Trigger *trigger = new Trigger(trigger_name);
 			//Scheduler::instance()->add(new ScheduledItem( t, new FireTriggerAction(target, trigger)));

@@ -7,11 +7,11 @@ Test MACHINE {
 	s2 STATE;
 
 	ENTER one { LOG "one" }
-	ENTER two { LOG "one" }
+	ENTER two { LOG "two" }
 	ENTER s1 { LOG "s1" }
 	ENTER s2 { LOG "s2" }
 
-	COMMAND next { }
+	COMMAND next { LOG "next"; }
 	TRANSITION one TO s1 ON next;
 	TRANSITION two TO s2 ON next;
 

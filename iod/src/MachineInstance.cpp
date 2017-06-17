@@ -1649,9 +1649,11 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		int64_t earliestTimer = (unsigned long) 100000000L;
 
 		uint64_t stable_state_timer_base = microsecs();
+		bool dbg_report_if_timer_found = false;
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 			StableState &s = stable_states[ss_idx];
 			if (s.uses_timer) {
+				dbg_report_if_timer_found = true;
 				// first disable any trigger that may still be enabled
 				if ( s.trigger) {
 					DBG_M_SCHEDULER << _name << " clearing trigger for state " << s.state_name << "\n";
@@ -1667,11 +1669,15 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
 				// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
 				//   we should trigger at v.iValue+1
-				if (s.timer_val.kind == Value::t_symbol) {
+				if (s.timer_val.kind == Value::t_symbol || s.timer_val.kind == Value::t_string) {
 					Value v = getValue(s.timer_val.sValue);
 					if (v.kind != Value::t_integer) {
-						NB_MSG << _name << " Error: timer value for state " << s.state_name << " is not numeric\n";
-						NB_MSG << "timer_val: " << s.timer_val << " lookup value: " << v << " type: " << v.kind << "\n";
+						char buf[200];
+						snprintf(buf, 200, "%s Error: timer value for state %s is not numeric. "
+								 "timer_val: %s lookup value: %s type: %d",
+								 _name.c_str(), s.state_name.c_str(), s.timer_val.sValue.c_str(),
+								 v.asString().c_str(), v.kind);
+						MessageLog::instance()->add(buf);
 						continue;
 					}
 					else
@@ -1679,17 +1685,25 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				}
 				else if (s.timer_val.kind == Value::t_integer)
 					timer_val = s.timer_val.iValue;
+				else if (s.timer_val.kind == Value::t_float)
+					timer_val = trunc(s.timer_val.fValue);
 				else {
 					DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " is not numeric\n";
 					NB_MSG << "timer_val: " << s.timer_val << " type: " << s.timer_val.kind << "\n";
 					continue;
 				}
+				// note comment above, this is not a correct handling of opGT and opLT
 				if (s.condition.predicate->op == opGT) timer_val++;
 				else if (s.condition.predicate->op == opLT) --timer_val;
 
 				if (timer_val < earliestTimer || earliestTimerState == 0) {
 					earliestTimerState = &s;
 					earliestTimer = timer_val;
+				}
+				else {
+					DBG_M_SCHEDULER << _name << " ignoring scheduled check for stable state #"
+						<< ss_idx << "(" <<timer_val << ") in favour of earlier check "
+						<< earliestTimer << "\n";
 				}
 
 			}
@@ -1722,6 +1736,9 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			}
 			else if (timer_val >= -2)
 				ProcessingThread::activate(this);
+		}
+		else if (dbg_report_if_timer_found) {
+			DBG_M_SCHEDULER << " no state timer required\n";
 		}
 
 
@@ -2773,8 +2790,14 @@ bool MachineInstance::setStableState() {
 						}
 						if (s.uses_timer) {
 							DBG_SCHEDULER << _name << "[" << current_state.getName()
-							<< "] scheduling condition tests for state " << s.state_name << "\n";
+							<< "] checking condition tests for rule #" << ss_idx
+							<< " state: " << s.state_name << "\n";
 							ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
+							if (ptd) {
+								DBG_M_SCHEDULER << "found timer event " << ptd->label << " t: "
+									<< ptd->delay << " on rule #" << ss_idx << " state: " << s.state_name
+									<< "\n";
+							}
 						}
 					}
 					found_match = true;
@@ -2786,6 +2809,11 @@ bool MachineInstance::setStableState() {
 						DBG_SCHEDULER << _name  << "[" << current_state.getName()
 							<< "] scheduling condition tests for state " << s.state_name << "\n";
 						ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
+						if (ptd) {
+							DBG_M_SCHEDULER << "found timer event " << ptd->label << " t: "
+							<< ptd->delay << " on rule #" << ss_idx << " state: " << s.state_name
+							<< "\n";
+						}
 					}
 				}
 
