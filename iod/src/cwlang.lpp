@@ -196,13 +196,13 @@ WITHIN              return WITHIN;
 
 [-]{0,1}[0-9][0-9]*[.][0-9]* {
 	yylval.fVal = atof(yytext);
-	std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
 	return FLOATVAL;
 }
 
 [-]{0,1}[0-9][0-9]*[.][0-9]*E[0-9]{1,3} {
 	yylval.fVal = atof(yytext);
-	std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
 	return FLOATVAL;
 }
 
