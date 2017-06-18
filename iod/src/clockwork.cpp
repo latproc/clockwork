@@ -525,6 +525,7 @@ void semantic_analysis() {
 	    if (!m) {
 			std::stringstream ss;
 			ss << "## - Warning: machine table entry " << (*iter).first << " has no machine";
+			++num_errors;
 			error_messages.push_back(ss.str());
 		}
         else
@@ -697,6 +698,7 @@ void semantic_analysis() {
                     << " found for " << mi->getName();
 					error_messages.push_back(ss.str());
 					MessageLog::instance()->add(ss.str().c_str());
+					++num_errors;
 				}
             }
 			else {
