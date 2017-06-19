@@ -242,7 +242,7 @@ double Value::toFloat() const {
 	else if (kind == t_symbol) {
 		std::cerr << "Warning: converting a string to float when passed a symbol\n";
 	}
-	assert(false);
+	//TBD assert(false);
 	return 0.0;
 }
 
@@ -409,7 +409,8 @@ bool Value::operator==(const Value &other) const {
         case t_integer:
 			return iValue == other.iValue;
 			break;
-		case t_symbol: assert(false); return token_id == other.token_id;
+		case t_symbol: //TBD assert(false); 
+					return token_id == other.token_id;
         case t_string: return sValue == other.sValue;
             break;            
         case t_bool: return bValue == other.bValue;
@@ -457,7 +458,7 @@ bool Value::operator!=(const Value &other) const {
 			return fValue != other.fValue && fabs(fValue - other.fValue) > ZERO_DISTANCE;
 			break;
 		case t_symbol:
-            assert(false);
+            //TBD assert(false);
             return token_id != other.token_id;
         case t_string:
             return sValue != other.sValue;
@@ -520,8 +521,16 @@ static bool stringToLong(const std::string &s, long &x) {
 	char *end;
 	x = strtol(str, &end, 0);
 	if (*end) {
-		DBG_PREDICATES << "str to long parsed " << (end-str) << " chars but did not hit the end of string '" << str << "'\n";
-		assert(false);
+		// check if this is actually a float before writing an error message
+		if (*end == '.') {
+			char *p = end; while (isdigit(*(++p))){;}  if (*p == 0) return false;
+		}
+
+		char buf[200];
+		snprintf(buf, 200, "str to long parsed %ld chars but did not hit the end of string '%s'",
+				 end-str, str);
+		MessageLog::instance()->add(buf);
+		DBG_PREDICATES << buf << "'\n";
 	}
 	return *end == 0;
 }
@@ -531,8 +540,11 @@ static bool stringToFloat(const std::string &s, double &x) {
 	char *end;
 	x = strtod(str, &end);
 	if (*end) {
-		DBG_PREDICATES << "str to float parsed " << (end-str) << " chars but did not hit the end of string '" << str << "'\n";
-		assert(false);
+		char buf[200];
+		snprintf(buf, 200, "str to float parsed %ld chars but did not hit the end of string '%s'",
+				 end-str, str);
+		MessageLog::instance()->add(buf);
+		DBG_PREDICATES << buf << "'\n";
 	}
 	return *end == 0;
 }
@@ -542,7 +554,10 @@ namespace ValueOperations {
 		virtual Value operator()(const Value &a, const Value &b) const { 
 			return 0; 
 		}
+		virtual std::ostream& operator<<(std::ostream&out) const { return out; }
+		virtual std::string toString() const { return ""; }
 	};
+	std::ostream& operator<<(std::ostream &out, const ValueOperation&v) { return v.operator<<(out); }
 
 	struct Sum : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const {
@@ -567,6 +582,8 @@ namespace ValueOperations {
 				return b.fValue;
 			return 0;
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "add"; return out; }
+		virtual std::string toString() const { return "add"; }
 	};
 
 	struct Minus : public ValueOperation {
@@ -592,6 +609,8 @@ namespace ValueOperations {
 				return -b.fValue;
 			return 0;
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "subtract"; return out; }
+		virtual std::string toString() const { return "subtract"; }
 	};
 
 	struct Multiply : public ValueOperation {
@@ -613,6 +632,8 @@ namespace ValueOperations {
 			}
 			return 0;
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "multiply"; return out; }
+		virtual std::string toString() const { return "multiply"; }
 	};
 
 	struct Divide : public ValueOperation {
@@ -654,6 +675,8 @@ namespace ValueOperations {
 			}
 			return 0;
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "divide"; return out; }
+		virtual std::string toString() const { return "divide"; }
 	};
 
 	struct Modulus : public ValueOperation {
@@ -670,24 +693,32 @@ namespace ValueOperations {
 					return 0;
 			}
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "modulus"; return out; }
+		virtual std::string toString() const { return "modulus"; }
 	};
 
 	struct BitAnd : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const {
 			return a.iValue & b.iValue;
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "AND"; return out; }
+		virtual std::string toString() const { return "AND"; }
 	};
     
 	struct BitOr : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const {
 			return a.iValue | b.iValue;
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "OR"; return out; }
+		virtual std::string toString() const { return "OR"; }
 	};
     
 	struct BitXOr : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const {
 			return a.iValue ^ b.iValue;
 		}
+		std::ostream& operator<<(std::ostream&out) const { out << "XOR"; return out; }
+		virtual std::string toString() const { return "XOR"; }
 	};
 
 }
@@ -700,16 +731,20 @@ struct TypeFix {
 			double x_float;
 			if ( (a.kind == Value::t_integer || a.kind == Value::t_float) 
 					&& (b.kind == Value::t_string || b.kind == Value::t_symbol) ) {
-				if (a.kind == Value::t_integer && stringToLong(b.sValue, x))  {
+				if (stringToLong(b.sValue, x))  {
 					v_ = x;
 					return (*op)(a, v_);
 				}
-				else if (a.kind == Value::t_float && stringToFloat(b.sValue, x_float))  {
+				else if (stringToFloat(b.sValue, x_float))  {
 					v_ = x_float;
 					return (*op)(a, v_);
 				}
 				else {
-					DBG_PREDICATES << "Trying to add a string and value but the string does not contain a number\n";
+					char buf[200];
+					snprintf(buf, 200, "Trying to %s %s and %s but the string does not contain a number",
+							 op->toString().c_str(), a.asString().c_str(), b.asString().c_str());
+					MessageLog::instance()->add(buf);
+					DBG_PREDICATES << buf << "\n";
 					return a;
 				}
 			}
@@ -738,7 +773,7 @@ struct TypeFix {
 			}
 		}
 		DBG_PREDICATES << "invalid call to TypeFix operator when type are the same for: " << a << " and " << b << "\n";
-		assert(false);
+		// TBD assert(false);
 		return a; // invalid usage
 	}
 	Value &value() { return v_; }
@@ -771,6 +806,8 @@ Value Value::operator-(void) const {
 		case t_symbol:
 		case t_string:
 				long x;
+				if (stringToLong(sValue, x))
+					return -x;
 				char *end;
 				x = strtol(sValue.c_str(),&end,0);
 				if (*end == 0) return Value(-x);
@@ -796,7 +833,16 @@ Value &Value::operator-(const Value &other) {
 
 Value &Value::operator*(const Value &other) {
 	if (kind != other.kind) {
-		assert(kind != t_string && kind != t_symbol);
+		if (kind == t_string || kind == t_symbol) {
+			char buf[200];
+			snprintf(buf, 200, "Warning: multiplying %s(string) by %s%s", 
+				this->asString().c_str(), 
+				other.asString().c_str(), 
+				(other.kind==t_string||other.kind==t_symbol)?"(string)":"");
+			MessageLog::instance()->add(buf);
+			NB_MSG << buf << "\n";
+			return *this;
+		}
 		Multiply op;
 		TypeFix tf;
 		return operator=(tf(*this, &op, other));
