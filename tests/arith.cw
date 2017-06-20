@@ -17,6 +17,15 @@ Arithmetic MACHINE {
 }
 arith Arithmetic;
 
+BadMultiply MACHINE {
+	LOCAL OPTION x 3;
+	COMMAND test { 
+		x := aa * 2; 
+		x := 2 * "2.01 "; 
+	}
+}
+failed_test BadMultiply;
+
 /* The above machine is not generic and so does not help us run
  a series of test cases. Below we try to improve on that, first
  by defining a ComparisonTest machine that compares two values.

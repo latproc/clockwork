@@ -1252,9 +1252,14 @@ void MachineInstance::removeLocal(int index) {
 	while (index-- && iter != locals.end()) iter++;
 	if (iter != locals.end()) locals.erase(iter);
 	setNeedsCheck();
-	if (_type == "LIST" || _type == "REFERENCE") {
+	if (_type == "LIST") {
 		notifyDependents();
 	}
+	else if (_type == "REFERENCE") {
+		setState("EMPTY");
+		notifyDependents();
+	}
+
 }
 
 void MachineInstance::setProperties(const SymbolTable &props) {

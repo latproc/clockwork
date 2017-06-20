@@ -321,4 +321,8 @@ testcopy MACHINE list {
 }
 tc testcopy aa;
 
+StringList LIST "a,b,c", "one two three", "house rabbit tree";
+
+pop_and_push_strings PopAndPushTest StringList;
+
 
