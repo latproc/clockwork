@@ -52,6 +52,7 @@ Action::Status SendMessageAction::run() {
 	owner->start(this);
 	if (target != 0) {
 		if (!target_machine) target_machine = owner->lookup(target);
+		DBG_ACTIONS << *this << "\n";
 		if (!target_machine) {
 			// no target with the given name, however in the case of channels,
 			// the target may be an active channel of the given type

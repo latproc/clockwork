@@ -1215,19 +1215,12 @@ void MachineInstance::addLocal(Value param, MachineInstance *mi) {
 		}
 	}
 	setNeedsCheck();
-	if (_type == "LIST" || _type == "REFERENCE") {
+	if (_type == "LIST") {
 		notifyDependents();
-		/*if (owner) {
-		  std::set<MachineInstance*>::iterator dep_iter = owner->depends.begin();
-		  while (dep_iter != owner->depends.end()) {
-		  MachineInstance *dep = *dep_iter++;
-		  if (mi){
-		  mi->addDependancy(dep);
-		  dep->listenTo(mi);
-		  }
-		  dep->setNeedsCheck();
-		  }
-		  }*/
+	}
+	else if (_type == "REFERENCE") {
+		setState("ASSIGNED");
+		notifyDependents();
 	}
 }
 
