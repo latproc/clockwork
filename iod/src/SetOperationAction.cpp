@@ -143,13 +143,38 @@ IntersectSetOperation::IntersectSetOperation(MachineInstance *m, const SetOperat
 */
 }
 
-void setListItem(MachineInstance *list, const Value &item) {
-    list->removeLocal(0);
-    list->addLocal(item, item.cached_machine);
-    list->locals[0].val = Value("ITEM");
-    list->locals[0].real_name = item.sValue;
-    list->locals[0].machine = item.cached_machine;
+void setListItem(MachineInstance *list, const Value &item, int index, bool &add_item) {
+	if (add_item) {
+		list->locals.push_back(item);
+		add_item = false;
+	}
+    list->locals[index].val = Value("ITEM");
+    list->locals[index].real_name = item.sValue;
+    list->locals[index].machine = item.cached_machine;
+	if (item.cached_machine)
+		list->localised_names["ITEM"] = item.cached_machine;
 }
+
+class IndexTracker {
+public:
+	bool add_item;
+	bool keep_item;
+	int index;
+	IndexTracker(std::vector<Parameter>&locals) {
+		// find or create the index to be used for the ITEM reference
+		keep_item = false;
+		add_item = true;
+		index = 0;
+		while (index < locals.size()) {
+			if (locals[index].val.asString() == "ITEM") {
+				keep_item = true;
+				add_item = false;
+				break;
+			}
+			++index;
+		}
+	}
+};
 
 Action::Status IntersectSetOperation::doOperation() {
     unsigned int num_copied = 0;
@@ -166,13 +191,16 @@ Action::Status IntersectSetOperation::doOperation() {
     Value last_a;
     Value last_b;
 #endif
-    unsigned int i=0;
+	IndexTracker track_a(source_a_machine->locals);
+	IndexTracker track_b(source_b_machine->locals);
+
+	unsigned int i=0;
     while (i < source_a_machine->parameters.size()) {
         Value &a(source_a_machine->parameters.at(i).val);
         MachineInstance *mi = owner->lookup(a);
         if (!mi) { ++i; continue; }
         assert(a.cached_machine);
-        setListItem(source_a_machine, a);
+        setListItem(source_a_machine, a, track_a.index, track_a.add_item);
 #ifdef DEPENDENCYFIX
         if (last_machine_a && !remove_selected) {
             if (MachineIncludesParameter(source_a_machine,last_a)) {
@@ -190,7 +218,7 @@ Action::Status IntersectSetOperation::doOperation() {
             if (!b.cached_machine) owner->lookup(b);
             if (!b.cached_machine) { continue; }
             Value v1(a);
-            setListItem(source_b_machine, b);
+            setListItem(source_b_machine, b, track_b.index, track_b.add_item);
 #ifdef DEPENDENCYFIX
             if (last_machine_b && !remove_selected) {
                 if (MachineIncludesParameter(source_b_machine,last_b)) {
@@ -202,11 +230,14 @@ Action::Status IntersectSetOperation::doOperation() {
             last_b = b;
             last_machine_b = b.cached_machine;
 #endif
+			source_a_machine->localised_names.erase("ITEM");
+			source_b_machine->localised_names.erase("ITEM");
             if (condition.predicate) {
                 bool matched = false;
                 condition.last_result = SymbolTable::Null;
                 condition.predicate->flushCache();
                 condition.predicate->stack.clear();
+
                 //std::cout << "testing: " << a << " and " << b << "\n";
                 if (condition(owner)) {
                     if (!MachineIncludesParameter(dest_machine,a)) {
@@ -215,16 +246,7 @@ Action::Status IntersectSetOperation::doOperation() {
                     }
                     matched = true;
                     if (remove_selected) {
-                        source_a_machine->removeLocal(0);
                         source_a_machine->removeParameter(i);
-/*
-                        mi->stopListening(source_a_mchine);
-                        mi->removeDependancy(source_a_machine);
-                        source_a_machine->removeDependancy(mi);
-                        source_a_machine->stopListening(mi);
-                        source_a_machine->parameters.erase(source_a_machine->parameters.begin()+i);
-                        source_a_machine->setNeedsCheck();
- */
                     }
                 }
                 if (num_copied >= to_copy) goto doneIntersectOperation;
@@ -245,13 +267,13 @@ Action::Status IntersectSetOperation::doOperation() {
                         break;
                     }
                 }
-								else if (property_name.length()) {
-									const Value &v1 = a.cached_machine->getValue(property_name);
-									const Value &v2 = b.cached_machine->getValue(property_name);
-									if (v1 != SymbolTable::Null && v1 == v2) {
-										dest_machine->addParameter(a, a.cached_machine);
-									}
-								}
+				else if (property_name.length()) {
+					const Value &v1 = a.cached_machine->getValue(property_name);
+					const Value &v2 = b.cached_machine->getValue(property_name);
+					if (v1 != SymbolTable::Null && v1 == v2) {
+						dest_machine->addParameter(a, a.cached_machine);
+					}
+				}
                 else if (a == b) dest_machine->addParameter(a);
             }
         }
@@ -259,8 +281,16 @@ Action::Status IntersectSetOperation::doOperation() {
     intersectSkipToNextSourceItem: ;
     }
 doneIntersectOperation:
-    source_b_machine->removeLocal(0);
-    source_b_machine->removeLocal(0);
+	if (!track_a.add_item && !track_a.keep_item && source_a_machine->locals.size()) {
+		std::vector<Parameter>::iterator iter = source_a_machine->locals.begin();
+		for (int i=0; i<track_a.index; ++i, iter++) {;}
+		source_a_machine->locals.erase(iter);
+	}
+	if (!track_b.add_item && !track_b.keep_item && source_b_machine->locals.size()) {
+		std::vector<Parameter>::iterator iter = source_b_machine->locals.begin();
+		for (int i=0; i<track_b.index; ++i, iter++) {;}
+		source_b_machine->locals.erase(iter);
+	}
 #ifdef DEPENDENCYFIX
     if (last_machine_a && !remove_selected) {
         if (MachineIncludesParameter(source_a_machine,last_a)) {
@@ -407,18 +437,28 @@ Action::Status SelectSetOperation::doOperation() {
     long to_copy;
     if (source_a_machine) {
         if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
-        unsigned int i=0;
 #ifdef DEPENDENCYFIX
         Value last;
         MachineInstance *last_machine = 0;
 #endif
-        while (i < source_a_machine->parameters.size()) {
-            //if (i<sp) continue;
-            //if (i>ep) break;
+		// find or create the index to be used for the ITEM reference
+		bool keep_item = false;
+		bool add_item = true;
+		int idx = 0;
+		while (idx < source_a_machine->locals.size()) {
+			if (source_a_machine->locals[idx].val.asString() == "ITEM") {
+				keep_item = true;
+				add_item = false;
+				break;
+			}
+			++idx;
+		}
+
+		unsigned int i=0;
+		while (i < source_a_machine->parameters.size()) {
             Value &a(source_a_machine->parameters.at(i).val);
             if (a.kind == Value::t_symbol) {
                 MachineInstance *mi = owner->lookup(a);
-                source_a_machine->removeLocal(0);
 #ifdef DEPENDENCYFIX
                 if (last_machine && !remove_selected) {
                     if (MachineIncludesParameter(source_a_machine,last)) {
@@ -430,15 +470,25 @@ Action::Status SelectSetOperation::doOperation() {
                 last = a;
                 last_machine = mi;
 #endif
-                source_a_machine->addLocal(a, mi);
-                source_a_machine->locals[0].val = Value("ITEM");
-                source_a_machine->locals[0].real_name = a.sValue;
+                //source_a_machine->addLocal(a, mi);
+				if (add_item) {
+					source_a_machine->locals.push_back(a);
+					add_item = false;
+				}
+				else
+					source_a_machine->locals[idx] = a;
+				source_a_machine->locals[idx].machine = mi;
+				source_a_machine->locals[idx].val.cached_machine = mi;
+
+                source_a_machine->locals[idx].val = Value("ITEM");
+                source_a_machine->locals[idx].real_name = a.sValue;
 				//std::cout << "step " << i << " " << source_a_machine->locals[0].real_name << "\n";
                 if (!mi)
                     throw new SetOperationException();
                 if (condition.predicate) {
 					//std::cout << "flushing predicate cache\n";
 					condition.predicate->flushCache();
+					source_a_machine->localised_names["ITEM"] = mi;
 				}
 				
                 if ( (!condition.predicate || condition(owner)) ){
@@ -447,16 +497,7 @@ Action::Status SelectSetOperation::doOperation() {
                         ++num_copied;
                     }
                     if (remove_selected) {
-                        source_a_machine->removeLocal(0);
                         source_a_machine->removeParameter(i);
-                        /*
-                        mi->stopListening(source_a_machine);
-                        mi->removeDependancy(source_a_machine);
-                        source_a_machine->removeDependancy(mi);
-                        source_a_machine->stopListening(mi);
-                        source_a_machine->parameters.erase(source_a_machine->parameters.begin()+i);
-                        source_a_machine->setNeedsCheck();
-                         */
                     }
                     if (num_copied >= to_copy) break;
                     if (remove_selected) continue; // skip the increment to next parameter
@@ -471,7 +512,11 @@ Action::Status SelectSetOperation::doOperation() {
             }
             ++i;
         }
-        source_a_machine->removeLocal(0);
+		if (!add_item && !keep_item && source_a_machine->locals.size()) {
+			std::vector<Parameter>::iterator iter = source_a_machine->locals.begin();
+			for (int i=0; i<idx; ++i, iter++) {;}
+			source_a_machine->locals.erase(iter);
+		}
 #ifdef DEPENDENCYFIX
         if (last_machine && !remove_selected) {
             if (MachineIncludesParameter(source_a_machine,last)) {
@@ -490,6 +535,7 @@ Action::Status SelectSetOperation::doOperation() {
         delim = ",";
     }
     ss << "]";
+	source_a_machine->localised_names.erase("ITEM");
     dest_machine->setValue("DEBUG", ss.str().c_str());
     status = Complete;
     return status;
