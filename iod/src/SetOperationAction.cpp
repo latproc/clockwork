@@ -159,7 +159,7 @@ class IndexTracker {
 public:
 	bool add_item;
 	bool keep_item;
-	int index;
+	unsigned int index;
 	IndexTracker(std::vector<Parameter>&locals) {
 		// find or create the index to be used for the ITEM reference
 		keep_item = false;
@@ -283,12 +283,12 @@ Action::Status IntersectSetOperation::doOperation() {
 doneIntersectOperation:
 	if (!track_a.add_item && !track_a.keep_item && source_a_machine->locals.size()) {
 		std::vector<Parameter>::iterator iter = source_a_machine->locals.begin();
-		for (int i=0; i<track_a.index; ++i, iter++) {;}
+		for (unsigned int i=0; i<track_a.index; ++i, iter++) {;}
 		source_a_machine->locals.erase(iter);
 	}
 	if (!track_b.add_item && !track_b.keep_item && source_b_machine->locals.size()) {
 		std::vector<Parameter>::iterator iter = source_b_machine->locals.begin();
-		for (int i=0; i<track_b.index; ++i, iter++) {;}
+		for (unsigned int i=0; i<track_b.index; ++i, iter++) {;}
 		source_b_machine->locals.erase(iter);
 	}
 #ifdef DEPENDENCYFIX
@@ -444,7 +444,7 @@ Action::Status SelectSetOperation::doOperation() {
 		// find or create the index to be used for the ITEM reference
 		bool keep_item = false;
 		bool add_item = true;
-		int idx = 0;
+		unsigned int idx = 0;
 		while (idx < source_a_machine->locals.size()) {
 			if (source_a_machine->locals[idx].val.asString() == "ITEM") {
 				keep_item = true;
@@ -514,7 +514,7 @@ Action::Status SelectSetOperation::doOperation() {
         }
 		if (!add_item && !keep_item && source_a_machine->locals.size()) {
 			std::vector<Parameter>::iterator iter = source_a_machine->locals.begin();
-			for (int i=0; i<idx; ++i, iter++) {;}
+			for (unsigned int i=0; i<idx; ++i, iter++) {;}
 			source_a_machine->locals.erase(iter);
 		}
 #ifdef DEPENDENCYFIX
