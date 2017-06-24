@@ -435,6 +435,16 @@ SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationAct
 Action::Status SelectSetOperation::doOperation() {
     int num_copied = 0;
     long to_copy;
+	if (!source_a_machine) {
+		error_str = "No source machine for copy";
+		status = Failed;
+		return status;
+	}
+	if (!source_b_machine) {
+		error_str = "No destination machine for copy";
+		status = Failed;
+		return status;
+	}
     if (source_a_machine) {
         if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
 #ifdef DEPENDENCYFIX
@@ -456,6 +466,20 @@ Action::Status SelectSetOperation::doOperation() {
 
 		unsigned int i=0;
 		while (i < source_a_machine->parameters.size()) {
+			{
+				const char *delim="";
+				char buf[1000];
+				snprintf(buf, 1000, "[");
+				size_t n = 1;
+				for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
+					snprintf(buf+n,1000-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
+					n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
+					delim = ",";
+				}
+				snprintf(buf+n, 1000-n, "]");
+				dest_machine->setValue("DEBUG", buf);
+			}
+
             Value &a(source_a_machine->parameters.at(i).val);
             if (a.kind == Value::t_symbol) {
                 MachineInstance *mi = owner->lookup(a);
