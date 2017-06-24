@@ -383,7 +383,12 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 				return false;
 			}
 			else {
-				result_str = v.asString();
+				if (v.kind == Value::t_dynamic && v.dynamicValue()) {
+					const Value *last = v.dynamicValue()->lastResult();
+					if (last) result_str = last->asString();
+				}
+				else
+					result_str = v.asString();
 				return true;
 			}
 		}

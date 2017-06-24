@@ -1,5 +1,35 @@
 # COPY commands cause the items in the source list to forget the list is still dependent on them
 #
+#To verify correction of this bug:
+#
+# 1.  examine the dependencies on machine 'a' after startup
+#
+#DESCRIBE a;
+#---------------
+#a: off  Class: FLAG 
+# instantiated at: bug-884.cw line:4
+#   published (1)
+#   Dependant machines: 
+#     dummy[10]:   idle
+#       abc[7]:   nonempty
+#
+#note that since it is passed to 'dummy' and is on list 'abc', both of those machines
+#	are dependent on it.
+#
+# 2. SEND example.run to trigger the copy operation
+# 3. Examine 'a' again:
+#
+# DESCRIBE a;
+# ---------------
+# a: off  Class: FLAG 
+#	[...]
+#   Dependant machines: 
+#     abc[7]:   nonempty
+#     dummy[10]:   idle
+#     copied[11]:   nonempty owner: example
+#
+# Note that a still has the list as a dependency so when a changes state the 
+# list will be told and it will notify its dependent machines
 
 a FLAG(val:1);
 b FLAG(val:2);
