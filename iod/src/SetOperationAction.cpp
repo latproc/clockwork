@@ -440,11 +440,6 @@ Action::Status SelectSetOperation::doOperation() {
 		status = Failed;
 		return status;
 	}
-	if (!source_b_machine) {
-		error_str = "No destination machine for copy";
-		status = Failed;
-		return status;
-	}
     if (source_a_machine) {
         if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
 #ifdef DEPENDENCYFIX
