@@ -77,10 +77,8 @@ std::ostream &CopyPropertiesAction::operator<<(std::ostream &out) const {
 
 Action::Status CopyPropertiesAction::run() {
 	owner->start(this);
-    if (!source_machine)
-        source_machine = owner->lookup(source);
-    if (!dest_machine)
-        dest_machine = owner->lookup(dest);
+    source_machine = owner->lookup(source);
+    dest_machine = owner->lookup(dest);
 	if (source_machine && dest_machine) {
 		size_t count = 0; // how many direct symbol updates did we do?
 		if (property_list.empty()) {

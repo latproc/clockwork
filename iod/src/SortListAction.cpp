@@ -93,8 +93,7 @@ private:
 
 Action::Status SortListAction::run() {
 	owner->start(this);
-    if (!list_machine)
-        list_machine = owner->lookup(list_machine_name);
+    list_machine = owner->lookup(list_machine_name);
 	if (list_machine && list_machine->_type == "LIST") {
         
         if (list_machine->parameters.empty())

@@ -448,6 +448,18 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 			goto cache_local_name;
 		}
 	}
+	if (state_machine)
+		for (unsigned int i=0; i<state_machine->parameters.size(); ++i) {
+			Parameter &p = state_machine->parameters[i];
+			if (p.val.kind == Value::t_symbol &&
+				(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name)) {
+				//ss << "...parameter";
+				if (parameters[i].machine) {
+					found = parameters[i].machine;
+					goto cache_local_name;
+				}
+			}
+		}
 	if (machines.count(seek_machine_name)) {
 		//ss << "...global";
 		found = machines[seek_machine_name];
@@ -1228,6 +1240,7 @@ void MachineInstance::removeLocal(int index) {
 	if ((int)locals.size() <= index) return;
 	Parameter &p = locals[index];
 	if (p.machine) {
+		localised_names.erase(p.machine->getName());
 		stopListening(p.machine);
 		p.machine->removeDependancy(this);
 	}

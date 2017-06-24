@@ -24,6 +24,21 @@
 #include "MessageLog.h"
 #include <sstream>
 
+
+static void debugParameterChange(MachineInstance *dest_machine) {
+	const char *delim="";
+	char buf[1000];
+	snprintf(buf, 1000, "[");
+	size_t n = 1;
+	for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
+		snprintf(buf+n,1000-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
+		n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
+		delim = ",";
+	}
+	snprintf(buf+n, 1000-n, "]");
+	dest_machine->setValue("DEBUG", buf);
+}
+
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val)
 : list_machine_name(name), entry(val) {
 }
@@ -48,27 +63,18 @@ std::ostream &IncludeAction::operator<<(std::ostream &out) const {
 
 Action::Status IncludeAction::run() {
 	owner->start(this);
-    if (!list_machine)
-        list_machine = owner->lookup(list_machine_name);
+    list_machine = owner->lookup(list_machine_name);
 
 	if (list_machine) {
-#if 0
-		{
-		std::stringstream ss;
-		ss << owner->getName() << " inserting " << entry << " kind: " << entry.kind << "\n";
-		char *msg = strdup(ss.str().c_str());
-		MessageLog::instance()->add(msg);
-		free(msg);
-		}
-#endif
-
-		//std::cout << owner->getName() << " inserting " << entry << " kind: " << entry.kind << "\n";
         if (list_machine->_type == "REFERENCE") {
+			list_machine->localised_names.erase("ITEM");
+			owner->localised_names.erase("ITEM");
             MachineInstance *old = 0;
             if (list_machine->locals.size()) {
                 // remove old item
                 old = list_machine->locals.at(0).machine;
                 if (old) {
+					list_machine->localised_names.erase(old->getName());
 					list_machine->removeLocal(0);
                 }
             }
@@ -86,53 +92,41 @@ Action::Status IncludeAction::run() {
             if (entry.kind == Value::t_symbol) {
                 std::string real_name;
                 MachineInstance *new_assignment = 0;
-				if (entry.cached_machine) {
-                    real_name = entry.cached_machine->getName();
-                    new_assignment = entry.cached_machine;
-                    list_machine->addLocal(entry,new_assignment);
-                    new_assignment->addDependancy(owner);
-                    owner->listenTo(new_assignment);
-                }
-                else
-				{
-                    real_name = entry.sValue;
-                    new_assignment = owner->lookup(real_name);
-                    bool done = false;
-                    if (new_assignment) {
-                        list_machine->addLocal(entry,new_assignment);
-                        done = true;
-                    }
-                    else {
-                        Value ref = owner->getValue(real_name);
-                        if (ref.kind == Value::t_symbol) {
-                            real_name = ref.sValue;
-                            new_assignment = owner->lookup(ref);
-                            list_machine->addLocal(ref,new_assignment);
-                            done = true;
-                        }
-                    }
-                    if (!done) {
-                        std::stringstream ss;
-                        ss << owner->fullName()
-                            << " failed to lookup machine: " << entry << " for assignment. Treating it as a string";
-                        char *err_msg = strdup(ss.str().c_str());
-                        MessageLog::instance()->add(err_msg);
-                        free(err_msg);
-                        list_machine->addLocal(entry,new_assignment);
-                    }
-                    else {
-                        new_assignment->addDependancy(owner);
-                        owner->listenTo(new_assignment);
-                    }
-                }
-                Parameter &p = list_machine->locals.at(0);
-                 p.real_name = real_name;
+				real_name = entry.sValue;
+				new_assignment = owner->lookup(real_name);
+				bool done = false;
+				if (new_assignment) {
+					list_machine->addLocal(entry,new_assignment);
+					done = true;
+				}
+				else {
+					Value ref = owner->getValue(real_name);
+					if (ref.kind == Value::t_symbol) {
+						real_name = ref.sValue;
+						new_assignment = owner->lookup(ref);
+						list_machine->addLocal(ref,new_assignment);
+						list_machine->localised_names["ITEM"] = new_assignment;
+						done = true;
+					}
+				}
+				if (!done) {
+					char buf[400];
+					snprintf(buf, 400, "%s  failed to lookup machine: %s  for assignment. Treating it as a string",
+							 owner->fullName().c_str(), entry.asString().c_str());
+					MessageLog::instance()->add(buf);
+					list_machine->addLocal(entry,new_assignment);
+				}
+				else {
+					new_assignment->addDependancy(owner);
+					owner->listenTo(new_assignment);
+				}
+                Parameter &p = list_machine->locals.at(0); //TBD take more care of this index
+				p.real_name = real_name;
                 p.val = Value("ITEM");
                 p.val.cached_machine = p.machine;
                 if (old && new_assignment && old != new_assignment) {
 					list_machine->setNeedsCheck();
-                    Message msg("changed");
-                    list_machine->notifyDependents(msg);
+                    list_machine->notifyDependents();
                 }
                 if (p.machine)
                     status = Complete;
@@ -161,14 +155,6 @@ Action::Status IncludeAction::run() {
                     MachineInstance *machine = owner->lookup(entry);
                     if (!machine) {
                         Value v = owner->getValue(entry.sValue);
-/*
-							std::stringstream ss;
-							ss << "adding value " << v << " kind: " << v.kind << " to list " << list_machine->fullName() << "\n";
-							char *buf = strdup(ss.str().c_str());
-							MessageLog::instance()->add(buf);
-							NB_MSG << buf;
-							free(buf);
-*/
                         if (v.kind == Value::t_symbol) {
                             machine = owner->lookup(v.sValue);
                             if (machine) {
@@ -192,22 +178,13 @@ Action::Status IncludeAction::run() {
                     list_machine->addParameter(entry);
             }
         }
-				std::stringstream ss;
-				const char *delim="";
-				ss << "[";
-				for (unsigned int i=0; i<list_machine->parameters.size(); ++i) {
-					ss << delim << list_machine->parameters[i].val;
-					delim = ",";
-				}
-				ss << "]";
-				list_machine->setValue("DEBUG", ss.str().c_str());
-
+		debugParameterChange(list_machine);
         status = Complete;
 	}
     else {
-        std::stringstream ss;
-        ss << "Cannot find a machine named " << list_machine_name << " for assignment of " << entry;
-        char *err_msg = strdup(ss.str().c_str());
+		char *err_msg = (char *)malloc(400);
+		snprintf(err_msg, 400, "%s Cannot find a machine named %s for assignment of %s",
+				 owner->getName().c_str(), list_machine_name.c_str(), entry.asString().c_str());
         MessageLog::instance()->add(err_msg);
         error_str = err_msg;
         status = Failed;

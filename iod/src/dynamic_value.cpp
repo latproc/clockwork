@@ -155,12 +155,13 @@ Value &AnyInValue::operator()(MachineInstance *mi) {
 			NB_MSG << buf << "\n";
 		}
 
-	if (machine_list == NULL)
-		machine_list = mi->lookup(machine_list_name);
+	machine_list = mi->lookup(machine_list_name);
 
 	if (!machine_list) {
-		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ANY IN "<<state<<" within " << mi->getName() << "\n";
-		MessageLog::instance()->add(ss.str().c_str());
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for ANY IN %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), state.c_str());
+		MessageLog::instance()->add(buf);
 		last_result = false; return last_result;
 	}
 
@@ -199,13 +200,12 @@ AllInValue::AllInValue(const AllInValue &other) {
 Value &AllInValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
-	if (machine_list == NULL) {
-		machine_list = mi->lookup(machine_list_name);
-	}
+	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
-		std::stringstream ss; ss << mi->getName() << " no machine "
-			<< machine_list_name << " for ALL "<<state<<" within " << mi->getName() << "\n";
-		MessageLog::instance()->add(ss.str().c_str());
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for ALL %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), state.c_str());
+		MessageLog::instance()->add(buf);
 		last_result = false; return last_result;
 	}
 
@@ -242,13 +242,12 @@ AnyEnabledDisabledValue::AnyEnabledDisabledValue(const AnyEnabledDisabledValue &
 
 Value &AnyEnabledDisabledValue::operator()(MachineInstance *mi) {
 
-	if (machine_list == NULL)
-		machine_list = mi->lookup(machine_list_name);
-
+	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
-		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for ANY "
-		<< ( (check_enabled) ? "ENABLED" : "DISABLED" ) << " within " << mi->getName() << "\n";
-		MessageLog::instance()->add(ss.str().c_str());
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for ANY %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), (check_enabled) ? "ENABLED" : "DISABLED" );
+		MessageLog::instance()->add(buf);
 		last_result = false; return last_result;
 	}
 
@@ -272,14 +271,12 @@ AllEnabledDisabledValue::AllEnabledDisabledValue(const AllEnabledDisabledValue &
 }
 
 Value &AllEnabledDisabledValue::operator()(MachineInstance *mi) {
-	if (machine_list == NULL) {
-		machine_list = mi->lookup(machine_list_name);
-	}
+	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
-		std::stringstream ss; ss << mi->getName() << " no machine "
-		<< machine_list_name << " for ALL "
-		<< ( (check_enabled) ? "ENABLED" : "DISABLED" ) <<" within " << mi->getName() << "\n";
-		MessageLog::instance()->add(ss.str().c_str());
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for ALL %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), (check_enabled) ? "ENABLED" : "DISABLED" );
+		MessageLog::instance()->add(buf);
 		last_result = false; return last_result;
 	}
 
@@ -307,10 +304,12 @@ CountValue::CountValue(const CountValue &other) {
 Value &CountValue::operator()(MachineInstance *mi) {
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
-	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
-		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for COUNT "<<state<<" test\n";
-		MessageLog::instance()->add(ss.str().c_str());
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for count %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), state.c_str());
+		MessageLog::instance()->add(buf);
 		last_result = 0;
 		return last_result;
 	}
@@ -349,8 +348,10 @@ IncludesValue::IncludesValue(const IncludesValue &other) {
 Value &IncludesValue::operator()(MachineInstance *mi) {
 	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
-		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
-		MessageLog::instance()->add(ss.str().c_str());
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for INCLUDES",
+				 mi->getName().c_str(), machine_list_name.c_str());
+		MessageLog::instance()->add(buf);
 		last_result = false; return last_result;
 	}
 
@@ -374,10 +375,12 @@ SizeValue::SizeValue(const SizeValue &other) {
 }
 
 Value &SizeValue::operator()(MachineInstance *mi) {
-	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
-		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for SIZE test\n";
-		MessageLog::instance()->add(ss.str().c_str());
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for SIZE test",
+				 mi->getName().c_str(), machine_list_name.c_str());
+		MessageLog::instance()->add(buf);
 		last_result = 0; return last_result;
 	}
 
@@ -420,7 +423,7 @@ void displayList(MachineInstance *m) {
 }
 
 Value &PopListBackValue::operator()(MachineInstance *mi) {
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+    machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
         MessageLog::instance()->add(ss.str().c_str());
@@ -463,7 +466,7 @@ std::ostream &PopListFrontValue::operator<<(std::ostream &out ) const {
 std::ostream &operator<<(std::ostream &out, const PopListFrontValue &val) { return val.operator<<(out); }
 
 Value &PopListFrontValue::operator()(MachineInstance *mi) {
-    if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+    machine_list = mi->lookup(machine_list_name);
     if (!machine_list)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
         MessageLog::instance()->add(ss.str().c_str());
@@ -519,7 +522,7 @@ ItemAtPosValue::ItemAtPosValue(const ItemAtPosValue &other) {
     index = other.index;
 }
 Value &ItemAtPosValue::operator()(MachineInstance *mi) {
-	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
 		MessageLog::instance()->add(ss.str().c_str());
@@ -574,7 +577,7 @@ BitsetValue::BitsetValue(const BitsetValue &other) {
     state = other.state;
 }
 Value &BitsetValue::operator()(MachineInstance *mi) {
-	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
+	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
 		MessageLog::instance()->add(ss.str().c_str());
@@ -608,7 +611,7 @@ EnabledValue::EnabledValue(const EnabledValue &other) {
 }
 DynamicValue *EnabledValue::clone() const { return new EnabledValue(*this); }
 Value &EnabledValue::operator()(MachineInstance *mi) {
-    if (machine == NULL) machine = mi->lookup(machine_name);
+    machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for ENABLED test\n";
         MessageLog::instance()->add(ss.str().c_str());
@@ -629,7 +632,7 @@ DisabledValue::DisabledValue(const DisabledValue &other) {
 }
 DynamicValue *DisabledValue::clone() const { return new DisabledValue(*this); }
 Value &DisabledValue::operator()(MachineInstance *mi) {
-    if (machine == NULL) machine = mi->lookup(machine_name);
+    machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for DISABLED test\n";
         MessageLog::instance()->add(ss.str().c_str());
@@ -674,7 +677,7 @@ ExistsValue::ExistsValue(const ExistsValue &other) {
 }
 DynamicValue *ExistsValue::clone() const { return new ExistsValue(*this); }
 Value &ExistsValue::operator()(MachineInstance *mi) {
-	if (machine == NULL) machine = mi->lookup(machine_name);
+	machine = mi->lookup(machine_name);
 	if (!machine)  {
 		last_result = false;
 		return last_result;

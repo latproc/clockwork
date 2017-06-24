@@ -60,8 +60,7 @@ void SetListEntriesAction::setListEntries(unsigned long bitmap) {
 
 Action::Status SetListEntriesAction::run() {
 	owner->start(this);
-    if (!dest_machine)
-        dest_machine = owner->lookup(dest);
+    dest_machine = owner->lookup(dest);
 	if (dest_machine && dest_machine->_type == "LIST") {
         if (source.kind == Value::t_integer) {
             setListEntries((unsigned long)source.iValue);

@@ -22,6 +22,21 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 
+
+static void debugParameterChange(MachineInstance *dest_machine) {
+	const char *delim="";
+	char buf[1000];
+	snprintf(buf, 1000, "[");
+	size_t n = 1;
+	for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
+		snprintf(buf+n,1000-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
+		n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
+		delim = ",";
+	}
+	snprintf(buf+n, 1000-n, "]");
+	dest_machine->setValue("DEBUG", buf);
+}
+
 SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value b,
 		Value destination, Value property, SetOperation op,
 		Predicate *pred, bool remove, Value start, Value end)
@@ -87,9 +102,14 @@ bool MachineIncludesParameter(MachineInstance *m, Value &param) {
 Action::Status SetOperationAction::run() {
 	owner->start(this);
     try {
-        if (!source_a_machine) source_a_machine = owner->lookup(source_a);
-        if (!source_b_machine) source_b_machine = owner->lookup(source_b);
-        if (!dest_machine) dest_machine = owner->lookup(dest);
+		// do not retain cached values since set operations may be working
+		// with changed items from other lists
+		source_a.cached_machine = 0;
+		source_b.cached_machine = 0;
+		dest.cached_machine = 0;
+        source_a_machine = owner->lookup(source_a);
+        source_b_machine = owner->lookup(source_b);
+        dest_machine = owner->lookup(dest);
         if (dest_machine && dest_machine->_type == "LIST") {
             status = doOperation();
         }
@@ -307,15 +327,7 @@ doneIntersectOperation:
         }
     }
 #endif
-    std::stringstream ss;
-    const char *delim="";
-    ss << "[";
-    for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
-        ss << delim << dest_machine->parameters[i].val;
-        delim = ",";
-    }
-    ss << "]";
-    dest_machine->setValue("DEBUG", ss.str().c_str());
+	debugParameterChange(dest_machine);
     status = Complete;
     return status;
 }
@@ -353,16 +365,7 @@ Action::Status UnionSetOperation::doOperation() {
                 if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
             }
         }
-    std::stringstream ss;
-    const char *delim="";
-    ss << "[";
-    for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
-        ss << delim << dest_machine->parameters[i].val;
-        delim = ",";
-    }
-    ss << "]";
-    dest_machine->setValue("DEBUG", ss.str().c_str());
-    
+	debugParameterChange(dest_machine);
     status = Complete;
     return status;
 }
@@ -461,21 +464,8 @@ Action::Status SelectSetOperation::doOperation() {
 
 		unsigned int i=0;
 		while (i < source_a_machine->parameters.size()) {
-			{
-				const char *delim="";
-				char buf[1000];
-				snprintf(buf, 1000, "[");
-				size_t n = 1;
-				for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
-					snprintf(buf+n,1000-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
-					n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
-					delim = ",";
-				}
-				snprintf(buf+n, 1000-n, "]");
-				dest_machine->setValue("DEBUG", buf);
-			}
-
-            Value &a(source_a_machine->parameters.at(i).val);
+			debugParameterChange(dest_machine);
+            Value a(source_a_machine->parameters.at(i).val);
             if (a.kind == Value::t_symbol) {
                 MachineInstance *mi = owner->lookup(a);
 #ifdef DEPENDENCYFIX
