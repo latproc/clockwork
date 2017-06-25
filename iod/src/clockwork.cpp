@@ -922,7 +922,7 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 			set_dependency_graph(argv[++i]);
 		}
 		else if (strcmp(argv[i], "-p") == 0 && i < argc-1) { // publisher port
-			set_publisher_port((int)strtol(argv[++i], 0, 10));
+			set_publisher_port((int)strtol(argv[++i], 0, 10), true);
 		}
 		else if (strcmp(argv[i], "-ps") == 0 && i < argc-1) { // persistent store port
 			set_persistent_store_port((int)strtol(argv[++i], 0, 10));
@@ -931,7 +931,7 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 			set_modbus_port((int)strtol(argv[++i], 0, 10));
 		}
 		else if (strcmp(argv[i], "-cp") == 0 && i < argc-1) { // command port
-			set_command_port((int)strtol(argv[++i], 0, 10));
+			set_command_port((int)strtol(argv[++i], 0, 10), true);
 		}
 		else if (strcmp(argv[i], "--name") == 0 && i < argc-1) { // command port
 			set_device_name(argv[++i]);

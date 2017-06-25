@@ -26,6 +26,7 @@
 #include <map>
 #include <zmq.hpp>
 #include <boost/thread/mutex.hpp>
+#include <Channel.h>
 
 #include "IODCommand.h"
 #include "ClientInterface.h"
@@ -466,17 +467,28 @@ void IODCommandThread::operator()() {
     int linger = 0; // do not wait at socket close time
 	cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 	char url_buf[30];
-	snprintf(url_buf, 30, "tcp://*:%d", command_port());
-	try {
-		cti->socket.bind (url_buf);
-	}
-	catch (zmq::error_t zex) {
-		{	NB_MSG << "Error: " << zmq_strerror(zmq_errno()) << "\n";
-			FileLogger fl(program_name); usleep(10);
-			fl.f() << "Error: " << zmq_strerror(zmq_errno()) << "\n";
-			exit(1);
+	int retries = 2; // attempt to use the default command port and auto allocate another if necessary
+	int port = command_port();
+	while (retries>0) {
+		snprintf(url_buf, 30, "tcp://*:%d", port);
+		try {
+			cti->socket.bind (url_buf);
+			break;
+		}
+		catch (zmq::error_t zex) {
+			{	NB_MSG << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
+				FileLogger fl(program_name); usleep(10);
+				fl.f() << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
+				if (!command_port_fixed() && --retries > 0) {
+					port = Channel::uniquePort();
+					usleep(100); // give time for the new port to become available
+					continue;
+				}
+				exit(1);
+			}
 		}
 	}
+	NB_MSG << "Client Interface available on port: " << port << "\n";
 
     zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
     access_req.bind("inproc://resource_mgr");

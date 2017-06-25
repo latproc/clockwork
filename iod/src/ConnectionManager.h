@@ -212,7 +212,6 @@ public:
 	SubStatus subscriberStatus();
 	uint64_t state_start;
 	RunStatus run_status;
-	int subscriber_port;
 	std::string current_channel;
 	std::string subscriber_host;
 	std::string channel_name;
@@ -224,6 +223,7 @@ public:
 protected:
 	zmq::socket_t subscriber_;
 	zmq::socket_t *sender_;
+	int subscriber_port;
 public:
 	SingleConnectionMonitor monit_subs;
 	SingleConnectionMonitor *monit_pubs;
