@@ -1185,7 +1185,10 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi) {
 		mi->addDependancy(this);
 		mi->listenTo(this);
 	}
-	//if (_type == "LIST" || _type == "REFERENCE")
+	if (_type == "LIST") {
+		if (parameters.size() > 0 && current_state.getName() != "nonempty")
+			setState("nonempty");
+	}
 	setNeedsCheck();
 	notifyDependents();
 	//}
@@ -1201,6 +1204,10 @@ void MachineInstance::removeParameter(int which) {
 		stopListening(m);
 	}
 	parameters.erase(parameters.begin()+which);
+	if (_type == "LIST") {
+		if (parameters.size() == 0 && current_state.getName() != "empty")
+			setState("empty");
+	}
 	setNeedsCheck();
 	notifyDependents();
 }
