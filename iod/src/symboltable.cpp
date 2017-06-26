@@ -60,6 +60,8 @@ int ClockworkToken::tokMessage;
 int ClockworkToken::TRACEABLE;
 int ClockworkToken::on;
 int ClockworkToken::off;
+int ClockworkToken::DEBUG;
+int ClockworkToken::TRACE;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -82,6 +84,8 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
         ClockworkToken::on = _instance->getTokenId("on");
         ClockworkToken::off = _instance->getTokenId("off");
+		ClockworkToken::DEBUG = _instance->getTokenId("DEBUG");
+		ClockworkToken::TRACE = _instance->getTokenId("TRACE");
     }
     return _instance;
 }

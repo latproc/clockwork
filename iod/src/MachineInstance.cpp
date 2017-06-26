@@ -152,11 +152,10 @@ void MachineInstance::setNeedsCheck() {
 	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
 	if (!getStateMachine() ) return;
 	if (!is_enabled) return;
+	if (ProcessingThread::is_pending(this)) return; // already in the runnable queue
 	if (!needs_check) {
 		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n";
 		++total_machines_needing_check;
-		if (_name == "trans")
-			int x = 1;
 	}
 	if (!active_actions.empty() || !mail_queue.empty()) {
 		//DBG_MSG << _name << " queued for action processing\n";
@@ -1385,9 +1384,6 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 		// machines receive messages from objects they are listening to
 		if (std::find(listens.begin(), listens.end(), from) != listens.end()) {
 			DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from " << from->getName() << "\n";
-			if (m.getText() == "in.off_leave") {
-				int x = 1;
-			}
 			return true;
 		}
 	}
@@ -3724,7 +3720,9 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		}
 		bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 		if (changed ){
-			setNeedsCheck();
+			if (property_val.token_id != ClockworkToken::TRACE &&
+				property_val.token_id != ClockworkToken::DEBUG)
+				setNeedsCheck();
 			properties.add(property, new_value, SymbolTable::ST_REPLACE);
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
@@ -3778,9 +3776,11 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		// only tell dependent machines to recheck predicates if the property
 		// actually changes value
 		if (changed) {
-			DBG_M_PROPERTIES << "telling dependent machines about the change\n";
-			setNeedsCheck();
-			notifyDependents();
+			if (property_val.token_id != ClockworkToken::TRACE &&
+				property_val.token_id != ClockworkToken::DEBUG) {
+				setNeedsCheck();
+				notifyDependents();
+			}
 		}
 	}
 }

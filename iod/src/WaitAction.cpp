@@ -83,8 +83,6 @@ Action::Status WaitAction::run() {
 		char buf[100]; snprintf(buf, 100, "%s WaitTimer", owner->getName().c_str());
 		trigger = new Trigger(buf);
 		trigger->addHolder(this);
-		if (owner->getName() == "trans")
-			int x = 1;
 		FireTriggerAction *fta = new FireTriggerAction(owner, trigger);
 		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, fta));
 		assert(!trigger->fired());

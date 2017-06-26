@@ -70,6 +70,8 @@ public:
     static int TRACEABLE;
     static int on;
     static int off;
+	static int TRACE;
+	static int DEBUG;
 };
 
 class SymbolTable {

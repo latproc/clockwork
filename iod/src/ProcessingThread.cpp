@@ -352,8 +352,15 @@ void ProcessingThread::activate(MachineInstance *m) {
 }
 
 void ProcessingThread::suspend(MachineInstance *m) {
+	boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
 	instance()->runnable.erase(m);
 }
+
+bool ProcessingThread::is_pending(MachineInstance *m) {
+	boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
+	return instance()->runnable.count(m);
+}
+
 
 void ProcessingThread::HandleIncomingEtherCatData( std::set<IOComponent *> &io_work_queue,
 		uint64_t curr_t, uint64_t last_sample_poll, AutoStatStorage &avg_io_time) {
@@ -628,8 +635,6 @@ void ProcessingThread::operator()()
 		}
 #endif
 
-		if (systems_waiting == 0 && processing_state == eIdle && status == e_waiting)
-			int x = 1;
 		/* this loop prioritises ethercat processing but if a certain
 			number of ethercat cycles have been processed with no 
 			other activities being given time, we give other jobs
