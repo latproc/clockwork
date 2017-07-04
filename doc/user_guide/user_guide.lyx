@@ -1180,6 +1180,18 @@ persistd monitors a connection clockwork driver for machines that publicly
  report their state changes using zmq.
 \end_layout
 
+\begin_layout Standard
+Some machine properties are used within clockwork and are not propagated
+ to the persistence daemon, however other properties are used in tools external
+ to clockwork and by default these properties are ignored by persistd.
+ 
+\end_layout
+
+\begin_layout Standard
+In future a method will be available to nominate the set of keys that are
+ to be ignored.
+\end_layout
+
 \begin_layout Subsection
 beckhoffd
 \end_layout

@@ -288,7 +288,7 @@ int main (int argc, char const *argv[])
                         }
                 }
                 else {
-                    if (m->_type != "POINT" && m->_type != "PUBLISHER" && m->_type != "SUBSCRIBER") {
+                    if (m->_type != "POINT" && m->_type != "MQTTPUBLISHER" && m->_type != "MQTTSUBSCRIBER") {
                         //DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
 										}
                     else   {
@@ -300,13 +300,13 @@ int main (int argc, char const *argv[])
                             continue;
                         }
                         std::string topic = m->parameters[1].val.asString();
-                        if (m->_type != "SUBSCRIBER" && m->parameters.size() == 3) {
+                        if (m->_type != "MQTTSUBSCRIBER" && m->parameters.size() == 3) {
                             if (!module->publishes(topic)) {
                                 m->properties.add("type", "Output");
                                 module->publish(topic, m->parameters[2].val.asString(), m);
                             }
                         }
-                        else if (m->_type != "PUBLISHER") {
+                        else if (m->_type != "MQTTPUBLISHER") {
                             if (!module->subscribes(topic)) {
                                 m->properties.add("type", "Input");
                                 module->subscribe(topic, m);

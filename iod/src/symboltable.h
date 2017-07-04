@@ -61,7 +61,8 @@ public:
     static int REFERENCE;
     static int TIMER;
     static int VARIABLE;
-    static int PUBLISHER;
+    static int MQTTPUBLISHER;
+	static int MQTTSUBSCRIBER;
     static int POLLING_DELAY;
     static int CYCLE_DELAY;
     static int SYSTEMSETTINGS;

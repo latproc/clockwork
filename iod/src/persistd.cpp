@@ -213,6 +213,7 @@ int main(int argc, const char * argv[]) {
     ignored_properties.insert("PERSISTENT");
     ignored_properties.insert("POLLING_DELAY");
     ignored_properties.insert("TRACEABLE");
+	ignored_properties.insert("IOTIME");
 
     po::options_description desc("Allowed options");
     desc.add_options()

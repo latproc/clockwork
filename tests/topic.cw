@@ -4,8 +4,10 @@ M2 MQTTBROKER "127.0.0.1", 1883;
 Switch POINT (tab:test) M2, "Mega1/dig/7", "off";
 Light POINT (tab:test) M2, "Mega1/dig/3";
 
-I_LightLevel SUBSCRIBER(tab:test) M2, "Mega1/ana/3";
-O_Dial PUBLISHER(tab:test) M2, "Mega1/pwm/11", 0;
+I_LightLevel MQTTSUBSCRIBER(tab:test) M2, "Mega1/ana/3";
+O_Dial MQTTPUBLISHER(tab:test) M2, "Mega1/pwm/11", 0;
+#I_LightLevel POINT (tab:test) M2, "Mega1/ana/3";
+#O_Dial POINT (tab:test) M2, "Mega1/pwm/11", 0;
 
 sense Sensor(tab:test) I_LightLevel;
 
@@ -33,7 +35,7 @@ adjuster Adjuster(tab:test) sense, O_Dial;
 #
 Sensor MACHINE level {
     OPTION light_level 0;
-    OPTION target_level 0;
+    OPTION target_level 500;
     current_light LEVEL(tab:test);
     
     dark WHEN light_level < target_level - 2;

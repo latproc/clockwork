@@ -378,13 +378,19 @@ void predefine_special_machines() {
 	module_class->addState("BOOT");
 	module_class->addState("SAFEOP");
 	module_class->addState("OP");
+#ifdef EC_SIMULATOR
+	module_class->transitions.push_back(Transition(State("INIT"), State("OP"), Message("turnOn")));
+	module_class->transitions.push_back(Transition(State("INIT"), State("PREOP"), Message("powerUp")));
+	module_class->transitions.push_back(Transition(State("PREOP"), State("OP"), Message("turnOn")));
+	module_class->transitions.push_back(Transition(State("OP"), State("PREOP"), Message("turnOff")));
+#endif
 
-	MachineClass *publisher_class = new MachineClass("PUBLISHER");
+	MachineClass *publisher_class = new MachineClass("MQTTPUBLISHER");
 	publisher_class->parameters.push_back(Parameter("broker"));
 	publisher_class->parameters.push_back(Parameter("topic"));
 	publisher_class->parameters.push_back(Parameter("message"));
 
-	MachineClass *subscriber_class = new MachineClass("SUBSCRIBER");
+	MachineClass *subscriber_class = new MachineClass("MQTTSUBSCRIBER");
 	subscriber_class->parameters.push_back(Parameter("broker"));
 	subscriber_class->parameters.push_back(Parameter("topic"));
 	subscriber_class->options["message"] = "";

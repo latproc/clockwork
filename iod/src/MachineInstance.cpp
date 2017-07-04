@@ -3709,7 +3709,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 			}
 		}
 
-		if (state_machine->token_id == ClockworkToken::PUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+		if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
 		{
 			std::string old_val(properties.lookup(property.c_str()).asString());
 			mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
@@ -3758,6 +3758,12 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 					NB_MSG << buf << "\n";
 				}
 			}
+			if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+			{
+				//std::string old_val(properties.lookup(property.c_str()).asString());
+				mq_interface->publish(properties.lookup("topic").asString(), new_value.asString(), this);
+			}
+
 			std::string property_name(modbusName(property, property_val));
 			if (published) {
 				Channel::sendPropertyChange(this, property.c_str(), new_value, authority);
