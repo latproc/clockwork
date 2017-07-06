@@ -126,6 +126,7 @@ READWRITE           return READWRITE;
 REPLACE             return REPLACE;
 REPORTS				return REPORTS;
 STATE_CHANGES		return STATE_CHANGES;
+SUM					return SUM;
 PRIVATE				{
 	char buf[100];
 	snprintf(buf, 100, "Error at line %d PRIVATE semantics are changing. Use LOCAL instead\n", yylineno);

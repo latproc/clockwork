@@ -155,6 +155,23 @@ private:
 	const Value *state_property;
 };
 
+class SumValue : public DynamicValue {
+public:
+	SumValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	virtual ~SumValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	SumValue(const SumValue &);
+
+private:
+	SumValue(const DynamicValue &);
+	std::string property;
+	std::string machine_list_name;
+	MachineInstance *machine_list;
+};
+
+
 class IncludesValue : public DynamicValue {
 public:
     IncludesValue(Value val, const char *list) : entry(val), machine_list_name(list), machine_list(0)  { }

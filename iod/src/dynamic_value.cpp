@@ -94,6 +94,12 @@ std::ostream &CountValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const CountValue &val) { return val.operator<<(out); }
 
+DynamicValue *SumValue::clone() const { return new SumValue(*this); }
+std::ostream &SumValue::operator<<(std::ostream &out ) const {
+	return out << "SUM " << property << " FROM " << machine_list_name << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const SumValue &val) { return val.operator<<(out); }
+
 DynamicValue *IncludesValue::clone() const { return new IncludesValue(*this); }
 std::ostream &IncludesValue::operator<<(std::ostream &out ) const {
     return out << machine_list_name << " INCLUDES " << entry << "(" << last_result <<")";
@@ -337,6 +343,40 @@ Value &CountValue::operator()(MachineInstance *mi) {
     }
     last_result = result;
     return last_result;
+}
+
+SumValue::SumValue(const SumValue &other) {
+	property = other.property;
+	machine_list_name = other.machine_list_name;
+	machine_list = 0;
+}
+
+Value &SumValue::operator()(MachineInstance *mi) {
+	machine_list = mi->lookup(machine_list_name);
+	if (!machine_list) {
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for sum %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), property.c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {
+		last_result = 0;
+		return last_result;
+	}
+
+	Value sum(0);
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
+		if (!machine_list->parameters[i].machine) continue;
+
+		sum = sum + machine_list->parameters[i].machine->getValue(property);
+	}
+	last_result = sum;
+	return last_result;
 }
 
 IncludesValue::IncludesValue(const IncludesValue &other) {

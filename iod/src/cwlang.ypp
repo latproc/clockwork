@@ -146,7 +146,7 @@ struct Subcondition {
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
-%token FLOAT32
+%token FLOAT32 SUM
 
 %union {
 	int iVal;
@@ -903,6 +903,9 @@ INTEGERVAL   {
 }
 | COUNT SYMBOL FROM SYMBOL {
     $$ = new Value(new CountValue($2,$4));
+}
+| SUM SYMBOL FROM SYMBOL {
+	$$ = new Value(new SumValue($2,$4));
 }
 | BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($8,$5));
