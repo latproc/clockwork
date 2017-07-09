@@ -26,8 +26,10 @@
 #include <iostream>
 #include <list>
 #include "value.h"
+#include "Expression.h"
 
 class MachineInstance;
+
 class DynamicValue {
 public:
     DynamicValue() :scope(0), refs(0), last_process_time(0){ }
@@ -169,6 +171,83 @@ private:
 	std::string property;
 	std::string machine_list_name;
 	MachineInstance *machine_list;
+};
+
+class MinValue : public DynamicValue {
+public:
+	MinValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	virtual ~MinValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	MinValue(const MinValue &);
+
+private:
+	MinValue(const DynamicValue &);
+	std::string property;
+	std::string machine_list_name;
+	MachineInstance *machine_list;
+};
+
+class MaxValue : public DynamicValue {
+public:
+	MaxValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	virtual ~MaxValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	MaxValue(const MaxValue &);
+
+private:
+	MaxValue(const DynamicValue &);
+	std::string property;
+	std::string machine_list_name;
+	MachineInstance *machine_list;
+};
+
+
+class MeanValue : public DynamicValue {
+public:
+	MeanValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	virtual ~MeanValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	MeanValue(const MeanValue &);
+
+private:
+	MeanValue(const DynamicValue &);
+	std::string property;
+	std::string machine_list_name;
+	MachineInstance *machine_list;
+};
+
+class AbsoluteValue : public DynamicValue {
+public:
+	AbsoluteValue(const char *property_name) : property(property_name)  { }
+	virtual ~AbsoluteValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	AbsoluteValue(const AbsoluteValue &);
+
+private:
+	AbsoluteValue(const DynamicValue &);
+	std::string property;
+};
+
+class ExpressionValue : public DynamicValue {
+public:
+	ExpressionValue(Predicate *pred) : condition(pred)  { }
+	virtual ~ExpressionValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	ExpressionValue(const ExpressionValue &);
+
+private:
+	ExpressionValue(const DynamicValue &);
+	Condition condition;
 };
 
 

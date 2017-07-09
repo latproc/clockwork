@@ -146,7 +146,7 @@ struct Subcondition {
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
-%token FLOAT32 SUM
+%token FLOAT32 SUM ABS MIN MAX MEAN
 
 %union {
 	int iVal;
@@ -176,6 +176,7 @@ struct Subcondition {
 %left '+' '-' '|'
 %left '*' '/' '%' '&' '^'
 %nonassoc NOT
+%nonassoc ABS
 %nonassoc UMINUS
 %nonassoc '~'
 %nonassoc AS
@@ -870,11 +871,9 @@ INTEGERVAL   {
     $$ = new Value($1);
 //	NB_MSG << " created symbol value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
-/* redundant
-| SYMBOL INCLUDES SYMBOL {
-    $$ =  new Value(new IncludesValue($3, $1));
+| ABS SYMBOL {
+	$$ = new Value(new AbsoluteValue($2));
 }
-*/
 | SYMBOL INCLUDES value {
     Value *v = $3;
     $$ =  new Value(new IncludesValue(*v, $1));
@@ -906,6 +905,15 @@ INTEGERVAL   {
 }
 | SUM SYMBOL FROM SYMBOL {
 	$$ = new Value(new SumValue($2,$4));
+}
+| MIN SYMBOL FROM SYMBOL {
+	$$ = new Value(new MinValue($2,$4));
+}
+| MAX SYMBOL FROM SYMBOL {
+	$$ = new Value(new MaxValue($2,$4));
+}
+| MEAN SYMBOL FROM SYMBOL {
+	$$ = new Value(new MeanValue($2,$4));
 }
 | BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($8,$5));

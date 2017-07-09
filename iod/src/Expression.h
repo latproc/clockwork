@@ -31,7 +31,7 @@ class MachineInstance;
 enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR, opNOT,
 	opUnaryMinus, opPlus, opMinus, opTimes, opDivide, opMod, opAssign, opMatch,
     opBitAnd, opBitOr, opBitXOr, opNegate, opAny, opAll, opCount, opIncludes,
-	opInteger, opFloat
+	opInteger, opFloat, opAbsoluteValue
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
@@ -108,9 +108,9 @@ public:
     Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
             last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {}
 
-    Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r),
-		mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0),
-        lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {}
+	Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r),
+	mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0),
+	lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {}
     ~Predicate();
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);

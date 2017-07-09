@@ -54,6 +54,7 @@ std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.oper
 			case opMinus: opstr = "-"; break;
 			case opTimes: opstr = "*"; break;
 			case opDivide: opstr = "/"; break;
+			case opAbsoluteValue: opstr = "ABS"; break;
 			case opMod: opstr = "%"; break;
 			case opAssign: opstr = ":="; break;
             case opMatch: opstr = "~"; break;
@@ -616,6 +617,7 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
 		case opMinus: return lhs - rhs;
 		case opTimes: return lhs * rhs;
 		case opDivide:return lhs / rhs;
+		case opAbsoluteValue: if (rhs < 0) return - rhs; else return rhs;
 		case opMod:   return lhs % rhs;
         case opBitAnd: return lhs & rhs;
         case opBitOr: return lhs | rhs;

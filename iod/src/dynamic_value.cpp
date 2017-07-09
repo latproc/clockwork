@@ -100,6 +100,36 @@ std::ostream &SumValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const SumValue &val) { return val.operator<<(out); }
 
+DynamicValue *MinValue::clone() const { return new MinValue(*this); }
+std::ostream &MinValue::operator<<(std::ostream &out ) const {
+	return out << "MIN " << property << " FROM " << machine_list_name << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const MinValue &val) { return val.operator<<(out); }
+
+DynamicValue *MaxValue::clone() const { return new MaxValue(*this); }
+std::ostream &MaxValue::operator<<(std::ostream &out ) const {
+	return out << "MAX " << property << " FROM " << machine_list_name << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const MaxValue &val) { return val.operator<<(out); }
+
+DynamicValue *MeanValue::clone() const { return new MeanValue(*this); }
+std::ostream &MeanValue::operator<<(std::ostream &out ) const {
+	return out << "MEAN " << property << " FROM " << machine_list_name << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const MeanValue &val) { return val.operator<<(out); }
+
+DynamicValue *AbsoluteValue::clone() const { return new AbsoluteValue(*this); }
+std::ostream &AbsoluteValue::operator<<(std::ostream &out ) const {
+	return out << "ABS " << property  << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const AbsoluteValue &val) { return val.operator<<(out); }
+
+DynamicValue *ExpressionValue::clone() const { return new ExpressionValue(*this); }
+std::ostream &ExpressionValue::operator<<(std::ostream &out ) const {
+	return out << *(condition.predicate) << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const ExpressionValue &val) { return val.operator<<(out); }
+
 DynamicValue *IncludesValue::clone() const { return new IncludesValue(*this); }
 std::ostream &IncludesValue::operator<<(std::ostream &out ) const {
     return out << machine_list_name << " INCLUDES " << entry << "(" << last_result <<")";
@@ -376,6 +406,133 @@ Value &SumValue::operator()(MachineInstance *mi) {
 		sum = sum + machine_list->parameters[i].machine->getValue(property);
 	}
 	last_result = sum;
+	return last_result;
+}
+
+MeanValue::MeanValue(const MeanValue &other) {
+	property = other.property;
+	machine_list_name = other.machine_list_name;
+	machine_list = 0;
+}
+
+Value &MeanValue::operator()(MachineInstance *mi) {
+	machine_list = mi->lookup(machine_list_name);
+	if (!machine_list) {
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for sum %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), property.c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {
+		last_result = 0;
+		return last_result;
+	}
+
+	Value sum(0);
+	int n = 0;
+	last_result = 0;
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
+		if (!machine_list->parameters[i].machine) continue;
+
+		sum = sum + machine_list->parameters[i].machine->getValue(property);
+		++n;
+	}
+	if (n == 0) return last_result;
+	double result;
+	if (sum.asFloat(result)) last_result = result / n;
+	return last_result;
+}
+
+MinValue::MinValue(const MinValue &other) {
+	property = other.property;
+}
+
+Value &MinValue::operator()(MachineInstance *mi) {
+	machine_list = mi->lookup(machine_list_name);
+	if (!machine_list) {
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for min %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), property.c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {
+		last_result = 0;
+		return last_result;
+	}
+
+	Value min(LONG_MAX);
+	bool unassigned = true;
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
+		if (!machine_list->parameters[i].machine) continue;
+
+		const Value &val = machine_list->parameters[i].machine->getValue(property);
+		if (unassigned || val < min) {min = val; unassigned = false; }
+	}
+	last_result = min;
+	return last_result;
+}
+
+
+MaxValue::MaxValue(const MaxValue &other) {
+	property = other.property;
+}
+
+Value &MaxValue::operator()(MachineInstance *mi) {
+	machine_list = mi->lookup(machine_list_name);
+	if (!machine_list) {
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for min %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), property.c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {
+		last_result = 0;
+		return last_result;
+	}
+
+	Value max(LONG_MIN);
+	bool unassigned = true;
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
+		if (!machine_list->parameters[i].machine) continue;
+
+		const Value &val = machine_list->parameters[i].machine->getValue(property);
+		if (unassigned || val > max) { max = val; unassigned = false; }
+	}
+	last_result = max;
+	return last_result;
+}
+
+ExpressionValue::ExpressionValue(const ExpressionValue &other) {
+	condition = other.condition;
+}
+
+Value &ExpressionValue::operator()(MachineInstance *mi) {
+
+	last_process_time = currentTime();
+
+	last_result = condition(mi);
+	return last_result;
+}
+
+AbsoluteValue::AbsoluteValue(const AbsoluteValue &other) { property = other.property; }
+Value &AbsoluteValue::operator()(MachineInstance *mi) {
+	last_result = mi->getValue(property);
+	if (last_result < 0) last_result = - mi->getValue(property);
 	return last_result;
 }
 

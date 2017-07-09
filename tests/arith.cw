@@ -14,6 +14,8 @@ Arithmetic MACHINE {
 	ok WHEN 10 == 10 AND (2 < 3 OR 4== 5);
 	error STATE;
 	unknown DEFAULT;
+
+	ENTER ok { LOG 1 + - 1; }
 }
 arith Arithmetic;
 

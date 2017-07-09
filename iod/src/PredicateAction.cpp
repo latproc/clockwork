@@ -97,6 +97,7 @@ Value eval(Predicate *p, MachineInstance *m){
 			case opMinus: res = l - r; break;
 			case opTimes: res = l * r; break;
 			case opDivide: res = l / r; break;
+			case opAbsoluteValue: if (r < 0) res = -r; else res = r; break;
 			case opMod: res = l % r; break;
             case opBitAnd: res = l & r; break;
             case opBitOr: res = l | r; break;
