@@ -2066,9 +2066,9 @@ void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string me
 		MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
 		assert(from_mi);
 		std::string response = _name + "." + message + "_done";
-		DBG_MSG << _name << " command " << message << " completion requires response. Adding command to execute "
-		<< response << " on: " << from_mi->fullName()
-		<< ( (from_mi->enabled()) ? " (enabled)\n" : " (disabled)\n");
+		//DBG_MSG << _name << " command " << message << " completion requires response. Adding command to execute "
+		//<< response << " on: " << from_mi->fullName()
+		//<< ( (from_mi->enabled()) ? " (enabled)\n" : " (disabled)\n");
 		ExecuteMessageActionTemplate emat(strdup(response.c_str()), from_mi);
 		ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
 		this->push(ema);

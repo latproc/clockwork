@@ -1,3 +1,15 @@
+# this startup pattern is used to perform initialisation 
+# in a way that reduces start race conditions
+
+Startup MACHINE {
+	idle DEFAULT;
+
+	COMMAND startup WITHIN INIT { LOG "executing startup"; }
+
+	TRANSITION INIT TO idle ON startup;
+}
+startup_test Startup;
+
 Test MACHINE {
 
 	one WHEN a == 1;
