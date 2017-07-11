@@ -178,7 +178,7 @@ bool IODCommandEnable::run(std::vector<Value> &params) {
 	std::cout << "received iod command ENABLE " << params[1] << "\n";
 	if (params.size() == 2) {
 		MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
-		if (m && !m->enabled()) {
+		if (m) {
 			m->enable();
 			result_str = "OK";
 			return true;
@@ -215,10 +215,9 @@ bool IODCommandResume::run(std::vector<Value> &params) {
     bool IODCommandDisable::run(std::vector<Value> &params) {
 		std::cout << "received iod command DISABLE " << params[1] << "\n";
         if (params.size() == 2) {
-			DBG_MSG << "disabling " << params[1] << "\n";
 			MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 			if (m) {
-				if (m->enabled()) m->disable();
+				m->disable();
 				result_str = "OK";
 				return true;
 			}

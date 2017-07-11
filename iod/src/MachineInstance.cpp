@@ -2507,7 +2507,10 @@ void sortDependentMachines(MachineInstance *m, std::list<MachineInstance*> &sort
 void MachineInstance::unpublish() { --published; }
 
 void MachineInstance::enable() {
-	if (is_enabled) return;
+	if (is_enabled && _type != "LIST" && _type != "REFERENCE") {
+		setNeedsCheck();
+		return;
+	}
 	is_enabled = true;
 	error_state = 0;
 	clearAllActions();
@@ -2520,10 +2523,7 @@ void MachineInstance::enable() {
 	std::list<MachineInstance*>::iterator oi = sorted.begin();
 	while (oi != sorted.end()) {
 		MachineInstance *b = *oi++;
-		if (!b->enabled()) {
-			//DBG_MSG << "ENABLING: " << b->_name << "\n";
-			b->enable();
-		}
+		b->enable();
 	}
 
 #if 1
@@ -2561,6 +2561,10 @@ void MachineInstance::disable() {
 		sendMessageToReceiver(msg, this, false);
 	}
 #endif
+	if (!is_enabled && _type != "LIST" && _type != "REFERENCE") {
+		setNeedsCheck();
+		return;
+	}
 	is_enabled = false;
 	if (locked) locked = 0;
 	if (io_interface) {
@@ -2591,10 +2595,7 @@ void MachineInstance::disable() {
 	std::list<MachineInstance*>::reverse_iterator oi = sorted.rbegin();
 	while (oi != sorted.rend()) {
 		MachineInstance *b = *oi++;
-		if (b->enabled()) {
-			//DBG_MSG << "DISABLING: " << b->_name << "\n";
-			b->disable();
-		}
+		b->disable();
 	}
 	// if any dependent machines are already enabled, make sure they know we are disabled
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();
