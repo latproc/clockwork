@@ -453,9 +453,26 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 			if (p.val.kind == Value::t_symbol &&
 				(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name)) {
 				//ss << "...parameter";
-				if (parameters[i].machine) {
+				if (i < parameters.size() && parameters[i].machine) {
 					found = parameters[i].machine;
 					goto cache_local_name;
+				}
+				else {
+					if (i>= parameters.size()) {
+						char buf[200];
+						snprintf(buf, 200, "Error: machine %s does not have a parameter %d (%s)\n",
+							 _name.c_str(), i, seek_machine_name.c_str());
+						MessageLog::instance()->add(buf);
+						++num_errors;
+						error_messages.push_back(buf);
+					}
+					else {
+						char buf[200];
+						snprintf(buf, 200, "Error: machine %s cannot find a machine for parameter %d (%s)\n",
+								 _name.c_str(), i, seek_machine_name.c_str());
+						++num_errors;
+						error_messages.push_back(buf);
+					}
 				}
 			}
 		}
