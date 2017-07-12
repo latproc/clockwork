@@ -148,30 +148,33 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 }
 
 void MachineInstance::setNeedsCheck() {
-	//DBG_MSG << _name << "::setNeedsCheck(), enabled: " << is_enabled
-	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
+	DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
+		<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
 	if (!getStateMachine() ) return;
 	if (!is_enabled) return;
-	if (ProcessingThread::is_pending(this)) return; // already in the runnable queue
 	if (!needs_check) {
 		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n";
 		++total_machines_needing_check;
 	}
 	if (!active_actions.empty() || !mail_queue.empty()) {
-		//DBG_MSG << _name << " queued for action processing\n";
+		DBG_M_MESSAGING << _name << " queued for action processing\n";
 		SharedWorkSet::instance()->add(this);
 		ProcessingThread::activate(this);
 	}
 	else if (getStateMachine()->allow_auto_states) {
-		//DBG_MSG << _name << " queued for stable state checks\n";
+		DBG_M_MESSAGING << _name << " queued for stable state checks\n";
 		pending_state_change.insert(this);
 		ProcessingThread::activate(this);
 	}
 	else {
-		//DBG_MSG << _name << " queued for action processing\n";
+		DBG_M_MESSAGING << _name << " queued for action processing\n";
 		SharedWorkSet::instance()->add(this);
 		ProcessingThread::activate(this);
 	}
+	if (ProcessingThread::is_pending(this)) {
+    DBG_M_MESSAGING << _name << " already queued to run.. not doing anything\n";
+    return; // already in the runnable queue
+  }
 	next_poll = 0;
 	if (state_machine->token_id == ClockworkToken::LIST) {
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();

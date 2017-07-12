@@ -545,7 +545,7 @@ void ProcessingThread::operator()()
 		int systems_waiting = 0;
 		uint64_t curr_t = 0;
 		uint64_t last_sample_poll = 0;
-		bool machines_have_work;
+		bool machines_have_work = false;
 		unsigned int num_channels = 0;
 		while (!program_done)
 		{
@@ -894,8 +894,7 @@ void ProcessingThread::operator()()
 			status = e_waiting_sched;
 		}
 
-		if (status == e_waiting  
-			&& machines_have_work 
+		if (status == e_waiting && machines_have_work 
 			&& curr_t - last_checked_machines >= machine_check_delay)
 		{
 
@@ -914,11 +913,13 @@ void ProcessingThread::operator()()
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
-							if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail())
+							if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
 								to_process.insert(mi);
-							if (!mi->queuedForStableStateTest()) {
-								iter = runnable.erase(iter);
-							}
+  							if (!mi->queuedForStableStateTest()) {
+  								iter = runnable.erase(iter);
+  							}
+  							else iter++;
+              }
 							else iter++;
 						}
 					}
