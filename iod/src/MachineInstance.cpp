@@ -466,13 +466,6 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 						++num_errors;
 						error_messages.push_back(buf);
 					}
-					else {
-						char buf[200];
-						snprintf(buf, 200, "Error: machine %s cannot find a machine for parameter %d (%s)",
-								 _name.c_str(), i, seek_machine_name.c_str());
-						++num_errors;
-						error_messages.push_back(buf);
-					}
 				}
 			}
 		}
