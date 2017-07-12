@@ -460,7 +460,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 				else {
 					if (i>= parameters.size()) {
 						char buf[200];
-						snprintf(buf, 200, "Error: machine %s does not have a parameter %d (%s)\n",
+						snprintf(buf, 200, "Error: machine %s does not have a parameter %d (%s)",
 							 _name.c_str(), i, seek_machine_name.c_str());
 						MessageLog::instance()->add(buf);
 						++num_errors;
@@ -468,7 +468,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 					}
 					else {
 						char buf[200];
-						snprintf(buf, 200, "Error: machine %s cannot find a machine for parameter %d (%s)\n",
+						snprintf(buf, 200, "Error: machine %s cannot find a machine for parameter %d (%s)",
 								 _name.c_str(), i, seek_machine_name.c_str());
 						++num_errors;
 						error_messages.push_back(buf);
