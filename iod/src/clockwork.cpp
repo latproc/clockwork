@@ -635,7 +635,7 @@ void semantic_analysis() {
         m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {
             MachineInstance *mi = *m_iter++;
-        DBG_PARSER << "Machine " << mi->getName() << " has " << mi->parameters.size() << " parameters\n";
+        DBG_PARSER << "Machine " << mi->getName() << " (" << mi->_type << ") has " << mi->parameters.size() << " parameters\n";
         
 		if (mi->getStateMachine() && mi->parameters.size() != mi->getStateMachine()->parameters.size()) {
             // the POINT class special; it can have either 2 or 3 parameters (yuk)
