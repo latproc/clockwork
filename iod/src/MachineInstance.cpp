@@ -152,6 +152,7 @@ void MachineInstance::setNeedsCheck() {
 		<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
 	if (!getStateMachine() ) return;
 	if (!is_enabled) return;
+  bool already_pending = ProcessingThread::is_pending(this);
 	if (!needs_check) {
 		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n";
 		++total_machines_needing_check;
@@ -171,9 +172,9 @@ void MachineInstance::setNeedsCheck() {
 		SharedWorkSet::instance()->add(this);
 		ProcessingThread::activate(this);
 	}
-	if (ProcessingThread::is_pending(this)) {
+	if (already_pending && _type != "LIST" && _type != "REFERENCE") {
     DBG_M_MESSAGING << _name << " already queued to run.. not doing anything\n";
-    return; // already in the runnable queue
+    return; // was already in the runnable queue at the start of this check
   }
 	next_poll = 0;
 	if (state_machine->token_id == ClockworkToken::LIST) {
