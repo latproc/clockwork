@@ -1080,6 +1080,10 @@ bool Value::asInteger(long &x) const {
 		x = iValue;
 		return true;
 	}
+	if (kind == t_float) {
+		x = fValue;
+		return true;
+	}
 	if (kind == t_string || kind == t_symbol) {
 		char *p;
 		const char *v = sValue.c_str();
