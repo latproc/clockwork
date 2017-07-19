@@ -110,7 +110,7 @@ Action::Status SetOperationAction::run() {
         source_a_machine = owner->lookup(source_a);
         source_b_machine = owner->lookup(source_b);
         dest_machine = owner->lookup(dest);
-        if (dest_machine && dest_machine->_type == "LIST") {
+        if (dest_machine && (dest_machine->_type == "LIST" || dest_machine->_type == "REFERENCE") ) {
             status = doOperation();
         }
         else
@@ -501,10 +501,16 @@ Action::Status SelectSetOperation::doOperation() {
 				}
 				
                 if ( (!condition.predicate || condition(owner)) ){
-                    if (!MachineIncludesParameter(dest_machine,a)) {
-                        dest_machine->addParameter(a);
-                        ++num_copied;
-                    }
+					if (dest_machine->_type == "LIST") {
+						if (!MachineIncludesParameter(dest_machine,a)) {
+							dest_machine->addParameter(a);
+							++num_copied;
+						}
+					}
+					else if (dest_machine->_type == "REFERENCE") {
+						if (dest_machine->locals.size()) dest_machine->removeLocal(0);
+						dest_machine->addLocal("ITEM", mi);
+					}
                     if (remove_selected) {
                         source_a_machine->removeParameter(i);
                     }

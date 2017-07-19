@@ -2549,7 +2549,21 @@ void MachineInstance::enable() {
 	}
 #endif
 
-	setInitialState(true);
+	if (_type == "LIST")
+		fixListState(*this);
+	else if (_type == "REFERENCE") {
+		if (locals.size()) {
+			const State *s = state_machine->findState("ASSIGNED");
+			setState(*s);
+		}
+		else{
+			const State *s = state_machine->findState("EMPTY");
+			setState(*s);
+		}
+	}
+	else
+		setInitialState(true);
+
 	setNeedsCheck();
 	// if any dependent machines are already enabled, make sure they know we are awake
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();

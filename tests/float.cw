@@ -44,14 +44,23 @@ Sample MACHINE {
 	# check whether a cast works when applied to the result value
 	COMMAND cast {
 		x := 2.3;
+		x := x AS FLOAT;
+		LOG "x initially as float: " + x;
 		x := x AS INTEGER;
 		LOG "x as int: " + x;
 		x := x AS FLOAT;
-		LOG "x as float: " + x;
+		LOG "x now as float: " + x;
 
-		y := 100.0;
+		y := 100.9;
 		x := y AS FLOAT;
 		LOG "y: " + y + " y as float: " + x;
+
+		x := 2.6 AS INTEGER * 2 + 1;
+		LOG "2.6 AS INTEGER * 2 + 1: " + x;
+		x := 2.6 * 2 AS INTEGER + 1;
+		LOG "2.6 * 2 AS INTEGER + 1: " + x;
+		x := (2.6 * 2) AS INTEGER + 1;
+		LOG "(2.6 * 2) AS INTEGER + 1: " + x;
 	}
 
 	COMMAND compare {
