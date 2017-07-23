@@ -29,6 +29,7 @@
 #include "dynamic_value.h"
 #include "MessageLog.h"
 #include "ProcessingThread.h"
+#include "MessageLog.h"
 
 
 static int count_instances = 0;
@@ -150,9 +151,15 @@ const Value &Predicate::getTimerValue() {
 
 PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *earliest, MachineInstance *target) // setup timer events that trigger the supplied machine
 {
-    long scheduled_time = -100000;
+	const long MIN_TIMER = -100000;
+    long scheduled_time = MIN_TIMER;
     long current_time = 0;
 	MachineInstance *timed_machine = 0; // the machine that the timer is on if not SELF
+	// timer usage can be of the form TIMER >= value or TIMER <= value
+	// in the first case, the predicate is initially false and eventually becomes true
+	// in the second case, the reverse is true and in this case, we need to keep testing
+	// until the predicate finally becomes false
+	bool rescheduleWhenTrue = false; // the predicate is false initially
 
     // below, we check the clauses of this predicate and if we find a timer test
     // we set the above variables. At the end of the method, we actually set the timer
@@ -169,7 +176,14 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 			&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
             || right_p->entry.asInteger(scheduled_time)) {
             current_time = target->getTimerVal()->iValue;
-			if (op == opGT || op == opLE) ++scheduled_time;
+			if (op == opGT) ++scheduled_time;
+			else if (op == opLE) {
+				++scheduled_time;
+				rescheduleWhenTrue = true;
+			}
+			else if (op == opLT) {
+				rescheduleWhenTrue = true;
+			}
 		}
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
@@ -188,7 +202,14 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
             timed_machine = target->lookup(machine_name);
             if (timed_machine) {
 				current_time = timed_machine->getTimerVal()->iValue;
-				if (op == opGT || op == opLE) ++scheduled_time;
+				if (op == opGT) ++scheduled_time;
+				else if (op == opLE) {
+					++scheduled_time;
+					rescheduleWhenTrue = true;
+				}
+				else if (op == opLT) {
+					rescheduleWhenTrue = true;
+				}
 			}
         }
         else
@@ -205,7 +226,16 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 				&& target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
 				|| left_p->entry.asInteger(scheduled_time)) {
             current_time = target->getTimerVal()->iValue;
-			if (op == opGT || op == opLE) ++scheduled_time;
+			if (op == opGT) {
+				++scheduled_time;
+				rescheduleWhenTrue = true;
+			}
+			else if (op == opLE) {
+				++scheduled_time;
+			}
+			else if (op == opGE) {
+				rescheduleWhenTrue = true;
+			}
 		}
         else
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
@@ -226,7 +256,16 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
             timed_machine = target->lookup(machine_name);
             if (timed_machine) {
 				current_time = timed_machine->getTimerVal()->iValue;
-				if (op == opGT || op == opLE) ++scheduled_time;
+				if (op == opGT) {
+					++scheduled_time;
+					rescheduleWhenTrue = true;
+				}
+				else if (op == opLE) {
+					++scheduled_time;
+				}
+				else if (op == opGE) {
+					rescheduleWhenTrue = true;
+				}
 			}
         }
         else
@@ -239,7 +278,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
     // processing delays and current time may already be a little > scheduled time. This is especially
     // true on slow clock cycles. For now we reschedule the trigger for up to 2ms past the necessary time.
 
-	if (scheduled_time != -100000) {
+	if (scheduled_time != MIN_TIMER) {
 		long t = (scheduled_time - current_time) * 1000;
 		if (t > 0) {
 			std::string trigger_name("Timer ");
@@ -264,7 +303,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 		}
 		// to allow for the above processing delays we keep the target runnable
 		else if (t >= -2000) {
-			ProcessingThread::activate(target);
+			target->setNeedsCheck();
 		}
 	}
     if (right_p) earliest = right_p->scheduleTimerEvents(earliest, target);
