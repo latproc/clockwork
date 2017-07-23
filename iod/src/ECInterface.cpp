@@ -35,10 +35,10 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #include <tool/MasterDevice.h>
-#include "MessageLog.h"
 #include "SDOEntry.h"
 #include "symboltable.h"
 
@@ -887,25 +887,32 @@ bool ECInterface::prepare() {
 }
 
 bool ECInterface::deactivate() {
-	std::cout << "------------- Deactivating the EtherCAT master -------------\n";
+	char buf[200];
+	snprintf(buf, 200, "EtherCAT interface: Deactivating the EtherCAT master");
+	MessageLog::instance()->add(buf);
 	active = false;
 	if (master) {
 		domain1 = 0;
 		ecrt_master_deactivate(master);
-		std::cout << "recreating domain\n";
+		snprintf(buf, 200, "EtherCAT interface: recreating domain");
+		MessageLog::instance()->add(buf);
 		domain1 = ecrt_master_create_domain(master);
 		assert(domain1 != 0);
 	}
 
-	std::cout << "cleaning up old io components,\n";
+	snprintf(buf, 200, "EtherCAT interface: cleaning up old io components,");
+	MessageLog::instance()->add(buf);
+
 	setProcessData(0);
 	{
 		boost::recursive_mutex::scoped_lock lock(modules_mutex);
-		std::cout << "removing ethercat modules instances\n";
+		snprintf(buf, 200, "EtherCAT interface: removing ethercat modules instances");
+		MessageLog::instance()->add(buf);
 		std::vector<ECModule *>::iterator iter = modules.begin();
 		while (iter != modules.end()){
 			ECModule *m = *iter++;
-			std::cout << "deleting module " << m->name << "\n";
+			snprintf(buf, 200, "EtherCAT interface: deleting module %s", m->name.c_str());
+			MessageLog::instance()->add(buf);
 			delete m;
 		}
 		modules.clear();
@@ -914,12 +921,15 @@ bool ECInterface::deactivate() {
 
 	// recreate the domain that was removed by the above.
 	if (!domain1) {
-		std::cerr << "failed to create domain\n";
+		snprintf(buf, 200, "EtherCAT interface: failed to create domain\n");
+		MessageLog::instance()->add(buf);
 		initialised = false;
 		return false;
 	}
-	else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created"
-		<< " with size " << ecrt_domain_size(domain1) << "\n";
+	else {
+		snprintf(buf, 200, "EtherCAT interface: domain1 successfully created with size %ld", ecrt_domain_size(domain1));
+		MessageLog::instance()->add(buf);
+	}
 
 
 	all_ok = true; // ok to try to start processing
@@ -943,21 +953,25 @@ bool ECInterface::activate() {
 		++pos;
 	}
 	std::cerr << "Activating master...";
+	char buf[200];
 	if ( (res = ecrt_master_activate(master)) ) {
-		std::cerr << "failed: " << res << "\n";
+		snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
+		MessageLog::instance()->add(buf);
 		return false;
 	}
 	active = true;
-	std::cerr << "done\n";
+	snprintf(buf, 200, "Activated master");
+	MessageLog::instance()->add(buf);
 
 	if (!(domain1_pd = ecrt_domain_data(domain1))) {
-		std::cout << "ecrt_domain_data failure\n";
+		snprintf(buf, 200, "EtherCAT interface: ecrt_domain_data failure");
+		MessageLog::instance()->add(buf);
 		if (master) ecrt_master_deactivate(master);
 		active = false;
 		return false;
 	}
 	size_t domain_size = ecrt_domain_size(domain1);
-	std::cout << "Activated master with domain size " << domain_size << "\n";
+	snprintf(buf, 200, "Activated master with domain size %ld", domain_size);
 	return true;
 }
 
@@ -1032,16 +1046,19 @@ void ECInterface::init() {
 
 	//ecrt_master_deactivate(master);
 
-    domain1 = ecrt_master_create_domain(master);
-    if (!domain1) {
-		std::cerr << "failed to create domain\n";
+	char buf[200];
+	domain1 = ecrt_master_create_domain(master);
+	if (!domain1) {
+		snprintf(buf, 200, "EtherCAT interface: failed to create domain");
 		initialised = false;
-        return;
-    }
-    else std::cout << "domain " << std::hex << domain1 << std::dec << " successfully created"
-		<< " with size " << ecrt_domain_size(domain1) << "\n";
+		return;
+   }
+   else {
+		snprintf(buf, 200, "EtherCAT interface: domain1 successfully created with size %ld", ecrt_domain_size(domain1));
+		MessageLog::instance()->add(buf);
+	}
 
-    all_ok = true; // ok to try to start processing
+	all_ok = true; // ok to try to start processing
 	failure_count = 0;
 
 	check_master_state();
@@ -1095,10 +1112,13 @@ ECInterface* ECInterface::instance_ = 0;
 
 ECInterface *ECInterface::instance() {
 	if (!instance_) {
-		std::cerr << "Constructing EtherCAT Instance\n";
 		instance_ = new ECInterface();
 	}
-	//if (!instance_->initialised) std::cerr << "Failed to initialise\n";
+	if (!instance_->initialised) {
+		char buf[100];
+		snprintf(buf, 100, "EtherCAT interface failed to initialise");
+		MessageLog::instance()->add(buf);
+	}
 	return instance_;
 }
 
@@ -1273,7 +1293,9 @@ int ECInterface::collectState() {
 	// we have seen the domain size have a value between zero and the expected max-min+1 
 	// this is to try to understand how that happens
 	if(domain_size < (size_t)max - min + 1){
-		std::cerr << "Warning: domain size " << domain_size << " less than expected: " << (size_t)max-min+1 << "\n";
+		char buf[200];
+		snprintf(buf, 200, "Warning: domain size %ld less than expected: %ld",
+			domain_size, (size_t)max-min+1);
 		return 0;
 	}
 #if 0

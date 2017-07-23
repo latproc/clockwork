@@ -1456,9 +1456,10 @@ uint64_t MachineInstance::requiredAuthority() {
 }
 
 // setup the triggers for subconditions and return the earliest time found
-uint64_t MachineInstance::setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer)
+uint64_t MachineInstance::setupSubconditionTriggers(const StableState &s, uint64_t u_earliestTimer)
 {
-	uint64_t result = earliestTimer;
+	int64_t earliestTimer = (int64_t)u_earliestTimer;
+	int64_t result = earliestTimer;
 	std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 	while (iter != s.subcondition_handlers->end()) {
 		ConditionHandler &ch = *iter++;
@@ -1520,7 +1521,7 @@ uint64_t MachineInstance::setupSubconditionTriggers(const StableState &s, uint64
 			}
 		}
 	}
-	return result;
+	return (uint64_t)result;
 }
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
@@ -1670,7 +1671,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		}
 		/* TBD optimise the timer triggers to only schedule the earliest trigger */
 		StableState *earliestTimerState = NULL;
-		int64_t earliestTimer = (unsigned long) 100000000L;
+		int64_t earliestTimer = LONG_MAX;
 
 		uint64_t stable_state_timer_base = microsecs();
 		bool dbg_report_if_timer_found = false;
@@ -1732,8 +1733,8 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
 			}
 			if (s.subcondition_handlers) {
-				uint64_t sc_timer;
-				if ( (sc_timer = setupSubconditionTriggers(s, earliestTimer)) < earliestTimer) {
+				int64_t sc_timer;
+				if ( (sc_timer = (int64_t) setupSubconditionTriggers(s, earliestTimer)) < earliestTimer) {
 					earliestTimerState = &s;
 					earliestTimer = sc_timer;
 				}
