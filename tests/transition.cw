@@ -52,3 +52,12 @@ AutoTransition MACHINE {
 }
 auto AutoTransition;
 
+TransitionToAny MACHINE {
+
+	off STATE;
+	idle DEFAULT;
+	COMMAND log { LOG "going idle"; }
+	TRANSITION INIT TO off,idle USING log;
+
+}
+toany TransitionToAny;

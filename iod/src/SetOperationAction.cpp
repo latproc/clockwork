@@ -504,12 +504,13 @@ Action::Status SelectSetOperation::doOperation() {
 					if (dest_machine->_type == "LIST") {
 						if (!MachineIncludesParameter(dest_machine,a)) {
 							dest_machine->addParameter(a);
-							++num_copied;
 						}
+						++num_copied;
 					}
 					else if (dest_machine->_type == "REFERENCE") {
 						if (dest_machine->locals.size()) dest_machine->removeLocal(0);
 						dest_machine->addLocal("ITEM", mi);
+						++num_copied;
 					}
                     if (remove_selected) {
                         source_a_machine->removeParameter(i);
