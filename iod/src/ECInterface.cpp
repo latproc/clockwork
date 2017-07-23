@@ -702,6 +702,7 @@ void ECInterface::configureModules() {
 				snprintf(buf, 100, "Error %d setting WD enable state on sync manager %d for module %d\n",
 					res, i, m->position);
 				MessageLog::instance()->add(buf);
+				std::cout << buf << "\n";
 			}
 			if (m->syncs[i].n_pdos && m->syncs[i].pdos)
 				ecrt_slave_config_pdo_assign_clear(m->slave_config, m->syncs[i].index);
@@ -714,6 +715,7 @@ void ECInterface::configureModules() {
 					snprintf(buf, 100, "Error %d setting WD enable state on sync manager %d for module %d\n",
 						res, i, m->slave_config->position);
 					MessageLog::instance()->add(buf);
+					std::cout << buf << "\n";
 				}
 			}
 #endif
@@ -873,8 +875,7 @@ void ECInterface::listSlaves( std::list<ec_slave_info_t> &slaves ){
 		res = ecrt_master_get_slave(master, pos, &slave_info);
 		if (res >= 0) slaves.push_back(slave_info); 
 		else {
-			std::cerr << "Error getting slave info at position " << pos
-				<< "\n";
+			std::cerr << "Error getting slave info at position " << pos << "\n";
 			assert(false);
 		}
 		++pos;
@@ -890,29 +891,34 @@ bool ECInterface::deactivate() {
 	char buf[200];
 	snprintf(buf, 200, "EtherCAT interface: Deactivating the EtherCAT master");
 	MessageLog::instance()->add(buf);
+	std::cout << buf << "\n";
 	active = false;
 	if (master) {
 		domain1 = 0;
 		ecrt_master_deactivate(master);
 		snprintf(buf, 200, "EtherCAT interface: recreating domain");
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		domain1 = ecrt_master_create_domain(master);
 		assert(domain1 != 0);
 	}
 
 	snprintf(buf, 200, "EtherCAT interface: cleaning up old io components,");
 	MessageLog::instance()->add(buf);
+	std::cout << buf << "\n";
 
 	setProcessData(0);
 	{
 		boost::recursive_mutex::scoped_lock lock(modules_mutex);
 		snprintf(buf, 200, "EtherCAT interface: removing ethercat modules instances");
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		std::vector<ECModule *>::iterator iter = modules.begin();
 		while (iter != modules.end()){
 			ECModule *m = *iter++;
 			snprintf(buf, 200, "EtherCAT interface: deleting module %s", m->name.c_str());
 			MessageLog::instance()->add(buf);
+			std::cout << buf << "\n";
 			delete m;
 		}
 		modules.clear();
@@ -923,12 +929,14 @@ bool ECInterface::deactivate() {
 	if (!domain1) {
 		snprintf(buf, 200, "EtherCAT interface: failed to create domain\n");
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		initialised = false;
 		return false;
 	}
 	else {
 		snprintf(buf, 200, "EtherCAT interface: domain1 successfully created with size %ld", ecrt_domain_size(domain1));
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 	}
 
 
@@ -957,21 +965,25 @@ bool ECInterface::activate() {
 	if ( (res = ecrt_master_activate(master)) ) {
 		snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		return false;
 	}
 	active = true;
 	snprintf(buf, 200, "Activated master");
 	MessageLog::instance()->add(buf);
+	std::cout << buf << "\n";
 
 	if (!(domain1_pd = ecrt_domain_data(domain1))) {
 		snprintf(buf, 200, "EtherCAT interface: ecrt_domain_data failure");
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		if (master) ecrt_master_deactivate(master);
 		active = false;
 		return false;
 	}
 	size_t domain_size = ecrt_domain_size(domain1);
 	snprintf(buf, 200, "Activated master with domain size %ld", domain_size);
+	std::cout << buf << "\n";
 	return true;
 }
 
@@ -1056,6 +1068,7 @@ void ECInterface::init() {
    else {
 		snprintf(buf, 200, "EtherCAT interface: domain1 successfully created with size %ld", ecrt_domain_size(domain1));
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 	}
 
 	all_ok = true; // ok to try to start processing
@@ -1118,6 +1131,7 @@ ECInterface *ECInterface::instance() {
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT interface failed to initialise");
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 	}
 	return instance_;
 }
@@ -1420,6 +1434,7 @@ void ECInterface::sendUpdates() {
 			char buf[100];
 			snprintf(buf, 100, "EtherCAT master is not ready to send updates\n");
 			MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		}
 		return;
 	}
@@ -1501,6 +1516,7 @@ void ECInterface::check_master_state(void)
 		else 
 			snprintf(buf, 100, "Number of slaves %d less than expected %d", ms.slaves_responding, expected_slaves);
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 	}
 	if (ms.slaves_responding != master_state.slaves_responding || ms.slaves_responding < expected_slaves) {
 		if (ms.slaves_responding > expected_slaves)
@@ -1524,6 +1540,7 @@ void ECInterface::check_master_state(void)
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT state change: was 0x%04x now 0x%04x", master_state.al_states, ms.al_states);
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 	}
 	if (master_was_running && ms.al_states != 0x8) {
 		if (failure_tolerance && all_ok && ++failure_count > *failure_tolerance) {
@@ -1547,6 +1564,7 @@ void ECInterface::check_master_state(void)
 		char buf[100];
 		snprintf(buf, 100, "EtherCAT link state change was %s now %s", master_state.link_up ?"up":"down", ms.link_up?"up":"down");
 		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 
 #if 0
 		// copy link state change through to clockwork
@@ -1561,11 +1579,13 @@ void ECInterface::check_master_state(void)
 			char buf[100];
 			snprintf(buf, 100, "Info: asked link status machine to change to state %s", state);
 			MessageLog::instance()->add(buf);
+			std::cout << buf << "\n";
 		}
 		else {
 			char buf[100];
 			snprintf(buf, 100, "Warning: no machine found to track EtherCAT link status");
 			MessageLog::instance()->add(buf);
+			std::cout << buf << "\n";
 		}
 #endif
 	}
@@ -1629,7 +1649,7 @@ void ECInterface::check_slave_config_states(void)
 
 		if (!m) {
       char buf[100];
-      snprintf(buf, 100, "null module in module list at position %d\n", i);
+      snprintf(buf, 100, "null module in module list at position %d", i);
       //MessageLog::instance()->add(buf);
 			std::cout << buf;
 			assert(m != 0);
