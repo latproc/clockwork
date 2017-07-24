@@ -7,12 +7,14 @@ S3 CONSTANT "2STR ";
 
 Test MACHINE {
 
-	ENTER INIT { 
+	COMMAND go { 
 		LOG "one"; 
 		LOG "two " + 2; 
 		LOG "now: " + YEAR + "/" + MONTH + "/" + DAY + " " 
 			+ HOUR + ":" + MINUTE + ":" + SECONDS + " " + TIMEZONE;
 		LOG "now: " +YR +MONTH+" "+ (((HOUR*60)+MINUTE)*60 + SECONDS);
+		LOG "timezone: " + TIMEZONE;
+		LOG "random: " + RANDOM;
 		LOG TIMESTAMP + " test"; 
 
 		a := "12";

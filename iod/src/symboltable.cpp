@@ -159,9 +159,15 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
 }
 
 bool SymbolTable::isKeyword(const Value &name) {
-    if (name.kind == Value::t_symbol || name.kind == Value::t_string)
-        return isKeyword(name.token_id);
+	if (name.kind == Value::t_symbol || name.kind == Value::t_string) {
+		if (name.token_id)
+			return keywords->exists(name.token_id);
+		else
+			return keywords->exists(name.sValue.c_str());
+	}
     return false;
+
+
 }
 
 /* Symbol table key values, calculated every time they are referenced */
@@ -204,7 +210,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             res = lt.tm_hour;
             return res;
         }
-        if (strcmp("DAY", name) == 0) {
+        if (	strcmp("DAY", name) == 0) {
             res = lt.tm_mday;
             return res;
         }
