@@ -3190,9 +3190,10 @@ const Value *MachineInstance::resolve(std::string property) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
-			state_timer.dynamicValue()->operator()(this);
-			DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
-			return &state_timer;
+			return getTimerVal();
+			//state_timer.dynamicValue()->operator()(this);
+			//DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			//return &state_timer;
 		}
 		else if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
 			return res;
@@ -3347,9 +3348,10 @@ const Value &MachineInstance::getValue(const std::string &property) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
-			getTimerVal();
-			DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
-			return state_timer;
+
+			//DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			//return state_timer;
+			return *getTimerVal();
 		}
 		else if (SymbolTable::isKeyword(property.c_str())) {
 			return SymbolTable::getKeyValue(property.c_str());

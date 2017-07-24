@@ -945,9 +945,6 @@ INTEGERVAL   {
 | COMBINATION OF SYMBOL AND SYMBOL {
     $$ = new Value(SymbolTable::Null);
 }
-| SYMBOL BECOMES value {
-    $$ = new Value(new AssignmentValue($1, $3));
-}
 | TAKE LAST FROM SYMBOL {
     $$ = new Value(new PopListBackValue($4));
 }
