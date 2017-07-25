@@ -125,6 +125,7 @@ SymbolTable::SymbolTable() {
         keywords->add("MONTH", 0L);
         keywords->add("YR", 0L);
         keywords->add("YEAR", 0L);
+				keywords->add("TIMESEQ", Value("",Value::t_string));
         keywords->add("TIMEZONE", Value("",Value::t_string));
         keywords->add("TIMESTAMP", Value("",Value::t_string));
         keywords->add("RANDOM", 0L);
@@ -230,6 +231,19 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             res = lt.tm_zone;
             return res;
         }
+				if (strcmp("TIMESEQ", name) == 0) {
+					struct timeval t;
+					gettimeofday(&t,0);
+					uint64_t msecs = ((t.tv_sec * 1000000L + t.tv_usec) / 1000) % 1000;
+					char buf[40];
+					const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
+					if (sizeof(long long) == sizeof(uint64_t))
+							fmt = "%02d%02d%02d%02d%02d%02d%03llu";
+					snprintf(buf, 40, fmt,
+									 lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
+					res = buf;
+					return res;
+				}
         if (strcmp("TIMESTAMP", name) == 0) {
             char buf[40];
             ctime_r(&now, buf);
