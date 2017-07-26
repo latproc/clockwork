@@ -55,7 +55,7 @@ public:
 
 class Message {
 public:
-	enum MessageType { SIMPLEMSG, ENTERMSG, LEAVEMSG };
+	enum MessageType { SIMPLEMSG, ENTERMSG, LEAVEMSG, ENABLEMSG, DISABLEMSG };
     typedef std::list<Value> Parameters;
 
     Message(MessageType t = SIMPLEMSG) : kind(t), seq(++sequence), text(""), params(0) {}
@@ -75,7 +75,9 @@ public:
 	bool isEnter() const { return kind == ENTERMSG; }
 	bool isLeave() const { return kind == LEAVEMSG; }
 	bool isSimple() const { return kind == SIMPLEMSG; }
-    
+	bool isEnable() const { return kind == ENABLEMSG; }
+	bool isDisable() const { return kind == DISABLEMSG; }
+
     static std::list<Value> *makeParams(Value p1, Value p2 = SymbolTable::Null, Value p3 = SymbolTable::Null, Value p4 = SymbolTable::Null);
 private:
 	static unsigned long sequence;

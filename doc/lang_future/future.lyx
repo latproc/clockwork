@@ -1356,6 +1356,25 @@ Procedural or functional style? A functional language tends to use functions
 \end_layout
 
 \begin_layout Subsection
+Data hiding
+\end_layout
+
+\begin_layout Standard
+Add: check PRIVATE STATE WITHIN visible_alias or perhaps just PRIVATE STATE
+ that simply doesn't update the external view of what state the machine
+ is in.
+ Considr perhaps SHOW state_name FOR state_name.
+\end_layout
+
+\begin_layout Subsection
+Type checking
+\end_layout
+
+\begin_layout Standard
+Consider adding: sample MACHINE p1 class1, p2 class2
+\end_layout
+
+\begin_layout Subsection
 Substates
 \end_layout
 
@@ -1825,6 +1844,14 @@ EXECUTE / DO command EVERY time_period;
 \end_layout
 
 \begin_layout Subsection
+Property calculations
+\end_layout
+
+\begin_layout Standard
+OPTION x expession
+\end_layout
+
+\begin_layout Subsection
 Dynamic machines
 \end_layout
 
@@ -1841,6 +1868,14 @@ New machines can be constructed with the CREATE command and removed with
 \begin_layout Standard
 Objects that are allocated statically can never be destroyed and reference
  counting is not necessary for these items (it may still be applied, however..TBD)
+\end_layout
+
+\begin_layout Subsection
+Patterns
+\end_layout
+
+\begin_layout Standard
+Access parts of a pattern via COPY pattern FROM source TO list
 \end_layout
 
 \begin_layout Subsection

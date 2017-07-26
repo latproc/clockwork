@@ -141,12 +141,12 @@ void SubscriptionManager::createSubscriberSocket(const char *chname) {
 #endif
 
 SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
-										 const char *remote_host, int remote_port) :
-		subscriber_port(remote_port),
+										 const char *remote_host, int remote_port, int setup_port_num) :
 		subscriber_host(remote_host),
-		channel_name(chname), protocol(proto), setup_port(5555), authority(0),
+		channel_name(chname), protocol(proto), setup_port(setup_port_num), authority(0),
 		subscriber_(*MessagingInterface::getContext(), (protocol == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
 		sender_(0),
+		subscriber_port(remote_port),
 		monit_subs(subscriber_,
 		   constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str()),
 		monit_pubs(0), monit_setup(0),
@@ -313,6 +313,7 @@ static char *setup_url = 0;
 bool SubscriptionManager::setupConnections() {
 	char url[100];
 	if (setupStatus() == SubscriptionManager::e_startup ) {
+
 		snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), setup_port);
 		current_channel = "";
 		try {

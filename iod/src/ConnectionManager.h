@@ -181,7 +181,7 @@ public:
 	enum SubStatus { ss_pub, ss_sub, ss_init, ss_ready };
 
 	SubscriptionManager(const char *chname, ProtocolType proto = eCHANNEL,
-						const char *remote_host = "localhost", int remote_port = 5555);
+						const char *remote_host = "localhost", int remote_port = 5555, int setup_port=5555);
 	virtual ~SubscriptionManager();
 	void setSetupMonitor(SingleConnectionMonitor *monitor);
 	void createSubscriberSocket(const char *chame);

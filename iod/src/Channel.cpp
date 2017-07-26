@@ -256,7 +256,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
 }
 
 bool Channel::syncRemoteStates(std::list<char *> &messages) {
-	//DBG_CHANNELS << "Channel " << name << " syncRemoteStates " << current_state << "\n";
+	DBG_CHANNELS << "Channel " << name << " syncRemoteStates " << current_state << "\n";
 	// publishers do not initially send the state of all machines
 	if (definition()->isPublisher()) return false;
 	if (current_state == ChannelImplementation::DISCONNECTED) return false;
@@ -334,6 +334,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 }
 
 Action::Status Channel::setState(const State &new_state, uint64_t authority, bool resume) {
+	setNeedsCheck(); // conservative: likely to need attention after a setstate
 	if (new_state != ChannelImplementation::DISCONNECTED && connections == 0) {
 		// can only change state if the channel is actually connected
 		if (!communications_manager || (isClient() && !communications_manager->monit_setup) ) {
@@ -347,58 +348,83 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 		if ( ( isClient() && communications_manager->monit_setup->disconnected() )
 			|| communications_manager->monit_subs.disconnected() ) {
 				{FileLogger fl(program_name);
-				fl.f() << name << " state chanage to " << new_state << " failed. command socket is not connected\n"; }
+				fl.f() << name << " state change to " << new_state << " failed. command socket is not connected\n"; }
 				return Action::Failed;
 		}
 		if ( communications_manager->monit_subs.disconnected() ) {
 				{FileLogger fl(program_name);
-				fl.f() << name << " state chanage to " << new_state << " failed. Subscriber is disconnected\n"; }
+				fl.f() << name << " state change to " << new_state << " failed. Subscriber is disconnected\n"; }
 				return Action::Failed;
 		}
 	}
 
 	Action::Status res = MachineInstance::setState(new_state, resume);
+	char buf[100];
 
+/*
 	if (res != Action::Complete) {
 		DBG_CHANNELS << "Action " << *this << " not complete\n";
+    snprintf(buf, 100, "Channel %s SetState to %s not complete", name.c_str(), new_state.getName().c_str() );
+		MessageLog::instance()->add(buf);
 		return res;
 	}
+*/
 	if (new_state == ChannelImplementation::CONNECTED) {
-		DBG_CHANNELS << name << " CONNECTED\n";
+		snprintf(buf, 100, "Channel %s CONNECTED", name.c_str());
+		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		enableShadows();
 		setNeedsCheck();
 		if (isClient()) {
+			snprintf(buf, 100, "Channel %s is client; setting state to DOWNLOADING", name.c_str());
+			MessageLog::instance()->add(buf);
+			std::cout << buf << "\n";
 			SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
-			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
+			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are done
 		}
 	}
 	else if (new_state == ChannelImplementation::WAITSTART) {
-		DBG_CHANNELS << name << " WAITSTART\n";
+		snprintf(buf, 100, "Channel %s: (%s) setting state to WAITSTART", name.c_str(), (isClient()) ? "client" : "server");
+		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
 		enableShadows();
 	}
 	else if (new_state == ChannelImplementation::UPLOADING) {
-		DBG_CHANNELS << name << " UPLOADING\n";
+		snprintf(buf, 100, "Channel %s: (%s) setting state to UPLOADING", name.c_str(), (isClient()) ? "client" : "server");
+		MessageLog::instance()->add(buf);
+		std::cout << buf << "\n";
+
 		setNeedsCheck();
 		SyncRemoteStatesActionTemplate srsat(this, cmd_client);
 		enqueueAction(srsat.factory(this));
 	}
 	else if (new_state == ChannelImplementation::DOWNLOADING) {
+		snprintf(buf, 100, "Channel %s: (%s) setting state to DOWNLOADING", name.c_str(), (isClient()) ? "client" : "server");
+		MessageLog::instance()->add(buf);
 		DBG_CHANNELS << name << " DOWNLOADING\n";
 		MessageHeader mh(MessageHeader::SOCK_CTRL, MessageHeader::SOCK_CTRL, false);
 		mh.start_time = microsecs();
 		std::string ack;
 		if (isClient()) {
+			snprintf(buf, 100, "Channel %s is client; sending 'status' to partner", name.c_str());
+			MessageLog::instance()->add(buf);
+
 			//sendMessage("status", *cmd_client, ack, mh);
-			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
+			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
 			safeSend(*cmd_client, "status", 6, mh);
 		}
 		else {
 			//sendMessage("done", *cmd_client, ack, mh);
-			DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
+			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
+			snprintf(buf, 100, "Channel %s is server; sending 'done' to partner", name.c_str());
+			MessageLog::instance()->add(buf);
+      mh.needReply(true);
 			safeSend(*cmd_client, "done", 4, mh);
 		}
 	}
 	else if (new_state == ChannelImplementation::DISCONNECTED) {
+		snprintf(buf, 100, "Channel %s DISCONNECTED", name.c_str());
+		MessageLog::instance()->add(buf);
 		DBG_CHANNELS << name << " DISCONNECTED\n";
 		disableShadows();
 		setNeedsCheck();
@@ -477,8 +503,10 @@ bool Channel::started() { return started_; }
 void Channel::addConnection() {
 	boost::mutex::scoped_lock lock(update_mutex);
 	++connections;
-	{FileLogger fl(program_name);
-	fl.f() << getName() << " client number " << connections << " connected in state " << current_state << "\n";}
+	char buf[100];
+	snprintf(buf, 100, "Channel %s [%s] added connection %d", name.c_str(), current_state.getName().c_str(), connections);
+	MessageLog::instance()->add(buf);
+	DBG_CHANNELS << buf << "\n";
 
 	if (connections == 1) {
 		if (isClient()){
@@ -489,8 +517,8 @@ void Channel::addConnection() {
 			else {
 				SetStateActionTemplate ssat_connected(CStringHolder("SELF"), "CONNECTED" );
 				enqueueAction(ssat_connected.factory(this)); // execute this state change once all other actions are complete
-				SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
-				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+				//SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
+				//enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 		}
 		else {
@@ -508,7 +536,9 @@ void Channel::addConnection() {
 		assert(false);
 	else if (!definition()->isPublisher()) {
 		if (current_state != ChannelImplementation::WAITSTART) {
-			DBG_CHANNELS << "Channel " << getName() << " waiting for start\n";
+			snprintf(buf, 100, "Channel %s added connection %d; now waiting for start", name.c_str(), connections);
+			MessageLog::instance()->add(buf);
+			DBG_CHANNELS << buf << "\n";
 			SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART" );
 			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 		}
@@ -518,8 +548,14 @@ void Channel::addConnection() {
 void Channel::dropConnection() {
 	boost::mutex::scoped_lock lock(update_mutex);
 	assert(connections);
+
+	char buf[100];
+	snprintf(buf, 100, "Channel %s [%s] lost connection %d", name.c_str(), current_state.getName().c_str(), connections);
+	MessageLog::instance()->add(buf);
+	DBG_CHANNELS << buf << "\n";
+
 	--connections;
-	{FileLogger fl(program_name); fl.f() << getName() << " client disconnected\n"; }
+
 	if(!connections) {
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "DISCONNECTED" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
@@ -556,7 +592,16 @@ void Channel::setPort(unsigned int new_port) {
     assert(port == 0);
     port = new_port;
 }
-unsigned int Channel::getPort() const { return port; }
+
+unsigned int Channel::getPort() const {
+	if (port == 0) {
+		const Value &port_v = properties.find("port");
+		long port_num;
+		if (port_v.asInteger(port_num)) return port_num;
+	}
+	return port;
+}
+
 
 
 int Channel::uniquePort(unsigned int start, unsigned int end) {
@@ -766,7 +811,11 @@ void Channel::stopServer() {
 // of data for the channel
 
 void Channel::checkStateChange(std::string event) {
+  char buf[100];
 	DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << name << "\n";
+
+	//if (event == "ack" && current_state != ChannelImplementation::DOWNLOADING && current_state != ChannelImplementation::UPLOADING)
+	//	return;
 
 	if (current_state == ChannelImplementation::DISCONNECTED) {
 		checkCommunications();
@@ -776,10 +825,14 @@ void Channel::checkStateChange(std::string event) {
 	}
 	if (isClient()) {
 		if ( current_state == ChannelImplementation::DOWNLOADING ) {
+      snprintf(buf, 100, "Channel %s (client) setting state to UPLOADING", name.c_str());
+      MessageLog::instance()->add(buf);
 			if (setState(ChannelImplementation::UPLOADING) == Action::Failed) {
 			}
 		}
 		else if (current_state == ChannelImplementation::UPLOADING) {
+      snprintf(buf, 100, "Channel %s (client) becomming ACTIVE", name.c_str());
+      MessageLog::instance()->add(buf);
 			DBG_CHANNELS << name << " -> ACTIVE\n";
 			setState(ChannelImplementation::ACTIVE);
 		}
@@ -834,7 +887,7 @@ void Channel::operator()() {
 	 */
 	if (isClient()){
 		Value host = getValue("host");
-		const Value port_val = getValue("port");
+		const Value &port_val = getValue("port");
 		if (host == SymbolTable::Null) {
 			if (definition_->options.find("host") != definition_->options.end())
 			{
@@ -857,7 +910,7 @@ void Channel::operator()() {
 
 		DBG_CHANNELS << " channel " << _name << " starting subscription to " << host << ":" << port << "\n";
 		communications_manager = new SubscriptionManager(definition()->name.c_str(),
-				eCHANNEL, host.asString().c_str(),(int)port);
+				eCHANNEL, host.asString().c_str(), 0, (int)port);
 	}
 	else {
 		communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL, "*", port);
@@ -886,7 +939,7 @@ void Channel::operator()() {
 #endif
 	usleep(500);
 	char start_cmd[20];
-	DBG_CHANNELS << "channel " << name << " thread waiting for start message\n";
+	DBG_CHANNELS << "channel " << name << " thread waiting for start message from command server\n";
 	size_t start_len;
 	safeRecv(*cmd_server, start_cmd, 20, true, start_len, 0);
 	if (!start_len) {
@@ -945,7 +998,7 @@ usleep(50);
 		try {
 
 			if (!communications_manager->checkConnections()) {
-				usleep(500000); continue;
+				usleep(50000); continue;
 			}
 
 			internals->router.poll();
@@ -1004,11 +1057,25 @@ usleep(50);
 				//NB_MSG << "CTRL checking for command\n";
 				if ( safeRecv(remote_sock, &data, &len, false, 0, mh) ) {
 					NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
+          char buf[100];
 					if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
+            snprintf(buf, 100, "Channel %s received 'done' from partner", name.c_str());
+            MessageLog::instance()->add(buf);
 						checkStateChange(data);
+            if (isClient() && !mh.needsReply()) {
+              snprintf(buf, 100, "Error: Channel %s detected missing need reply on %s message",
+                  name.c_str(), (data)?data : "<empty>");
+              MessageLog::instance()->add(buf);
+              mh.needReply(true);
+            }
 					}
+          //else if (strncmp(data, "ack", len) == 0)
+          //  checkStateChange(data);
+
 					if (mh.needsReply()) {
-						//NB_MSG << name << " sending reply as requested\n";
+						NB_MSG << name << " sending reply as requested\n";
+            snprintf(buf, 100, "Channel %s sending 'ack' to '%s' message", name.c_str(), (data)?data:"<empty>");
+            MessageLog::instance()->add(buf);
 						mh.dest = MessageHeader::SOCK_CHAN;
 						mh.source = MessageHeader::SOCK_CTRL;
 						mh.needReply(false);
@@ -1746,7 +1813,6 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
 	if (!all) return;
     std::string machine_name = machine->fullName();
 	char *cmdstr = 0;
-
 
 	std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {

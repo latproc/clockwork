@@ -140,8 +140,12 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 		MachineClass *cls = MachineClass::find(type);
 		ChannelDefinition *defn = dynamic_cast<ChannelDefinition*>(cls);
 		if (defn) {
+			MachineInstance *found = MachineInstance::find(name.get());
 			Channel *chn = new Channel(name.get(), type);
+			chn->properties.add(defn->properties); // load default properties
+			chn->properties.add(defn->properties); // overwrite with instance properties
 			chn->setDefinition(defn);
+			return chn;
 		}
 		return new MachineInstance(name, type, instance_type);
 	}
@@ -300,7 +304,6 @@ bool TriggeredAction::active() {
 void MachineInstance::triggerFired(Trigger *trig) {
 	static const std::string str_publish("publish");
 	if (trig->matches(str_publish)) {
-		std::cout << "trigger fired, sending property changes\n";
 		Channel::sendPropertyChanges(this);
 	}
 	setNeedsCheck();
@@ -1072,6 +1075,10 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 					else
 						busy_it++;
 			}
+			else if (mi->executingCommand()) {
+				ProcessingThread::activate(mi);
+				busy_it++;
+			}
 			else busy_it++;
 		}
 	}
@@ -1386,7 +1393,7 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	// all active machines receive messages from themselves but now we
 	// check if there is a handler in the case of enter and leave messages
 	// enter and leave functions are no longer automatically accepted
-	if (m.isSimple()) {
+	if (m.isSimple() || m.isEnable()) {
 		if ( from == this || (io_interface && from == io_interface) ) {
 			DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from itself\n";
 			return true;
@@ -2317,9 +2324,13 @@ void MachineInstance::start(Action *a) {
 	// actions execute from the back of the queue
 	// an action may have been pushed and then started or just started
 	// if it is not the item at the back of the queue we push it now
-	if (a!=executingCommand()) {
+	Action *curr = executingCommand();
+	if (a!=curr) {
 		active_actions.push_back(a->retain());
+		ProcessingThread::activate(this);
 	}
+	else if (curr)
+		setNeedsCheck();
 }
 
 void MachineInstance::displayActive(std::ostream &note) {
@@ -2538,10 +2549,10 @@ void MachineInstance::enable() {
 	}
 
 #if 1
-	if (isActive()) {
+	if (isActive() && !isShadow()) {
 		std::string msgstr(_name);
 		msgstr += "_enabled";
-		Message *msg = new Message(msgstr.c_str());
+		Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);
 		sendMessageToReceiver(msg, this, false);
 	}
 #endif
@@ -2578,14 +2589,6 @@ void MachineInstance::setDebug(bool which) {
 }
 
 void MachineInstance::disable() {
-#if 0
-	{
-		std::string msgstr(_name);
-		msgstr += "_disabled";
-		Message *msg = new Message(msgstr.c_str());
-		sendMessageToReceiver(msg, this, false);
-	}
-#endif
 	if (!is_enabled && _type != "LIST" && _type != "REFERENCE") {
 		setNeedsCheck();
 		return;

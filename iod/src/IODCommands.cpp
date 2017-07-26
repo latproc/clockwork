@@ -153,12 +153,12 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
 				action list but some machines do not poll their action list because they
 				do not expect to receive events
 			*/
-			if (mi->isActive()) {
+			if (mi->isShadow())
+				mi->setState(state_name.c_str(),auth);
+			else {
 				SetStateActionTemplate ssat("SELF", state_name );
 				mi->enqueueAction(ssat.factory(mi)); // execute this state change once all other actions are complete
 			}
-			else
-				mi->setState(state_name.c_str(),auth);
 			result_str = "OK";
 			return true;
 		}

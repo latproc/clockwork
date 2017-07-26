@@ -2,7 +2,7 @@
 # is connected to the client and is implemented as shown below.
 
 FlasherMachine MACHINE {
-	OPTION delay 100;
+	OPTION delay 1000000;
     on WHEN SELF IS on,  EXECUTE turnOff WHEN SELF IS on && TIMER >= delay;
     off WHEN SELF IS off, EXECUTE turnOn WHEN SELF IS off && TIMER >= delay;
 	stopped WHEN SELF IS stopped;
@@ -29,10 +29,10 @@ flasher FlasherMachine;
 
  it is not required that both sides actually use the same
  definition for the channel unless one side requires it 
- by the channel configuration IDENTITIER.
+ by the channel configuration IDENTIFIER.
 */
 
-flasher_chn FlasherChannel(host:"192.168.4.105", port:5555);
+flasher_chn FlasherChannel(host:"127.0.0.1", port:15555);
 
 /*
 The host and port provided in the channel instantiation are not the 

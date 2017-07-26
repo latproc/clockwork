@@ -15,3 +15,11 @@ PatternTest MACHINE {
 }
 pattern_test PatternTest;
 
+TimeSeq MACHINE {
+
+	OPTION timeseq 0;
+
+	ENTER INIT { timeseq := COPY `[0-9]{12}` FROM TIMESEQ; }
+	COMMAND update { timeseq := COPY `[0-9]{12}` FROM TIMESEQ; }
+}
+time_sequence TimeSeq;
