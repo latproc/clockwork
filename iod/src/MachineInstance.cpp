@@ -1075,7 +1075,8 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 					else
 						busy_it++;
 			}
-			else if (mi->executingCommand()) {
+			else if (mi->executingCommand() && !mi->executingCommand()->getTrigger()) {
+				Action *a = mi->executingCommand();
 				ProcessingThread::activate(mi);
 				busy_it++;
 			}

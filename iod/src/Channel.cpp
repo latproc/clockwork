@@ -21,6 +21,7 @@
 #include "SharedWorkSet.h"
 #include "MachineInterface.h"
 #include "MachineShadowInstance.h"
+#include "WaitAction.h"
 
 std::map<std::string, Channel*> *Channel::all = 0;
 std::map< std::string, ChannelDefinition* > *ChannelDefinition::all = 0;
@@ -515,8 +516,12 @@ void Channel::addConnection() {
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			else {
-				SetStateActionTemplate ssat_connected(CStringHolder("SELF"), "CONNECTED" );
-				enqueueAction(ssat_connected.factory(this)); // execute this state change once all other actions are complete
+				WaitActionTemplate *wat = new WaitActionTemplate(50);
+				SetStateActionTemplate *ssat_connected = new SetStateActionTemplate(CStringHolder("SELF"), "CONNECTED" );
+				MachineCommandTemplate mc("download_channel_state", "");
+				mc.setActionTemplate(wat);
+				mc.setActionTemplate(ssat_connected);
+				enqueueAction(mc.factory(this)); // execute this state change once all other actions are complete
 				//SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
 				//enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
