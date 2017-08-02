@@ -1099,13 +1099,18 @@ void initialise_machines() {
 				//if (!m->isShadow())
 				//	m->enable();
 				std::map<std::string, std::map<std::string, Value> >::iterator found = store.init_values.find(name);
-                if (found != store.init_values.end()) {
+				if (found != store.init_values.end()) {
 					std::map< std::string, Value > &list((*found).second);
                     PersistentStore::PropertyPair node;
 					BOOST_FOREACH(node, list) {
 						long v;
+						double d;
 						DBG_INITIALISATION << name << " initialising " << node.first << " to " << node.second << "\n";
-						if (node.second.asInteger(v))
+						if (node.second.kind == Value::t_integer || node.second.kind == Value::t_float)
+							m->setValue(node.first, node.second);
+						else if (node.second.asFloat(d))
+							m->setValue(node.first, d);
+						else if (node.second.asInteger(v))
 							m->setValue(node.first, v);
 						else
 							m->setValue(node.first, node.second);

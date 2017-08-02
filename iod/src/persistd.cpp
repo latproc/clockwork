@@ -134,9 +134,9 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings)
                         case cJSON_String:
                             store.insert(machine.asString(), property.asString(), json_val->valuestring);
                             break;
-                        case cJSON_Number:
+											case cJSON_Number:
 														if (json_val->valueNumber.kind == cJSON_Number_int_t)
-                            	store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._int);
+																	store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._int);
 														else
                             	store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._double);
                             break;
@@ -307,7 +307,7 @@ int main(int argc, const char * argv[]) {
 						if (param_list) { delete param_list; param_list = 0; }
         }
         catch(std::exception e) {
-            std::cerr << "exception " <<e.what() << "processing: " << data << "\n";
+            std::cerr << "exception " <<e.what() << " processing: " << data << "\n";
         }
     }
 

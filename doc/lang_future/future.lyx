@@ -117,6 +117,10 @@ Sets and relationships
 \end_layout
 
 \begin_layout Itemize
+Binary values
+\end_layout
+
+\begin_layout Itemize
 Lists
 \end_layout
 
@@ -215,7 +219,8 @@ Method extensions
 \end_layout
 
 \begin_layout Itemize
-Sequences and Cycles - shortcuts for transition tables?
+Sequences and Cycles - shortcuts for transition tables? Transitions are
+ limited to be within a list or a cycle of states.
 \end_layout
 
 \begin_layout Itemize
@@ -1868,6 +1873,16 @@ New machines can be constructed with the CREATE command and removed with
 \begin_layout Standard
 Objects that are allocated statically can never be destroyed and reference
  counting is not necessary for these items (it may still be applied, however..TBD)
+\end_layout
+
+\begin_layout Subsection
+Linked states
+\end_layout
+
+\begin_layout Standard
+States in cooperating machines can be linked to ensure that one machine
+ passes through a gateway state before another machine may pass through
+ a linked state.
 \end_layout
 
 \begin_layout Subsection
