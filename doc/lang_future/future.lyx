@@ -1589,6 +1589,91 @@ CATCH ALL { num_errors := num_errors + 1 }
 \end_layout
 
 \begin_layout Subsection
+State changes
+\end_layout
+
+\begin_layout Standard
+We have clarified what is meant by 
+\begin_inset Quotes eld
+\end_inset
+
+machine IS state
+\begin_inset Quotes erd
+\end_inset
+
+ to mean that the conditions for that state are true and the machine has
+ completed the transition to the state.
+ Once a machine has started to change state, it enters a private 
+\begin_inset Quotes eld
+\end_inset
+
+leaving
+\begin_inset Quotes erd
+\end_inset
+
+ state for the previous state and then a private 
+\begin_inset Quotes eld
+\end_inset
+
+entering
+\begin_inset Quotes erd
+\end_inset
+
+ state for the new state before finally becoming on.
+ Since they are private states, the machine will appear to the outside world
+ to still be in the original state.
+\end_layout
+
+\begin_layout Standard
+Two new verbs are added: LEAVING and ENTERING, these can be used to get
+ access to the private parts of the transition.
+\end_layout
+
+\begin_layout Standard
+Is a transitional state equal to a normal state with the same name?
+\end_layout
+
+\begin_layout Standard
+is a private state equal to a normal state with the same name?
+\end_layout
+
+\begin_layout Standard
+PRIVATE states can be used to simplify the external interface of a machine.
+\end_layout
+
+\begin_layout LyX-Code
+turning_on PRIVATE STATE;
+\end_layout
+
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+PRIVATE STATES a,b,c;
+\end_layout
+
+\begin_layout Standard
+To indicate that a stable state is private the state needs to be declared
+ as a PRIVATE STATE as well as being defined in a WHEN clause in the normal
+ way.
+\end_layout
+
+\begin_layout Standard
+Consider simply setting 'transitional' on a state during the enter/leave
+ process.
+\end_layout
+
+\begin_layout Standard
+Consider adding a new test to see if a machine is currently transitioning:
+ wait WHEN other IS CHANGING STATE;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout Subsection
 Support of parallel execution
 \end_layout
 
