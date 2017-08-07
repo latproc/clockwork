@@ -41,6 +41,7 @@ BITSET              return BITSET;
 BY                  return BY;
 CALL				return CALL;
 CATCH				return CATCH;
+CHANGING		return CHANGING;
 CHANNEL             return CHANNEL;
 CLASS				return CLASS;
 CLEAR               return CLEAR;

@@ -904,3 +904,34 @@ std::ostream &ClassNameValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const ClassNameValue &val) { return val.operator<<(out); }
 
+
+DynamicValue *ChangingStateValue::clone() const { return new ChangingStateValue(*this); }
+Value &ChangingStateValue::operator()(MachineInstance *mi) {
+	machine = mi->lookup(machine_name);
+	if (!machine || !machine->getStateMachine())  {
+		std::stringstream ss;
+		ss << mi->getName()
+			<< " no machine "
+			<< machine_name << " for CHANGING STATE test\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = "NULL"; return last_result;
+	}
+	last_result = false;
+	if (machine->active_actions.empty()) return last_result;
+	std::list<Action*>::iterator iter = machine->active_actions.begin();
+	while (iter != machine->active_actions.end()) {
+		Action *a = *iter++;
+		MoveStateAction *msa = dynamic_cast<MoveStateAction*>(a);
+		if (msa && msa->value == machine->getCurrent()) {
+			last_result = true;
+			return last_result;
+		}
+	}
+	return last_result;
+}
+
+std::ostream &ChangingStateValue::operator<<(std::ostream &out ) const {
+	return out << machine_name << " CHANGING STATE (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const ChangingStateValue &val) { return val.operator<<(out); }
+

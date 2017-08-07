@@ -429,6 +429,20 @@ private:
 };
 
 
+class ChangingStateValue : public DynamicValue {
+public:
+	ChangingStateValue(const char *name) : machine_name(name), machine(0) { }
+	virtual ~ChangingStateValue() { }
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	ChangingStateValue(const CastValue &);
+
+private:
+	ChangingStateValue(const DynamicValue &);
+	std::string machine_name;
+	MachineInstance *machine;
+};
 
 
 #endif

@@ -305,6 +305,7 @@ Action::Status SetStateAction::checkComplete() {
 					cleanupTrigger();
 				}
 				owner->stop(this);
+				owner->notifyDependents();
 				return status;
 			}
 			else {

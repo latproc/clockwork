@@ -147,6 +147,7 @@ struct Subcondition {
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS MIN MAX MEAN
+%token CHANGING
 
 %union {
 	int iVal;
@@ -935,6 +936,9 @@ INTEGERVAL   {
 }
 | CLASS OF SYMBOL {
 	$$ = new Value(new ClassNameValue($3));
+}
+| SYMBOL CHANGING STATE {
+	$$ = new Value(new ChangingStateValue($1));
 }
 | COMMON BETWEEN SYMBOL AND SYMBOL {
     $$ = new Value(SymbolTable::Null);
