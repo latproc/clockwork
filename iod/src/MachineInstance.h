@@ -161,7 +161,7 @@ public:
   void enqueueAction(Action *a);
   void enqueue(const Package &package);
   State &getCurrent() { return current_state; }
-  const char *getCurrentStateString() { return current_state.getName().c_str(); }
+  const char *getCurrentStateString() const { return current_state.getName().c_str(); }
 
   void addDependancy(MachineInstance *m);
   void removeDependancy(MachineInstance *m);
@@ -303,7 +303,6 @@ public:
 
 protected:
   InstanceType my_instance_type;
-  MoveStateAction *state_change; // this is set during change between stable states
   MachineClass *state_machine;
   State current_state;
   uint64_t setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer);
@@ -314,7 +313,6 @@ protected:
   Value state_timer;
   MachineInstance *locked;
   ModbusAddress modbus_address;
-  std::vector<std::string>state_names; // used for mapping modbus offsets to states
   std::vector<std::string>command_names; // used for mapping modbus offsets to states
   ModbusExport::Type modbus_exported;
 

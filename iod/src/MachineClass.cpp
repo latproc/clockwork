@@ -38,42 +38,49 @@ bool MachineClass::isStableState(State &state) {
 	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
 }
 
+void MachineClass::addState(const State &state) {
+	StateMap::iterator found = states.find(state.getName());
+	if (found == states.end())
+		states[state.getName()] = new State(state);
+	else
+		*((*found).second) = state;
+}
 void MachineClass::addState(const char *name) {
-	states.push_back(new State(name));
+	if (states.find(name) == states.end())
+		states[name] = new State(name);
 }
 
 State *MachineClass::findMutableState(const char *seek) {
+	StateMap::iterator found = states.find(seek);
+	if (found != states.end())
+		return (*found).second;
+
+	/*
 	std::list<State *>::const_iterator iter = states.begin();
 	while (iter != states.end()) {
 		State *s = *iter++;
 		if (s->getName() == seek) return s;
 	}
+	 */
 	return 0;
 }
 
 const State *MachineClass::findState(const char *seek) const {
-	std::list<State *>::const_iterator iter = states.begin();
-	while (iter != states.end()) {
-		const State *s = *iter++;
-		if (s->getName() == seek) return s;
-	}
+	StateMap::const_iterator found = states.find(seek);
+	if (found != states.end())
+		return (*found).second;
 	return 0;
 }
 
 const State *MachineClass::findState(const State &seek) const {
-	std::list<State*>::const_iterator iter = states.begin();
-	while (iter != states.end()) {
-		const State *s = *iter++;
-		if (*s == seek) {
-			return s;
-		}
-	}
+	StateMap::const_iterator found = states.find(seek.getName());
+	if (found != states.end())
+		return (*found).second;
 	return 0;
 }
 
-
-MachineClass *MachineClass::find(const char *name) {
-	int token = Tokeniser::instance()->getTokenId(name);
+MachineClass *MachineClass::find(const char *seek) {
+	int token = Tokeniser::instance()->getTokenId(seek);
 	std::list<MachineClass *>::iterator iter = all_machine_classes.begin();
 	while (iter != all_machine_classes.end()) {
 		MachineClass *mc = *iter++;
@@ -83,24 +90,20 @@ MachineClass *MachineClass::find(const char *name) {
 }
 
 void MachineClass::addProperty(const char *p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p);
 }
 
 void MachineClass::addPrivateProperty(const char *p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p);
 	local_properties.insert(p); //
 }
 
 void MachineClass::addPrivateProperty(const std::string &p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p.c_str());
 	local_properties.insert(p); //
 }
 
 void MachineClass::addCommand(const char *p) {
-	//NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
 	command_names.insert(p);
 }
 

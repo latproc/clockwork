@@ -7,6 +7,7 @@
 FlagInterface INTERFACE {
 #	OPTION x , y;
 #	OPTION z 100;
+    EXPORT STATES on,off;
 
     on STATE;
 	off STATE;

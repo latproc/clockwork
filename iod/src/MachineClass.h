@@ -34,13 +34,13 @@ class Plugin;
 
 class MachineClass {
 public:
+	typedef std::map<std::string, State*> StateMap;
   MachineClass(const char *class_name);
   SymbolTable properties;
   std::set<std::string> local_properties;
   std::vector<Parameter> parameters;
   std::vector<Parameter> locals;
-  std::list<State *> states;
-  std::set<std::string> state_names;
+	StateMap states;
   std::multimap<std::string, StableState> stable_state_xref;
   std::vector<StableState> stable_states;
   std::multimap<std::string, MachineCommandTemplate*> commands;
@@ -56,6 +56,7 @@ public:
   void defaultState(State state);
   bool isStableState(State &state);
   void addState(const char *name);
+	void addState(const State &state);
   const State *findState(const char *name) const;
   const State *findState(const State &seek) const;
   State *findMutableState(const char *name);

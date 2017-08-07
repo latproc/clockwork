@@ -130,14 +130,9 @@ READWRITE           return READWRITE;
 REPLACE             return REPLACE;
 REPORTS				return REPORTS;
 STATE_CHANGES		return STATE_CHANGES;
-SUM					return SUM;
-PRIVATE				{
-	char buf[100];
-	snprintf(buf, 100, "Error at line %d PRIVATE semantics are changing. Use LOCAL instead\n", yylineno);
-	yyerror(buf);
-	return LOCAL;
-}
-PROPERTY_CHANGES	return PROPERTY_CHANGES;
+SUM									return SUM;
+PRIVATE							return PRIVATE;
+PROPERTY_CHANGES		return PROPERTY_CHANGES;
 RO                  return READONLY;
 ROUTE               return ROUTE;
 RW                  return READWRITE;

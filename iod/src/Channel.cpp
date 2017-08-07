@@ -1971,7 +1971,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 		if (!chn) return; // not connected
 		if (chn->current_state == ChannelImplementation::DISCONNECTED) return;
 		if (command == "UPDATE") {
-			assert(false);
+			//assert(false);
 			return; // there should be no way for modbus updates to go to shadows
 		}
 		char *cmd = MessageEncoding::encodeCommand(command, params); // send command
