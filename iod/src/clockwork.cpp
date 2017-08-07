@@ -589,7 +589,7 @@ void semantic_analysis() {
     }
     
     // display all machine instances and link classes to their instances
-    DBG_PARSER << "\nDefinitions\n";
+    DBG_PARSER << "******* Definitions\n";
     std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;
