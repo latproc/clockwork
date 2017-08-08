@@ -147,9 +147,10 @@ struct Subcondition {
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS MIN MAX MEAN
-%token CHANGING
+%token CHANGING FAILURE
 
 %union {
+	bool bVal;
 	int iVal;
 	double fVal;
 	const char *sVal;
@@ -192,6 +193,7 @@ struct Subcondition {
 %type <iVal> access_type
 %type <iVal> size_type
 %type <subcond> state_subcondition
+%type <bVal> transition_semantics
 
 %%
 
@@ -2033,46 +2035,52 @@ transition_entry:
 transition ';'
 ;
 
+transition_semantics:
+ABORT ON FAILURE { $$ = true; }
+| WAIT ON FAILURE { $$ = false; }
+| { $$ = true; }
+;
+
 transition:
-TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */
+TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << " using " << $6 << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), 0,$7));
     }
     current_name_list.clear();
 }
-| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), 0, $7));
     }
     current_name_list.clear();
 }
 | TRANSITION state_list /*  source state */ TO transition_state /* destination state */
-    USING SYMBOL /* received event */ REQUIRES predicate /* rule */
+    USING SYMBOL /* received event */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "using " << $6 << "requiring " << *($8) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8, $9));
     }
     current_name_list.clear();
 }
 | TRANSITION state_list /*  source state */ TO transition_state /* destination state */
-    ON SYMBOL /* received event */ REQUIRES predicate /* rule */
+    ON SYMBOL /* received event */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "requiring " << *($8) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8, $9));
     }
     current_name_list.clear();
 }
-| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "requiring " << *($6) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6, $7));
     }
     current_name_list.clear();
 }

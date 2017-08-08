@@ -65,6 +65,7 @@
 #include "CounterRateFilterSettings.h"
 #include "CounterRateInstance.h"
 #include "RateEstimatorInstance.h"
+#include "AbortAction.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
@@ -1953,7 +1954,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 
 					// find state condition
 					bool found = false;
-					IfCommandAction *change_state_action = 0;
+					IfElseCommandAction *change_state_action = 0;
 					for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 						StableState &s = stable_states[ss_idx];
 						if (s.state_name == t.dest.getName()) {
@@ -1969,8 +1970,14 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 								MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
 								MachineCommandTemplate mc("stable_state_test", "");
 								mc.setActionTemplate(&temp);
-								IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
-								change_state_action = new IfCommandAction(this, &ifcat);
+								char buf[100];
+								snprintf(buf, 100, "%s: Failed Transition from %s to %s",
+												 _name.c_str(), current_state.getName().c_str(), t.dest.getName().c_str());
+								AbortActionTemplate aat(true, buf);
+								MachineCommandTemplate mc2("abort", "");
+								mc2.setActionTemplate(&aat);
+								IfElseCommandActionTemplate ifecat(s.condition.predicate, &mc, &mc2);
+								change_state_action = new IfElseCommandAction(this, &ifecat);
 							}
 							else {
 								// update the action to or with another condition
@@ -2787,36 +2794,12 @@ bool MachineInstance::setStableState() {
 						DBG_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name
 							<< " due to condition: " << *s.condition.predicate << "\n";
 						char *sn = strdup(s.state_name.c_str());
-#if 0
-						MoveStateActionTemplate temp(_name.c_str(), sn );
-						state_change = new MoveStateAction(this, temp);
-						Action::Status action_status;
-						if ( (action_status = (*state_change)()) == Action::Failed) {
-							DBG_MSG << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
-						}
-						else {
-							DBG_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
-						}
-						//if (action_status == Action::Complete || action_status == Action::Failed) {
-						state_change->release();
-						state_change = 0;
-#else
 						SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name );
 						enqueueAction(ssat.factory(this)); // execute this state change next time actions are processed
-#endif
 						free(sn);
 					}
 					else {
 						DBG_AUTOSTATES << _name << " is already in " << s.state_name << " checking subconditions\n";
-						// reschedule timer triggers for this state
-/*
-						if (s.uses_timer) {
-							DBG_SCHEDULER << _name << " should retrigger timer for " << s.state_name << "("<<s.timer_val<< ")"<< "\n";
-							Value v = getValue(s.timer_val.sValue);
-							if (v.kind == Value::t_integer && v.iValue < next_timer)
-								next_timer = v.iValue;
-						}
-*/
 						if (s.subcondition_handlers) {
 							std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 							while (iter != s.subcondition_handlers->end()) {

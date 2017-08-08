@@ -74,6 +74,7 @@ EXPORT              return EXPORT;
 EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;
 EXTRACT             return EXTRACT;
+FAILURE							return FAILURE;
 FIRST               return FIRST;
 FLOAT32			return FLOAT32;
 FLOAT				return FLOAT;
