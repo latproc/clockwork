@@ -51,6 +51,7 @@ public:
   std::list<Transition> transitions;
   std::list<ModbusAddressTemplate> exports;
   std::vector<std::string> state_exports;
+	std::vector<std::string> state_exports_rw;
   std::vector<std::string> command_exports;
   static std::map<std::string, MachineClass> machine_classes;
   void defaultState(State state);

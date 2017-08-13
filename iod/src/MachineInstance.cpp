@@ -4145,6 +4145,12 @@ void MachineInstance::setupModbusInterface() {
 		addModbusExport(name, ModbusAddress::discrete, 1, this, ModbusExport::discrete, ModbusAddress::state, full_name+"."+s);
 		//modbus_exports[name(name].setName(full_name+"."+s);
 	}
+	// exported states
+	BOOST_FOREACH(std::string s, state_machine->state_exports_rw) {
+		std::string name = _name + "." + s;
+		addModbusExport(name, ModbusAddress::coil, 1, this, ModbusExport::discrete, ModbusAddress::state, full_name+"."+s);
+		//modbus_exports[name(name].setName(full_name+"."+s);
+	}
 
 	// exported commands
 	BOOST_FOREACH(std::string s, state_machine->command_exports) {
@@ -4282,6 +4288,23 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			return;
+			
+		}
+		else if (addr.getSource() == ModbusAddress::state) {
+			std::string state_name = addr.getName();
+			size_t found = state_name.find(".");
+			if (found != std::string::npos) {
+				std::string state = state_name.substr(found+1);
+				std::string name = state_name.erase(found);
+				if (_name != name) {
+					char buf[100];
+					snprintf(buf, 100, "%s: Warning: modbus object name %s does not match the machine receiving the event %s", _name.c_str(), name.c_str(), state_name.c_str());
+					MessageLog::instance()->add(buf);
+				}
+				SetStateActionTemplate ssat(CStringHolder("SELF"), state );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
+
 		}
 		else if (addr.getSource() == ModbusAddress::command) {
 			if (new_value) {

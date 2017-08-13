@@ -617,6 +617,20 @@ EXPORT access_type size_type name_list ';' {
     }
     current_name_list.clear();
 }
+| EXPORT STATES name_list READWRITE ';' {
+	DBG_PARSER << " export " << current_name_list.size() << " states\n";
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		current_machineclass->state_exports_rw.push_back(name);
+	}
+	current_name_list.clear();
+}
+| EXPORT STATES name_list READONLY ';' {
+	DBG_PARSER << " export " << current_name_list.size() << " states\n";
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		current_machineclass->state_exports.push_back(name);
+	}
+	current_name_list.clear();
+}
 | EXPORT COMMANDS name_list ';' {
     DBG_PARSER << " export " << current_name_list.size() << " commands\n";
     BOOST_FOREACH(std::string &name, current_name_list) {
