@@ -239,7 +239,13 @@ void Dispatcher::idle()
                     {
                         MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
                         Channel *chn = dynamic_cast<Channel*>(to);
-                        if (!chn && mi && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL)
+											if (!mi->getStateMachine()) {
+												char buf[100];
+												snprintf(buf, 100, "Warning: Machine %s does not have a valid state machine", mi->getName().c_str());
+												MessageLog::instance()->add(buf);
+												NB_MSG << buf << "\n";
+											}
+                        if (!chn && mi && mi->getStateMachine() && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL)
                         {
                             DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to " << to->getName() <<  "\n";
                             {
