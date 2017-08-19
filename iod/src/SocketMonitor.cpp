@@ -40,15 +40,14 @@
 #include "Channel.h"
 #include "SocketMonitor.h"
 
-SocketMonitor::SocketMonitor(zmq::socket_t &s, const char *snam) : sock(s), disconnected_(true), socket_name(snam), aborted(false) {
+static std::string constructSocketName() {
+	static int sequence = 0;
+	char buf[40];
+	snprintf(buf, 40, "inproc://s_%lld_%d", microsecs(), ++sequence);
+	return buf;
+}
 
-	std::string::const_iterator p = socket_name.begin();
-	std::string url("inproc://");
-	while (p != socket_name.end()) {
-		char ch = *p++;
-		if (isalnum(ch))url += ch;
-	}
-	monitor_socket_name = url;
+SocketMonitor::SocketMonitor(zmq::socket_t &s) : sock(s), disconnected_(true), aborted(false), active_(false), monitor_socket_name(constructSocketName()) {
 }
 
 SocketMonitor::~SocketMonitor() {
@@ -56,7 +55,7 @@ SocketMonitor::~SocketMonitor() {
 
 void SocketMonitor::operator()() {
 		char thread_name[100];
-		snprintf(thread_name, 100, "iod skt monitor %s", socket_name.c_str());
+		snprintf(thread_name, 100, "iod skt monitor %s", monitor_socket_name.c_str());
 #ifdef __APPLE__
         pthread_setname_np(thread_name);
 #else
@@ -91,11 +90,17 @@ void SocketMonitor::operator()() {
 }
 
 void SocketMonitor::abort() {
-	aborted = true;
 	zmq::monitor_t::abort();
+	aborted = true;
+	active_ = false;
 }
 
-const std::string &SocketMonitor::socketName() const { return socket_name; }
+bool SocketMonitor::active() {
+	if (!active_) {
+		DBG_MSG << monitor_socket_name << " " << std::hex << this << std::dec <<  " monitor not active\n";
+	}
+	return active_;
+}
 
 const std::string &SocketMonitor::monitorSocketName() const { return monitor_socket_name; }
 
@@ -104,7 +109,8 @@ void SocketMonitor::setMonitorSocketName(std::string name) {
 }
 
 void SocketMonitor::on_monitor_started() {
-        DBG_MSG << socket_name << " monitor started\n";
+	DBG_MSG << monitor_socket_name << " " << std::hex << this << std::dec <<  " monitor started\n";
+	active_ = true;
 }
 
 
@@ -119,13 +125,13 @@ void SocketMonitor::checkResponders(const zmq_event_t &event_, const char *addr_
 
 
 void SocketMonitor::on_event_connected(const zmq_event_t &event_, const char* addr_) {
-    DBG_MSG << socket_name<< " on_event_connected " << addr_ << "\n";
-    disconnected_ = false;
+  DBG_MSG << monitor_socket_name<< " on_event_connected " << addr_ << "\n";
+  disconnected_ = false;
 	checkResponders(event_, addr_);
 }
 void SocketMonitor::on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
 	disconnected_ = true;
-        //DBG_MSG << socket_name << " on_event_connect_delayed " << addr_ << "\n";
+  //DBG_MSG << socket_name << " on_event_connect_delayed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_connect_retried(const zmq_event_t &event_, const char* addr_) {
         //DBG_MSG << socket_name<< " on_event_connect_retried " << addr_ << "\n";
@@ -137,27 +143,27 @@ void SocketMonitor::on_event_bind_failed(const zmq_event_t &event_, const char* 
         //DBG_MSG << socket_name<< " on_event_bind_failed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_accepted(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << socket_name << " on_event_accepted " << event_.value << " " << addr_ << "\n";
-        disconnected_ = false;
-		checkResponders(event_, addr_);
-    }
+	//DBG_MSG << socket_name << " on_event_accepted " << event_.value << " " << addr_ << "\n";
+	disconnected_ = false;
+	checkResponders(event_, addr_);
+	}
 void SocketMonitor::on_event_accept_failed(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << socket_name<< " on_event_accept_failed " << addr_ << "\n";
+	//DBG_MSG << socket_name<< " on_event_accept_failed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_closed(const zmq_event_t &event_, const char* addr_) {
 	disconnected_ = true;
-        //DBG_MSG << socket_name<< " on_event_closed " << addr_ << "\n";
+	//DBG_MSG << socket_name<< " on_event_closed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_close_failed(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << socket_name<< " on_event_close_failed " << addr_ << "\n";
+	//DBG_MSG << socket_name<< " on_event_close_failed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        //DBG_MSG << socket_name<< " on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
-        disconnected_ = true;
+	//DBG_MSG << socket_name<< " on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
+	disconnected_ = true;
 	checkResponders(event_, addr_);
 }
 void SocketMonitor::on_event_unknown(const zmq_event_t &event_, const char* addr_) {
-        DBG_MSG << socket_name<< " on_event_unknown " << addr_ << "\n";
+        DBG_MSG << monitor_socket_name << " on_event_unknown " << addr_ << "\n";
 }
     
 bool SocketMonitor::disconnected() { return disconnected_;}

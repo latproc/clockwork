@@ -139,6 +139,7 @@ public:
 	MessageRouter router;
 	boost::thread *router_thread;
 	ChannelInternals() :command_sock(0), cmd_sock_info(0), router_thread(0) {}
+	std::string getCommandSocketName(bool client_endpoint);
 };
 
 
@@ -225,7 +226,8 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
 
 		MachineClass *mc = MachineClass::find(interface_name.c_str());
 		if (!mc) {
-			DBG_CHANNELS << "Warning: Interface " << interface_name << " is not defined\n";
+			std::string msg = MessageLog::instance()->add("Warning: Interface ", interface_name, " is not defined");
+			DBG_CHANNELS << msg << "\n";
 			return;
 		}
 		MachineInterface *mi = dynamic_cast<MachineInterface*>(mc);
@@ -330,7 +332,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 		}
 */
 	}
-	//DBG_CHANNELS << "Channel " << name << " syncRemoteStatesDone\n";
+	DBG_CHANNELS << "Channel " << name << " syncRemoteStatesDone\n";
 	return true;
 }
 
@@ -373,13 +375,13 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 	if (new_state == ChannelImplementation::CONNECTED) {
 		snprintf(buf, 100, "Channel %s CONNECTED", name.c_str());
 		MessageLog::instance()->add(buf);
-		std::cout << buf << "\n";
+		DBG_CHANNELS << buf << "\n";
 		enableShadows();
 		setNeedsCheck();
 		if (isClient()) {
 			snprintf(buf, 100, "Channel %s is client; setting state to DOWNLOADING", name.c_str());
 			MessageLog::instance()->add(buf);
-			std::cout << buf << "\n";
+			DBG_CHANNELS << buf << "\n";
 			SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
 			enqueueAction(ssat.factory(this)); // execute this state change once all other actions are done
 		}
@@ -387,13 +389,13 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 	else if (new_state == ChannelImplementation::WAITSTART) {
 		snprintf(buf, 100, "Channel %s: (%s) setting state to WAITSTART", name.c_str(), (isClient()) ? "client" : "server");
 		MessageLog::instance()->add(buf);
-		std::cout << buf << "\n";
+		DBG_CHANNELS << buf << "\n";
 		enableShadows();
 	}
 	else if (new_state == ChannelImplementation::UPLOADING) {
 		snprintf(buf, 100, "Channel %s: (%s) setting state to UPLOADING", name.c_str(), (isClient()) ? "client" : "server");
 		MessageLog::instance()->add(buf);
-		std::cout << buf << "\n";
+		DBG_CHANNELS << buf << "\n";
 
 		setNeedsCheck();
 		SyncRemoteStatesActionTemplate srsat(this, cmd_client);
@@ -409,6 +411,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 		if (isClient()) {
 			snprintf(buf, 100, "Channel %s is client; sending 'status' to partner", name.c_str());
 			MessageLog::instance()->add(buf);
+			DBG_CHANNELS << buf << "\n";
 
 			//sendMessage("status", *cmd_client, ack, mh);
 			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
@@ -419,7 +422,9 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
 			snprintf(buf, 100, "Channel %s is server; sending 'done' to partner", name.c_str());
 			MessageLog::instance()->add(buf);
-      mh.needReply(true);
+			DBG_CHANNELS << buf << "\n";
+
+			mh.needReply(true);
 			safeSend(*cmd_client, "done", 4, mh);
 		}
 	}
@@ -607,8 +612,6 @@ unsigned int Channel::getPort() const {
 	return port;
 }
 
-
-
 int Channel::uniquePort(unsigned int start, unsigned int end) {
     int res = 0;
     char address_buf[40];
@@ -620,7 +623,6 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-            //DBG_CHANNELS << "found available port " << res << "\n";
             break;
         }
         catch (zmq::error_t err) {
@@ -742,9 +744,8 @@ void Channel::startServer(ProtocolType proto) {
 		return;
 	}
 
-	std::string socknam("inproc://");
 	mif = MessagingInterface::create("*", port, proto);
-	monit_subs = new SocketMonitor(*mif->getSocket(), mif->getURL().c_str());
+	monit_subs = new SocketMonitor(*mif->getSocket());
 
 	connect_responder = new ChannelConnectMonitor(this);
 	disconnect_responder = new ChannelDisconnectMonitor(this);
@@ -760,7 +761,7 @@ void Channel::startClient() {
 		DBG_CHANNELS << "Channel::startClient() called when mif is already allocated\n";
 		return;
 	}
-	std::string socknam("inproc://");
+
 	Value host = getValue("host");
 	if (host == SymbolTable::Null)
 		host = "localhost";
@@ -771,7 +772,7 @@ void Channel::startClient() {
 	}
 
 	mif = MessagingInterface::create(host.asString().c_str(), port, eCHANNEL);
-	monit_subs = new SocketMonitor(*mif->getSocket(), mif->getURL().c_str());
+	monit_subs = new SocketMonitor(*mif->getSocket());
 
 	connect_responder = new ChannelConnectMonitor(this);
 	disconnect_responder = new ChannelDisconnectMonitor(this);
@@ -953,7 +954,6 @@ void Channel::operator()() {
 	}
 	safeSend(*cmd_server, "ok", 2);
 
-
 	zmq::pollitem_t *items = 0;
 	DBG_CHANNELS << "channel " << name << " thread received start message\n";
 
@@ -968,24 +968,25 @@ void Channel::operator()() {
 	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 	internals->command_sock->connect( internals->cmd_sock_info->address.c_str() );
 
-usleep(50);
-internals->command_sock->send("TEST", 4);
-usleep(50);
-
+	usleep(50);
+	internals->command_sock->send("TEST", 4);
+	usleep(50);
 
 	zmq::socket_t remote_sock(*MessagingInterface::getContext(), ZMQ_PAIR);
-	remote_sock.bind("inproc://sock_control");
+	char sock_crtl_name[20];
+	snprintf(sock_crtl_name, 20, "inproc://s_%lld", microsecs());
+	remote_sock.bind(sock_crtl_name);
 	usleep(50);
 
 	// start routine messages through the subscriber socket
 	internals->router.setRemoteSocket(&communications_manager->subscriber());
 	internals->router.addRoute(MessageHeader::SOCK_CW, internals->command_sock);
-	usleep(50);
-	NB_MSG << "Clockwork command processor on other end of " << internals->cmd_sock_info->address << "\n";
+	//usleep(50);
+	DBG_CHANNELS << "Clockwork command processor on other end of " << internals->cmd_sock_info->address << "\n";
 	internals->router.addRoute(MessageHeader::SOCK_CHAN, cmd_server);
-	usleep(50);
-	internals->router.addRoute(MessageHeader::SOCK_CTRL, ZMQ_PAIR, "inproc://sock_control");
-	usleep(50);
+	//usleep(50);
+	internals->router.addRoute(MessageHeader::SOCK_CTRL, ZMQ_PAIR, sock_crtl_name);
+	//usleep(50);
 
 	//internals->router.addFilter(MessageHeader::SOCK_CW, new CommandLogFilter(this, "****** "));
 	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new CommandLogFilter(this, "------ "));
@@ -1041,10 +1042,6 @@ usleep(50);
 					fl.f() << name << "Error polling channel port\n";
 				}
 			}
-
-			//if (!communications_manager->checkConnections(items, num_poll_items, *cmd_server) ) {
-			//	usleep(100); continue;
-			//}
 
 			if (items[subscriber_idx].revents & ZMQ_POLLERR) {
 				{FileLogger fl(program_name);
@@ -1146,22 +1143,27 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 	}
 	return true;
 }
-std::string Channel::getCommandSocketName(bool client_endpoint) {
-	char cmd_socket_name[100];
-	snprintf(cmd_socket_name, 100, "inproc://%s_cmd", name.c_str());
-	DBG_CHANNELS << "using " << cmd_socket_name
-	<< " for the " << ( (client_endpoint) ? "client " : "server ") << "command socket\n";
-	char *pos = strchr(cmd_socket_name, ':')+1;
-	while ( (pos = strchr(pos, ':'))  ) *pos = '-';
-	return cmd_socket_name;
+
+std::string ChannelInternals::getCommandSocketName(bool client_endpoint) {
+	if (command_sock_name.empty()) {
+		char cmd_socket_name[100];
+		snprintf(cmd_socket_name, 100, "inproc://s_%lld_cmd", microsecs());
+		const char *end = (client_endpoint) ? "client" : "server";
+		DBG_CHANNELS << "using " << cmd_socket_name << " for the " << end << " command socket\n";
+		char *pos = strchr(cmd_socket_name, ':')+1;
+		while ( (pos = strchr(pos, ':'))  ) *pos = '-';
+		command_sock_name = cmd_socket_name;
+	}
+	return command_sock_name;
 }
 
 zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
-	std::string cmd_socket_name = getCommandSocketName( client_endpoint );
+	std::string cmd_socket_name = internals->getCommandSocketName( client_endpoint );
 	if (client_endpoint) {
 		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 		sock->connect(cmd_socket_name.c_str());
 		DBG_CHANNELS << name << " connected channel command client\n";
+		usleep(50);
 		return sock;
 	}
 	else {
@@ -1533,6 +1535,9 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
 		if (isClient()){
 			if (communications_manager->setupStatus() == SubscriptionManager::e_done)
 				safeSend(*cmd_client, cmd, strlen(cmd), mh );
+			else {
+				DBG_CHANNELS << "Not sending '" << cmd << "' since the subscriber is not connected yet\n";
+			}
 		}
 		else if (communications_manager) {
 			safeSend(*cmd_client, cmd, strlen(cmd), mh);
@@ -2278,7 +2283,7 @@ void Channel::setupShadows() {
         else if (m) {
 			m->publish();
             // this machine is a shadow
-			DBG_MSG << "Channel " << name << " adding shadow machine " << m->getName() << "\n";
+			DBG_CHANNELS << "Channel " << name << " adding shadow machine " << m->getName() << "\n";
 			channel_machines.insert(m);
 			modified();
 			m->owner_channel = this;

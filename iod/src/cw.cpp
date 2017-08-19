@@ -332,9 +332,6 @@ int main (int argc, char const *argv[])
 	IODHardwareActivation iod_activation;
 	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
 
-	//zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
-	//resource_mgr.bind("inproc://resource_mgr");
-    
 	zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
 	sim_io.bind("inproc://ethercat_sync");
     

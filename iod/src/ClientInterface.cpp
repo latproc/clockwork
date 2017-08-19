@@ -235,40 +235,40 @@ public:
         monitor(*sock, "inproc://monitor.rep");
     }
     virtual void on_monitor_started() {
-        //std::cerr << "command channel monitor started\n";
+        DBG_MSG << "CI << command channel monitor started\n";
     }
     virtual void on_event_connected(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_connected " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_connected " << addr_ << "\n";
     }
     virtual void on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_connect_delayed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_connect_delayed " << addr_ << "\n";
     }
     virtual void on_event_connect_retried(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel command channel on_event_connect_retried " << addr_ << "\n";
+        DBG_MSG << "CI command channel command channel on_event_connect_retried " << addr_ << "\n";
     }
     virtual void on_event_listening(const zmq_event_t &event_, const char* addr_) {
-        //FileLogger fl(program_name); fl.f() << "command channel on_event_listening " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_listening " << addr_ << "\n";
     }
     virtual void on_event_bind_failed(const zmq_event_t &event_, const char* addr_) {
-			//FileLogger fl(program_name); fl.f() << "command channel on_event_bind_failed " << addr_ << "\n";
+			DBG_MSG << "CI command channel on_event_bind_failed " << addr_ << "\n";
     }
     virtual void on_event_accepted(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_accepted " << event_.value << " " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_accepted " << event_.value << " " << addr_ << "\n";
     }
     virtual void on_event_accept_failed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_accept_failed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_accept_failed " << addr_ << "\n";
     }
     virtual void on_event_closed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_closed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_closed " << addr_ << "\n";
     }
     virtual void on_event_close_failed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_close_failed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_close_failed " << addr_ << "\n";
     }
     virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
     }
     virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "command channel on_event_unknown " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_unknown " << addr_ << "\n";
     }
 
 private:
@@ -461,8 +461,8 @@ void IODCommandThread::operator()() {
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
 
-    //MyMonitor monit(&cti->socket);
-    //boost::thread cmd_monitor(boost::ref(monit));
+	//MyMonitor monit(&cti->socket);
+	//boost::thread cmd_monitor(boost::ref(monit));
     
     int linger = 0; // do not wait at socket close time
 	cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));

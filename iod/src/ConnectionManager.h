@@ -54,14 +54,16 @@ private:
 
 class SingleConnectionMonitor : public SocketMonitor {
 public:
-	SingleConnectionMonitor(zmq::socket_t &s, const char *snam);
+	SingleConnectionMonitor(zmq::socket_t &s);
 	virtual void on_event_accepted(const zmq_event_t &event_, const char* addr_);
 	virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_);
 	virtual void on_event_connected(const zmq_event_t &event_, const char* addr_);
 	void setEndPoint(const char *endpt);
 	std::string &endPoint() { return sock_addr; }
+	const std::string &socketName() const { return socket_name; }
 	
 private:
+	std::string socket_name;
 	std::string sock_addr;
 	SingleConnectionMonitor(const SingleConnectionMonitor&);
 	SingleConnectionMonitor &operator=(const SingleConnectionMonitor&);

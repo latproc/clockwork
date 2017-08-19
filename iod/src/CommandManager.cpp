@@ -130,7 +130,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
 CommandManager::CommandManager(const char *host, int portnum)
 	: host_name(host), port(portnum), setup(0), monit_setup(0) {
 	    setup = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
-	    monit_setup = new SingleConnectionMonitor(*setup, constructAlphaNumericString("inproc://", host, ".setup", "inproc://monitor.setup").c_str());
+	    monit_setup = new SingleConnectionMonitor(*setup);
 	    init();
 }
 

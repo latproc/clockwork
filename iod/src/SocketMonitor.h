@@ -42,7 +42,7 @@ public:
 
 class SocketMonitor : public zmq::monitor_t {
 public:
-	SocketMonitor(zmq::socket_t &s, const char *snam);
+	SocketMonitor(zmq::socket_t &s);
 	virtual ~SocketMonitor();
 	void operator()();
 	virtual void on_monitor_started();
@@ -59,19 +59,19 @@ public:
 	virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_);
 	bool disconnected();
 	void abort();
+	bool active();
 	void addResponder(uint16_t event, EventResponder *responder);
 	void removeResponder(uint16_t event, EventResponder *responder);
 	void checkResponders(const zmq_event_t &event_, const char *addr_)const;
 	void setMonitorSocketName(std::string name);
-	const std::string &socketName() const;
 	const std::string &monitorSocketName() const;
 	
 protected:
 	std::multimap<int, EventResponder*> responders;
 	zmq::socket_t &sock;
 	bool disconnected_;
-	std::string socket_name;
 	bool aborted;
+	bool active_;
 	std::string monitor_socket_name;
 };
 
