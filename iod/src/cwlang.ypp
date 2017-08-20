@@ -1409,6 +1409,23 @@ SET SYMBOL TO value error_clause  {
 	current_action = new IncludeActionTemplate($7, $2, *$5, true);
 }
 
+| ADD ITEMS FROM SYMBOL AFTER LAST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($8, $4, -1, false, true);
+}
+| ADD ITEMS FROM SYMBOL BEFORE FIRST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($8, $4, 0, true, true);
+}
+| ADD ITEMS FROM SYMBOL AFTER ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($9, $4, *$7, false, true);
+}
+| ADD ITEMS FROM SYMBOL BEFORE ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($9, $4, *$7, true, true);
+}
+
 | INCLUDE SYMBOL IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new IncludeActionTemplate($4, $2);
@@ -1546,6 +1563,11 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
     delete $2;
+}
+| MOVE ITEMS value TO value OF SYMBOL TO SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SetOperationActionTemplate(-1, $7, SymbolTable::Null, $9, "", soSelect, 0, true, *$3, *$5);
+	delete $3; delete $5;
 }
 | SORT SYMBOL {
     if (current_action) current_actions->push_back(current_action);

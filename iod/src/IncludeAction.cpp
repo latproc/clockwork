@@ -27,35 +27,35 @@
 
 static void debugParameterChange(MachineInstance *dest_machine) {
 	const char *delim="";
-	char buf[1000];
+	char buf[1010];
 	snprintf(buf, 1000, "[");
 	size_t n = 1;
 	for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
 		snprintf(buf+n,1000-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
 		n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
 		delim = ",";
+		if (n >= 999) break;
 	}
 	snprintf(buf+n, 1000-n, "]");
 	dest_machine->setValue("DEBUG", buf);
 }
 
-IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val, Value pos, bool insert_before)
-: list_machine_name(name), entry(val), position(pos), before(insert_before) {
-	int x = 1;
+IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val, Value pos, bool insert_before, bool expand_items)
+: list_machine_name(name), entry(val), position(pos), before(insert_before), expand(expand_items) {
 }
 
 IncludeActionTemplate::~IncludeActionTemplate() {
 }
-                                           
+
 Action *IncludeActionTemplate::factory(MachineInstance *mi) {
-	return new IncludeAction(mi, this, position, before);
+	return new IncludeAction(mi, this, position, before, expand);
 }
 
-IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, Value pos, bool insert_before)
-    : Action(m), list_machine_name(dat->list_machine_name), entry(dat->entry), list_machine(0), entry_machine(0), position(pos), before(insert_before) {
+IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, Value pos, bool insert_before, bool expand_list)
+    : Action(m), list_machine_name(dat->list_machine_name), entry(dat->entry), list_machine(0), entry_machine(0), position(pos), before(insert_before), expand(expand_list) {
 }
 
-IncludeAction::IncludeAction() : list_machine(0), entry_machine(0), position(-1), before(false) {
+IncludeAction::IncludeAction() : list_machine(0), entry_machine(0), position(-1), before(false), expand(false) {
 }
 
 std::ostream &IncludeAction::operator<<(std::ostream &out) const {
@@ -168,6 +168,8 @@ Action::Status IncludeAction::run() {
 				if (list_machine->parameters[i].val == entry
 								|| list_machine->parameters[i].real_name == entry.asString())
 					found = true;
+				// bug: if the item being added is a list and expand is true but the list object itself is already
+				//   on this list then it won't be expanded
 			}
 			if (!found) {
 				if (entry.kind == Value::t_symbol) {
@@ -186,8 +188,17 @@ Action::Status IncludeAction::run() {
 						else
 							list_machine->addParameter(v, 0, pos, before);
 					}
-					else
-						list_machine->addParameter(entry, machine, pos, before);
+					else {
+						if (machine->_type == "LIST" && expand) {
+							for (int i = 0; i<machine->parameters.size(); i++) {
+								MachineInstance *item = machine->parameters[i].machine;
+								list_machine->addParameter(machine->parameters[i].val, item, pos, before);
+								if (pos >= 0) ++pos; // not adding at the end 
+							}
+						}
+						else
+							list_machine->addParameter(entry, machine, pos, before);
+					}
 				}
 				else
 					list_machine->addParameter(entry, 0, pos, before);

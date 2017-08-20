@@ -159,9 +159,10 @@ void MachineInstance::setNeedsCheck() {
 	if (!is_enabled) return;
   bool already_pending = ProcessingThread::is_pending(this);
 	if (!needs_check) {
-		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n";
+		DBG_AUTOSTATES << _name << " needs check\n";
 		++total_machines_needing_check;
 	}
+	++needs_check;
 	if (!active_actions.empty() || !mail_queue.empty()) {
 		DBG_M_MESSAGING << _name << " queued for action processing\n";
 		SharedWorkSet::instance()->add(this);
@@ -182,14 +183,16 @@ void MachineInstance::setNeedsCheck() {
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
 			MachineInstance *dep = *dep_iter++;
-			if (dep->is_enabled) dep->setNeedsCheck();
+			if (dep->is_enabled && dep->needs_check < 2) // <2 is an anti-recursion check
+				dep->setNeedsCheck();
 		}
 	}
 	else if (state_machine->token_id == ClockworkToken::REFERENCE) {
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
 			MachineInstance *dep = *dep_iter++;
-			if (dep->is_enabled) dep->setNeedsCheck();
+			if (dep->is_enabled && dep->needs_check < 2) // <2 is an anti-recursion check
+				dep->setNeedsCheck();
 		}
 	}
 }
@@ -1208,22 +1211,9 @@ public:
 	}
 };
 
-void MachineInstance::addParameter(Value param, MachineInstance *mi, int position, bool before) {
-	Parameter p(param);
+void MachineInstance::addParameter(const Parameter &p, MachineInstance *mi, int position, bool before) {
 
-	if (!mi && param.kind == Value::t_symbol) {
-		mi = lookup(param);
-		if (mi) {
-			if (!param.cached_machine) param.cached_machine = mi;
-			p.real_name = mi->fullName();
-		}
-	}
-	else if (mi) {
-		p.real_name = mi->fullName();
-	}
-	p.machine = mi;
-
-	std::cout << _name << " " << ((mi) ?  mi->getName() : "") << " " << position << " " << before << "\n";
+	//std::cout << _name << " " << ((mi) ?  mi->getName() : "") << " " << position << " " << before << "\n";
 
 	if (position < 0) {
 		if (!before) parameters.push_back(p);
@@ -1251,6 +1241,23 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi, int positio
 	setNeedsCheck();
 	notifyDependents();
 	//}
+}
+
+void MachineInstance::addParameter(Value param, MachineInstance *mi, int position, bool before) {
+	Parameter p(param);
+
+	if (!mi && param.kind == Value::t_symbol) {
+		mi = lookup(param);
+		if (mi) {
+			if (!param.cached_machine) param.cached_machine = mi;
+			p.real_name = mi->fullName();
+		}
+	}
+	else if (mi) {
+		p.real_name = mi->fullName();
+	}
+	p.machine = mi;
+	addParameter(p, mi, position, before);
 }
 
 void MachineInstance::removeParameter(int which) {

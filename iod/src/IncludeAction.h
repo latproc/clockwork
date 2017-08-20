@@ -33,7 +33,7 @@ struct IncludeActionTemplate : public ActionTemplate {
     // given by the 'name' parameter.  The names are to be evaluated in the
     // scope where the command is used.
     
-	IncludeActionTemplate(const std::string &name, Value val, Value pos = -1, bool before = false);
+	IncludeActionTemplate(const std::string &name, Value val, Value pos = -1, bool before = false, bool expand = false);
     ~IncludeActionTemplate();
     
     virtual Action *factory(MachineInstance *mi);
@@ -45,10 +45,11 @@ struct IncludeActionTemplate : public ActionTemplate {
 	Value entry;
 	Value position;
 	bool before;
+	bool expand;
 };
 
 struct IncludeAction : public Action {
-	IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, const Value pos, bool before);
+	IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, const Value pos, bool before, bool expand = false);
 	IncludeAction();
 	Status run();
 	Status checkComplete();
@@ -60,6 +61,7 @@ struct IncludeAction : public Action {
 	MachineInstance *entry_machine;
 	Value position;
 	bool before;
+	bool expand;
 };
 
 #endif

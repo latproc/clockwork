@@ -86,6 +86,7 @@ public:
 
   void triggerFired(Trigger *trig);
 
+	void addParameter(const Parameter &param, MachineInstance *machine = 0, int position = -1, bool before = false);
   void addParameter(Value param, MachineInstance *machine = 0, int position = -1, bool before = false);
   void removeParameter(int which);
   void addLocal(Value param, MachineInstance *machine = 0);
