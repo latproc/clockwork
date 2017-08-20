@@ -1184,19 +1184,60 @@ MachineInstance *MachineInstance::find(const char *name) {
 	return 0;
 }
 
-void MachineInstance::addParameter(Value param, MachineInstance *mi) {
-	parameters.push_back(param);
+template<class T>class Inserter {
+public:
+	void add(T item, std::list<T>&list, int pos, bool before) {
+		if (list.empty()) list.push_back(item);
+		else if (pos == 0 && before) list.push_front(item);
+		else if (pos == -1 && !before) list.push_back(item);
+		else if (pos == -1 && before) {
+			typename std::list<T>::reverse_iterator iter = list.rbegin();
+			if (iter != list.rend()) iter++;
+			list.insert(iter.base(), item);
+		}
+		else {
+			size_t n = list.size();
+			if (pos > n || (pos >= n-1 && !before)) list.push_back(item);
+			else {
+				typename std::list<T>::const_iterator iter = list.begin();
+				int i = 0;
+				while (iter != list.end() && i < pos) { iter++; i++; }
+				if (i == pos) list.insert(iter, item);
+			}
+		}
+	}
+};
+
+void MachineInstance::addParameter(Value param, MachineInstance *mi, int position, bool before) {
+	Parameter p(param);
+
 	if (!mi && param.kind == Value::t_symbol) {
 		mi = lookup(param);
 		if (mi) {
 			if (!param.cached_machine) param.cached_machine = mi;
-			parameters[parameters.size()-1].real_name = mi->fullName();
+			p.real_name = mi->fullName();
 		}
 	}
 	else if (mi) {
-		parameters[parameters.size()-1].real_name = mi->fullName();
+		p.real_name = mi->fullName();
 	}
-	parameters[parameters.size()-1].machine = mi;
+	p.machine = mi;
+
+	std::cout << _name << " " << ((mi) ?  mi->getName() : "") << " " << position << " " << before << "\n";
+
+	if (position < 0) {
+		if (!before) parameters.push_back(p);
+		else
+			parameters.insert(parameters.begin()+(parameters.size()-1), p);
+	}
+	else {
+		if (!before) position++;
+		if (position < parameters.size())
+			parameters.insert(parameters.begin()+position, p);
+		else
+			parameters.push_back(p);
+	}
+
 	if (mi) {
 		addDependancy(mi);
 		listenTo(mi);

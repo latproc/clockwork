@@ -147,7 +147,7 @@ struct Subcondition {
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS MIN MAX MEAN
-%token CHANGING FAILURE
+%token CHANGING FAILURE ADD AFTER BEFORE
 
 %union {
 	bool bVal;
@@ -1390,6 +1390,24 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("TAKE"));
 }
+
+| ADD SYMBOL AFTER LAST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($6, $2, -1, false);
+}
+| ADD SYMBOL BEFORE FIRST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($6, $2, 0, true);
+}
+| ADD SYMBOL AFTER ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($7, $2, *$5, false);
+}
+| ADD SYMBOL BEFORE ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($7, $2, *$5, true);
+}
+
 | INCLUDE SYMBOL IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new IncludeActionTemplate($4, $2);
