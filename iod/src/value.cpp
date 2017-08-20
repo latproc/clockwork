@@ -1075,6 +1075,25 @@ std::string Value::quoted() const {
 	else return val;
 }
 
+bool Value::asBoolean(bool &x) const {
+	switch(kind) {
+		case t_bool: { x = bValue; return true; }
+		case t_integer: { x = iValue != 0; return true; }
+		case t_float: { x = fValue != 0.0; return true; }
+		case t_string:
+		case t_symbol:
+			if (sValue == "true" || sValue == "TRUE") {
+				x = true; return true;
+			}
+			else if (sValue == "false" || sValue == "FALSE") {
+				x = false; return true;
+			}
+			else return false;
+		default:
+			return false;
+	}
+}
+
 bool Value::asInteger(long &x) const {
 	if (kind == t_integer) {
 		x = iValue;
