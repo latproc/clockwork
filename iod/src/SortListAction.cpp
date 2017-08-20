@@ -25,22 +25,22 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 
-SortListActionTemplate::SortListActionTemplate(Value list_name, Value property)
-: list_machine_name(list_name.asString()), property_name(property.asString()) {
+SortListActionTemplate::SortListActionTemplate(Value list_name, Value property, bool asc)
+: list_machine_name(list_name.asString()), property_name(property.asString()), ascending(asc) {
 }
 
 SortListActionTemplate::~SortListActionTemplate() {
 }
                                            
 Action *SortListActionTemplate::factory(MachineInstance *mi) {
-	return new SortListAction(mi, this);
+	return new SortListAction(mi, this, ascending);
 }
 
-SortListAction::SortListAction(MachineInstance *m, const SortListActionTemplate *dat)
-    : Action(m), list_machine_name(dat->list_machine_name), property_name(dat->property_name), list_machine(0) {
+SortListAction::SortListAction(MachineInstance *m, const SortListActionTemplate *dat, bool asc)
+    : Action(m), list_machine_name(dat->list_machine_name), property_name(dat->property_name), list_machine(0), ascending(asc) {
 }
 
-SortListAction::SortListAction() : list_machine(0) {
+SortListAction::SortListAction() : list_machine(0), ascending(true) {
 }
 
 std::ostream &SortListAction::operator<<(std::ostream &out) const {
@@ -48,47 +48,65 @@ std::ostream &SortListAction::operator<<(std::ostream &out) const {
 }
 
 class StringValueSorter {
+	bool ascending;
 public:
+	StringValueSorter(bool asc = true) : ascending(asc) { }
     bool operator()(const Parameter &a, const Parameter &b) const {
+			if (ascending)
         return a.val.asString() < b.val.asString();
+			else
+				return b.val.asString() < a.val.asString();
     }
 };
 
 class NumericValueSorter {
+	bool ascending;
 public:
+	NumericValueSorter(bool asc = true) : ascending(asc) { }
     bool operator()(const Parameter &a, const Parameter &b) const {
-        if (a.val.kind != Value::t_integer || b.val.kind != Value::t_integer) return true;
-        long a_i, b_i;
-        if (!a.val.asInteger(a_i) || !b.val.asInteger(b_i)) return true;
+			if (a.val.kind != Value::t_integer || b.val.kind != Value::t_integer) return true;
+			long a_i, b_i;
+			if (!a.val.asInteger(a_i) || !b.val.asInteger(b_i)) return true;
+			if (ascending)
         return a_i < b_i;
+			else
+				return b_i < a_i;
     }
 };
 
 class PropertyValueStringSorter {
 public:
-    PropertyValueStringSorter(std::string property_name) : property(property_name) { }
+    PropertyValueStringSorter(std::string property_name, bool asc = true) : property(property_name), ascending(asc) { }
     bool operator()(const Parameter &a, const Parameter &b) const {
-        if (!a.machine) return true;
-        if (!b.machine) return false;
+			if (!a.machine) return true;
+			if (!b.machine) return false;
+			if (ascending)
         return a.machine->getValue(property) < b.machine->getValue(property);
+			else
+				return b.machine->getValue(property) < a.machine->getValue(property);
     }
 private:
-    std::string property;
+	std::string property;
+	bool ascending;
 };
 
 class PropertyValueNumericSorter {
 public:
-    PropertyValueNumericSorter(std::string property_name) : property(property_name) { }
+    PropertyValueNumericSorter(std::string property_name, bool asc = true) : property(property_name), ascending(asc) { }
     bool operator()(const Parameter &a, const Parameter &b) const {
         if (!a.machine) return true;
         if (!b.machine) return false;
         long a_val, b_val;
         if (!a.machine->getValue(property).asInteger(a_val)) return true;
         if (!b.machine->getValue(property).asInteger(b_val)) return false;
-        return a_val < b_val;
+			if (ascending)
+				return a_val < b_val;
+			else
+				return b_val < a_val;
     }
 private:
-    std::string property;
+	std::string property;
+	bool ascending;
 };
 
 Action::Status SortListAction::run() {
@@ -112,11 +130,11 @@ Action::Status SortListAction::run() {
                 }
             }
             if (use_integer_sort) {
-                PropertyValueNumericSorter property_sort(property_name.asString());
+                PropertyValueNumericSorter property_sort(property_name.asString(), ascending);
                 std::sort(list_machine->parameters.begin(), list_machine->parameters.end(), property_sort);
             }
             else {
-                PropertyValueStringSorter property_sort(property_name.asString());
+                PropertyValueStringSorter property_sort(property_name.asString(), ascending);
                 std::sort(list_machine->parameters.begin(), list_machine->parameters.end(), property_sort);
             }
         }
@@ -131,11 +149,11 @@ Action::Status SortListAction::run() {
                 }
             }
             if (use_integer_sort) {
-                NumericValueSorter numeric_sort;
+                NumericValueSorter numeric_sort(ascending);
                 std::sort(list_machine->parameters.begin(), list_machine->parameters.end(), numeric_sort);
             }
             else {
-                StringValueSorter string_sort;
+                StringValueSorter string_sort(ascending);
                 std::sort(list_machine->parameters.begin(), list_machine->parameters.end(), string_sort);
             }
         }

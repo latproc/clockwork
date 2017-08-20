@@ -148,6 +148,7 @@ struct Subcondition {
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS MIN MAX MEAN
 %token CHANGING FAILURE ADD AFTER BEFORE
+%token ASCENDING ASC DESCENDING DESC
 
 %union {
 	bool bVal;
@@ -1553,6 +1554,38 @@ SET SYMBOL TO value error_clause  {
 | SORT SYMBOL BY PROPERTY SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SortListActionTemplate($2, $5);
+}
+| SORT SYMBOL ASC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", true);
+}
+| SORT SYMBOL ASCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", true);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL ASC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, true);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL ASCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, true);
+}
+| SORT SYMBOL DESC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", false);
+}
+| SORT SYMBOL DESCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", false);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL DESC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, false);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL DESCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, false);
 }
 /*
 | TAKE LAST FROM SYMBOL {
