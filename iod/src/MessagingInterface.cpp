@@ -283,7 +283,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
+			//if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );

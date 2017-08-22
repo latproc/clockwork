@@ -1,5 +1,6 @@
 #include "MachineShadowInstance.h"
 #include "Logger.h"
+#include "DebugExtra.h"
 
 MachineShadowInstance::MachineShadowInstance(InstanceType instance_type) : MachineInstance(instance_type) {
 	shadow_machines.push_back(this);
@@ -16,12 +17,12 @@ void MachineShadowInstance::idle() {
 }
 
 Action::Status MachineShadowInstance::setState(const State &new_state, uint64_t authority, bool resume) {
-	NB_MSG << _name << " (shadow) setState("<<current_state<< "->" << new_state << ")\n";
+	DBG_CHANNELS << _name << " (shadow) setState("<<current_state<< "->" << new_state << ")\n";
 	return MachineInstance::setState(new_state, authority, resume);
 }
 
 Action::Status MachineShadowInstance::setState(const char *new_state, uint64_t authority, bool resume) {
-	NB_MSG << _name << " (shadow) setState(" << new_state << ")\n";
+	DBG_CHANNELS << _name << " (shadow) setState(" << new_state << ")\n";
 	return MachineInstance::setState(new_state, authority, resume);
 }
 

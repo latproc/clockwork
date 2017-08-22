@@ -57,10 +57,10 @@ void SingleConnectionMonitor::on_event_connected(const zmq_event_t &event_, cons
 }
 
 void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-		DBG_CHANNELS << socket_name << " Disconnected\n";
-		//sock.disconnect(sock_addr.c_str());
-		SocketMonitor::on_event_disconnected(event_, addr_);
-    }
+	DBG_CHANNELS << socket_name << " Disconnected\n";
+	//sock.disconnect(sock_addr.c_str());
+	SocketMonitor::on_event_disconnected(event_, addr_);
+}
 
 void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
 
@@ -167,8 +167,8 @@ SubscriptionManager::SubStatus SubscriptionManager::subscriberStatus() { return 
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
 	assert(isClient());
-    if (monit_setup) delete monit_setup;
-    monit_setup = monitor;
+	if (monit_setup) delete monit_setup;
+	monit_setup = monitor;
 }
 
 void SubscriptionManager::init() {
@@ -255,8 +255,7 @@ bool SubscriptionManager::requestChannel() {
 				}
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
-        assert(len);
-		DBG_CHANNELS << "Got channel " << buf << "\n";
+				DBG_CHANNELS << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
@@ -359,7 +358,7 @@ bool SubscriptionManager::setupConnections() {
 			int counter = 5;
 			while (counter-- > 0 && !monit_subs.active()) usleep(100);
 			if (!monit_subs.active()) {
-				DBG_MSG << channel_url << " monitor subscriber not active\n";
+				DBG_CHANNELS << channel_url << " monitor subscriber not active\n";
 				return false;
 			}
 			subscriber().connect(channel_url.c_str());
@@ -463,13 +462,13 @@ void MessageRouter::finish() {
 class scoped_lock {
 public:
 	scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) {
-		//		NB_MSG << location << " LOCKING...\n";
+		//		DBG_CHANNELS << location << " LOCKING...\n";
 		lock.lock();
-		//		NB_MSG << location << " LOCKED...\n";
+		//		DBG_CHANNELS << location << " LOCKED...\n";
 	}
 	~scoped_lock() {
 		lock.unlock();
-		//		NB_MSG << location << " UNLOCKED\n";
+		//		DBG_CHANNELS << location << " UNLOCKED\n";
 	}
 	std::string location;
 	boost::mutex &mutex;
@@ -485,7 +484,7 @@ void MessageRouter::addRoute(int route_id, zmq::socket_t *dest) {
 	scoped_lock lock("addRoute", internals->data_mutex);
 
 	if (internals->routes.find(route_id) == internals->routes.end()) {
-		NB_MSG << " added route " << route_id << "\n";
+		DBG_CHANNELS << " added route " << route_id << "\n";
 		internals->routes[route_id] = new RouteInfo(dest);
 	}
 }
@@ -518,7 +517,7 @@ void MessageRouter::addDefaultRoute(int type, const std::string address) {
 void MessageRouter::addRemoteSocket(int type, const std::string address) {
 	scoped_lock lock("setRemoteSocket", internals->data_mutex);
 	zmq::socket_t *remote_sock = new zmq::socket_t(*MessagingInterface::getContext(), type);
-	DBG_MSG << "MessageRouter connecting to remote socket " << address << "\n";
+	DBG_CHANNELS << "MessageRouter connecting to remote socket " << address << "\n";
 	remote_sock->connect(address.c_str());
 	internals->remote = remote_sock;
 }
@@ -618,9 +617,9 @@ void MessageRouter::poll() {
 
 	// receiving from remote socket
 	if (items[0].revents & ZMQ_POLLIN) {
-		NB_MSG << "Message router collecting message from remote\n";
+		DBG_CHANNELS << "Message router collecting message from remote\n";
 		if (safeRecv(*internals->remote, &buf, &len, false, 0, mh)) {
-			NB_MSG << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
+			DBG_CHANNELS << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
 			std::map<int, RouteInfo *>::const_iterator found = internals->routes.find(mh.dest);
 			if (found != internals->routes.end()) {
 				RouteInfo * ri = internals->routes.at(mh.dest);
@@ -639,7 +638,7 @@ void MessageRouter::poll() {
 					}
 				}
 				else {
-					NB_MSG << "forwarding " << buf << " to " << mh.dest << "\n";
+					DBG_CHANNELS << "forwarding " << buf << " to " << mh.dest << "\n";
 					mh.start_time = microsecs();
 					safeSend(*dest, buf, len, mh);
 				}
@@ -650,7 +649,7 @@ void MessageRouter::poll() {
 			}
 #if 1
 			else {
-				NB_MSG << "Message " << buf << " needed a default route but none has been set\n";
+				DBG_CHANNELS << "Message " << buf << " needed a default route but none has been set\n";
 			}
 #endif
 		}
@@ -659,13 +658,13 @@ void MessageRouter::poll() {
 	// forwarding to remote socket
 	for (unsigned int i=1; i<num_socks; ++i) {
 		if (items[i].revents & ZMQ_POLLIN) {
-			NB_MSG << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
+			DBG_CHANNELS << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
 			std::map<int, RouteInfo *>::iterator found = internals->routes.find(destinations[i-1]);
 			assert(found != internals->routes.end());
 			zmq::socket_t *sock = internals->routes[ destinations[i-1] ]->sock;
 			MessageHeader mh;
 			if (safeRecv(*sock, &buf, &len, false, 0, mh)) {
-				NB_MSG << " collected '" << buf << "' from route " << destinations[i-1] << " with header " << mh << "\n";
+				DBG_CHANNELS << " collected '" << buf << "' from route " << destinations[i-1] << " with header " << mh << "\n";
 				bool do_send = true; // by default all messages are sent. a filter can stop that
 				std::list<MessageFilter *>::iterator fi = internals->filters.begin();
 				while (fi != internals->filters.end()) {
@@ -673,15 +672,15 @@ void MessageRouter::poll() {
 					if ( !(filter->filter(&buf, len, mh))) do_send = false;
 				}
 				if (do_send) {
-					char disp[2*len+1];
-					for (int i=0; i<len; ++i) sprintf(disp+2*i, "%x", buf[i]);
-					disp[2*len] = 0;
-					DBG_MSG << "Sending '" << disp << "'\n";
+					//char disp[2*len+1];
+					//for (int i=0; i<len; ++i) sprintf(disp+2*i, "%x", buf[i]);
+					//disp[2*len] = 0;
+					//DBG_CHANNELS << "Sending '" << disp << "'\n";
 					mh.start_time = microsecs();
 					safeSend(*internals->remote, buf, len, mh);
 				}
 				else
-					NB_MSG << "dropped message due to filter\n";
+					DBG_CHANNELS << "dropped message due to filter\n";
 			}
 		}
 	}
@@ -809,10 +808,10 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     size_t msglen = 0;
 #if 0
 	if (items[0].revents & ZMQ_POLLIN) {
-		NB_MSG << "have message activity from clockwork\n";
+		DBG_CHANNELS << "have message activity from clockwork\n";
 	}
 	if (items[1].revents & ZMQ_POLLIN) {
-		NB_MSG << "have message activity from publisher\n";
+		DBG_CHANNELS << "have message activity from publisher\n";
 	}
 #endif
 	// yuk. the command socket is assumed to be the last item in the poll item list.
