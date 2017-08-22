@@ -28,6 +28,12 @@ f2 FLAG;
 		COPY ALL FROM list TO test;
 		ADD f1 BEFORE ITEM 2 OF test; 
 	}
+	COMMAND move {
+		CLEAR test; 
+		CLEAR work; 
+		COPY ALL FROM list TO test;
+		MOVE 1 FROM test TO work;
+	}
 	COMMAND bunch { 
 		CLEAR work; 
 		CLEAR test; 

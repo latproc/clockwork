@@ -444,7 +444,9 @@ Action::Status SelectSetOperation::doOperation() {
 		else {
 			if (!end_pos.asInteger(ep)) ep = -1;
 		}
-		if (ep == -1) count = 1; else count = ep - sp + 1;
+		if (count == -1) {
+			if (ep != -1) count = ep - sp + 1;
+		}
 	}
 
     if (source_a_machine) {
