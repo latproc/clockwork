@@ -93,6 +93,7 @@ IGNORES				return IGNORES;
 INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;
+INDEX								return INDEX;
 INTERFACE           return INTERFACE;
 INTEGER				return INTEGER;
 ITEM                return ITEM;

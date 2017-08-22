@@ -148,7 +148,7 @@ struct Subcondition {
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS MIN MAX MEAN
 %token CHANGING FAILURE ADD AFTER BEFORE
-%token ASCENDING ASC DESCENDING DESC
+%token ASCENDING ASC DESCENDING DESC INDEX
 
 %union {
 	bool bVal;
@@ -920,6 +920,9 @@ INTEGERVAL   {
 }
 | COUNT SYMBOL FROM SYMBOL {
     $$ = new Value(new CountValue($2,$4));
+}
+| INDEX OF ITEM IN SYMBOL WHERE predicate {
+	$$ = new Value(new FindValue($5, $7));
 }
 | SUM SYMBOL FROM SYMBOL {
 	$$ = new Value(new SumValue($2,$4));

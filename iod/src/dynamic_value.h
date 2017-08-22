@@ -157,6 +157,25 @@ private:
 	const Value *state_property;
 };
 
+
+class FindValue : public DynamicValue {
+public:
+	FindValue(const char *list, Predicate *pred)
+	: machine_list_name(list), machine_list(0), condition(pred)  { }
+	virtual ~FindValue() {}
+	virtual Value &operator()(MachineInstance *);
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	FindValue(const FindValue &);
+
+private:
+	FindValue(const DynamicValue &);
+	std::string property_name;
+	std::string machine_list_name;
+	MachineInstance *machine_list;
+	Condition condition;
+};
+
 class SumValue : public DynamicValue {
 public:
 	SumValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
