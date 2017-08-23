@@ -438,7 +438,7 @@ Action::Status SelectSetOperation::doOperation() {
 		if (sp == -1) sp = 0;
 
 		if (end_pos.kind == Value::t_symbol || end_pos.kind == Value::t_string) {
-			Value v = scope->properties.lookup(start_pos.sValue.c_str());
+			Value v = scope->properties.lookup(end_pos.sValue.c_str());
 			if (!v.asInteger(ep)) ep = -1;
 		}
 		else {
@@ -448,7 +448,6 @@ Action::Status SelectSetOperation::doOperation() {
 			if (ep != -1) count = ep - sp + 1;
 		}
 	}
-
     if (source_a_machine) {
         if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
 #ifdef DEPENDENCYFIX
