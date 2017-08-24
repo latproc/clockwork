@@ -25,15 +25,17 @@
 
 static void debugParameterChange(MachineInstance *dest_machine) {
 	const char *delim="";
-	char buf[1000];
-	snprintf(buf, 1000, "[");
+	const int bufsize=600;
+	char buf[bufsize];
+	snprintf(buf, bufsize, "[");
 	size_t n = 1;
-	for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
-		snprintf(buf+n,1000-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
+	for (unsigned int i=0; n<bufsize-2 && i<dest_machine->parameters.size(); ++i) {
+		if (n + strlen(delim) + dest_machine->parameters[i].val.asString().length() >= bufsize-2) { n=bufsize-2; break; }
+		snprintf(buf+n,bufsize-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
 		n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
 		delim = ",";
 	}
-	snprintf(buf+n, 1000-n, "]");
+	snprintf(buf+n, bufsize-n, "]");
 	dest_machine->setValue("DEBUG", buf);
 }
 
