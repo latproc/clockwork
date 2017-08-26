@@ -26,6 +26,7 @@
 #include <map>
 #include <zmq.hpp>
 #include <boost/thread/mutex.hpp>
+#include <Channel.h>
 
 #include "IODCommand.h"
 #include "ClientInterface.h"
@@ -43,7 +44,7 @@
 
 
 uint64_t client_watchdog_timer = 0;
-extern bool machine_is_ready;
+//extern bool machine_is_ready;
 static Watchdog *wd;
 
 IODCommandThread *IODCommandThread::instance_;
@@ -234,40 +235,40 @@ public:
         monitor(*sock, "inproc://monitor.rep");
     }
     virtual void on_monitor_started() {
-        //std::cerr << "command channel monitor started\n";
+        DBG_MSG << "CI << command channel monitor started\n";
     }
     virtual void on_event_connected(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_connected " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_connected " << addr_ << "\n";
     }
     virtual void on_event_connect_delayed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_connect_delayed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_connect_delayed " << addr_ << "\n";
     }
     virtual void on_event_connect_retried(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel command channel on_event_connect_retried " << addr_ << "\n";
+        DBG_MSG << "CI command channel command channel on_event_connect_retried " << addr_ << "\n";
     }
     virtual void on_event_listening(const zmq_event_t &event_, const char* addr_) {
-        //FileLogger fl(program_name); fl.f() << "command channel on_event_listening " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_listening " << addr_ << "\n";
     }
     virtual void on_event_bind_failed(const zmq_event_t &event_, const char* addr_) {
-			//FileLogger fl(program_name); fl.f() << "command channel on_event_bind_failed " << addr_ << "\n";
+			DBG_MSG << "CI command channel on_event_bind_failed " << addr_ << "\n";
     }
     virtual void on_event_accepted(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_accepted " << event_.value << " " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_accepted " << event_.value << " " << addr_ << "\n";
     }
     virtual void on_event_accept_failed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_accept_failed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_accept_failed " << addr_ << "\n";
     }
     virtual void on_event_closed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_closed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_closed " << addr_ << "\n";
     }
     virtual void on_event_close_failed(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_close_failed " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_close_failed " << addr_ << "\n";
     }
     virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-        //std::cerr << "command channel on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_disconnected "<< event_.value << " "  << addr_ << "\n";
     }
     virtual void on_event_unknown(const zmq_event_t &event_, const char* addr_) {
-        std::cerr << "command channel on_event_unknown " << addr_ << "\n";
+        DBG_MSG << "CI command channel on_event_unknown " << addr_ << "\n";
     }
 
 private:
@@ -325,7 +326,7 @@ IODCommand *parseCommandString(const char *data) {
 	else if (ds == "GET" && count==3) {
 		command = new IODCommandGetProperty;
 	}
-	else if (ds == "MODBUS" && count == 2 && params[1] == "EXPORT") {
+	else if (ds == "MODBUS" && (count == 2 || count == 3) && params[1] == "EXPORT") {
 		command = new IODCommandModbusExport;
 	}
 	else if (ds == "MODBUS" && count == 2 && params[1] == "REFRESH") {
@@ -443,7 +444,7 @@ IODCommand *parseCommandString(const char *data) {
 		fl.f() << "Warning: no command found for " << data << "\n";
 		command = new IODCommandUnknown;
 	}
-	command->setParameters(params);
+	if (command) command->setParameters(params);
 	return command;
 }
 
@@ -455,28 +456,39 @@ void IODCommandThread::operator()() {
     pthread_setname_np(pthread_self(), "iod command interface");
 #endif
 
-		wd = new Watchdog("Command Thread Watchdog", 600, false);
+	wd = new Watchdog("Command Thread Watchdog", 600, false);
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals*>(internals);
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
 
-    //MyMonitor monit(&cti->socket);
-    //boost::thread cmd_monitor(boost::ref(monit));
+	//MyMonitor monit(&cti->socket);
+	//boost::thread cmd_monitor(boost::ref(monit));
     
     int linger = 0; // do not wait at socket close time
 	cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 	char url_buf[30];
-	snprintf(url_buf, 30, "tcp://*:%d", command_port());
-	try {
-		cti->socket.bind (url_buf);
-	}
-	catch (zmq::error_t zex) {
-		{	NB_MSG << "Error: " << zmq_strerror(zmq_errno()) << "\n";
-			FileLogger fl(program_name); usleep(10);
-			fl.f() << "Error: " << zmq_strerror(zmq_errno()) << "\n";
-			exit(1);
+	int retries = 2; // attempt to use the default command port and auto allocate another if necessary
+	int port = command_port();
+	while (retries>0) {
+		snprintf(url_buf, 30, "tcp://*:%d", port);
+		try {
+			cti->socket.bind (url_buf);
+			break;
+		}
+		catch (zmq::error_t zex) {
+			{	NB_MSG << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
+				FileLogger fl(program_name); usleep(10);
+				fl.f() << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
+				if (!command_port_fixed() && --retries > 0) {
+					port = Channel::uniquePort();
+					usleep(100); // give time for the new port to become available
+					continue;
+				}
+				exit(1);
+			}
 		}
 	}
+	NB_MSG << "Client Interface available on port: " << port << "\n";
 
     zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
     access_req.bind("inproc://resource_mgr");
@@ -498,7 +510,7 @@ void IODCommandThread::operator()() {
 	} while (strcmp(start_cli, "start") != 0);
 
     enum {e_running, e_wait_processing_start, e_wait_processing, e_responding} status = e_running; //are we holding shared resources?
-		int poll_time = 2;
+	int poll_time = 2;
     while (!done) {
 		try {
 			wd->stop(); // disable the watchdog while we wait for something to do
@@ -511,7 +523,7 @@ void IODCommandThread::operator()() {
 			try {
 				rc = zmq::poll( &items[0], 3, poll_time);
 				if (poll_time < 20) poll_time += 1;
-				if (!rc) continue;
+				if (!rc) { usleep(100); continue; }
 				if (rc == -1 && errno == EAGAIN) continue;
 				if (done) break;
 			}
@@ -558,16 +570,19 @@ void IODCommandThread::operator()() {
 			if ( items[0].revents & ZMQ_POLLIN) {
 				zmq::message_t request;
 				if (!cti->socket.recv (&request)) continue; // interrupted system call
+#if 0
 				if (!machine_is_ready) {
 					const char *tosend = "Ignored during startup";
 					safeSend(cti->socket, tosend, strlen(tosend));
 					continue;
 				}
+#endif
 				size_t size = request.size();
 				char *data = (char *)malloc(size+1); // note: leaks if an exception is thrown
 				memcpy(data, request.data(), size);
 				data[size] = 0;
 				MessageHeader mh;
+				mh.start_time = microsecs();
 				mh.needReply(true);
 				safeSend(command_sync, data, size, mh);
 				free(data);

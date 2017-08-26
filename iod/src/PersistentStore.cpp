@@ -2,7 +2,7 @@
 #include <string.h>
 #include <boost/foreach.hpp>
 #include <errno.h>
-
+#include <iomanip>
 #include <utility>
 #include <string>
 #include <iostream>
@@ -35,6 +35,7 @@ void PersistentStore::load() {
 	std::ifstream store(file_name.c_str());
 	if (!store.is_open()) return;
 	char buf[400];
+	std::cout << std::fixed;
 	while (store.getline(buf, 400, '\n')) {
 		char value_buf[400];
 		std::istringstream in(buf);
@@ -55,15 +56,21 @@ void PersistentStore::load() {
 			value_str = vp;
 
 		long i_value;
+		double d_value;
 		char *endp;
 		i_value = strtol(value_str.c_str(), &endp, 10);
 		if (*endp == 0) {
 			insert(name, property, i_value);
-			//std::cout << name << "." << property << ":" << i_value << "\n";
 		}
 		else {
-			insert(name, property, Value(value_str.c_str(), kind).asString());
-			//std::cout << name << "." << property << ":" << value_str << "\n";
+			d_value = strtod(value_str.c_str(), &endp);
+			if (*endp == 0) {
+					insert(name, property, d_value);
+			}
+			else {
+				insert(name, property, Value(value_str.c_str(), kind).asString());
+				std::cout << name << "." << property << ":" << value_str << "\n";
+			}
 		}
 	}
 	store.close();
@@ -104,13 +111,12 @@ std::ostream &PersistentStore::operator<<(std::ostream &out) const {
 				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
 			}
 			else if (entry.second.kind == Value::t_bool
-					 || entry.second.kind == Value::t_integer ) {
-				//std::cout << prop.first << " " << entry.first << " " << entry.second << " bool/int\n";
+					 || entry.second.kind == Value::t_integer 
+					 || entry.second.kind == Value::t_float
+					) {
 				out << prop.first << " " << entry.first << " " << entry.second << "\n";
 			}
-/*			else if (entry.second.kind == Value::t_symbol && entry.second.sValue.find(" ") != std::string::npos)
-				out << prop.first << " " << entry.first << " " << entry.second.quoted() << "\n";
-*/			else if (sym_info && execute_pattern(sym_info, entry.second.asString().c_str()) == 0) {
+			else if (sym_info && execute_pattern(sym_info, entry.second.asString().c_str()) == 0) {
 				//std::cout << prop.first << " " << entry.first << " " << entry.second.quoted() << " symbol pattern\n";
 				out << prop.first << " " << entry.first << " " << entry.second << "\n";
 			}

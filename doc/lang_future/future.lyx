@@ -91,6 +91,15 @@ This paper describes various language features that will be added to Clockwork
  in the future
 \end_layout
 
+\begin_layout Standard
+\begin_inset CommandInset toc
+LatexCommand tableofcontents
+
+\end_inset
+
+
+\end_layout
+
 \begin_layout Section
 Introduction
 \end_layout
@@ -105,6 +114,10 @@ Floating point calculations
 
 \begin_layout Itemize
 Sets and relationships
+\end_layout
+
+\begin_layout Itemize
+Binary values
 \end_layout
 
 \begin_layout Itemize
@@ -206,7 +219,8 @@ Method extensions
 \end_layout
 
 \begin_layout Itemize
-Sequences and Cycles - shortcuts for transition tables?
+Sequences and Cycles - shortcuts for transition tables? Transitions are
+ limited to be within a list or a cycle of states.
 \end_layout
 
 \begin_layout Itemize
@@ -371,14 +385,93 @@ The way property values are stored in machines desparately needs an overhaul;
  time.
 \end_layout
 
-\begin_layout Subsection
-Floating point calculations
+\begin_layout Subsubsection
+Floating point values
 \end_layout
 
 \begin_layout Standard
-Clockwork is very weak when manipulating floating point data.
- Currently all calculations are done using integer arithmetic and the type
- system needs to be updated to fix this.
+Within clockwork, floating point values are used as in the following examples:
+\end_layout
+
+\begin_layout LyX-Code
+OPTION x 1.0;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION y 1.;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION z 1.3E3;
+\end_layout
+
+\begin_layout Standard
+Usage
+\end_layout
+
+\begin_layout LyX-Code
+OPTION a 1;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION x 1.3;
+\end_layout
+
+\begin_layout LyX-Code
+a := a + x; /* a converted to float with value 2.3 */
+\end_layout
+
+\begin_layout LyX-Code
+a := INT(a+x); /* INT is an alias for INTEGER */
+\end_layout
+
+\begin_layout LyX-Code
+a := a + x AS INTEGER;
+\end_layout
+
+\begin_layout LyX-Code
+a := (a + x) AS INTEGER;
+\end_layout
+
+\begin_layout Standard
+The precedence of AS is 
+\end_layout
+
+\begin_layout Subsubsection
+Type translation
+\end_layout
+
+\begin_layout Standard
+Values are typed internally and can be forcibly converted from one type
+ to another via the AS operator:
+\end_layout
+
+\begin_layout LyX-Code
+a := b AS INTEGER;
+\end_layout
+
+\begin_layout LyX-Code
+b := a AS FLOAT
+\end_layout
+
+\begin_layout Standard
+Numeric values can be combined in expressions without specific type casting
+ and the rules for determining resultant types are:
+\end_layout
+
+\begin_layout Itemize
+string expressions cause numeric values to be converted to strings in the
+ result
+\end_layout
+
+\begin_layout Itemize
+when a floating point value is used in an subexpression, the subexpression
+ type is converted to floating point
+\end_layout
+
+\begin_layout Itemize
+floating point values will be displayed in fixed-point notation from clockwork
+ (hard-coded at 3 decimal places at present
 \end_layout
 
 \begin_layout Subsection
@@ -522,6 +615,11 @@ There should be a way to trigger events for each item in a set:
 
 \begin_layout LyX-Code
 EACH item IN set DO command
+\end_layout
+
+\begin_layout Standard
+at present, a message can be sent to all members of a set by sending the
+ message to the set
 \end_layout
 
 \begin_layout Subsubsection
@@ -1263,6 +1361,25 @@ Procedural or functional style? A functional language tends to use functions
 \end_layout
 
 \begin_layout Subsection
+Data hiding
+\end_layout
+
+\begin_layout Standard
+Add: check PRIVATE STATE WITHIN visible_alias or perhaps just PRIVATE STATE
+ that simply doesn't update the external view of what state the machine
+ is in.
+ Considr perhaps SHOW state_name FOR state_name.
+\end_layout
+
+\begin_layout Subsection
+Type checking
+\end_layout
+
+\begin_layout Standard
+Consider adding: sample MACHINE p1 class1, p2 class2
+\end_layout
+
+\begin_layout Subsection
 Substates
 \end_layout
 
@@ -1469,6 +1586,91 @@ Note that statements after a THROW are not executed and the handler is deemed
 
 \begin_layout LyX-Code
 CATCH ALL { num_errors := num_errors + 1 }
+\end_layout
+
+\begin_layout Subsection
+State changes
+\end_layout
+
+\begin_layout Standard
+We have clarified what is meant by 
+\begin_inset Quotes eld
+\end_inset
+
+machine IS state
+\begin_inset Quotes erd
+\end_inset
+
+ to mean that the conditions for that state are true and the machine has
+ completed the transition to the state.
+ Once a machine has started to change state, it enters a private 
+\begin_inset Quotes eld
+\end_inset
+
+leaving
+\begin_inset Quotes erd
+\end_inset
+
+ state for the previous state and then a private 
+\begin_inset Quotes eld
+\end_inset
+
+entering
+\begin_inset Quotes erd
+\end_inset
+
+ state for the new state before finally becoming on.
+ Since they are private states, the machine will appear to the outside world
+ to still be in the original state.
+\end_layout
+
+\begin_layout Standard
+Two new verbs are added: LEAVING and ENTERING, these can be used to get
+ access to the private parts of the transition.
+\end_layout
+
+\begin_layout Standard
+Is a transitional state equal to a normal state with the same name?
+\end_layout
+
+\begin_layout Standard
+is a private state equal to a normal state with the same name?
+\end_layout
+
+\begin_layout Standard
+PRIVATE states can be used to simplify the external interface of a machine.
+\end_layout
+
+\begin_layout LyX-Code
+turning_on PRIVATE STATE;
+\end_layout
+
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+PRIVATE STATES a,b,c;
+\end_layout
+
+\begin_layout Standard
+To indicate that a stable state is private the state needs to be declared
+ as a PRIVATE STATE as well as being defined in a WHEN clause in the normal
+ way.
+\end_layout
+
+\begin_layout Standard
+Consider simply setting 'transitional' on a state during the enter/leave
+ process.
+\end_layout
+
+\begin_layout Standard
+Consider adding a new test to see if a machine is currently transitioning:
+ wait WHEN other IS CHANGING STATE;
+\end_layout
+
+\begin_layout LyX-Code
+
 \end_layout
 
 \begin_layout Subsection
@@ -1732,6 +1934,14 @@ EXECUTE / DO command EVERY time_period;
 \end_layout
 
 \begin_layout Subsection
+Property calculations
+\end_layout
+
+\begin_layout Standard
+OPTION x expession
+\end_layout
+
+\begin_layout Subsection
 Dynamic machines
 \end_layout
 
@@ -1748,6 +1958,24 @@ New machines can be constructed with the CREATE command and removed with
 \begin_layout Standard
 Objects that are allocated statically can never be destroyed and reference
  counting is not necessary for these items (it may still be applied, however..TBD)
+\end_layout
+
+\begin_layout Subsection
+Linked states
+\end_layout
+
+\begin_layout Standard
+States in cooperating machines can be linked to ensure that one machine
+ passes through a gateway state before another machine may pass through
+ a linked state.
+\end_layout
+
+\begin_layout Subsection
+Patterns
+\end_layout
+
+\begin_layout Standard
+Access parts of a pattern via COPY pattern FROM source TO list
 \end_layout
 
 \begin_layout Subsection

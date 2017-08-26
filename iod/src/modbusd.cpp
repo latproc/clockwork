@@ -60,7 +60,6 @@
 
 namespace po = boost::program_options;
 
-const char *program_name;
 
 static boost::condition_variable_any cond;
 
@@ -736,11 +735,12 @@ void loadData(const char *initial_settings)
 		while (init.getline(buf, 200, '\n'))
 		{
 			std::istringstream iss(buf);
-			int group, addr, len;
+			int group, addr, kind, len;
 			int value;
 			std::string name;
-			iss >> group >> addr >> name >> len >> value;
-			if (debug) std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
+			iss >> group >> addr >> kind >> name >> len >> value;
+			if (debug) std::cout << name << ": " << group << " " << kind << " " << addr << " " << len << " " << value <<  "\n";
+			if (kind == 7) len = 2; // float
 			insert(group, addr-1, value, len);
 		}
 	}

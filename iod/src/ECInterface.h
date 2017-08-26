@@ -53,6 +53,7 @@ public:
 	bool ecrtSlaveConfigPdos();
 	bool online();
 	bool operational();
+	int state();
 	std::ostream &operator <<(std::ostream &)const;
 	const std::string &getName() const { return name; }
 public:
@@ -62,6 +63,7 @@ public:
 	uint16_t position;
 	uint32_t vendor_id;
 	uint32_t product_code;
+	uint32_t revision_no;
 	unsigned int *offsets;
 	unsigned int *bit_positions;
 	unsigned int sync_count;
@@ -83,6 +85,7 @@ typedef struct ECMaster{
 } ec_master_t;
 typedef struct ECMasterState{
     unsigned int link_up;
+	unsigned int al_states;
 } ec_master_state_t;
 typedef struct ECDomain{} ec_domain_t;
 typedef struct ECDomainState{} ec_domain_state_t;
@@ -101,6 +104,13 @@ class ECInterface {
 public:
 	static unsigned int FREQUENCY;
 	static ec_master_t *master;
+	static uint64_t master_last_checked; // time the master status was last checked
+	static uint64_t master_state_changed; // time a last state change was detected in the master
+
+#if 0
+	static ec_master_info_t master_info;
+	static uint64_t master_info_time; // time the master info was last read
+#endif
 	static ec_master_state_t master_state;
 
 	static ec_domain_t *domain1;
@@ -108,7 +118,7 @@ public:
 	static uint8_t *domain1_pd;
 
 	bool initialised;
-	bool active;
+	static bool active;
 
 	static ECInterface *instance();
 
@@ -125,24 +135,35 @@ public:
 	
 	bool start();
 	bool stop();
-	bool init();
+	void init(); // prepare the master
+	static void setup(void *data); // call init and link to the clockwork machine instance for ethercat
 	void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
-    const ec_master_t *getMaster() { return master; }
-    const ec_master_state_t *getMasterState() { return &master_state; }
+	const ec_master_t *getMaster() { return master; }
+	const ec_master_state_t *getMasterState() { return &master_state; }
 #ifndef EC_SIMULATOR
+	void listSlaves( std::list<ec_slave_info_t> &slaves );
 	bool prepare();
-	bool activate();
+	bool activate(); // attempt to activate the master
+	bool deactivate(); // deactivate the master
+	void configureModules();
+	void registerModules();
 	bool addModule(ECModule *m, bool reset_io);
 	bool online();
 	bool operational();
-	static std::vector<ECModule *>modules;
 	//bool configurePDOs();
-	static ECModule *findModule(int position);
-	uint8_t *getProcessData() { return process_data; }
-	uint8_t *getProcessMask();
+	static ECModule *findModule(unsigned int position);
+
 	void setProcessData (uint8_t *pd);
-	void setProcessMask (uint8_t *m);
-	uint32_t getProcessDataSize();
+	uint8_t *getProcessData() { return process_data; }
+
+	void setProcessMask( uint8_t *new_mask );
+	uint8_t *getProcessMask();
+	void setAppProcessMask( uint8_t *new_mask, size_t size );
+
+	void setMaxIOIndex(unsigned int new_max); // min index into user required process data (must be zero)
+	void setMinIOIndex(unsigned int new_min); // max index into user required process data
+	uint32_t getProcessDataSize(); // returns process data size of user selected data set
+	
 	uint32_t getReferenceTime();
 	void setReferenceTime(uint32_t now);
 
@@ -150,10 +171,10 @@ public:
 	void setUpdateMask (uint8_t *m);
 	uint8_t *getUpdateData();
 	uint8_t *getUpdateMask();
-	
+
 #ifdef USE_SDO
-  void beginModulePreparation(); // load the first SDO initialisation entry
-  bool finishedModulePreparation(); // are all the SDO init entries completed
+	void beginModulePreparation(); // load the first SDO initialisation entry
+	bool finishedModulePreparation(); // are all the SDO init entries completed
 	bool checkSDOInitialisation();
 	void checkSDOUpdates();
 
@@ -173,6 +194,7 @@ private:
 	uint8_t *update_mask;
 	uint32_t reference_time;
 #ifndef EC_SIMULATOR
+	static std::vector<ECModule *>modules;
 #ifdef USE_SDO
 	std::list< std::pair<SDOEntry*, Value> > initialisation_entries;
 	std::list< std::pair<SDOEntry*, Value> >::iterator current_init_entry;
@@ -186,6 +208,10 @@ private:
 	static long default_tolerance;
 	const long *failure_tolerance;
 	int failure_count;
+
+	unsigned int min_io_index; // first byte of the process data needed by the user (must be zero currently)
+	unsigned int max_io_index; // last byte of the process data needed by the user
+	uint8_t *app_process_mask; // copy of user provided mask data
 };
 
 #ifdef USE_ETHERCAT

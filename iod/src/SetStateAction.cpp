@@ -26,6 +26,7 @@
 #include "MessageLog.h"
 #include "Scheduler.h"
 #include "FireTriggerAction.h"
+#include "AbortAction.h"
 
 uint64_t nowMicrosecs();
 
@@ -178,12 +179,23 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 							}
 							else {
 								std::stringstream ss;
-								ss << "Transition from " << t.source << " to "
+								ss << owner->getName() << " "  << "Transition from " << t.source << " to "
 									<< value << " denied due to condition " << t.condition->last_evaluation;
-								error_str = ss.str().c_str();
-								DBG_M_ACTIONS << owner->getName() << " "  << ss.str() << "\n";
-								status = New;
-								return NeedsRetry;
+								error_str = strdup(ss.str().c_str());
+								MessageLog::instance()->add(ss.str().c_str());
+								DBG_M_ACTIONS << ss.str() << "\n";
+								if (t.abort_on_failure) {
+									AbortActionTemplate aat(true, error_str.get());
+									AbortAction *aa = (AbortAction*)aat.factory(owner);
+									owner->enqueueAction(aa);
+									status = Failed;
+									return status;
+								}
+								else {
+									status = New;
+									owner->setNeedsCheck();
+									return NeedsRetry;
+								}
 							}
 						}
 					}
@@ -305,6 +317,7 @@ Action::Status SetStateAction::checkComplete() {
 					cleanupTrigger();
 				}
 				owner->stop(this);
+				owner->notifyDependents();
 				return status;
 			}
 			else {

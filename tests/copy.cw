@@ -8,16 +8,33 @@ front_done LIST;
 Test MACHINE L_Done, L_FrontDone {
 
 	saved LIST;
+	rowTwo REFERENCE; # this is set to a by copy then overwritten, check dependencies
+	aRef REFERENCE; # copy all should leave the last item here
+	twoItems LIST;
+	
 
 	ENTER INIT {
 		CLEAR saved;
 		COPY ALL FROM L_Done TO saved;
+		COPY ALL FROM L_Done TO rowTwo WHERE L_Done.ITEM.row == 1;
+		COPY ALL FROM L_Done TO rowTwo WHERE L_Done.ITEM.row == 2;
+		COPY ALL FROM L_Done TO aRef;
 		n := SIZE OF saved;
 		LOG "copied " + n + " to saved";
 		LOG "copying to L_FrontDone";
 	    COPY ALL FROM L_Done TO L_FrontDone WHERE L_Done.ITEM.row == 1;
 		n := SIZE OF L_FrontDone;
+		COPY 2 FROM L_Done TO twoItems;
 	}
+}
+
+d FLAG; e FLAG; f FLAG; g FLAG;
+letters LIST a,b,c,d,e,f,g;
+copier Copier letters;
+Copier MACHINE list {
+	res LIST;
+	COMMAND reset { CLEAR res; }
+	COMMAND go { COPY 2 FROM list TO res; }
 }
 
 Settings MACHINE {
@@ -43,7 +60,7 @@ STARTUP MACHINE {
 	off INITIAL;
 	on STATE;
 
-	ENTER on { ENABLE done; ENABLE front_done; ENABLE pt;}
+	ENTER on { ENABLE done; ENABLE front_done; ENABLE pt; ENABLE test; ENABLE copier; }
 }
 
 startup STARTUP;

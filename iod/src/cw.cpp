@@ -66,8 +66,6 @@
 #include "ProcessingThread.h"
 #include <libgen.h>
 
-const char *program_name;
-
 bool program_done = false;
 bool machine_is_ready = false;
 
@@ -290,7 +288,7 @@ int main (int argc, char const *argv[])
                         }
                 }
                 else {
-                    if (m->_type != "POINT" && m->_type != "PUBLISHER" && m->_type != "SUBSCRIBER") {
+                    if (m->_type != "POINT" && m->_type != "MQTTPUBLISHER" && m->_type != "MQTTSUBSCRIBER") {
                         //DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
 										}
                     else   {
@@ -302,13 +300,13 @@ int main (int argc, char const *argv[])
                             continue;
                         }
                         std::string topic = m->parameters[1].val.asString();
-                        if (m->_type != "SUBSCRIBER" && m->parameters.size() == 3) {
+                        if (m->_type != "MQTTSUBSCRIBER" && m->parameters.size() == 3) {
                             if (!module->publishes(topic)) {
                                 m->properties.add("type", "Output");
                                 module->publish(topic, m->parameters[2].val.asString(), m);
                             }
                         }
-                        else if (m->_type != "PUBLISHER") {
+                        else if (m->_type != "MQTTPUBLISHER") {
                             if (!module->subscribes(topic)) {
                                 m->properties.add("type", "Input");
                                 module->subscribe(topic, m);
@@ -334,15 +332,13 @@ int main (int argc, char const *argv[])
 	IODHardwareActivation iod_activation;
 	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
 
-	//zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
-	//resource_mgr.bind("inproc://resource_mgr");
-    
 	zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
 	sim_io.bind("inproc://ethercat_sync");
     
 	DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
-    
+	Scheduler::instance()->setThreadRef(scheduler_thread);
+
 	DBG_INITIALISATION << "-------- Starting Command Interface ---------\n";
 	boost::thread monitor(boost::ref(*stateMonitor));
 

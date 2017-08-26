@@ -22,6 +22,7 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <boost/thread/mutex.hpp>
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
 #include <netinet/in.h>
@@ -35,6 +36,7 @@
 #include "ProcessingThread.h"
 
 #define VERBOSE_DEBUG 0
+//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
@@ -83,8 +85,20 @@ uint8_t *IOComponent::io_process_mask = 0;
 uint8_t *IOComponent::update_data = 0;
 uint8_t *IOComponent::default_data = 0;
 uint8_t *IOComponent::default_mask = 0;
-int IOComponent::outputs_waiting = 0;
 static uint8_t *last_process_data = 0;
+int IOComponent::outputs_waiting = 0;
+
+boost::recursive_mutex processing_queue_mutex;
+boost::recursive_mutex IOComponent::io_names_mutex;
+boost::unique_lock<boost::recursive_mutex> io_lock(processing_queue_mutex, boost::defer_lock);
+
+void IOComponent::lock() {
+	io_lock.lock();
+}
+
+void IOComponent::unlock() {
+	io_lock.unlock();
+}
 
 unsigned int IOComponent::max_offset = 0;
 unsigned int IOComponent::min_offset = 1000000L;
@@ -149,23 +163,73 @@ void copyMaskedBits(uint8_t *dest, uint8_t*src, uint8_t *mask, size_t len) {
 #endif
 }
 
+IOUpdate::~IOUpdate() {
+	assert(mask_);
+//	delete mask_;
+}
+
+// these components need to synchronise with clockwork
+std::set<IOComponent*> updatedComponentsIn;
+std::set<IOComponent*> updatedComponentsOut;
+bool IOComponent::updates_sent = false;
+
 IOComponent::HardwareState IOComponent::getHardwareState() { return hardware_state; }
 void IOComponent::setHardwareState(IOComponent::HardwareState state) { 
-	NB_MSG << "Hardware state  set to " << 
-		((state == s_hardware_init) ? "Hardware Initialisation" : "Operational") << "\n";
+	const char *hw_state_str = "Hardware preinitialisatio";
+	if (state == s_hardware_init)
+		hw_state_str = "Hardware Initialisation";
+	else if (state == s_operational)
+		hw_state_str = "Operational";
+	NB_MSG << "Hardware state  set to " << hw_state_str << "\n";
 	hardware_state = state; 
 }
 
 IOComponent::DeviceList IOComponent::devices;
 
+uint8_t *IOComponent::getProcessData() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return io_process_data; 
+}
+uint8_t *IOComponent::getProcessMask() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return io_process_mask; 
+}
+uint8_t *IOComponent::getDefaultData() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return default_data; 
+}
+uint8_t *IOComponent::getDefaultMask() { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+  return default_mask; 
+}
+
+void IOComponent::reset() {
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+	processing_queue.clear();
+	regular_polls.clear();
+	std::list<MachineInstance*>::iterator iter = MachineInstance::begin();
+	while (iter != MachineInstance::end()) {
+		MachineInstance *m = *iter++;
+		if (m->io_interface) { delete m->io_interface; m->io_interface = 0; }
+	}
+	if (io_process_data) delete[] io_process_data; io_process_data = 0;
+	if (io_process_mask) delete[] io_process_mask; io_process_mask = 0;
+	if (update_data) delete[] update_data; update_data = 0;
+	if (default_data) delete[] default_data; default_data = 0;
+	if (default_mask) delete[] default_mask; default_mask = 0;
+	if (last_process_data) delete[] last_process_data; last_process_data = 0;
+}
+
 IOComponent::IOComponent(IOAddress addr) 
 		: last_event(e_none), address(addr), io_index(-1), raw_value(0) { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 	processing_queue.push_back(this); 
 	// the io_index is the bit offset of the first bit in this objects address space
 	io_index = addr.io_offset*8 + addr.io_bitpos;
 }
 
 IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0), direction_(DirBidirectional) { 
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 	processing_queue.push_back(this); 
 	// use the same io-updated index as the processing queue position
 }
@@ -176,17 +240,19 @@ IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0), dir
 void IOComponent::setInitialState() {
 }
 
+void IOComponent::updatesSent(bool which){
+	//if (which) std::cout << "updates sent\n";
+	updates_sent = which;
+}
+
+bool IOComponent::updatesToSend() { return updates_sent == false; }
+
 IOComponent* IOComponent::lookup_device(const std::string name) {
     IOComponent::DeviceList::iterator device_iter = IOComponent::devices.find(name);
     if (device_iter != IOComponent::devices.end())
         return (*device_iter).second;
     return 0;
 }
-
-// these components need to synchronise with clockwork
-std::set<IOComponent*> updatedComponentsIn;
-std::set<IOComponent*> updatedComponentsOut;
-bool IOComponent::updates_sent = false;
 
 #if VERBOSE_DEBUG
 static void display(uint8_t *p, unsigned int count) {
@@ -219,7 +285,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
     gettimeofday(&now, NULL);
     current_time = now.tv_sec * 1000000 + now.tv_usec;
 
-		assert(data != io_process_data);
+	assert(data != io_process_data);
 
 #if VERBOSE_DEBUG
 	for (size_t ii=0; ii<data_size; ++ii) if (mask[ii]) {
@@ -252,9 +318,10 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		if (!last_process_data) {
 			if (*m) notifyComponentsAt(i);
 		}
-		if (*m && *p==*q) {
-			std::cout<<"warning: incoming_data == process_data but mask indicates a change\n";
-		}
+//		if (*m && *p==*q) {
+//			std::cout<<"warning: incoming_data == process_data but mask indicates a change at byte "
+//			<< (int)(m-mask) << std::setw(2) <<  std::hex << " value: 0x" << (int)(*m) << std::dec << "\n";
+//		}
 		if (*p != *q && *m) { // copy masked bits if any
 			uint8_t bitmask = 0x01;
 			int j = 0;
@@ -281,6 +348,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 							// remotely source change on this io
 							if (ioc) {
 								//std::cout << " adding " << ioc->io_name << " due to bit change\n";
+								boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 								updatedComponentsIn.insert(ioc);
 							}
 
@@ -314,24 +382,39 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		memcpy(last_process_data, io_process_data, process_data_size);
 	}
     
+	{
+		boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 	if (!updatedComponentsIn.size())
 		return;
-	//std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
+//	std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
 #ifdef USE_EXPERIMENTAL_IDLE_LOOP
+	// look at the components that changed and remove them from the outgoing queue as long as the 
+	// outputs have been sent to the hardware
 	std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
 	while (iter != updatedComponentsIn.end()) {
 		IOComponent *ioc = *iter++;
 		ioc->read_time = io_clock;
 		//std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
-		//if (ioc->last_event == e_none)  {
-			updatedComponentsIn.erase(ioc); 
-			if (updates_sent && updatedComponentsOut.count(ioc)) {
-				//std::cout << "output request for " << ioc->io_name << " resolved\n";
-				updatedComponentsOut.erase(ioc);
-			}
-		//}
+		updatedComponentsIn.erase(ioc); 
+		if (updates_sent && updatedComponentsOut.count(ioc)) {
+			//std::cout << "output request for " << ioc->io_name << " resolved\n";
+			updatedComponentsOut.erase(ioc);
+		}
 		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
 		updated_machines.insert(ioc);
+	}
+	// for machines with updates to send, if these machines already have the same value
+	// as the hardware (and updates have been sent) we also remove them from the
+	// outgoing queue
+	if (updates_sent) {
+		iter = updatedComponentsOut.begin();
+		while (iter != updatedComponentsOut.end()) {
+			IOComponent *ioc = *iter++;
+			if (ioc->pending_value == (uint32_t)ioc->address.value) {
+				//std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
+				updatedComponentsOut.erase(ioc);
+			}
+		}
 	}
 #else
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
@@ -341,7 +424,8 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		ioc->idle();
 	}
 #endif
-  outputs_waiting = updatedComponentsOut.size();
+	}
+	outputs_waiting = updatedComponentsOut.size();
 }
 
 IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos, 
@@ -356,12 +440,22 @@ IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
 	addr.is_signed = signed_value;
 	char buf[80];
 	snprintf(buf, 80, "io:%s_%d", name, module_pos);
+
+	{
+	boost::recursive_mutex::scoped_lock lock(io_names_mutex);
 	if (io_names.find(std::string(buf)) != io_names.end())  {
 		std::cerr << "IOComponent::add_io_entry: warning - an IO component named " 
 			<< name << " already existed on module " << module_pos << "\n";
 	}
 	io_names[buf] = addr;
+	}
 	return addr;
+}
+
+void IOComponent::remove_io_module(int pos) {
+	//TBD add a mutex on io_names and code to remove entries for modules at this position
+	boost::recursive_mutex::scoped_lock lock(io_names_mutex);
+	io_names.clear();
 }
 
 void IOComponent::add_publisher(const char *name, const char *topic, const char *message) {
@@ -381,12 +475,15 @@ void IOComponent::setupProperties(MachineInstance *m) {
 
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
-	out << (io_clock-read_time) << " [" << address.description<<" "
+	out << "readtime: " << (io_clock-read_time) << " [" << address.description<<", "
 		<<address.module_position << " "
 		<< address.io_offset << ':' 
 		<< address.io_bitpos << "." 
 		<< address.bitlen << "]=" 
 		<< address.value;
+  if (address.bitlen == 1 && io_process_data)  {
+    out << " (" << (bool)(io_process_data[address.io_offset] & (1<<address.io_bitpos)) << ")";
+  }
 	return out;
 }
 
@@ -891,6 +988,7 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
 			IOComponent *c = *items++;
 			if (c) {
 			//std::cout << "notifying " << c->io_name << "\n";
+			boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 			updatedComponentsIn.insert(c);
 			++count;
 			}
@@ -901,6 +999,7 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
 }
 
 bool IOComponent::hasUpdates() {
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 	return !updatedComponentsOut.empty();
 }
 
@@ -1039,18 +1138,23 @@ IOUpdate *IOComponent::getUpdates() {
 	if (!mask) {
 		return 0;
 	}
+	//MEMCHECK();
 	IOUpdate *res = new IOUpdate;
-	res->size = max_offset - min_offset + 1;
-	res->data = getUpdateData();
-	res->mask = mask;
+	//MEMCHECK();
+	res->setSize(max_offset - min_offset + 1);
+	res->setData(getUpdateData());
+	//MEMCHECK();
+	res->setMask(mask);
+	//MEMCHECK();
 #if VERBOSE_DEBUG
 	std::cout << std::flush 
-		<< "IOComponent::getUpdates preparing to send " << res->size << "d:"; 
-	display(res->data, process_data_size); 
-	std::cout << "m:"; 
-	display(res->mask, process_data_size);
+		<< "IOComponent::getUpdates preparing to send " << res->size() << " d:"; 
+	display(res->data(), process_data_size); 
+	std::cout << " m:"; 
+	display(res->mask(), process_data_size);
 	std::cout << "\n" << std::flush;
 #endif
+	//MEMCHECK();
 	return res;
 }
 
@@ -1058,37 +1162,44 @@ IOUpdate *IOComponent::getDefaults() {
 	if (min_offset > max_offset)
 		return 0;
 	IOUpdate *res = new IOUpdate;
-	res->size = max_offset - min_offset + 1;
+	res->setSize(max_offset - min_offset + 1);
+	assert(io_process_data);
+	assert(process_data_size);
+	assert(default_data);
+	assert(default_mask);
 	copyMaskedBits(io_process_data, default_data, default_mask, process_data_size);
-	res->data = getProcessData();
-	res->mask = default_mask;
+	res->setData(getProcessData());
+	res->setMask(default_mask);
 
 #if VERBOSE_DEBUG
-	std::cout << "preparing to send defaults " << res->size << " bytes\n"; 
-	display(res->data, res->size); std::cout << "\n"; 
-	display(res->mask, res->size); std::cout << "\n";
+	std::cout << "preparing to send defaults " << res->size() << " bytes\n"; 
+	display(res->data(), res->size()); std::cout << "\n"; 
+	display(res->mask(), res->size()); std::cout << "\n";
 #endif
 	return res;
 }
 
 
 void IOComponent::setupIOMap() {
+	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 	max_offset = 0;
 	min_offset = 1000000L;
+	io_map.clear();
 
 	if (indexed_components) delete indexed_components;
-	//std::cout << "\n\n\n";
+	std::cout << "\n\n setupIOMap\n";
 	// find the highest and lowest offset location within the process data
 	std::list<IOComponent *>::iterator iter = processing_queue.begin();
 	while (iter != processing_queue.end()) {
 		IOComponent *ioc = *iter++;
-		//std::cout << ioc->getName() << " " << ioc->address << "\n";
+		std::cout << ioc->getName() << " " << ioc->address << "\n";
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
 		//bitpos = bitpos % 8;
 		if (ioc->address.bitlen>=8) offset += ioc->address.bitlen/8 - 1;
 		if (offset > max_offset) max_offset = offset;
+		assert(max_offset < 10000);
 		if (offset < min_offset) min_offset = offset;
 	}
 	if (min_offset > max_offset) min_offset = max_offset;
@@ -1120,10 +1231,10 @@ void IOComponent::setupIOMap() {
 			if (!cl) cl = new std::list<IOComponent *>();
 			cl->push_back(ioc);
 			io_map[offset+i] = cl;
-			//std::cout << "offset: " << (offset+i) << " io name: " << ioc->io_name << "\n";
+			std::cout << "offset: " << (offset+i) << " io name: " << ioc->io_name << "\n";
 		}
 	}
-	//std::cout << "\n\n\n";
+	std::cout << "\n\n\n";
 	io_process_mask = generateProcessMask(io_process_mask, process_data_size);
 }
 
@@ -1141,23 +1252,27 @@ void IOComponent::markChange() {
 		// only outputs will have an e_on or e_off event queued, 
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
-			//std::cout << "IOComponent::markChange setting bit " 
-			//	<< (offset - update_data) << ":" << bitpos 
-			//	<< " for " << io_name << "\n";
+/*
+			std::cout << "IOComponent::markChange setting bit " 
+				<< (offset - update_data) << ":" << bitpos 
+				<< " for " << io_name << "\n";
+*/
 			set_bit(offset, bitpos, 1);			
-			updates_sent = false;
+			updatesSent(false);
 		}
 		else if (value &&last_event == e_off) {
 			set_bit(offset, bitpos, 0);
-			updates_sent = false;
+			updatesSent(false);
 		}
 		last_event = e_none;
 	}
 	else {
 		if (last_event == e_change) {
-			//std::cerr << " marking change to " << pending_value 
-			//	<< " at offset " << (unsigned long)(offset - update_data)
-			//    << " for " << io_name << "\n";
+/*
+			std::cerr << " marking change to " << pending_value 
+				<< " at offset " << (unsigned long)(offset - update_data)
+			    << " for " << io_name << "\n";
+*/
 			if (address.bitlen == 8) {
 				*offset = (uint8_t)pending_value & 0xff;
 			}
@@ -1174,7 +1289,7 @@ void IOComponent::markChange() {
 			display(update_data);
 			std::cout << "\n";
 #endif
-			updates_sent = false;
+			updatesSent(false);
 			//address.value = pending_value;
 		}
 	}
@@ -1183,7 +1298,7 @@ void IOComponent::markChange() {
 
 void IOComponent::handleChange(std::list<Package*> &work_queue) {
 	assert(io_process_data);
-	//std::cout << io_name << "::handleChange() " << last_event << "\n";
+//	std::cout << io_name << "::handleChange() " << last_event << "\n";
 	uint8_t *offset = io_process_data + address.io_offset;
 	int bitpos = address.io_bitpos;
 	offset += (bitpos / 8);
@@ -1201,7 +1316,7 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 					else evt = "off_leave";
 					std::list<MachineInstance*>::iterator owner_iter = owners.begin();
 					while (owner_iter != owners.end()) {
-            ProcessingThread::activate(*owner_iter);
+						ProcessingThread::activate(*owner_iter);
 						work_queue.push_back( new Package(this, *owner_iter++, new Message(evt, Message::LEAVEMSG)) );
 					}
 #endif
@@ -1269,7 +1384,7 @@ void Output::turnOn() {
 	gettimeofday(&last, 0);
 	last_event = e_on;
 	updatedComponentsOut.insert(this);
-	updates_sent = false;
+	updatesSent(false);
 	++outputs_waiting;
 	markChange();
 }
@@ -1278,7 +1393,7 @@ void Output::turnOff() {
 	gettimeofday(&last, 0);
 	last_event = e_off;
 	updatedComponentsOut.insert(this);
-	updates_sent = false;
+	updatesSent(false);
 	++outputs_waiting;
 	markChange();
 }
@@ -1288,7 +1403,7 @@ void IOComponent::setValue(uint32_t new_value) {
 	pending_value = new_value;
 	gettimeofday(&last, 0);
 	last_event = e_change;
-	updates_sent = false;
+	updatesSent(false);
 	updatedComponentsOut.insert(this);
 	++outputs_waiting;
 	markChange();
@@ -1299,7 +1414,7 @@ void IOComponent::setValue(int32_t new_value) {
 	pending_value = new_value;
 	gettimeofday(&last, 0);
 	last_event = e_change;
-	updates_sent = false;
+	updatesSent(false);
 	updatedComponentsOut.insert(this);
 	++outputs_waiting;
 	markChange();

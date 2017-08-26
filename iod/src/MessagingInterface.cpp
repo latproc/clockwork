@@ -40,28 +40,14 @@
 #include "Channel.h"
 #include "string.h"
 
+const char *program_name;
+static std::string STATE_ERROR("Operation cannot be accomplished in current state");
+
+
 MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 bool MessagingInterface::abort_all = false;
-
-const int MessageHeader::NEED_REPLY = 1;
-
-const int MessageHeader::SOCK_REMOTE = 9;
-const int MessageHeader::SOCK_CW = 1;
-const int MessageHeader::SOCK_CHAN = 2;
-const int MessageHeader::SOCK_CTRL = 3;
-
-uint32_t MessageHeader::last_id = 0;
-
-std::ostream &MessageHeader::operator<<(std::ostream &out) const  {
-	out << dest<<":" << source<<":" << options;
-	return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const MessageHeader&mh) {
-	return mh.operator<<(out);
-}
 
 uint64_t nowMicrosecs() {
 	struct timeval now;
@@ -95,30 +81,6 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 	return t;
 }
 
-MessageHeader::MessageHeader(uint32_t dst, uint32_t src, bool need_reply)
-		: msgid(++last_id), dest(dst), source(src), start_time(microsecs()), arrival_time(0), options(0)
-{
-	if (need_reply) options |= NEED_REPLY;
-}
-
-MessageHeader::MessageHeader() : msgid(++last_id), dest(0), source(0), start_time(microsecs()), arrival_time(0), options(0){}
-
-void MessageHeader::needReply(bool needs) {
-	if (needs) options|=NEED_REPLY;
-	else options &= (-1 ^ NEED_REPLY);
-}
-
-bool MessageHeader::needsReply() {
-	return ((options & NEED_REPLY) == NEED_REPLY);
-}
-
-void MessageHeader::reply() {
-	uint32_t tmp = dest;
-	dest = source;
-	source = tmp;
-}
-
-
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
 bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout) {
@@ -129,26 +91,20 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
 
 	*response_len = 0;
-	int retries = 5;
 	if (block && timeout == 0) timeout = 500;
-
-	int64_t more = 0;
-	size_t more_size = sizeof (more);
 
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
-			bool got_response = false;
-			bool got_address = false;
 			if (items[0].revents & ZMQ_POLLIN) {
 
 				bool done = false;
 				zmq::message_t message;
 				while (!done) {
 					{
-					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+					if ( (sock.recv(&message, ZMQ_DONTWAIT)) ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							//{ FileLogger fl(program_name); fl.f() << "Error: unexpected message header\n"; }
 							continue;
@@ -169,7 +125,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				}
 				usleep(10000);
 			}
-			return (response_len == 0) ? false : true;
+			return (*response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
@@ -188,21 +144,14 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 }
 
 bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout, MessageHeader &header) {
-	//    struct timeval now;
-	//    gettimeofday(&now, 0);
-	//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
+
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n"; }
-
 	*response_len = 0;
-	int retries = 5;
 	if (block && timeout == 0) timeout = 500;
 
-	int64_t more = 0;
-	size_t more_size = sizeof (more);
 
 	while (!MessagingInterface::aborted()) {
 		try {
@@ -210,7 +159,9 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			bool got_response = false;
+#if 0
 			bool got_address = false;
+#endif
 			if (items[0].revents & ZMQ_POLLIN) {
 
 				bool done = false;
@@ -317,7 +268,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 	return false;
 }
 
-void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader header) {
+void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const MessageHeader &header) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -328,6 +279,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 	if (header.dest || header.source) {
 		stage = e_sending_source;
 	}
+	assert(header.start_time != 0);
 
 	while (!MessagingInterface::aborted()) {
 		try {
@@ -351,7 +303,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 					FileLogger fl(program_name);
 					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
-				if (zmq_errno() == EFSM) throw;
+				if (zmq_errno() == EFSM || STATE_ERROR == zmq_strerror(errno)) throw;
 				usleep(10);
 				continue;
 			} else {
@@ -366,6 +318,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader
 }
 
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
+
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -385,7 +338,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 					FileLogger fl(program_name); 
 					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
-				if (zmq_errno() == EFSM) {
+				if (zmq_errno() == EFSM || STATE_ERROR == zmq_strerror(errno)) {
 					usleep(1000);
 					throw;
 				}
@@ -400,7 +353,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
-				 int32_t timeout_us, MessageHeader header) {
+				 int32_t timeout_us, const MessageHeader &header) {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -448,12 +401,15 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
     ss << host << ":" << port;
     std::string id = ss.str();
     if (interfaces.count(id) == 0) {
-        MessagingInterface *res = new MessagingInterface(host, port, MessagingInterface::DEFERRED_START, proto);
+			DBG_CHANNELS << "creating new interface to " << id << "\n";
+        MessagingInterface *res = new MessagingInterface(host, port, MessagingInterface::IMMEDIATE_START, proto);
         interfaces[id] = res;
         return res;
     }
-    else
-        return interfaces[id];
+		else {
+			DBG_CHANNELS << "returning existing interface to " << id <<"\n";
+			return interfaces[id];
+		}
 }
 
 MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start, ProtocolType proto)
@@ -474,12 +430,16 @@ MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred
 }
 
 void MessagingInterface::start() {
-	if (started_) return;
+	if (started_) {
+		DBG_CHANNELS << "Messaging interface already started; skipping\n";
+		return;
+	}
 	if (protocol == eCLOCKWORK || protocol == eZMQ|| protocol == eCHANNEL) {
 		owner_thread = pthread_self();
-		if (hostname == "*" || hostname == "*") {
-			//NB_MSG << "binding " << url << "\n";
+		if (hostname == "*" || hostname == "0.0.0.0") {
+			NB_MSG << "binding " << url << "\n";
 			socket->bind(url.c_str());
+			started_ = true;
 		}
 		else {
 			connect();
@@ -488,7 +448,6 @@ void MessagingInterface::start() {
 	else {
 		connect();
 	}
-	started_ = true;
 }
 
 void MessagingInterface::stop() { 
@@ -566,8 +525,10 @@ void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ || protocol == eCHANNEL) {
 		if (pthread_equal(owner_thread, pthread_self())) {
 			FileLogger fl(program_name); fl.f() << hostname<<":"<<port 
-				<<" socket connect being called from a thread that isn't the owner\n";
+				<<" attempt to call socket connect from a thread that isn't the owner\n";
+			return;
 		}
+		DBG_CHANNELS << "calling connect on " << url << "\n";
 		socket->connect(url.c_str());
 		int linger = 0;
 		socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
@@ -577,9 +538,10 @@ void MessagingInterface::connect() {
 		connection = anetTcpConnect(error, hostname.c_str(), port);
 		if (connection == -1) {
 			MessageLog::instance()->add(error);
-			std::cerr << error << "\n";
+			DBG_CHANNELS << "MessagingInterface::connect error " << error << "\n";
 		}
 	}
+	started_ = true;
 }
 
 MessagingInterface::~MessagingInterface() {
@@ -608,9 +570,13 @@ char *MessagingInterface::send(const char *txt) {
 	if (owner_thread != pthread_self()) {
 		char tnam1[100], tnam2[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
-		assert(pgn_rc == 0);
+		if (pgn_rc != 0)  {
+			NB_MSG << "Warning: Error code " << pgn_rc << " returned when getting thread name\n";
+		}
 		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
-		assert(pgn_rc == 0);
+		if (pgn_rc != 0) {
+			NB_MSG << "Warning: Error code " << pgn_rc << " returned when getting thread name\n";
+		}
 
 		NB_MSG << "error: message send ("<< txt <<") from a different thread:"
 		<< " owner: " << std::hex << " '" << owner_thread

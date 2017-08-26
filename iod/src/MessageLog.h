@@ -30,6 +30,7 @@ public:
     static MessageLog *instance();
     static void setMaxMemory(unsigned int max) { max_memory = max; }
     void add(const char *text);
+		std::string add(const std::string a="", const std::string b="", const std::string c="", const std::string d="");
     void purge();
     
     size_t count() const;

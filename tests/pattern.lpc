@@ -15,3 +15,16 @@ PatternTest MACHINE {
 }
 pattern_test PatternTest;
 
+TimeSeq MACHINE {
+
+	OPTION W "1653";
+	LOCAL OPTION x "";
+
+	OPTION timeseq 0;
+	OPTION weight "";
+
+	ENTER INIT { timeseq := COPY `[0-9]{12}` FROM TIMESEQ; }
+	COMMAND update { timeseq := COPY `[0-9]{12}` FROM TIMESEQ; }
+	COMMAND getWeight { x := W AS FLOAT / 10; weight := COPY `[0-9]*[.][0-9]` FROM x; }
+}
+time_sequence TimeSeq;

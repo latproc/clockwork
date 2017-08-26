@@ -4,6 +4,22 @@ Pulse MACHINE {
 }
 flasher0 Pulse;
 
+Pulse2 MACHINE Output {
+  OPTION offDelay 50;
+  off WHEN SELF IS on AND TIMER >= offDelay;
+  on WHEN SELF IS on;
+  off DEFAULT;
+
+  on DURING turnOn {}
+  off DURING turnoff {}
+
+	ENTER on { SET Output TO on; }
+	ENTER off { SET Output TO off; }
+
+  TRANSITION off TO on USING turnOn;
+}
+
+
 FlasherOne MACHINE { 
 	inactive INITIAL; inactive WHEN SELF IS inactive;
 	on WHEN SELF IS on AND TIMER < 1000 OR SELF IS off AND TIMER>=1000;

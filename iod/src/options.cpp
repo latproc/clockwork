@@ -30,9 +30,11 @@ const char *modbus_map_name = 0;
 const char *debug_config_name = 0;
 const char *dependency_graph_name = 0;
 static int publisher_port_num = 5556;
+static bool publisher_port_num_required = false;
 static int persistent_port_num = 5557;
 static int modbus_port_num = 5558;
 static int command_port_num = 5555;
+static bool command_port_num_required = false;
 static bool keep_stats = false;
 static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
@@ -94,12 +96,17 @@ const char *dependency_graph() {
     return dependency_graph_name;
 }
 
-void set_publisher_port(int port) {
+void set_publisher_port(int port, bool required) {
     publisher_port_num = port;
+	publisher_port_num_required = required;
 }
 
 int publisher_port() {
     return publisher_port_num;
+}
+
+bool publisher_port_fixed() {
+	return publisher_port_num_required;
 }
 
 
@@ -119,12 +126,17 @@ int modbus_port() {
     return modbus_port_num;
 }
 
-void set_command_port(int port) {
+void set_command_port(int port, bool required) {
     command_port_num = port;
+	command_port_num_required = required;
 }
 
 int command_port() {
     return command_port_num;
+}
+
+bool command_port_fixed() {
+	return command_port_num_required;
 }
 
 void enable_statistics(bool which) {

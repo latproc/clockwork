@@ -1,3 +1,15 @@
+# this startup pattern is used to perform initialisation 
+# in a way that reduces start race conditions
+
+Startup MACHINE {
+	idle DEFAULT;
+
+	COMMAND startup WITHIN INIT { LOG "executing startup"; }
+
+	TRANSITION INIT TO idle ON startup;
+}
+startup_test Startup;
+
 Test MACHINE {
 
 	one WHEN a == 1;
@@ -7,11 +19,11 @@ Test MACHINE {
 	s2 STATE;
 
 	ENTER one { LOG "one" }
-	ENTER two { LOG "one" }
+	ENTER two { LOG "two" }
 	ENTER s1 { LOG "s1" }
 	ENTER s2 { LOG "s2" }
 
-	COMMAND next { }
+	COMMAND next { LOG "next"; }
 	TRANSITION one TO s1 ON next;
 	TRANSITION two TO s2 ON next;
 
@@ -40,3 +52,12 @@ AutoTransition MACHINE {
 }
 auto AutoTransition;
 
+TransitionToAny MACHINE {
+
+	off STATE;
+	idle DEFAULT;
+	COMMAND log { LOG "going idle"; }
+	TRANSITION INIT TO off,idle USING log;
+
+}
+toany TransitionToAny;

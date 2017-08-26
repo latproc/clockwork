@@ -144,3 +144,12 @@ Transmitter::~Transmitter() { }
 
 void Transmitter::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) { assert(false); }
 
+bool Receiver::hasPending(const Message &msg) {
+	boost::mutex::scoped_lock lock(q_mutex);
+	std::list<Package>::iterator iter = mail_queue.begin();
+	while (iter != mail_queue.end()) {
+		const Package &p = *iter++;
+		if (p.message && *p.message == msg) return true;
+	}
+	return false;
+}

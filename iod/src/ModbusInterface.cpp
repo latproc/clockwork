@@ -57,7 +57,7 @@ int ModbusAddress::next(ModbusAddress::Group g) {
 	return 0;
 }
 
-ModbusAddress ModbusAddress::alloc(ModbusAddress::Group g, unsigned int n, ModbusAddressable*ma, Source src, const std::string &full_name) {
+ModbusAddress ModbusAddress::alloc(ModbusAddress::Group g, unsigned int n, ModbusAddressable*ma, ModbusAddress::Source src, const std::string &full_name, ModbusExport::Type kind) {
 	if (n == 0) return ModbusAddress();
 	int address;
 	switch(g) {
@@ -74,7 +74,7 @@ ModbusAddress ModbusAddress::alloc(ModbusAddress::Group g, unsigned int n, Modbu
 		default: return ModbusAddress();
 	}
 	DBG_MODBUS << "Modbus allocated " << n << " addresses in group " << (int)g << " starting at " << address<< "\n"; 
-	ModbusAddress addr = ModbusAddress(g, address, n, ma, src, full_name, 0);
+	ModbusAddress addr = ModbusAddress(g, address, n, ma, src, full_name, kind, 0);
 	int index = ( (int)g <<16) + address;
 	if (address < first_auto_address) 
 		user_mappings[index] = addr;
@@ -83,8 +83,8 @@ ModbusAddress ModbusAddress::alloc(ModbusAddress::Group g, unsigned int n, Modbu
 	return addr;
 }
 
-ModbusAddress::ModbusAddress(ModbusAddress::Group g, int a, int n, ModbusAddressable *o, Source src, const std::string &nam, int i) 
-	: group(g), address(a), allocated(n), offset(i), source(src), owner(o), name(nam) {
+ModbusAddress::ModbusAddress(ModbusAddress::Group g, int a, int n, ModbusAddressable *o, Source src, const std::string &nam, ModbusExport::Type exType, int i)
+	: group(g), address(a), allocated(n), exportType(exType), offset(i), source(src), owner(o), name(nam) {
 	switch(g) {
 		case discrete: 
 			if (address >= next_discrete) 
@@ -126,6 +126,7 @@ void ModbusAddress::update(MachineInstance *owner, Group group, int addr, const 
     params.push_back(len);
     params.push_back(Value(str_value,Value::t_string));
 	MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+	mh.start_time = microsecs();
 	Channel::sendCommand(owner, "UPDATE", &params, mh);
 }
 
@@ -137,6 +138,19 @@ void ModbusAddress::update(MachineInstance *owner, Group group, int addr, int ne
     params.push_back(len);
     params.push_back(new_value);
 	MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+	mh.start_time = microsecs();
+	Channel::sendCommand(owner, "UPDATE", &params, mh);
+}
+
+void ModbusAddress::update(MachineInstance *owner, Group group, int addr, double new_value, int len) {
+	std::list<Value>params;
+	params.push_back(group);
+	params.push_back(addr);
+	params.push_back(Value(name.c_str(),Value::t_string));
+	params.push_back(len);
+	params.push_back(new_value);
+	MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+	mh.start_time = microsecs();
 	Channel::sendCommand(owner, "UPDATE", &params, mh);
 }
 
@@ -144,6 +158,10 @@ void ModbusAddress::update(MachineInstance *owner, int index, int new_value, int
 	int addr = index & 0xffff;
 	int group = index >> 16;
 	update(owner, (Group)group, addr, new_value, len);
+}
+
+void ModbusAddress::update(MachineInstance *owner, double new_value) {
+	update(owner, group, address, new_value, allocated);
 }
 
 void ModbusAddress::update(MachineInstance *owner, int new_value) {

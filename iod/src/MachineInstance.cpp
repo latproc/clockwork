@@ -50,6 +50,7 @@
 #include "Channel.h"
 #include <boost/thread/mutex.hpp>
 #include "WaitAction.h"
+#include "ControlSystemMachine.h"
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
 #include "SDOEntry.h"
@@ -57,15 +58,35 @@
 #include "ECInterface.h"
 #endif
 #include "ProcessingThread.h"
+#include "Transition.h"
+#include "SharedWorkSet.h"
+#include "MachineInterface.h"
+#include "MachineShadowInstance.h"
+#include "CounterRateFilterSettings.h"
+#include "CounterRateInstance.h"
+#include "RateEstimatorInstance.h"
+#include "AbortAction.h"
 
 extern int num_errors;
 extern std::list<std::string>error_messages;
 
-static uint64_t process_time = 0; // used for idle calculations for rate estimation
+uint64_t rate_calc_process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
 
 unsigned int MachineInstance::num_machines_with_work = 1; // machine idle processing will occur if this value is non zero
 unsigned int MachineInstance::total_machines_needing_check = 1;
+
+class MachineEvent {
+public:
+	MachineInstance *mi;
+	Message *msg;
+	MachineEvent(MachineInstance *, Message *);
+	MachineEvent(MachineInstance *, const Message &);
+	~MachineEvent();
+private:
+	MachineEvent(const MachineEvent&);
+	MachineEvent &operator=(const MachineEvent&);
+};
 
 class MachineInstance::SharedCache {
 public:
@@ -87,237 +108,24 @@ public:
 
   Cache() : full_name(0), modbus_name(0), reported_error(false), needs_throttle(false) { }
 };
-
-Parameter::Parameter(Value v) : val(v), machine(0) {
-	;
-}
-Parameter::Parameter(const char *name, const SymbolTable &st) : val(name), properties(st), machine(0) { }
-std::ostream &Parameter::operator<< (std::ostream &out)const {
-	return out << val << "(" << properties << ")";
-}
-Parameter::Parameter(const Parameter &orig) {
-	val = orig.val; machine = orig.machine; properties = orig.properties;
-	real_name = orig.real_name;
-
-}
-
-Transition::Transition(State s, State d, Message t, Predicate *p) : source(s), dest(d), trigger(t), condition(0) {
-	if (p) {
-		condition = new Condition(p);
-	}
-}
-
-Transition::Transition(const Transition &other) : source(other.source), dest(other.dest), trigger(other.trigger), condition(0) {
-	if (other.condition && other.condition->predicate) {
-		condition = new Condition(new Predicate(*other.condition->predicate));
-	}
-}
-
-Transition::~Transition() {
-	delete condition;
-}
-
-Transition &Transition::operator=(const Transition &other) {
-	source = other.source;
-	dest = other.dest;
-	trigger = other.trigger;
-	if (other.condition) {
-		delete condition;
-		condition = new Condition(other.condition->predicate);
-	}
-	return *this;
-}
-
-ConditionHandler::ConditionHandler(const ConditionHandler &other)
-: condition(other.condition),
-	command_name(other.command_name),
-	flag_name(other.flag_name),
-	timer_val(other.timer_val),
-	action(other.action),
-	trigger(other.trigger),
-	uses_timer(other.uses_timer),
-	triggered(other.triggered)
-{
-	if (trigger) trigger->retain();
-}
-
-ConditionHandler &ConditionHandler::operator=(const ConditionHandler &other) {
-	condition = other.condition;
-	command_name = other.command_name;
-	flag_name = other.flag_name;
-	timer_val = other.timer_val;
-	action = other.action;
-	trigger = other.trigger;
-	if (trigger) trigger->retain();
-	uses_timer = other.uses_timer;
-	triggered = other.triggered;
-	return *this;
-}
-
-bool ConditionHandler::check(MachineInstance *machine) {
-	if (!machine) return false;
-	if (command_name == "FLAG" ) {
-		MachineInstance *flag = machine->lookup(flag_name);
-		if (!flag)
-			std::cerr << machine->getName() << " error: flag " << flag_name << " not found\n";
-		else {
-			if (condition(machine)) {
-				if (strcmp("on", flag->getCurrentStateString())) {
-					if (tracing() && machine->isTraceable()) {
-						machine->resetTemporaryStringStream();
-						machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
-						machine->setValue("TRACE", machine->ss.str());
-					}
-					const State *on = flag->state_machine->findState("on");
-					if (!flag->isActive()) {
-						flag->setState(*on);
-					}
-					else {
-						// execute this state change once all other actions are complete
-						SetStateActionTemplate ssat("SELF", "on" );
-						flag->enqueueAction(ssat.factory(flag));
-					}
-				}
-			}
-			else if (strcmp("off", flag->getCurrentStateString())) {
-				if (tracing() && machine->isTraceable()) {
-					machine->resetTemporaryStringStream();
-					machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
-					machine->setValue("TRACE", machine->ss.str());
-				}
-				const State *off = flag->state_machine->findState("off");
-				if (!flag->isActive()) flag->setState(*off);
-				else {
-					// execute this state change once all other actions are complete
-					SetStateActionTemplate ssat("SELF", "off" );
-					SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(flag));
-					flag->enqueueAction(ssa);
-				}
-			}
-		}
-	}
-	else if (!triggered && ( (trigger && trigger->fired()) || !trigger) && condition(machine)) {
-		triggered = true;
-		DBG_AUTOSTATES << machine->getName() << " subcondition triggered: " << command_name << " " << *(condition.predicate) << "\n";
-		machine->execute(Message(command_name.c_str()),machine);
-		if (trigger) trigger->disable();
-	}
-	else {
-		DBG_AUTOSTATES <<"condition: " << (*condition.predicate) << "\n";
-		if (!trigger) { DBG_AUTOSTATES << "    condition does not have a timer\n"; }
-		if (triggered) {DBG_AUTOSTATES <<"     condition " << (condition.predicate) << " already triggered\n";}
-		if (condition(machine)) {DBG_AUTOSTATES <<"    condition " << (condition.predicate) << " passes\n";}
-	}
-	if (triggered) return true;
-	return false;
-}
-
-void ConditionHandler::reset() {
-	if (trigger) {
-		//NB_MSG << "clearing trigger on subcondition of state " << s.state_name << "\n";
-		if (trigger->enabled())
-			trigger->disable();
-		trigger = trigger->release();
-	}
-	trigger = 0;
-	triggered = false;
-}
-
-
-std::ostream &operator<<(std::ostream &out, const Parameter &p) {
-	return p.operator<<(out);
-}
-
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a) {
 	return a.operator<<(out);
-}
-
-std::ostream &operator<<(std::ostream &out, const StableState &ss) {
-	return ss.operator<<(out);
-}
-
-StableState::~StableState() {
-	if (trigger) {
-		if (trigger->enabled()) {
-			trigger->disable();
-		}
-		trigger = trigger->release();
-	}
-	if (subcondition_handlers) {
-		subcondition_handlers->clear();
-		delete subcondition_handlers;
-	}
-}
-
-	StableState::StableState (const StableState &other)
-: state_name(other.state_name), condition(other.condition),
-	uses_timer(other.uses_timer), timer_val(0), trigger(0), subcondition_handlers(0), owner(other.owner)
-{
-	if (other.subcondition_handlers) {
-		subcondition_handlers = new std::list<ConditionHandler>;
-		std::copy(other.subcondition_handlers->begin(), other.subcondition_handlers->end(), back_inserter(*subcondition_handlers));
-	}
-}
-
-
-void StableState::triggerFired(Trigger *trig) {
-	if (owner) owner->setNeedsCheck();
 }
 
 std::map<std::string, MachineInstance*> machines;
 std::map<std::string, MachineClass*> machine_classes;
 
-// All machine instances automatically join and leave this list. 
+// All machine instances automatically join and leave this list.
 // During the poll process, all machines in this list have their idle() called.
 std::list<MachineInstance*> MachineInstance::all_machines;
+std::list<MachineInstance*> MachineInstance::io_modules;
 std::list<MachineInstance*> MachineInstance::automatic_machines;
 std::list<MachineInstance*> MachineInstance::active_machines;
 std::list<MachineInstance*> MachineInstance::shadow_machines;
 std::set<MachineInstance*> MachineInstance::plugin_machines;
 std::list<Package*> MachineInstance::pending_events;
 std::set<MachineInstance*> MachineInstance::pending_state_change;
-std::map<std::string, MachineInterface *> MachineInterface::all_interfaces;
 std::map<std::string, HardwareAddress> MachineInstance::hw_names;
-
-
-std::list<MachineClass*> MachineClass::all_machine_classes;
-
-std::map<std::string, MachineClass> MachineClass::machine_classes;
-SharedWorkSet *SharedWorkSet::instance_ = 0;
-
-SharedWorkSet *SharedWorkSet::instance() {
-	if (!instance_) instance_ = new SharedWorkSet();
-	return instance_;
-}
-
-
-void SharedWorkSet::add(MachineInstance *m) {
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	busy_machines.insert(m);
-}
-
-void SharedWorkSet::remove(MachineInstance *m) {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	busy_machines.erase(m);
-}
-
-std::set<MachineInstance*>::iterator SharedWorkSet::erase(std::set<MachineInstance*>::iterator &iter) {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	return busy_machines.erase(iter);
-}
-
-bool SharedWorkSet::empty() {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	return busy_machines.empty();
-}
-
-size_t SharedWorkSet::size() {
-	boost::recursive_mutex::scoped_lock scoped_lock(mutex);
-	return busy_machines.size();
-}
-
-std::set<MachineInstance*>::iterator SharedWorkSet::begin() { return busy_machines.begin(); }
-std::set<MachineInstance*>::iterator SharedWorkSet::end() { return busy_machines.end(); }
 
 
 /* Factory methods */
@@ -333,36 +141,40 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 		MachineClass *cls = MachineClass::find(type);
 		ChannelDefinition *defn = dynamic_cast<ChannelDefinition*>(cls);
 		if (defn) {
+			MachineInstance *found = MachineInstance::find(name.get());
 			Channel *chn = new Channel(name.get(), type);
+			chn->properties.add(defn->properties); // load default properties
+			chn->properties.add(defn->properties); // overwrite with instance properties
 			chn->setDefinition(defn);
+			return chn;
 		}
 		return new MachineInstance(name, type, instance_type);
 	}
 }
 
 void MachineInstance::setNeedsCheck() {
-	//DBG_MSG << _name << "::setNeedsCheck(), enabled: " << is_enabled 
-	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
+	DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
+		<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
 	if (!getStateMachine() ) return;
 	if (!is_enabled) return;
-	if (!needs_check) { 
-		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n"; 
+  bool already_pending = ProcessingThread::is_pending(this);
+	if (!needs_check) {
+		DBG_AUTOSTATES << _name << " needs check\n";
 		++total_machines_needing_check;
-		if (_name == "trans")
-			int x = 1;
 	}
+	++needs_check;
 	if (!active_actions.empty() || !mail_queue.empty()) {
-		//DBG_MSG << _name << " queued for action processing\n";
+		DBG_M_MESSAGING << _name << " queued for action processing\n";
 		SharedWorkSet::instance()->add(this);
 		ProcessingThread::activate(this);
 	}
 	else if (getStateMachine()->allow_auto_states) {
-		//DBG_MSG << _name << " queued for stable state checks\n";
+		DBG_M_MESSAGING << _name << " queued for stable state checks\n";
 		pending_state_change.insert(this);
 		ProcessingThread::activate(this);
 	}
 	else {
-		//DBG_MSG << _name << " queued for action processing\n";
+		DBG_M_MESSAGING << _name << " queued for action processing\n";
 		SharedWorkSet::instance()->add(this);
 		ProcessingThread::activate(this);
 	}
@@ -371,14 +183,16 @@ void MachineInstance::setNeedsCheck() {
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
 			MachineInstance *dep = *dep_iter++;
-			if (dep->is_enabled) dep->setNeedsCheck();
+			if (dep->is_enabled && dep->needs_check < 2) // <2 is an anti-recursion check
+				dep->setNeedsCheck();
 		}
 	}
 	else if (state_machine->token_id == ClockworkToken::REFERENCE) {
 		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
 		while (dep_iter != depends.end()) {
 			MachineInstance *dep = *dep_iter++;
-			if (dep->is_enabled) dep->setNeedsCheck();
+			if (dep->is_enabled && dep->needs_check < 2) // <2 is an anti-recursion check
+				dep->setNeedsCheck();
 		}
 	}
 }
@@ -454,13 +268,13 @@ bool MachineInstance::workToDo() {
 			<< num_machines_with_work <<"," <<  total_machines_needing_check << ") > 0\n";
 	}
 	return !pending_events.empty() || !SharedWorkSet::instance()->empty() || !pending_state_change.empty()
-				|| num_machines_with_work + total_machines_needing_check > 0; 
+				|| num_machines_with_work + total_machines_needing_check > 0;
 }
 std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
 std::set<MachineInstance*>& MachineInstance::pluginMachines() { return plugin_machines; }
 
-void MachineInstance::forceIdleCheck() { 
-	num_machines_with_work++; 
+void MachineInstance::forceIdleCheck() {
+	num_machines_with_work++;
 	DBG_AUTOSTATES  << " forced an idle check " << num_machines_with_work << "\n";
 }
 
@@ -473,27 +287,27 @@ void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, uns
 }
 #endif
 
+#if 0
 bool TriggeredAction::active() {
 	std::set<IOComponent*>::iterator iter = trigger_on.begin();
 	while (iter != trigger_on.end()) {
 		IOComponent *ioc = *iter++;
 		if (!ioc->isOn())
-			return false; 
+			return false;
 	}
 	iter = trigger_off.begin();
 	while (iter != trigger_off.end()) {
 		IOComponent *ioc = *iter++;
 		if (!ioc->isOff())
-			return false; 
+			return false;
 	}
 	return true;
 }
-
+#endif
 
 void MachineInstance::triggerFired(Trigger *trig) {
 	static const std::string str_publish("publish");
 	if (trig->matches(str_publish)) {
-		std::cout << "trigger fired, sending property changes\n";
 		Channel::sendPropertyChanges(this);
 	}
 	setNeedsCheck();
@@ -602,7 +416,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 		machine_name.erase(pos);
 		std::string extra = short_name.substr(pos+1);
 		MachineInstance *mi = lookup(machine_name);
-		if (mi) 
+		if (mi)
 			return mi->lookup(extra);
 		else
 			return 0;
@@ -611,12 +425,12 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 	MachineInstance *found = 0;
 	resetTemporaryStringStream();
 	//ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
-	if (seek_machine_name == "SELF" || seek_machine_name == _name) { 
+	if (seek_machine_name == "SELF" || seek_machine_name == _name) {
 		//ss << "...self";
 		if (state_machine->token_id == ClockworkToken::tokCONDITION && owner)
 			found = owner;
 		else
-			found = this; 
+			found = this;
 		goto cache_local_name;
 	}
 	else if (seek_machine_name == "OWNER" ) {
@@ -627,7 +441,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 		Parameter &p = locals[i];
 		if (p.val.kind == Value::t_symbol && p.val.sValue == seek_machine_name) {
 			//ss << "...local";
-			found = p.machine; 
+			found = p.machine;
 			goto cache_local_name;
 		}
 	}
@@ -636,10 +450,32 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
 		if (p.val.kind == Value::t_symbol &&
 				(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name) && p.machine) {
 			//ss << "...parameter";
-			found = p.machine; 
+			found = p.machine;
 			goto cache_local_name;
 		}
 	}
+	if (state_machine)
+		for (unsigned int i=0; i<state_machine->parameters.size(); ++i) {
+			Parameter &p = state_machine->parameters[i];
+			if (p.val.kind == Value::t_symbol &&
+				(p.val.sValue == seek_machine_name || p.real_name == seek_machine_name)) {
+				//ss << "...parameter";
+				if (i < parameters.size() && parameters[i].machine) {
+					found = parameters[i].machine;
+					goto cache_local_name;
+				}
+				else {
+					if (i>= parameters.size()) {
+						char buf[200];
+						snprintf(buf, 200, "Error: machine %s does not have a parameter %d (%s)",
+							 _name.c_str(), i, seek_machine_name.c_str());
+						MessageLog::instance()->add(buf);
+						++num_errors;
+						error_messages.push_back(buf);
+					}
+				}
+			}
+		}
 	if (machines.count(seek_machine_name)) {
 		//ss << "...global";
 		found = machines[seek_machine_name];
@@ -735,275 +571,22 @@ DynamicValue *MachineTimerValue::clone() const {
 	return mtv;
 }
 
-MachineShadowInstance::MachineShadowInstance(InstanceType instance_type) : MachineInstance(instance_type) {
-	shadow_machines.push_back(this);
-}
-
-MachineShadowInstance::MachineShadowInstance(CStringHolder name, const char * type, InstanceType instance_type)
-	: MachineInstance(name, type, instance_type) {
-	shadow_machines.push_back(this);
-}
-
-void MachineShadowInstance::idle() {
-	MachineInstance::idle();
-	return;
-}
-
-Action::Status MachineShadowInstance::setState(const State &new_state, uint64_t authority, bool resume) {
-	NB_MSG << _name << " (shadow) setState("<<current_state<< "->" << new_state << ")\n";
-	return MachineInstance::setState(new_state, authority, resume);
-}
-
-Action::Status MachineShadowInstance::setState(const char *new_state, uint64_t authority, bool resume) {
-	NB_MSG << _name << " (shadow) setState(" << new_state << ")\n";
-	return MachineInstance::setState(new_state, authority, resume);
-}
-
-
-MachineShadowInstance::~MachineShadowInstance() {
-	return;
-}
-
-
-class CounterRateFilterSettings {
-	public:
-		long position;
-		long velocity;
-		bool property_changed;
-		// analogue filter fields
-		uint32_t noise_tolerance; // filter out changes with +/- this range
-		int32_t last_sent; // this is the value to send unless the read value moves away from the mean
-        int32_t last_pos;
-
-		uint64_t start_t;
-		uint64_t update_t;
-        uint64_t last_update_t;
-        SampleBuffer readings;
-		MachineInstance *counter_machine;
-		Value *noise_tolerance_val;
-		long zero_count;
-		CounterRateFilterSettings(unsigned int sz) : position(0), velocity(0), property_changed(false),
-		noise_tolerance(20),last_sent(0), last_pos(0), start_t(0), update_t(0), last_update_t(0),
-                readings(sz),counter_machine(0), noise_tolerance_val(0), zero_count(0) {
-			struct timeval now;
-			gettimeofday(&now, 0);
-			update_t = start_t;
-		}
-};
-
-CounterRateInstance::CounterRateInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-	settings = new CounterRateFilterSettings(32);
-}
-CounterRateInstance::CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type)
-	: MachineInstance(name, type, instance_type) {
-		settings = new CounterRateFilterSettings(32);
-	}
-CounterRateInstance::~CounterRateInstance() { delete settings; }
-
-#if 0
-bool CounterRateInstance::hasWork() { 
-	struct timeval now;
-	gettimeofday(&now, 0);
-	return ( (uint64_t)now.tv_sec*1000000L + now.tv_usec >= (uint64_t) next_poll);
-}
-#endif
-
-void CounterRateInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
-	if (property == "VALUE") {
-		if (new_value.kind == Value::t_symbol) {
-			new_value = lookup(new_value.sValue.c_str());
-		}
-		long val;
-		if (!new_value.asInteger(val)) val = 0;
-		if (settings->property_changed) {
-			settings->property_changed = false;
-		}
-
-		//reset once the buffers have been filled with zeros
-		if (!val) ++settings->zero_count;
-        else settings->zero_count = 0;
-		if (settings->zero_count > settings->readings.length()) {
-			settings->zero_count = 0;
-			// reset buffers;
-			//settings->start_t = settings->update_t;
-			settings->readings.reset();
-		}
-        
-        if ( (settings->update_t - settings->last_update_t)/1000 == 0 )
-            return;
-        settings->last_update_t = settings->update_t;
-		uint64_t delta_t = settings->update_t - settings->start_t;
-        settings->readings.append( val, delta_t);
-
-		int32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
-		if ( (uint32_t)abs(mean - settings->last_sent) > settings->noise_tolerance ) {
-			settings->last_sent = mean;
-		}
-		settings->position = settings->last_sent;
-		settings->velocity = filter(settings->position);
-
-		MachineInstance::setValue(property, settings->velocity);
-		MachineInstance::setValue("position", settings->position);
-		MachineInstance *pos = lookup(parameters[0]);
-		if (pos) pos->setValue("VALUE", settings->position);
-	}
-	else
-		MachineInstance::setValue(property, new_value);
-}
-
-long CounterRateInstance::filter(long val) {
-	if (settings->readings.length() < 4) return 0;
-	//float speed = settings->positions.difference(settings->positions.length()-1, 0) / settings->times.difference(settings->times.length()-1,0) * 250000;
-	//float speed = settings->positions.slopeFromLeastSquaresFit(settings->times) * 1000000;
-    float speed = settings->readings.rate();
-	return speed;
-}
-
-void CounterRateInstance::idle() {
-	if (!io_interface) {
-		struct timeval now;
-		gettimeofday(&now, 0);
-		uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-		if (settings->update_t + 2000 < now_t) {
-			long new_val = (long)((float)settings->position + settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
-			setValue("VALUE", new_val);
-		}
-	}
-}
-
-void RateEstimatorInstance::setNeedsCheck() {
-	//std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled 
-	//	<< " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
-	MachineInstance::setNeedsCheck();
-	SharedWorkSet::instance()->add(this);
-}
-
-void RateEstimatorInstance::idle() {
-	MachineInstance *pos_m = lookup(parameters[0]);
-	if (!pos_m) return;
-	if (!settings) {
-		if (settings) delete settings;
-		if (pos_m->io_interface)
-			settings = new CounterRateFilterSettings(8);
-		else
-			settings = new CounterRateFilterSettings(8);
-	}
-	if (is_enabled) { // && hasWork()) {
-		double delta = 0;
-		uint64_t curr_t = (pos_m->io_interface) ? pos_m->io_interface->read_time : process_time;
-
-        delta = (double)(curr_t - settings->update_t) / 1000.0;
-		if (!delta)  {
-			return;
-		}
-        MachineInstance::idle();
-
-		const Value & pos_v = pos_m->getValue("VALUE");
-		assert(pos_v.kind == Value::t_integer);
-		assert(pos_v != SymbolTable::Null);
-		long pos = pos_v.iValue;
-		
-/*
-	  	std::cout << _name 
-			<< " last_pos: " << settings->last_pos << " pos: " << pos_v.iValue
-			<< " pos: " << pos_v.iValue
-			<< " read time: " << curr_t
-			<< " upd: " << settings->update_t
-			<< " delta: " << delta
-			<< " vel: " << ( (delta) ? (float)(pos - last_pos) * 1000.0/ delta : 0)<< "\n";
-*/
-		if (pos_m && pos_m->getValue("VALUE").asInteger(pos))
-			setValue("VALUE", pos);
-		if (pos != settings->last_pos || settings->velocity) {
-			Trigger *trigger = new Trigger(this, "RateEstimatorTimer");
-			Scheduler::instance()->add(new ScheduledItem(10000, trigger));
-
-			//Scheduler::instance()->add(
-			//	new ScheduledItem(10000, new FireTriggerAction(this, trigger)));
-			trigger->release();
-		}
-		settings->last_pos = pos;
-	}
-}
-
-
-RateEstimatorInstance::RateEstimatorInstance(InstanceType instance_type) :MachineInstance(instance_type) {
-	settings = 0;
-	if (!idle_time) idle_time = 50000;
-}
-RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * type, InstanceType instance_type)
-	: MachineInstance(name, type, instance_type) {
-		settings = 0;
-
-		if (!idle_time) idle_time = 50000;
-	}
-RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
-
-void RateEstimatorInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
-	if (property == "VALUE") {
-		if (new_value.kind == Value::t_symbol) {
-			new_value = lookup(new_value.sValue.c_str());
-		}
-		MachineInstance *pos = lookup(parameters[0]);
-		if (pos && pos->io_interface)
-			settings->update_t = pos->io_interface->read_time;
-		else {
-			settings->update_t = process_time;
-		}
-		long val;
-		if (!new_value.asInteger(val)) val = 0;
-		if (settings->property_changed) {
-			settings->property_changed = false;
-		}
-
-        // use current time - start time as t0 to avoid floating point resolution issues
-		if (settings->start_t == 0) settings->start_t = settings->update_t;
-		uint64_t delta_t = settings->update_t - settings->start_t;
-		settings->position = (int32_t)val;
-		settings->readings.append(settings->position, delta_t);
-        settings->velocity = settings->readings.rate() * 1000000;
-        //std::cout << _name << " adding reading: " << (int32_t)val <<" " << delta_t << " "
-        //<<  settings->velocity << " "<< settings->readings.front << " " << settings->readings.back <<"\n";
-		//settings->velocity = (int32_t)filter((int32_t)settings->position);
-
-        //reset once the buffers have been filled with zeros
-        if (!settings->velocity) ++settings->zero_count;
-        else settings->zero_count = 0;
-        if (settings->zero_count > settings->readings.BUFSIZE) {
-            // reset buffers;
-            //settings->start_t = settings->update_t;
-            settings->readings.reset();
-        }
-
-		MachineInstance::setValue(property, settings->velocity);
-		MachineInstance::setValue("position", settings->position);
-	}
-	else
-		MachineInstance::setValue(property, new_value);
-}
-
-long RateEstimatorInstance::filter(long val) {
-	if (settings->readings.length() < 2) return 0;
-    float speed = settings->readings.rate() * 1000000;
-	return speed;
-}
-
 MachineInstance::MachineInstance(InstanceType instance_type)
-	: Receiver(""), 
-	_type("Undefined"), 
+	: Receiver(""),
+	_type("Undefined"),
 	io_interface(0),
 	mq_interface(0),
 	owner(0),
 	needs_check(0),
 	uses_timer(false),
 	my_instance_type(instance_type),
-	state_change(0), 
+	state_change(0),
 	state_machine(0),
 	current_state("undefined"),
 	is_enabled(false),
 	state_timer(0),
 	locked(0),
-	modbus_exported(none),
+	modbus_exported(ModbusExport::none),
 	saved_state("undefined"),
 	current_state_val("undefined"),
 	is_active(false),
@@ -1025,6 +608,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
+	if (_type == "MODULE") io_modules.push_back(this);
 	if (instance_type == MACHINE_INSTANCE) {
 		all_machines.push_back(this);
 		Dispatcher::instance()->addReceiver(this);
@@ -1033,21 +617,21 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 }
 
 MachineInstance::MachineInstance(CStringHolder name, const char * type, InstanceType instance_type)
-	: Receiver(name), 
-	_type(type), 
-	io_interface(0), 
+	: Receiver(name),
+	_type(type),
+	io_interface(0),
 	mq_interface(0),
 	owner(0),
 	needs_check(0),
 	uses_timer(false),
 	my_instance_type(instance_type),
-	state_change(0), 
-	state_machine(0), 
+	state_change(0),
+	state_machine(0),
 	current_state("undefined"),
 	is_enabled(false),
 	state_timer(0),
 	locked(0),
-	modbus_exported(none),
+	modbus_exported(ModbusExport::none),
 	saved_state("undefined"),
 	current_state_val("undefined"),
 	is_active(false),
@@ -1068,6 +652,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	state_timer.setDynamicValue(new MachineTimerValue(this));
 	if (_type != "LIST" && _type != "REFERENCE")
 		current_value_holder.setDynamicValue(new MachineValue(this, _name));
+	if (_type == "MODULE") io_modules.push_back(this);
 	if (instance_type == MACHINE_INSTANCE) {
 		all_machines.push_back(this);
 		Dispatcher::instance()->addReceiver(this);
@@ -1099,7 +684,7 @@ void MachineInstance::describe(std::ostream &out) {
 		for (unsigned int i=0; i<parameters.size(); i++) {
 			Value p_i = parameters[i].val;
 			if (p_i.kind == Value::t_symbol) {
-				out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name 
+				out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name
 					<< "), state: "
 					<< (parameters[i].machine ? parameters[i].machine->getCurrent().getName(): "")
 					<< (parameters[i].machine && !parameters[i].machine->enabled() ? " DISABLED" : "")
@@ -1120,6 +705,15 @@ void MachineInstance::describe(std::ostream &out) {
 			else
 				out << locals[i].val <<"  Missing machine\n";
 		}
+	}
+	if (modbus_exports.size()) {
+		out << "Exports:\n  ";
+		std::map<std::string, ModbusAddress >::const_iterator iter = modbus_exports.begin();
+		while (iter != modbus_exports.end()) {
+			out << (*iter++).first;
+			if (iter != modbus_exports.end()) out << ",";
+		}
+		out << "\n";
 	}
 	if (published) { out << "  published (" << published << ")\n"; }
 	if (listens.size()) {
@@ -1258,7 +852,7 @@ void MachineInstance::stopListening(MachineInstance *m) {
 bool checkDepend(std::set<Transmitter*>&checked, Transmitter *seek, Transmitter *test) {
 	if (seek == test) return true;
 	MachineInstance *mi = dynamic_cast<MachineInstance*>(test);
-	if (mi)	{ 
+	if (mi)	{
 		BOOST_FOREACH(Transmitter *machine, mi->listens) {
 			if (!checked.count(machine)) {
 				checked.insert(machine);
@@ -1269,9 +863,9 @@ bool checkDepend(std::set<Transmitter*>&checked, Transmitter *seek, Transmitter 
 	return false;
 }
 
-void MachineInstance::addDependancy(MachineInstance *m) { 
+void MachineInstance::addDependancy(MachineInstance *m) {
 	if (m && m != this && !depends.count(m)) {
-		depends.insert(m); 
+		depends.insert(m);
 		DBG_M_DEPENDANCIES << _name << " added dependant machine " << m->getName() << "\n";
 	}
 }
@@ -1435,11 +1029,10 @@ long total_process_calls = 0;
 uint64_t total_processing_time = 0;
 long total_aborts = 0;
 
-#if 1
 bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which) {
 
 	uint64_t start_processing = nowMicrosecs();
-	process_time = start_processing;
+	rate_calc_process_time = start_processing;
 
 	std::list<Package*>::iterator evt_iter = pending_events.begin();
 	while (evt_iter != pending_events.end() ) {
@@ -1454,7 +1047,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 
 
 	num_machines_with_work = 0;
-	process_time = nowMicrosecs();
+	rate_calc_process_time = nowMicrosecs();
 	//boost::recursive_mutex &mutex(SharedWorkSet::instance()->getMutex());
 	{
 		//boost::recursive_mutex::scoped_lock lock(mutex);
@@ -1473,7 +1066,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 			if (mi->state_machine && mi->state_machine->plugin)
 				mi->state_machine->plugin->poll_actions(mi);
 			if ( (mi->state_machine && mi->state_machine->plugin)
-					|| (!mi->has_work && !mi->executingCommand() ) ) 
+					|| (!mi->has_work && !mi->executingCommand() ) )
 			{
 					if (!mi->has_work && !mi->executingCommand())  {
 						SharedWorkSet::instance()->remove(mi);
@@ -1486,6 +1079,11 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 					else
 						busy_it++;
 			}
+			else if (mi->executingCommand() && !mi->executingCommand()->getTrigger()) {
+				Action *a = mi->executingCommand();
+				ProcessingThread::activate(mi);
+				busy_it++;
+			}
 			else busy_it++;
 		}
 	}
@@ -1494,7 +1092,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
   uint64_t now = nowMicrosecs();
 	total_processing_time += now - start_processing;
 	if (now - start_processing < max_time) ++loop_count; // completed a pass through all machines
-	
+
 	if (!shared->system) shared->system = MachineInstance::find("SYSTEM");
 	MachineInstance *system = shared->system;
 	system->setValue("PENDING_STATE_CHANGE", pending_state_change.size());
@@ -1511,109 +1109,6 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 #endif
 	return true;
 }
-#else
-bool MachineInstance::processAll(uint32_t max_time, PollType which) {
-	std::list<Package*>::iterator evt_iter = pending_events.begin();
-	while (evt_iter != pending_events.end()) {
-		Package *pkg = *evt_iter;
-		evt_iter = pending_events.erase(evt_iter);
-		MachineInstance *mi = dynamic_cast<MachineInstance*>(pkg->receiver);
-		if (mi) mi->execute(*(pkg->message), pkg->transmitter);
-		delete pkg;
-	}
-
-	static int point_token = ClockworkToken::POINT;
-	static std::list<MachineInstance *>::iterator iter = active_machines.begin();
-	bool builtins = false;
-	if (iter == active_machines.begin()) {
-		struct timeval now;
-		gettimeofday(&now, NULL);
-		saved_loop_count = loop_count;
-		process_time = now.tv_sec * 1000000 + now.tv_usec;
-		if (which == BUILTINS)
-			builtins = true;
-		if (last_num_machines_with_work == 0 && num_machines_with_work == 0) {
-			shortcuts++;
-			return true;
-		}
-		else DBG_AUTOSTATES << num_machines_with_work << " machines with work at MachineInstance::processAll\n";
-		last_num_machines_with_work = num_machines_with_work;
-		num_machines_with_work = 0; // counts how many machines have work remaining at the end of this process
-	}
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-	const int block_size = 20;
-	int count = block_size;
-	while (iter != active_machines.end()) {
-		/* To compute a counterrate, the device needs a continual suppliy of input readings. 
-		   The process of polling the hardware will normally do this but when running a simulation
-		   we need some help. The following hack provides the solution until a proper method can be developed.
-		 */
-		MachineInstance *m = *iter++;
-		bool point = m->state_machine->token_id == point_token;
-		if ( (builtins && point) || (!builtins && (!point || m->mq_interface) && m->enabled() ) ) {
-			if (m->hasWork()) { /*std::cout << m->_name << " has work\n";*/ ++total_machines_with_work; }
-			if (m->hasWork() || !m->active_actions.empty() ) {
-				DBG_ACTIONS << m->getName() << " working in state: " << m->current_state.getName() << "\n";
-				m->idle();
-				++total_idle_calls;
-			}
-			if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->poll_actions) {
-				m->state_machine->plugin->poll_actions(m);
-				++total_plugins_with_work;
-			}
-			if (m->hasWork() || !m->active_actions.empty()) {
-				DBG_ACTIONS << m->getName() << " has work\n";
-				++num_machines_with_work;
-				DBG_ACTIONS << m->_name << " ADDED to machines with work " << num_machines_with_work << "\n";
-			}
-		}
-		count--;
-		if (count<=0) {
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-			if (now_t - start_processing > max_time) {
-				total_processing_time += now_t - start_processing;
-				total_aborts++;
-				return false; // ran out of time to finish
-			}
-			count = block_size;
-		}
-	}
-	if (num_machines_with_work == 0) {
-		DBG_ACTIONS << " no more actions outstanding\n";
-	}
-	else {
-		DBG_ACTIONS << " more actions to run\n";
-	}
-	gettimeofday(&now, NULL);
-	uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-	total_processing_time += now_t - start_processing;
-	++loop_count; // completed a pass through all machines
-	total_process_calls += loop_count - saved_loop_count;
-#if 0
-	if (!shared->system) shared->system = MachineInstance::find("SYSTEM");
-	MachineInstance *system = shared->system;
-	assert(system);
-	if (loop_count % 100 == 1) {
-		system->setValue("AVG_PROCESS_CALLS_PER_KCYCLE", total_process_calls*1000 / loop_count);
-		system->setValue("AVG_MACHINES_WITH_WORK_PER_KCYCLE", total_machines_with_work*1000 / loop_count);
-		system->setValue("AVG_WORK_PER_KCYCLE", total_idle_calls*1000 / loop_count);
-		system->setValue("CYCLES", loop_count);
-		system->setValue("AVG_PLUGIN_WORK_PER_KCYCLE", total_plugins_with_work * 1000 / loop_count);
-		system->setValue("SHORTCUTS_TAKEN_PER_KCYCLE", shortcuts * 1000 / loop_count);
-		system->setValue("AVG_PROCESSING_TIME_PER_KCYCLE", (long)(total_processing_time * 1000 / loop_count));
-		system->setValue("AVG_ABORTS_PER_KCYCLE", total_aborts * 1000/ loop_count);
-	}
-#endif
-	iter = active_machines.begin(); // prepare for the next cycle
-	return true; // complete the cycle
-}
-#endif
-
-#if 1
 
 void MachineInstance::checkPluginStates() {
 	//std::list<uint64_t> stats;
@@ -1635,15 +1130,6 @@ void MachineInstance::checkPluginStates() {
 		//uint64_t delta = nowMicrosecs() - start;
 		//stats.push_back(delta);
 	}
-#if 0
-  std::list<uint64_t>::iterator iter = stats.begin();
-  while (iter != stats.end()) {
-		uint64_t x = *iter++;
-		std::cout << x << " ";
-	}
-	if (!stats.empty()) std::cout << "\n";
-	DBG_MSG << "-- " << (nowMicrosecs() - start_processing) << "\n";
-#endif
 }
 
 // Warning: max_time is ignored in this method
@@ -1664,66 +1150,6 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
 	}
 	return true;
 }
-#else
-
-bool MachineInstance::checkStableStates(uint32_t max_time) {
-#ifdef USE_EXPERIMENTAL_IDLE_LOOP
-	if (last_machines_needing_check == 0 && total_machines_needing_check == 0) return true;
-#endif
-	last_machines_needing_check = total_machines_needing_check;
-	DBG_AUTOSTATES << total_machines_needing_check << " machines need state check in checkStableStates\n";
-	total_machines_needing_check = 0;
-	static std::list<MachineInstance *>::iterator iter = MachineInstance::automatic_machines.begin();
-
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	uint64_t start_processing = now.tv_sec * 1000000 + now.tv_usec;
-	const int block_size = 5;
-	int count = block_size;
-	while (iter != MachineInstance::automatic_machines.end()) {
-		MachineInstance *m = *iter++;
-		DBG_AUTOSTATES  << " check stable states: " << m->getName() << "\n";
-		if ( m->enabled() && m->executingCommand() == NULL
-				&& (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ) && m->next_poll <= start_processing )
-		{
-			DBG_AUTOSTATES  << "calling " << m->getName() << "::setStableState()\n";
-			m->setStableState();
-			if (m->state_machine && m->state_machine->plugin && m->state_machine->plugin->state_check) {
-				m->state_machine->plugin->state_check(m);
-				DBG_AUTOSTATES  << "flagging state checks for " << m->getName() << " because it has a plugin\n";
-				++total_machines_needing_check;
-			}
-			else if (m->enabled() && m->executingCommand() == NULL
-					&& (m->needsCheck() || m->state_machine->token_id == ClockworkToken::tokCONDITION ))
-			{
-				DBG_AUTOSTATES  << "flagging state checks for " << m->getName() << " because it is a condition or needs a check\n";
-				++total_machines_needing_check;
-			}
-		}
-		else {
-			if (m->needsCheck()) {
-				DBG_AUTOSTATES  << m->getName() << " not checked\n";
-			}
-		}
-		count--;
-		if (count<=0) {
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
-			if (now_t - start_processing > max_time) {
-				DBG_AUTOSTATES << " aborting stable state checks\n";
-				return false; // ran out of time to finish
-			}
-			count = block_size;
-		}
-	}
-	iter = MachineInstance::automatic_machines.begin();
-	if (total_machines_needing_check == 0) {
-		DBG_AUTOSTATES << " all states are stable (" << automatic_machines.size() << " machines)\n";
-	}
-	return true;
-}
-#endif
 
 void MachineInstance::displayAutomaticMachines() {
 	BOOST_FOREACH(MachineInstance *m, MachineInstance::automatic_machines) {
@@ -1761,29 +1187,77 @@ MachineInstance *MachineInstance::find(const char *name) {
 	return 0;
 }
 
-void MachineInstance::addParameter(Value param, MachineInstance *mi) {
-	parameters.push_back(param);
-	if (!mi && param.kind == Value::t_symbol) {
-		mi = lookup(param);
-		if (mi) {
-			if (!param.cached_machine) param.cached_machine = mi;
-			parameters[parameters.size()-1].real_name = mi->fullName();
+template<class T>class Inserter {
+public:
+	void add(T item, std::list<T>&list, int pos, bool before) {
+		if (list.empty()) list.push_back(item);
+		else if (pos == 0 && before) list.push_front(item);
+		else if (pos == -1 && !before) list.push_back(item);
+		else if (pos == -1 && before) {
+			typename std::list<T>::reverse_iterator iter = list.rbegin();
+			if (iter != list.rend()) iter++;
+			list.insert(iter.base(), item);
+		}
+		else {
+			size_t n = list.size();
+			if (pos > n || (pos >= n-1 && !before)) list.push_back(item);
+			else {
+				typename std::list<T>::const_iterator iter = list.begin();
+				int i = 0;
+				while (iter != list.end() && i < pos) { iter++; i++; }
+				if (i == pos) list.insert(iter, item);
+			}
 		}
 	}
-	else if (mi) {
-		parameters[parameters.size()-1].real_name = mi->fullName();
+};
+
+void MachineInstance::addParameter(const Parameter &p, MachineInstance *mi, int position, bool before) {
+
+	//std::cout << _name << " " << ((mi) ?  mi->getName() : "") << " " << position << " " << before << "\n";
+
+	if (position < 0) {
+		if (!before) parameters.push_back(p);
+		else
+			parameters.insert(parameters.begin()+(parameters.size()-1), p);
 	}
-	parameters[parameters.size()-1].machine = mi;
+	else {
+		if (!before) position++;
+		if (position < parameters.size())
+			parameters.insert(parameters.begin()+position, p);
+		else
+			parameters.push_back(p);
+	}
+
 	if (mi) {
 		addDependancy(mi);
 		listenTo(mi);
 		mi->addDependancy(this);
 		mi->listenTo(this);
 	}
-	//if (_type == "LIST" || _type == "REFERENCE")
+	if (_type == "LIST") {
+		if (parameters.size() > 0 && current_state.getName() != "nonempty")
+			setState("nonempty");
+	}
 	setNeedsCheck();
 	notifyDependents();
 	//}
+}
+
+void MachineInstance::addParameter(Value param, MachineInstance *mi, int position, bool before) {
+	Parameter p(param);
+
+	if (!mi && param.kind == Value::t_symbol) {
+		mi = lookup(param);
+		if (mi) {
+			if (!param.cached_machine) param.cached_machine = mi;
+			p.real_name = mi->fullName();
+		}
+	}
+	else if (mi) {
+		p.real_name = mi->fullName();
+	}
+	p.machine = mi;
+	addParameter(p, mi, position, before);
 }
 
 void MachineInstance::removeParameter(int which) {
@@ -1796,6 +1270,10 @@ void MachineInstance::removeParameter(int which) {
 		stopListening(m);
 	}
 	parameters.erase(parameters.begin()+which);
+	if (_type == "LIST") {
+		if (parameters.size() == 0 && current_state.getName() != "empty")
+			setState("empty");
+	}
 	setNeedsCheck();
 	notifyDependents();
 }
@@ -1822,19 +1300,12 @@ void MachineInstance::addLocal(Value param, MachineInstance *mi) {
 		}
 	}
 	setNeedsCheck();
-	if (_type == "LIST" || _type == "REFERENCE") {
+	if (_type == "LIST") {
 		notifyDependents();
-		/*if (owner) {
-		  std::set<MachineInstance*>::iterator dep_iter = owner->depends.begin();
-		  while (dep_iter != owner->depends.end()) {
-		  MachineInstance *dep = *dep_iter++;
-		  if (mi){
-		  mi->addDependancy(dep);
-		  dep->listenTo(mi);
-		  }
-		  dep->setNeedsCheck();
-		  }
-		  }*/
+	}
+	else if (_type == "REFERENCE") {
+		setState("ASSIGNED");
+		notifyDependents();
 	}
 }
 
@@ -1842,6 +1313,7 @@ void MachineInstance::removeLocal(int index) {
 	if ((int)locals.size() <= index) return;
 	Parameter &p = locals[index];
 	if (p.machine) {
+		localised_names.erase(p.machine->getName());
 		stopListening(p.machine);
 		p.machine->removeDependancy(this);
 	}
@@ -1859,9 +1331,14 @@ void MachineInstance::removeLocal(int index) {
 	while (index-- && iter != locals.end()) iter++;
 	if (iter != locals.end()) locals.erase(iter);
 	setNeedsCheck();
-	if (_type == "LIST" || _type == "REFERENCE") {
+	if (_type == "LIST") {
 		notifyDependents();
 	}
+	else if (_type == "REFERENCE") {
+		setState("EMPTY");
+		notifyDependents();
+	}
+
 }
 
 void MachineInstance::setProperties(const SymbolTable &props) {
@@ -1904,7 +1381,7 @@ MachineInstance &MachineInstance::operator=(const MachineInstance &orig) {
 std::ostream &MachineInstance::operator<<(std::ostream &out)const  {
 	out << _name << "(" << id <<")" << "<" << _type << ">\n";
 	if (properties.begin() != properties.end()) {
-		out << "  Properties: " << properties << "\n"; 
+		out << "  Properties: " << properties << "\n";
 	}
 	if (!parameters.empty()) {
 		for (unsigned int i=0; i<parameters.size(); ++i) {
@@ -1939,9 +1416,9 @@ std::ostream &MachineInstance::operator<<(std::ostream &out)const  {
 bool MachineInstance::stateExists(State &seek) {
 	//return (state_machine->state_names.count(seek.getName()) != 0);
 
-	std::list<State>::const_iterator iter = state_machine->states.begin();
+	std::list<State *>::const_iterator iter = state_machine->states.begin();
 	while (iter != state_machine->states.end()) {
-		if (*iter == seek) return true;
+		if ( *(*iter) == seek) return true;
 		iter++;
 	}
 	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
@@ -1966,17 +1443,14 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	// all active machines receive messages from themselves but now we
 	// check if there is a handler in the case of enter and leave messages
 	// enter and leave functions are no longer automatically accepted
-	if (m.isSimple()) {
+	if (m.isSimple() || m.isEnable()) {
 		if ( from == this || (io_interface && from == io_interface) ) {
 			DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from itself\n";
-			return true; 
-		}    
+			return true;
+		}
 		// machines receive messages from objects they are listening to
 		if (std::find(listens.begin(), listens.end(), from) != listens.end()) {
 			DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from " << from->getName() << "\n";
-			if (m.getText() == "in.off_leave") {
-				int x = 1;
-			}
 			return true;
 		}
 	}
@@ -2025,9 +1499,9 @@ Action::Status MachineInstance::setState(const char *sn, uint64_t authority, boo
 	return setState(*s, authority, resume);
 }
 
-void MachineInstance::forceStableStateCheck() { 
+void MachineInstance::forceStableStateCheck() {
 	DBG_AUTOSTATES << "stable state check forced\n";
-	total_machines_needing_check++; 
+	total_machines_needing_check++;
 }
 
 void MachineInstance::requireAuthority(uint64_t auth) {
@@ -2036,6 +1510,75 @@ void MachineInstance::requireAuthority(uint64_t auth) {
 
 uint64_t MachineInstance::requiredAuthority() {
 	return expected_authority;
+}
+
+// setup the triggers for subconditions and return the earliest time found
+uint64_t MachineInstance::setupSubconditionTriggers(const StableState &s, uint64_t u_earliestTimer)
+{
+	int64_t earliestTimer = (int64_t)u_earliestTimer;
+	int64_t result = earliestTimer;
+	std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+	while (iter != s.subcondition_handlers->end()) {
+		ConditionHandler &ch = *iter++;
+		//setup triggers for subcondition handlers
+
+		if (ch.uses_timer) {
+			int64_t timer_val;
+			ch.reset();
+			if (s.state_name == current_state.getName()) {
+				// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
+				//   we should trigger at v.iValue+1
+				//NB_MSG << "setting up trigger for subcondition on state " << s.state_name << "\n";
+
+				std::list<Predicate *> timer_clauses;
+				DBG_PREDICATES << "searcing: " << (*ch.condition.predicate) << "\n";
+				ch.condition.predicate->findTimerClauses(timer_clauses);
+				std::list<Predicate *>::iterator iter = timer_clauses.begin();
+				timer_val = LONG_MAX;
+				while (iter != timer_clauses.end()) {
+					Predicate *node = *iter++;
+					const Value &tv = node->getTimerValue();
+					if (tv == SymbolTable::Null) continue;
+					if (tv.kind == Value::t_symbol || tv.kind == Value::t_string) {
+						Value v = getValue(tv.sValue);
+						if (v.kind != Value::t_integer) {
+							DBG_MSG << _name << " Warning: timer value "<< v << " for state "
+							<< s.state_name << " subcondition is not numeric\n";
+							continue;
+						}
+
+						if (v.iValue>=0 && v.iValue < timer_val) {
+							timer_val = v.iValue;
+							if (node->op == opGT) ++timer_val;
+						}
+						else {
+							DBG_PREDICATES << "skipping large timer value " << v.iValue << "\n";
+						}
+					}
+					else if (tv.kind == Value::t_integer) {
+						if (tv.iValue < timer_val) {
+							timer_val = tv.iValue;
+							if (node->op == opGT) ++timer_val;
+						}
+						else {
+							DBG_PREDICATES << "skipping a large timer value " << tv.iValue << "\n";
+						}
+					}
+					else {
+						DBG_MSG<< _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
+						continue;
+					}
+				}
+				if (timer_val < LONG_MAX && timer_val < earliestTimer) result = timer_val;
+			}
+		}
+		else if (ch.command_name == "FLAG") {
+			if (s.state_name == current_state.getName()) {
+				//TBD What was intended here?
+			}
+		}
+	}
+	return (uint64_t)result;
 }
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
@@ -2059,7 +1602,13 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		return Action::Failed;
 	}
 
-	if (!hasState(new_state)) {
+	if (!resume && current_state == new_state)
+		return Action::Complete;
+
+
+	const State *machine_class_state = state_machine->findState(new_state);
+
+	if (!machine_class_state) {
 		const Value &s = getValue(new_state.getName().c_str());
 		State propertyState(s.asString().c_str());
 		if (!hasState(propertyState)) {
@@ -2073,10 +1622,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 	}
 	Action::Status stat = Action::Complete;
 
-
-	if (resume || current_state != new_state) {
-		std::string last = current_state.getName();
-
+	{
 #ifndef DISABLE_LEAVE_FUNCTIONS
 		/* notify everyone we are leaving a state */
 		// TBD use notifyDependents()
@@ -2123,7 +1669,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		// until later, if the state actually changes
 
 		// update the Modbus interface for self
-		if (published && (modbus_exported == discrete || modbus_exported == coil) ) {
+		if (published && (modbus_exported == ModbusExport::discrete || modbus_exported == ModbusExport::coil) ) {
 			if (!modbus_exports.count(_name)) {
 				char buf[100];
 				snprintf(buf, 100, "%s Internal Error: modbus export info not found", getName().c_str());
@@ -2149,10 +1695,15 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		}
 #endif
 		gettimeofday(&start_time,0);
-		gettimeofday(&disabled_time,0);
+		disabled_time = start_time;
 		DBG_STATECHANGES << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+		std::string last = current_state.getName();
 		current_state = new_state;
 		current_state_val = new_state.getName();
+
+		// call the internal enter function for the machine if available
+		if (machine_class_state) machine_class_state->enter(0);
+
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
 		// publish the state change if we are a publisher
 		if (mq_interface) {
@@ -2177,12 +1728,14 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		}
 		/* TBD optimise the timer triggers to only schedule the earliest trigger */
 		StableState *earliestTimerState = NULL;
-		int64_t earliestTimer = (unsigned long) 100000000L;
+		int64_t earliestTimer = LONG_MAX;
 
 		uint64_t stable_state_timer_base = microsecs();
+		bool dbg_report_if_timer_found = false;
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 			StableState &s = stable_states[ss_idx];
 			if (s.uses_timer) {
+				dbg_report_if_timer_found = true;
 				// first disable any trigger that may still be enabled
 				if ( s.trigger) {
 					DBG_M_SCHEDULER << _name << " clearing trigger for state " << s.state_name << "\n";
@@ -2198,11 +1751,15 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
 				// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
 				//   we should trigger at v.iValue+1
-				if (s.timer_val.kind == Value::t_symbol) {
+				if (s.timer_val.kind == Value::t_symbol || s.timer_val.kind == Value::t_string) {
 					Value v = getValue(s.timer_val.sValue);
 					if (v.kind != Value::t_integer) {
-						NB_MSG << _name << " Error: timer value for state " << s.state_name << " is not numeric\n";
-						NB_MSG << "timer_val: " << s.timer_val << " lookup value: " << v << " type: " << v.kind << "\n";
+						char buf[200];
+						snprintf(buf, 200, "%s Error: timer value for state %s is not numeric. "
+								 "timer_val: %s lookup value: %s type: %d",
+								 _name.c_str(), s.state_name.c_str(), s.timer_val.sValue.c_str(),
+								 v.asString().c_str(), v.kind);
+						MessageLog::instance()->add(buf);
 						continue;
 					}
 					else
@@ -2210,11 +1767,14 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				}
 				else if (s.timer_val.kind == Value::t_integer)
 					timer_val = s.timer_val.iValue;
+				else if (s.timer_val.kind == Value::t_float)
+					timer_val = trunc(s.timer_val.fValue);
 				else {
 					DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " is not numeric\n";
 					NB_MSG << "timer_val: " << s.timer_val << " type: " << s.timer_val.kind << "\n";
 					continue;
 				}
+				// note comment above, this is not a correct handling of opGT and opLT
 				if (s.condition.predicate->op == opGT) timer_val++;
 				else if (s.condition.predicate->op == opLT) --timer_val;
 
@@ -2222,90 +1782,21 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 					earliestTimerState = &s;
 					earliestTimer = timer_val;
 				}
+				else {
+					DBG_M_SCHEDULER << _name << " ignoring scheduled check for stable state #"
+						<< ss_idx << "(" <<timer_val << ") in favour of earlier check "
+						<< earliestTimer << "\n";
+				}
 
 			}
-			if (s.subcondition_handlers)
-			{
-				std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
-				while (iter != s.subcondition_handlers->end()) {
-					ConditionHandler &ch = *iter++;
-					//setup triggers for subcondition handlers
-
-					if (ch.uses_timer) {
-						int64_t timer_val;
-						ch.reset();
-						if (s.state_name == current_state.getName()) {
-							// BUG here. If the timer comparison is '>' (ie Timer should be > the given value
-							//   we should trigger at v.iValue+1
-							//NB_MSG << "setting up trigger for subcondition on state " << s.state_name << "\n";
-
-							std::list<Predicate *> timer_clauses;
-							DBG_PREDICATES << "searcing: " << (*ch.condition.predicate) << "\n";
-							ch.condition.predicate->findTimerClauses(timer_clauses);
-							std::list<Predicate *>::iterator iter = timer_clauses.begin();
-							timer_val = LONG_MAX;
-							while (iter != timer_clauses.end()) {
-								Predicate *node = *iter++;
-								const Value &tv = node->getTimerValue();
-								if (tv == SymbolTable::Null) continue;
-								if (tv.kind == Value::t_symbol || tv.kind == Value::t_string) {
-									Value v = getValue(tv.sValue);
-									if (v.kind != Value::t_integer) {
-										DBG_MSG << _name << " Warning: timer value "<< v << " for state " 
-											<< s.state_name << " subcondition is not numeric\n";
-										continue;
-									}
-
-									if (v.iValue>=0 && v.iValue < timer_val) {
-										timer_val = v.iValue;
-										if (node->op == opGT) ++timer_val;
-									}
-									else {
-										DBG_PREDICATES << "skipping large timer value " << v.iValue << "\n";
-									}
-								}
-								else if (tv.kind == Value::t_integer) {
-									if (tv.iValue < timer_val) {
-										timer_val = tv.iValue;
-										if (node->op == opGT) ++timer_val;
-									}
-									else {
-										DBG_PREDICATES << "skipping a large timer value " << tv.iValue << "\n";
-									}
-								}
-								else {
-									DBG_MSG<< _name << " Warning: timer value for state " << s.state_name << " subcondition is not numeric\n";
-									continue;
-								}
-							}
-							if (timer_val < LONG_MAX && timer_val < earliestTimer) {
-								earliestTimerState = &s;
-								earliestTimer = timer_val;
-							}
-#if 0
-								ch.timer_val = timer_val;
-								if (timer_val > 0) {
-									DBG_M_SCHEDULER << _name << " Scheduling subcondition timer for " << timer_val*1000 << "us\n";
-									if (_name == "trans")
-										int x = 1;
-									ch.trigger = new Trigger(this, "SubconditionTimer");
-									FireTriggerAction *fta = new FireTriggerAction(this, ch.trigger);
-									Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
-								}
-								else if (timer_val >= -2) {
-									ProcessingThread::activate(this);
-								}
-							}
-#endif
-						}
-					}
-					else if (ch.command_name == "FLAG") {
-						if (s.state_name == current_state.getName()) {
-							//TBD What was intended here?
-						}
-					}
+			if (s.subcondition_handlers) {
+				int64_t sc_timer;
+				if ( (sc_timer = (int64_t) setupSubconditionTriggers(s, earliestTimer)) < earliestTimer) {
+					earliestTimerState = &s;
+					earliestTimer = sc_timer;
 				}
 			}
+
 		}
 		if (earliestTimerState) {
 			StableState s(*earliestTimerState);
@@ -2327,6 +1818,9 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			}
 			else if (timer_val >= -2)
 				ProcessingThread::activate(this);
+		}
+		else if (dbg_report_if_timer_found) {
+			DBG_M_SCHEDULER << " no state timer required\n";
 		}
 
 
@@ -2373,7 +1867,7 @@ void MachineInstance::notifyDependents(Message &msg){
 		if (this == dep) continue;
 		if (!dep->is_enabled) continue;
 		if (!dep->is_active && !dep->io_interface) continue;
-		DBG_M_MESSAGING << _name << " should tell " << dep->getName() 
+		DBG_M_MESSAGING << _name << " should tell " << dep->getName()
 			<< " it is " << current_state.getName() << " using " << msg << "\n";
 
 
@@ -2384,7 +1878,7 @@ void MachineInstance::notifyDependents(Message &msg){
 		Action *act = dep->executingCommand();
 		if (act) {
 			if (act->getStatus() == Action::Suspended) act->resume();
-			DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() 
+			DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName()
 				<< "]" << " is executing " << *act << "\n";
 		}
 		//TBD execute the message on the dependant machine
@@ -2413,6 +1907,51 @@ Action *MachineInstance::findMatchingCommand(const std::string &command_name) {
 	return 0;
 }
 
+Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
+			const std::string short_name, bool response_required) {
+	std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(m.getText().c_str()));
+	if (receive_handler_i != receives_functions.end()) {
+		if (debug()) {
+			DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
+				<< "handler: " << *((*receive_handler_i).second) << "\n";
+		}
+#ifndef EC_SIMULATOR
+		if (state_machine && state_machine->name == "ETHERCAT_BUS") {
+			if (short_name == "activate"
+					&& (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED") ) {
+				ProcessingThread::instance()->machine.requestActivation(true);
+			}
+			else if (short_name == "deactivate" && current_state.getName() == "ACTIVE")
+				ProcessingThread::instance()->machine.requestDeactivation(true);
+			return NULL;
+		}
+#endif
+		if (response_required)
+			prepareCompletionMessage(from, short_name);
+		return (*receive_handler_i).second->retain();
+	}
+	else if (from == this) {
+		if (short_name == m.getText()) {
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
+			return NULL;
+		} // no other alternatives
+		std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(short_name.c_str()));
+		if (receive_handler_i != receives_functions.end()) {
+			if (debug()){
+				DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
+					<< "handler: " << *((*receive_handler_i).second) << "\n";
+			}
+			if (response_required)
+				prepareCompletionMessage(from, short_name);
+
+			return (*receive_handler_i).second->retain();
+		}
+	}
+	if (response_required)
+		prepareCompletionMessage(from, short_name);
+	return NULL;
+}
 
 /* findHandler - find a handler for a message by looking through the transition table
 
@@ -2424,7 +1963,7 @@ Action *MachineInstance::findMatchingCommand(const std::string &command_name) {
    - clear the trigger on the condition handlers for the state
    - construct a stable state IF test and push it to the action stack
    - if a response is required push an ExecuteMessage action  for the _done message
-   - otherwise, 
+   - otherwise,
    -push a move state action
    - if there is a matching command (unnecessary test) and the command is exported turn the command coil off
 
@@ -2453,6 +1992,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					&& (!t.condition || t.condition->operator()(this))) {
 				// found match, if there is a command defined for this transition, we
 				// execute the command, otherwise we just do the state change
+				bool state_change_ok = true;
 				int num_commands = commands.count(t.trigger.getText());
 				if (num_commands) {
 					DBG_M_MESSAGING << "Transition on machine " << getName() << " has a linked command; using it\n";
@@ -2462,7 +2002,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 
 					// find state condition
 					bool found = false;
-					IfCommandAction *change_state_action = 0;
+					IfElseCommandAction *change_state_action = 0;
 					for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 						StableState &s = stable_states[ss_idx];
 						if (s.state_name == t.dest.getName()) {
@@ -2478,8 +2018,14 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 								MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
 								MachineCommandTemplate mc("stable_state_test", "");
 								mc.setActionTemplate(&temp);
-								IfCommandActionTemplate ifcat(s.condition.predicate, &mc);
-								change_state_action = new IfCommandAction(this, &ifcat);
+								char buf[100];
+								snprintf(buf, 100, "%s: Failed Transition from %s to %s",
+												 _name.c_str(), current_state.getName().c_str(), t.dest.getName().c_str());
+								AbortActionTemplate aat(true, buf);
+								MachineCommandTemplate mc2("abort", "");
+								mc2.setActionTemplate(&aat);
+								IfElseCommandActionTemplate ifecat(s.condition.predicate, &mc, &mc2);
+								change_state_action = new IfElseCommandAction(this, &ifecat);
 							}
 							else {
 								// update the action to or with another condition
@@ -2518,14 +2064,35 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 					if (matching_command) return matching_command;
 				}
 				else {
-					DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
+
+#ifndef EC_SIMULATOR
+					if (state_machine->name == "ETHERCAT_BUS") {
+						if (short_name == "activate"
+								&& (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED") ) {
+							ProcessingThread::instance()->machine.requestActivation(true);
+							ProcessingThread::activate(this);
+						}
+						else if (short_name == "deactivate" && current_state.getName() == "ACTIVE") {
+							ProcessingThread::instance()->machine.requestDeactivation(true);
+							ProcessingThread::activate(this);
+						}
+					}
+					else
+#endif
+						DBG_M_MESSAGING << "No linked command for the transition, performing state change\n";
 				}
 				if (response_required)
 					prepareCompletionMessage(from, t.trigger.getText());
 
-				// no matching command, just perform the transition
-				MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
-				return new MoveStateAction(this, temp);
+				if (state_change_ok) {
+					// no matching command, just perform the transition
+					MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str() );
+					return new MoveStateAction(this, temp);
+				}
+				else {
+					SendMessageActionTemplate ssat("StateChangeFailureException", this);
+					return new SendMessageAction(this, ssat);
+				}
 			}
 		}
 		// no transition but this may still be a command
@@ -2565,37 +2132,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 		else
 			DBG_M_MESSAGING << _name << ": Looking for ENTER method for " << current_state.getName() << "\n";
 	}
-	std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(m.getText().c_str()));
-	if (receive_handler_i != receives_functions.end()) {
-		if (debug()) {
-			DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
-				<< "handler: " << *((*receive_handler_i).second) << "\n";
-		}
-		if (response_required)
-			prepareCompletionMessage(from, short_name);
-		return (*receive_handler_i).second->retain();
-	}
-	else if (from == this) {
-		if (short_name == m.getText()) {
-			if (response_required)
-				prepareCompletionMessage(from, short_name);
-			return NULL;
-		} // no other alternatives
-		std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(short_name.c_str()));
-		if (receive_handler_i != receives_functions.end()) {
-			if (debug()){
-				DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
-					<< "handler: " << *((*receive_handler_i).second) << "\n";
-			}
-			if (response_required)
-				prepareCompletionMessage(from, short_name);
-
-			return (*receive_handler_i).second->retain();
-		}
-	}
-	if (response_required)
-		prepareCompletionMessage(from, short_name);
-	return NULL;
+	return findReceiveHandler(from, m, short_name, response_required);
 }
 
 void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string message) {
@@ -2603,9 +2140,9 @@ void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string me
 		MachineInstance *from_mi = dynamic_cast<MachineInstance*>(from);
 		assert(from_mi);
 		std::string response = _name + "." + message + "_done";
-		DBG_MSG << _name << " command " << message << " completion requires response. Adding command to execute "
-		<< response << " on: " << from_mi->fullName()
-		<< ( (from_mi->enabled()) ? " (enabled)\n" : " (disabled)\n");
+		//DBG_MSG << _name << " command " << message << " completion requires response. Adding command to execute "
+		//<< response << " on: " << from_mi->fullName()
+		//<< ( (from_mi->enabled()) ? " (enabled)\n" : " (disabled)\n");
 		ExecuteMessageActionTemplate emat(strdup(response.c_str()), from_mi);
 		ExecuteMessageAction *ema = new ExecuteMessageAction(from_mi, emat);
 		this->push(ema);
@@ -2752,7 +2289,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from, Acti
 
 void MachineInstance::handle(const Message&m, Transmitter *from, bool send_receipt) {
 	if (!enabled()) {
-		DBG_M_MESSAGING << _name << ":" << id 
+		DBG_M_MESSAGING << _name << ":" << id
 			<< " dropped: " << m << " in " << getCurrent() << " from " << from->getName() << " while disabled\n";
 		if (send_receipt) {
 			NB_MSG << _name << " Error: message '" << m.getText() << "' requiring a receipt arrived while disabled\n";
@@ -2760,8 +2297,8 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 		return;
 	}
 	if (_type != "POINT") {
-		DBG_M_MESSAGING << _name << ":" << id 
-			<< " received: " << m << " in " << getCurrent() << " from " << from->getName() 
+		DBG_M_MESSAGING << _name << ":" << id
+			<< " received: " << m << " in " << getCurrent() << " from " << from->getName()
 			<< " will send receipt: " << send_receipt << "\n";
 	}
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
@@ -2783,6 +2320,7 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 		MachineInstance *mi = dynamic_cast<MachineInstance*>(r);
 		if (mi) {
 			MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
+			mh.start_time = microsecs();
 			Channel::sendCommand(mi, "SEND", params, mh); // empty command parameter list
 		}
 		else {
@@ -2800,121 +2338,18 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 			Dispatcher::instance()->deliver(p);
 		}
 		else {
+#if 0
 			char buf[120];
 			snprintf(buf, 120, "%s: sending %s to %s failed because the target is not enabled",
 					 _name.c_str(), m->getText().c_str(), r->getName().c_str());
 			MessageLog::instance()->add(buf);
 			DBG_MSG << buf << "\n";
+#endif
 			Package *p = new Package(this, this, new Message("DisabledMessageTargetException"), false);
 			Dispatcher::instance()->deliver(p);
 		}
 	}
 }
-
-MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
-	name(class_name), allow_auto_states(true), token_id(0), plugin(0),
-	polling_delay(0)
-{
-	states.push_back("INIT");
-	token_id = Tokeniser::instance()->getTokenId(class_name);
-	all_machine_classes.push_back(this);
-}
-
-void MachineClass::defaultState(State state) {
-	default_state = state;
-}
-
-void MachineClass::disableAutomaticStateChanges() { 
-	allow_auto_states = false; 
-}
-
-void MachineClass::enableAutomaticStateChanges() { 
-	allow_auto_states = true; 
-}
-
-bool MachineClass::isStableState(State &state) {
-	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
-}
-
-const State *MachineClass::findState(const char *seek) const {
-	std::list<State>::const_iterator iter = states.begin();
-	while (iter != states.end()) {
-		const State &s = *iter++;
-		if (s.getName() == seek) return &s;
-	}
-	return 0;
-}
-
-const State *MachineClass::findState(const State &seek) const {
-	std::list<State>::const_iterator iter = states.begin();
-	while (iter != states.end()) {
-		const State &s = *iter++;
-		if (s == seek) {
-			return &s;
-		}
-	}
-	return 0;
-}
-
-
-MachineClass *MachineClass::find(const char *name) {
-	int token = Tokeniser::instance()->getTokenId(name);
-	std::list<MachineClass *>::iterator iter = all_machine_classes.begin();
-	while (iter != all_machine_classes.end()) {
-		MachineClass *mc = *iter++;
-		if (mc->token_id == token) return mc;
-	}
-	return 0;
-}
-
-void MachineClass::addProperty(const char *p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
-	property_names.insert(p);
-}
-
-void MachineClass::addPrivateProperty(const char *p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
-	property_names.insert(p);
-	local_properties.insert(p); //
-}
-
-void MachineClass::addPrivateProperty(const std::string &p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
-	property_names.insert(p.c_str());
-	local_properties.insert(p); //
-}
-
-void MachineClass::addCommand(const char *p) {
-	//NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
-	command_names.insert(p);
-}
-
-bool MachineClass::propertyIsLocal(const char *name) const {
-	return local_properties.count(name) > 0;
-}
-
-bool MachineClass::propertyIsLocal(const std::string &name) const {
-	return local_properties.count(name) > 0;
-}
-
-bool MachineClass::propertyIsLocal(const Value &name) const {
-	return local_properties.count(name.asString()) > 0;
-}
-
-MachineCommandTemplate *MachineClass::findMatchingCommand(std::string cmd_name, const char *state) {
-	// find the correct command to use based on the current state
-	std::multimap<std::string, MachineCommandTemplate*>::iterator cmd_it = commands.find(cmd_name);
-	while (cmd_it != commands.end()) {
-		std::pair<std::string, MachineCommandTemplate*>curr = *cmd_it++;
-		if (curr.first != cmd_name) break;
-		MachineCommandTemplate *cmd = curr.second;
-		if ( !state || cmd->switch_state || (!cmd->switch_state && cmd->getStateName().get() == state)  )
-			return cmd;
-	}
-	return 0;
-}
-
-
 
 
 MachineEvent::MachineEvent(MachineInstance *machine, Message *message) :
@@ -2924,26 +2359,6 @@ MachineEvent::MachineEvent(MachineInstance *machine, const Message &message) :
 	mi(machine), msg(new Message(message)) { }
 
 MachineEvent::~MachineEvent() { delete msg; }
-
-MachineInterface::MachineInterface(const char *class_name) : MachineClass(class_name) {
-	if (all_interfaces.count(class_name) != 0) {
-		NB_MSG << "interface " << class_name << " is already defined\n";
-	}
-	all_interfaces[class_name] = this;
-}
-
-MachineInterface::~MachineInterface() {
-	all_interfaces.erase(this->name);
-}
-/*
-void MachineInterface::addProperty(const char *name) {
-	property_names.insert(name);
-}
-
-void MachineInterface::addCommand(const char *name) {
-	command_names.insert(name);
-}
-*/
 
 
 Action *MachineInstance::executingCommand() {
@@ -2965,9 +2380,13 @@ void MachineInstance::start(Action *a) {
 	// actions execute from the back of the queue
 	// an action may have been pushed and then started or just started
 	// if it is not the item at the back of the queue we push it now
-	if (a!=executingCommand()) {
+	Action *curr = executingCommand();
+	if (a!=curr) {
 		active_actions.push_back(a->retain());
+		ProcessingThread::activate(this);
 	}
+	else if (curr)
+		setNeedsCheck();
 }
 
 void MachineInstance::displayActive(std::ostream &note) {
@@ -3049,10 +2468,12 @@ void MachineInstance::markActive() {
 	if (state_machine && state_machine->plugin) markPlugin();
 }
 
+#if 0
 void MachineInstance::markPassive() {
 	is_active = false;
 	active_machines.remove(this);
 }
+#endif
 
 void MachineInstance::markPlugin() {
 	plugin_machines.insert(this);
@@ -3060,7 +2481,7 @@ void MachineInstance::markPlugin() {
 
 void MachineInstance::resume() {
 	if (!is_enabled) {
-		// adjust the starttime of the current state to make allowance for the 
+		// adjust the starttime of the current state to make allowance for the
 		// time we were disabled
 		struct timeval now;
 		gettimeofday(&now, 0);
@@ -3073,14 +2494,14 @@ void MachineInstance::resume() {
 		}
 
 		// fix status
-		is_enabled = true; 
+		is_enabled = true;
 		error_state = 0;
 		for (unsigned int i = 0; i<locals.size(); ++i) {
 			locals[i].machine->resume();
 		}
 		setState(current_state, expected_authority, true);
 		setNeedsCheck();
-	} 
+	}
 }
 
 void fixListState(MachineInstance &list) {
@@ -3122,10 +2543,10 @@ void MachineInstance::setInitialState(bool resume) {
 		MessageLog::instance()->add(buf);
 		NB_MSG << buf << "\n";
 	}
-} 
+}
 
-void MachineInstance::publish() { 
-	++published; 
+void MachineInstance::publish() {
+	++published;
 }
 
 void sortDependentMachines(MachineInstance *m, std::list<MachineInstance*> &sorted) {
@@ -3160,14 +2581,17 @@ void sortDependentMachines(MachineInstance *m, std::list<MachineInstance*> &sort
 		}
 	}
 }
-		
+
 void MachineInstance::unpublish() { --published; }
 
 void MachineInstance::enable() {
-	if (is_enabled) return;
-	is_enabled = true; 
-	error_state = 0; 
-	clearAllActions(); 
+	if (is_enabled && _type != "LIST" && _type != "REFERENCE") {
+		setNeedsCheck();
+		return;
+	}
+	is_enabled = true;
+	error_state = 0;
+	clearAllActions();
 	if (io_interface) {
 		io_interface->setupProperties(this);
 		io_interface->handleChange(pending_events);
@@ -3177,29 +2601,40 @@ void MachineInstance::enable() {
 	std::list<MachineInstance*>::iterator oi = sorted.begin();
 	while (oi != sorted.end()) {
 		MachineInstance *b = *oi++;
-		if (!b->enabled()) {
-			//DBG_MSG << "ENABLING: " << b->_name << "\n";
-			b->enable();
-		}
+		b->enable();
 	}
 
 #if 1
-	if (isActive()) {
+	if (isActive() && !isShadow()) {
 		std::string msgstr(_name);
 		msgstr += "_enabled";
-		Message *msg = new Message(msgstr.c_str());
+		Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);
 		sendMessageToReceiver(msg, this, false);
 	}
 #endif
 
-	setInitialState(true);
+	if (_type == "LIST")
+		fixListState(*this);
+	else if (_type == "REFERENCE") {
+		if (locals.size()) {
+			const State *s = state_machine->findState("ASSIGNED");
+			setState(*s);
+		}
+		else{
+			const State *s = state_machine->findState("EMPTY");
+			setState(*s);
+		}
+	}
+	else
+		setInitialState(true);
+
 	setNeedsCheck();
 	// if any dependent machines are already enabled, make sure they know we are awake
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();
 	while (d_iter != depends.end()) {
 		MachineInstance *dep = *d_iter++;
 		if (dep->enabled()) dep->setNeedsCheck(); // make sure dependant machines update when a property changes
-	}	
+	}
 }
 
 void MachineInstance::setDebug(bool which) {
@@ -3209,22 +2644,18 @@ void MachineInstance::setDebug(bool which) {
 	}
 }
 
-void MachineInstance::disable() { 
-#if 0
-	{
-		std::string msgstr(_name);
-		msgstr += "_disabled";
-		Message *msg = new Message(msgstr.c_str());
-		sendMessageToReceiver(msg, this, false);
+void MachineInstance::disable() {
+	if (!is_enabled && _type != "LIST" && _type != "REFERENCE") {
+		setNeedsCheck();
+		return;
 	}
-#endif
 	is_enabled = false;
 	if (locked) locked = 0;
 	if (io_interface) {
 		io_interface->turnOff();
 	}
 	if (isShadow()) setInitialState();
-	
+
 	const Value &val = properties.lookup("default");
 	if (val != SymbolTable::Null) {
 		if (val.kind == Value::t_integer) {
@@ -3248,10 +2679,7 @@ void MachineInstance::disable() {
 	std::list<MachineInstance*>::reverse_iterator oi = sorted.rbegin();
 	while (oi != sorted.rend()) {
 		MachineInstance *b = *oi++;
-		if (b->enabled()) {
-			//DBG_MSG << "DISABLING: " << b->_name << "\n";
-			b->disable();
-		}
+		b->disable();
 	}
 	// if any dependent machines are already enabled, make sure they know we are disabled
 	std::set<MachineInstance *>::iterator d_iter = depends.begin();
@@ -3263,10 +2691,10 @@ void MachineInstance::disable() {
 }
 
 void MachineInstance::resume(const State &s) {
-	if (!is_enabled) {		
+	if (!is_enabled) {
 		// fix status
 		clearAllActions();
-		is_enabled = true; 
+		is_enabled = true;
 		error_state = 0;
 		// resume all local machines first so that setState() can
 		// execute any necessary methods on local machines
@@ -3284,7 +2712,7 @@ void MachineInstance::resume(const State &s) {
 		while (d_iter != depends.end()) {
 			MachineInstance *dep = *d_iter++;
 			if (dep->enabled()) dep->setNeedsCheck();
-		}	
+		}
 	}
 }
 
@@ -3387,7 +2815,7 @@ bool MachineInstance::setStableState() {
 		StableState *active_state = 0;
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 			StableState &s = stable_states[ss_idx];
-			// the following test should be enabled but there is currently a situation that 
+			// the following test should be enabled but there is currently a situation that
 			// can cause the stable state to not be evaluated when a trigger is set. TBD
 			//		if ( (s.trigger && s.trigger->enabled() && s.trigger->fired() && s.condition(this) )
 			//			|| (!s.trigger && s.condition(this)) ) {
@@ -3411,39 +2839,15 @@ bool MachineInstance::setStableState() {
 								ch.triggered = false;
 							}
 						}
-						DBG_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name 
+						DBG_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name
 							<< " due to condition: " << *s.condition.predicate << "\n";
 						char *sn = strdup(s.state_name.c_str());
-#if 0
-						MoveStateActionTemplate temp(_name.c_str(), sn );
-						state_change = new MoveStateAction(this, temp);
-						Action::Status action_status;
-						if ( (action_status = (*state_change)()) == Action::Failed) {
-							DBG_MSG << " Warning: failed to start moving state on " << _name << " to " << s.state_name<< "\n";
-						}
-						else {
-							DBG_AUTOSTATES << " started state change on " << _name << " to " << s.state_name<<"\n";
-						}
-						//if (action_status == Action::Complete || action_status == Action::Failed) {
-						state_change->release();
-						state_change = 0;
-#else
 						SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name );
 						enqueueAction(ssat.factory(this)); // execute this state change next time actions are processed
-#endif
 						free(sn);
 					}
 					else {
 						DBG_AUTOSTATES << _name << " is already in " << s.state_name << " checking subconditions\n";
-						// reschedule timer triggers for this state
-/*
-						if (s.uses_timer) {
-							DBG_SCHEDULER << _name << " should retrigger timer for " << s.state_name << "("<<s.timer_val<< ")"<< "\n";
-							Value v = getValue(s.timer_val.sValue);
-							if (v.kind == Value::t_integer && v.iValue < next_timer)
-								next_timer = v.iValue;
-						}
-*/
 						if (s.subcondition_handlers) {
 							std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 							while (iter != s.subcondition_handlers->end()) {
@@ -3461,8 +2865,14 @@ bool MachineInstance::setStableState() {
 						}
 						if (s.uses_timer) {
 							DBG_SCHEDULER << _name << "[" << current_state.getName()
-							<< "] scheduling condition tests for state " << s.state_name << "\n";
+							<< "] checking condition tests for rule #" << ss_idx
+							<< " state: " << s.state_name << "\n";
 							ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
+							if (ptd) {
+								DBG_M_SCHEDULER << "found timer event " << ptd->label << " t: "
+									<< ptd->delay << " on rule #" << ss_idx << " state: " << s.state_name
+									<< "\n";
+							}
 						}
 					}
 					found_match = true;
@@ -3471,16 +2881,21 @@ bool MachineInstance::setStableState() {
 				else {
 					DBG_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
 					if (s.uses_timer) {
-						DBG_SCHEDULER << _name  << "[" << current_state.getName() 
+						DBG_SCHEDULER << _name  << "[" << current_state.getName()
 							<< "] scheduling condition tests for state " << s.state_name << "\n";
 						ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
+						if (ptd) {
+							DBG_M_SCHEDULER << "found timer event " << ptd->label << " t: "
+							<< ptd->delay << " on rule #" << ss_idx << " state: " << s.state_name
+							<< "\n";
+						}
 					}
 				}
 
 			}
 		}
 		/*
-			we have now determined whether to change state or not and in the case where we are 
+			we have now determined whether to change state or not and in the case where we are
 			going to change state we reset subcondition flags (ref TAG keyword) on all states
 			that have them except the newly active state
 		*/
@@ -3501,7 +2916,7 @@ bool MachineInstance::setStableState() {
 							}
 						}
 						else
-							std::cerr << _name << " error: flag " << ch.flag_name << " not found\n"; 
+							std::cerr << _name << " error: flag " << ch.flag_name << " not found\n";
 					}
 				}
 			}
@@ -3551,7 +2966,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 		DBG_INITIALISATION << _name << " initialising property " << option.first << " (" << option.second << ")\n";
 		if (option.second.kind == Value::t_symbol) {
 			Value v = getValue(option.second.sValue);
-			if (v != SymbolTable::Null) 
+			if (v != SymbolTable::Null)
 				properties.add(option.first, v, SymbolTable::NO_REPLACE);
 			else
 				properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
@@ -3570,7 +2985,6 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
 	if (locals.size() == 0) {
 		BOOST_FOREACH(Parameter p, state_machine->locals) {
-			DBG_MSG << "cloning machine '" << p.val.sValue << "'\n";
 			Parameter newp(p.val.sValue.c_str());
 			if (!p.machine) {
 				DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter " << p.val.sValue << "\n";
@@ -3582,7 +2996,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 				listenTo(newp.machine);
 				newp.machine->addDependancy(this);
 				std::map<std::string, MachineClass*>::iterator c_iter = machine_classes.find(newp.machine->_type);
-				if (c_iter == machine_classes.end()) 
+				if (c_iter == machine_classes.end())
 					DBG_M_INITIALISATION <<"Warning: class " << newp.machine->_type << " not found\n"
 						;
 				else if ((*c_iter).second) {
@@ -3613,7 +3027,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 						}
 						else {
 							resetTemporaryStringStream();
-							ss << "## - Error: Machine " << newsm->name << " requires " 
+							ss << "## - Error: Machine " << newsm->name << " requires "
 								<< newsm->parameters.size()
 								<< " parameters but instance " << _name << "." << newp.machine->getName() << " has " << p.machine->parameters.size();
 							error_messages.push_back(ss.str());
@@ -3664,8 +3078,8 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 				parameters[i].val = state_machine->parameters[i].val.sValue.c_str();
 				MachineInstance *m = lookup(parameters[i].real_name);
 				DBG_M_INITIALISATION << _name << " is looking up " << parameters[i].real_name << " for param " << i << "\n";
-				if(m) { 
-					DBG_M_INITIALISATION << " found " << m->getName() << "\n"; 
+				if(m) {
+					DBG_M_INITIALISATION << " found " << m->getName() << "\n";
 					m->addDependancy(this);
 					listenTo(m);
 				}
@@ -3675,7 +3089,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 				DBG_M_MSG << "Parameter " << i << " (" << parameters[i].val << ") with real name " <<  state_machine->parameters[i].val << "\n";
 			}
 			// fix the properties for the machine passed as a parameter
-			// the statemachine may nominate a default property that isn't 
+			// the statemachine may nominate a default property that isn't
 			// provided by the actual parameter. here we find these situations
 			// and set the default
 			if (parameters[i].machine && !state_machine->parameters[i].properties.empty()) {
@@ -3811,9 +3225,10 @@ const Value *MachineInstance::resolve(std::string property) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
-			state_timer.dynamicValue()->operator()(this);
-			DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
-			return &state_timer;
+			return getTimerVal();
+			//state_timer.dynamicValue()->operator()(this);
+			//DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			//return &state_timer;
 		}
 		else if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
 			return res;
@@ -3834,7 +3249,7 @@ const Value *MachineInstance::resolve(std::string property) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " " << res->asString() << "\n";
+				DBG_M_PROPERTIES << "found property " << property << " (type: " << res->kind << ") " << res->asString() << "\n";
 				return res;
 			}
 		}
@@ -3902,7 +3317,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 		MachineInstance *other = lookup(name);
 		if (other) {
 			const Value &v = other->getValue(prop);
-			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << v << "\n";
+			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " (type: " << v.kind << ") "<< " in machine " << name << " with value " << v << "\n";
 			return v;
 		}
 		else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
@@ -3968,9 +3383,10 @@ const Value &MachineInstance::getValue(const std::string &property) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
 			// since the last evaluation of stable states.
-			getTimerVal();
-			DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
-			return state_timer;
+
+			//DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
+			//return state_timer;
+			return *getTimerVal();
 		}
 		else if (SymbolTable::isKeyword(property.c_str())) {
 			return SymbolTable::getKeyValue(property.c_str());
@@ -3993,7 +3409,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
+				DBG_M_PROPERTIES << "found property " << property << " (type: " << x.kind << ") "<< x.asString() << "\n";
 				return x;
 			}
 		}
@@ -4022,7 +3438,8 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 		MachineInstance *other = lookup(name);
 		if (other) {
 			Value *v = other->getMutableValue(prop.c_str());
-			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " in machine " << name << " with value " << *v << "\n";
+			DBG_M_PROPERTIES << other->getName() << " found property " << prop << " (type: "
+				<< v->kind << ") in machine " << name << " with value " << *v << "\n";
 			return v;
 		}
 		else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" && locals.size() == 0) {
@@ -4045,13 +3462,13 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 
 		// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 
-		// variables may refer to an initialisation value passed in as a parameter. 
+		// variables may refer to an initialisation value passed in as a parameter.
 		if ( state_machine
 			 && (state_machine->token_id == ClockworkToken::VARIABLE
 				|| state_machine->token_id == ClockworkToken::CONSTANT)
 			) {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
-				if (state_machine->parameters[i].val.kind == Value::t_symbol 
+				if (state_machine->parameters[i].val.kind == Value::t_symbol
 						&& property == state_machine->parameters[i].val.sValue
 
 				   ) {
@@ -4105,7 +3522,8 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " " << x.asString() << "\n";
+				DBG_M_PROPERTIES << "found property " << property << " (type: "
+						<< x.kind << ") " << x.asString() << "\n";
 				return &x;
 			}
 		}
@@ -4127,11 +3545,11 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 const Value *MachineInstance::lookupState(const std::string &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
-		std::list<State>::iterator iter = state_machine->states.begin();
+		std::list<State*>::iterator iter = state_machine->states.begin();
 		while (iter != state_machine->states.end()) {
-			State &s = *iter++;
-			if (s.getName() == state_name) {
-				return s.getNameValue();
+			State *s = *iter++;
+			if (s->getName() == state_name) {
+				return s->getNameValue();
 			}
 		}
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
@@ -4144,11 +3562,11 @@ const Value *MachineInstance::lookupState(const std::string &state_name) {
 const Value *MachineInstance::lookupState(const Value &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
-		std::list<State>::iterator iter = state_machine->states.begin();
+		std::list<State*>::iterator iter = state_machine->states.begin();
 		while (iter != state_machine->states.end()) {
-			State &s = *iter++;
-			if (s.getId() == state_name.token_id) {
-				return s.getNameValue();
+			State *s = *iter++;
+			if (s->getId() == state_name.token_id) {
+				return s->getNameValue();
 			}
 		}
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
@@ -4206,7 +3624,7 @@ void MachineInstance::discard() {
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
 if (false){FileLogger fl(program_name);
-fl.f() << _name << " Sending modbus update " << property_name  << " " << new_value 
+fl.f() << _name << " Sending modbus update " << property_name  << " " << new_value
 	<< " (kind:" << new_value.kind<< ")"<< "\n";
 }
 
@@ -4219,7 +3637,18 @@ fl.f() << _name << " Sending modbus update " << property_name  << " " << new_val
 		case ModbusAddress::coil:
 		case ModbusAddress::input_register:
 		case ModbusAddress::holding_register: {
-			if (new_value.kind == Value::t_integer) {
+			if (new_value.kind == Value::t_float) {
+				double floatVal;
+				if (ma.length() == 1 || ma.length() == 2) {
+					if (new_value.asFloat(floatVal)) {
+						ma.update(this, floatVal);
+					}
+					else {
+						DBG_M_MODBUS << property_name << " does not have an integer value\n";
+					}
+				}
+			}
+			else if (new_value.kind == Value::t_integer) {
 				long intVal;
 				if (ma.length() == 1 || ma.length() == 2) {
 					if (new_value.asInteger(intVal)) {
@@ -4235,7 +3664,7 @@ fl.f() << _name << " Sending modbus update " << property_name  << " " << new_val
 				char *res;
 				val = strtol(new_value.sValue.c_str(), &res, 10);
 				if (errno == 0 && *res == 0) // complete string parsed as a number
-					ma.update(this, val);
+					ma.update(this, (int)val);
 				else
 					ma.update(this, new_value.sValue);
 			}
@@ -4343,7 +3772,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 			}
 		}
 
-		if (state_machine->token_id == ClockworkToken::PUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+		if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
 		{
 			std::string old_val(properties.lookup(property.c_str()).asString());
 			mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
@@ -4354,7 +3783,9 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		}
 		bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 		if (changed ){
-			setNeedsCheck();
+			if (property_val.token_id != ClockworkToken::TRACE &&
+				property_val.token_id != ClockworkToken::DEBUG)
+				setNeedsCheck();
 			properties.add(property, new_value, SymbolTable::ST_REPLACE);
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
@@ -4368,7 +3799,7 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 					}
 				}
 			}
-			else 
+			else
 #endif //USE_SDO
 #endif
 			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
@@ -4390,6 +3821,12 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 					NB_MSG << buf << "\n";
 				}
 			}
+			if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+			{
+				//std::string old_val(properties.lookup(property.c_str()).asString());
+				mq_interface->publish(properties.lookup("topic").asString(), new_value.asString(), this);
+			}
+
 			std::string property_name(modbusName(property, property_val));
 			if (published) {
 				Channel::sendPropertyChange(this, property.c_str(), new_value, authority);
@@ -4399,13 +3836,20 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 					Channel::sendModbusUpdate(this, property_name, new_value);
 				}
 			}
+			{
+				Message changed_msg("PROPERTY_CHANGE");
+				if (receives_functions.count(changed_msg) && !hasPending(changed_msg))
+					enqueue(Package(this, this, changed_msg));
+			}
 		}
 		// only tell dependent machines to recheck predicates if the property
 		// actually changes value
 		if (changed) {
-			DBG_M_PROPERTIES << "telling dependent machines about the change\n";
-			setNeedsCheck();
-			notifyDependents();
+			if (property_val.token_id != ClockworkToken::TRACE &&
+				property_val.token_id != ClockworkToken::DEBUG) {
+				setNeedsCheck();
+				notifyDependents();
+			}
 		}
 	}
 }
@@ -4429,6 +3873,8 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 			NB_MSG << full_name << " index ("<<group<<"," <<addr<<")" << (*iter).first << " should be " << (*iter).second << "\n";
 		}
 		int length = info.length();
+		if (info.kind() == ModbusExport::float32)
+			length = 2;
 		Value value(0);
 		switch(info.getSource()) {
 			case ModbusAddress::machine:
@@ -4437,7 +3883,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 				}
 				else if (current_state.getName() == "on")
 					value = 1;
-				else 
+				else
 					value = 0;
 				break;
 			case ModbusAddress::state:
@@ -4468,8 +3914,9 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 				value = "UNKNOWN";
 		}
 		cJSON *item = cJSON_CreateArray();
-		cJSON_AddItemToArray(item, cJSON_CreateNumber(group));
-		cJSON_AddItemToArray(item, cJSON_CreateNumber(addr));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(group));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(addr));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(info.kind()));
 		if (owner) {
 			std::string name(owner->getName());
 			name += ".";
@@ -4489,11 +3936,13 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 			cJSON_AddItemToArray(item, cJSON_CreateString(name.c_str()));
 			//out << group << " " << addr << " " << full_name << " " << length << " " << value <<"\n";
 		}
-		cJSON_AddItemToArray(item, cJSON_CreateNumber(length));
+		cJSON_AddItemToArray(item, cJSON_CreateLong(length));
 		if (value.kind == Value::t_string || value.kind == Value::t_symbol)
 			cJSON_AddItemToArray(item, cJSON_CreateString(value.sValue.c_str()));
+		else if (value.kind == Value::t_float)
+			cJSON_AddItemToArray(item, cJSON_CreateDouble(value.fValue));
 		else
-			cJSON_AddItemToArray(item, cJSON_CreateNumber(value.iValue));
+			cJSON_AddItemToArray(item, cJSON_CreateLong(value.iValue));
 		cJSON_AddItemToArray(json_array, item);
 		iter++;
 	}
@@ -4508,19 +3957,23 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 		//assert((int)info.getGroup() == group);
 		//assert(info.getAddress() == addr);
 		const char *data_type;
-		switch(ModbusAddress::toGroup(group)) {
-			case ModbusAddress::discrete: data_type = "Discrete"; break;
-			case ModbusAddress::coil: data_type = "Discrete"; break;
-			case ModbusAddress::input_register: 
-			case ModbusAddress::holding_register:  
-						  if (info.length() == 1)
-							  data_type = "Signed_int_16";
-						  else if (info.length() == 2)
-							  data_type = "Signed_int_32";
-						  else
-							  data_type = "Ascii_String";
-						  break;
-			default: data_type = "Unknown";
+		if (info.kind() == ModbusExport::float32)
+			data_type = "Floating_PT_32";
+		else {
+			switch(ModbusAddress::toGroup(group)) {
+				case ModbusAddress::discrete: data_type = "Discrete"; break;
+				case ModbusAddress::coil: data_type = "Discrete"; break;
+				case ModbusAddress::input_register:
+				case ModbusAddress::holding_register:
+					  if (info.length() == 1)
+						  data_type = "Signed_int_16";
+					  else if (info.length() == 2)
+						  data_type = "Signed_int_32";
+					  else
+						  data_type = "Ascii_String";
+					  break;
+				default: data_type = "Unknown";
+			}
 		}
 		if (owner)
 			out << group << ":" << std::setfill('0') << std::setw(5) << addr
@@ -4548,24 +4001,29 @@ void MachineInstance::exportModbusMapping(std::ostream &out) {
 // Modbus
 
 
-ModbusAddress MachineInstance::addModbusExport(std::string name, ModbusAddress::Group g, unsigned int n, 
-		ModbusAddressable *owner, ModbusAddress::Source src, const std::string &full_name) {
+ModbusAddress MachineInstance::addModbusExport(std::string name,
+											   ModbusAddress::Group g,
+											   unsigned int n,
+											   ModbusAddressable *owner,
+											   ModbusExport::Type kind,
+											   ModbusAddress::Source src,
+											   const std::string &full_name) {
 	if (ModbusAddress::preset_modbus_mapping.count(full_name) != 0) {
 		ModbusAddressDetails info = ModbusAddress::preset_modbus_mapping[full_name];
 		DBG_MODBUS << _name << " " << name << " has predefined address: " << info.group<<":"<<std::setfill('0')<<std::setw(5)<<info.address << "\n";
-		ModbusAddress addr(ModbusAddress::toGroup(info.group), info.address, info.len, owner, src, full_name);
+		ModbusAddress addr(ModbusAddress::toGroup(info.group), info.address, info.len, owner, src, full_name, kind);
 		modbus_exports[name] = addr;
 		return addr;
 	}
 	else {
-		ModbusAddress addr = ModbusAddress::alloc(g, n, this, src, full_name);
+		ModbusAddress addr = ModbusAddress::alloc(g, n, this, src, full_name, kind);
 		DBG_MODBUS << _name << " " << name << " allocated new address " << addr << "\n";
 		modbus_exports[name] = addr;
 		return addr;
 	}
 }
 
-void MachineInstance::setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, int size) {
+void MachineInstance::setupModbusPropertyExports(std::string property_name, ModbusAddress::Group grp, ModbusExport::Type kind, int size) {
 	std::string full_name;
 	if (owner) full_name = owner->getName() + ".";
 	std::string name;
@@ -4573,19 +4031,19 @@ void MachineInstance::setupModbusPropertyExports(std::string property_name, Modb
 	name += property_name;
 	switch(grp) {
 		case ModbusAddress::discrete:
-			addModbusExport(name, ModbusAddress::discrete, size, this, ModbusAddress::property, full_name+name); 
+			addModbusExport(name, ModbusAddress::discrete, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::coil:
-			addModbusExport(name, ModbusAddress::coil, size, this, ModbusAddress::property, full_name+name); 
+			addModbusExport(name, ModbusAddress::coil, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::input_register:
-			addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name); 
+			addModbusExport(name, ModbusAddress::input_register, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::holding_register:
-			addModbusExport(name, ModbusAddress::holding_register, size, this, ModbusAddress::property, full_name+name);
+			addModbusExport(name, ModbusAddress::holding_register, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		case ModbusAddress::string:
-			addModbusExport(name, ModbusAddress::input_register, size, this, ModbusAddress::property, full_name+name);
+			addModbusExport(name, ModbusAddress::input_register, size, this, kind, ModbusAddress::property, full_name+name);
 			break;
 		default: ;
 	}
@@ -4604,7 +4062,7 @@ void MachineInstance::setupModbusInterface() {
 	long str_length = 0;
 
 	// workout the export type for this machine
-	ExportType export_type = none;
+	ModbusExport::Type export_type = ModbusExport::none;
 
 	bool exported = properties.exists("export");
 	if (exported) {
@@ -4614,32 +4072,32 @@ void MachineInstance::setupModbusInterface() {
 				const Value &type = properties.lookup("type");
 				if (type != SymbolTable::Null) {
 					if (type == "Input") {
-						self_discrete = true; 
-						export_type=discrete;
+						self_discrete = true;
+						export_type=ModbusExport::discrete;
 					}
 					else if (type == "Output") {
 						if (export_type_val=="rw") {
 							self_coil = true;
-							export_type=coil;
+							export_type=ModbusExport::coil;
 						}
 						else {
 							self_discrete = true;
-							export_type=coil;
+							export_type=ModbusExport::coil;
 						}
 					}
 					else if (type=="AnalogueInput") {
 						self_reg = true;
-						export_type=reg;
+						export_type=ModbusExport::reg;
 					}
 					else if (type=="AnalogueOutput") {
 						// default to readonly export
 						if (export_type_val=="rw") {
 							self_rwreg = true;
-							export_type=rw_reg;
+							export_type=ModbusExport::rw_reg;
 						}
 						else {
 							self_reg = true;
-							export_type=reg;
+							export_type=ModbusExport::reg;
 						}
 					}
 				}
@@ -4647,80 +4105,84 @@ void MachineInstance::setupModbusInterface() {
 			else
 				if (export_type_val=="rw") {
 					self_coil = true;
-					export_type=coil;
+					export_type=ModbusExport::coil;
 				}
 				else if (export_type_val=="reg") {
 					self_reg = true;
-					export_type=reg;
+					export_type=ModbusExport::reg;
 				}
 				else if (export_type_val=="rw_reg") {
 					self_rwreg = true;
-					export_type=rw_reg;
+					export_type=ModbusExport::rw_reg;
 				}
 				else if (export_type_val=="reg32") {
 					self_reg = true;
-					export_type=reg32;
+					export_type=ModbusExport::reg32;
 				}
 				else if (export_type_val=="rw_reg32") {
 					self_rwreg = true;
-					export_type=rw_reg32;
+					export_type=ModbusExport::rw_reg32;
+				}
+				else if (export_type_val=="float32") {
+					self_rwreg = true;
+					export_type=ModbusExport::float32;
 				}
 				else if (export_type_val=="str") {
 					const Value &export_size = properties.lookup("strlen");
-					self_reg = true; 
-					export_type=str;
+					self_reg = true;
+					export_type=ModbusExport::str;
 					export_size.asInteger(str_length);
 				}
 				else if (export_type_val=="rw_str") {
 					const Value &export_size = properties.lookup("strlen");
 					self_rwreg = true;
-					export_type=str;
+					export_type=ModbusExport::str;
 					export_size.asInteger(str_length);
 				}
 				else {
 					self_discrete = true;
-					export_type=discrete;
+					export_type=ModbusExport::discrete;
 				}
 		}
 	}
 	if (_type != "VARIABLE" && _type != "CONSTANT") {// export property refers to VALUE export type, not the machine
-		modbus_exported = export_type;		
+		modbus_exported = export_type;
 	}
 
-	// register the individual properties 
+	// register the individual properties
 
 	if (_type != "VARIABLE" && _type != "CONSTANT") {
 		// exporting 'self' (either 'on' state or 'VALUE' property depending on export type)
 		if (self_coil) {
-			modbus_address = addModbusExport(_name, ModbusAddress::coil, 1, this, ModbusAddress::machine, full_name);
+			modbus_address = addModbusExport(_name, ModbusAddress::coil, 1, this, export_type, ModbusAddress::machine, full_name);
 		}
 		else if (self_discrete) {
-			modbus_address = addModbusExport(_name, ModbusAddress::discrete, 1, this, ModbusAddress::machine, full_name);
+			modbus_address = addModbusExport(_name, ModbusAddress::discrete, 1, this, export_type, ModbusAddress::machine, full_name);
 			//addModbusExportname(_name].setName(full_name);
 		}
 		else if (self_reg) {
 			int len = 1;
-			if (export_type == reg) {
+			if (export_type == ModbusExport::reg) {
 				len = 1;
 			}
-			else if (export_type == reg32) {
+			else if (export_type == ModbusExport::reg32) {
 				len = 2;
 			}
-			else if (export_type == str && str_length == 0) {
+			else if (export_type == ModbusExport::str && str_length == 0) {
 				len=80;
 			}
-			modbus_address = addModbusExport(_name, ModbusAddress::input_register, len, this, ModbusAddress::machine, full_name);
+			modbus_address = addModbusExport(_name, ModbusAddress::input_register, len, this, export_type, ModbusAddress::machine, full_name);
 			//modbus_exports[_name].setName(full_name);
 		}
 		else if (self_rwreg) {
 			int len = 1;
-			if (export_type == rw_reg32) {
+			if (export_type == ModbusExport::rw_reg32) {
 				len = 2;
 			}
-			else if (export_type == str && str_length == 0) {
+			else if (export_type == ModbusExport::str && str_length == 0) {
 				len=80;
 			}
-			addModbusExport(_name, ModbusAddress::holding_register, len, this, ModbusAddress::machine, full_name);
+			addModbusExport(_name, ModbusAddress::holding_register, len, this, export_type, ModbusAddress::machine, full_name);
 			//modbus_exports[name(_name].setName(full_name);
 		}
 	}
@@ -4728,51 +4190,60 @@ void MachineInstance::setupModbusInterface() {
 	// exported states
 	BOOST_FOREACH(std::string s, state_machine->state_exports) {
 		std::string name = _name + "." + s;
-		addModbusExport(name, ModbusAddress::discrete, 1, this, ModbusAddress::state, full_name+"."+s);
+		addModbusExport(name, ModbusAddress::discrete, 1, this, ModbusExport::discrete, ModbusAddress::state, full_name+"."+s);
+		//modbus_exports[name(name].setName(full_name+"."+s);
+	}
+	// exported states
+	BOOST_FOREACH(std::string s, state_machine->state_exports_rw) {
+		std::string name = _name + "." + s;
+		addModbusExport(name, ModbusAddress::coil, 1, this, ModbusExport::discrete, ModbusAddress::state, full_name+"."+s);
 		//modbus_exports[name(name].setName(full_name+"."+s);
 	}
 
 	// exported commands
 	BOOST_FOREACH(std::string s, state_machine->command_exports) {
 		std::string name = _name + "." + s;
-		addModbusExport(name, ModbusAddress::coil, 1, this, ModbusAddress::command, full_name+"."+s);
+		addModbusExport(name, ModbusAddress::coil, 1, this, ModbusExport::discrete, ModbusAddress::command, full_name+"."+s);
 		//addModbusExportname(name].setName(full_name+"."+s);
 	}
 
 	if (_type == "VARIABLE" || _type == "CONSTANT") {
 		std::string property_name(_name);
 		switch(export_type) {
-			case none: break;
-			case discrete:
-				   setupModbusPropertyExports(property_name, ModbusAddress::discrete, 1);
+			case ModbusExport::none: break;
+			case ModbusExport::discrete:
+				setupModbusPropertyExports(property_name, ModbusAddress::discrete, ModbusExport::discrete, 1);
 				   break;
-			case coil:
-				   setupModbusPropertyExports(property_name, ModbusAddress::coil, 1);
+			case ModbusExport::coil:
+				setupModbusPropertyExports(property_name, ModbusAddress::coil, ModbusExport::coil, 1);
 				   break;
-			case reg:
-				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 1);
+			case ModbusExport::reg:
+				setupModbusPropertyExports(property_name, ModbusAddress::input_register, ModbusExport::reg, 1);
 				   break;
-			case rw_reg:
-				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 1);
+			case ModbusExport::rw_reg:
+				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::rw_reg, 1);
 				   break;
-			case reg32:
-				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, 2);
+			case ModbusExport::reg32:
+				   setupModbusPropertyExports(property_name, ModbusAddress::input_register, ModbusExport::reg32, 2);
 				   break;
-			case rw_reg32:
-				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, 2);
+			case ModbusExport::rw_reg32:
+				   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::rw_reg32, 2);
 				   break;
-			case str:
+			case ModbusExport::float32:
+				setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::float32, 2);
+				break;
+			case ModbusExport::str:
 				   if (self_reg)
-					   setupModbusPropertyExports(property_name, ModbusAddress::input_register, (int)str_length);
+					   setupModbusPropertyExports(property_name, ModbusAddress::input_register, ModbusExport::str, (int)str_length);
 				   else
-					   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, (int)str_length);
+					   setupModbusPropertyExports(property_name, ModbusAddress::holding_register, ModbusExport::str, (int)str_length);
 				   break;
 		}
 	}
 
 	BOOST_FOREACH(ModbusAddressTemplate mat, state_machine->exports) {
 		//if (export_type == none) continue;
-		setupModbusPropertyExports(mat.property_name, mat.kind, mat.size);
+		setupModbusPropertyExports(mat.property_name, mat.grp, mat.exType, mat.size);
 	}
 
 	assert(modbus_addresses.size() == 0);
@@ -4843,7 +4314,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 		return;
 	}
 	ModbusAddress addr = modbus_exports[item_name];
-	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";	
+	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";
 
 	if (addr.getGroup() == ModbusAddress::coil || addr.getGroup() == ModbusAddress::discrete){
 
@@ -4865,6 +4336,23 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			return;
+			
+		}
+		else if (addr.getSource() == ModbusAddress::state) {
+			std::string state_name = addr.getName();
+			size_t found = state_name.find(".");
+			if (found != std::string::npos) {
+				std::string state = state_name.substr(found+1);
+				std::string name = state_name.erase(found);
+				if (_name != name) {
+					char buf[100];
+					snprintf(buf, 100, "%s: Warning: modbus object name %s does not match the machine receiving the event %s", _name.c_str(), name.c_str(), state_name.c_str());
+					MessageLog::instance()->add(buf);
+				}
+				SetStateActionTemplate ssat(CStringHolder("SELF"), state );
+				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
+			}
+
 		}
 		else if (addr.getSource() == ModbusAddress::command) {
 			if (new_value) {
@@ -4901,6 +4389,37 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 	}
 }
 
+void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset, float new_value) {
+	std::string name(fullName());
+	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
+	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
+	if (!modbus_addresses.count(index)) {
+		NB_MSG << name << " Error: bad modbus address lookup for " << base_addr << "\n";
+		return;
+	}
+	const std::string &item_name = modbus_addresses[index];
+	if (!modbus_exports.count(item_name)) {
+		NB_MSG << name << " Error: bad modbus name lookup for " << item_name << "\n";
+		return;
+	}
+	ModbusAddress addr = modbus_exports[item_name];
+	DBG_MODBUS << name << " local ModbusAddress found: " << addr<< "\n";
+
+	if (addr.getGroup() == ModbusAddress::holding_register) {
+		DBG_MODBUS << name << " holding register update\n";
+		std::string property_name = modbus_addresses[index];
+		DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index << " (" << addr << ")\n";
+		if (property_name == _name)
+			setValue("VALUE", new_value);
+		else
+			setValue(property_name, new_value);
+	}
+	else {
+		NB_MSG << name << " unexpected modbus group " << addr.getGroup() << " for write operation (float) " << addr << "\n";
+	}
+}
+
+
 int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, int len) {
 	int pos = (addr.getGroup() << 16) + addr.getAddress() + offset;
 	if (!modbus_addresses.count(pos)) {
@@ -4932,105 +4451,26 @@ int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, in
 
 
 // Error states (not used yet)
-bool MachineInstance::inError() { 
-	return error_state != 0; 
+bool MachineInstance::inError() {
+	return error_state != 0;
 }
 
-void MachineInstance::setError(int val) { 
+void MachineInstance::setError(int val) {
 	if (error_state) return;
-	error_state = val; 
-	if (val) { 
+	error_state = val;
+	if (val) {
 		saved_state = current_state;
 		const State *err = state_machine->findState("ERROR");
 		assert(err);
 		setState(*err);
-	} 
+	}
 }
 
 void MachineInstance::resetError() {
-	error_state = 0; 
+	error_state = 0;
 	if (state_machine) setState(state_machine->initial_state);
 }
 
 void MachineInstance::ignoreError() {
 	error_state = 0;
 }
-
-MachineDetails::MachineDetails(const char *nam, const char *cls, std::list<Parameter> &params,
-			   const char *sf, int sl, SymbolTable &props, MachineInstance::InstanceType kind)
-: machine_name(nam), machine_class(cls), source_file(sf), source_line(sl),
-instance_type(kind)
-{
-	std::copy(parameters.begin(), parameters.end(),  back_inserter(parameters));
-
-	SymbolTableConstIterator iter = props.begin();
-	while (iter != props.end()) {
-		const std::pair<std::string, Value> &p = *iter;
-		properties.push_back(p);
-		iter++;
-	}
-}
-
-MachineInstance *MachineDetails::instantiate() {
-	MachineInstance *machine = MachineInstanceFactory::create(machine_name.c_str(),
-		machine_class.c_str(), instance_type);
-	machine->setDefinitionLocation(source_file.c_str(), source_line);
-	std::copy(parameters.begin(), parameters.end(),  back_inserter(machine->parameters));
-	machine->setProperties(properties);
-	return machine;
-}
-
-void ActionList::push_back(Action *a) {
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.push_back(a);
-}
-
-void ActionList::push_front(Action *a){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.push_front(a);
-}
-
-Action *ActionList::back(){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.back();
-}
-
-Action *ActionList::front(){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.front();
-}
-void ActionList::pop_front(){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.pop_front();
-}
-
-size_t ActionList::size(){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.size();
-}
-
-bool ActionList::empty(){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.empty();
-}
-
-std::list<Action*>::iterator ActionList::begin(){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.begin();
-}
-
-std::list<Action*>::iterator ActionList::end(){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.end();
-}
-
-std::list<Action*>::iterator ActionList::erase(std::list<Action*>::iterator &i){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	return actions.erase (i);
-}
-
-void ActionList::remove(Action *a){ 
-	boost::recursive_mutex::scoped_lock lock(mutex);
-	actions.remove(a);
-}
-

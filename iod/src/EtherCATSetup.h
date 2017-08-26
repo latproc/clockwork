@@ -21,8 +21,23 @@
 #ifndef __ETHERCAT_SETUP_H_
 #define __ETHERCAT_SETUP_H_
 
+#include <map>
+
+/* the configuration selector is used to nominate which modules are to be 
+	configured from xml files manually rather than from a bus
+	scan.
+*/
+class ManualConfigurationSelector {
+	unsigned int bus_position;
+	std::string xml_file_name;
+	uint32_t product_code; // optional
+	uint32_t release_no; // optional
+	std::string alternate_sm_name; // leave blank if not required
+};
+
 void initialiseOutputs();
 
-void generateIOComponentModules();
+class DeviceInfo;
+void generateIOComponentModules( std::map<unsigned int, DeviceInfo*> slave_configuration );
 
 #endif
