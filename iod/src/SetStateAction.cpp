@@ -40,10 +40,14 @@ Action *MoveStateActionTemplate::factory(MachineInstance *mi)
 	return new MoveStateAction(mi, *this);
 }
 
+SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth)
+: Action(mi), target(t.target), saved_state(t.new_state), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) { }
+
 Action::Status SetStateAction::executeStateChange(bool use_transitions)
 {
-	//std::map<std::string, MachineInstance*>::iterator pos = machines.find(target.get());
-	//if (pos != machines.end()) {
+	// restore the name of the state we are seeking in case it was updated by a prior invocation
+	new_state = saved_state;
+	value = saved_state.sValue.c_str();
 	owner->start(this);
 
 	if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
@@ -67,7 +71,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		// VARIABLE or CONSTANT that contains the name. If we have a state that coincides with
 		// new_state, we ignore such subtleties.
 		if (!machine->hasState(new_state.sValue)) {
-			State value(new_state.sValue.c_str());
+			value = new_state.sValue.c_str();
 			const Value &deref = owner->getValue(new_state.sValue.c_str());
 			if (deref != SymbolTable::Null) {
 				DBG_M_ACTIONS << *this << " dereferenced " << new_state << " to " << deref << "\n";

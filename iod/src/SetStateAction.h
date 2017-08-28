@@ -44,8 +44,7 @@ private:
 };
 
 struct SetStateAction : public Action {
-    SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth = 0)
-	    : Action(mi), target(t.target), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) { }
+	SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth = 0);
     Status run();
     Status checkComplete();
 	void setAuthority(uint64_t auth) { authority = auth; }
@@ -54,6 +53,7 @@ struct SetStateAction : public Action {
 
 	virtual std::ostream &operator<<(std::ostream &out)const;
     CStringHolder target;
+		Value saved_state;
     Value new_state; // new state as given by the program (may be a property name)
     State value;
     MachineInstance *machine;
