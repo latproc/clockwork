@@ -69,9 +69,7 @@ Action::Status AbortAction::checkComplete() {
 	abort();
 	if (abort_fail) {
 		status = Failed;
-		char *msg = strdup(message.c_str());
-		error_str = msg;
-		free(msg);
+		error_str = strdup(message.c_str());
 	}
 	else
 		status = Complete;
