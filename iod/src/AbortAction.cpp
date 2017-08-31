@@ -51,6 +51,7 @@ Action::Status AbortAction::run() {
 		SendMessageActionTemplate smat(this->message.c_str(), owner);
 		Action *sma = smat.factory(owner);
 		(*sma)();
+		delete sma;
 	}
 	abort();
 	if (abort_fail) {
@@ -68,7 +69,9 @@ Action::Status AbortAction::checkComplete() {
 	abort();
 	if (abort_fail) {
 		status = Failed;
-		error_str = strdup(message.c_str());
+		char *msg = strdup(message.c_str());
+		error_str = msg;
+		free(msg);
 	}
 	else
 		status = Complete;

@@ -1383,7 +1383,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
             char *res = cJSON_Print(res_json);
             result_str = res;
             free(res);
-            free(res_json);
+            cJSON_Delete(res_json);
             return true;
         }
         std::stringstream ss;
