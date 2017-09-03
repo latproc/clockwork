@@ -101,7 +101,11 @@ MachineInstance *ClockworkInterpreter::settings() { return _settings; }
 
 void usage(int argc, char const *argv[])
 {
-    std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store] [-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize] \n";
+    std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store]\n"
+		<< "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
+		<< "[-mp modbus_port] [-ps persistent_store_port]"
+		<< "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics"
+		<< "\n";
 }
 
 static void listDirectory( const std::string pathToCheck, std::list<std::string> &file_list)
