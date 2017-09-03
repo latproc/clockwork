@@ -546,10 +546,12 @@ class MachineTimerValue : public DynamicValue {
 		Value &operator()(MachineInstance *m)  {
 			assert(machine_instance);
 			if (!machine_instance) { last_result = false; return last_result; }
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			long msecs = (long)get_diff_in_microsecs(&now, &machine_instance->start_time)/1000;
-			last_result = msecs;
+			if (machine_instance->enabled()) {
+				struct timeval now;
+				gettimeofday(&now, NULL);
+				long msecs = (long)get_diff_in_microsecs(&now, &machine_instance->start_time)/1000;
+				last_result = msecs;
+			}
 			//DBG_MSG << m->getName() << " update timer value " << last_result << "\n";
 			return last_result;
 		}
@@ -560,6 +562,13 @@ class MachineTimerValue : public DynamicValue {
 			return out << machine_instance->getName() << ".TIMER (" << last_result <<")";
 		}
 		Value *getLastResult() { return &last_result; }
+		void resume() {
+			struct timeval now;
+			gettimeofday(&now, NULL);
+			uint64_t now_v = now.tv_sec * 1000000 + now.tv_usec - last_result.iValue*1000;
+			machine_instance->start_time.tv_sec = now_v / 1000000;
+			machine_instance->start_time.tv_usec = now_v % 1000000;
+		}
 		DynamicValue *clone() const;
 	protected:
 		MachineInstance *machine_instance;
@@ -2481,17 +2490,6 @@ void MachineInstance::markPlugin() {
 
 void MachineInstance::resume() {
 	if (!is_enabled) {
-		// adjust the starttime of the current state to make allowance for the
-		// time we were disabled
-		struct timeval now;
-		gettimeofday(&now, 0);
-		long dt = (long)get_diff_in_microsecs(&now, &disabled_time);
-		start_time.tv_usec += dt % 1000000L;
-		start_time.tv_sec += dt / 1000000L;
-		if (start_time.tv_usec >= 1000000L) {
-			start_time.tv_usec -= 1000000L;
-			++start_time.tv_sec;
-		}
 
 		// fix status
 		is_enabled = true;
@@ -2500,6 +2498,10 @@ void MachineInstance::resume() {
 			locals[i].machine->resume();
 		}
 		setState(current_state, expected_authority, true);
+		// adjust the starttime of the current state to make allowance for the
+		// time we were disabled
+		MachineTimerValue *mtv = dynamic_cast<MachineTimerValue*>(state_timer.dynamicValue());
+		if (mtv) mtv->resume();
 		setNeedsCheck();
 	}
 }
@@ -2649,12 +2651,13 @@ void MachineInstance::disable() {
 		setNeedsCheck();
 		return;
 	}
-	is_enabled = false;
+	getTimerVal(); // update the timer in case a resume occurs
 	if (locked) locked = 0;
 	if (io_interface) {
 		io_interface->turnOff();
 	}
 	if (isShadow()) setInitialState();
+	is_enabled = false;
 
 	const Value &val = properties.lookup("default");
 	if (val != SymbolTable::Null) {
