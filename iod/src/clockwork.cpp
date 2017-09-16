@@ -75,8 +75,7 @@ MachineInstance *_settings = 0;
 
 void ClockworkProcessManager::SetTime(uint64_t t) {
 	ClockworkInterpreter *cw = ClockworkInterpreter::instance();
-	assert(t >= cw->now());
-	cw->current_time = t;
+	if (t >= cw->now()) cw->current_time = t;
 }
 
 ClockworkInterpreter::ClockworkInterpreter() : cycle_delay(0), default_poll_delay(0) {
