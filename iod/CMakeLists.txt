@@ -8,6 +8,7 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
+
 cmake_policy(SET CMP0008 OLD)
 cmake_policy(SET CMP0015 NEW)
 
@@ -33,10 +34,14 @@ configure_file (
 )
 
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
 FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono REQUIRED)
 FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
+FIND_PACKAGE(ZeroMQ REQUIRED)
+
+INCLUDE_DIRECTORIES(${ZeroMQ_INCLUDE_DIR})
 
 set(HEADER_FILES
 	${CLOCKWORK_DIR}/MessagingInterface.h
@@ -189,8 +194,8 @@ set (Clockwork_SRCS
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-#target_link_libraries(cw Clockwork "dl" "zmq" ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
-target_link_libraries(cw Clockwork "dl" "zmq" ${Boost_LIBRARIES} "mosquitto")
+#target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
+target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
@@ -236,7 +241,7 @@ INCLUDE_DIRECTORIES(${ETHERCAT_DIR})
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/tool)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/include)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/master)
-include_directories("${LIBXML2_INCLUDE_DIR}")
+INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
 LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
 LINK_DIRECTORIES("LIBXML2_LIBRARIES")
 
@@ -245,7 +250,7 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 )
 #set_target_properties (iod PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
-target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" "zmq" xml2 ${Boost_LIBRARIES} "mosquitto")
+target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
 add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
@@ -253,7 +258,7 @@ add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 )
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 )
-target_link_libraries(iod_sdo Clockwork ec_tool "ethercat" "dl" "zmq" xml2 ${Boost_LIBRARIES} "mosquitto")
+target_link_libraries(iod_sdo Clockwork ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto")
 install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
@@ -285,16 +290,16 @@ SET_SOURCE_FILES_PROPERTIES(${iosh_lex_output} GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
 
 add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
-target_link_libraries(iosh Clockwork "readline" "zmq" ${Boost_LIBRARIES} )
+target_link_libraries(iosh Clockwork "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
 
 add_executable(device_connector src/device_connector.cpp src/options.cpp )
-target_link_libraries(device_connector Clockwork "zmq" ${Boost_LIBRARIES} )
+target_link_libraries(device_connector Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
 
 add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
-target_link_libraries(persistd Clockwork "zmq" ${Boost_LIBRARIES} )
+target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
 
 add_executable(modbusd src/modbusd.cpp )
-target_link_libraries(modbusd Clockwork modbus "zmq" ${Boost_LIBRARIES} )
+target_link_libraries(modbusd Clockwork modbus ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
 
 install(TARGETS cw iosh device_connector modbusd persistd
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
