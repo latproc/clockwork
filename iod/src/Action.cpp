@@ -185,7 +185,8 @@ void Action::reset() {
 	status = New;
 	error_str=""; result_str="";
 	saved_status=Running; blocked=0;
-	started_=false;
+	started_ = false;
+	aborted_ = false;
 	cleanupTrigger();
 }
 
@@ -281,19 +282,21 @@ Action::Status Action::operator()() {
 	start_time = microsecs();
 	status = Running; // important because run() checks the current state
 	status = run();
-	if (status == Failed) {
-		if (error_msg) {
-			AbortActionTemplate aat(true, error_msg->get());
-			AbortAction *aa = (AbortAction*)aat.factory(owner);
-			owner->enqueueAction(aa);
-		}
-		else if (timeout_msg) {
-			AbortActionTemplate aat(true, timeout_msg->get());
-			AbortAction *aa = (AbortAction*)aat.factory(owner);
-			owner->enqueueAction(aa);
-		}
-	}
+	if (status == Failed) reportError();
 	return status;
+}
+
+void Action::reportError() {
+	if (error_msg) {
+		AbortActionTemplate aat(true, error_msg->get());
+		AbortAction *aa = (AbortAction*)aat.factory(owner);
+		owner->enqueueAction(aa);
+	}
+	else if (timeout_msg) {
+		AbortActionTemplate aat(true, timeout_msg->get());
+		AbortAction *aa = (AbortAction*)aat.factory(owner);
+		owner->enqueueAction(aa);
+	}
 }
 
 void Action::recover() {

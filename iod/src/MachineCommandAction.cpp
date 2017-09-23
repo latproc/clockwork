@@ -159,10 +159,14 @@ Action::Status MachineCommand::runActions() {
 		}
 		setBlocker(0);
 		last_step = current_step++;
-        DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
-    }
-    DBG_M_ACTIONS << owner->getName() << " " << *this <<" completed all actions\n";
-    return Complete;
+		DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
+		if (a->aborted()) {
+			abort();
+			return Failed;
+		}
+	}
+	DBG_M_ACTIONS << owner->getName() << " " << *this <<" completed all actions\n";
+	return Complete;
 }
 
 Action::Status MachineCommand::run() { 

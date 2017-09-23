@@ -60,6 +60,7 @@ Action::Status IfCommandAction::run() {
 	status = (*command)();
 	if (status == Complete || status == Failed) {
 		owner->stop(this);
+		if (command->aborted()) abort();
 	}
 	return status;
 }
@@ -104,10 +105,13 @@ Action::Status IfElseCommandAction::run() {
 	if (condition(owner)) {
 		//DBG_MSG << "false" << "\n";
 		status = (*command)();
+		if (command->aborted()) abort();
 	}
-	else
+	else {
 		//DBG_MSG << "true" << "\n";
 		status = (*else_command)();
+		if (command->aborted()) abort();
+	}
 	if (status == Complete || status == Failed) {
 		owner->stop(this);
 	}
