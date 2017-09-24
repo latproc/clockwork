@@ -424,7 +424,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 					if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
 						long x;
 						char *p;
-						x = strtol(params[3].asString().c_str(), &p, 0);
+						x = strtol(params[3].asString().c_str(), &p, 10);
 						if (use_authority)
 							if (*p == 0)
 								m->setValue(params[2].asString(), x, authority);

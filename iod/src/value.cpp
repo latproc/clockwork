@@ -519,7 +519,7 @@ bool Value::operator!() const {
 static bool stringToLong(const std::string &s, long &x) {
 	const char *str = s.c_str();
 	char *end;
-	x = strtol(str, &end, 0);
+	x = strtol(str, &end, 10);
 	if (*end) {
 		// check if this is actually a float before writing an error message
 		if (*end == '.') {
@@ -809,7 +809,7 @@ Value Value::operator-(void) const {
 				if (stringToLong(sValue, x))
 					return -x;
 				char *end;
-				x = strtol(sValue.c_str(),&end,0);
+				x = strtol(sValue.c_str(),&end,10);
 				if (*end == 0) return Value(-x);
 		default: ;
 	}
@@ -1106,7 +1106,7 @@ bool Value::asInteger(long &x) const {
 	if (kind == t_string || kind == t_symbol) {
 		char *p;
 		const char *v = sValue.c_str();
-		x = strtol(v, &p, 0);
+		x = strtol(v, &p, 10);
 		if (*p == 0) return true;
 		if (p != v )
 			return false;
