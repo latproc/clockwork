@@ -222,14 +222,15 @@ WITHIN              return WITHIN;
 }
 
 0           {
-	yylval.iVal = atoi(yytext);
+	yylval.iVal = 0;
 	return INTEGERVAL;
 }
 
 
 [-]{0,1}[0-9][0-9]* {
-    yylval.iVal = atoi(yytext);
-    return INTEGERVAL;
+	char *rest = 0;
+	yylval.iVal = strol(yytext, &rest, 10);
+	return INTEGERVAL;
 }
 
 "%BEGIN_PLUGIN"			BEGIN PLUGIN_CODE;

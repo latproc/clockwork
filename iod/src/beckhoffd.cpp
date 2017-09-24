@@ -217,7 +217,7 @@ bool BeckhoffdProperty::run(std::vector<Value> &params) {
         if (params.size() == 3) {
             long x;
             char *p;
-            x = strtol(params[2].asString().c_str(), &p, 0);
+            x = strtol(params[2].asString().c_str(), &p, 10);
             if (*p == 0)
                 m->setValue(x);
             else {
