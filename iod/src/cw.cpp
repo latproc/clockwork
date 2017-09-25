@@ -218,7 +218,7 @@ int main (int argc, char const *argv[])
         std::ofstream out(modbus_map());
         if (!out) {
             std::cerr << "not able to open " << modbus_map() << " for write\n";
-            return false;
+            return 1;
         }    
         while (m_iter != MachineInstance::end()) {
             (*m_iter)->exportModbusMapping(out);
