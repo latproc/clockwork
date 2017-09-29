@@ -9,8 +9,8 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
 
-cmake_policy(SET CMP0008 OLD)
-cmake_policy(SET CMP0015 NEW)
+#cmake_policy(SET CMP0008 OLD)
+#cmake_policy(SET CMP0015 NEW)
 
 #set (CMAKE_VERBOSE_MAKEFILE false)
 

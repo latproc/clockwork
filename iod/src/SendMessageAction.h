@@ -28,13 +28,14 @@
 class MachineInstance;
 
 struct SendMessageActionTemplate : public ActionTemplate {
-	SendMessageActionTemplate(Value msg, Value dest);
-	SendMessageActionTemplate(Value msg, MachineInstance *dest);
+	SendMessageActionTemplate(Value msg, Value dest, bool should_throw = false);
+	SendMessageActionTemplate(Value msg, MachineInstance *dest, bool should_throw = false);
     virtual Action *factory(MachineInstance *mi);
     virtual std::ostream &operator<<(std::ostream &out)const;
 	Value message;
 	Value target;
 	MachineInstance *target_machine;
+	bool abort_after;
 };
 
 struct SendMessageAction : public Action {
@@ -45,6 +46,7 @@ struct SendMessageAction : public Action {
 	Value message;
 	Value target;
 	MachineInstance *target_machine;
+	bool abort_after;
 };
 
 #endif

@@ -59,11 +59,13 @@ AbortTest MACHINE {
 
 ENTER tick {
 	count := count + 1;
-	IF (count > 10) { 
+	LOG "This message before an IF should be displayed" + count + "/3";
+	IF (count >= 3) { 
+		#LOG "This tick message before a THROW should be displayed";
 		THROW overrun ;
 		LOG "This tick message should not be displayed";
 	};
-	LOG "This message after a THROW inside an IF should not be displayed"
+	LOG "This message after an IF should only be displayed if the tick message has not been displayed"
 }
 
 ENTER INIT {
