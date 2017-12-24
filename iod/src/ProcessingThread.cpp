@@ -563,13 +563,13 @@ void ProcessingThread::operator()()
 				std::list<CommandSocketInfo*>::iterator csi_iter = internals->channel_sockets.begin();
 				int idx = dynamic_poll_start_idx;
 				while (csi_iter != internals->channel_sockets.end()) {
+					if (idx == max_poll_sockets) break;
 					CommandSocketInfo *info = *csi_iter++;
 					items[idx].socket = (void*)(*info->sock);
 					items[idx].fd = 0;
 					items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
 					items[idx].revents = 0;
 					idx++;
-					if (idx == max_poll_sockets) break;
 				}
 				num_channels = idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
 			}

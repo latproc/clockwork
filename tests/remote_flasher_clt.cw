@@ -3,8 +3,8 @@
 
 FlasherMachine MACHINE {
 	OPTION delay 1000000;
-    on WHEN SELF IS on,  EXECUTE turnOff WHEN SELF IS on && TIMER >= delay;
-    off WHEN SELF IS off, EXECUTE turnOn WHEN SELF IS off && TIMER >= delay;
+    on WHEN SELF IS on,  EXECUTE turnOff WHEN TIMER >= delay;
+    off WHEN SELF IS off, EXECUTE turnOn WHEN TIMER >= delay;
 	stopped WHEN SELF IS stopped;
     #on STATE;
     #off STATE;
@@ -46,3 +46,6 @@ to the client and the client will then subscribe to the channel.
 client_flag FLAG;
 
 item1 Item(barcode:1234, serial:1111);
+
+# when using the follower system, try adding the following
+# client_flag SIMPLEFOLLOWERB serverflag;

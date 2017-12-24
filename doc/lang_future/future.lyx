@@ -109,15 +109,23 @@ Types
 \end_layout
 
 \begin_layout Itemize
+Integers
+\end_layout
+
+\begin_layout Itemize
+Strings
+\end_layout
+
+\begin_layout Itemize
 Floating point calculations
 \end_layout
 
 \begin_layout Itemize
-Sets and relationships
+Binary values
 \end_layout
 
 \begin_layout Itemize
-Binary values
+Sets and relationships
 \end_layout
 
 \begin_layout Itemize
@@ -129,16 +137,20 @@ References
 \end_layout
 
 \begin_layout Itemize
+Type conversions (x AS type)
+\end_layout
+
+\begin_layout Subsubsection
+Not implemented
+\end_layout
+
+\begin_layout Itemize
 Streams (also generators)
 \end_layout
 
 \begin_layout Itemize
 Replace the current symbol table and Value system with a more efficient
  and robust implementation
-\end_layout
-
-\begin_layout Itemize
-Type conversions (x AS type)
 \end_layout
 
 \begin_layout Itemize
@@ -162,7 +174,7 @@ Events with data
 \end_layout
 
 \begin_layout Itemize
-Copying properties en mass
+Copying properties en mass via variants of COPY PROPERTIES
 \end_layout
 
 \begin_layout Subsection
@@ -170,11 +182,11 @@ Features
 \end_layout
 
 \begin_layout Itemize
-Substates
+Substates (implemented via nesting of machines)
 \end_layout
 
 \begin_layout Itemize
-Exceptions
+Exceptions (THROW, CATCH)
 \end_layout
 
 \begin_layout Itemize
@@ -232,7 +244,15 @@ Executing a subexpression on the default state
 \end_layout
 
 \begin_layout Itemize
-Persistence
+Persistence via persistd
+\end_layout
+
+\begin_layout Itemize
+Property type and state enforcement via STRICT
+\end_layout
+
+\begin_layout Subsubsection
+Not implemented
 \end_layout
 
 \begin_layout Itemize
@@ -882,6 +902,17 @@ Methods can contain declarations of invariant conditions.
 \end_layout
 
 \begin_layout Subsubsection
+Strict
+\end_layout
+
+\begin_layout Standard
+When applied to a machine, STRICT causes the machine to refuse to change
+ the type of a property once set and causes a system exit if a machine is
+ asked to transition to an unknown state.
+ 
+\end_layout
+
+\begin_layout Subsubsection
 Failsafe Mode
 \end_layout
 
@@ -1177,7 +1208,7 @@ COPY PROPERTIES FROM machine1 TO machine2
 \end_layout
 
 \begin_layout LyX-Code
-COPY PROPERTIES NAMED property_name,...
+COPY PROPERTIES property_name,...
  FROM machine1 TO machine2
 \end_layout
 
@@ -1667,6 +1698,42 @@ Consider simply setting 'transitional' on a state during the enter/leave
 \begin_layout Standard
 Consider adding a new test to see if a machine is currently transitioning:
  wait WHEN other IS CHANGING STATE;
+\end_layout
+
+\begin_layout Standard
+As part of this cleanup, some work needs to be done on the current implementatio
+n of USING.
+ At present, given
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b USING next;
+\end_layout
+
+\begin_layout Standard
+will provide a command called 'next' that causes a transition from 'a' to
+ 'b'.
+ This will also cause an effect whereby if the machine moves from 'a' to
+ 'b' by a direct 'SET', the next command will still be executed.
+ A new verb is required to specifically enable this behaviour:
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b USING next; # retains the legacy behaviour
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b AFTER next; # the 'next' command causes the transition
+ once it completes
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b INVOKES starting; # the 'starting' handler is invoked
+ after the machine transitions from a to b
+\end_layout
+
+\begin_layout Standard
+The two clauses can be combined.
 \end_layout
 
 \begin_layout LyX-Code

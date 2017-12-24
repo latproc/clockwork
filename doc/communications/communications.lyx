@@ -83,7 +83,7 @@ Communications
 \end_layout
 
 \begin_layout Abstract
-This document describes the future communications framework for Clockwork.
+This document describes the communications framework for Clockwork.
  A Clockwork driver program provides a runtime environment to execute several
  machines in parallel.
  Each driver may communicate with other programs via message passing and
