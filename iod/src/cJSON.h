@@ -90,9 +90,9 @@ extern cJSON *cJSON_GetArrayItem(cJSON *array,int item);
 extern cJSON *cJSON_GetObjectItem(cJSON *object,const char *string);
 	
 // These calls create a cJSON item of the appropriate type.
-extern cJSON *cJSON_CreateNull();
-extern cJSON *cJSON_CreateTrue();
-extern cJSON *cJSON_CreateFalse();
+extern cJSON *cJSON_CreateNull(void);
+extern cJSON *cJSON_CreateTrue(void);
+extern cJSON *cJSON_CreateFalse(void);
 extern cJSON *cJSON_CreateDouble(double num);
 extern cJSON *cJSON_CreateLong(long num);
 // on 64bit machines we prefer to use long for large numbers if possible. tbd fix this
@@ -100,8 +100,8 @@ extern cJSON *cJSON_CreateLong(long num);
 #define cJSON_CreateNumber(a) cJSON_CreateLong((a))
 /*extern cJSON *cJSON_CreateNumber(double num); */
 extern cJSON *cJSON_CreateString(const char *string);
-extern cJSON *cJSON_CreateArray();
-extern cJSON *cJSON_CreateObject();
+extern cJSON *cJSON_CreateArray(void);
+extern cJSON *cJSON_CreateObject(void);
 
 // These utilities create an Array of count items.
 extern cJSON *cJSON_CreateIntArray(int *numbers,int count);
