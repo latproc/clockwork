@@ -280,7 +280,7 @@ struct ModbusServerThread
 			if (modbus_state == ms_paused) { 
 				if (++paused_counter>warn_at) {
 					std::cout << "modbus paused\n" << std::flush;
-					warn_at += 10;
+					warn_at += 100;
 				}
 				usleep(10000); 
 				continue; 
@@ -1016,7 +1016,7 @@ int main(int argc, const char * argv[])
 				if (errno == EINTR) continue;
 				if (++exception_count <= 5 && program_state != s_finished) { usleep(2000); exit(1); continue; }
 			}
-			if (need_refresh) {
+			if (need_refresh && subscription_manager.setupStatus() == SubscriptionManager::e_done) {
 				CollectModbusStatus();
 				need_refresh = false;
 				std::cout << "resuming modbus\n";
