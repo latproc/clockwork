@@ -766,8 +766,6 @@ void loadData(const char *initial_settings)
 					Value value(MessageEncoding::valueFromJSONObject(fld, 0));
 					if (DEBUG_BASIC)
 						std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
-if (name.asString() == "Core_TotalNoBales")
-  int x=1;
 					if (value.kind == Value::t_string) {
 						std::string valstr = value.asString();
 						insert((int)group.iValue, (int)addr.iValue-1, valstr.c_str(), valstr.length()+1); // note copying null
