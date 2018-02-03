@@ -35,6 +35,10 @@ Action *SetStateActionTemplate::factory(MachineInstance *mi)
 	return new SetStateAction(mi, *this);
 }
 
+std::ostream &SetStateActionTemplate::operator<<(std::ostream &out) const {
+	return out << target.get() << " " << new_state;
+}
+
 Action *MoveStateActionTemplate::factory(MachineInstance *mi)
 { 
 	return new MoveStateAction(mi, *this);

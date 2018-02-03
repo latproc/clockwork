@@ -27,6 +27,11 @@ Action *LogActionTemplate::factory(MachineInstance *mi) {
     return new LogAction(mi, *this);
 }
 
+std::ostream &LogActionTemplate::operator<<(std::ostream &out) const {
+	return out << "LOG " << message;
+}
+
+
 Action::Status LogAction::run() {
 	owner->start(this);
     std::stringstream ss;

@@ -33,9 +33,7 @@ class MachineInstance;
 struct SetStateActionTemplate : public ActionTemplate {
     SetStateActionTemplate(CStringHolder targ, Value newstate) : target(targ), new_state(newstate) { }
     virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-        return out << target.get() << " " << new_state;
-    }
+		std::ostream &operator<<(std::ostream &out) const;
     CStringHolder target;
     Value new_state;
     std::string trigger_event;
