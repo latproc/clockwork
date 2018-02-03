@@ -1,6 +1,6 @@
-
 #include <list>
 #include <vector>
+#include <fstream>
 #include "State.h"
 #include "StableState.h"
 #include "MachineClass.h"
@@ -128,3 +128,211 @@ MachineCommandTemplate *MachineClass::findMatchingCommand(std::string cmd_name, 
 	}
 	return 0;
 }
+
+void MachineClass::exportHandlers(std::ostream &ofs)
+{
+	std::list<State*>::iterator iter = states.begin();
+	while (iter != states.end()) {
+		const State *s = *iter++;
+		ofs
+		<< "int cw_" << name << "_enter_" << s->getName()
+		<< "(struct cw_" << name << " *m, ccrContParam) {";
+		std::string fn_name(s->getName());
+		fn_name += "_enter";
+		if (name == "Ramp") {
+			int x = 0;
+		}
+		std::multimap<Message, MachineCommandTemplate*>::iterator found = receives.find(Message(fn_name.c_str()));
+		if (found != receives.end()) {
+			const std::pair<Message, MachineCommandTemplate*> &item = *found;
+			ofs << "// " <<(*item.second) << "\n";
+			for (int i = 0; i<(item.second)->action_templates.size(); ++i) {
+				ActionTemplate*at = (item.second)->action_templates.at(i);
+				if (at) ofs << "// " << (*at) << "\n";
+			}
+		}
+		ofs << "  m->machine.execute = 0;\n  return 1;\n}\n";
+	}
+}
+
+void MachineClass::exportCommands(std::ostream &ofs)
+{
+	std::list<State*>::iterator iter = states.begin();
+	while (iter != states.end()) {
+		const State *s = *iter++;
+		ofs
+		<< "int " << name << "_enter_" << s->getName()
+		<< "(struct cw_" << name << " *m, ccrContParam) {";
+		std::string fn_name(s->getName());
+		std::multimap<std::string, MachineCommandTemplate*>::iterator found = commands.find(fn_name);
+		if (found != commands.end()) {
+			const std::pair<std::string, MachineCommandTemplate*> &item = *found;
+			ofs << "// " <<(*item.second) << "\n";
+			for (int i = 0; i<(item.second)->action_templates.size(); ++i) {
+				ActionTemplate*at = (item.second)->action_templates.at(i);
+				if (at) ofs << "// " << (*at) << "\n";
+			}
+		}
+		ofs << "m->machine.execute = 0; return 1; }\n";
+	}
+}
+
+bool MachineClass::cExport(const std::string &filename) {
+	// TODO: redo this with some kind of templating system
+
+	std::stringstream params;
+	std::stringstream values;
+	std::stringstream refs;
+	std::stringstream setup;
+	{
+		std::string header(filename);
+		header += ".h";
+		std::ofstream ofh(header);
+		ofh
+		<< "#ifndef __" << name << "_h__\n"
+		<< "#define __" << name << "_h__\n"
+		<< "\n#include \"runtime.h\"\n";
+
+		// export statenumbers
+		{
+			int statenum = 0;
+			std::list<State*>::iterator iter = states.begin();
+			while (iter != states.end()) {
+				const State *s = *iter++;
+				ofh << "#define state_cw_" << name << "_" << s->getName() << " " << statenum++ << "\n";
+			}
+		}
+		ofh
+		<< "struct cw_" << name << ";\n"
+		<< "struct IOAddress *cw_" << name << "_getAddress(struct cw_" << name << " *p);\n"
+		<< "struct cw_" << name << " *create_cw_" << name << "(const char *name";
+		{
+			std::vector<Parameter>::iterator p_iter = parameters.begin();
+			while (p_iter != parameters.end()) {
+				const Parameter &p = *p_iter++;
+				params << ", MachineBase *" <<p.val;
+				values << ", " << p.val;
+				refs << "MachineBase *_" << p.val << ";\n";
+				setup << "m->_" << p.val << " = " << p.val << ";\n";
+			}
+			if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
+				ofh << ", int pin";
+			}
+			ofh << params.str() << ");\n"
+			<< "void Init_cw_" << name << "(struct cw_" << name << " * " << ", const char *name";
+			if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
+				ofh << ", int pin";
+			}
+			ofh << params.str() << ");\n"
+			<< "MachineBase *cw_" << name << "_To_MachineBase(struct cw_" << name << " *);\n"
+			<< "#endif\n";
+		}
+	}
+	{
+		std::string source(filename);
+		source += ".c";
+		std::ofstream ofs(source);
+
+		{
+			ofs
+			<< "\n#include \"base_includes.h\"\n"
+			<< "#include \"cw_" << name << ".h\""
+			<< "\n//static const char* TAG = \"" << name << "\";"
+			<< "\n#define DEBUG_LOG 0\n"
+			<< "struct cw_" << name << " {\n"
+			<< "MachineBase machine;\n"
+			<< "int gpio_pin;\n"
+			<< "struct IOAddress addr;\n"
+			<< refs.str();
+			SymbolTableConstIterator pnames_iter = properties.begin();
+			while (pnames_iter != properties.end()) {
+					const std::pair<std::string, Value> prop = *pnames_iter++;
+					ofs<< "Value " << prop.first << "; // " << prop.second << "\n";
+			}
+			std::map<std::string, Value>::iterator opts_iter = options.begin();
+			while (opts_iter != options.end()) {
+				const std::pair<std::string, Value> opt = *opts_iter++;
+				ofs<< "Value " << opt.first << "; // " << opt.second << "\n";
+			}
+		ofs
+		<< "};\n";
+		}
+
+		ofs << "int cw_" << name << "_check_state(struct cw_" << name << " *m);\n";
+
+		ofs
+		<< "struct cw_" << name << " *create_cw_" << name << "(const char *name";
+		if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
+			ofs << ", int pin";
+		}
+		ofs << params.str() << ") {\n"
+		<< "struct cw_" << name << " *p = (struct cw_" << name << " *)malloc(sizeof(struct cw_" << name << "));\n"
+		<< "Init_cw_" << name << "(p, name";
+		if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
+			ofs << ", pin";
+		}
+
+		ofs << values.str() << ");\n"
+		<< "return p;\n"
+		<< "}\n";
+
+		ofs
+		<< "void Init_cw_" << name << "(struct cw_" << name << " *m, const char *name";
+		if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
+			ofs << ", int pin";
+		}
+		ofs << params.str() << ") {\n"
+		<< "initMachineBase(&m->machine, name);\n"
+		<< "init_io_address(&m->addr, 0, 0, 0, 0, iot_none, IO_STABLE);\n"
+		<< setup.str();
+		SymbolTableConstIterator pnames_iter = properties.begin();
+		while (pnames_iter != properties.end()) {
+			const std::pair<std::string, Value> prop = *pnames_iter++;
+			ofs<< "m->" << prop.first << " = " << prop.second << ";\n";
+		}
+		std::map<std::string, Value>::iterator opts_iter = options.begin();
+		while (opts_iter != options.end()) {
+			const std::pair<std::string, Value> opt = *opts_iter++;
+			ofs<< "m->" << opt.first << " = " << opt.second << ";\n";
+		}
+		ofs
+		<< "m->machine.state = 0;\n"
+		<< "m->machine.check_state = ( int(*)(MachineBase*) )cw_" << name << "_check_state;\n"
+		<< "markPending(&m->machine);\n"
+		<< "}\n";
+
+		ofs
+		<< "struct IOAddress *cw_" << name << "_getAddress(struct cw_" << name << " *p) {\n"
+		<< "  return (p->addr.io_type == iot_none) ? 0 : &p->addr;\n"
+		<< "}\n";
+
+		ofs
+		<< "MachineBase *cw_" << name << "_To_MachineBase(struct cw_" << name << " *p) { return &p->machine; }\n";
+
+		// export enter functions for states
+		exportHandlers(ofs);
+		//exportCommands(ofs);
+
+		ofs
+		<< "int cw_" << name << "_check_state(struct cw_" << name << " *m) {\n"
+		<< "  int new_state = 0; enter_func new_state_enter = 0;\n";
+
+		for (int i=0; i<stable_states.size(); ++i) {
+			const StableState &s = stable_states.at(i);
+			if (i>0) ofs << " //  else\n";
+			ofs
+			<< "//  if (" << *s.condition.predicate << ") {\n"
+			<< "//    new_state = state_cw_" << name << "_" << s.state_name << ";\n"
+			<< "//    new_state_enter = (enter_func)cw_" << name << "_enter_" << s.state_name << ";\n"
+			<< "//  }\n";
+		}
+
+		ofs
+		<< "  if (new_state != m->machine.state)\n"
+		<< "    changeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter);\n"
+		<< "  return 1;\n"
+		<< "}\n";
+	}
+	return false;
+}
+
