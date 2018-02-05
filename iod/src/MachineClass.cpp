@@ -153,7 +153,28 @@ void MachineClass::exportHandlers(std::ostream &ofs)
 		}
 		ofs << "  m->machine.execute = 0;\n  return 1;\n}\n";
 	}
+
+	{
+		std::multimap<Message, MachineCommandTemplate*>::iterator iter = receives.begin();
+		while (iter != receives.end()) {
+			const std::pair<Message, MachineCommandTemplate*> &item = *iter++;
+			std::string msg(item.first.getText().substr(0, item.first.getText().find('_')));
+			if (state_names.find(msg) == state_names.end()) {
+				ofs
+				<< "int cw_" << name << "_" << item.first
+				<< "(struct cw_" << name << " *m, ccrContParam) {"
+				<< "// " <<(*item.second) << "\n";
+				for (int i = 0; i<(item.second)->action_templates.size(); ++i) {
+					ActionTemplate*at = (item.second)->action_templates.at(i);
+					if (at) ofs << "// " << (*at) << "\n";
+				}
+				ofs << "  m->machine.execute = 0;\n  return 1;\n}\n";
+			}
+		}
+
+	}
 }
+
 
 void MachineClass::exportCommands(std::ostream &ofs)
 {
