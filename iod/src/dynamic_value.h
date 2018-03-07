@@ -76,7 +76,7 @@ class AnyInValue : public DynamicValue {
 public:
     AnyInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0) {}
     virtual ~AnyInValue() {}
-    virtual Value &operator()(MachineInstance *);
+		virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     AnyInValue(const AnyInValue &);
@@ -93,7 +93,7 @@ class AllInValue : public DynamicValue {
 public:
     AllInValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0) {}
     virtual ~AllInValue() {}
-    virtual Value &operator()(MachineInstance *);
+		virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     AllInValue(const AllInValue &);
@@ -111,7 +111,7 @@ public:
 	AnyEnabledDisabledValue(bool enabled, const char *list)
 	: check_enabled(enabled), machine_list_name(list), machine_list(0) {}
 	virtual ~AnyEnabledDisabledValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	AnyEnabledDisabledValue(const AnyEnabledDisabledValue &);
@@ -128,7 +128,7 @@ public:
 	AllEnabledDisabledValue(bool enabled, const char *list)
 	: check_enabled(enabled), machine_list_name(list), machine_list(0) {}
 	virtual ~AllEnabledDisabledValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	AllEnabledDisabledValue(const AllEnabledDisabledValue &);
@@ -144,7 +144,7 @@ class CountValue : public DynamicValue {
 public:
     CountValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0), state_property(0)  { }
     virtual ~CountValue() {}
-    virtual Value &operator()(MachineInstance *);
+    virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     CountValue(const CountValue &);
@@ -180,7 +180,7 @@ class SumValue : public DynamicValue {
 public:
 	SumValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
 	virtual ~SumValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	SumValue(const SumValue &);
@@ -196,7 +196,7 @@ class MinValue : public DynamicValue {
 public:
 	MinValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
 	virtual ~MinValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	MinValue(const MinValue &);
@@ -212,7 +212,7 @@ class MaxValue : public DynamicValue {
 public:
 	MaxValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
 	virtual ~MaxValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	MaxValue(const MaxValue &);
@@ -229,7 +229,7 @@ class MeanValue : public DynamicValue {
 public:
 	MeanValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
 	virtual ~MeanValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	MeanValue(const MeanValue &);
@@ -245,7 +245,7 @@ class AbsoluteValue : public DynamicValue {
 public:
 	AbsoluteValue(const char *property_name) : property(property_name)  { }
 	virtual ~AbsoluteValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual Value &operator()(MachineInstance *mi);
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	AbsoluteValue(const AbsoluteValue &);
@@ -259,7 +259,7 @@ class ExpressionValue : public DynamicValue {
 public:
 	ExpressionValue(Predicate *pred) : condition(pred)  { }
 	virtual ~ExpressionValue() {}
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	ExpressionValue(const ExpressionValue &);
@@ -274,7 +274,7 @@ class IncludesValue : public DynamicValue {
 public:
     IncludesValue(Value val, const char *list) : entry(val), machine_list_name(list), machine_list(0)  { }
     virtual ~IncludesValue() {}
-    virtual Value &operator()(MachineInstance *);
+    virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     IncludesValue(const IncludesValue &);
@@ -309,7 +309,7 @@ class SizeValue : public DynamicValue {
 public:
     SizeValue(const char *list) : machine_list_name(list), machine_list(0)  { }
     virtual ~SizeValue() {}
-    virtual Value &operator()(MachineInstance *);
+		virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     SizeValue(const SizeValue &);
@@ -359,7 +359,7 @@ class BitsetValue : public DynamicValue {
 public:
     BitsetValue(const char *state_str, const char *list) : state(state_str), machine_list_name(list), machine_list(0)  { }
     virtual ~BitsetValue() {}
-    virtual Value &operator()(MachineInstance *);
+    virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     BitsetValue(const BitsetValue &);
@@ -375,7 +375,7 @@ class EnabledValue : public DynamicValue {
 public:
     EnabledValue(const char *name) : machine_name(name), machine(0) { }
     virtual ~EnabledValue() { }
-    virtual Value &operator()(MachineInstance *);
+    virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     EnabledValue(const EnabledValue &);
@@ -390,7 +390,7 @@ class DisabledValue : public DynamicValue {
 public:
     DisabledValue(const char *name) : machine_name(name), machine(0) { }
     virtual ~DisabledValue() { }
-    virtual Value &operator()(MachineInstance *);
+    virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     DisabledValue(const DisabledValue &);
@@ -405,7 +405,7 @@ class ExistsValue : public DynamicValue {
 public:
 	ExistsValue(const char *name) : machine_name(name), machine(0) { }
 	virtual ~ExistsValue() { }
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	ExistsValue(const ExistsValue &);
@@ -436,7 +436,7 @@ class ClassNameValue : public DynamicValue {
 public:
 	ClassNameValue(const char *name) : machine_name(name), machine(0) { }
 	virtual ~ClassNameValue() { }
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	ClassNameValue(const CastValue &);
@@ -452,7 +452,7 @@ class ChangingStateValue : public DynamicValue {
 public:
 	ChangingStateValue(const char *name) : machine_name(name), machine(0) { }
 	virtual ~ChangingStateValue() { }
-	virtual Value &operator()(MachineInstance *);
+	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
 	virtual std::ostream &operator<<(std::ostream &) const;
 	ChangingStateValue(const CastValue &);

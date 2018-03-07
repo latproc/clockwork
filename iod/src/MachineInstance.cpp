@@ -893,7 +893,7 @@ bool MachineInstance::dependsOn(Transmitter *m) {
 	if (!m) return false;
 	MachineInstance *mi = dynamic_cast<MachineInstance*>(m);
 	if (!mi) return true; // assume we depend on all low level transmitters
-	return listens.find(mi) != listens.end();
+	return listens.find(mi) != listens.end(); // TBD - shouldn't this be checking the dependancies, not listens?
 }
 
 

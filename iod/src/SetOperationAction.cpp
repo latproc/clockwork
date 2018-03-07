@@ -69,6 +69,12 @@ SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationAct
 				source_a_machine(0), source_b_machine(0),
         dest_machine(0),  operation(dat->operation),
 			 remove_selected(dat->remove_selected), start_pos(dat->start_pos), end_pos(dat->end_pos) {
+	if (count.dynamicValue())
+		 count.dynamicValue()->setScope(scope);
+	if (start_pos.dynamicValue())
+		start_pos.dynamicValue()->setScope(scope);
+	if (end_pos.dynamicValue())
+		end_pos.dynamicValue()->setScope(scope);
 }
 
 SetOperationAction::SetOperationAction() : Action(), dest_machine(0) {
