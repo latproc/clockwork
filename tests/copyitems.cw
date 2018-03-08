@@ -15,6 +15,17 @@ Copier MACHINE list1, list2 {
     pos := SIZE OF items - 1;
     COPY ITEM pos FROM list1 TO list2;
   }
+
+  COMMAND run3 {
+    CLEAR list2;
+		count := 2;
+    COPY count FROM list1 TO list2;
+  }
+
+  COMMAND run4 {
+    CLEAR list2;
+    COPY SIZE OF items FROM list1 TO list2;
+  }
 }
 
 alpha LIST a,b,c,d;
