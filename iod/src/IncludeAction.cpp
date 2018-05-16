@@ -209,7 +209,7 @@ Action::Status IncludeAction::run() {
 	}
 	else {
 		char *err_msg = (char *)malloc(400);
-		snprintf(err_msg, 400, "%s Cannot find a machine named %s for list inser of %s",
+		snprintf(err_msg, 400, "%s Cannot find a machine named %s for list insert of %s",
 			 owner->getName().c_str(), list_machine_name.c_str(), entry.asString().c_str());
 		MessageLog::instance()->add(err_msg);
 		error_str = err_msg;
