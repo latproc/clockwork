@@ -29,33 +29,30 @@ class MachineInstance;
 
 struct SortListActionTemplate : public ActionTemplate {
     
-    // the bitset property named in the list_machine parameter are used to set the state of
-    // entries in the list named in the dest parameter
-    // The names are to be evaluated in the
-    // scope where the command is used.
-    
-	SortListActionTemplate(Value list_machine, Value property_name);
+	SortListActionTemplate(Value list_machine, Value property_name, bool ascending = true);
     ~SortListActionTemplate();
     
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-       return out << "SortListAction "  << list_machine_name << " from " << property_name << "\n";
-    }
+	virtual Action *factory(MachineInstance *mi);
+	std::ostream &operator<<(std::ostream &out) const {
+		 return out << "SortListAction "  << list_machine_name << " from " << property_name << "\n";
+	}
 
-    std::string list_machine_name;
-    std::string property_name;
+	std::string list_machine_name;
+	std::string property_name;
+	bool ascending;
 };
 
 struct SortListAction : public Action {
-	SortListAction(MachineInstance *m, const SortListActionTemplate *dat);
-    SortListAction();
+	SortListAction(MachineInstance *m, const SortListActionTemplate *dat, bool ascending);
+	SortListAction();
 	Status run();
 	Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out)const;
+	virtual std::ostream &operator<<(std::ostream &out)const;
 
 	Value list_machine_name;
-    Value property_name;
-    MachineInstance *list_machine;
+	Value property_name;
+	MachineInstance *list_machine;
+	bool ascending;
 };
 
 #endif

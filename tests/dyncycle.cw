@@ -1,30 +1,26 @@
+# This cyclic machine transitions from a to b to c and
+# back to a when it receives a 'next' command. The 
+# transition is only performed if a 'finished' flag
+# is set for the state. 
+# 
+
 Cycle MACHINE {
 
-a_finished FLAG;
+finished FLAG;
+blocked FLAG;
 
-b_finished FLAG;
+a WHEN SELF IS a || SELF IS d, TAG finished WHEN TIMER > 10000; 
+b WHEN SELF IS b || SELF IS a, TAG finished WHEN TIMER > 10000; 
+c WHEN SELF IS c || (SELF IS b && blocked IS off), TAG finished WHEN TIMER > 10000;
+d WHEN SELF IS d || SELF IS c, TAG finished WHEN TIMER > 10000;
+a INITIAL;
 
-c_finished FLAG;
+TRANSITION a TO b ON next REQUIRES finished IS on; 
+TRANSITION b TO c ON next REQUIRES finished IS on;
+TRANSITION c TO d ON next REQUIRES finished IS on AND blocked IS off;
+TRANSITION d TO a ON next;  # automatic due to rules above
 
-a WHEN SELF IS a OR SELF IS INIT OR SELF IS changing, TAG a_finished WHEN TIMER > 10000; 
-
-b WHEN SELF IS b OR SELF IS changing, TAG b_finished WHEN TIMER > 10000; 
-
-c WHEN SELF IS c OR SELF IS changing, TAG c_finished WHEN TIMER > 10000;
-
-ENTER a { SET a_finished TO off }
-
-ENTER b { SET b_finished TO off }
-
-ENTER c { SET c_finished TO off }
-
-changing DURING next { LOG "next" }
-
-TRANSITION a TO b ON next REQUIRES a_finished IS on; 
-
-TRANSITION b TO c ON next REQUIRES b_finished IS on; 
-
-TRANSITION c TO a ON next REQUIRES c_finished IS on; 
+COMMAND next { LOG "next executed"; }
 
 }
 

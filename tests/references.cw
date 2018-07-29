@@ -26,3 +26,41 @@ Manager MACHINE sampler {
 sampler Sample1(tab:Refs);
 manager Manager(tab:Refs) sampler;
 
+# test sending messages to a reference
+f1 FLAG;
+f2 FLAG;
+f3 FLAG;
+f4 FLAG;
+all_flags LIST f1,f2,f3,f4;
+
+Messages MACHINE flags {
+  OPTION i 0;
+  ref REFERENCE;
+  ENTER INIT { x := ITEM i OF flags; ASSIGN x TO ref; }
+  COMMAND clear { CLEAR ref; }
+  COMMAND next { i := (i + 1) % (SIZE OF flags); x := ITEM i OF flags; ASSIGN x TO ref; }
+  COMMAND call { CALL turnOn ON ref.ITEM }
+  COMMAND on { SEND turnOn TO ref }
+  COMMAND off { SEND turnOff TO ref }
+
+  RECEIVE ref.changed { LOG "ref changed" }
+}
+msg Messages all_flags;
+
+Pulser2 MACHINE {
+    pulse FLAG;
+	waiting WHEN SELF IS waiting;
+    on WHEN pulse IS on;
+    running WHEN TIMER >= 0, TAG pulse WHEN TIMER >= 1000;
+	waiting INITIAL;
+	running DURING start {}
+}
+
+TimeClock MACHINE target{
+    pulser Pulser2;
+	
+    RECEIVE pulser.on_enter { CALL  next ON target; LOG "tick"; CALL call ON target }
+}
+clock TimeClock msg;
+
+

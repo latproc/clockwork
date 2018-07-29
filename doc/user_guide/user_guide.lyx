@@ -1,7 +1,9 @@
-#LyX 2.1 created this file. For more info see http://www.lyx.org/
-\lyxformat 474
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
 \begin_document
 \begin_header
+\save_transient_properties true
+\origin unavailable
 \textclass article
 \use_default_options true
 \maintain_unincluded_children false
@@ -9,16 +11,16 @@
 \language_package default
 \inputencoding auto
 \fontencoding global
-\font_roman default
-\font_sans default
-\font_typewriter default
-\font_math auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
-\font_sf_scale 100
-\font_tt_scale 100
+\font_sf_scale 100 100
+\font_tt_scale 100 100
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -226,6 +228,10 @@ The file: README, that comes with the latproc distribution explains how
 
 \begin_layout Enumerate
 pull the latproc project from git
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -236,6 +242,10 @@ git clone git://github.com/latproc/clockwork.git
 \end_deeper
 \begin_layout Enumerate
 change to the latproc directory and build the interpreter
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -291,11 +301,19 @@ Here is a program that will display a message on the terminal:
 
 \begin_layout LyX-Code
 Hello MACHINE { 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
 ENTER INIT { 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -455,7 +473,7 @@ When a Clockwork program is being run, you can interact with it using a
  Refer to section 
 \begin_inset CommandInset ref
 LatexCommand ref
-reference "sub:iosh"
+reference "subsec:iosh"
 
 \end_inset
 
@@ -509,7 +527,7 @@ Tools
 iosh
 \begin_inset CommandInset label
 LatexCommand label
-name "sub:iosh"
+name "subsec:iosh"
 
 \end_inset
 
@@ -553,7 +571,19 @@ machine
 \begin_inset space ~
 \end_inset
 
-on|off start/stops debug messages for the device
+on|off start/stops debug messages for the device; see Table
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "tab:Debug-groups"
+
+\end_inset
+
+.
+ Example: DEBUG blinker on
 \end_layout
 
 \begin_layout Description
@@ -565,7 +595,20 @@ debug_group
 \begin_inset space ~
 \end_inset
 
-on|off starts/stops debug messages for all the devices in the given group
+on|off starts/stops debug messages for all the devices in the given group;
+ see Table
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "tab:Debug-groups"
+
+\end_inset
+
+.
+ Example DEBUG DEBUG_SCHEDULER on
 \end_layout
 
 \begin_layout Description
@@ -712,6 +755,422 @@ machine_name changes from the on state to off or vice-versa, only usable
  on machines with both an on and off state.
 \end_layout
 
+\begin_layout Subsubsection
+Debug facilities
+\end_layout
+
+\begin_layout Standard
+Basic debug facilities are provided to:
+\end_layout
+
+\begin_layout Itemize
+enable extra output from the driver onto its terminal output.
+ The debug groups are listed in table
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "tab:Debug-groups"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+trace handler execution by turning trace mode on and monitoring a device
+ via sampler
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float table
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Tabular
+<lyxtabular version="3" rows="16" columns="2">
+<features tabularvalignment="middle">
+<column alignment="left" valignment="top" width="0pt">
+<column alignment="left" valignment="top" width="8cm">
+<row>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Name
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Description
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_ACTIONS
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to execution of steps in handlers
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_AUTOSTATES
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to evaluation of stable states
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_CHANNELS
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to communication channels between programs
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_DEPENDANCIES
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+not used
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_DISPATCHER
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to sending internal messages from handlers
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_ETHERCAT
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows EtherCAT related messages
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_INITIALISATION
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages about the initialisation of internal structures
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_MACHINELOOKUPS
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Not used
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_MESSAGING
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to sending of zmq messages
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_MODBUS
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to modbus
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_PARSER
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to the parsing of clockwork scripts
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_PREDICATES
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to evaluation of predicates in IF statements and
+ stable states
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_PROPERTIES
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages relating to properties
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_SCHEDULER
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows scheduler messages
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+DEBUG_STATECHANGES
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Shows messages aboute state changes and transition tables
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "tab:Debug-groups"
+
+\end_inset
+
+Debug groups
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+Tracing
+\end_layout
+
+\begin_layout Standard
+To enable tracing from iosh, first enable tracing globally and set the TRACEABLE
+ property on the machine to be traced to TRUE or FALSE to enable/disable
+ tracing on that machine.
+ For example:
+\end_layout
+
+\begin_layout LyX-Code
+TRACING ON 
+\end_layout
+
+\begin_layout LyX-Code
+PROPERTY blinker TRACEABLE TRUE;
+\end_layout
+
 \begin_layout Subsection
 persistd
 \end_layout
@@ -719,6 +1178,18 @@ persistd
 \begin_layout Standard
 persistd monitors a connection clockwork driver for machines that publicly
  report their state changes using zmq.
+\end_layout
+
+\begin_layout Standard
+Some machine properties are used within clockwork and are not propagated
+ to the persistence daemon, however other properties are used in tools external
+ to clockwork and by default these properties are ignored by persistd.
+ 
+\end_layout
+
+\begin_layout Standard
+In future a method will be available to nominate the set of keys that are
+ to be ignored.
 \end_layout
 
 \begin_layout Subsection
@@ -753,6 +1224,10 @@ instantiate an EXTERNAL machine
 
 \begin_layout Itemize
 set parameters on that machine:
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -823,6 +1298,10 @@ pattern_test.message := 'curl'
 
 \begin_layout LyX-Code
 PatternTest MACHINE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -840,6 +1319,10 @@ PatternTest MACHINE {
 
 \begin_layout LyX-Code
 	ENTER found {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -940,6 +1423,10 @@ Here is an example of how to latch an input; once the input comes on the
 
 \begin_layout LyX-Code
 GenericLatch MACHINE input {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -988,6 +1475,10 @@ would be used.
 
 \begin_layout LyX-Code
 CommandTest MACHINE other {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -997,6 +1488,10 @@ CommandTest MACHINE other {
 
 \begin_layout LyX-Code
 	ENTER a { 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1032,6 +1527,10 @@ CommandTest MACHINE other {
 
 \begin_layout LyX-Code
 OtherTest MACHINE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1066,11 +1565,19 @@ Cell MACHINE left, right {
 
 \begin_layout LyX-Code
 on WHEN right IS off 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
 AND (SELF IS on 
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1173,6 +1680,10 @@ The following simulates several philosophers dining at a circular table.
 
 \begin_layout LyX-Code
 Chopstick MACHINE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1199,6 +1710,10 @@ Chopstick MACHINE {
 
 \begin_layout LyX-Code
 Philosopher MACHINE left, right {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1232,6 +1747,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
 	finishing WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1242,6 +1761,10 @@ Philosopher MACHINE left, right {
 \end_deeper
 \begin_layout LyX-Code
 	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1260,6 +1783,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
     ENTER INIT {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1282,6 +1809,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
 	ENTER starting {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1291,6 +1822,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
 		IF (left.owner == "noone") {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1308,6 +1843,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
 			IF (right.owner == "noone") {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1326,6 +1865,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
 			ELSE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1349,6 +1892,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
 		ELSE {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -1368,6 +1915,10 @@ Philosopher MACHINE left, right {
 
 \begin_layout LyX-Code
 	ENTER finished {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper

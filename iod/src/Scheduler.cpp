@@ -28,8 +28,10 @@
 #include "MessageLog.h"
 #include <zmq.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/chrono.hpp>
 #include <assert.h>
 #include "watchdog.h"
+#include "ProcessingThread.h"
 
 Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000L;
@@ -37,7 +39,9 @@ static Watchdog *wd = 0;
 
 class SchedulerInternals {
 public:
+	SchedulerInternals() :thread_ptr(0) { }
 	boost::recursive_mutex q_mutex;
+	boost::thread *thread_ptr;
 };
 
 #if 0
@@ -49,42 +53,35 @@ public:
 };
 #endif
 
-static void setTime(struct timeval &now, long delta) {
-	gettimeofday(&now, 0);
-	if (delta<0) { 
-		DBG_SCHEDULER << "***** negative delta: " << delta << "\n"; 
+static uint64_t calcDeliveryTime(long delay) {
+	uint64_t res = microsecs() + delay;
+	if (delay<0) {
+		DBG_SCHEDULER << "***** negative delta: " << delay << "\n";
 	}
-	else {
-		now.tv_sec += delta / ONEMILLION;
-		now.tv_usec += delta % ONEMILLION;
-		if (now.tv_usec >= ONEMILLION) {
-			++now.tv_sec;
-			now.tv_usec -= ONEMILLION;
-		}
-	}
-	DBG_SCHEDULER << "setTime: " << now.tv_sec << '.' << std::setfill('0')<< std::setw(6) << now.tv_usec << "\n";
+	DBG_SCHEDULER << "setTime: " << res << "\n";
+	return res;
 }
 
 std::string Scheduler::getStatus() { 
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
-	struct timeval now;
-	gettimeofday(&now, 0);
+	uint64_t now = microsecs();
 	long wait_duration = 0;
-	if (notification_sent) wait_duration = get_diff_in_microsecs(&now, notification_sent);
+	if (notification_sent) wait_duration = now - notification_sent;
 	char buf[300];
 	if (state == e_running) 
 		snprintf(buf, 300, "busy");
-	else
+	else {
 		snprintf(buf, 300, "state: %d, is ready: %d"
-			" items: %ld, now: %ld.%06d\n"
+			" items: %ld, now: %lld\n"
 			"last notification: %10.6f\nwait time: %10.6f",
-			state, ready(), items.size(), now.tv_sec, now.tv_usec,
+				 state, ready(now), items.size(), (now - ProcessingThread::programStartTime()),
 				(float)notification_sent/1000000.0f, (float)wait_duration/1000000.0f);
+	}
 	std::stringstream ss;
 	ss << buf << "\n";
     std::list<ScheduledItem*>::const_iterator iter = items.queue.begin();
 	while (iter != items.queue.end()) {
-        ScheduledItem *item = *iter++;
+		ScheduledItem *item = *iter++;
 		ss << *item << "\n";
 	}
 	ss << std::ends;
@@ -92,17 +89,11 @@ std::string Scheduler::getStatus() {
 }
 
 bool ScheduledItem::operator<(const ScheduledItem& other) const {
-    if (delivery_time.tv_sec < other.delivery_time.tv_sec) return true;
-    if (delivery_time.tv_sec == other.delivery_time.tv_sec) 
-		return delivery_time.tv_usec < other.delivery_time.tv_usec;
-    return false;
+	return delivery_time < other.delivery_time;
 }
 
 bool ScheduledItem::operator>=(const ScheduledItem& other) const {
-    if (delivery_time.tv_sec > other.delivery_time.tv_sec) return true;
-    if (delivery_time.tv_sec == other.delivery_time.tv_sec) 
-		return delivery_time.tv_usec >= other.delivery_time.tv_usec;
-    return false;
+	return delivery_time >= other.delivery_time;
 }
 
 ScheduledItem *Scheduler::next() const { 
@@ -163,26 +154,42 @@ bool PriorityQueue::check() const {
 	return true;
 }
 
-ScheduledItem::ScheduledItem(long when, Package *p) :package(p), action(0) {
-	setTime(delivery_time, when);
-	DBG_SCHEDULER << "scheduled package: " << delivery_time.tv_sec << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec << "\n";
+ScheduledItem::ScheduledItem(long delay, Package *p) :package(p), action(0), trigger(0) {
+	delivery_time = calcDeliveryTime(delay);
+	DBG_SCHEDULER << "scheduled package: " << delivery_time << "\n";
 }
 
-ScheduledItem::ScheduledItem(long when, Action *a) :package(0), action(a) {
-	setTime(delivery_time, when);
-	DBG_SCHEDULER << "scheduled action: " << delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec << "\n";
+ScheduledItem::ScheduledItem(long delay, Action *a) :package(0), action(a), trigger(0) {
+	delivery_time = calcDeliveryTime(delay);
+	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
 }
+
+ScheduledItem::ScheduledItem(long delay, Trigger *t) :package(0), action(0), trigger(t->retain()) {
+	delivery_time = calcDeliveryTime(delay);
+	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+}
+
+ScheduledItem::ScheduledItem(uint64_t starting, long delay, Action *a) : package(0), action(a), trigger(0) {
+	delivery_time = starting + delay;
+	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+}
+
+ScheduledItem::ScheduledItem(uint64_t starting, long delay, Trigger *t) : package(0), action(0), trigger(t->retain()) {
+	delivery_time = starting + delay;
+	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+}
+
 
 ScheduledItem::~ScheduledItem() {
+	if (trigger) trigger->release();
+	trigger = 0;
 }
 
 std::ostream &ScheduledItem::operator <<(std::ostream &out) const {
-	struct timeval now;
-	gettimeofday(&now, 0);
-	int64_t delta = get_diff_in_microsecs( &delivery_time, &now);
-	out << delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << delivery_time.tv_usec
-		<< " (" << delta << ") ";
-	if (package) out << *package; else if (action) out << *action;
+	uint64_t now = microsecs();
+	int64_t delta = delivery_time - now;
+	out << delivery_time << " (" << delta << ") ";
+	if (package) out << *package; else if (action) out << *action; else if (trigger) out << *trigger;
 	return out;
 }
 
@@ -192,13 +199,16 @@ std::ostream &operator <<(std::ostream &out, const ScheduledItem &item) {
 
 Scheduler::Scheduler() : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PAIR),
 		update_notify(0), next_delay_time(0), notification_sent(0) {
-
 	internals = new SchedulerInternals;
 	wd = new Watchdog("Scheduler", 300, false);
 	update_sync.bind("inproc://sch_items");
-	next_time.tv_sec = 0;
-	next_time.tv_usec = 0;
+	next_time = 0;
 }
+
+void Scheduler::setThreadRef(boost::thread &ref) {
+	internals->thread_ptr = &ref;
+}
+
 
 bool CompareSheduledItems::operator()(const ScheduledItem *a, const ScheduledItem *b) const {
     bool result = (*a) >= (*b);
@@ -206,23 +216,35 @@ bool CompareSheduledItems::operator()(const ScheduledItem *a, const ScheduledIte
 }
 
 int64_t Scheduler::getNextDelay() {
-	if (empty()) return -1;
+	if (empty()) return 1000000;
     ScheduledItem *top = next();
 	next_time = top->delivery_time;
-	return get_diff_in_microsecs(&next_time, nowMicrosecs());
+	return next_time - nowMicrosecs();
+}
+
+int64_t Scheduler::getNextDelay(uint64_t start) {
+	if (empty())
+		return 1000000;
+	ScheduledItem *top = next();
+	int64_t res = top->delivery_time- start;
+	return res;
 }
 
 void Scheduler::add(ScheduledItem*item) {
+	next_delay_time = getNextDelay();
 	ScheduledItem *top = 0;
 	{
 		boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 		DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
-		//DBG_SCHEDULER << "Before schedule::add() " << *this << "\n";
 		items.push(item);
 	}
 	top = next();
 	next_time = top->delivery_time;
-	next_delay_time = getNextDelay();
+	long delay = next_time - nowMicrosecs();
+	if (delay <= next_delay_time || next_delay_time <= 0) { // && delay>=0 && next_delay_time>=0) {
+		next_delay_time = delay;
+		if (internals->thread_ptr) internals->thread_ptr->interrupt();
+	}
 #if 0
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
 	long wait_duration = nowMicrosecs() - last_notification;
@@ -265,33 +287,10 @@ void Scheduler::add(ScheduledItem*item) {
 #endif
 }
 
-/*
-std::ostream &Scheduler::operator<<(std::ostream &out) const  {
-    std::list<ScheduledItem*>::const_iterator iter = items.begin();
-	while (iter != items.queue.end()) {
-        ScheduledItem *item = *iter++;
-        struct timeval now;
-        gettimeofday(&now, 0);
-        long dt = get_diff_in_microsecs(&item->delivery_time, &now);
-		out << "Scheduler: {" << item->delivery_time.tv_sec << "." << std::setfill('0')<< std::setw(6) << item->delivery_time.tv_usec
-                << " (" << dt << "usec) }" << "\n  ";
-		if (item->package) out << *(item->package);
-		else if (item->action) out << *(item->action);
-        break;
-	}
-    out << " (" << items.size() << " items)\n";
-    return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const Scheduler &m) {
-    return m.operator<<(out);
-}
- */
-
-bool Scheduler::ready() {
+bool Scheduler::ready(uint64_t start) {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	if (items.empty()) { return false; }
-	return getNextDelay() <= 0;
+	return getNextDelay(start) <= 0;
 }
 
 void Scheduler::operator()() {
@@ -316,49 +315,28 @@ void Scheduler::idle() {
 	sync.bind("inproc://scheduler_sync");
 	char buf[10];
 	size_t response_len = 0;
-	while (!  safeRecv(sync, buf, 10, true, response_len, 0)) usleep(100);
+	while (!  safeRecv(sync, buf, 10, true, response_len, 0))
+		boost::this_thread::sleep_for(boost::chrono::microseconds(100));
 	NB_MSG << "Scheduler started\n";
 
 	state = e_waiting;
 	bool is_ready;
 	uint64_t last_poll = nowMicrosecs();
 	while (state != e_aborted) {
-		next_delay_time = getNextDelay();
-		if (!ready() && state == e_waiting) {
+		next_delay_time = getNextDelay(last_poll);
+		if (!ready(last_poll) && state == e_waiting) {
 			wd->stop();
+			try {
 			long delay = next_delay_time;
-			usleep(1000);
-#if 0
-			notification_sent = 0; // checking now, if more items are pushed we will want to know
-			bool no_items = false;
-			{
-				boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
-				no_items = items.empty();
+			if (delay>10)
+				boost::this_thread::sleep_for(boost::chrono::microseconds(delay));
 			}
-			if (no_items) {
-				// empty, just wait for someone to add some work
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 5)) {
-					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
+			catch (boost::thread_interrupted ex) {
+				// permit interruption
 			}
-			else if (delay <= 0) {
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 0)) {
-					//NB_MSG << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
-			}
-			else if (delay < 1000) {
-				if (!safeRecv(update_sync, buf, 10, false, response_len, 0)) {
-					//std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
-				usleep((unsigned int)delay);
-			}
-			else
-				if (!safeRecv(update_sync, buf, 10, false, response_len, delay/1000)) {
-					//std::cout << "Scheduler: safeRecv failed at line " << __LINE__ << "\n";
-				}
-#endif
 		}
-		is_ready = ready();
+		last_poll = nowMicrosecs();
+		is_ready = ready(last_poll);
 		if (!is_ready && state == e_waiting) continue;
 
 		if ( state == e_waiting && is_ready) {
@@ -380,26 +358,33 @@ void Scheduler::idle() {
 			{
 				boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 				item = next();
-				DBG_SCHEDULER << "Scheduled item " << (*item) << " ready. " << items.size() << " items remain\n";
+				DBG_SCHEDULER << "Scheduler activating scheduled item " << (*item) << " ready. " << items.size() << " items remain\n";
 				pop();
 			}
-			next_time.tv_sec = 0;
-			next_time.tv_usec = 0;
-			if (item->package) {
-				DBG_SCHEDULER << " handling package on " << item->package->receiver->getName() << "\n";
+			next_time = 0;
+			if (item->trigger) {
+				if (item->trigger->enabled()) {
+					DBG_SCHEDULER << "Scheduler firing trigger " << item->trigger->getName() << "\n";
+					item->trigger->fire();
+				}
+				delete item;
+				++items_found;
+			}
+			else if (item->package) {
+				DBG_SCHEDULER << "Scheduler activating package on " << item->package->receiver->getName() << "\n";
 				item->package->receiver->handle(item->package->message, item->package->transmitter);
 				delete item->package;
 				delete item;
 				++items_found;
 			}
 			else if (item->action) {
-				DBG_SCHEDULER << " pushing action to  " << item->action->getOwner()->getName() << "\n";
+				DBG_SCHEDULER << "Scheduler activating pushing action to  " << item->action->getOwner()->getName() << "\n";
 				item->action->getOwner()->push(item->action);
-				item->action->getOwner()->setNeedsCheck();
 				delete item;
 				++items_found;
 			}
-			is_ready = ready();
+			last_poll = nowMicrosecs();
+			is_ready = ready(last_poll);
 		}
 		//if (items_found)
 		//	MachineInstance::forceIdleCheck();

@@ -55,11 +55,12 @@ public:
 
 class Message {
 public:
+	enum MessageType { SIMPLEMSG, ENTERMSG, LEAVEMSG, ENABLEMSG, DISABLEMSG };
     typedef std::list<Value> Parameters;
 
-    Message() : text(""), params(0) {}
-    Message(Message *m, Parameters *p = 0);
-    Message(CStringHolder msg, Parameters *p = 0);
+    Message(MessageType t = SIMPLEMSG) : kind(t), seq(++sequence), text(""), params(0) {}
+    Message(Message *m, MessageType t = SIMPLEMSG, Parameters *p = 0);
+    Message(CStringHolder msg, MessageType t = SIMPLEMSG, Parameters *p = 0);
     Message(const Message &orig);
     Message &operator=(const Message &other);
     ~Message();
@@ -70,9 +71,18 @@ public:
     bool operator>(const Message &other) const { return text > other.text; }
     const std::string getText() const { return text; }
     const std::list<Value> *getParams() const { return params; }
-    
+
+	bool isEnter() const { return kind == ENTERMSG; }
+	bool isLeave() const { return kind == LEAVEMSG; }
+	bool isSimple() const { return kind == SIMPLEMSG; }
+	bool isEnable() const { return kind == ENABLEMSG; }
+	bool isDisable() const { return kind == DISABLEMSG; }
+
     static std::list<Value> *makeParams(Value p1, Value p2 = SymbolTable::Null, Value p3 = SymbolTable::Null, Value p4 = SymbolTable::Null);
 private:
+	static unsigned long sequence;
+	MessageType kind;
+	unsigned long seq;
     std::string text;
     std::list<Value> *params;
 };
@@ -123,6 +133,8 @@ public:
     virtual bool receives(const Message&, Transmitter *t) = 0;
     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false ) = 0;
 	virtual void enqueue(const Package &package);
+	bool hasMail() { return !mail_queue.empty(); }
+	bool hasPending(const Message &msg);
     long getId() const { return id; }
 protected:
 		

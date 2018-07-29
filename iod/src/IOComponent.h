@@ -31,6 +31,7 @@
 #include "Message.h"
 #include "MQTTInterface.h"
 #include "filtering.h"
+#include <boost/thread/mutex.hpp>
 
 struct IOAddress {
 	unsigned int module_position;
@@ -61,11 +62,21 @@ struct MQTTTopic {
 
 class IOUpdate {
 public:
-	IOUpdate():size(0), data(0), mask(0) { }
-	~IOUpdate() { delete mask; }
-	uint32_t size;
-	uint8_t *data; // shared pointer to process data
-	uint8_t *mask; // allocated pointer to current mask
+	IOUpdate():size_(0), data_(0), mask_(0) { }
+	~IOUpdate();
+
+	uint32_t size() const { return size_; }
+	void setSize(uint32_t sz) { size_ = sz; }
+
+	uint8_t *data() const { return data_; }
+	void setData(uint8_t *dt) { data_ = dt; }
+
+	uint8_t *mask() const { return mask_; }
+	void setMask(uint8_t *ms) { mask_ = ms; }
+private:
+	uint32_t size_;
+	uint8_t *data_; // shared pointer to process data
+	uint8_t *mask_; // allocated pointer to current mask
 };
 
 class MachineInstance;
@@ -75,20 +86,21 @@ public:
 	typedef std::list<IOComponent *>::iterator Iterator;
 	static Iterator begin() { return processing_queue.begin(); }
 	static Iterator end() { return processing_queue.end(); }
+	static void reset();
 	static IOAddress add_io_entry(const char *name, unsigned int module_pos, 
 		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
 	static void processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data, 
-			std::set<IOComponent *> &updatedMachines);
+	std::set<IOComponent *> &updatedMachines);
 	static void setupIOMap();
 	static int getMinIOOffset();
 	static int getMaxIOOffset();
-	static uint8_t *getProcessData() { return io_process_data; }
-	static uint8_t *getProcessMask() { return io_process_mask; }
+	static uint8_t *getProcessData();
+	static uint8_t *getProcessMask();
 	static uint8_t *getUpdateData();
-	static uint8_t *getDefaultData() { return default_data; }
-	static uint8_t *getDefaultMask() { return default_mask; }
+	static uint8_t *getDefaultData();
+	static uint8_t *getDefaultMask();
 	static void setDefaultData(uint8_t *);
 	static void setDefaultMask(uint8_t *);
 	static int notifyComponentsAt(unsigned int offset);
@@ -97,6 +109,9 @@ public:
 	static IOUpdate *getDefaults();
 	static uint8_t *generateMask(std::list<MachineInstance*> &outputs);
 	static uint64_t getClock() { return global_clock; }
+	static void remove_io_module(int pos);
+	static void lock(); // block others from resetting io
+	static void unlock(); // allow io resets
 protected:
 	static std::map<std::string, IOAddress> io_names;
 	static uint64_t global_clock;
@@ -160,9 +175,11 @@ public:
 	enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };
 	static HardwareState getHardwareState();
 	static void setHardwareState(HardwareState state);
-  static void updatesSent() { updates_sent = true; }
+	static void updatesSent(bool which);
+	static bool updatesToSend();
 
 protected:
+	static boost::recursive_mutex io_names_mutex;
 	static uint64_t io_clock;
 	int getStatus(); 
 	int io_index; // the index of the first bit in this component's address space

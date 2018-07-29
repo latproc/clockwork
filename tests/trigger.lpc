@@ -1,4 +1,41 @@
-#TBD
-FlipFlop MACHINE {
+/*
+Test triggers
 
+*/
+FlipFlop MACHINE {
+	OPTION counter 0;
+	on STATE;
+	off INITIAL;
+	TRANSITION off TO on ON next;
+	TRANSITION on TO off ON next;
+
+	ENTER on { WAIT 990; SEND next TO SELF; }
+	ENTER off { WAIT 990; SEND next TO SELF; }
+	COMMAND count { counter := counter+1; }
+	COMMAND reset { counter := 0; }
 }
+ff FlipFlop;
+
+Timer MACHINE flipflop {
+	OPTION a 0;
+	idle INITIAL;
+	COMMAND reset { CALL reset ON flipflop; a := 0; }
+	COMMAND clear { a := 0; }
+	COMMAND inc{ CALL count ON flipflop; a := a + 1; }
+}
+timer Timer ff;
+
+Panel MACHINE flipflop, t {
+
+	COMMAND go { 
+		WAITFOR flipflop IS off;
+		CALL count ON flipflop;
+		CALL inc ON t;
+		WAITFOR flipflop IS on;
+		CALL count ON flipflop;
+		CALL inc ON t;
+	}
+}
+panel Panel ff, timer;
+
+#Test MACHINE { tolerance RANGECHECK; } test Test;

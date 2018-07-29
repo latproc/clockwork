@@ -3,11 +3,12 @@
 #include "cwlang.h"
 #include "cwlang.tab.hpp"
 void yyerror(const char *);
+
 static char *buf;
 static int buflen = 0;
 static char *bufp;
 extern YYSTYPE yylval;
-    int yycharno;
+int yycharno;
 
 void append_char(int ch);
 %}
@@ -25,20 +26,29 @@ void append_char(int ch);
 "~"                 return MATCHES;
 16BIT               return WORD;
 32BIT               return DOUBLEWORD;
-ABORT				return ABORT;
+ABORT								return ABORT;
+ABS									return ABS;
+ADD									return ADD;
+AFTER								return AFTER;
 ALL                 return ALL;
 AND                 return AND;
 ANY                 return ANY;
 ARE                 return ARE;
 ASSIGN              return ASSIGN;
 AT                  return AT;
+AS									return AS;
+ASCENDING						return ASCENDING;
+ASC									return ASC;
 BECOMES             return BECOMES;
+BEFORE							return BEFORE;
 BETWEEN             return BETWEEN;
 BITSET              return BITSET;
 BY                  return BY;
 CALL				return CALL;
 CATCH				return CATCH;
+CHANGING		return CHANGING;
 CHANNEL             return CHANNEL;
+CLASS				return CLASS;
 CLEAR               return CLEAR;
 COMMAND				return COMMAND;
 COMMANDS			return COMMANDS;
@@ -52,6 +62,8 @@ CREATE              return CREATE;
 DEC                 return DEC;
 DEFAULT             return DEFAULT;
 DEFAULTS            return DEFAULTS;
+DESCENDING					return DESCENDING;
+DESC								return DESC;
 DIFFERENCE          return DIFFERENCE;
 DISABLE             return DISABLE;
 DISABLED            return DISABLED;
@@ -61,13 +73,18 @@ ENABLE              return ENABLE;
 ENABLED             return ENABLED;
 ENTER               return ENTER;
 ENTRIES             return ENTRIES;
+ERROR				return ERROR;
+ERRORS				return ERRORS;
 EXECUTE				return EXECUTE;
 EXISTS				return EXISTS;
 EXPORT              return EXPORT;
 EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;
 EXTRACT             return EXTRACT;
+FAILURE							return FAILURE;
 FIRST               return FIRST;
+FLOAT32			return FLOAT32;
+FLOAT				return FLOAT;
 FROM				return FROM;
 GLOBAL              return GLOBAL;
 GROUP               return GROUP;
@@ -76,7 +93,9 @@ IGNORES				return IGNORES;
 INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;
+INDEX								return INDEX;
 INTERFACE           return INTERFACE;
+INTEGER				return INTEGER;
 ITEM                return ITEM;
 ITEMS               return ITEMS;
 IDENTIFIER          return IDENTIFIER;
@@ -94,8 +113,11 @@ LOCK				return LOCK;
 LOG                 return LOG;
 MACHINE             return STATEMACHINE;
 MACHINES            return MACHINES;
+MAX					return MAX;
 MATCHES             return MATCHES;
 MATCHING            return MATCHING;
+MEAN				return MEAN;
+MIN					return MIN;
 MODBUS				return MODBUS;
 MODULE              return MODULE;
 MODULES             return MODULES;
@@ -108,6 +130,7 @@ ON					return ON;
 OPTION              return OPTION;
 OR                  return OR;
 PLUGIN              return PLUGIN;
+LOCAL				return LOCAL;
 PROPERTIES          return PROPERTIES;
 PROPERTY			return PROPERTY;
 PUBLISHER			return tokPUBLISHER;
@@ -117,6 +140,13 @@ READWRITE           return READWRITE;
 REPLACE             return REPLACE;
 REPORTS				return REPORTS;
 STATE_CHANGES		return STATE_CHANGES;
+SUM					return SUM;
+PRIVATE				{
+	char buf[100];
+	snprintf(buf, 100, "Error at line %d PRIVATE semantics are changing. Use LOCAL instead\n", yylineno);
+	yyerror(buf);
+	return LOCAL;
+}
 PROPERTY_CHANGES	return PROPERTY_CHANGES;
 RO                  return READONLY;
 ROUTE               return ROUTE;
@@ -126,6 +156,7 @@ RECEIVES            return RECEIVES;
 REQUIRES            return REQUIRES;
 RETURN				return RETURN;
 RESUME              return RESUME;
+SDO					return SDO;
 SELECT              return SELECT;
 SEND                return SEND;
 SENDS               return SENDS;
@@ -141,6 +172,7 @@ TAG					return TAG;
 TAKE                return TAKE;
 THROTTLE			return THROTTLE;
 THROW				return THROW;
+TIMEOUT				return TIMEOUT;
 TO                  return TO;
 TRANSITION          return TRANSITION;
 UNLOCK				return UNLOCK;
@@ -159,14 +191,46 @@ WITHIN              return WITHIN;
     return SYMBOL;
 }
 
-0           {
-    yylval.iVal = atoi(yytext);
-    return INTEGER;
+"0x"[0-9a-fA-F][0-9a-fA-F]*	{
+	long val;
+	char *p;
+	val = strtol(yytext, &p, 16);
+    yylval.iVal = val;
+    return INTEGERVAL;
 }
 
-[-]{0,1}[1-9][0-9]* {
-    yylval.iVal = atoi(yytext);
-    return INTEGER;
+0\.0 {
+	yylval.fVal = atof(yytext);
+	return FLOATVAL;
+}
+
+0\. {
+	yylval.fVal = atof(yytext);
+	return FLOATVAL;
+}
+
+[-]{0,1}[0-9][0-9]*[.][0-9]* {
+	yylval.fVal = atof(yytext);
+	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+	return FLOATVAL;
+}
+
+[-]{0,1}[0-9][0-9]*[.][0-9]*E[0-9]{1,3} {
+	yylval.fVal = atof(yytext);
+	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+	return FLOATVAL;
+}
+
+0           {
+	yylval.iVal = 0;
+	return INTEGERVAL;
+}
+
+
+[-]{0,1}[0-9][0-9]* {
+	char *rest = 0;
+	yylval.iVal = strtol(yytext, &rest, 10);
+	return INTEGERVAL;
 }
 
 "%BEGIN_PLUGIN"			BEGIN PLUGIN_CODE;
@@ -263,4 +327,3 @@ void append_char(int ch)
 	*bufp++ = ch;
 	*bufp = 0;
 }
-

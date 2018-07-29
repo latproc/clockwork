@@ -34,11 +34,15 @@
 #include <boost/thread/mutex.hpp>
 #include <list>
 #include <map>
+#include <map>
 #include <utility>
 #include <fstream>
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
 #include <tool/MasterDevice.h>
+#ifdef USE_SDO
+#include "SDOEntry.h"
+#endif //USE_SDO
 #endif
 
 #define __MAIN__
@@ -66,8 +70,8 @@
 #include "ProcessingThread.h"
 #include "EtherCATSetup.h"
 #include "Channel.h"
+#include "ethercat_xml_parser.h"
 
-const char *program_name = 0;
 bool program_done = false;
 bool machine_is_ready = false;
 
@@ -84,48 +88,6 @@ boost::condition_variable_any io_updated;
 boost::condition_variable_any model_updated;
 boost::mutex ecat_mutex;
 boost::condition_variable_any ecat_polltime;
-
-#ifdef EC_SIMULATOR
-
-// in a simulated environment, we provide a way to wire components together
-void checkInputs();
-
-typedef std::list<std::string> StringList;
-std::map<std::string, StringList> wiring;
-
-
-void checkInputs()
-{
-	std::map<std::string, StringList>::iterator iter = wiring.begin();
-	while (iter != wiring.end())
-	{
-		const std::pair<std::string, StringList> &link = *iter++;
-		Output *device = dynamic_cast<Output*>(IOComponent::lookup_device(link.first));
-		if (device)
-		{
-			StringList::const_iterator linked_devices = link.second.begin();
-			while (linked_devices != link.second.end())
-			{
-				Input *end_point = dynamic_cast<Input*>(IOComponent::lookup_device(*linked_devices++));
-				SimulatedRawInput *in = 0;
-				if (end_point)
-					in  = dynamic_cast<SimulatedRawInput*>(end_point->access_raw_device());
-				if (in)
-				{
-					if (device->isOn() && !end_point->isOn())
-					{
-						in->turnOn();
-					}
-					else if (device->isOff() && !end_point->isOff())
-						in->turnOff();
-				}
-			}
-		}
-	}
-}
-
-#else
-#endif
 
 void load_debug_config()
 {
@@ -150,42 +112,206 @@ void load_debug_config()
 	}
 }
 
-static void finish(int sig)
-{
-	struct sigaction sa;
-	sa.sa_handler = SIG_DFL;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	sigaction(SIGTERM, &sa, 0);
-	sigaction(SIGINT, &sa, 0);
-	std::cerr << "received signal..quitting\n";
-	program_done = true;
-	io_updated.notify_one();
-}
+std::list<DeviceInfo*>collected_configurations;
+std::map<unsigned int, DeviceInfo*> slave_configuration;
+class ClockworkDeviceConfigurator : public DeviceConfigurator {
+	public:
 
-bool setup_signals()
-{
-	return false; // TBD disabled catching signals
-	struct sigaction sa;
-	sa.sa_handler = finish;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	if (sigaction(SIGTERM, &sa, 0) || sigaction(SIGINT, &sa, 0))
-	{
+		bool configure( DeviceInfo *dev) {
+			std::cout << "collected configuration for device "
+				<< std::hex << " 0x" << dev->product_code << " "
+				<< std::hex << " 0x" << dev->revision_no
+				<< "\n";
+			std::list<DeviceInfo*>::iterator iter = collected_configurations.begin();
+			while (iter != collected_configurations.end()) {
+				const DeviceInfo *di = *iter++;
+				if ( *dev == *di ) {
+					std::cout << " using item already found\n";
+					return true;
+				}
+			}
+			collected_configurations.push_back(dev);
+			return true;
+		}
+};
+
+
+
+bool setupEtherCatThread() {
+	if (!ECInterface::instance()->initialised) {
+		std::cout << "Cannect setup the EtherCAT thread until the interface is initialised\n";
 		return false;
 	}
-	sa.sa_handler = SIG_IGN;
-	if (sigaction(SIGPIPE, &sa, 0)) return false;
+#ifndef EC_SIMULATOR
+	{
+		//determine which EtherCAT modules are to use configurations loaded from
+		// XML files
+		// build a list of modules with xml configs and a list of xml file references
+		//   collecting product code and revision numbers if specified
+		// where product codes and revision numbers are not specified in the config
+		//   the module in the bus position will be used
+		// search the bus to complete the product_code/release_no details if necessary
+		// search the xml files for matching modules
+		ClockworkDeviceConfigurator configurator;
+		EtherCATXMLParser parser(configurator);
+
+		std::list<ec_slave_info_t> slaves;
+		ECInterface::instance()->listSlaves(slaves);
+		std::vector<ec_slave_info_t> slave_arr;
+		std::copy(slaves.begin(), slaves.end(), std::back_inserter(slave_arr));
+		std::cout << "found " << slave_arr.size() << " slaves on the bus\n";
+
+		std::list<MachineInstance*>::iterator iter = MachineInstance::begin();
+		std::set<std::string> xml_files;
+		while (iter != MachineInstance::end())
+		{
+			const int error_buf_size = 100;
+			char error_buf[error_buf_size];
+			MachineInstance *m = *iter++;
+			if (m->_type == "MODULE") {
+				const Value &position = m->getValue("position");
+				const Value &xml_filename = m->getValue("config_file");
+				const Value &selected_sm = m->getValue("alternate_sync_manager");
+				const Value &product_code = m->getValue("ProductCode");
+				const Value &revision_no = m->getValue("RevisionNo");
+				if (xml_filename != SymbolTable::Null) {
+					std::cout << "using xml configuration file " << xml_filename << " for " << m->getName() << " at position " << position << "\n";
+					xml_files.insert(xml_filename.sValue);
+					Value pc(product_code);
+					Value rn(revision_no);
+					Value sm(selected_sm);
+					if (product_code == SymbolTable::Null ) {
+						// find product code of the device at this position
+						const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
+						pc = (long)slave.product_code;
+						std::cout << "setting product code for position " << position.iValue
+							<< " to " 
+							<< std::hex << "0x" << pc << std::dec 
+							<< " from bus slave at position " << position.iValue
+							<< "\n";
+					}
+					else {
+						std::cout << "using config file product code "
+							<< std::hex << "0x" << pc << std::dec 
+							<< " for position " << position.iValue
+							<< "\n";
+					}
+					if (revision_no == SymbolTable::Null) {
+						rn =  (long)slave_arr[ position.iValue ].revision_number;
+						// find product code of the device at this position
+						const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
+						std::cout << "setting product code for position " << position.iValue
+							<< " to " 
+							<< std::hex << "0x" << rn << std::dec << "\n";
+					}
+					if (sm == SymbolTable::Null) sm = Value("", Value::t_string);
+					
+					parser.xml_configured.clear();
+					DeviceInfo *dev = new DeviceInfo(pc.iValue, rn.iValue, sm.sValue.c_str() );
+					parser.xml_configured.push_back( dev );
+					parser.init();
+					if (!parser.loadDeviceConfigurationXML(xml_filename.sValue.c_str())) {
+						std::cerr << "Warning: failed to load module configuration from " << xml_filename<< "\n";
+					}
+					else {
+						std::cout << "checking for " << *dev<< "\n";
+						DeviceInfo *di = 0;
+						std::list<DeviceInfo*>::iterator iter = collected_configurations.begin();
+						while (iter != collected_configurations.end()) {
+							DeviceInfo *item = *iter++;
+							if ( *dev == *item ) {
+								std::cout << " using item " << *item << "\n";
+								di = item;
+								break;
+							}
+							std::cout << "no match with " << *item << "\n";
+						}
+						//if (collected_configurations.size() == 1) {
+						if (di) {
+							slave_configuration[position.iValue] = di;
+							const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
+							ECModule *module = new ECModule();
+
+							module->name = slave.name;
+							module->alias = slave.alias;
+							module->position = slave.position;
+							module->vendor_id = slave.vendor_id;
+							module->product_code = slave.product_code;
+							module->revision_no = slave.revision_number;
+							module->syncs = di->config.c_syncs;
+							module->pdos = 0;
+							module->pdo_entries = di->config.c_entries;
+							module->sync_count = di->config.num_syncs;
+							module->entry_details = di->config.c_entry_details;
+							module->num_entries = di->config.num_entries;
+							if (!ECInterface::instance()->addModule(module, true))  {
+								delete module; // module may be already registered
+								std::cerr << "failed to add module " << module->name << "\n";
+							}
+
+						}
+						else {
+							std::cout << "error: found " << collected_configurations.size() << " for slave at position " << position 
+								<< " when earching xml file for device " 
+								<< std::hex << pc.iValue << "/" << rn.iValue << std::dec << ":" << sm.sValue << "\n";
+						}
+					}
+				}
+			}
+		}
+#if 0
+		// having collected a number of xml files we load the manual configurations
+		std::set<std::string>::iterator fi(xml_files.begin());
+		while (fi != xml_files.end()) {
+			const std::string &fname = *fi++;
+			parser.init();
+			std::cout << "attempting to load devices from " << fname << "\n";
+			if (!parser.loadDeviceConfigurationXML(fname.c_str())) {
+				std::cerr << "Warning: failed to load module configuration from " << fname << "\n";
+			}
+		}
+		std::cout << "Collected " << collected_configurations.size() << " configurations\n\n";
+#endif
+		
+		char *slave_config = collectSlaveConfig(true);
+		if (slave_config) free(slave_config);
+		ECInterface::instance()->configureModules();
+		ECInterface::instance()->registerModules();
+	}
+#endif
+	generateIOComponentModules(slave_configuration);
+#ifndef EC_SIMULATOR
+#ifdef USE_SDO
+	// prepare all SDO entries
+	SDOEntry::resolveSDOModules(); 
+#endif //USE_SDO
+#endif
+	IOComponent::setupIOMap();
+	initialiseOutputs();
 	return true;
 }
 
+
 class IODHardwareActivation : public HardwareActivation {
 	public:
+    IODHardwareActivation() : setup_done(false) {}
+		bool initialiseHardware() {
+      assert(!setup_done);
+      setup_done = true;
+			if (setupEtherCatThread()) {
+#ifdef USE_SDO
+				ECInterface::instance()->beginModulePreparation();
+#endif
+				return true;
+			}
+			else return false;
+		}
 		void operator()(void) {
 			NB_MSG << "----------- Initialising machines ------------\n";
-			//ECInterface::instance()->activate();
 			initialise_machines();
 		}
+private:
+  bool setup_done;
 };
 
 int main(int argc, char const *argv[])
@@ -193,7 +319,7 @@ int main(int argc, char const *argv[])
 	char *pn = strdup(argv[0]);
 	program_name = strdup(basename(pn));
 	free(pn);
-std::string thread_name("Main");
+std::string thread_name("iod_main");
 #ifdef __APPLE__
 	pthread_setname_np(thread_name.c_str());
 #else
@@ -207,6 +333,13 @@ std::string thread_name("Main");
 	Dispatcher::instance();
 	MessageLog::setMaxMemory(10000);
 	Scheduler::instance();
+
+	std::cout << "-------- Creating Command Interface ---------\n";
+	ControlSystemMachine machine;
+	IODCommandThread *stateMonitor = IODCommandThread::instance();
+	IODHardwareActivation iod_activation;
+	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
+
 
 	Logger::instance()->setLevel(Logger::Debug);
 	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
@@ -281,7 +414,7 @@ std::string thread_name("Main");
 	if (test_only() )
 	{
 		const char *backup_file_name = "modbus_mappings.bak";
-	ControlSystemMachine machine;
+		ControlSystemMachine machine;
 		rename(modbus_map(), backup_file_name);
 		// export the modbus mappings and exit
 		std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
@@ -306,35 +439,22 @@ std::string thread_name("Main");
 	if (cycle_delay_v) delay = cycle_delay_v->iValue;
 	ECInterface::FREQUENCY=1000000 / delay;
 
-#ifndef EC_SIMULATOR
-	{
-		char *slave_config = collectSlaveConfig(true);
-		if (slave_config) free(slave_config);
+	MachineInstance *ethercat_status = MachineInstance::find("ETHERCAT");
+	if (!ethercat_status) 
+		std::cerr << "Warning: No instance of the EtherCAT control machine found\n";
+
+	if (num_errors > 0) {
+		// display errors and warnings
+		BOOST_FOREACH(std::string &error, error_messages) {
+			std::cerr << error << "\n";
+			MessageLog::instance()->add(error.c_str());
+		}
+		// abort if there were errors
+		std::cerr << "Errors detected. Aborting\n";
+		return 2;
 	}
-#endif
-	generateIOComponentModules();
-	IOComponent::setupIOMap();
-	initialiseOutputs();
-
-if (num_errors > 0) {
-	// display errors and warnings
-	BOOST_FOREACH(std::string &error, error_messages) {
-		std::cerr << error << "\n";
-	}
-	// abort if there were errors
-	std::cerr << "Errors detected. Aborting\n";
-	return 2;
-}
-
-
-#ifdef EC_SIMULATOR
-	wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
-#endif
 
 	std::cout << "-------- Initialising ---------\n";
-	ECInterface::instance()->activate();
-
-	setup_signals();
 
 	std::cout << "-------- Starting EtherCAT Interface ---------\n";
 	EtherCATThread ethercat;
@@ -342,14 +462,7 @@ if (num_errors > 0) {
 
 	std::cout << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
-
-
-	std::cout << "-------- Starting Command Interface ---------\n";
-	ControlSystemMachine machine;
-	IODCommandThread *stateMonitor = IODCommandThread::instance();
-	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(&machine, iod_activation, *stateMonitor);
-
+	Scheduler::instance()->setThreadRef(scheduler_thread);
 
 	boost::thread monitor(boost::ref(*stateMonitor));
 	usleep(50000); // give time before starting the processin g thread

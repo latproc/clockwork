@@ -64,6 +64,9 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
 
 void initialise_machine_names(char *data);
 
+char *history_file = 0; /* the full path of the command history file */
+const char *history_name = ".iosh_history";
+
 /* A static variable for holding the line. */
 static char *line_read = (char *)NULL;
 static char *last_read = (char *)NULL;
@@ -93,6 +96,8 @@ rl_gets (const char *prompt)
         }
         if (!last_read) {
             add_history (line_read);
+std::cout << "adding to history\n";
+			if (write_history(history_name) != 0) perror("writing history");
             last_read = strdup(line_read);
         }
     }
@@ -108,6 +113,10 @@ char *send_command(std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
+	if (cmd != "" && cmd != ";") {
+		cmd += ";";
+		write_history(history_file);
+	}
 	sendMessage(*psocket, msg);
 	size_t size = strlen(msg);
     free(msg);
@@ -139,7 +148,7 @@ extern FILE *yyin;
 bool cmdline_done = false;
 
 void usage(const char *name) {
-	std::cout << name << " [-h host] [-p port]\n";
+	std::cout << name << " [-q] [-h host] [-p port]\n";
 }
 
 std::list<char *>machine_names;
@@ -258,25 +267,25 @@ void initialise_machine_names(char *data) {
 
 void initialise_commands() {
 	commands.push_back("CHANNELS");
-    commands.push_back("DESCRIBE");
-    commands.push_back("DISABLE");
-    commands.push_back("ENABLE");
+	commands.push_back("DESCRIBE");
+	commands.push_back("DISABLE");
+	commands.push_back("ENABLE");
 	commands.push_back("FIND");
-    commands.push_back("GET");
-    commands.push_back("HELP");
+	commands.push_back("GET");
+	commands.push_back("HELP");
 	commands.push_back("INFO");
-    commands.push_back("LIST");
-    commands.push_back("MESSAGES");
+	commands.push_back("LIST");
+	commands.push_back("MESSAGES");
+	commands.push_back("MODBUS");
 	commands.push_back("NOTICE");
-    commands.push_back("MODBUS");
-    commands.push_back("PROPERTY");
-    commands.push_back("RESUME");
-    commands.push_back("SCHEDULER");
-    commands.push_back("SEND");
-    commands.push_back("SET");
-    commands.push_back("TRACING");
-    commands.push_back("TOGGLE");
-    commands.push_back("QUIT");
+	commands.push_back("PROPERTY");
+	commands.push_back("QUIT");
+	commands.push_back("RESUME");
+	commands.push_back("SCHEDULER");
+	commands.push_back("SEND");
+	commands.push_back("SET");
+	commands.push_back("TOGGLE");
+	commands.push_back("TRACING");
 }
 
 const char *program_name;
@@ -287,6 +296,13 @@ int main(int argc, const char * argv[])
 	program_name = strdup(basename(pn));
 	free(pn);
 
+	const char *home_dir = getenv("HOME");
+	size_t len = strlen(home_dir)+strlen(history_name)+2;
+	history_file = new char[len];
+	snprintf(history_file, len, "%s/%s",home_dir, history_name);
+	if (read_history(history_file) != 0) 
+		printf("Error reading history from %s: %s\n",history_name, strerror(errno));
+
     context = new zmq::context_t;
     
     try {
@@ -295,7 +311,7 @@ int main(int argc, const char * argv[])
 		std::string host = "127.0.0.1";
 		for (int i=1; i<argc; ++i) {
 			if (i<argc-1 && strcmp(argv[i],"-p") == 0) {
-				port = (int)strtol(argv[++i], 0, 0);
+				port = (int)strtol(argv[++i], 0, 10);
 			} 
 			else if (i<argc-1 && strcmp(argv[i],"-h") == 0) {
 				host = argv[++i];

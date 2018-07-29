@@ -27,7 +27,14 @@
 #include "MessageLog.h"
 #include "Dispatcher.h"
 
-Action *SendMessageActionTemplate::factory(MachineInstance *mi) { 
+SendMessageActionTemplate::SendMessageActionTemplate(Value msg, Value dest)
+: message(msg), target(dest), target_machine(0) {}
+
+SendMessageActionTemplate::SendMessageActionTemplate(Value msg, MachineInstance *dest)
+: message(msg), target(dest->fullName()), target_machine(dest) {}
+
+
+Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
   return new SendMessageAction(mi, *this); 
 }
 
@@ -38,13 +45,18 @@ std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
 		<< "\n";
 }
 
+SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
+: Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine) {}
+
 Action::Status SendMessageAction::run() {
 	owner->start(this);
 	if (target != 0) {
-		if (!target_machine) target_machine = owner->lookup(target);
+		target.cached_machine = 0; // clear cached value
+		target_machine = owner->lookup(target);
+		DBG_ACTIONS << *this << "\n";
 		if (!target_machine) {
 			// no target with the given name, however in the case of channels,
-			// the target may be active channels of the given type
+			// the target may be an active channel of the given type
 			Channel *chn = Channel::findByType(target.asString());
 			target_machine = chn;
 		}
@@ -80,7 +92,7 @@ Action::Status SendMessageAction::run() {
 			std::stringstream ss;
 			ss << *this << " Error: cannot find target machine " << target;
 			MessageLog::instance()->add(ss.str().c_str());
-			NB_MSG << ss.str();
+			NB_MSG << ss.str() << "\n";
 			status = Action::Failed;
 		}
 	}
@@ -98,6 +110,9 @@ Action::Status SendMessageAction::checkComplete() {
 }
 
 std::ostream &SendMessageAction::operator<<(std::ostream &out) const {
-    return out << owner->getName() << ": SendMessageAction " << message << " TO " << target << "\n";
+	if (!target_machine)
+		return out << owner->getName() << ": SendMessageAction " << message << " TO unknown target: " << target.asString() << "\n";
+	else
+		return out << owner->getName() << ": SendMessageAction " << message << " TO " << target << "\n";
 }
 		

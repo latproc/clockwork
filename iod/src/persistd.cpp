@@ -46,7 +46,6 @@
 
 namespace po = boost::program_options;
 
-const char *program_name;
 
 bool done = false;
 zmq::socket_t *cmd_socket = 0;
@@ -135,8 +134,11 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings)
                         case cJSON_String:
                             store.insert(machine.asString(), property.asString(), json_val->valuestring);
                             break;
-                        case cJSON_Number:
-                            store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._int);
+											case cJSON_Number:
+														if (json_val->valueNumber.kind == cJSON_Number_int_t)
+																	store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._int);
+														else
+                            	store.insert(machine.asString(), property.asString(), json_val->valueNumber.val._double);
                             break;
                         case cJSON_True:
                             store.insert(machine.asString(), property.asString(), true);
@@ -211,6 +213,7 @@ int main(int argc, const char * argv[]) {
     ignored_properties.insert("PERSISTENT");
     ignored_properties.insert("POLLING_DELAY");
     ignored_properties.insert("TRACEABLE");
+	ignored_properties.insert("IOTIME");
 
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -242,10 +245,13 @@ int main(int argc, const char * argv[]) {
     
     while (!done) {
         zmq::pollitem_t items[] = {
-            { subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
-            { subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+            { (void*)subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+            { (void*)subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
         };
-        if (!subscription_manager.checkConnections()) continue;
+		if (!subscription_manager.checkConnections()) {
+			usleep(100);
+			continue;
+		}
         try {
             int rc = zmq::poll( &items[0], 2, 500);
             if (need_refresh) {
@@ -301,7 +307,7 @@ int main(int argc, const char * argv[]) {
 						if (param_list) { delete param_list; param_list = 0; }
         }
         catch(std::exception e) {
-            std::cerr << "exception " <<e.what() << "processing: " << data << "\n";
+            std::cerr << "exception " <<e.what() << " processing: " << data << "\n";
         }
     }
 

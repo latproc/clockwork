@@ -33,7 +33,7 @@ struct IncludeActionTemplate : public ActionTemplate {
     // given by the 'name' parameter.  The names are to be evaluated in the
     // scope where the command is used.
     
-	IncludeActionTemplate(const std::string &name, Value val);
+	IncludeActionTemplate(const std::string &name, Value val, Value pos = -1, bool before = false, bool expand = false);
     ~IncludeActionTemplate();
     
     virtual Action *factory(MachineInstance *mi);
@@ -42,20 +42,26 @@ struct IncludeActionTemplate : public ActionTemplate {
     }
 
 	std::string list_machine_name; // name of the list to include the machine into
-    Value entry;
+	Value entry;
+	Value position;
+	bool before;
+	bool expand;
 };
 
 struct IncludeAction : public Action {
-	IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat);
-    IncludeAction();
+	IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, const Value pos, bool before, bool expand = false);
+	IncludeAction();
 	Status run();
 	Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out)const;
+	virtual std::ostream &operator<<(std::ostream &out)const;
 
 	std::string list_machine_name;
-    Value entry;
-    MachineInstance *list_machine;
-    MachineInstance *entry_machine;
+	Value entry;
+	MachineInstance *list_machine;
+	MachineInstance *entry_machine;
+	Value position;
+	bool before;
+	bool expand;
 };
 
 #endif

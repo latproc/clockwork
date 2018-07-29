@@ -5,7 +5,9 @@
 #include <algorithm>
 #include "Logger.h"
 
-unsigned int MessageLog::max_memory = 1024*1024;
+static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
+
+unsigned int MessageLog::max_memory = 2048*1024;
 MessageLog * MessageLog::instance_ = 0;
 boost::mutex MessageLog::mutex_;
 
@@ -18,6 +20,31 @@ MessageLog *MessageLog::instance() {
     return instance_;
 }
 
+std::string MessageLog::add(const std::string a, const std::string b, const std::string c, const std::string d) {
+	size_t len = 50 + a.length() + b.length() + c.length() + d.length();
+	char buf[50];
+	Logger::getTimeString(buf, 50);
+	std::string msg(buf);
+	msg += a + b + c + d;
+	boost::mutex::scoped_lock lock(mutex_);
+	size_t extra = msg.length() + 1 + sizeof(LogEntry);
+	if (current_memory + extra > max_memory) {
+		MEMCHECK();
+		std::list<LogEntry*>::iterator iter = entries.begin();
+		while (iter != entries.end()  && current_memory + extra > max_memory) {
+			LogEntry *e = *iter;
+			//std::cout << "trimming log; removing entry " << e->getText() << "\n";
+			current_memory -= e->size();
+			iter = entries.erase(iter);
+			delete e;
+			MEMCHECK();
+		}
+	}
+	entries.push_back(new LogEntry(msg.c_str()));
+	current_memory += extra;
+	return msg;
+}
+
 void MessageLog::add(const char *text) {
 	size_t len = 50 + strlen(text);
 	char buf[len];
@@ -26,13 +53,18 @@ void MessageLog::add(const char *text) {
 	boost::mutex::scoped_lock lock(mutex_);
 	strncat(buf, text,  len);
     size_t extra = strlen(buf) + 1 + sizeof(LogEntry);
-    std::list<LogEntry*>::iterator iter = entries.begin();
-    while (iter != entries.end()  && current_memory + extra > max_memory) {
-        LogEntry *e = *iter;
-        current_memory -= e->size();
-        iter = entries.erase(iter);
-        delete e;
-    }
+	if (current_memory + extra > max_memory) {
+		MEMCHECK();
+	    std::list<LogEntry*>::iterator iter = entries.begin();
+	    while (iter != entries.end()  && current_memory + extra > max_memory) {
+	        LogEntry *e = *iter;
+		//std::cout << "trimming log; removing entry " << e->getText() << "\n";
+	        current_memory -= e->size();
+	        iter = entries.erase(iter);
+	        delete e;
+			MEMCHECK();
+	    }
+	}
     entries.push_back(new LogEntry(buf));
     current_memory += extra;
 }

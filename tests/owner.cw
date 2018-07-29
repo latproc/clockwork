@@ -5,7 +5,7 @@ ResumeFix MACHINE owner {
   good DEFAULT;
   ENTER fixing { 
 	LOG "machine " + OWNER.NAME + " needs fix";
-	SET OWNER TO PROPERTY OWNER.SavedState; 
+	SET OWNER TO OWNER.SavedState; 
   }
 
   ENTER good { LOG "machine " + OWNER.NAME + " seems good" }

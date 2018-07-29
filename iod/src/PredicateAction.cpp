@@ -50,7 +50,9 @@ Value resolve(Predicate *p, MachineInstance *m) {
 			Value prop = m->getValue(v.sValue); // property lookup
 			if (prop != SymbolTable::Null) {
 				if (m && m->debug() ) {
-					DBG_PREDICATES << "Using property " << p->entry << " to resolve search (" << prop << ")\n";
+					DBG_PREDICATES << "Using property " << p->entry 
+						<< " to resolve search (" << prop << ", type: " << prop.kind << ")"
+						<< ")\n";
 				}
 				return prop;
 			}
@@ -95,11 +97,14 @@ Value eval(Predicate *p, MachineInstance *m){
 			case opMinus: res = l - r; break;
 			case opTimes: res = l * r; break;
 			case opDivide: res = l / r; break;
+			case opAbsoluteValue: if (r < 0) res = -r; else res = r; break;
 			case opMod: res = l % r; break;
             case opBitAnd: res = l & r; break;
             case opBitOr: res = l | r; break;
             case opBitXOr: res = l ^ r; break;
             case opNegate: res = ~r; break;
+			case opInteger: res = r.trunc(); break;
+			case opFloat: res = r.toFloat(); break;
 			case opAssign: res = r; break; // TBD
             case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
             case opAny:
@@ -117,7 +122,7 @@ Value eval(Predicate *p, MachineInstance *m){
 	    }
 		
 		if (m && m->debug()) {
-			if (p->op == opNOT) {
+			if (p->op == opNOT || p->op == opInteger || p->op == opFloat) {
 				DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
 			}
 			else {
@@ -166,10 +171,13 @@ Action::Status PredicateAction::run() {
 			}
 		}
 		else {
-            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to " << val << "\n";
+            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to " 
+							<< val << " (type: " << val.kind << ")\n";
 			owner->setValue(name, val);
 		}
 	}
+	else
+	  assert(false);
 	status = Complete;
 	owner->stop(this);
 	return status;

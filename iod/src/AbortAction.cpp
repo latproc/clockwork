@@ -22,26 +22,58 @@
 #include "MachineInstance.h"
 #include "Logger.h"
 #include "DebugExtra.h"
+#include "SendMessageAction.h"
+
+AbortActionTemplate::AbortActionTemplate(bool failed) : abort_fail(failed) {
+}
+
+AbortActionTemplate::AbortActionTemplate(bool failed, Value exception_message)
+: abort_fail(true),message(exception_message.sValue) {
+}
 
 Action *AbortActionTemplate::factory(MachineInstance *mi) {
 	return new AbortAction(mi, this);
 }
 
+AbortAction::AbortAction(MachineInstance *m, const AbortActionTemplate *dat) : Action(m), abort_fail(dat->abort_fail), message(dat->message) {
+}
+
 std::ostream &AbortAction::operator<<(std::ostream &out) const {
-    out << "Abort Action\n";
+	if (message.length()) out << "Throw Exception (" << message << ")" << " to " << owner->getName();
+	else if (abort_fail) out << "Abort";
+	else out << "Return";
     return out;
 }
 
 Action::Status AbortAction::run() {
 	owner->start(this);
-	status =  (abort_fail) ? Failed : Complete;
+	if (message.length() > 0) {
+		SendMessageActionTemplate smat(this->message.c_str(), owner);
+		Action *sma = smat.factory(owner);
+		(*sma)();
+		delete sma;
+	}
+	abort();
+	if (abort_fail) {
+		status = Failed;
+		error_str = strdup(message.c_str());
+	}
+	else
+		status = Complete;
 	owner->stop(this);
 	return status;
 }
 
 Action::Status AbortAction::checkComplete() {
 	if (status == Complete || status == Failed) return status;
-	status =  (abort_fail) ? Failed : Complete;
+	abort();
+	if (abort_fail) {
+		status = Failed;
+		error_str = strdup(message.c_str());
+	}
+	else
+		status = Complete;
+	owner->stop(this);
 	return status;
 }
 

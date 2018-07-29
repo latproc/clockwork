@@ -34,6 +34,7 @@ std::string MessageEncoding::valueType(const Value &v) {
             break;
         case Value::t_string: return "STRING";
         case Value::t_integer: return "INTEGER";
+		case Value::t_float: return "FLOAT";
         case Value::t_bool: return "BOOL";
 #ifdef DYNAMIC_VALUES
         case Value::t_dynamic: {
@@ -58,6 +59,9 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
         case Value::t_integer:
             cJSON_AddNumberToObject(obj, name, val.iValue);
             break;
+		case Value::t_float:
+			cJSON_AddItemToObject(obj, name, cJSON_CreateDouble(val.fValue));
+			break;
         case Value::t_bool:
             if (val.bValue)
                 cJSON_AddTrueToObject(obj, name);
@@ -89,8 +93,11 @@ void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
             cJSON_AddItemToArray(obj, cJSON_CreateString(val.sValue.c_str()));
             break;
         case Value::t_integer:
-            cJSON_AddItemToArray(obj, cJSON_CreateNumber(val.iValue));
+            cJSON_AddItemToArray(obj, cJSON_CreateLong(val.iValue));
             break;
+		case Value::t_float:
+			cJSON_AddItemToArray(obj, cJSON_CreateDouble(val.fValue));
+			break;
         case Value::t_bool:
             if (val.bValue)
                 cJSON_AddItemToArray(obj, cJSON_CreateTrue());
@@ -147,7 +154,7 @@ char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value 
 char *MessageEncoding::encodeState(const std::string &machine, const std::string &state, uint64_t authority) {
 	size_t msglen = machine.length() + state.length() + 80;
 	char *buf = (char *)malloc(msglen);
-	snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\", %ld]} ", machine.c_str(), state.c_str(), authority);
+	snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\", %lld]} ", machine.c_str(), state.c_str(), authority);
 	return buf;
 /*
     cJSON *msg = cJSON_CreateObject();
@@ -219,13 +226,12 @@ Value MessageEncoding::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
         if (obj->valueNumber.kind == cJSON_Number_int_t)
             res = obj->valueNumber.val._int;
         else
-            res = (long)floor(obj->valueNumber.val._double + 0.5);
+            res = obj->valueNumber.val._double;
     }
     else
         res = SymbolTable::Null;
     return res;
 }
-
 
 bool MessageEncoding::getCommand(const char *msg, std::string &cmd, std::vector<Value> **params)
 {

@@ -23,38 +23,56 @@
 #include "Logger.h"
 #include "DebugExtra.h"
 
+static int count_instances = 0;
+static int max_count = 0;
+static int last_max = 0;
+
 FireTriggerAction::FireTriggerAction(MachineInstance *m, Trigger *t) 
-	: Action(m), trigger(t->retain()){
-        if (m) t->setOwner(m);
-    }
+: Action(m),  pending_trigger(t->retain()) {
+	if (m) t->setOwner(m);
+	t->addHolder(this);
+	++count_instances;
+	if (count_instances>max_count) max_count = count_instances;
+}
 
 FireTriggerAction::~FireTriggerAction() {
-	//DBG_ACTIONS << "Removing " << *this << "\n";
-	trigger->release();
+	--count_instances;
+/*
+	if (last_max != max_count) {
+		DBG_MSG << "Max FireTriggers: " << max_count<<"\n"; last_max = max_count;
+	}
+*/
+	DBG_M_ACTIONS << "Removing " << *this << "\n";
+	cleanupTrigger();
 }
 
 Action::Status FireTriggerAction::run() { 
 	owner->start(this);
-	if (!trigger->enabled()) {
-		status = Complete;
-		owner->stop(this);
-		return status;
+	Action::setTrigger(pending_trigger->retain());
+	pending_trigger = pending_trigger->release();
+	if (trigger->enabled()) {
+		DBG_M_ACTIONS << owner->getName() << " triggered " << trigger->getName() << "\n";
+		trigger->fire(); 
 	}
-	DBG_SCHEDULER << owner->getName() << " triggered " << trigger->getName() << "\n";
-	trigger->fire(); 
+	else {
+		//DBG_MSG << owner->getName() << " trigger " << trigger->getName() << " fired while disabled\n";
+		//assert(trigger->fired());
+	}
 	status = Complete;
 	owner->stop(this);
 	return status;
 }
 
 Action::Status FireTriggerAction::checkComplete() {
-	status = Complete;
+	assert(status == Complete);
 	return status;
 }
 
 std::ostream& FireTriggerAction::operator<<(std::ostream &out) const {
-	out << owner->getName() << " FireTrigger Action " << ((trigger) ? trigger->getName() : "(no trigger)")  << ","
-		<< " enabled: " << ((trigger) ? trigger->enabled() : false)  << ","
+	Trigger *t = trigger;
+	if (!t) t = pending_trigger;
+	out << owner->getName() << " FireTrigger Action " << ((t) ? t->getName() : "(no trigger)")  << ","
+		<< " enabled: " << ((t) ? t->enabled() : false)  << ","
 		<< " status: " << status  << ","
         << " owner: " << owner->getName()  << ","
 		<< " owner state: " << owner->getCurrent().getName();

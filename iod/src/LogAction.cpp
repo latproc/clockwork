@@ -27,6 +27,11 @@ Action *LogActionTemplate::factory(MachineInstance *mi) {
     return new LogAction(mi, *this);
 }
 
+std::ostream &LogActionTemplate::operator<<(std::ostream &out) const {
+	return out << "LOG " << message;
+}
+
+
 Action::Status LogAction::run() {
 	owner->start(this);
     std::stringstream ss;
@@ -55,6 +60,10 @@ Action::Status LogAction::checkComplete() {
 }
 
 std::ostream &LogAction::operator<<(std::ostream &out)const {
-    return out << "LOG " << message;
+	if (!predicate) {
+		return out << "LOG " << message;
+	}
+	Value val = predicate->evaluate(owner);
+	return out << "LOG " << val;
 }
 

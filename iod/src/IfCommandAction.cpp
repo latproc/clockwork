@@ -29,12 +29,12 @@ Action *IfCommandActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &IfCommandActionTemplate::operator<<(std::ostream &out) const {
-	return out << "IF template "  << *condition.predicate << ": " << *command << "\n";
+	return out << "IF template "  << *condition.predicate << ": " << *command;
 }
 
 
 std::ostream &IfCommandAction::operator<<(std::ostream &out) const {
-	return out << "If Action " << *condition.predicate << ": " << *command << "\n";
+	return out << "If Action " << *condition.predicate << ": " << *command;
 }
 
 IfCommandAction::IfCommandAction(MachineInstance *mi, IfCommandActionTemplate *t) : Action(mi), condition(t->condition)  { 
@@ -81,11 +81,11 @@ Action *IfElseCommandActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &IfElseCommandActionTemplate::operator<<(std::ostream &out) const {
-	return out << "IF template "  << *condition.predicate << ": " << *command << "\n";
+	return out << "IF template "  << *condition.predicate << ": " << *command;
 }
 
 std::ostream &IfElseCommandAction::operator<<(std::ostream &out) const {
-	return out << "IfElse Action " << *condition.predicate << ": " << *command << "\n";
+	return out << "IfElse Action " << *condition.predicate << ": " << *command;
 }
 
 IfElseCommandAction::IfElseCommandAction(MachineInstance *mi, IfElseCommandActionTemplate *t) : Action(mi), condition(t->condition)  { 

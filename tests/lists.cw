@@ -1,6 +1,20 @@
 /* lists.cw - play with various list functions
  */
 
+
+/* check whether lists can turn members on and off */
+Flags LIST f1, f2, f3;
+f1 FLAG;
+f2 FLAG;
+f3 FLAG;
+
+TestListCommands MACHINE list {
+	COMMAND TurnOn { SEND turnOn TO list; }
+	COMMAND TurnOff { SEND turnOff TO list; }
+}
+test_list_commands TestListCommands Flags;
+
+
 BOOL MACHINE { true STATE ; false INITIAL; }
 
 /* A light controller iwth the ability to receive turnOn/turnOff commands
@@ -306,5 +320,9 @@ testcopy MACHINE list {
 	ENTER INIT { COPY 1 FROM list TO curr; }
 }
 tc testcopy aa;
+
+StringList LIST "a,b,c", "one two three", "house rabbit tree";
+
+pop_and_push_strings PopAndPushTest StringList;
 
 

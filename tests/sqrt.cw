@@ -1,5 +1,6 @@
-# Latproc isn't designed for numeric calculations, for one thing
-# it has only integer numbers.
+# Latproc isn't designed for numeric calculations but it can
+# manage some calculations, especially now that it has
+# floating point.
 
 # here is a machine that is unstable if it's length is not
 # close to the sqrt of its area. The machine trys to find
@@ -8,14 +9,14 @@
 
 SquareRoot MACHINE (area:10) {
 
-    OPTION Area 0;
-    OPTION Length 0;
-    OPTION LSquared 0;
+    OPTION Area 0.0;
+    OPTION Length 0.0;
+    OPTION LSquared 0.0;
 	OPTION step 0;
 
-    ENTER INIT { Area := area * 10000; step := Area / 2; }
+    ENTER INIT { Area := area; step := Area / 2.0; }
     
-    stable WHEN LSquared - Area < Length && LSquared - Area > -1 * Length;
+    stable WHEN LSquared - Area < 0.00001 * Length && LSquared - Area > -0.00001 * Length;
     low WHEN LSquared < Area;
     high WHEN LSquared > Area;
     

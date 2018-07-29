@@ -54,14 +54,16 @@ private:
 
 class SingleConnectionMonitor : public SocketMonitor {
 public:
-	SingleConnectionMonitor(zmq::socket_t &s, const char *snam);
+	SingleConnectionMonitor(zmq::socket_t &s);
 	virtual void on_event_accepted(const zmq_event_t &event_, const char* addr_);
 	virtual void on_event_disconnected(const zmq_event_t &event_, const char* addr_);
 	virtual void on_event_connected(const zmq_event_t &event_, const char* addr_);
 	void setEndPoint(const char *endpt);
 	std::string &endPoint() { return sock_addr; }
+	const std::string &socketName() const { return socket_name; }
 	
 private:
+	std::string socket_name;
 	std::string sock_addr;
 	SingleConnectionMonitor(const SingleConnectionMonitor&);
 	SingleConnectionMonitor &operator=(const SingleConnectionMonitor&);
@@ -181,7 +183,7 @@ public:
 	enum SubStatus { ss_pub, ss_sub, ss_init, ss_ready };
 
 	SubscriptionManager(const char *chname, ProtocolType proto = eCHANNEL,
-						const char *remote_host = "localhost", int remote_port = 5555);
+						const char *remote_host = "localhost", int remote_port = 5555, int setup_port=5555);
 	virtual ~SubscriptionManager();
 	void setSetupMonitor(SingleConnectionMonitor *monitor);
 	void createSubscriberSocket(const char *chame);
@@ -212,7 +214,6 @@ public:
 	SubStatus subscriberStatus();
 	uint64_t state_start;
 	RunStatus run_status;
-	int subscriber_port;
 	std::string current_channel;
 	std::string subscriber_host;
 	std::string channel_name;
@@ -224,6 +225,7 @@ public:
 protected:
 	zmq::socket_t subscriber_;
 	zmq::socket_t *sender_;
+	int subscriber_port;
 public:
 	SingleConnectionMonitor monit_subs;
 	SingleConnectionMonitor *monit_pubs;

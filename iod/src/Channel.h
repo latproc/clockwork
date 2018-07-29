@@ -76,6 +76,8 @@ public:
     void removeMonitorProperty(const char *, const Value &);
     void removeMonitorExports();
 
+	void processChannelIgnoresList();
+
     void modified();
     void checked();
 
@@ -115,7 +117,7 @@ private:
 
 class ChannelDefinition : public MachineClass, public ChannelImplementation {
 public:
-	enum Feature { ReportStateChanges, ReportPropertyChanges, ReportModbusUpdates };
+	enum Feature { ReportStateChanges, ReportPropertyChanges, ReportModbusUpdates, ReportLocalPropertyChanges };
 
 	void addFeature(Feature f);
 	void removeFeature(Feature f);
@@ -139,6 +141,8 @@ public:
     void addSendName(const char *);
     void addReceiveName(const char *);
     void addOptionName(const char *n, Value &v);
+
+	void processIgnoresPatternList(std::set<std::string>::const_iterator first, std::set<std::string>::const_iterator last, Channel *chn) const;
 
 	MachineClass* interfaceFor(const char *monitored_machine) const;
 
@@ -210,7 +214,9 @@ public:
 	static unsigned int lastIndex() { return last_idx; }
 	CommandSocketInfo(Channel *chn);
 	~CommandSocketInfo();
+	const std::string &commandSocketName() { return cmd_socket_name; }
 protected:
+	std::string cmd_socket_name;
 	static unsigned int last_idx;
 	static boost::mutex mutex;
 };
@@ -272,7 +278,6 @@ public:
 	bool isClient(); 	// does this channel connect to another instance of clockwork?
 	bool syncRemoteStates(std::list<char *> &);
 	void syncInterfaceProperties(MachineInstance *m, std::list<char *> &);
-	std::string getCommandSocketName(bool client_endpoint);
 	zmq::socket_t *createCommandSocket(bool client_endpoint);
 
 	void addSocket(int route_id, const char *addr);
@@ -358,7 +363,13 @@ protected:
 	SequenceNumber seqno;
 	uint64_t last_throttled_send;
 
+	// these are cached values updated by setupFilters() each time the channel changes
+	bool does_monitor;
+	bool does_share;
+	bool does_update;
+
 	friend class SyncRemoteStatesAction;
+	friend class ChannelDefinition;
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);

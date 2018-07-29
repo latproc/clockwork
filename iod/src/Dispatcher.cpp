@@ -33,8 +33,11 @@
 #include <zmq.hpp>
 #include "Channel.h"
 #include <pthread.h>
+#include "ProcessingThread.h"
+#include "SharedWorkSet.h"
 
 Dispatcher *Dispatcher::instance_ = NULL;
+//boost::mutex Dispatcher::delivery_mutex;
 
 void DispatchThread::operator()()
 {
@@ -103,11 +106,10 @@ void Dispatcher::removeReceiver(Receiver*r)
 
 void Dispatcher::deliver(Package *p)
 {
-	if (dispatch_socket == 0) {
-		owner_thread = pthread_self();
-		dispatch_socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PUSH);
-    	dispatch_socket->connect("inproc://dispatcher");
-	}
+//		owner_thread = pthread_self();
+		zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_PUSH);
+    	sock.connect("inproc://dispatcher");
+#if 0
 	if (owner_thread != pthread_self()) {
 		char tnam1[100], tnam2[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
@@ -115,26 +117,35 @@ void Dispatcher::deliver(Package *p)
 		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
 		assert(pgn_rc == 0);
 
-		NB_MSG << "dispatcher error: message send package ("<< *p <<") from a different thread:"
+		std::stringstream ss;
+		ss << "dispatcher error: message send package ("
+		<< *p <<") from a different thread:"
 		<< " owner: " << std::hex << " '" << owner_thread
 		<< " '" << tnam2
 		<< "' current: " << std::hex << " " << pthread_self()
 		<< " '" << tnam1 << "'"
-		<< std::dec << "\n";
+		<< std::dec;
+		char buf[1000];
+		snprintf(buf, 1000, "%s", ss.str().c_str());
+		MessageLog::instance()->add(buf);
+		std::cerr << buf << "\n";
 	}
-    dispatch_socket->send(&p, sizeof(Package*));
+#endif
+    sock.send(&p, sizeof(Package*));
 }
 
+/*
 void Dispatcher::deliverZ(Package *p)
 {
     DBG_DISPATCHER << "Dispatcher accepted package " << *p << "\n";
     to_deliver.push_back(p);
 }
+*/
 
 void Dispatcher::idle()
 {
     socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PULL);
-	
+
 	try {
     socket->bind("inproc://dispatcher");
 	}
@@ -151,17 +162,17 @@ void Dispatcher::idle()
     command.bind("inproc://dispatcher_cmd");
 
 	// the clockwork driver calls our start() method and that blocks until
-	// we get to this point. Note that this thread will then 
+	// we get to this point. Note that this thread will then
 	// block until it gets a sync-start from the driver.
     started = true;
 	DBG_MSG << "Dispatcher started\n";
-	
+
 	char buf[11];
 	size_t response_len = 0;
 	safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
 	buf[response_len]= 0;
 	NB_MSG << "Dispatcher got sync start: " << buf << "\n";
-	
+
     /*
     { // wait for a start command
     char cmd[10];
@@ -174,14 +185,14 @@ void Dispatcher::idle()
 
 	/* this module waits for a start from clockwork and then starts looking for input on its
 		command socket and its message socket (e_waiting). When either a command or message is detected
-		it requests time from clockwork (e_waiting_cw). Clockwork in responds and the module 
+		it requests time from clockwork (e_waiting_cw). Clockwork in responds and the module
 		reads the incoming request and processes it (e_running)
 	 */
 
     status = e_waiting;
-    zmq::pollitem_t items[] = {  
-		{ *socket, 0, ZMQ_POLLIN, 0 }, 
-		{ command, 0, ZMQ_POLLIN, 0 },
+    zmq::pollitem_t items[] = {
+		{ (void*) *socket, 0, ZMQ_POLLIN, 0 },
+		{  (void*)command, 0, ZMQ_POLLIN, 0 }
 	};
     while (status != e_aborted)
     {
@@ -219,7 +230,7 @@ void Dispatcher::idle()
                 {
                     //MachineInstance::forceStableStateCheck();
                     //MachineInstance::forceIdleCheck();
-                    
+
                     DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
                     Receiver *to = p->receiver;
                     Transmitter *from = p->transmitter;
@@ -228,7 +239,13 @@ void Dispatcher::idle()
                     {
                         MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
                         Channel *chn = dynamic_cast<Channel*>(to);
-                        if (!chn && mi && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL)
+											if (!mi->getStateMachine()) {
+												char buf[100];
+												snprintf(buf, 100, "Warning: Machine %s does not have a valid state machine", mi->getName().c_str());
+												MessageLog::instance()->add(buf);
+												NB_MSG << buf << "\n";
+											}
+                        if (!chn && mi && mi->getStateMachine() && mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL)
                         {
                             DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to " << to->getName() <<  "\n";
                             {
@@ -306,6 +323,7 @@ void Dispatcher::idle()
                             if (mi)
                             {
 								SharedWorkSet::instance()->add(mi);
+								ProcessingThread::activate(mi);
                                 Action *curr = mi->executingCommand();
                                 if (curr)
                                 {
@@ -329,7 +347,7 @@ void Dispatcher::idle()
                     }
                     delete p;
                 }
-                zmq::pollitem_t skt_poll = { *socket, 0, ZMQ_POLLIN, 0 };
+                zmq::pollitem_t skt_poll = {(void*) *socket, 0, ZMQ_POLLIN, 0 };
                 items[0] = skt_poll;
                 zmq::poll( &items[0], 1, 0); // check for more incoming messages
             }
@@ -344,4 +362,3 @@ void Dispatcher::idle()
         }
     }
 }
-

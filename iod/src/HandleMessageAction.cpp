@@ -41,9 +41,18 @@ Action::Status HandleMessageAction::run() {
 		<< package.transmitter->getName() << " to " << owner->getName() << "\n";
 
 	if (owner->io_interface && package.transmitter == owner->io_interface) {
-		owner->execute(package.message, package.transmitter);
-		status = Complete;
+		Status sent = owner->execute(package.message, package.transmitter);
+		if (sent == Failed)
+			status = Failed;
+		else {
+			status = Complete;
+		}
 		owner->stop(this);
+		if (package.needs_receipt) {
+			MachineInstance *mi = dynamic_cast<MachineInstance*>(package.transmitter);
+			owner->prepareCompletionMessage(mi, package.message->getText());
+		}
+
 		return status;
 	}
 
@@ -77,7 +86,7 @@ Action::Status HandleMessageAction::run() {
     if (owner->debug()) {
         char buf[100];
         snprintf(buf, 100, "no handler for handling %s\n", package.message->getText().c_str() );
-        DBG_M_MESSAGING << buf << "\n";
+        DBG_M_MESSAGING << buf;
         result_str = strdup(buf);
     }
 	status = Complete;
@@ -99,6 +108,8 @@ Action::Status HandleMessageAction::checkComplete() {
 }
 
 std::ostream &HandleMessageAction::operator<<(std::ostream &out)const {
-	return out << "HandleMessage with package " << *(package.message);
+	out << "HandleMessage with package " << *(package.message);
+	if (package.transmitter) out << " from " << package.transmitter->getName() << " to " << owner->getName();
+	return out;
 }
 

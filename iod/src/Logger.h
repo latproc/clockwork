@@ -55,19 +55,30 @@ public:
 		name_map[new_name] = (int)flag_names.size()-1;
 		return (int)flag_names.size()-1;
 	}
-	int lookup(const std::string &name) { if (name_map.count(name)) return name_map[name]; else return 0; }
+	int lookup(const std::string &name) {
+		NameMapIterator iter = name_map.find(name);
+		if (iter != name_map.end()) return (*iter).second; else return 0;
+	}
 	int insert(int flag_num) { state_flags.insert(flag_num); return flag_num; }
 	int insert(std::string name) { 
-		if (name_map.count(name)) { 
-			int n = name_map[name]; state_flags.insert(n); return n; 
+		NameMapIterator iter = name_map.find(name);
+		if (iter != name_map.end()) {
+			int n = (*iter).second; state_flags.insert(n); return n;
 		}
 		return -1;
 	}
 	void erase(int flag_num) { state_flags.erase(flag_num); }
-	void erase(std::string name) { if (name_map.count(name)) state_flags.insert(name_map[name]); }
-	bool includes(int flag_num) { return state_flags.count(flag_num); }
-	bool includes(std::string name) { if (name_map.count(name)) return state_flags.count(name_map[name]); else return false; }
+	void erase(std::string name) {
+		NameMapIterator iter = name_map.find(name);
+		if (iter != name_map.end()) state_flags.insert((*iter).second);
+	}
+	bool includes(int flag_num);
+	bool includes(std::string name) {
+		return name_map.find(name) != name_map.end();
+	}
 	std::ostream &operator<<(std::ostream &out) const;
+
+	typedef std::map<std::string, int>::iterator NameMapIterator;
 
 private:
 	LogState(){}

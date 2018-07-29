@@ -50,41 +50,39 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
         payload[message->payloadlen] = 0;
         std::cout << message->topic << ": " << payload << "\n";
         std::map<std::string, MachineInstance*>::iterator pos = device->handlers.find(message->topic);
-        if (pos != device->handlers.end()) {
-            MachineInstance *m = (*pos).second;
-            m->setValue("topic", message->topic);
-            //const Value &prev = m->getValue("message");
-            //Value new_value = (const char *)message->payload;
-            //bool changed = (prev != new_value);
-            char *tmp = 0;
-            if (strcmp(payload, "off"))
-                int x = 0;
-            long val = strtol(payload, &tmp, 10);
-            if (tmp && *tmp == 0)
-                m->setValue("message", val);
-            else
-                m->setValue("message", payload);
-            const char *evt = payload;
-            std::string event("");
-            event += evt;
-            if (strcmp(evt,"on") == 0 || strcmp(evt, "off") == 0)
-                event += "_enter";
-            else
-                event = "property_change";
-            if (m->_type == "POINT" && (event ==  "on_enter" || event == "off_enter")) {
-                Message msg(event.c_str());
-                m->execute(msg, device);
-            }
-            else {
-                std::set<MachineInstance*>::iterator iter = m->depends.begin();
-                while (iter != m->depends.end()) {
-                    MachineInstance *mi = *iter++;
-                    Message msg(event.c_str());
-                    mi->execute(msg, m);
-                }
+	if (pos != device->handlers.end()) {
+		MachineInstance *m = (*pos).second;
+		m->setValue("topic", message->topic);
+		char *tmp = 0;
+		long val = strtol(payload, &tmp, 10);
+		if (tmp && *tmp == 0)
+			m->setValue("message", val);
+		else
+			m->setValue("message", payload);
+		const char *evt = payload;
+		std::string event("");
+		event += evt;
+		bool is_enter = false;
+		if (strcmp(evt,"on") == 0 || strcmp(evt, "off") == 0) {
+			event += "_enter";
+			is_enter = true;
+		}
+		else
+			event = "property_change";
+		if (m->_type == "POINT" && (event ==  "on_enter" || event == "off_enter")) {
+			Message msg(event.c_str(), Message::ENTERMSG);
+			m->execute(msg, device);
+		}
+		else {
+			std::set<MachineInstance*>::iterator iter = m->depends.begin();
+			while (iter != m->depends.end()) {
+				MachineInstance *mi = *iter++;
+				Message msg(event.c_str(), (is_enter)?Message::ENTERMSG : Message::SIMPLEMSG);
+				mi->execute(msg, m);
 			}
+		}
         }
-		delete[] payload;
+	delete[] payload;
     }
 }
 

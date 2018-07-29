@@ -61,7 +61,8 @@ public:
     static int REFERENCE;
     static int TIMER;
     static int VARIABLE;
-    static int PUBLISHER;
+    static int MQTTPUBLISHER;
+	static int MQTTSUBSCRIBER;
     static int POLLING_DELAY;
     static int CYCLE_DELAY;
     static int SYSTEMSETTINGS;
@@ -70,6 +71,8 @@ public:
     static int TRACEABLE;
     static int on;
     static int off;
+	static int TRACE;
+	static int DEBUG;
 };
 
 class SymbolTable {
@@ -77,11 +80,12 @@ public:
 	SymbolTable();
 	enum ReplaceMode { ST_REPLACE, NO_REPLACE };
 	
-    bool add(const char *name, Value val, ReplaceMode replace_mode = ST_REPLACE);
-    bool add(const std::string name, Value val, ReplaceMode replace_mode = ST_REPLACE);
+    bool add(const char *name, const Value &val, ReplaceMode replace_mode = ST_REPLACE);
+    bool add(const std::string name, const Value &val, ReplaceMode replace_mode = ST_REPLACE);
     void add(const SymbolTable &orig, ReplaceMode replace_mode = ST_REPLACE); // load symbols optionally with replacement
-    const Value &lookup(Value &name);
+    const Value &lookup(const Value &name);
     const Value &lookup(const char *name);
+	const Value &find(const char *name) const;
 	Value &find(const char *name);
 	size_t count(const char *name) { return st.count(name); }
     bool exists(const char *name);

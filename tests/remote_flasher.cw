@@ -9,7 +9,9 @@ FlagInterface INTERFACE {
 #	OPTION z 100;
 
     on STATE;
-    off INITIAL;
+	off STATE;
+	stopped STATE;
+    INIT INITIAL;
     
     COMMAND turnOn;
     COMMAND turnOff;
@@ -25,6 +27,7 @@ FlagInterface INTERFACE {
 */
 
 FlasherChannel CHANNEL {
+	OPTION host "127.0.0.1";
 	OPTION port 7720;
     UPDATES flasher FlagInterface;
     UPDATES flag FlagInterface;

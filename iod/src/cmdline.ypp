@@ -22,6 +22,7 @@ extern char *yytext;
 
 %union {
 	int iVal;
+	double fVal;
 	const char *sVal;
 	const char *symbol;
     const char *pVal;
@@ -29,6 +30,7 @@ extern char *yytext;
 };
 
 %token <iVal> INTEGER
+%token <fVal> FLOAT
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
 
@@ -37,7 +39,6 @@ extern char *yytext;
 session:
 | commandline 
 | session commandline 
-|
 ;
 
 commandline: 
@@ -54,6 +55,7 @@ SYMBOL {
 
 param:
 INTEGER		{ params.push_back(yylval.iVal); }
+| FLOAT		{ params.push_back(yylval.fVal); }
 | SYMBOL	{ params.push_back(yylval.sVal); }
 | STRINGVAL	{ params.push_back(Value(yylval.sVal, Value::t_string)); }
 

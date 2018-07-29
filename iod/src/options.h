@@ -41,17 +41,19 @@ const char *debug_config();
 void set_dependency_graph(const char *name);
 const char *dependency_graph();
     
-void set_publisher_port(int port);
+void set_publisher_port(int port, bool required = false);
 int publisher_port();
-    
+bool publisher_port_fixed();
+
 void set_persistent_store_port(int port);
 int persistent_store_port();
     
 void set_modbus_port(int port);
 int modbus_port();
 
-void set_command_port(int port);
+void set_command_port(int port, bool required = false);
 int command_port();
+bool command_port_fixed();
 
 void enable_statistics(bool which);
 int keep_statistics();
@@ -64,6 +66,10 @@ bool tracing();
 
 unsigned long get_cycle_time();
 void set_cycle_time(unsigned long ct);
+
+bool export_to_c();
+void set_export_to_c(bool c_export);
+
     
 #ifdef __cplusplus
 }

@@ -165,8 +165,15 @@ struct IODCommandNotice : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandBusy : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
 
 struct IODCommandFind : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
+struct IODCommandShow : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
@@ -174,6 +181,21 @@ struct IODCommandFreeze : public IODCommand {
 	bool run(std::vector<Value> &params);
 };
 
+struct IODCommandTriggers : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
+struct IODCommandShutdown : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
+struct IODCommandSDO : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
+
+struct IODCommandToggleEtherCAT : public IODCommand {
+	bool run(std::vector<Value> &params);
+};
 
 
 #endif

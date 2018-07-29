@@ -14,7 +14,7 @@ struct CircularBuffer *createBuffer(int size)
     buf->front = -1;
     buf->back = -1;
     buf->values = (double*)malloc( sizeof(double) * size);
-    buf->times = (uint64_t*)malloc( sizeof(long) * size);
+    buf->times = (uint64_t*)malloc( sizeof(uint64_t) * size);
 	buf->total = 0;
     return buf;
 }

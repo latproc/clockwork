@@ -27,40 +27,22 @@ public:
 	ControlSystemMachine();
 
     /* states */
-    bool ready() const { return state == s_operational; }
-    bool connected()  const { return state == s_connected || state == s_operational; }
+    bool ready() const;
+    bool connected() const;
 
-#ifdef EC_SIMULATOR
     /* conditions */
-    bool c_connected() const { return true; }
-    bool c_disconnected() const { return false; }
-    bool c_online() const { return true; }
-    bool c_operational() const { return true; }
-#else
-    /* conditions */
-    bool c_connected() const { return ECInterface::domain1_state.wc_state == 2 && ECInterface::master_state.link_up; }
-    bool c_disconnected() const { return ECInterface::domain1_state.wc_state != 2 || !ECInterface::master_state.link_up; }
-    bool c_online() const { return !c_disconnected() && ECInterface::instance()->online(); }
-    bool c_operational() const { return !c_disconnected() && ECInterface::instance()->operational(); }
-#endif
+    bool c_connected() const; // ethercat link is up
+    bool c_disconnected() const; // ethercat link is down/unknown
+	bool c_active() const; // ethercat master is active
+    bool c_online() const; // all ethercat slaves are online
+    bool c_operational() const; // all ethercat slaves are operational
 
-    void idle() {
-        switch(state) {
-            case s_unknown:
-                if (c_connected()) enter_connected();
-            case s_connected:
-                if (c_online()) enter_slaves_online();
-            case s_slaves_online:
-                if (c_operational()) enter_operational();
-                break;
-            case s_operational:
-                if (c_disconnected()) enter_disconnected();
-
-                break;
-            case s_disconnected:
-                if (!c_disconnected()) enter_unknown();
-        }
-    }
+    void idle();
+	void requestActivation(bool which);
+	bool activationRequested();
+	void requestDeactivation(bool which);
+	bool deactivationRequested();
+	uint64_t lastUpdated();
 
 protected:
     enum states {s_unknown, s_disconnected, s_connected, s_slaves_online, s_operational};
@@ -69,24 +51,18 @@ protected:
     enum events { e_start, e_none };
     events last_event;
 
-    void enter_connected() {
-        state = s_connected;
-		std::cout << "Control System is connected\n "; }
-    void enter_disconnected() {
-        state = s_disconnected;
-        std::cout << "Control System is disconnected\n ";
-    }
-    void enter_slaves_online() {
-        state = s_slaves_online;
-        std::cout << "Control System slaves are online\n ";
-    }
-    void enter_operational() {
-        state = s_operational;
-        std::cout << "Control System is operational\n ";
-    }
-    void enter_unknown() {
-        state=s_unknown;
-        std::cout << "\nControl System is in an unknown state\n ";
-    }
+    void enter_connected();
+    void enter_disconnected();
+    void enter_slaves_online();
+    void enter_operational();
+    void enter_unknown();
 
+	void sync_slaves();
+
+	MachineInstance *ethercat_machine;
+
+	bool activate_requested;
+	bool deactivate_requested;
+	uint64_t ecat_last_synced; // time that ethercat status was last synced to clockwork
+	unsigned int ecat_last_state; // time that ethercat status was last synced to clockwork
 };

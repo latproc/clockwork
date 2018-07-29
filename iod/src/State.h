@@ -41,11 +41,15 @@ public:
     Value *getNameValue() { return &name; }
 	int getIntValue() { return val; }
 
+	void enter(void *data) const;
+	void setEnterFunction( void (*f)(void *) );
+
 private:
     std::string text;
     int val;
     Value name;
     int token_id;
+	void (*enter_proc)(void *);
 };
 
 std::ostream &operator<<(std::ostream &out, const State &m);

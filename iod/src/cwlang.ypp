@@ -41,6 +41,8 @@
 #include "MessageLog.h"
 #include "Channel.h"
 #include "AbortAction.h"
+#include "SDOEntry.h"
+#include "MachineInterface.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -71,6 +73,9 @@ PredicateOperator current_op;
     std::list<SymbolTable> property_stack;
     std::list<ChannelDefinition*> channel_definitions;
 
+static char *error_message_name = 0;
+static char *timeout_message_name = 0;
+
 MachineInstance *current_machine = 0;
 MachineClass *current_machineclass = 0;
 ChannelDefinition *current_channelclass = 0;
@@ -80,8 +85,8 @@ std::list<ChannelDefinition> all_channeldefs;
 ChannelDefinition::Feature current_feature;
 std::set<ChannelDefinition::Feature> *current_features = 0;
 //std::list<MachineDetails*>deferred_instantiations;
-    
-static MachineInstance *addMachine(const char *name, const char *type, 
+
+static MachineInstance *addMachine(const char *name, const char *type,
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
 	MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
 	machine->setDefinitionLocation(yyfilename, yylineno);
@@ -91,12 +96,23 @@ static MachineInstance *addMachine(const char *name, const char *type,
         machines[name] = machine;
     else {
 				MachineInstance *orig = (*found).second;
-        NB_MSG << yyfilename << ":" << std::setw(5) << yylineno << " " 
+        NB_MSG << yyfilename << ":" << std::setw(5) << yylineno << " "
 					<< "Error: machine " << name << " already defined "
 					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
     }
 
     return machine;
+}
+
+static void cleanupErrorClause(bool deallocate = false) {
+	if (timeout_message_name) {
+		if (deallocate) free(timeout_message_name);
+		timeout_message_name = 0;
+	}
+	if (error_message_name) {
+		if (deallocate) free(error_message_name);
+		error_message_name = 0;
+	}
 }
 
 struct Subcondition {
@@ -127,12 +143,17 @@ struct Subcondition {
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
-%token THROW CATCH ABORT RETURN ERROR TIMEOUT
+%token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
-%token LINKED
+%token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
+%token FLOAT32 SUM ABS MIN MAX MEAN
+%token CHANGING FAILURE ADD AFTER BEFORE
+%token ASCENDING ASC DESCENDING DESC INDEX
 
 %union {
+	bool bVal;
 	int iVal;
+	double fVal;
 	const char *sVal;
 	const char *symbol;
     const char *pVal;
@@ -143,7 +164,9 @@ struct Subcondition {
 	struct Subcondition *subcond;
 };
 
-%token <iVal> INTEGER
+%token <iVal> INTEGERVAL
+%token <iVal> ADDRESS
+%token <fVal> FLOATVAL
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
 %token <pVal> PATTERN
@@ -156,12 +179,14 @@ struct Subcondition {
 %left '+' '-' '|'
 %left '*' '/' '%' '&' '^'
 %nonassoc NOT
+%nonassoc ABS
 %nonassoc UMINUS
 %nonassoc '~'
+%nonassoc AS
 %left IFX
 %left IFELSE
 
-%type <expr> expression 
+%type <expr> expression
 %type <expr> predicate
 %type <val> value
 %type <val> basic_value
@@ -169,6 +194,7 @@ struct Subcondition {
 %type <iVal> access_type
 %type <iVal> size_type
 %type <subcond> state_subcondition
+%type <bVal> transition_semantics
 
 %%
 
@@ -190,7 +216,7 @@ program_section:
 ;
 
 global_references:
-global_reference 
+global_reference
 | global_references COMMA global_reference
 ;
 
@@ -202,17 +228,36 @@ SYMBOL {
 }
 ;
 
+local_option_settings:
+local_option_setting
+| local_option_settings COMMA local_option_setting
+;
+
 option_settings:
 option_setting
 | option_settings COMMA option_setting
 ;
 
+
 option_setting:
 SYMBOL value {
-    std::string name($1);
-    current_machineclass->options[name] = *$2;
-    DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$2 << "\n";
-    delete $2;
+	std::string name($1);
+	Value v(*$2);
+	current_machineclass->options[name] = v;
+//	NB_MSG << current_machineclass->name << " option: "
+//		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
+	delete $2;
+}
+
+local_option_setting:
+SYMBOL value {
+	std::string name($1);
+	Value v(*$2);
+	current_machineclass->options[name] = v;
+	current_machineclass->addPrivateProperty(name);
+//	NB_MSG << current_machineclass->name << " local option: "
+//		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
+	delete $2;
 }
 
 route_declaration:
@@ -222,8 +267,8 @@ ROUTE STRINGVAL TO SYMBOL ';' {
 ;
 
 machine_definition:
-definition_header '{' definition_body '}' { 
-    DBG_PARSER << "machine definition\n"; 
+definition_header '{' definition_body '}' {
+    DBG_PARSER << "machine definition\n";
     if (current_machineclass) {
         DBG_PARSER << current_machineclass->name << "\n";
         // save the current list of states to the class
@@ -246,13 +291,22 @@ definition_header '{' definition_body '}' {
 
 interface_definition:
 interface_defn_header '{' interface_defn_body '}' {
-    
+
 }
 ;
 
 interface_defn_header:
 SYMBOL INTERFACE {
     DBG_PARSER << " interface definition "  << $1 << "\n";
+	MachineClass *cls = MachineClass::find($1);
+	if (cls) {
+		std::stringstream ss;
+		ss << "## - Error: " << yyfilename << ":" << yylineno
+			<< " Interface " << $1 << " already defined";
+		error_messages.push_back(ss.str());
+		NB_MSG << ss.str() << "\n";
+		++num_errors;
+	}
     current_machineclass = new MachineInterface($1);
 }
 ;
@@ -265,18 +319,36 @@ interface_defn_section
 interface_defn_section:
 | OPTION name_list ';' {
 	BOOST_FOREACH(std::string &name, current_name_list) {
-		NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+		//NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
 		current_machineclass->addProperty(name.c_str());
+	}
+	current_name_list.clear();
+}
+| LOCAL OPTION name_list ';' {
+	BOOST_FOREACH(std::string &name, current_name_list) {
+//		NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+		current_machineclass->addPrivateProperty(name.c_str());
 	}
 	current_name_list.clear();
 }
 | OPTION SYMBOL value ';' {
 	std::string name($2);
+	Value v(*$3);
 	current_machineclass->options[name] = *$3;
-	NB_MSG << "Adding property " << name << " to interface " << current_machineclass->name << "\n";
+//	NB_MSG << "Adding property " << name
+//		<< " value: " << *$3 << " (type: " << v.kind << ")"
+//		<< " to interface " << current_machineclass->name << "\n";
 	current_machineclass->addProperty(name.c_str());
 	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$3 << "\n";
 	delete $3;
+}
+| LOCAL OPTION SYMBOL value ';' {
+	std::string name($3);
+	current_machineclass->options[name] = *$4;
+//	NB_MSG << "Adding private property " << name << " to interface " << current_machineclass->name << "\n";
+	current_machineclass->addPrivateProperty(name.c_str());
+	DBG_PARSER << current_machineclass->name << " private option: " << name << ": " << *$4 << "\n";
+	delete $4;
 }
 | COMMAND SYMBOL ';'
 | COMMANDS name_list ';' {
@@ -301,7 +373,7 @@ chn_definition_header:
 SYMBOL CHANNEL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
     current_channelclass = new ChannelDefinition($1);
-    
+
     channel_definitions.push_back( current_channelclass );
     current_name_list.clear();
     current_machine_list.clear();
@@ -415,7 +487,7 @@ chn_definition_section:
 }
 
 | OPTION chn_option_settings ';'
-| THROTTLE INTEGER ';' { current_channelclass->setThrottleTime($2 * 1000); }
+| THROTTLE INTEGERVAL ';' { current_channelclass->setThrottleTime($2 * 1000); }
 | tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
 | MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
 ;
@@ -444,7 +516,13 @@ SYMBOL {
 
 
 basic_value:
-INTEGER   {
+INTEGERVAL   {
+    $$ = new Value($1);
+}
+| FLOATVAL {
+	$$ = new Value($1);
+}
+| ADDRESS	{
     $$ = new Value($1);
 }
 | STRINGVAL {
@@ -470,14 +548,14 @@ SYMBOL value {
 
 
 definition_header:
-SYMBOL STATEMACHINE parameters { 
+SYMBOL STATEMACHINE parameters {
     DBG_PARSER << " machine class "  << $1 << "\n";
     current_machineclass = new MachineClass($1);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();
 }
-| SYMBOL STATEMACHINE property_block parameters  { 
-    DBG_PARSER << " machine class (with properties)  "  << $1 << "\n"; 
+| SYMBOL STATEMACHINE property_block parameters  {
+    DBG_PARSER << " machine class (with properties)  "  << $1 << "\n";
     current_machineclass = new MachineClass($1);
     properties = property_stack.back();
     property_stack.pop_back();
@@ -496,7 +574,8 @@ definition_section
 definition_section:
 GLOBAL global_references ';'
 | OPTION option_settings ';'
-| export_clause 
+| LOCAL OPTION local_option_settings ';'
+| export_clause
 | local_machine_instantiation
 | command
 | stable_state
@@ -512,16 +591,20 @@ EXPORT access_type size_type name_list ';' {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "exporting " << name << "\n";
         int len = 1;
-        if ( $3 == WORD) len = 1;
-        else if ($3 == DOUBLEWORD) len = 2;
-        else if ($3 == STRINGTYPE) len = (int)current_value.iValue;
-        else {
-            std::cerr<< "Unexpected export size token: " << $3 << "\n";
-        }
-        if ($2 == READONLY)
-            current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::input_register, len) );
+		ModbusExport::Type exType(ModbusExport::none);
+		if ( $3 == WORD) { len = 1; exType = ModbusExport::reg; }
+		else if ($3 == DOUBLEWORD) { len = 2; exType = ModbusExport::reg32; }
+		else if ($3 == FLOAT32) { len = 2; exType = ModbusExport::float32; }
+		else if ($3 == STRINGTYPE) { len = (int)current_value.iValue; exType = ModbusExport::str; }
+		else {
+			std::cerr<< "Unexpected export size token: " << $3 << "\n";
+		}
+		if ($3 == FLOAT32)
+			current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::holding_register, ModbusExport::float32, 2) );
+		else if ($2 == READONLY)
+            current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::input_register, exType, len) );
         else if ($2 == READWRITE)
-            current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::holding_register, len) );
+            current_machineclass->exports.push_back( ModbusAddressTemplate(name, ModbusAddress::holding_register, exType, len) );
         else {
             std::cerr<< "Unexpected access type token: " << $2 << "\n";
         }
@@ -534,6 +617,20 @@ EXPORT access_type size_type name_list ';' {
         current_machineclass->state_exports.push_back(name);
     }
     current_name_list.clear();
+}
+| EXPORT STATES name_list READWRITE ';' {
+	DBG_PARSER << " export " << current_name_list.size() << " states\n";
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		current_machineclass->state_exports_rw.push_back(name);
+	}
+	current_name_list.clear();
+}
+| EXPORT STATES name_list READONLY ';' {
+	DBG_PARSER << " export " << current_name_list.size() << " states\n";
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		current_machineclass->state_exports.push_back(name);
+	}
+	current_name_list.clear();
 }
 | EXPORT COMMANDS name_list ';' {
     DBG_PARSER << " export " << current_name_list.size() << " commands\n";
@@ -552,7 +649,8 @@ READONLY { $$ = READONLY; }
 size_type:
 WORD { $$ = WORD; }
 | DOUBLEWORD { $$ = DOUBLEWORD; }
-| STRINGTYPE INTEGER { $$ = STRINGTYPE; current_value = $2; }
+| STRINGTYPE INTEGERVAL { $$ = STRINGTYPE; current_value = $2; }
+| FLOAT32 { $$ = FLOAT32; }
 ;
 
 machine_instantiation:
@@ -564,7 +662,7 @@ instantiation ';'
         machines[current_machine->getName()] = current_machine;
     else {
 				MachineInstance *orig = (*found).second;
-        NB_MSG << yyfilename << ":" << yylineno 
+        NB_MSG << yyfilename << ":" << yylineno
 					<< " " << "Error: machine " << current_machine->getName() << " already defined "
 					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
     }
@@ -581,7 +679,7 @@ local_instantiation ';'
     BOOST_FOREACH(Parameter &p, current_locals) {
         if (p.val.kind == Value::t_symbol && p.val.sValue == current_machine->getName()) {
             std::stringstream ss;
-            ss << "## - Error: " << yyfilename << ":" << yylineno 
+            ss << "## - Error: " << yyfilename << ":" << yylineno
                 << " local machine " << current_machine->getName() << " already defined";
             error_messages.push_back(ss.str());
             NB_MSG << ss.str() << "\n";
@@ -591,7 +689,7 @@ local_instantiation ';'
         }
     }
     if (!found) {
-        DBG_PARSER << "pushing local machine " << current_machine->getName() << " num_properties:" 
+        DBG_PARSER << "pushing local machine " << current_machine->getName() << " num_properties:"
             << current_machine->properties.size() << " num params: " << current_machine->parameters.size() << "\n";
 	    char *name = strdup(current_machine->getName().c_str());
         Parameter p(name);
@@ -607,27 +705,29 @@ state_definition ';'
 ;
 
 transitory_state:
-SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
+SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
-    current_machineclass->states.push_back($1);
+    current_machineclass->addState($1);
     current_machineclass->state_names.insert($1);
-    
+
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
-    current_machineclass->commands[$3] = mc;
+	current_machineclass->commands.insert(std::make_pair($3, mc));
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
+	cleanupErrorClause(true);
 }
-| SYMBOL /*state name */ DURING SYMBOL /* command */ property_block action  {
+| SYMBOL /*state name */ DURING SYMBOL /* command */ property_block error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
-    current_machineclass->states.push_back($1);
+    current_machineclass->addState($1);
     current_machineclass->state_names.insert($1);
-    
+
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     properties = property_stack.back();
     property_stack.pop_back();
     if (properties.exists("TIMEOUT")) {
+		error_messages.push_back("Deprecated feature setting a timeout on a command using a TIMEOUT property");
         const Value &t = properties.lookup("TIMEOUT");
         long timeout;
         if (t.asInteger(timeout)) {
@@ -637,15 +737,16 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ action  {
     properties.clear();
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
-    current_machineclass->commands[$3] = mc;
+    current_machineclass->commands.insert(std::make_pair($3, mc));
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
+	cleanupErrorClause(true);
 }
 ;
 
 state_definition:
 SYMBOL STATE {
-    current_machineclass->states.push_back($1); // add to states to permit changes to this state
+    current_machineclass->addState($1); // add to states to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
 | SYMBOL DEFAULT {
@@ -654,13 +755,13 @@ SYMBOL STATE {
     ss.condition.predicate = new Predicate("DEFAULT");
     ss.state_name = $1;
     current_machineclass->stable_states.push_back(ss);
-    current_machineclass->states.push_back($1);// add to states to permit changes to this state
+    current_machineclass->addState($1);// add to states to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
 | SYMBOL INITSTATE {
     DBG_PARSER << " default state " << $1 << "\n" ;
     current_machineclass->initial_state = $1;
-    current_machineclass->states.push_back($1);// add to states list to permit changes to this state
+    current_machineclass->addState($1);// add to states list to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
 ;
@@ -672,7 +773,7 @@ SYMBOL WHEN predicate {
     ss.condition.predicate = $3;
     ss.state_name = $1;
     current_machineclass->stable_states.push_back(ss);
-    current_machineclass->states.push_back($1);// add to states to permit changes to this state
+    current_machineclass->addState($1);// add to states to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
 | stable_state_definition COMMA state_subcondition {
@@ -763,6 +864,8 @@ value {
 | expression '&' expression { $$ = new Predicate($1, opBitAnd, $3);}
 | expression '|' expression { $$ = new Predicate($1, opBitOr, $3);}
 | expression '^' expression { $$ = new Predicate($1, opBitXOr, $3);}
+| expression AS INTEGER { $$ = new Predicate(0, opInteger, $1); }
+| expression AS FLOAT { $$ = new Predicate(0, opFloat, $1); }
 | '!' expression { $$ = new Predicate(0, opNegate, $2);}
 | '-' expression { $$ = new Predicate(new Predicate(-1), opTimes, $2);}
 | expression MATCHES PATTERN {
@@ -771,20 +874,24 @@ value {
 ;
 
 value:
-INTEGER   { 
-    $$ = new Value($1); 
+INTEGERVAL   {
+    $$ = new Value($1);
+}
+| FLOATVAL {
+	$$ = new Value($1);
+//	NB_MSG << " created float value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 | STRINGVAL {
-    $$ = new Value($1, Value::t_string); 
+    $$ = new Value($1, Value::t_string);
+//	NB_MSG << " created string value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 | SYMBOL {
-    $$ = new Value($1); 
+    $$ = new Value($1);
+//	NB_MSG << " created symbol value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
-/* redundant
-| SYMBOL INCLUDES SYMBOL {
-    $$ =  new Value(new IncludesValue($3, $1));
+| ABS SYMBOL {
+	$$ = new Value(new AbsoluteValue($2));
 }
-*/
 | SYMBOL INCLUDES value {
     Value *v = $3;
     $$ =  new Value(new IncludesValue(*v, $1));
@@ -796,11 +903,38 @@ INTEGER   {
 | ALL SYMBOL ARE SYMBOL {
     $$ = new Value(new AllInValue($4, $2));
 }
+| ANY SYMBOL ENABLED {
+	$$ = new Value(new AnyEnabledDisabledValue(true, $2));
+}
+| ANY SYMBOL DISABLED {
+	$$ = new Value(new AnyEnabledDisabledValue(false, $2));
+}
+| ALL SYMBOL ENABLED {
+	$$ = new Value(new AllEnabledDisabledValue(true, $2));
+}
+| ALL SYMBOL DISABLED {
+	$$ = new Value(new AllEnabledDisabledValue(false, $2));
+}
 | SIZE OF SYMBOL {
     $$ = new Value(new SizeValue($3));
 }
 | COUNT SYMBOL FROM SYMBOL {
     $$ = new Value(new CountValue($2,$4));
+}
+| INDEX OF ITEM IN SYMBOL WHERE predicate {
+	$$ = new Value(new FindValue($5, $7));
+}
+| SUM SYMBOL FROM SYMBOL {
+	$$ = new Value(new SumValue($2,$4));
+}
+| MIN SYMBOL FROM SYMBOL {
+	$$ = new Value(new MinValue($2,$4));
+}
+| MAX SYMBOL FROM SYMBOL {
+	$$ = new Value(new MaxValue($2,$4));
+}
+| MEAN SYMBOL FROM SYMBOL {
+	$$ = new Value(new MeanValue($2,$4));
 }
 | BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($8,$5));
@@ -820,6 +954,12 @@ INTEGER   {
 | SYMBOL EXISTS {
 	$$ = new Value(new ExistsValue($1));
 }
+| CLASS OF SYMBOL {
+	$$ = new Value(new ClassNameValue($3));
+}
+| SYMBOL CHANGING STATE {
+	$$ = new Value(new ChangingStateValue($1));
+}
 | COMMON BETWEEN SYMBOL AND SYMBOL {
     $$ = new Value(SymbolTable::Null);
 }
@@ -828,9 +968,6 @@ INTEGER   {
 }
 | COMBINATION OF SYMBOL AND SYMBOL {
     $$ = new Value(SymbolTable::Null);
-}
-| SYMBOL BECOMES value {
-    $$ = new Value(new AssignmentValue($1, $3));
 }
 | TAKE LAST FROM SYMBOL {
     $$ = new Value(new PopListBackValue($4));
@@ -870,14 +1007,13 @@ COMMAND SYMBOL /* command name */ action {
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     if (current_machineclass->receives.count(Message($2)) == 0) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
     	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << *at << " ";
+    	    DBG_PARSER << "\t"<< *at << "\n";
     	}
-    	DBG_PARSER << "\n";
-        
-	    current_machineclass->receives[Message($2)] = mc;
-	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+
+	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
 	}
     else {
         std::stringstream ss;
@@ -892,15 +1028,16 @@ COMMAND SYMBOL /* command name */ action {
 	// commands are essentially messages
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
     mc->setActionTemplates(*current_actions);
-    if (current_machineclass->receives.count(Message($2)) == 0) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+	MachineCommandTemplate *handler = current_machineclass->findMatchingCommand($2, $4);
+	//unsigned int existing_commands = current_machineclass->receives.count(Message($2));
+    if (!handler) {
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
     	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << *at << " ";
+    	    DBG_PARSER << "\t" << *at << "\n";
     	}
-    	DBG_PARSER << "\n";
-        
-	    current_machineclass->receives[Message($2)] = mc;
-	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+
+		current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+		current_machineclass->commands.insert(std::make_pair($2,mc)); // by making a command form, the command will be exported
 	}
     else {
         std::stringstream ss;
@@ -916,14 +1053,13 @@ COMMAND SYMBOL /* command name */ action {
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     if (current_machineclass->receives.count(Message($2)) == 0) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions: ";
+    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
     	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << *at << " ";
+    	    DBG_PARSER << *at << "\n";
     	}
-    	DBG_PARSER << "\n";
-        
-	    current_machineclass->receives[Message($2)] = mc;
-	    current_machineclass->commands[$2] = mc; // by making a command form, the command will be exported
+
+	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
+	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
 	}
     else {
         std::stringstream ss;
@@ -951,7 +1087,7 @@ ENTER SYMBOL /* state name */ action
     }
     DBG_PARSER << "\n";
 
-    current_machineclass->receives[Message(strdup(msg_name.c_str()))] = mc;
+    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
 }
 ;
 
@@ -964,14 +1100,14 @@ LEAVE SYMBOL action
     current_actions->clear();
     std::string msg_name ($2);
     msg_name += "_leave";
-    
+
     DBG_PARSER << "generating leave function " << msg_name << " for " << mc->action_templates.size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
         DBG_PARSER <<"    " << *at << "\n";
     }
     DBG_PARSER << "\n";
-    
-    current_machineclass->receives[Message(strdup(msg_name.c_str()))] = mc;
+
+    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
 #else
     /* raise an error if cw is run on configs with LEAVE functions but the feature is not enabled */
     std::stringstream ss;
@@ -993,7 +1129,7 @@ CATCH SYMBOL action {
 		MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
 		mc->setActionTemplates(*current_actions);
 		current_actions->clear();
-		current_machineclass->receives[Message(strdup($2))] = mc;
+		current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
 	}
 	else {
 		std::stringstream ss;
@@ -1004,7 +1140,7 @@ CATCH SYMBOL action {
 	}
 }
 |
-RECEIVE SYMBOL /* message */ action  {
+RECEIVE SYMBOL /* message */ error_clause action  {
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
         DBG_PARSER << *at << ", ";
@@ -1014,7 +1150,7 @@ RECEIVE SYMBOL /* message */ action  {
         MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
-        current_machineclass->receives[Message(strdup($2))] = mc;
+        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
     }
     else {
         std::stringstream ss;
@@ -1023,9 +1159,10 @@ RECEIVE SYMBOL /* message */ action  {
         error_messages.push_back(ss.str());
         ++num_errors;
     }
+	cleanupErrorClause(true);
 }
 |
-RECEIVE SYMBOL /* message */ WITHIN SYMBOL action  {
+RECEIVE SYMBOL /* message */ WITHIN SYMBOL error_clause action  {
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
         DBG_PARSER << *at << ", ";
@@ -1035,7 +1172,7 @@ RECEIVE SYMBOL /* message */ WITHIN SYMBOL action  {
         MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
-        current_machineclass->receives[Message(strdup($2))] = mc;
+        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
     }
     else {
         std::stringstream ss;
@@ -1044,9 +1181,10 @@ RECEIVE SYMBOL /* message */ WITHIN SYMBOL action  {
         error_messages.push_back(ss.str());
         ++num_errors;
     }
+	cleanupErrorClause(true);
 }
 |
-RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ action  {
+RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ error_clause action  {
     std::stringstream ss;
     ss << $4 << "." << $2 << std::flush;
     CStringHolder msg_name = strdup(ss.str().c_str());
@@ -1059,27 +1197,28 @@ RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ action  {
         MachineCommandTemplate *mc = new MachineCommandTemplate(msg_name.get(), "");
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
-        current_machineclass->receives[Message(strdup(msg_name.get()))] = mc;
+        current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.get())), mc));
     }
     else {
         std::stringstream ss;
-        ss << "Error: " << yyfilename << ":" << yylineno 
+        ss << "Error: " << yyfilename << ":" << yylineno
             << ": Already have a RECEIVES handler for " << msg_name.get();
         DBG_PARSER << ss.str() << "\n";
         error_messages.push_back(ss.str());
         ++num_errors;
     }
+	cleanupErrorClause(true);
 }
 ;
 
 action_list:
-action  { 
+action  {
 	current_actions_stack.push_back(current_actions);
 	current_actions = new std::list<ActionTemplate*>;
-	DBG_PARSER << "** created new action stack\n"; 
+	DBG_PARSER << "** created new action stack\n";
     if (current_action) {
-		current_actions->push_back(current_action); 
-		current_action = 0; 
+		current_actions->push_back(current_action);
+		current_action = 0;
 	}
 }
 | action_list ';' action
@@ -1090,11 +1229,12 @@ action  {
 ;
 
 action:
-SET SYMBOL TO value  {
+SET SYMBOL TO value error_clause  {
     DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
     current_action = new SetStateActionTemplate($2, *$4);
     delete $4;
+	free(error_message_name); error_message_name = 0;
 }
 | ABORT {
 	DBG_PARSER << " abort action\n";
@@ -1107,65 +1247,71 @@ SET SYMBOL TO value  {
 	current_action = new AbortActionTemplate(false); // do not regard this as an action failure
 }
 | WAIT value /* wait for timer */ {
-    DBG_PARSER << " wait action: wait " << *$2 << "\n"; 
+    DBG_PARSER << " wait action: wait " << *$2 << "\n";
     if (current_action) current_actions->push_back(current_action);
     current_action = new WaitActionTemplate(*$2);
-    delete $2; 
+    delete $2;
 }
 | LOCK SYMBOL /* obtain a lock on a machine */ {
-    DBG_PARSER << " lock : " << $2 << "\n"; 
+    DBG_PARSER << " lock : " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new LockActionTemplate($2); 
+    current_action = new LockActionTemplate($2);
 }
 | UNLOCK SYMBOL /* release the lock on a machine */ {
-    DBG_PARSER << " unlock : " << $2 << "\n"; 
+    DBG_PARSER << " unlock : " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new UnlockActionTemplate($2); 
+    current_action = new UnlockActionTemplate($2);
 }
-| ENABLE SYMBOL /* enable a machine */ { 
-    DBG_PARSER << " enable action: " << $2 << "\n"; 
+| ENABLE SYMBOL /* enable a machine */ {
+    DBG_PARSER << " enable action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new EnableActionTemplate($2); 
+    current_action = new EnableActionTemplate($2);
+}
+| ENABLE name_list /* enable a list of machines */ {
+    DBG_PARSER << " enable action: <list>\n";
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new EnableActionTemplate(current_name_list);
+	current_name_list.clear();
 }
 | ENABLE SYMBOL WHERE SYMBOL EQ value /* enable a machine */ {
-    DBG_PARSER << " enable action: " << $2 << "\n"; 
+    DBG_PARSER << " enable action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new EnableActionTemplate($2, $4, $6); 
+    current_action = new EnableActionTemplate($2, $4, $6);
 }
-| RESUME SYMBOL /* resume a machine */ { 
-    DBG_PARSER << " resume action: " << $2 << "\n"; 
+| RESUME SYMBOL /* resume a machine */ {
+    DBG_PARSER << " resume action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ResumeActionTemplate($2, ""); 
+    current_action = new ResumeActionTemplate($2, "");
 }
 | RESUME SYMBOL WHERE SYMBOL EQ value /* resume a machine */ {
-    DBG_PARSER << " resume action: " << $2 << "\n"; 
+    DBG_PARSER << " resume action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ResumeActionTemplate($2, "", $4, $6); 
+    current_action = new ResumeActionTemplate($2, "", $4, $6);
 }
-| RESUME SYMBOL AT SYMBOL /* resume a machine from a given state */ { 
-    DBG_PARSER << " resume action: " << $2 << "\n"; 
+| RESUME SYMBOL AT SYMBOL /* resume a machine from a given state */ {
+    DBG_PARSER << " resume action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ResumeActionTemplate($2, $4); 
+    current_action = new ResumeActionTemplate($2, $4);
 }
-| DISABLE SYMBOL /* enable a machine */ { 
-    DBG_PARSER << " disable action: " << $2 << "\n"; 
+| DISABLE SYMBOL /* enable a machine */ {
+    DBG_PARSER << " disable action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new DisableActionTemplate($2); 
+    current_action = new DisableActionTemplate($2);
 }
-| DISABLE SYMBOL WHERE SYMBOL EQ value  /* enable a machine */ { 
-    DBG_PARSER << " disable action: " << $2 << "\n"; 
+| DISABLE SYMBOL WHERE SYMBOL EQ value  /* enable a machine */ {
+    DBG_PARSER << " disable action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
     current_action = new DisableActionTemplate($2, $4, $6);
 }
 | SHUTDOWN /* cause the interpreter to exit */ {
-    DBG_PARSER << " shutdown action " << "\n"; 
+    DBG_PARSER << " shutdown action " << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ShutdownActionTemplate(); 
+    current_action = new ShutdownActionTemplate();
 }
-| WAITFOR SYMBOL EQ SYMBOL /* wait for object to be in a state */ { 
-    DBG_PARSER << " wait for action: wait for " << $2 << " to be " << $4 << "\n"; 
+| WAITFOR SYMBOL EQ SYMBOL /* wait for object to be in a state */ {
+    DBG_PARSER << " wait for action: wait for " << $2 << " to be " << $4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new WaitForActionTemplate($2, $4); 
+    current_action = new WaitForActionTemplate($2, $4);
 }
 | INC SYMBOL /* increment a property */ {
     if (current_action) current_actions->push_back(current_action);
@@ -1185,21 +1331,24 @@ SET SYMBOL TO value  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
 }
-| SET SYMBOL TO PROPERTY SYMBOL /* set the value of a property */ {
+| SET SYMBOL TO PROPERTY SYMBOL error_clause /* set the state based on the value of a property */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5);
+	cleanupErrorClause(true);
 }
-| CALL SYMBOL ON SYMBOL /* execute a command on a machine and wait for it to complete */ {
-    if (current_action) current_actions->push_back(current_action);
-    current_action = new CallMethodActionTemplate($2, $4);    
-}
-| CALL SYMBOL /* execute a command within the current machine and wait for it to complete */ {
+| CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new CallMethodActionTemplate($2, "SELF");
+	current_action = new CallMethodActionTemplate($2, $4, timeout_message_name, error_message_name);
+	cleanupErrorClause();
+}
+| CALL SYMBOL error_clause /* execute a command within the current machine and wait for it to complete */ {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new CallMethodActionTemplate($2, "SELF", timeout_message_name, error_message_name);
+	cleanupErrorClause();
 }
 | SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SendMessageActionTemplate($2, $4);    
+    current_action = new SendMessageActionTemplate($2, $4);
 }
 | SEND STRINGVAL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
@@ -1208,41 +1357,78 @@ SET SYMBOL TO value  {
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SendMessageActionTemplate($2, 0);
+	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
+	current_action = new AbortActionTemplate(true, $2);
 }
 | THROW STRINGVAL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SendMessageActionTemplate($2, 0);
+	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
+	current_action = new AbortActionTemplate(true, $2);
 }
 | SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new CopyPatternActionTemplate($1, $4, $6);    
+    current_action = new CopyPatternActionTemplate($1, $4, $6);
 }
 | SYMBOL BECOMES COPY ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new CopyAllPatternActionTemplate($1, $5, $7);    
+    current_action = new CopyAllPatternActionTemplate($1, $5, $7);
 }
 | SYMBOL BECOMES EXTRACT PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ExtractPatternActionTemplate($1, $4, $6);    
+    current_action = new ExtractPatternActionTemplate($1, $4, $6);
 }
 | SYMBOL BECOMES EXTRACT ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ExtractAllPatternActionTemplate($1, $5, $7);    
+    current_action = new ExtractAllPatternActionTemplate($1, $5, $7);
 }
 | CREATE SYMBOL WITH COUNT SYMBOL IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("COUNT"));
 }
-| CREATE SYMBOL WITH COPY INTEGER FROM SYMBOL {
+| CREATE SYMBOL WITH COPY INTEGERVAL FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("COPY"));
 }
-| CREATE SYMBOL WITH TAKE INTEGER FROM SYMBOL {
+| CREATE SYMBOL WITH TAKE INTEGERVAL FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("TAKE"));
 }
+
+| ADD SYMBOL AFTER LAST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($6, $2, -1, false);
+}
+| ADD SYMBOL BEFORE FIRST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($6, $2, 0, true);
+}
+| ADD SYMBOL AFTER ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($7, $2, *$5, false);
+}
+| ADD SYMBOL BEFORE ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($7, $2, *$5, true);
+}
+
+| ADD ITEMS FROM SYMBOL AFTER LAST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($8, $4, -1, false, true);
+}
+| ADD ITEMS FROM SYMBOL BEFORE FIRST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($8, $4, 0, true, true);
+}
+| ADD ITEMS FROM SYMBOL AFTER ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($9, $4, *$7, false, true);
+}
+| ADD ITEMS FROM SYMBOL BEFORE ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($9, $4, *$7, true, true);
+}
+
 | INCLUDE SYMBOL IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new IncludeActionTemplate($4, $2);
@@ -1277,15 +1463,21 @@ SET SYMBOL TO value  {
 }
 | REPLACE PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ReplacePatternActionTemplate($2, $4, $6);    
+    current_action = new ReplacePatternActionTemplate($2, $4, $6);
 }
 | REPLACE ALL PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ReplaceAllPatternActionTemplate($3, $5, $7);    
+    current_action = new ReplaceAllPatternActionTemplate($3, $5, $7);
 }
 | COPY PROPERTIES FROM SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new CopyPropertiesActionTemplate($4, $6);
+}
+| COPY PROPERTIES name_list FROM SYMBOL TO SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	CopyPropertiesActionTemplate *cpat = new CopyPropertiesActionTemplate($5, $7, current_name_list);
+	current_name_list.clear();
+	current_action = cpat;
 }
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
@@ -1375,6 +1567,11 @@ SET SYMBOL TO value  {
     current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
     delete $2;
 }
+| MOVE ITEMS value TO value OF SYMBOL TO SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SetOperationActionTemplate(-1, $7, SymbolTable::Null, $9, "", soSelect, 0, true, *$3, *$5);
+	delete $3; delete $5;
+}
 | SORT SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SortListActionTemplate($2, "VALUE");
@@ -1382,6 +1579,38 @@ SET SYMBOL TO value  {
 | SORT SYMBOL BY PROPERTY SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SortListActionTemplate($2, $5);
+}
+| SORT SYMBOL ASC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", true);
+}
+| SORT SYMBOL ASCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", true);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL ASC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, true);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL ASCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, true);
+}
+| SORT SYMBOL DESC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", false);
+}
+| SORT SYMBOL DESCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", false);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL DESC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, false);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL DESCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, false);
 }
 /*
 | TAKE LAST FROM SYMBOL {
@@ -1392,7 +1621,7 @@ SET SYMBOL TO value  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PopFrontActionTemplate($4);
 }
-| TAKE ITEM INTEGER FROM SYMBOL {
+| TAKE ITEM INTEGERVAL FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new GetListItemActionTemplate($5, $3);
 }
@@ -1406,10 +1635,10 @@ SET SYMBOL TO value  {
 | IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
    DBG_PARSER << " IF action: " << *$3 << "\n";
     if (current_action) {
-		current_actions->push_back(current_action); 
-		current_action = 0; 
+		current_actions->push_back(current_action);
+		current_action = 0;
 	}
-    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "");
+    MachineCommandTemplate *mc = new MachineCommandTemplate("if_true_command", "");
 	mc->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
@@ -1421,16 +1650,16 @@ SET SYMBOL TO value  {
 | IF_ '(' predicate ')' '{' action_list '}' ELSE '{' action_list '}' %prec IFELSE {
     DBG_PARSER << " IFELSE action: " << *$3 << "\n";
     if (current_action) {
-		current_actions->push_back(current_action); 
-		current_action = 0; 
+		current_actions->push_back(current_action);
+		current_action = 0;
 	}
-    MachineCommandTemplate *mc = new MachineCommandTemplate("unnamed_command", "");
+    MachineCommandTemplate *mc = new MachineCommandTemplate("if_true_command", "");
 	mc->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
 	current_actions = current_actions_stack.back();
 	current_actions_stack.pop_back();
-    MachineCommandTemplate *mc2 = new MachineCommandTemplate("unnamed_command", "");
+    MachineCommandTemplate *mc2 = new MachineCommandTemplate("if_false_command", "");
 	mc2->setActionTemplates(*current_actions);
 	current_actions->clear();
 	delete current_actions;
@@ -1440,23 +1669,70 @@ SET SYMBOL TO value  {
     current_action = new IfElseCommandActionTemplate($3, mc2, mc) ;
 }
 | '{' action_list '}' {
-    if (current_action) current_actions->push_back(current_action); current_action = 0; 
+    if (current_action) current_actions->push_back(current_action); current_action = 0;
 }
 |
 ;
 
+/* TBD fix this to only allow one generic error and one timeout clause.
+ 	Also add the ON ERROR error-name handler form.
+ */
+error_clause:
+IGNORE ERRORS {
+	if (error_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON ERROR clauses at line " << yylineno << "\n";
+		// TBD multiple error clauses will be implemented later
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	else {
+		error_message_name = strdup("IGNORE");
+	}
+}
+| ON ERROR SYMBOL error_clause {
+	if (error_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON ERROR clauses at line " << yylineno << "\n";
+		// TBD multiple error clauses will be implemented later
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	else {
+		size_t len = strlen($3);
+		error_message_name = (char *)malloc(strlen($3)+1);
+		strncpy(error_message_name, $3, len+1);
+	}
+}
+| ON TIMEOUT SYMBOL error_clause {
+	if (timeout_message_name) {
+		std::stringstream ss;
+		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	else {
+		size_t len = strlen($3);
+		timeout_message_name = (char *)malloc(strlen($3)+1);
+		strncpy(timeout_message_name, $3, len+1);
+	}
+}
+| ;
 
 local_instantiation:
-SYMBOL SYMBOL parameters  
+SYMBOL SYMBOL parameters
 {
     current_machine = MachineInstanceFactory::create($1, $2, MachineInstance::MACHINE_TEMPLATE);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machine->parameters));
     current_parameters.clear();
-    
+
     current_machine->setDefinitionLocation(yyfilename, yylineno);
     properties.clear(); // NOTE: properties should be empty here, anyway
 }
-| SYMBOL SYMBOL property_block parameters 
+| SYMBOL SYMBOL property_block parameters
 {
     DBG_PARSER << "local variable with properties\n";
     current_machine = MachineInstanceFactory::create($1, $2, MachineInstance::MACHINE_TEMPLATE);
@@ -1501,7 +1777,7 @@ SYMBOL SYMBOL parameters
 ;
 
 /* an instantiation may be of a channel and we cannot construct the machine
- * until we know.  These items are pushed to a queue for instantiation after all files 
+ * until we know.  These items are pushed to a queue for instantiation after all files
  * have been processed.
  */
 instantiation:
@@ -1517,7 +1793,7 @@ SYMBOL SYMBOL parameters
 	current_machine->setDefinitionLocation(yyfilename, yylineno);
     properties.clear();
 }
-| SYMBOL SYMBOL property_block parameters 
+| SYMBOL SYMBOL property_block parameters
 {
 	//deferred_instantiations.push_back(new MachineDetails($1, $2, current_parameters.end,
 	//__FILE__, __LINE__, properties,
@@ -1535,7 +1811,7 @@ SYMBOL SYMBOL parameters
 ;
 
 /*delay_entry:
-tokPOLLING_DELAY INTEGER ';' {
+tokPOLLING_DELAY INTEGERVAL ';' {
     current_machineclass->polling_delay = $2;
 }
 */
@@ -1563,6 +1839,7 @@ PLUGIN STRINGVAL ';' {
 		ss << current_machineclass->name << ": " << dlerror() << "\n";
 		MessageLog::instance()->add(ss.str().c_str());
     	error_messages.push_back(ss.str());
+		++num_errors;
 		NB_MSG << ss.str() << "\n";
 	}
 }
@@ -1587,7 +1864,7 @@ parameters ';'
     current_value = Value();
     properties.clear();
 }
-| module_instances parameters ';' 
+| module_instances parameters ';'
 {
     DBG_PARSER << std::setw(5) << yylineno << " module definition (in modules section)" <<current_value <<  "\n";
     MachineInstance *m = addMachine(current_parameters.front().val.sValue.c_str(), "MODULE");
@@ -1611,7 +1888,7 @@ parameter
 parameter:
 value {
     current_value = *$1;
-    DBG_PARSER << std::setw(5) << yylineno << " "  << "Symbol, value: " << *$1 << "\n"; 
+    DBG_PARSER << std::setw(5) << yylineno << " "  << "Symbol, value: " << *$1 << "\n";
     current_parameters.push_back(Parameter(*$1));
     $$ = new Parameter(*$1);
     delete $1;
@@ -1620,7 +1897,7 @@ value {
     current_value = $1;
     properties = property_stack.back();
     property_stack.pop_back();
-    DBG_PARSER << std::setw(5) << yylineno << " "  << "Symbol, value: " << $1 << '[' << properties << "]\n"; 
+    DBG_PARSER << std::setw(5) << yylineno << " "  << "Symbol, value: " << $1 << '[' << properties << "]\n";
     current_parameters.push_back(Parameter($1, properties));
     $$ = new Parameter($1, properties);
     properties.clear();
@@ -1654,9 +1931,66 @@ SYMBOL MODULE parameters ';'
     m->setDefinitionLocation(yyfilename, yylineno);
     properties.clear();
 }
+| SYMBOL SDO property_block parameters ';'
+{
+#ifdef USE_SDO
+    DBG_PARSER << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+	// the following will be added to a list of new entitites and the module will be resolved later
+	std::vector<Parameter> params;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
+	SDOEntry *entry = 0;
+	if (params.size() == 4)
+		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	else if (params.size() == 5)
+		entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue,
+			params[4].val.iValue);
+	if (entry) {
+		entry->setModuleName(params[0].val.sValue);
+
+		MachineInstance *m = addMachine($1, "SDOENTRY");
+		properties = property_stack.back();
+		property_stack.pop_back();
+		m->setProperties(properties);
+		std::cout << "Properties: " << properties << "\n";
+		properties.clear();
+		std::cout << "Entry default: " << m->properties.lookup("default") << "\n";
+
+
+		std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+		current_parameters.clear();
+		m->setDefinitionLocation(yyfilename, yylineno);
+
+		entry->setMachineInstance(m);
+	}
+#else
+    error_messages.push_back("Error: SDO is not supported in this version");
+    num_errors++;
+#endif //USE_SDO
+}
+| SYMBOL SDO parameters ';'
+{
+#ifdef USE_SDO
+    DBG_MSG << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+	// the following will be added to a list of new entitites and the module will be resolved later
+	std::vector<Parameter> params;
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
+	SDOEntry *entry = new SDOEntry($1, params[1].val.iValue, params[2].val.iValue, 0, params[3].val.iValue);
+	entry->setModuleName(params[0].val.sValue);
+
+    MachineInstance *m = addMachine($1, "SDOENTRY");
+    std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
+    current_parameters.clear();
+    m->setDefinitionLocation(yyfilename, yylineno);
+
+	entry->setMachineInstance(m);
+#else
+    error_messages.push_back("Error: SDO is not supported in this version");
+    num_errors++;
+#endif //USE_SDO
+}
 | SYMBOL FLAG ';'
 {
-    DBG_PARSER << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
+    DBG_MSG << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
     MachineInstance *m = addMachine($1, "FLAG");
     m->properties = properties;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
@@ -1689,7 +2023,7 @@ SYMBOL MODULE parameters ';'
     ss.condition.predicate = $5;
     ss.state_name = "true";
     current_machineclass->stable_states.push_back(ss);
-    current_machineclass->states.push_back("true");// add to states to permit changes to this state
+    current_machineclass->addState("true");// add to states to permit changes to this state
     current_machineclass->state_names.insert("true");
     properties.clear();
 }
@@ -1706,7 +2040,7 @@ SYMBOL MODULE parameters ';'
 	ss.condition.predicate = $4;
 	ss.state_name = "true";
 	current_machineclass->stable_states.push_back(ss);
-	current_machineclass->states.push_back("true");// add to states to permit changes to this state
+	current_machineclass->addState("true");// add to states to permit changes to this state
 	current_machineclass->state_names.insert("true");
 	properties.clear();
 }
@@ -1723,7 +2057,7 @@ property_block:
 
 properties:
 property
-| properties COMMA property 
+| properties COMMA property
 ;
 
 property:
@@ -1791,46 +2125,52 @@ transition_entry:
 transition ';'
 ;
 
+transition_semantics:
+ABORT ON FAILURE { $$ = true; }
+| WAIT ON FAILURE { $$ = false; }
+| { $$ = true; }
+;
+
 transition:
-TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */
+TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << " using " << $6 << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), 0,$7));
     }
     current_name_list.clear();
 }
-| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), 0, $7));
     }
     current_name_list.clear();
 }
 | TRANSITION state_list /*  source state */ TO transition_state /* destination state */
-    USING SYMBOL /* received event */ REQUIRES predicate /* rule */
+    USING SYMBOL /* received event */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "using " << $6 << "requiring " << *($8) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8, $9));
     }
     current_name_list.clear();
 }
 | TRANSITION state_list /*  source state */ TO transition_state /* destination state */
-    ON SYMBOL /* received event */ REQUIRES predicate /* rule */
+    ON SYMBOL /* received event */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "requiring " << *($8) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8, $9));
     }
     current_name_list.clear();
 }
-| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "requiring " << *($6) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6, $7));
     }
     current_name_list.clear();
 }
@@ -1845,4 +2185,3 @@ void yyerror(const char *str)
     std::cerr << ss.str() << "\n";
     num_errors++;
 }
-

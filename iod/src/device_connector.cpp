@@ -58,8 +58,7 @@
 #include "DebugExtra.h"
 #include <pthread.h>
 
-bool debug = false;
-const char *program_name = "device_connector";
+volatile bool debug = false;
 
 class DeviceStatus {
 public:
@@ -519,7 +518,7 @@ struct MatchFunction {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", Options::instance()->machine(), Options::instance()->property(), res.c_str());
                     if (cmd) {
                         std::string response;
-										if(debug)std::cout << "sending: " << cmd << "\n" << std::flush;
+						if(debug)std::cout << "sending: " << cmd << "\n" << std::flush;
                         if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
@@ -589,6 +588,7 @@ struct ConnectionThread {
             DeviceStatus::instance()->setStatus(DeviceStatus::e_disconnected);
             updateProperty();
             while (!done) {
+//				std::cout << "c." << std::flush;
                 
                 // connect or accept connection
                 if (DeviceStatus::instance()->current() == DeviceStatus::e_disconnected && Options::instance()->client()) {
@@ -601,7 +601,8 @@ struct ConnectionThread {
                         }
                     }
                     else {
-                        connection = anetTcpConnect(msg_buffer, Options::instance()->host(), Options::instance()->port());
+                        if (!done)
+							connection = anetTcpConnect(msg_buffer, Options::instance()->host(), Options::instance()->port());
                         if (connection == -1) {
                             std::cerr << msg_buffer << " retrying in " << (retry_delay/1000) << "ms\n";
                             usleep(retry_delay); // pause before trying again
@@ -610,39 +611,56 @@ struct ConnectionThread {
                             continue;
                         }
                     }
+					if (done) break;
                     retry_delay = 50000;
                     DeviceStatus::instance()->setStatus(DeviceStatus::e_connected);
                     updateProperty();
                 }
                 
                 fd_set read_ready;
-                FD_ZERO(&read_ready);
-                int nfds = 0;
-                DeviceStatus::State dev_state = DeviceStatus::instance()->current();
-                if (dev_state == DeviceStatus::e_connected  || dev_state == DeviceStatus::e_up || dev_state == DeviceStatus::e_timeout ) {
-                    FD_SET(connection, &read_ready);
-                    nfds = connection+1;
-                }
-                else if (Options::instance()->server()) {
-                    FD_SET(listener, &read_ready);
-                    nfds = listener+1;
-                }
+				const unsigned long wait_time = 2000000L;
+				unsigned long select_start;
+				select_start = microsecs();
+				int err = 0;
+				while (!done) {
+                	FD_ZERO(&read_ready);
+                	int nfds = 0;
+                	DeviceStatus::State dev_state = DeviceStatus::instance()->current();
+                	if (dev_state == DeviceStatus::e_connected  || dev_state == DeviceStatus::e_up || dev_state == DeviceStatus::e_timeout ) {
+                	    FD_SET(connection, &read_ready);
+                	    nfds = connection+1;
+                	}
+                	else if (Options::instance()->server()) {
+                	    FD_SET(listener, &read_ready);
+                	    nfds = listener+1;
+                	}
                 
-                struct timeval select_timeout;
-                select_timeout.tv_sec = 2;
-                select_timeout.tv_usec = 0;
-                int err = select(nfds, &read_ready, NULL, NULL, &select_timeout);
+                	struct timeval select_timeout;
+                	select_timeout.tv_sec = 0;
+                	select_timeout.tv_usec = 200000L;
+	                err = select(nfds, &read_ready, NULL, NULL, &select_timeout);
+					if (err != 0) break;
+				
+					if (microsecs() - select_start >= wait_time) {
+						std::cerr << "\ntimeout\n";
+						break;
+					}
+				}
+				if (done) break;
                 if (err == -1) {
                     if (errno != EINTR)
                         std::cerr << "socket: " << strerror(errno) << "\n";
+					else
+						std::cerr << "select was interrupred\n";
+
                 }
                 else if (err == 0) {
                     DeviceStatus::State dev_state = DeviceStatus::instance()->current();
                     if (dev_state == DeviceStatus::e_connected || dev_state == DeviceStatus::e_up) {
                         DeviceStatus::instance()->setStatus( DeviceStatus::e_timeout );
                         updateProperty();
-                        std::cerr << "select timeout " << select_timeout.tv_sec << "."
-                        << std::setfill('0') << std::setw(3) << (select_timeout.tv_usec / 1000) << "\n";
+                        std::cerr << "select timeout " << (wait_time /1000000L) << "."
+                        << std::setfill('0') << std::setw(3) << ( (wait_time%1000000) / 1000) << "\n";
                         
                         // we disconnect from a TCP connection on a timeout but do nothing in the case of a serial port
                         if (!Options::instance()->serialPort() && Options::instance()->disconnectOnTimeout()) {
@@ -655,7 +673,10 @@ struct ConnectionThread {
                     }
                 }
                 
-                if (Options::instance()->server() && DeviceStatus::instance()->current() == DeviceStatus::e_disconnected && FD_ISSET(listener, &read_ready)) {
+				if (done) break;
+                if (Options::instance()->server() 
+						&& DeviceStatus::instance()->current() == DeviceStatus::e_disconnected 
+						&& FD_ISSET(listener, &read_ready)) {
                     // Accept and setup a connection
                     int port;
                     char hostip[16]; // dot notation
@@ -684,6 +705,7 @@ struct ConnectionThread {
                 else if (connection != -1 && FD_ISSET(connection, &read_ready)) {
                     if (offset < buffer_size-1) {
                         ssize_t n = read(connection, buf+offset, buffer_size - offset - 1);
+						if (done) break;
                         if (n == -1) {
                             if (!done && errno != EINTR && errno != EAGAIN) { // stop() may cause a read error that we ignore
                                 std::cerr << "error: " << strerror(errno) << " reading from connection\n";
@@ -744,6 +766,9 @@ struct ConnectionThread {
                     }
                 }
             }
+			std::cout << "Connection Thread Done\n";
+			is_shutdown = true;
+			
         }catch (std::exception e) {
             if (zmq_errno())
                 std::cerr << zmq_strerror(zmq_errno()) << "\n";
@@ -768,7 +793,9 @@ struct ConnectionThread {
         }
     }
     
-    ConnectionThread() : done(false), connection(-1), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ), msg_buffer(0)
+    ConnectionThread() 
+	: done(false), is_shutdown(false),
+		connection(-1), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ), msg_buffer(0)
     {
         assert(Options::instance()->valid());
         msg_buffer =new char[ANET_ERR_LEN];
@@ -779,12 +806,24 @@ struct ConnectionThread {
         cmd_interface.connect(iod_connection);
     }
     
+	bool stopped() { return is_shutdown; }
     void stop() {
-        done = true;
+        if(done) {
+			std::cout << "connection thread is already done\n"; 
+			return;
+		}
+		done = true;
         DeviceStatus::State dev_state = DeviceStatus::instance()->current();
-        if (dev_state == DeviceStatus::e_connected || dev_state == DeviceStatus::e_up || dev_state == DeviceStatus::e_disconnected) {
-            done = true;
+		std::cout << "device connector connection thread got stop when status == " 
+			<< stringFromDeviceStatus(dev_state) << "\n";
+        if (dev_state == DeviceStatus::e_connected 
+				|| dev_state == DeviceStatus::e_up 
+				|| dev_state == DeviceStatus::e_disconnected) {
+			std::cout << "closing connection\n";
             close(connection);
+			connection = -1;
+			DeviceStatus::instance()->setStatus( DeviceStatus::e_disconnected );
+			updateProperty();
         }
     }
     
@@ -825,6 +864,7 @@ struct ConnectionThread {
         }
     }
     bool done;
+	bool is_shutdown;
     int listener;
     int connection;
     zmq::socket_t cmd_interface;
@@ -838,7 +878,7 @@ struct ConnectionThread {
     std::string to_send;
 };
 
-bool done = false;
+volatile bool done = false;
 ConnectionThread *connection_thread = 0;
 Options *Options::instance_;
 
@@ -851,7 +891,6 @@ static void finish(int sig)
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGINT, &sa, 0);
     done = true;
-	if (connection_thread) connection_thread->stop();
 }
 
 static void toggle_debug(int sig)
@@ -888,13 +927,18 @@ public:
 	Options &options;
 	zmq::socket_t &cmd;
 	ConnectionManager *connection_manager;
-	bool done = false;
+	bool done;
+	bool is_shutdown;
 
-	void stop() { done = true; }
+	void stop() { 
+		done = true; 
+		std::cout << "device connector processing thread got stop\n";
+	}
+	bool stopped() { return is_shutdown; }
 
 	ProcessingThread(Options &opt, zmq::socket_t &command_sock,
 					 ConnectionManager *connection_mgr)
-	: options(opt), cmd(command_sock), connection_manager(connection_mgr) {
+	: options(opt), cmd(command_sock), connection_manager(connection_mgr), done(false), is_shutdown(false) {
 
 	}
 	void operator()() {
@@ -904,26 +948,25 @@ public:
 		memset(items, 0, sizeof(zmq::pollitem_t)*3);
 		int idx = 0;
 
-		int cmd_index = -1;
 		int subs_index = -1;
 		int num_items = 0;
 		if (options.watchProperty()) {
 			SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(connection_manager);
 			assert(sm);
-			items[idx].socket = sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+			items[idx].socket = (void*)sm->setup(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 			subs_index = idx;
 			items[idx].fd = 0;
-			items[idx].socket = sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+			items[idx].socket = (void*)sm->subscriber(); items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		}
 		else {
 			CommandManager *cm = dynamic_cast<CommandManager*>(connection_manager);
 			assert(cm);
-			items[idx].socket = *cm->setup;
+			items[idx].socket = (void*)*cm->setup;
 			items[idx].fd = 0;
 			items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		}
-		cmd_index = idx;  items[idx].fd = 0;
-		items[idx].socket = cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
+		items[idx].fd = 0;
+		items[idx].socket = (void*)cmd; items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;  idx++;
 		num_items = idx;
 
 
@@ -931,14 +974,15 @@ public:
 		while (!done)
 		{
 			struct timeval now;
-			usleep(5000);
 			gettimeofday(&now, 0);
+			if (done) break;
 
 			try {
-				if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(50000); continue;}
+				if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(500); continue;}
 				error_count = 0;
 			}
 			catch (std::exception e) {
+                std::cerr << e.what() << "\n";
 				++error_count;
 				if (zmq_errno()) {
 					std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
@@ -951,6 +995,7 @@ public:
 				if (error_count > 10) {
 					FileLogger fl(program_name); fl.f() << " too many errors. exiting."<<std::flush; sleep(2); exit(0);
 				}
+				continue;
 			}
 
 
@@ -974,8 +1019,6 @@ public:
 				}
 			}
 #endif
-
-			//if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
 
 			if (subs_index>=0 && items[subs_index].revents & ZMQ_POLLIN) {
 				char data[1000];
@@ -1002,6 +1045,7 @@ public:
 					}
 				}
 				catch (zmq::error_t e) {
+                	std::cerr << e.what() << "\n";
 					if (errno == EINTR) continue;
 
 				}
@@ -1009,6 +1053,10 @@ public:
 			}
 			else usleep(500);
 		}
+		
+		if (connection_thread) connection_thread->stop();
+//		std::cout << "p.done\n" << std::flush;
+		is_shutdown = true;
 	}
 };
 
@@ -1129,11 +1177,14 @@ int main(int argc, const char * argv[])
 		ProcessingThread processing_thread(options, cmd, connection_manager);
 		boost::thread processing(boost::ref(processing_thread));
 
+		// main processing loop: just wait for a TERM signal
 		while (!done) {
+//			std::cout << "m." << std::flush;
 			usleep(100000);
 		}
+//		std::cout << "m.done\n" << std::flush;
+		connection_thread->stop();
 		processing_thread.stop();
-		processing.join();
 
 		//PropertyMonitorThread watch_thread(options, connection_thread);
 		//boost::thread *watcher = 0;
@@ -1142,16 +1193,28 @@ int main(int argc, const char * argv[])
 		//    watcher = new boost::thread(boost::ref(watch_thread));
 		//}
 
-		connection_thread->stop();
         //if (watcher) watch_thread.stop();
+		while (!processing_thread.stopped() || !connection_thread->stopped() )  {
+			usleep(100000);
+			if (!processing_thread.stopped() && !connection_thread->stopped() ){
+				std::cout << "Waiting for threads to stop\n" << std::flush;
+			}
+			else if (!processing_thread.stopped()) 
+				std::cout << "Waiting for processing thread to stop\n" << std::flush;
+			else
+				std::cout << "Waiting for connection thread to stop\n" << std::flush;
+		}
+			
         monitor.join();
+		processing.join();
+		std::cout << "done\n" << std::flush;
     }
     catch (std::exception e) {
         if (zmq_errno()) 
             std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
         else
             std::cerr << e.what() << "\n";
-				exit(1);
+		exit(1);
     }
     return 0;
 }

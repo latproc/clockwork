@@ -51,7 +51,8 @@ int ClockworkToken::tokITEM;
 int ClockworkToken::VARIABLE;
 int ClockworkToken::CONSTANT;
 int ClockworkToken::tokCONDITION;
-int ClockworkToken::PUBLISHER;
+int ClockworkToken::MQTTPUBLISHER;
+int ClockworkToken::MQTTSUBSCRIBER;
 int ClockworkToken::POLLING_DELAY;
 int ClockworkToken::CYCLE_DELAY;
 int ClockworkToken::SYSTEMSETTINGS;
@@ -60,6 +61,8 @@ int ClockworkToken::tokMessage;
 int ClockworkToken::TRACEABLE;
 int ClockworkToken::on;
 int ClockworkToken::off;
+int ClockworkToken::DEBUG;
+int ClockworkToken::TRACE;
 
 Tokeniser* Tokeniser::instance() {
     if (!_instance) {
@@ -73,7 +76,8 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
         ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
         ClockworkToken::tokCONDITION = _instance->getTokenId("CONDITION");
-        ClockworkToken::PUBLISHER = _instance->getTokenId("PUBLISHER");
+        ClockworkToken::MQTTPUBLISHER = _instance->getTokenId("MQTTPUBLISHER");
+		ClockworkToken::MQTTSUBSCRIBER = _instance->getTokenId("MQTTSUBSCRIBER");
         ClockworkToken::POLLING_DELAY = _instance->getTokenId("POLLING_DELAY");
         ClockworkToken::CYCLE_DELAY = _instance->getTokenId("CYCLE_DELAY");
         ClockworkToken::tokMessage = _instance->getTokenId("message");
@@ -82,6 +86,8 @@ Tokeniser* Tokeniser::instance() {
         ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
         ClockworkToken::on = _instance->getTokenId("on");
         ClockworkToken::off = _instance->getTokenId("off");
+		ClockworkToken::DEBUG = _instance->getTokenId("DEBUG");
+		ClockworkToken::TRACE = _instance->getTokenId("TRACE");
     }
     return _instance;
 }
@@ -119,6 +125,7 @@ SymbolTable::SymbolTable() {
         keywords->add("MONTH", 0L);
         keywords->add("YR", 0L);
         keywords->add("YEAR", 0L);
+				keywords->add("TIMESEQ", Value("",Value::t_string));
         keywords->add("TIMEZONE", Value("",Value::t_string));
         keywords->add("TIMESTAMP", Value("",Value::t_string));
         keywords->add("RANDOM", 0L);
@@ -153,9 +160,15 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
 }
 
 bool SymbolTable::isKeyword(const Value &name) {
-    if (name.kind == Value::t_symbol || name.kind == Value::t_string)
-        return isKeyword(name.token_id);
+	if (name.kind == Value::t_symbol || name.kind == Value::t_string) {
+		if (name.token_id)
+			return keywords->exists(name.token_id);
+		else
+			return keywords->exists(name.sValue.c_str());
+	}
     return false;
+
+
 }
 
 /* Symbol table key values, calculated every time they are referenced */
@@ -198,7 +211,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             res = lt.tm_hour;
             return res;
         }
-        if (strcmp("DAY", name) == 0) {
+        if (	strcmp("DAY", name) == 0) {
             res = lt.tm_mday;
             return res;
         }
@@ -218,6 +231,19 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             res = lt.tm_zone;
             return res;
         }
+				if (strcmp("TIMESEQ", name) == 0) {
+					struct timeval t;
+					gettimeofday(&t,0);
+					uint64_t msecs = ((t.tv_sec * 1000000L + t.tv_usec) / 1000) % 1000;
+					char buf[40];
+					const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
+					if (sizeof(long long) == sizeof(uint64_t))
+							fmt = "%02d%02d%02d%02d%02d%02d%03llu";
+					snprintf(buf, 40, fmt,
+									 lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
+					res = buf;
+					return res;
+				}
         if (strcmp("TIMESTAMP", name) == 0) {
             char buf[40];
             ctime_r(&now, buf);
@@ -231,7 +257,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
     return Null;
 }
 
-bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
+bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         std::string s(name);
         st[s] = val;
@@ -244,7 +270,7 @@ bool SymbolTable::add(const char *name, Value val, ReplaceMode replace_mode) {
     }
 }
 
-bool SymbolTable::add(const std::string name, Value val, ReplaceMode replace_mode) {
+bool SymbolTable::add(const std::string name, const Value &val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
     	st[name] = val;
         stok[Tokeniser::instance()->getTokenId(name)] = val;
@@ -259,7 +285,7 @@ bool SymbolTable::add(const std::string name, Value val, ReplaceMode replace_mod
 void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
     SymbolTableConstIterator iter = orig.st.begin();
     while (iter != orig.st.end()) {
-        if (replace_mode != ST_REPLACE && st.find((*iter).first) != orig.st.end()) {  // skip entries we already have if not replace mode
+        if (replace_mode != ST_REPLACE && st.find((*iter).first) != st.end()) {  // skip entries we already have if not replace mode
             ++iter; continue;
         }
         const std::string &name = (*iter).first;
@@ -278,6 +304,16 @@ bool SymbolTable::exists(const char *name) {
 
 bool SymbolTable::exists(int tok) {
     return stok.find(tok) != stok.end();
+}
+
+const Value &SymbolTable::find(const char *name) const {
+	if (this != keywords) {
+		Value &res = keywords->find(name);
+		if (res != SymbolTable::Null) return res;
+	}
+	SymbolTableConstIterator iter = st.find(name);
+	if (iter != st.end()) return (*iter).second;
+	return NullValue;
 }
 
 Value &SymbolTable::find(const char *name) {
@@ -300,7 +336,7 @@ const Value &SymbolTable::lookup(const char *name) {
     return SymbolTable::Null;
 }
 
-const Value &SymbolTable::lookup(Value &name) {
+const Value &SymbolTable::lookup(const Value &name) {
     if (this != keywords) {
         const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) return res;
@@ -318,6 +354,8 @@ void Value::addItem(Value next_value) {
     else {
         if (kind == t_integer)
             listValue.push_front(Value(iValue));
+        else if (kind == t_float)
+            listValue.push_front(Value(fValue));
         else if (kind == t_string)
             listValue.push_front(Value(sValue.c_str()));
         

@@ -22,6 +22,7 @@
 #define __ENABLEACTION_H__ 1
 
 #include <iostream>
+#include <list>
 #include "Action.h"
 #include "symboltable.h"
 
@@ -29,13 +30,12 @@ class MachineInstance;
 
 struct EnableActionTemplate : public ActionTemplate {
 	EnableActionTemplate(const std::string &name, const char *property = 0, const Value *val = 0);
+	EnableActionTemplate(std::list<std::string> &names, const char *property = 0, const Value *val = 0);
     ~EnableActionTemplate();
     virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-       return out << "EnableAction template "  << machine_name<< "\n";
-    }
+    std::ostream &operator<<(std::ostream &out) const;
 
-	std::string machine_name;
+	std::list<std::string> machine_name;
     char *property_name;
     char *property_value;
 };
@@ -47,8 +47,9 @@ struct EnableAction : public Action {
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
 
-	std::string machine_name;
-	MachineInstance *machine;
+	std::list< std::pair<std::string, MachineInstance*> >machines;
+	//std::string machine_name;
+	//MachineInstance *machine;
     char *property_name;
     char *property_value;
 };

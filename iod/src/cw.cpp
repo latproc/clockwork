@@ -37,6 +37,7 @@
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
 #include <signal.h>
+#include <sys/stat.h>
 
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
@@ -65,8 +66,6 @@
 #include "Channel.h"
 #include "ProcessingThread.h"
 #include <libgen.h>
-
-const char *program_name;
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -146,7 +145,7 @@ int main (int argc, char const *argv[])
 	program_name = strdup(basename(pn));
 	free(pn);
 
-	std::string thread_name("Main");
+	std::string thread_name("cw_main");
 #ifdef __APPLE__
 	pthread_setname_np(thread_name.c_str());
 #else
@@ -163,8 +162,7 @@ int main (int argc, char const *argv[])
 
 	set_debug_config("iod.conf");
 	Logger::instance()->setLevel(Logger::Debug);
-	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
-	load_debug_config();
+	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
 
 	std::list<std::string> source_files;
 	int load_result = loadOptions(argc, argv, source_files);
@@ -191,6 +189,7 @@ int main (int argc, char const *argv[])
 		Dispatcher::instance()->stop();
 		return load_result;
 	}
+	load_debug_config();
 
     if (dependency_graph()) {
         std::ofstream graph(dependency_graph());
@@ -220,7 +219,7 @@ int main (int argc, char const *argv[])
         std::ofstream out(modbus_map());
         if (!out) {
             std::cerr << "not able to open " << modbus_map() << " for write\n";
-            return false;
+            return 1;
         }    
         while (m_iter != MachineInstance::end()) {
             (*m_iter)->exportModbusMapping(out);
@@ -230,10 +229,28 @@ int main (int argc, char const *argv[])
 
 		return load_result;
 	}
+	if (export_to_c()) {
+		const char *export_path = "/tmp/cw_export";
+		std::list<MachineClass*>::iterator iter = MachineClass::all_machine_classes.begin();
+		if (mkdir(export_path, 0770) == -1 && errno != EEXIST) {
+			std::cerr << "failed to create export directory /tmp/cw_export.. aborting\n";
+			return 1;
+		}
+		while (iter != MachineClass::all_machine_classes.end()) {
+			MachineClass *mc = *iter++;
+			if (mc->name == "POINT") continue;
+			if (mc->name == "SYSTEM") continue;
+			char basename[80];
+			snprintf(basename, 80, "%s/cw_%s", export_path, mc->name.c_str());
+			const std::string fname(basename);
+			mc->cExport(fname);
+		}
+		return 0;
+	}
 	
 	MQTTInterface::instance()->init();
 	MQTTInterface::instance()->start();
-    
+
 	std::list<Output *> output_list;
 	{
         {
@@ -290,7 +307,7 @@ int main (int argc, char const *argv[])
                         }
                 }
                 else {
-                    if (m->_type != "POINT" && m->_type != "PUBLISHER" && m->_type != "SUBSCRIBER") {
+                    if (m->_type != "POINT" && m->_type != "MQTTPUBLISHER" && m->_type != "MQTTSUBSCRIBER") {
                         //DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
 										}
                     else   {
@@ -302,13 +319,13 @@ int main (int argc, char const *argv[])
                             continue;
                         }
                         std::string topic = m->parameters[1].val.asString();
-                        if (m->_type != "SUBSCRIBER" && m->parameters.size() == 3) {
+                        if (m->_type != "MQTTSUBSCRIBER" && m->parameters.size() == 3) {
                             if (!module->publishes(topic)) {
                                 m->properties.add("type", "Output");
                                 module->publish(topic, m->parameters[2].val.asString(), m);
                             }
                         }
-                        else if (m->_type != "PUBLISHER") {
+                        else if (m->_type != "MQTTPUBLISHER") {
                             if (!module->subscribes(topic)) {
                                 m->properties.add("type", "Input");
                                 module->subscribe(topic, m);
@@ -332,17 +349,15 @@ int main (int argc, char const *argv[])
 
 	IODCommandThread *stateMonitor = IODCommandThread::instance();
 	IODHardwareActivation iod_activation;
-	ProcessingThread processMonitor(&machine, iod_activation, *stateMonitor);
+	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
 
-	//zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
-	//resource_mgr.bind("inproc://resource_mgr");
-    
 	zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
 	sim_io.bind("inproc://ethercat_sync");
     
 	DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
-    
+	Scheduler::instance()->setThreadRef(scheduler_thread);
+
 	DBG_INITIALISATION << "-------- Starting Command Interface ---------\n";
 	boost::thread monitor(boost::ref(*stateMonitor));
 
@@ -370,7 +385,7 @@ int main (int argc, char const *argv[])
         MQTTInterface::instance()->collectState();
 
         //sim_io.send("ecat", 4);
-        safeRecv(sim_io, buf, 10, false, response_len, 100000);
+        safeRecv(sim_io, buf, 10, false, response_len, 100);
         struct timeval now;
         gettimeofday(&now,0);
         

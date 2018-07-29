@@ -19,12 +19,23 @@
 */
 
 #include "EnableAction.h"
+#include <algorithm>
 #include "MachineInstance.h"
 #include "Logger.h"
 #include "MessageLog.h"
 
 EnableActionTemplate::EnableActionTemplate(const std::string &name, const char *property, const Value *val)
-: machine_name(name), property_name(0), property_value(0) {
+: property_name(0), property_value(0) {
+	machine_name.push_back(name);
+    if (property && val) {
+        property_name = strdup(property);
+        property_value = strdup(val->asString().c_str());
+    }
+}
+
+EnableActionTemplate::EnableActionTemplate(std::list<std::string> &names, const char *property, const Value *val)
+: property_name(0), property_value(0) {
+	std::copy( names.begin(), names.end(), std::back_inserter(machine_name));
     if (property && val) {
         property_name = strdup(property);
         property_value = strdup(val->asString().c_str());
@@ -35,15 +46,30 @@ EnableActionTemplate::~EnableActionTemplate() {
     free(property_name);
     free(property_value);
 }
+
+std::ostream &EnableActionTemplate::operator<<(std::ostream &out) const {
+	out << "EnableAction template ";
+	typename std::list<std::string>::const_iterator iter = machine_name.begin();
+	while (iter != machine_name.end()) {
+		out << *iter++;
+		if (iter != machine_name.end()) out << ", ";
+	}
+	return out;
+}
                                            
 Action *EnableActionTemplate::factory(MachineInstance *mi) {
 	return new EnableAction(mi, this);
 }
 
 EnableAction::EnableAction(MachineInstance *m, const EnableActionTemplate *dat)
-    : Action(m), machine_name(dat->machine_name), machine(0), property_name(0), property_value(0) {
+    : Action(m), property_name(0), property_value(0) {
         if (dat->property_name) property_name = strdup(dat->property_name);
         if (dat->property_value) property_value = strdup(dat->property_value);
+
+		std::list<std::string>::const_iterator iter = dat->machine_name.begin();
+		while (iter != dat->machine_name.end())  {
+			machines.push_back( std::make_pair( *iter++, (MachineInstance*)0 ) );
+		}
 }
 
 EnableAction::EnableAction() {
@@ -52,22 +78,32 @@ EnableAction::EnableAction() {
 }
 
 std::ostream &EnableAction::operator<<(std::ostream &out) const {
-	return out << "Enable Action " << machine_name;
+	out << "EnableAction ";
+	typename std::list< std::pair<std::string, MachineInstance*> >::const_iterator iter = machines.begin();
+	while (iter != machines.end()) {
+		out << (*iter++).first;
+		if (iter != machines.end()) out << ", ";
+	}
+	return out;
 }
 
 Action::Status EnableAction::run() {
 	owner->start(this);
-	machine = owner->lookup(machine_name);
-	if (machine) {
-		machine->enable();
-		status = Complete;
-	}
-	else {
-		char buf[100];
-		snprintf(buf, 100, "EnableAction Error: cannot find %s from %s", machine_name.c_str(), owner->getName().c_str());
-		MessageLog::instance()->add(buf);
-		error_str = (const char*)buf;
-		status = Failed;
+	status = Complete; // assumption
+	typename std::list< std::pair<std::string, MachineInstance*> >::iterator iter = machines.begin();
+	while (iter != machines.end()) {
+		std::pair<std::string, MachineInstance*> &item = *iter++;
+		if (!item.second) item.second = owner->lookup(item.first);
+		if (item.second) {
+			item.second->enable();
+		}
+		else {
+			char buf[150];
+			snprintf(buf, 150, "EnableAction Error: cannot find %s from %s", item.first.c_str(), owner->getName().c_str());
+			MessageLog::instance()->add(buf);
+			error_str = (const char*)buf;
+			status = Failed;
+		}
 	}
 	if (status == Complete || status == Failed) {
 		owner->stop(this);

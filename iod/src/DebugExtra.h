@@ -38,6 +38,7 @@ public:
 	int DEBUG_MODBUS;
 	int DEBUG_DISPATCHER;
 	int DEBUG_CHANNELS;
+	int DEBUG_ETHERCAT;
 private:
     DebugExtra();
     static DebugExtra* instance_;
@@ -57,6 +58,7 @@ private:
 #define DBG_MODBUS MSG(DebugExtra::instance()->DEBUG_MODBUS)
 #define DBG_DISPATCHER MSG(DebugExtra::instance()->DEBUG_DISPATCHER)
 #define DBG_CHANNELS MSG(DebugExtra::instance()->DEBUG_CHANNELS)
+#define DBG_ETHERCAT MSG(DebugExtra::instance()->DEBUG_ETHERCAT)
 
 #define DBG_M_PARSER M_MSG(DebugExtra::instance()->DEBUG_PARSER, this)
 #define DBG_M_PREDICATES M_MSG(DebugExtra::instance()->DEBUG_PREDICATES, this)

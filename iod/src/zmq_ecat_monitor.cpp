@@ -67,7 +67,7 @@ int main(int argc, const char * argv[])
 	    else {
 			int port = 5556;
 			if (argc > 2 && strcmp(argv[1],"-p") == 0) {
-				port = strtol(argv[2], 0, 0);
+				port = strtol(argv[2], 0, 10);
 			}
 			std::cout << "Listening on port " << port << "\n";
 	        // client

@@ -31,6 +31,10 @@ WaitAction::WaitAction(MachineInstance *mi, WaitActionTemplate &wat)
 	if (wait_time == -1) use_property = true;
 }
 
+WaitAction::~WaitAction() {
+	NB_MSG << "Destructing " << *this;
+}
+
 Action *WaitActionTemplate::factory(MachineInstance *mi) { 
   return new WaitAction(mi, *this); 
 }
@@ -50,8 +54,12 @@ Action::Status WaitAction::run() {
 			DBG_M_PROPERTIES << "looking up property " << property_name << " " << ": " << v << "\n";
 		}
 		else
-	        v = owner->getValue(property_name.c_str());
-        if (v.kind != Value::t_integer) {
+	      v = owner->getValue(property_name.c_str());
+        if (v.kind == Value::t_float) {
+            DBG_M_PROPERTIES << "Error: expected an integer value for wait_time, got: " << v << "\n";
+						wait_time = v.trunc();
+				}
+        else if (v.kind != Value::t_integer) {
             wait_time = 0;
             DBG_M_PROPERTIES << "Error: expected an integer value for wait_time, got: " << v << "\n";
         }
@@ -60,16 +68,25 @@ Action::Status WaitAction::run() {
     }
     gettimeofday(&start_time, 0);
     if (wait_time == 0) {
+		if (trigger && !trigger->fired() && trigger->enabled()) {
+			trigger->fire();
+		}
 		status = Complete;
 		owner->stop(this);
 	}
 	else {
 		status = Running;
-        if (trigger) trigger = trigger->release();
-		trigger = new Trigger("WaitTimer");
-		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, new FireTriggerAction(owner, trigger)));
+        if (trigger) {
+			DBG_MESSAGING << owner->getName() << " " << *this << " removing old trigger\n";
+			cleanupTrigger();
+		}
+		char buf[100]; snprintf(buf, 100, "%s WaitTimer", owner->getName().c_str());
+		trigger = new Trigger(buf);
+		trigger->addHolder(this);
+		FireTriggerAction *fta = new FireTriggerAction(owner, trigger);
+		Scheduler::instance()->add(new ScheduledItem(wait_time * 1000, fta));
 		assert(!trigger->fired());
-        if (use_property) wait_time = -1; // next time, find the property value again
+		if (use_property) wait_time = -1; // next time, find the property value again
 	}
     DBG_M_PROPERTIES << "waiting " << wait_time << "\n";
     return status;
@@ -83,9 +100,20 @@ Action::Status WaitAction::checkComplete() {
 	if (delta >= wait_time * 1000) { status = Complete; owner->stop(this); }
 //    else DBG_M_ACTIONS << "still waiting " << (wait_time*1000-delta) << "\n";
 */
-	if (trigger && trigger->fired()) {
+	DBG_M_MESSAGING << owner->getName() << " " << *this << " checking if complete\n";
+	if (!trigger) {
+		DBG_M_MESSAGING << owner->getName() << " " << *this << " has no trigger\n";
 		status = Complete;
 		owner->stop(this);
+	}
+	else if ( trigger && trigger->fired() ) {
+		DBG_M_MESSAGING << owner->getName() << " " << *this << " trigger has fired\n";
+		status = Complete;
+		owner->stop(this);
+	}
+	else if (trigger) {
+		DBG_M_MESSAGING << owner->getName() << " " << *this << " trigger has not fired\n";
+		trigger->report("not fired");
 	}
     return status;
 }

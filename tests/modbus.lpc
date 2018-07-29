@@ -1,20 +1,31 @@
 # various modbus interface tests
+#
+# if using device connector to update values in B, 
+# run it as follows:
+#
+# device_connector --serial_port /dev/tty.usbserial-A900ced4 
+#   --serial_settings 115200  
+#   --name dev --queue queue 
+#   --pattern '[0-9]+[^0-9]+'
 
 OUT_1 FLAG(tab:Outputs);
 OUT_2 FLAG(tab:Outputs);
 
 A CONSTANT(tab:Tests, export:reg) 123;
+AA CONSTANT(tab:Tests, export:reg) 3531;
 B VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 456;
 C CONSTANT(tab:Tests, export:reg32) 554343;
 D VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg32) 10;
 E CONSTANT(tab:Tests, export:str, strlen:30) "This is a message";
 F VARIABLE(tab:Tests, PERSISTENT:true, export:rw_str, strlen:25) "Another test message";
+G VARIABLE(tab:Tests, PERSISTENT:true, export:float32) 1;
 
 PanelScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
 RequestScreen VARIABLE(tab:Tests, PERSISTENT:true, export:rw_reg) 1;
 
 Calc MACHINE {
-
+	OPTION Pi 3.14192654;
+	EXPORT READONLY FLOAT32 Pi;
     GLOBAL D;
     go DEFAULT;
     ENTER go { offdelay := D * 60000; }
@@ -23,8 +34,39 @@ Calc MACHINE {
 }
 calc Calc;
 
+#device connector interface
+DeviceInterface MACHINE output {
+	queue LIST;
+	busy WHEN queue IS NOT empty;
+	idle DEFAULT;
+
+	ENTER busy { 
+		tmp := TAKE FIRST FROM queue; 
+		x := COPY ALL `[0-9]` FROM tmp;
+		output.VALUE := 0 + x;
+		SET SELF TO idle;
+	}
+}
+dev DeviceInterface B;
+bmon OutputMonitor B;
+
+OutputMonitor MACHINE output {
+    EXPORT RW 16BIT Value;
+	EXPORT STATES low,med,high;
+	OPTION Value 0;
+	OPTION tab Tests;
+	high WHEN output >= 750;
+	med WHEN output >= 500;
+	low DEFAULT;
+
+	ENTER high { Value := 750; }
+	ENTER med { Value := 500; }
+	ENTER low { Value := 250; }
+}
+
 OddNumber MACHINE {
-	OPTION last 0, VALUE 0;
+	LOCAL OPTION last 0;
+	OPTION VALUE 0;
 
 	evaluating WHEN last != VALUE;
 	ENTER evaluating { LOG VALUE; last := VALUE; }
@@ -33,8 +75,29 @@ OddNumber MACHINE {
 }
 val1 OddNumber(export:rw_reg);
 val2 OddNumber(export:rw_reg);
-	
-	
+
+PanelMonitor MACHINE {
+	LOCAL OPTION last 0, last_active 0;
+	GLOBAL CHANNELS;
+	panels LIST;
+	LOCAL OPTION className "";
+
+	# check if the panel is ok whenever the number of active channels changes or the panel is not one of the active channels
+	update WHEN SELF IS idle && TIMER > 500 || last_active != COUNT ACTIVE FROM CHANNELS;
+	ok WHEN COUNT ACTIVE FROM panels == 1;
+	idle DEFAULT;	
+
+	COMMAND check { 
+		last := SIZE OF CHANNELS;  # last should be the same as the number of channels in the iosh CHANNELS command
+		last_active := COUNT ACTIVE FROM CHANNELS; # check last_active against the channels from iosh
+		CLEAR panels; # prepare to make a list of panel channels
+		COPY ALL FROM CHANNELS TO panels WHERE CLASS OF CHANNELS.ITEM == "PANEL_CHANNEL";
+	}
+	ENTER update { CALL check ON SELF; }
+
+	ENTER INIT { className := CLASS OF SELF; }
+}
+panel_monitor PanelMonitor;
 
 Monitor MACHINE other {
 
@@ -69,9 +132,10 @@ Error MACHINE {
 	EXPORT READONLY STRING 40 cause;
 	EXPORT READONLY STRING 40 name;
 	EXPORT READWRITE STRING 40 tune;
-	error FLAG(export:ro,tab:Test);
+	error FLAG(export:ro,tab:Tests);
 	OPTION cause "No Error";
 	OPTION name "Error";
+	OPTION tune "No tune";
 	ENTER INIT { SET error TO on }
 }
 M_Error Error;
@@ -125,6 +189,16 @@ Flash MACHINE (delay:500)output {
 		error_flag.tab := tab;
 	}
 }
+
+MultiStateSwitch MACHINE {
+	EXPORT STATES One, Two, Three, Four RW;
+	One INITIAL;
+	Two STATE;
+	Three STATE;
+	Four STATE;
+}
+Switch MultiStateSwitch;
+
 
 #flash1 Flash (type:Light, tab:Outputs) O_GrabNo1JawOpen;
 flash1 Flash (type:Light, tab:Outputs) OUT_1;

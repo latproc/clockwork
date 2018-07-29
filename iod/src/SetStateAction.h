@@ -33,26 +33,29 @@ class MachineInstance;
 struct SetStateActionTemplate : public ActionTemplate {
     SetStateActionTemplate(CStringHolder targ, Value newstate) : target(targ), new_state(newstate) { }
     virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-        return out << target.get() << " " << new_state;
-    }
+		std::ostream &operator<<(std::ostream &out) const;
     CStringHolder target;
     Value new_state;
     std::string trigger_event;
+private:
 	Condition condition;
 };
 
 struct SetStateAction : public Action {
-    SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth = 0)
-	    : Action(mi), target(t.target), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) { }
+	SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth = 0);
     Status run();
     Status checkComplete();
 	void setAuthority(uint64_t auth) { authority = auth; }
-    virtual std::ostream &operator<<(std::ostream &out)const;
+
+	Condition &getCondition() { return condition; }
+
+	virtual std::ostream &operator<<(std::ostream &out)const;
     CStringHolder target;
+		Value saved_state;
     Value new_state; // new state as given by the program (may be a property name)
     State value;
     MachineInstance *machine;
+private:
 	Condition condition;
 protected:
 	uint64_t authority;

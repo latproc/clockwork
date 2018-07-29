@@ -23,7 +23,7 @@
 #include "State.h"
 #include "symboltable.h"
 
-State::State(const char *msg) :text(msg), val(0), name(msg, Value::t_string) {
+State::State(const char *msg) :text(msg), val(0), name(msg, Value::t_string), enter_proc(0) {
     token_id = Tokeniser::instance()->getTokenId(text.c_str());
 }
 
@@ -62,3 +62,15 @@ bool State::operator==(const State &other) const {
 bool State::operator!=(const State &other) const {
     return token_id != other.token_id || val != other.val;
 }
+
+void State::enter(void *data) const {
+	if (enter_proc) {
+		enter_proc(data);
+	}
+
+}
+
+void State::setEnterFunction( void (*f)(void *) ) {
+	enter_proc = f;
+}
+

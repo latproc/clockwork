@@ -31,10 +31,11 @@ class MachineInstance;
 class DynamicValue;
 
 uint64_t microsecs();
+void simple_deltat(std::ostream &out, uint64_t dt);
 
 class Value {
 public:
-    enum Kind { t_empty, t_integer, t_string, t_bool, t_symbol, t_dynamic /*, t_list, t_map */};
+    enum Kind { t_empty, t_integer, t_string, t_bool, t_symbol, t_dynamic, t_float /*, t_list, t_map */};
 
 	typedef std::list<Value*> List;
 //    typedef std::map<std::string, Value> Map;
@@ -46,6 +47,8 @@ public:
     Value(int v) ;
     Value(unsigned int v);
     Value(unsigned long v);
+	Value(float v);
+	Value(double v);
     Value(const char *str, Kind k = t_symbol);
     Value(std::string str, Kind k = t_symbol);
     Value(const Value&other);
@@ -54,15 +57,23 @@ public:
     virtual ~Value();
     std::string asString() const;
     std::string quoted() const;
+	bool asFloat(double &val) const;
 	bool asInteger(long &val) const;
+	bool asBoolean(bool &val) const;
+	long trunc() const;
+	long round(int digits = 0) const;
+	double toFloat() const;
     explicit operator long() { return iValue; }
     explicit operator int() { return (int)iValue; }
+	explicit operator float() { return (float)fValue; }
+	explicit operator double() { return fValue; }
 //	Value operator[](int index);
 //	Value operator[](std::string index);
 
     Kind kind;
     bool bValue;
     long iValue;
+	double fValue;
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
     DynamicValue *dyn_value;
@@ -80,6 +91,8 @@ public:
     Value &operator=(unsigned long);
     Value &operator=(const char *);
     Value &operator=(std::string);
+	Value &operator=(float);
+	Value &operator=(double);
 
     bool operator>=(const Value &other) const;
     bool operator<=(const Value &other) const;

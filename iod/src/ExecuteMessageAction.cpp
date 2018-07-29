@@ -24,32 +24,48 @@
 #include "IOComponent.h"
 #include "MachineInstance.h"
 
-// ExecuteMessageAction - immediately execute a triggers and handle a message on a machine
+// ExecuteMessageAction - immediately execute a trigger and handle a message on a machine
+ExecuteMessageActionTemplate::ExecuteMessageActionTemplate(CStringHolder msg, CStringHolder dest)
+: message(msg), target(dest), target_machine(0) {}
+
+ExecuteMessageActionTemplate::ExecuteMessageActionTemplate::ExecuteMessageActionTemplate(CStringHolder msg, MachineInstance *dest)
+: message(msg), target(dest->fullName().c_str()), target_machine(dest) {}
 
 Action *ExecuteMessageActionTemplate::factory(MachineInstance *mi) { 
   return new ExecuteMessageAction(mi, *this); 
 }
 
 std::ostream &ExecuteMessageActionTemplate::operator<<(std::ostream &out) const {
-    return out << "ExecuteMessageActionTemplate " << message.get() << " " << target.get() << "\n";
+    return out << "ExecuteMessageActionTemplate " << message.get() << " on " << target.get();
 }
+
+ExecuteMessageAction::ExecuteMessageAction(MachineInstance *mi, ExecuteMessageActionTemplate &eat)
+: Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine) { }
 
 Action::Status ExecuteMessageAction::run() {
 	owner->start(this);
 	if (!target_machine) target_machine = owner->lookup(target.get());
 
-	if (target_machine) target_machine->execute(Message(message.get()), owner);
-	status = Action::Complete;
-	owner->stop(this);
+	if (target_machine) {
+		status = target_machine->execute(Message(message.get()), owner);
+		//New, Running, Complete, Failed, Suspended, NeedsRetry
+		if (status == Complete || status == Failed) owner->stop(this);
+	}
+	else {
+		status = Action::Failed;
+		owner->stop(this);
+	}
 	return status;
 }
 
 Action::Status ExecuteMessageAction::checkComplete() {
-	return Action::Complete;
+	status = target_machine->execute(Message(message.get()), owner);
+	if (status == Running || status == Suspended) owner->stop(this);
+	return status;
 }
 
 std::ostream &ExecuteMessageAction::operator<<(std::ostream &out) const {
-    return out << "ExecuteMessageAction " << message.get() << " " << target.get() << "\n";
+    return out << "ExecuteMessageAction " << message.get() << " on " << target.get();
 }
 
 

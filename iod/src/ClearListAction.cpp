@@ -45,12 +45,11 @@ std::ostream &ClearListAction::operator<<(std::ostream &out) const {
 
 Action::Status ClearListAction::run() {
 	owner->start(this);
-    if (!dest_machine)
-        dest_machine = owner->lookup(dest);
+    dest_machine = owner->lookup(dest);
 	if (dest_machine && dest_machine->_type == "LIST" ) {
 #if 1
         // TBD needs further testing
-        for (int i=0; i<dest_machine->parameters.size(); ++i) {
+        for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
             Parameter &p = dest_machine->parameters[i];
             if (p.machine) {
                 dest_machine->stopListening(p.machine);
@@ -64,6 +63,7 @@ Action::Status ClearListAction::run() {
 	}
 	else if (dest_machine && dest_machine->_type == "REFERENCE" ) {
         dest_machine->removeLocal(0);
+		dest_machine->localised_names.erase("ITEM");
         status = Complete;
 	}
     else
