@@ -1,0 +1,273 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+The clockwork interpreter
+\end_layout
+
+\begin_layout Author
+Martin Leadbeater
+\end_layout
+
+\begin_layout Section*
+Introduction
+\end_layout
+
+\begin_layout Standard
+The interpreter is written in C++ using yacc and lex to implement the language
+ parser.
+\end_layout
+
+\begin_layout Section*
+Architecture
+\end_layout
+
+\begin_layout Section*
+Notes
+\end_layout
+
+\begin_layout Itemize
+When a state is activated (see MachineInstance::setState()) several things
+ need to be done:
+\end_layout
+
+\begin_deeper
+\begin_layout Enumerate
+modbus exports are checked and if necessary modbus messages are sent
+\end_layout
+
+\begin_layout Enumerate
+in the case of a new state
+\end_layout
+
+\begin_deeper
+\begin_layout Enumerate
+the timer is reset
+\end_layout
+
+\begin_layout Enumerate
+the property value 'STATE' is updated
+\end_layout
+
+\begin_layout Enumerate
+in the case of MQTT objects, the state change is published
+\end_layout
+
+\begin_layout Enumerate
+in the case of modbus exported states, the state change is exported to modbus
+\end_layout
+
+\begin_layout Enumerate
+all stable states are examined 
+\end_layout
+
+\begin_deeper
+\begin_layout Enumerate
+those that use timers have their previous trigger removed and a new trigger
+ setup
+\end_layout
+
+\begin_layout Enumerate
+all subcondition handlers are checked and those that use timers
+\end_layout
+
+\begin_deeper
+\begin_layout Enumerate
+have their trigger cleared
+\end_layout
+
+\begin_layout Enumerate
+have a new trigger set if the stable state is now the current state
+\end_layout
+
+\end_deeper
+\end_deeper
+\end_deeper
+\begin_layout Enumerate
+a message is sent via zmq
+\end_layout
+
+\begin_layout Enumerate
+the <name>_enter method is called if it exists on the current machine
+\end_layout
+
+\begin_layout Enumerate
+the <name>_enter method is send to each dependent machine 
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+When a message is executed,
+\end_layout
+
+\begin_deeper
+\begin_layout Enumerate
+it will fail if the target machine is disabled
+\end_layout
+
+\begin_layout Enumerate
+An empty message will fail
+\end_layout
+
+\begin_layout Enumerate
+builtin objects (POINT, SUBSCRIBER, PUBLISHER, ANALOGINPUT, STATUS_FLAG
+ are treated specially and futher processing stops
+\end_layout
+
+\begin_layout Enumerate
+executing operations are given an opportuniy to complete if they are waiting
+ for a trigger that has been fired (eg a state change).
+ This process resolves call actions, for example since the call action will
+ block until its corresponding action has completed processing.
+\end_layout
+
+\begin_layout Enumerate
+a handler is constructed to process the event and started (see HandleMessageActi
+on )
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+the main loop should set an alarm at the next earliest scheduled event rather
+ than on a fixed clock
+\end_layout
+
+\begin_layout Subsection*
+Sets
+\end_layout
+
+\begin_layout Standard
+Sets/Lists are implemented as machines where the parameter list used to
+ hold references to the members of the list.
+ This approach takes care of parsing and also naturally leads to providing
+ functions such as testing the state of the list.
+ 
+\end_layout
+
+\begin_layout Standard
+To evaluate a predicate, the interpreter tries to minimise calculations
+ such as machine lookups.
+ The first phase of a predicate evaluation resolves symbols at each node
+ in the expression tree to find Values that contains the evaluation of the
+ node.
+ In the case of MachineInstances, the current state of the machine is needed
+ and this is achieved by caching a pointer to a Value within the machine
+ instance that retains the current state.
+ Once a predicate has been evaluated, the cached values are used for the
+ comparison and the only computation required is to dereference and evaluate
+ the cached Value pointers.
+\end_layout
+
+\begin_layout Standard
+In the case of VARIABLE MachineInstances, the value cached in the predicate
+ evaluation is the value that holds the property called 'VALUE' within the
+ machine.
+\end_layout
+
+\begin_layout Standard
+In the case of LISTs, the value cached if a function object that evaluates
+ the condition dynamically
+\end_layout
+
+\begin_layout Subsection*
+Message Log
+\end_layout
+
+\begin_layout Standard
+The daemons now implement a message log with capped memory.
+ If new messages would cause the buffer to overflow messages are first removed
+ from the log, oldest first.
+ Initially messages are not typed, they are essentially just strings.
+ The command interpreter provides a 'MESSAGES' command with the syntax:
+\end_layout
+
+\begin_layout LyX-Code
+MESSAGES [JSON] [num_messages]
+\end_layout
+
+\begin_layout Standard
+If JSON is not specified text messages will be returned.
+\end_layout
+
+\begin_layout Standard
+There is a facility to write the message log to a file and to reload it
+ on startup.
+ This is not currently active (there is now way to specify the name of the
+ file on the commandline)
+\end_layout
+
+\begin_layout Standard
+Currently clockwork exits if there are fatal errors in the configuration.
+ The plan is to not exit but to continue running, servicing the command
+ interface so the web user interface or iosh can be used to examine the
+ errors.
+\end_layout
+
+\end_body
+\end_document

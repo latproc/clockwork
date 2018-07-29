@@ -1474,6 +1474,17 @@ Channels currently share a connection to the standard command channel but
 Test channels that are marked as publishers but instantiated in clockwork
 \end_layout
 
+\begin_layout Itemize
+Each channel has a CommandSocketInfo pointer in its internal data.
+ This structure is used to hold information about communication with the
+ main processing thread.
+\end_layout
+
+\begin_layout Itemize
+A CommandSocketInfo is created when setDefinition is called on a channel
+ as long as the structure has not already been allocated 
+\end_layout
+
 \begin_layout Section
 Predefined Channels
 \end_layout
