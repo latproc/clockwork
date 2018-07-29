@@ -280,7 +280,7 @@ struct ModbusServerThread
 			if (modbus_state == ms_paused) { 
 				if (++paused_counter>warn_at) {
 					std::cout << "modbus paused\n" << std::flush;
-					warn_at += 10;
+					warn_at += 100;
 				}
 				usleep(10000); 
 				continue; 
@@ -746,19 +746,24 @@ void loadData(const char *initial_settings)
 	}
 	else
 	{
-		int num_params = cJSON_GetArraySize(obj);
-		if (num_params)
 		{
-			for (int i=0; i<num_params; ++i)
-			{
-				cJSON *item = cJSON_GetArrayItem(obj, i);
+        	cJSON *item = obj->child; 
+			int i = 0;
+			while (item) {
 				if (item->type == cJSON_Array)
 				{
-					Value group = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 0), 0);
-					Value addr = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 1), 0);
-					Value name = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 2), 0);
-					Value len = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 3), 0);
-					Value value = MessageEncoding::valueFromJSONObject(cJSON_GetArrayItem(item, 4), 0);
+					cJSON *fld = item->child;
+					Value group(MessageEncoding::valueFromJSONObject(fld, 0));
+					fld = fld->next;
+					Value addr(MessageEncoding::valueFromJSONObject(fld, 0));
+					fld = fld->next;
+					Value kind(MessageEncoding::valueFromJSONObject(fld, 0));
+					fld = fld->next;
+					Value name(MessageEncoding::valueFromJSONObject(fld, 0));
+					fld = fld->next;
+					Value len(MessageEncoding::valueFromJSONObject(fld, 0));
+					fld = fld->next;
+					Value value(MessageEncoding::valueFromJSONObject(fld, 0));
 					if (DEBUG_BASIC)
 						std::cout << name << ": " << group << " " << addr << " " << len << " " << value <<  "\n";
 					if (value.kind == Value::t_string) {
@@ -774,6 +779,7 @@ void loadData(const char *initial_settings)
 					std::cerr << "item " << i << " is not of the expected format: " << node << "\n";
 					free(node);
 				}
+				item = item->next; ++i;
 			}
 		}
 	}
@@ -1016,7 +1022,7 @@ int main(int argc, const char * argv[])
 				if (errno == EINTR) continue;
 				if (++exception_count <= 5 && program_state != s_finished) { usleep(2000); exit(1); continue; }
 			}
-			if (need_refresh) {
+			if (need_refresh && subscription_manager.setupStatus() == SubscriptionManager::e_done) {
 				CollectModbusStatus();
 				need_refresh = false;
 				std::cout << "resuming modbus\n";
@@ -1056,6 +1062,11 @@ int main(int argc, const char * argv[])
 
 			std::vector<Value> params(0);
 			size_t count = parseIncomingMessage(data, params);
+			if (count == 0) {
+				std::cout << "received unknown data, '" << data << "', from clockwork of length " << len << " could not parse\n";
+				if (data) { free(data); data = 0; }
+				continue;
+			}
 			std::string cmd(params[0].asString());
 			free(data);
 			data = 0;

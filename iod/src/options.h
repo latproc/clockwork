@@ -66,6 +66,10 @@ bool tracing();
 
 unsigned long get_cycle_time();
 void set_cycle_time(unsigned long ct);
+
+bool export_to_c();
+void set_export_to_c(bool c_export);
+
     
 #ifdef __cplusplus
 }

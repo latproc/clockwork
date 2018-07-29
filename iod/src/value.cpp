@@ -283,7 +283,7 @@ bool numeric_types(Value::Kind a, Value::Kind b) {
 }
 
 bool Value::operator>=(const Value &other) const {
-    Kind a = kind;
+	Kind a = kind;
 	Kind b = other.kind;
 
 	if (a == t_symbol) a = t_string;
@@ -519,7 +519,7 @@ bool Value::operator!() const {
 static bool stringToLong(const std::string &s, long &x) {
 	const char *str = s.c_str();
 	char *end;
-	x = strtol(str, &end, 0);
+	x = strtol(str, &end, 10);
 	if (*end) {
 		// check if this is actually a float before writing an error message
 		if (*end == '.') {
@@ -809,7 +809,7 @@ Value Value::operator-(void) const {
 				if (stringToLong(sValue, x))
 					return -x;
 				char *end;
-				x = strtol(sValue.c_str(),&end,0);
+				x = strtol(sValue.c_str(),&end,10);
 				if (*end == 0) return Value(-x);
 		default: ;
 	}
@@ -1046,19 +1046,22 @@ std::string Value::asString() const {
             snprintf(buf, 25, "%ld", iValue);
             return buf;
         }
-		case t_float:
-		{
-			char buf[25];
-			snprintf(buf, 25, "%6.6lf", fValue);
-			return buf;
-		}
+				case t_float:
+				{
+					char buf[25];
+					snprintf(buf, 25, "%6.6lf", fValue);
+					return buf;
+				}
         case t_empty: return "null";
         case t_symbol:
         case t_string:
             return sValue;
         case t_dynamic:
-            return "<dynamic value>";
-            
+				{
+					const Value &tmp((*dyn_value)());
+					return tmp.asString();
+				}
+
         default:
             break;
     }
@@ -1075,6 +1078,30 @@ std::string Value::quoted() const {
 	else return val;
 }
 
+bool Value::asBoolean(bool &x) const {
+	switch(kind) {
+		case t_bool: { x = bValue; return true; }
+		case t_integer: { x = iValue != 0; return true; }
+		case t_float: { x = fValue != 0.0; return true; }
+		case t_string:
+		case t_symbol:
+			if (sValue == "true" || sValue == "TRUE") {
+				x = true; return true;
+			}
+			else if (sValue == "false" || sValue == "FALSE") {
+				x = false; return true;
+			}
+			else return false;
+		case t_dynamic:
+		{
+			const Value &tmp((*dyn_value)());
+			return tmp.asBoolean(x);
+		}
+		default:
+			return false;
+	}
+}
+
 bool Value::asInteger(long &x) const {
 	if (kind == t_integer) {
 		x = iValue;
@@ -1087,7 +1114,7 @@ bool Value::asInteger(long &x) const {
 	if (kind == t_string || kind == t_symbol) {
 		char *p;
 		const char *v = sValue.c_str();
-		x = strtol(v, &p, 0);
+		x = strtol(v, &p, 10);
 		if (*p == 0) return true;
 		if (p != v )
 			return false;
@@ -1096,6 +1123,10 @@ bool Value::asInteger(long &x) const {
 	else if (kind == t_bool) {
 		x = (bValue) ? 1 : 0;
 		return true;
+	}
+	else if (kind == t_dynamic) {
+		const Value &tmp((*dyn_value)());
+		return tmp.asInteger(x);
 	}
 	return false;
 }
@@ -1121,6 +1152,10 @@ bool Value::asFloat(double &x) const {
 	else if (kind == t_bool) {
 		x = (bValue) ? 1.0 : 0.0;
 		return true;
+	}
+	else if (kind == t_dynamic) {
+		const Value &tmp((*dyn_value)());
+		return tmp.asFloat(x);
 	}
 	return false;
 }

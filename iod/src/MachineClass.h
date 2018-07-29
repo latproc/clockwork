@@ -51,6 +51,7 @@ public:
   std::list<Transition> transitions;
   std::list<ModbusAddressTemplate> exports;
   std::vector<std::string> state_exports;
+	std::vector<std::string> state_exports_rw;
   std::vector<std::string> command_exports;
   static std::map<std::string, MachineClass> machine_classes;
   void defaultState(State state);
@@ -85,6 +86,11 @@ public:
 
 	std::set<std::string> property_names;
 	std::set<std::string> command_names;
+
+	void exportHandlers(std::ostream &ofs);
+	void exportCommands(std::ostream &ofs);
+	bool cExport(const std::string &filename);
+
 private:
     MachineClass();
     MachineClass(const MachineClass &other);

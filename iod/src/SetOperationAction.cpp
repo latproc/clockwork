@@ -25,15 +25,17 @@
 
 static void debugParameterChange(MachineInstance *dest_machine) {
 	const char *delim="";
-	char buf[1000];
-	snprintf(buf, 1000, "[");
+	const int bufsize=600;
+	char buf[bufsize];
+	snprintf(buf, bufsize, "[");
 	size_t n = 1;
-	for (unsigned int i=0; i<dest_machine->parameters.size(); ++i) {
-		snprintf(buf+n,1000-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
+	for (unsigned int i=0; n<bufsize-2 && i<dest_machine->parameters.size(); ++i) {
+		if (n + strlen(delim) + dest_machine->parameters[i].val.asString().length() >= bufsize-2) { n=bufsize-2; break; }
+		snprintf(buf+n,bufsize-n,"%s%s",delim,dest_machine->parameters[i].val.asString().c_str());
 		n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
 		delim = ",";
 	}
-	snprintf(buf+n, 1000-n, "]");
+	snprintf(buf+n, bufsize-n, "]");
 	dest_machine->setValue("DEBUG", buf);
 }
 
@@ -62,11 +64,17 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
     : Action(m), scope(m), count(dat->count), 
-
         source_a(dat->src_a_name), source_b(dat->src_b_name), dest(dat->dest_name),
-        condition(dat->condition), property_name(dat->property_name), source_a_machine(0), source_b_machine(0),
+        condition(dat->condition), property_name(dat->property_name),
+				source_a_machine(0), source_b_machine(0),
         dest_machine(0),  operation(dat->operation),
-         remove_selected(dat->remove_selected) {
+			 remove_selected(dat->remove_selected), start_pos(dat->start_pos), end_pos(dat->end_pos) {
+	if (count.dynamicValue())
+		 count.dynamicValue()->setScope(scope);
+	if (start_pos.dynamicValue())
+		start_pos.dynamicValue()->setScope(scope);
+	if (end_pos.dynamicValue())
+		end_pos.dynamicValue()->setScope(scope);
 }
 
 SetOperationAction::SetOperationAction() : Action(), dest_machine(0) {
@@ -100,13 +108,13 @@ bool MachineIncludesParameter(MachineInstance *m, Value &param) {
 }
 
 Action::Status SetOperationAction::run() {
-	owner->start(this);
+		owner->start(this);
     try {
-		// do not retain cached values since set operations may be working
-		// with changed items from other lists
-		source_a.cached_machine = 0;
-		source_b.cached_machine = 0;
-		dest.cached_machine = 0;
+				// do not retain cached values since set operations may be working
+				// with changed items from other lists
+				source_a.cached_machine = 0;
+				source_b.cached_machine = 0;
+				dest.cached_machine = 0;
         source_a_machine = owner->lookup(source_a);
         source_b_machine = owner->lookup(source_b);
         dest_machine = owner->lookup(dest);
@@ -415,36 +423,48 @@ SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationAct
 : SetOperationAction(m, dat)
 {
     /*
-    if (start_pos.kind == Value::t_symbol || start_pos.kind == Value::t_string) {
-        Value v = m->properties.lookup(start_pos.sValue.c_str());
-        if (!v.asInteger(sp)) sp = 0;
-    }
-    else {
-        if (!start_pos.asInteger(sp)) sp = 0;
-    }
-    if (sp == -1) sp = 0;
-    if (ep == -1) sp = 0;
-    if (end_pos.kind == Value::t_symbol || end_pos.kind == Value::t_string) {
-        Value v = m->properties.lookup(start_pos.sValue.c_str());
-        if (!v.asInteger(ep)) ep = -1;
-    }
-    else {
-        if (!end_pos.asInteger(ep)) ep = -1;
-    }
-    if (ep == -1) count = -1; else count = ep - sp + 1;
      */
 }
 
 Action::Status SelectSetOperation::doOperation() {
     int num_copied = 0;
     long to_copy;
-	if (!source_a_machine) {
-		error_str = "No source machine for copy";
-		status = Failed;
-		return status;
-	}
+		if (!source_a_machine) {
+			error_str = "No source machine for copy";
+			status = Failed;
+			return status;
+		}
+
+		{
+			if (start_pos.kind == Value::t_symbol || start_pos.kind == Value::t_string) {
+				Value v = scope->properties.lookup(start_pos.sValue.c_str());
+				if (!v.asInteger(sp)) sp = -1;
+			}
+			else {
+				if (!start_pos.asInteger(sp)) sp = -1;
+			}
+			if (sp == -1) sp = 0;
+
+			if (end_pos.kind == Value::t_symbol || end_pos.kind == Value::t_string) {
+				Value v = scope->properties.lookup(end_pos.sValue.c_str());
+				if (!v.asInteger(ep)) ep = -1;
+			}
+			else {
+				if (!end_pos.asInteger(ep)) ep = -1;
+			}
+			if (count.kind == Value::t_integer && count == -1) {
+				if (ep != -1) count = ep - sp + 1;
+			}
+		}
     if (source_a_machine) {
-        if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+			if (count.kind == Value::t_symbol) {
+				const Value &prop = owner->getValue(count);
+				if (prop == SymbolTable::Null || !prop.asInteger(to_copy))
+					to_copy = source_a_machine->parameters.size();
+			}
+			else
+				if ( (count.kind == Value::t_integer && count < 0) || !count.asInteger(to_copy))
+					to_copy = source_a_machine->parameters.size();
 #ifdef DEPENDENCYFIX
         Value last;
         MachineInstance *last_machine = 0;
@@ -462,22 +482,22 @@ Action::Status SelectSetOperation::doOperation() {
 			++idx;
 		}
 
-		unsigned int i=0;
+		unsigned int i = sp; // start from here
 		while (i < source_a_machine->parameters.size()) {
 			debugParameterChange(dest_machine);
-            Value a(source_a_machine->parameters.at(i).val);
-            if (a.kind == Value::t_symbol) {
-                MachineInstance *mi = owner->lookup(a);
+			Value a(source_a_machine->parameters.at(i).val);
+			if (a.kind == Value::t_symbol) {
+					MachineInstance *mi = owner->lookup(a);
 #ifdef DEPENDENCYFIX
-                if (last_machine && !remove_selected) {
-                    if (MachineIncludesParameter(source_a_machine,last)) {
-                        source_a_machine->addDependancy(last_machine);
-                        last_machine->listenTo(source_a_machine);
-                        last_machine->addDependancy(source_a_machine);
-                    }
-                }
-                last = a;
-                last_machine = mi;
+					if (last_machine && !remove_selected) {
+							if (MachineIncludesParameter(source_a_machine,last)) {
+									source_a_machine->addDependancy(last_machine);
+									last_machine->listenTo(source_a_machine);
+									last_machine->addDependancy(source_a_machine);
+							}
+					}
+					last = a;
+					last_machine = mi;
 #endif
                 //source_a_machine->addLocal(a, mi);
 				if (add_item) {
@@ -486,48 +506,48 @@ Action::Status SelectSetOperation::doOperation() {
 				}
 				else
 					source_a_machine->locals[idx] = a;
-				source_a_machine->locals[idx].machine = mi;
-				source_a_machine->locals[idx].val.cached_machine = mi;
+					source_a_machine->locals[idx].machine = mi;
+					source_a_machine->locals[idx].val.cached_machine = mi;
 
-                source_a_machine->locals[idx].val = Value("ITEM");
-                source_a_machine->locals[idx].real_name = a.sValue;
-				//std::cout << "step " << i << " " << source_a_machine->locals[0].real_name << "\n";
-                if (!mi)
-                    throw new SetOperationException();
-                if (condition.predicate) {
-					//std::cout << "flushing predicate cache\n";
-					condition.predicate->flushCache();
-					source_a_machine->localised_names["ITEM"] = mi;
-				}
+					source_a_machine->locals[idx].val = Value("ITEM");
+					source_a_machine->locals[idx].real_name = a.sValue;
+					//std::cout << "step " << i << " " << source_a_machine->locals[0].real_name << "\n";
+					if (!mi)
+						throw new SetOperationException();
+					if (condition.predicate) {
+						//std::cout << "flushing predicate cache\n";
+						condition.predicate->flushCache();
+						source_a_machine->localised_names["ITEM"] = mi;
+					}
 				
-                if ( (!condition.predicate || condition(owner)) ){
-					if (dest_machine->_type == "LIST") {
-						if (!MachineIncludesParameter(dest_machine,a)) {
-							dest_machine->addParameter(a);
+					if ( (!condition.predicate || condition(owner)) ){
+						if (dest_machine->_type == "LIST") {
+							if (!MachineIncludesParameter(dest_machine,a)) {
+								dest_machine->addParameter(a);
+							}
+							++num_copied;
 						}
-						++num_copied;
+						else if (dest_machine->_type == "REFERENCE") {
+							if (dest_machine->locals.size()) dest_machine->removeLocal(0);
+							dest_machine->addLocal("ITEM", mi);
+							++num_copied;
+						}
+						if (remove_selected) {
+								source_a_machine->removeParameter(i);
+						}
+						if (num_copied >= to_copy) break;
+						if (remove_selected) continue; // skip the increment to next parameter
 					}
-					else if (dest_machine->_type == "REFERENCE") {
-						if (dest_machine->locals.size()) dest_machine->removeLocal(0);
-						dest_machine->addLocal("ITEM", mi);
-						++num_copied;
-					}
-                    if (remove_selected) {
-                        source_a_machine->removeParameter(i);
-                    }
-                    if (num_copied >= to_copy) break;
-                    if (remove_selected) continue; // skip the increment to next parameter
-                }
-				else if (condition.predicate) {
+					else if (condition.predicate) {
 					//std::cout << "evaluation of " << condition.last_evaluation 
 					//	<< " gave " << condition.last_result << "\n";
+					}
 				}
-            }
-            else {
-                if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
-            }
-            ++i;
-        }
+				else {
+						if (!MachineIncludesParameter(dest_machine,a)) dest_machine->addParameter(a);
+				}
+				++i;
+			}
 		if (!add_item && !keep_item && source_a_machine->locals.size()) {
 			std::vector<Parameter>::iterator iter = source_a_machine->locals.begin();
 			for (unsigned int i=0; i<idx; ++i, iter++) {;}

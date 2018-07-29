@@ -190,6 +190,16 @@ Flash MACHINE (delay:500)output {
 	}
 }
 
+MultiStateSwitch MACHINE {
+	EXPORT STATES One, Two, Three, Four RW;
+	One INITIAL;
+	Two STATE;
+	Three STATE;
+	Four STATE;
+}
+Switch MultiStateSwitch;
+
+
 #flash1 Flash (type:Light, tab:Outputs) O_GrabNo1JawOpen;
 flash1 Flash (type:Light, tab:Outputs) OUT_1;
 #flash2 Flash (type:Light, tab:Outputs) OUT_2;

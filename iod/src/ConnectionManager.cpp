@@ -41,24 +41,26 @@
 #include "SocketMonitor.h"
 #include "ConnectionManager.h"
 
-SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &s, const char *snam)
-    : SocketMonitor(s, snam) { }
+static std::string STATE_ERROR("Operation cannot be accomplished in current state");
+
+SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &sm)
+    : SocketMonitor(sm) { }
 
 void SingleConnectionMonitor::on_event_accepted(const zmq_event_t &event_, const char* addr_) {
 	SocketMonitor::on_event_accepted(event_, addr_);
-	//DBG_CHANNELS << socket_name << "Accepted\n";
+	DBG_CHANNELS << socket_name << "Accepted\n";
 }
 
 void SingleConnectionMonitor::on_event_connected(const zmq_event_t &event_, const char* addr_) {
 	SocketMonitor::on_event_connected(event_, addr_);
-	//DBG_CHANNELS << socket_name << " Connected\n";
+	DBG_CHANNELS << socket_name << " Connected\n";
 }
 
 void SingleConnectionMonitor::on_event_disconnected(const zmq_event_t &event_, const char* addr_) {
-		//DBG_CHANNELS << socket_name << " Disconnected\n";
-		//sock.disconnect(sock_addr.c_str());
-		SocketMonitor::on_event_disconnected(event_, addr_);
-    }
+	DBG_CHANNELS << socket_name << " Disconnected\n";
+	//sock.disconnect(sock_addr.c_str());
+	SocketMonitor::on_event_disconnected(event_, addr_);
+}
 
 void SingleConnectionMonitor::setEndPoint(const char *endpt) { sock_addr = endpt; }
 
@@ -125,21 +127,6 @@ public:
 	static const uint64_t channel_request_timeout = 3000000;
 };
 
-#if 0
-void SubscriptionManager::createSubscriberSocket(const char *chname) {
-	subscriber_ = new zmq::socket_t(*MessagingInterface::getContext(), (protocol == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR);
-	monit_subs = new SingleConnectionMonitor(*subscriber_,
-			constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str());
-	if (subscriber_host == "*") {
-		_setup_status = e_not_used; // This is not a client
-		assert(protocol == eCHANNEL);
-		char url[100];
-		snprintf(url, 100, "tcp://*:%d", subscriber_port);
-		subscriber_->bind(url);
-	}
-}
-#endif
-
 SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 										 const char *remote_host, int remote_port, int setup_port_num) :
 		subscriber_host(remote_host),
@@ -147,8 +134,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 		subscriber_(*MessagingInterface::getContext(), (protocol == eCLOCKWORK)?ZMQ_SUB:ZMQ_PAIR),
 		sender_(0),
 		subscriber_port(remote_port),
-		monit_subs(subscriber_,
-		   constructAlphaNumericString("inproc://", chname, ".subs", "inproc://monitor.subs").c_str()),
+		monit_subs(subscriber_),
 		monit_pubs(0), monit_setup(0),
 		setup_(0),
 		_setup_status(e_startup), sub_status_(ss_init)
@@ -158,8 +144,10 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 	//createSubscriberSocket(chname);
 	if (isClient()) {
 		setup_ = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
-		monit_setup = new SingleConnectionMonitor(*setup_, constructAlphaNumericString("inproc://", chname, ".setup", "inproc://monitor.setup").c_str() );
+		monit_setup = new SingleConnectionMonitor(*setup_);
 		setSetupStatus(e_startup);
+		init();
+
 		if (subscriber_host == "*") {
 			_setup_status = e_not_used; // This is not a client
 			assert(protocol == eCHANNEL);
@@ -168,7 +156,8 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 			subscriber_.bind(url);
 		}
 	}
-	init();
+	else
+		init();
 }
 
 SubscriptionManager::~SubscriptionManager() {
@@ -178,8 +167,8 @@ SubscriptionManager::SubStatus SubscriptionManager::subscriberStatus() { return 
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
 	assert(isClient());
-    if (monit_setup) delete monit_setup;
-    monit_setup = monitor;
+	if (monit_setup) delete monit_setup;
+	monit_setup = monitor;
 }
 
 void SubscriptionManager::init() {
@@ -234,9 +223,11 @@ bool SubscriptionManager::requestChannel() {
 				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
 				if (zmq_errno() == ETIMEDOUT) {
+					// TBD. need propery recovery from this...
+					exit(zmq_errno());
 					smi->sent_request = false;
 				}
-				if (zmq_errno() == EFSM /*EFSM*/) {
+				if (zmq_errno() == EFSM /*EFSM*/ || STATE_ERROR == zmq_strerror(zmq_errno())) {
 					{
 						FileLogger fl(program_name);
 						fl.f() << channel_name << " attempting recovery requesting channels\n" << std::flush; }
@@ -264,8 +255,7 @@ bool SubscriptionManager::requestChannel() {
 				}
         if (len == 0) return false; // no data yet
         if (len < 1000) buf[len] =0;
-        assert(len);
-		DBG_CHANNELS << "Got channel " << buf << "\n";
+				DBG_CHANNELS << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
             buf[len] = 0;
@@ -312,9 +302,19 @@ void SubscriptionManager::configureSetupConnection(const char *host, int port) {
 static char *setup_url = 0;
 bool SubscriptionManager::setupConnections() {
 	char url[100];
+	snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), setup_port);
+
 	if (setupStatus() == SubscriptionManager::e_startup ) {
 
-		snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), setup_port);
+		int counter = 5;
+		while (counter-- > 0 && !monit_setup->active()) { DBG_CHANNELS << "waiting.." << counter << "\n"; usleep(100); }
+		if (!monit_setup->active()) {
+			char buf[100];
+			snprintf(buf, 150, "Connection monitor for %s failed to activate", url);
+			std::cerr << buf << "\n";
+			return false;
+		}
+
 		current_channel = "";
 		try {
 			{FileLogger fl(program_name); fl.f() << "SubscriptionManager connecting to " << url << "\n"<<std::flush; }
@@ -355,6 +355,12 @@ bool SubscriptionManager::setupConnections() {
 			DBG_CHANNELS << " connecting subscriber to " << channel_url << "\n";
 			{FileLogger fl(program_name); fl.f() << " connecting subscriber to " << channel_url << "\n"; }
 			monit_subs.setEndPoint(channel_url.c_str());
+			int counter = 5;
+			while (counter-- > 0 && !monit_subs.active()) usleep(100);
+			if (!monit_subs.active()) {
+				DBG_CHANNELS << channel_url << " monitor subscriber not active\n";
+				return false;
+			}
 			subscriber().connect(channel_url.c_str());
 
 			//setSetupStatus(SubscriptionManager::e_done); //TBD is this correct? Shouldn't be here
@@ -456,13 +462,13 @@ void MessageRouter::finish() {
 class scoped_lock {
 public:
 	scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) {
-		//		NB_MSG << location << " LOCKING...\n";
+		//		DBG_CHANNELS << location << " LOCKING...\n";
 		lock.lock();
-		//		NB_MSG << location << " LOCKED...\n";
+		//		DBG_CHANNELS << location << " LOCKED...\n";
 	}
 	~scoped_lock() {
 		lock.unlock();
-		//		NB_MSG << location << " UNLOCKED\n";
+		//		DBG_CHANNELS << location << " UNLOCKED\n";
 	}
 	std::string location;
 	boost::mutex &mutex;
@@ -478,7 +484,7 @@ void MessageRouter::addRoute(int route_id, zmq::socket_t *dest) {
 	scoped_lock lock("addRoute", internals->data_mutex);
 
 	if (internals->routes.find(route_id) == internals->routes.end()) {
-		NB_MSG << " added route " << route_id << "\n";
+		DBG_CHANNELS << " added route " << route_id << "\n";
 		internals->routes[route_id] = new RouteInfo(dest);
 	}
 }
@@ -511,6 +517,7 @@ void MessageRouter::addDefaultRoute(int type, const std::string address) {
 void MessageRouter::addRemoteSocket(int type, const std::string address) {
 	scoped_lock lock("setRemoteSocket", internals->data_mutex);
 	zmq::socket_t *remote_sock = new zmq::socket_t(*MessagingInterface::getContext(), type);
+	DBG_CHANNELS << "MessageRouter connecting to remote socket " << address << "\n";
 	remote_sock->connect(address.c_str());
 	internals->remote = remote_sock;
 }
@@ -610,9 +617,9 @@ void MessageRouter::poll() {
 
 	// receiving from remote socket
 	if (items[0].revents & ZMQ_POLLIN) {
-		NB_MSG << "Message router collecting message from remote\n";
+		DBG_CHANNELS << "Message router collecting message from remote\n";
 		if (safeRecv(*internals->remote, &buf, &len, false, 0, mh)) {
-			NB_MSG << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
+			DBG_CHANNELS << "Message router collected message from " << mh.source << " for route " << mh.dest << "\n";
 			std::map<int, RouteInfo *>::const_iterator found = internals->routes.find(mh.dest);
 			if (found != internals->routes.end()) {
 				RouteInfo * ri = internals->routes.at(mh.dest);
@@ -631,7 +638,7 @@ void MessageRouter::poll() {
 					}
 				}
 				else {
-					NB_MSG << "forwarding " << buf << " to " << mh.dest << "\n";
+					DBG_CHANNELS << "forwarding " << buf << " to " << mh.dest << "\n";
 					mh.start_time = microsecs();
 					safeSend(*dest, buf, len, mh);
 				}
@@ -642,7 +649,7 @@ void MessageRouter::poll() {
 			}
 #if 1
 			else {
-				NB_MSG << "Message " << buf << " needed a default route but none has been set\n";
+				DBG_CHANNELS << "Message " << buf << " needed a default route but none has been set\n";
 			}
 #endif
 		}
@@ -651,13 +658,13 @@ void MessageRouter::poll() {
 	// forwarding to remote socket
 	for (unsigned int i=1; i<num_socks; ++i) {
 		if (items[i].revents & ZMQ_POLLIN) {
-			NB_MSG << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
+			DBG_CHANNELS << "activity on pollidx " << i << " route " << destinations[i-1] <<  "\n";
 			std::map<int, RouteInfo *>::iterator found = internals->routes.find(destinations[i-1]);
 			assert(found != internals->routes.end());
 			zmq::socket_t *sock = internals->routes[ destinations[i-1] ]->sock;
 			MessageHeader mh;
 			if (safeRecv(*sock, &buf, &len, false, 0, mh)) {
-				NB_MSG << " collected " << buf << " from route " << destinations[i-1] << " with header " << mh << "\n";
+				DBG_CHANNELS << " collected '" << buf << "' from route " << destinations[i-1] << " with header " << mh << "\n";
 				bool do_send = true; // by default all messages are sent. a filter can stop that
 				std::list<MessageFilter *>::iterator fi = internals->filters.begin();
 				while (fi != internals->filters.end()) {
@@ -665,11 +672,15 @@ void MessageRouter::poll() {
 					if ( !(filter->filter(&buf, len, mh))) do_send = false;
 				}
 				if (do_send) {
+					//char disp[2*len+1];
+					//for (int i=0; i<len; ++i) sprintf(disp+2*i, "%x", buf[i]);
+					//disp[2*len] = 0;
+					//DBG_CHANNELS << "Sending '" << disp << "'\n";
 					mh.start_time = microsecs();
 					safeSend(*internals->remote, buf, len, mh);
 				}
 				else
-					NB_MSG << "dropped message due to filter\n";
+					DBG_CHANNELS << "dropped message due to filter\n";
 			}
 		}
 	}
@@ -732,7 +743,7 @@ bool SubscriptionManager::checkConnections() {
 	}
 
 	if (monit_subs.disconnected() && !monit_setup->disconnected()) {
-#if 0
+#if 1
 		{
 			FileLogger fl(program_name); fl.f()
 				<< "SubscriptionManager disconnected from server publisher with setup status: " << setupStatus() << "\n"<<std::flush;
@@ -797,10 +808,10 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     size_t msglen = 0;
 #if 0
 	if (items[0].revents & ZMQ_POLLIN) {
-		NB_MSG << "have message activity from clockwork\n";
+		DBG_CHANNELS << "have message activity from clockwork\n";
 	}
 	if (items[1].revents & ZMQ_POLLIN) {
-		NB_MSG << "have message activity from publisher\n";
+		DBG_CHANNELS << "have message activity from publisher\n";
 	}
 #endif
 	// yuk. the command socket is assumed to be the last item in the poll item list.

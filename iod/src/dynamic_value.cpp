@@ -32,7 +32,7 @@ void DynamicValue::flushCache() {
 }
 
 const Value &DynamicValue::operator()(MachineInstance *m) {
-    setScope(m);
+    if (scope != m) setScope(m);
     return operator()();
 }
 
@@ -93,6 +93,13 @@ std::ostream &CountValue::operator<<(std::ostream &out ) const {
     return out << "COUNT " << state << " FROM " << machine_list_name << " (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const CountValue &val) { return val.operator<<(out); }
+
+DynamicValue *FindValue::clone() const { return new FindValue(*this); }
+std::ostream &FindValue::operator<<(std::ostream &out ) const {
+	return out << "INDEX OF ITEM IN " << machine_list_name
+		<< " WHERE " << *condition.predicate <<  " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const FindValue &val) { return val.operator<<(out); }
 
 DynamicValue *SumValue::clone() const { return new SumValue(*this); }
 std::ostream &SumValue::operator<<(std::ostream &out ) const {
@@ -180,8 +187,8 @@ AnyInValue::AnyInValue(const AnyInValue &other) {
 	state_property = 0;
 }
 
-Value &AnyInValue::operator()(MachineInstance *mi) {
-	
+const Value &AnyInValue::operator()() {
+	MachineInstance *mi = scope;
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
 	if (state_property == 0) {
@@ -233,7 +240,8 @@ AllInValue::AllInValue(const AllInValue &other) {
     machine_list = 0;
 	state_property = 0;
 }
-Value &AllInValue::operator()(MachineInstance *mi) {
+const Value &AllInValue::operator()() {
+	MachineInstance *mi = scope;
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
 	machine_list = mi->lookup(machine_list_name);
@@ -276,8 +284,8 @@ AnyEnabledDisabledValue::AnyEnabledDisabledValue(const AnyEnabledDisabledValue &
 	machine_list = 0;
 }
 
-Value &AnyEnabledDisabledValue::operator()(MachineInstance *mi) {
-
+const Value &AnyEnabledDisabledValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -306,7 +314,8 @@ AllEnabledDisabledValue::AllEnabledDisabledValue(const AllEnabledDisabledValue &
 	machine_list = 0;
 }
 
-Value &AllEnabledDisabledValue::operator()(MachineInstance *mi) {
+const Value &AllEnabledDisabledValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -337,7 +346,8 @@ CountValue::CountValue(const CountValue &other) {
 	state_property = 0;
 }
 
-Value &CountValue::operator()(MachineInstance *mi) {
+const Value &CountValue::operator()() {
+	MachineInstance *mi = scope;
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
 	machine_list = mi->lookup(machine_list_name);
@@ -375,13 +385,91 @@ Value &CountValue::operator()(MachineInstance *mi) {
     return last_result;
 }
 
+FindValue::FindValue(const FindValue &other) {
+	property_name = other.property_name;
+	machine_list_name = other.machine_list_name;
+	machine_list = 0;
+	condition = other.condition;
+}
+
+Value &FindValue::operator()(MachineInstance *scope) {
+	machine_list = scope->lookup(machine_list_name);
+	if (!machine_list) {
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for index search %s",
+						 scope->getName().c_str(), machine_list_name.c_str(), property_name.c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {
+		last_result = -1;
+		return last_result;
+	}
+
+	std::string prop_val;
+	int result = -1;
+	// find or create the index to be used for the ITEM reference
+	bool keep_item = false; // true if this list had an 'ITEM'
+	bool add_item = true;
+	unsigned int idx = 0;
+	while (idx < machine_list->locals.size()) {
+		if (machine_list->locals[idx].val.asString() == "ITEM") {
+			keep_item = true;
+			add_item = false; // no need to add an item
+			break;
+		}
+		++idx;
+	}
+
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		Value a(machine_list->parameters.at(i).val);
+		MachineInstance *mi = machine_list->parameters.at(i).machine;
+		if (!mi) mi = scope->lookup(machine_list->parameters[i]);
+		if (!mi) continue;
+
+		// assign ITEM for the test
+		if (add_item) {
+			machine_list->locals.push_back(a);
+			add_item = false;
+		}
+		else
+			machine_list->locals[idx] = a;
+
+		machine_list->locals[idx].machine = mi;
+		machine_list->locals[idx].val.cached_machine = mi;
+
+		machine_list->locals[idx].val = Value("ITEM");
+		machine_list->locals[idx].real_name = a.sValue;
+
+		if (condition.predicate) {
+			//std::cout << "flushing predicate cache\n";
+			condition.predicate->flushCache();
+			machine_list->localised_names["ITEM"] = mi;
+		}
+
+		if ( (!condition.predicate || condition(scope)) ){
+			result = i;
+			break;
+		}
+	}
+	if (!keep_item && machine_list->locals.size() > idx)
+		machine_list->locals.erase(machine_list->locals.begin() + idx);
+
+	last_result = result;
+	return last_result;
+}
+
 SumValue::SumValue(const SumValue &other) {
 	property = other.property;
 	machine_list_name = other.machine_list_name;
 	machine_list = 0;
 }
 
-Value &SumValue::operator()(MachineInstance *mi) {
+const Value &SumValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -415,7 +503,8 @@ MeanValue::MeanValue(const MeanValue &other) {
 	machine_list = 0;
 }
 
-Value &MeanValue::operator()(MachineInstance *mi) {
+const Value &MeanValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -452,7 +541,8 @@ MinValue::MinValue(const MinValue &other) {
 	property = other.property;
 }
 
-Value &MinValue::operator()(MachineInstance *mi) {
+const Value &MinValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -487,7 +577,8 @@ MaxValue::MaxValue(const MaxValue &other) {
 	property = other.property;
 }
 
-Value &MaxValue::operator()(MachineInstance *mi) {
+const Value &MaxValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -521,8 +612,8 @@ ExpressionValue::ExpressionValue(const ExpressionValue &other) {
 	condition = other.condition;
 }
 
-Value &ExpressionValue::operator()(MachineInstance *mi) {
-
+const Value &ExpressionValue::operator()() {
+	MachineInstance *mi = scope;
 	last_process_time = currentTime();
 
 	last_result = condition(mi);
@@ -542,7 +633,8 @@ IncludesValue::IncludesValue(const IncludesValue &other) {
     machine_list = 0;
 }
 
-Value &IncludesValue::operator()(MachineInstance *mi) {
+const Value &IncludesValue::operator()() {
+	MachineInstance *mi = scope;
 	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
 		char buf[400];
@@ -571,12 +663,13 @@ SizeValue::SizeValue(const SizeValue &other) {
     machine_list = 0;
 }
 
-Value &SizeValue::operator()(MachineInstance *mi) {
-	machine_list = mi->lookup(machine_list_name);
+const Value &SizeValue::operator()() {
+	if (!scope) return SymbolTable::Null;
+	machine_list = scope->lookup(machine_list_name);
 	if (!machine_list)  {
 		char buf[400];
 		snprintf(buf, 400, "%s: no machine %s for SIZE test",
-				 mi->getName().c_str(), machine_list_name.c_str());
+				 scope->getName().c_str(), machine_list_name.c_str());
 		MessageLog::instance()->add(buf);
 		last_result = 0; return last_result;
 	}
@@ -590,7 +683,6 @@ Value &SizeValue::operator()(MachineInstance *mi) {
 	last_result = (long)machine_list->parameters.size();
 	return last_result;
 }
-
 
 PopListBackValue::PopListBackValue(const PopListBackValue &other) {
     machine_list_name = other.machine_list_name;
@@ -633,16 +725,13 @@ Value &PopListBackValue::operator()(MachineInstance *mi) {
         if (machine_list->parameters[i].machine && !last_result.cached_machine) {
 			if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
             last_result.cached_machine = machine_list->parameters[i].machine;
-            //std::string msg("Warning parameter with machine pointer was not completely configured: ");
-            //msg += last_result.asString();
-            //MessageLog::instance()->add(msg.c_str());
         }
         if (remove_from_list){
-			machine_list->removeDependancy(machine_list->parameters[0].machine);
-			machine_list->stopListening(machine_list->parameters[0].machine);
-            machine_list->parameters.pop_back();
-            machine_list->setNeedsCheck();
-			displayList(machine_list);
+					machine_list->removeDependancy(machine_list->parameters[0].machine);
+					machine_list->stopListening(machine_list->parameters[0].machine);
+					machine_list->parameters.pop_back();
+					machine_list->setNeedsCheck();
+					displayList(machine_list);
         }
     }
     return last_result;
@@ -676,14 +765,11 @@ Value &PopListFrontValue::operator()(MachineInstance *mi) {
             if (machine_list->locals[0].machine && !last_result.cached_machine) {
 				if (!machine_list->parameters[0].machine) mi->lookup(machine_list->parameters[0]);
                 last_result.cached_machine = machine_list->locals[0].machine;
-                //std::string msg("Warning parameter with machine pointer was not completely configured: ");
-                //msg += last_result.asString();
-                //MessageLog::instance()->add(msg.c_str());
             }
             if (remove_from_list){
-                machine_list->removeLocal(0);
-                machine_list->setNeedsCheck();
-				displayList(machine_list);
+							machine_list->removeLocal(0);
+							machine_list->setNeedsCheck();
+							displayList(machine_list);
             }
         }
     }
@@ -693,18 +779,15 @@ Value &PopListFrontValue::operator()(MachineInstance *mi) {
             if (machine_list->parameters[0].machine && !last_result.cached_machine) {
 				if (!machine_list->parameters[0].machine) mi->lookup(machine_list->parameters[0]);
                 last_result.cached_machine = machine_list->parameters[0].machine;
-                //std::string msg("Warning parameter with machine pointer was not completely configured: ");
-                //msg += last_result.asString();
-                //MessageLog::instance()->add(msg.c_str());
             }
             if (remove_from_list){
-				machine_list->removeDependancy(machine_list->parameters[0].machine);
-				machine_list->stopListening(machine_list->parameters[0].machine);
-                machine_list->parameters.erase(machine_list->parameters.begin());
-                if (machine_list->_type == "LIST") {
-                    machine_list->setNeedsCheck();
-					displayList(machine_list);
-                }
+								machine_list->removeDependancy(machine_list->parameters[0].machine);
+								machine_list->stopListening(machine_list->parameters[0].machine);
+								machine_list->parameters.erase(machine_list->parameters.begin());
+								if (machine_list->_type == "LIST") {
+										machine_list->setNeedsCheck();
+										displayList(machine_list);
+								}
             }
         }
     }
@@ -773,7 +856,8 @@ BitsetValue::BitsetValue(const BitsetValue &other) {
     machine_list = 0;
     state = other.state;
 }
-Value &BitsetValue::operator()(MachineInstance *mi) {
+const Value &BitsetValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
@@ -807,7 +891,8 @@ EnabledValue::EnabledValue(const EnabledValue &other) {
     machine = 0;
 }
 DynamicValue *EnabledValue::clone() const { return new EnabledValue(*this); }
-Value &EnabledValue::operator()(MachineInstance *mi) {
+const Value &EnabledValue::operator()() {
+		MachineInstance *mi = scope;
     machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for ENABLED test\n";
@@ -828,7 +913,8 @@ DisabledValue::DisabledValue(const DisabledValue &other) {
     machine = 0;
 }
 DynamicValue *DisabledValue::clone() const { return new DisabledValue(*this); }
-Value &DisabledValue::operator()(MachineInstance *mi) {
+const Value &DisabledValue::operator()() {
+		MachineInstance *mi = scope;
     machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for DISABLED test\n";
@@ -873,7 +959,8 @@ ExistsValue::ExistsValue(const ExistsValue &other) {
 	machine = 0;
 }
 DynamicValue *ExistsValue::clone() const { return new ExistsValue(*this); }
-Value &ExistsValue::operator()(MachineInstance *mi) {
+const Value &ExistsValue::operator()() {
+	MachineInstance *mi = scope;
 	machine = mi->lookup(machine_name);
 	if (!machine)  {
 		last_result = false;
@@ -889,7 +976,8 @@ std::ostream &operator<<(std::ostream &out, const ExistsValue &val) { return val
 
 
 DynamicValue *ClassNameValue::clone() const { return new ClassNameValue(*this); }
-Value &ClassNameValue::operator()(MachineInstance *mi) {
+const Value &ClassNameValue::operator()() {
+	MachineInstance *mi = scope;
 	machine = mi->lookup(machine_name);
 	if (!machine || !machine->getStateMachine())  {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for CLASS test\n";
@@ -903,4 +991,36 @@ std::ostream &ClassNameValue::operator<<(std::ostream &out ) const {
 	return out << "CLASS OF " << machine_name << " " << last_result;
 }
 std::ostream &operator<<(std::ostream &out, const ClassNameValue &val) { return val.operator<<(out); }
+
+
+DynamicValue *ChangingStateValue::clone() const { return new ChangingStateValue(*this); }
+const Value &ChangingStateValue::operator()() {
+	MachineInstance *mi = scope;
+	machine = mi->lookup(machine_name);
+	if (!machine || !machine->getStateMachine())  {
+		std::stringstream ss;
+		ss << mi->getName()
+			<< " no machine "
+			<< machine_name << " for CHANGING STATE test\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = "NULL"; return last_result;
+	}
+	last_result = false;
+	if (machine->active_actions.empty()) return last_result;
+	std::list<Action*>::iterator iter = machine->active_actions.begin();
+	while (iter != machine->active_actions.end()) {
+		Action *a = *iter++;
+		MoveStateAction *msa = dynamic_cast<MoveStateAction*>(a);
+		if (msa && msa->value == machine->getCurrent()) {
+			last_result = true;
+			return last_result;
+		}
+	}
+	return last_result;
+}
+
+std::ostream &ChangingStateValue::operator<<(std::ostream &out ) const {
+	return out << machine_name << " CHANGING STATE (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const ChangingStateValue &val) { return val.operator<<(out); }
 

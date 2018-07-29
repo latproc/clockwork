@@ -41,6 +41,8 @@
 #include "string.h"
 
 const char *program_name;
+static std::string STATE_ERROR("Operation cannot be accomplished in current state");
+
 
 MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
@@ -301,7 +303,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 					FileLogger fl(program_name);
 					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
-				if (zmq_errno() == EFSM) throw;
+				if (zmq_errno() == EFSM || STATE_ERROR == zmq_strerror(errno)) throw;
 				usleep(10);
 				continue;
 			} else {
@@ -316,6 +318,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 }
 
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
+
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -335,7 +338,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 					FileLogger fl(program_name); 
 					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
-				if (zmq_errno() == EFSM) {
+				if (zmq_errno() == EFSM || STATE_ERROR == zmq_strerror(errno)) {
 					usleep(1000);
 					throw;
 				}
@@ -398,12 +401,15 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
     ss << host << ":" << port;
     std::string id = ss.str();
     if (interfaces.count(id) == 0) {
+			DBG_CHANNELS << "creating new interface to " << id << "\n";
         MessagingInterface *res = new MessagingInterface(host, port, MessagingInterface::IMMEDIATE_START, proto);
         interfaces[id] = res;
         return res;
     }
-    else
-        return interfaces[id];
+		else {
+			DBG_CHANNELS << "returning existing interface to " << id <<"\n";
+			return interfaces[id];
+		}
 }
 
 MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start, ProtocolType proto)
@@ -424,12 +430,16 @@ MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred
 }
 
 void MessagingInterface::start() {
-	if (started_) return;
+	if (started_) {
+		DBG_CHANNELS << "Messaging interface already started; skipping\n";
+		return;
+	}
 	if (protocol == eCLOCKWORK || protocol == eZMQ|| protocol == eCHANNEL) {
 		owner_thread = pthread_self();
-		if (hostname == "*" || hostname == "*") {
-			//NB_MSG << "binding " << url << "\n";
+		if (hostname == "*" || hostname == "0.0.0.0") {
+			NB_MSG << "binding " << url << "\n";
 			socket->bind(url.c_str());
+			started_ = true;
 		}
 		else {
 			connect();
@@ -438,7 +448,6 @@ void MessagingInterface::start() {
 	else {
 		connect();
 	}
-	started_ = true;
 }
 
 void MessagingInterface::stop() { 
@@ -516,8 +525,10 @@ void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ || protocol == eCHANNEL) {
 		if (pthread_equal(owner_thread, pthread_self())) {
 			FileLogger fl(program_name); fl.f() << hostname<<":"<<port 
-				<<" socket connect being called from a thread that isn't the owner\n";
+				<<" attempt to call socket connect from a thread that isn't the owner\n";
+		  // return; // no longer returning here, we have some evidence this is not a good test. TBD
 		}
+		DBG_CHANNELS << "calling connect on " << url << "\n";
 		socket->connect(url.c_str());
 		int linger = 0;
 		socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
@@ -527,9 +538,10 @@ void MessagingInterface::connect() {
 		connection = anetTcpConnect(error, hostname.c_str(), port);
 		if (connection == -1) {
 			MessageLog::instance()->add(error);
-			std::cerr << error << "\n";
+			DBG_CHANNELS << "MessagingInterface::connect error " << error << "\n";
 		}
 	}
+	started_ = true;
 }
 
 MessagingInterface::~MessagingInterface() {

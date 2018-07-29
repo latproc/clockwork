@@ -59,6 +59,7 @@ public:
     std::string quoted() const;
 	bool asFloat(double &val) const;
 	bool asInteger(long &val) const;
+	bool asBoolean(bool &val) const;
 	long trunc() const;
 	long round(int digits = 0) const;
 	double toFloat() const;

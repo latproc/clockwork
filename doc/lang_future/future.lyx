@@ -109,15 +109,23 @@ Types
 \end_layout
 
 \begin_layout Itemize
+Integers
+\end_layout
+
+\begin_layout Itemize
+Strings
+\end_layout
+
+\begin_layout Itemize
 Floating point calculations
 \end_layout
 
 \begin_layout Itemize
-Sets and relationships
+Binary values
 \end_layout
 
 \begin_layout Itemize
-Binary values
+Sets and relationships
 \end_layout
 
 \begin_layout Itemize
@@ -129,16 +137,20 @@ References
 \end_layout
 
 \begin_layout Itemize
+Type conversions (x AS type)
+\end_layout
+
+\begin_layout Subsubsection
+Not implemented
+\end_layout
+
+\begin_layout Itemize
 Streams (also generators)
 \end_layout
 
 \begin_layout Itemize
 Replace the current symbol table and Value system with a more efficient
  and robust implementation
-\end_layout
-
-\begin_layout Itemize
-Type conversions (x AS type)
 \end_layout
 
 \begin_layout Itemize
@@ -162,7 +174,7 @@ Events with data
 \end_layout
 
 \begin_layout Itemize
-Copying properties en mass
+Copying properties en mass via variants of COPY PROPERTIES
 \end_layout
 
 \begin_layout Subsection
@@ -170,11 +182,11 @@ Features
 \end_layout
 
 \begin_layout Itemize
-Substates
+Substates (implemented via nesting of machines)
 \end_layout
 
 \begin_layout Itemize
-Exceptions
+Exceptions (THROW, CATCH)
 \end_layout
 
 \begin_layout Itemize
@@ -232,7 +244,15 @@ Executing a subexpression on the default state
 \end_layout
 
 \begin_layout Itemize
-Persistence
+Persistence via persistd
+\end_layout
+
+\begin_layout Itemize
+Property type and state enforcement via STRICT
+\end_layout
+
+\begin_layout Subsubsection
+Not implemented
 \end_layout
 
 \begin_layout Itemize
@@ -882,6 +902,17 @@ Methods can contain declarations of invariant conditions.
 \end_layout
 
 \begin_layout Subsubsection
+Strict
+\end_layout
+
+\begin_layout Standard
+When applied to a machine, STRICT causes the machine to refuse to change
+ the type of a property once set and causes a system exit if a machine is
+ asked to transition to an unknown state.
+ 
+\end_layout
+
+\begin_layout Subsubsection
 Failsafe Mode
 \end_layout
 
@@ -1005,16 +1036,20 @@ It should be assumed that there is no guarantee that non-blocking steps
 A function may be invoked by a CALL statement in which case the calling
  machine blocks until the function is complete.
  On completion, a result property 'RESULT' will contain the result of the
- function and this can be automatically assigned to a local property.
+ function.
+ RESULT is actually a REFERENCE (see section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "subsec:References"
+
+\end_inset
+
+) so it can return multiple properties and a reference to a machine.
  For example:
 \end_layout
 
 \begin_layout LyX-Code
-property := CALL method ON machine;
-\end_layout
 
-\begin_layout Standard
-which is equivalent to:
 \end_layout
 
 \begin_layout LyX-Code
@@ -1022,11 +1057,22 @@ CALL method ON machine;
 \end_layout
 
 \begin_layout LyX-Code
-property := RESULT;
+property := RESULT.val;
+\end_layout
+
+\begin_layout LyX-Code
+SEND go TO RESULT.ITEM;
 \end_layout
 
 \begin_layout Subsection
 References
+\begin_inset CommandInset label
+LatexCommand label
+name "subsec:References"
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
@@ -1177,7 +1223,7 @@ COPY PROPERTIES FROM machine1 TO machine2
 \end_layout
 
 \begin_layout LyX-Code
-COPY PROPERTIES NAMED property_name,...
+COPY PROPERTIES property_name,...
  FROM machine1 TO machine2
 \end_layout
 
@@ -1589,6 +1635,127 @@ CATCH ALL { num_errors := num_errors + 1 }
 \end_layout
 
 \begin_layout Subsection
+State changes
+\end_layout
+
+\begin_layout Standard
+We have clarified what is meant by 
+\begin_inset Quotes eld
+\end_inset
+
+machine IS state
+\begin_inset Quotes erd
+\end_inset
+
+ to mean that the conditions for that state are true and the machine has
+ completed the transition to the state.
+ Once a machine has started to change state, it enters a private 
+\begin_inset Quotes eld
+\end_inset
+
+leaving
+\begin_inset Quotes erd
+\end_inset
+
+ state for the previous state and then a private 
+\begin_inset Quotes eld
+\end_inset
+
+entering
+\begin_inset Quotes erd
+\end_inset
+
+ state for the new state before finally becoming on.
+ Since they are private states, the machine will appear to the outside world
+ to still be in the original state.
+\end_layout
+
+\begin_layout Standard
+Two new verbs are added: LEAVING and ENTERING, these can be used to get
+ access to the private parts of the transition.
+\end_layout
+
+\begin_layout Standard
+Is a transitional state equal to a normal state with the same name?
+\end_layout
+
+\begin_layout Standard
+is a private state equal to a normal state with the same name?
+\end_layout
+
+\begin_layout Standard
+PRIVATE states can be used to simplify the external interface of a machine.
+\end_layout
+
+\begin_layout LyX-Code
+turning_on PRIVATE STATE;
+\end_layout
+
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+PRIVATE STATES a,b,c;
+\end_layout
+
+\begin_layout Standard
+To indicate that a stable state is private the state needs to be declared
+ as a PRIVATE STATE as well as being defined in a WHEN clause in the normal
+ way.
+\end_layout
+
+\begin_layout Standard
+Consider simply setting 'transitional' on a state during the enter/leave
+ process.
+\end_layout
+
+\begin_layout Standard
+Consider adding a new test to see if a machine is currently transitioning:
+ wait WHEN other IS CHANGING STATE;
+\end_layout
+
+\begin_layout Standard
+As part of this cleanup, some work needs to be done on the current implementatio
+n of USING.
+ At present, given
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b USING next;
+\end_layout
+
+\begin_layout Standard
+will provide a command called 'next' that causes a transition from 'a' to
+ 'b'.
+ This will also cause an effect whereby if the machine moves from 'a' to
+ 'b' by a direct 'SET', the next command will still be executed.
+ A new verb is required to specifically enable this behaviour:
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b USING next; # retains the legacy behaviour
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b AFTER next; # the 'next' command causes the transition
+ once it completes
+\end_layout
+
+\begin_layout Standard
+TRANSITION a TO b INVOKES starting; # the 'starting' handler is invoked
+ after the machine transitions from a to b
+\end_layout
+
+\begin_layout Standard
+The two clauses can be combined.
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout Subsection
 Support of parallel execution
 \end_layout
 
@@ -1963,6 +2130,37 @@ Machines should be able to be defined as extensions of existing machines.
  Some thought will be needed as to whether actions will be executed before
  or after existing actions.
  
+\end_layout
+
+\begin_layout Subsection
+Introspection
+\end_layout
+
+\begin_layout Standard
+Clockwork already has facilities to enable and disable parts of the executing
+ machine.
+ To make it easier to address groups of machines some facilities will be
+ added tselect machines within the current instance:
+\end_layout
+
+\begin_layout LyX-Code
+points LIST FROM SELECT MACHINES OF TYPE POINT;
+\end_layout
+
+\begin_layout LyX-Code
+outputs LIST FROM SELECT MACHINES WITH NAME MATCHING `^O_`;
+\end_layout
+
+\begin_layout Standard
+or 
+\end_layout
+
+\begin_layout LyX-Code
+points LIST;
+\end_layout
+
+\begin_layout LyX-Code
+SELECT MACHINES OF TYPE POINT INTO points;
 \end_layout
 
 \begin_layout Subsection

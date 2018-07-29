@@ -8,14 +8,16 @@ class Condition;
 class Predicate;
 class Transition {
 public:
-    State source;
-    State dest;
-    Message trigger;
-    Condition *condition;
-    Transition(State s, State d, Message t, Predicate *p=0);
-    Transition(const Transition &other);
-    Transition &operator=(const Transition &other);
-    ~Transition();
+	Transition(State s, State d, Message t, Predicate *p=0, bool abort_semantics = true);
+	Transition(const Transition &other);
+	Transition &operator=(const Transition &other);
+	~Transition();
+
+	State source;
+	State dest;
+	Message trigger;
+	Condition *condition;
+	bool abort_on_failure;
 };
 
 #endif

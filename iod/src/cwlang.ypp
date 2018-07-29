@@ -147,8 +147,11 @@ struct Subcondition {
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS MIN MAX MEAN PRIVATE
+%token CHANGING FAILURE ADD AFTER BEFORE
+%token ASCENDING ASC DESCENDING DESC INDEX
 
 %union {
+	bool bVal;
 	int iVal;
 	double fVal;
 	const char *sVal;
@@ -191,6 +194,7 @@ struct Subcondition {
 %type <iVal> access_type
 %type <iVal> size_type
 %type <subcond> state_subcondition
+%type <bVal> transition_semantics
 
 %%
 
@@ -615,6 +619,20 @@ EXPORT access_type size_type name_list ';' {
     }
     current_name_list.clear();
 }
+| EXPORT STATES name_list READWRITE ';' {
+	DBG_PARSER << " export " << current_name_list.size() << " states\n";
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		current_machineclass->state_exports_rw.push_back(name);
+	}
+	current_name_list.clear();
+}
+| EXPORT STATES name_list READONLY ';' {
+	DBG_PARSER << " export " << current_name_list.size() << " states\n";
+	BOOST_FOREACH(std::string &name, current_name_list) {
+		current_machineclass->state_exports.push_back(name);
+	}
+	current_name_list.clear();
+}
 | EXPORT COMMANDS name_list ';' {
     DBG_PARSER << " export " << current_name_list.size() << " commands\n";
     BOOST_FOREACH(std::string &name, current_name_list) {
@@ -902,6 +920,9 @@ INTEGERVAL   {
 | COUNT SYMBOL FROM SYMBOL {
     $$ = new Value(new CountValue($2,$4));
 }
+| INDEX OF ITEM IN SYMBOL WHERE predicate {
+	$$ = new Value(new FindValue($5, $7));
+}
 | SUM SYMBOL FROM SYMBOL {
 	$$ = new Value(new SumValue($2,$4));
 }
@@ -934,6 +955,9 @@ INTEGERVAL   {
 }
 | CLASS OF SYMBOL {
 	$$ = new Value(new ClassNameValue($3));
+}
+| SYMBOL CHANGING STATE {
+	$$ = new Value(new ChangingStateValue($1));
 }
 | COMMON BETWEEN SYMBOL AND SYMBOL {
     $$ = new Value(SymbolTable::Null);
@@ -1369,6 +1393,41 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new LogActionTemplate(new Predicate("TAKE"));
 }
+
+| ADD SYMBOL AFTER LAST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($6, $2, -1, false);
+}
+| ADD SYMBOL BEFORE FIRST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($6, $2, 0, true);
+}
+| ADD SYMBOL AFTER ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($7, $2, *$5, false);
+}
+| ADD SYMBOL BEFORE ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($7, $2, *$5, true);
+}
+
+| ADD ITEMS FROM SYMBOL AFTER LAST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($8, $4, -1, false, true);
+}
+| ADD ITEMS FROM SYMBOL BEFORE FIRST OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($8, $4, 0, true, true);
+}
+| ADD ITEMS FROM SYMBOL AFTER ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($9, $4, *$7, false, true);
+}
+| ADD ITEMS FROM SYMBOL BEFORE ITEM basic_value OF SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($9, $4, *$7, true, true);
+}
+
 | INCLUDE SYMBOL IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new IncludeActionTemplate($4, $2);
@@ -1507,6 +1566,11 @@ SET SYMBOL TO value error_clause  {
     current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
     delete $2;
 }
+| MOVE ITEMS value TO value OF SYMBOL TO SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SetOperationActionTemplate(-1, $7, SymbolTable::Null, $9, "", soSelect, 0, true, *$3, *$5);
+	delete $3; delete $5;
+}
 | SORT SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SortListActionTemplate($2, "VALUE");
@@ -1514,6 +1578,38 @@ SET SYMBOL TO value error_clause  {
 | SORT SYMBOL BY PROPERTY SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SortListActionTemplate($2, $5);
+}
+| SORT SYMBOL ASC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", true);
+}
+| SORT SYMBOL ASCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", true);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL ASC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, true);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL ASCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, true);
+}
+| SORT SYMBOL DESC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", false);
+}
+| SORT SYMBOL DESCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, "VALUE", false);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL DESC {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, false);
+}
+| SORT SYMBOL BY PROPERTY SYMBOL DESCENDING {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new SortListActionTemplate($2, $5, false);
 }
 /*
 | TAKE LAST FROM SYMBOL {
@@ -2026,46 +2122,52 @@ transition_entry:
 transition ';'
 ;
 
+transition_semantics:
+ABORT ON FAILURE { $$ = true; }
+| WAIT ON FAILURE { $$ = false; }
+| { $$ = true; }
+;
+
 transition:
-TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */
+TRANSITION state_list /* list of source states */ TO transition_state /* destination state */ USING SYMBOL /* command_name */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << " using " << $6 << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), 0,$7));
     }
     current_name_list.clear();
 }
-| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ ON SYMBOL /* received event */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6)));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), 0, $7));
     }
     current_name_list.clear();
 }
 | TRANSITION state_list /*  source state */ TO transition_state /* destination state */
-    USING SYMBOL /* received event */ REQUIRES predicate /* rule */
+    USING SYMBOL /* received event */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "using " << $6 << "requiring " << *($8) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8, $9));
     }
     current_name_list.clear();
 }
 | TRANSITION state_list /*  source state */ TO transition_state /* destination state */
-    ON SYMBOL /* received event */ REQUIRES predicate /* rule */
+    ON SYMBOL /* received event */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "on " << $6 << "requiring " << *($8) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message($6), $8, $9));
     }
     current_name_list.clear();
 }
-| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */
+| TRANSITION state_list /*  source state */ TO transition_state /* destination state */ REQUIRES predicate /* rule */ transition_semantics
 {
     BOOST_FOREACH(std::string &name, current_name_list) {
         DBG_PARSER << "adding transition " << name << " to " << $4 << "requiring " << *($6) << "\n";
-        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6));
+        current_machineclass->transitions.push_back(Transition(State(name.c_str()), State($4), Message("NOTRIGGER"), $6, $7));
     }
     current_name_list.clear();
 }

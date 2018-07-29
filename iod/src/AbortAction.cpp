@@ -51,6 +51,7 @@ Action::Status AbortAction::run() {
 		SendMessageActionTemplate smat(this->message.c_str(), owner);
 		Action *sma = smat.factory(owner);
 		(*sma)();
+		delete sma;
 	}
 	abort();
 	if (abort_fail) {

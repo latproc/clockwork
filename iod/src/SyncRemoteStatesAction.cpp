@@ -165,7 +165,7 @@ Action::Status SyncRemoteStatesAction::execute()
 		}
 	}
 	else if (internals->process_state == SyncRemoteStatesActionInternals::ps_waiting_ack) {
-		snprintf(buf, 200, "%s Sync remote states - awaiting ack", chn->getName().c_str());
+		//snprintf(buf, 200, "%s Sync remote states - awaiting ack", chn->getName().c_str());
 		MessageLog::instance()->add(buf);
 		DBG_CHANNELS << buf << "\n";
 		char *ack; size_t len;

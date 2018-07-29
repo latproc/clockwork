@@ -1,7 +1,9 @@
-#LyX 2.1 created this file. For more info see http://www.lyx.org/
-\lyxformat 474
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
 \begin_document
 \begin_header
+\save_transient_properties true
+\origin unavailable
 \textclass article
 \use_default_options true
 \maintain_unincluded_children false
@@ -9,16 +11,16 @@
 \language_package default
 \inputencoding auto
 \fontencoding global
-\font_roman default
-\font_sans default
-\font_typewriter default
-\font_math auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
-\font_sf_scale 100
-\font_tt_scale 100
+\font_sf_scale 100 100
+\font_tt_scale 100 100
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -127,6 +129,27 @@ define transition rules that determine what actions can be performed and
 
 \begin_layout Itemize
 define state entry functions that execute when a machine enters a state
+\end_layout
+
+\begin_layout Itemize
+monitor the operation of a machine by sampling events as they occur and
+ interactively inspecting the state and properties of internal components
+\end_layout
+
+\begin_layout Itemize
+view the state and properties of the machine in a web browser
+\end_layout
+
+\begin_layout Itemize
+view the operation of a machine in a 3D view
+\end_layout
+
+\begin_layout Itemize
+interface to serial devices, network devices and modbus devices
+\end_layout
+
+\begin_layout Itemize
+program embedded devices and microcontrollers (not yet available)
 \end_layout
 
 \begin_layout Subsection
@@ -286,7 +309,7 @@ The above AndGate machine does not directly control any other part of the
 \end_layout
 
 \begin_layout LyX-Code
-AndGate MACHINE input1, input2, output
+AndGateSwitch MACHINE input1, input2, output
 \end_layout
 
 \begin_layout LyX-Code
@@ -332,7 +355,7 @@ b FLAG;
 \end_layout
 
 \begin_layout LyX-Code
-and_gate AndGate a, b, light;
+and_gate AndGateSwitch a, b, light;
 \end_layout
 
 \begin_layout Standard
@@ -352,7 +375,7 @@ LightController MACHINE input, output {
 status open
 
 \begin_layout Plain Layout
-Note the test 1==1 is a functional placeholder; the indention is to define
+Note the test 1==1 is a functional placeholder; the intention is to define
  the value TRUE for this kind of situation.
 \end_layout
 
@@ -366,30 +389,24 @@ Note the test 1==1 is a functional placeholder; the indention is to define
 }
 \end_layout
 
+\begin_layout LyX-Code
+light FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+a FLAG; b FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGate a, b;
+\end_layout
+
+\begin_layout LyX-Code
+lc LightController and_gate, light
+\end_layout
+
 \begin_layout Standard
-in this case, AndGate does not manipulate or even know about the output:
-\end_layout
-
-\begin_layout LyX-Code
-AndGate MACHINE input1, input2
-\end_layout
-
-\begin_layout LyX-Code
-{
-\end_layout
-
-\begin_deeper
-\begin_layout LyX-Code
-on WHEN input1 IS on AND input2 IS on;
-\end_layout
-
-\begin_layout LyX-Code
-off DEFAULT;
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-}
+in this case, AndGate does not manipulate or even know about the output.
 \end_layout
 
 \begin_layout Standard
@@ -487,7 +504,7 @@ status open
 \align center
 \begin_inset Tabular
 <lyxtabular version="3" rows="12" columns="6">
-<features rotate="0" tabularvalignment="middle">
+<features tabularvalignment="middle">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
@@ -1178,7 +1195,7 @@ returns the bitwise inverse of the rhs
 \begin_inset Caption Standard
 
 \begin_layout Plain Layout
-Expression operators
+C-based Expression operators
 \begin_inset CommandInset label
 LatexCommand label
 name "tab:Expression-operators"
@@ -1344,7 +1361,7 @@ As another example, the following machine tries to stay in an inverted state
 \end_layout
 
 \begin_layout LyX-Code
-Inverted MACHINE input { 
+Inverted MACHINE input {
 \end_layout
 
 \begin_deeper
@@ -1388,7 +1405,7 @@ The above definition may be made more strict by tightening the definition
 \end_layout
 
 \begin_layout LyX-Code
-Inverted MACHINE input { 
+Inverted MACHINE input {
 \end_layout
 
 \begin_deeper
@@ -1507,7 +1524,7 @@ c_finished FLAG;
 \end_layout
 
 \begin_layout LyX-Code
-a WHEN SELF IS a OR SELF IS INIT OR SELF IS changing, 
+a WHEN SELF IS a OR SELF IS INIT OR SELF IS changing,
 \end_layout
 
 \begin_deeper
@@ -1517,7 +1534,7 @@ TAG a_finished WHEN TIMER > 5000;
 
 \end_deeper
 \begin_layout LyX-Code
-b WHEN SELF IS b OR SELF IS changing, 
+b WHEN SELF IS b OR SELF IS changing,
 \end_layout
 
 \begin_deeper
@@ -1527,7 +1544,7 @@ TAG b_finished WHEN TIMER > 5000;
 
 \end_deeper
 \begin_layout LyX-Code
-c WHEN SELF IS c OR SELF IS changing, 
+c WHEN SELF IS c OR SELF IS changing,
 \end_layout
 
 \begin_deeper
@@ -1619,8 +1636,7 @@ Commands are lists of actions that are executed in response to receipt of
 \end_layout
 
 \begin_layout Standard
-Note: there is currently no way to abort the exectuion of a command, this
- feature will be added in future.
+
 \end_layout
 
 \begin_layout Standard
@@ -1629,7 +1645,7 @@ The mechanism for this will be to add clauses to identify timeouts or other
 \end_layout
 
 \begin_layout LyX-Code
-COMMAND example { statements }, EXECUTE command WHEN predicate
+COMMAND example { statements } ON ERROR message
 \end_layout
 
 \begin_layout Standard
@@ -1637,7 +1653,7 @@ or
 \end_layout
 
 \begin_layout LyX-Code
-COMMAND example { statements }, THROW error WHEN predicate
+COMMAND example { statements } ON TIMEOUT message
 \end_layout
 
 \begin_layout Subsection
@@ -1659,8 +1675,8 @@ Machines can be grouped together into lists.
 \end_layout
 
 \begin_layout Itemize
-every entry in the list must be unique, attempting to include an item a
- second time does nothing
+machines may be placed on a list but every entry in the list must be unique,
+ attempting to include an item a second time leads to undefined bahaviour
 \end_layout
 
 \begin_layout Itemize
@@ -1720,6 +1736,58 @@ The builtin machine, REFERENCE provides a way to link machines together.
  or UNASSIGNED_enter mesages.
  If an assignment is attempted to a non-existent machine any preexisting
  assignment is cleared and the new assignment fails.
+\end_layout
+
+\begin_layout Section
+Subtleties
+\end_layout
+
+\begin_layout Subsection
+Enabling and disabling machines
+\end_layout
+
+\begin_layout Standard
+Machines in clockwork may be prevented from operating by disabling them.
+ Messages sent to disabled machines are silently ignored and attempts to
+ set the state of a disabled machine triggers an exception.
+ TBD more information about interactions with disabled machines.
+\end_layout
+
+\begin_layout Subsection
+Controlling startup
+\end_layout
+
+\begin_layout Standard
+When the clockwork environment starts, all machines initially disabled and
+ are enabled depending on the following rules:
+\end_layout
+
+\begin_layout Standard
+if the application program implements a machine with the class 'STARTUP',
+ only that machine is enabled and the entire startup process is left to
+ application control.
+\end_layout
+
+\begin_layout Standard
+if there is no instance of a 'STARTUP' machine machines that have a property:
+ 'startup_enabled' with a value of false are not enabled and all other machines
+ are enabled.
+\end_layout
+
+\begin_layout Standard
+The system attempts to start machines in order such that machines passed
+ as paremeters to other machines are enabled first.
+\end_layout
+
+\begin_layout Standard
+Machines that include a 'DEPENDS ON' clause can only enabled when the named
+ machine has been enabled.
+ If the named machine does not exist it is not possible to enable the dependent
+ machines.
+ In the case where the application does not provide a STARTUP machine, when
+ the machines that are the object of a DEPENDS ON clause are enabled or
+ disabled those machines that depend on them are automatically enabled or
+ disabled.
 \end_layout
 
 \begin_layout Section
@@ -2018,9 +2086,9 @@ OR (also ||) used to join expressions within a condition
 \end_layout
 
 \begin_layout Description
-PERSISTENT a property that indicates that state changes on this machine
- will be published and at startup, this machine will be automatically enabled
- and initialised from its last known state.
+PERSISTENT a property that indicates that propertye changes on this machine
+ will be published.
+ Machines marked as persistent are no longer automatically enabled on startup.
 \end_layout
 
 \begin_layout Description
@@ -2028,7 +2096,7 @@ POINT refers to an addressable port within a module or a builtin machine
  with that name (see Section 
 \begin_inset CommandInset ref
 LatexCommand ref
-reference "sub:Builtin-classes"
+reference "subsec:Builtin-classes"
 
 \end_inset
 
@@ -2430,7 +2498,7 @@ Expressions are based on C language expressions, standard arithmetic and
 Builtin classes
 \begin_inset CommandInset label
 LatexCommand label
-name "sub:Builtin-classes"
+name "subsec:Builtin-classes"
 
 \end_inset
 
@@ -2503,10 +2571,10 @@ Syntax
 \begin_layout Standard
 \begin_inset Formula 
 \begin{eqnarray*}
-program & = & \mathit{definition}\, program\,|\,Ø\\
-\mathcal{\mathit{definition}} & = & name\, object\, parameterlist\\
-parameters & = & parameter\,|\, parameter\,','\, parameter\\
-parameter & = & value\, parameter\,|\,Ø
+program & = & \mathit{definition}\,program\,|\,Ø\\
+\mathcal{\mathit{definition}} & = & name\,object\,parameterlist\\
+parameters & = & parameter\,|\,parameter\,','\,parameter\\
+parameter & = & value\,parameter\,|\,Ø
 \end{eqnarray*}
 
 \end_inset

@@ -26,6 +26,7 @@
 #include "MessageLog.h"
 #include "Scheduler.h"
 #include "FireTriggerAction.h"
+#include "AbortAction.h"
 
 uint64_t nowMicrosecs();
 
@@ -34,15 +35,23 @@ Action *SetStateActionTemplate::factory(MachineInstance *mi)
 	return new SetStateAction(mi, *this);
 }
 
+std::ostream &SetStateActionTemplate::operator<<(std::ostream &out) const {
+	return out << target.get() << " " << new_state;
+}
+
 Action *MoveStateActionTemplate::factory(MachineInstance *mi)
 { 
 	return new MoveStateAction(mi, *this);
 }
 
+SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth)
+: Action(mi), target(t.target), saved_state(t.new_state), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) { }
+
 Action::Status SetStateAction::executeStateChange(bool use_transitions)
 {
-	//std::map<std::string, MachineInstance*>::iterator pos = machines.find(target.get());
-	//if (pos != machines.end()) {
+	// restore the name of the state we are seeking in case it was updated by a prior invocation
+	new_state = saved_state;
+	value = saved_state.sValue.c_str();
 	owner->start(this);
 
 	if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
@@ -66,7 +75,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		// VARIABLE or CONSTANT that contains the name. If we have a state that coincides with
 		// new_state, we ignore such subtleties.
 		if (!machine->hasState(new_state.sValue)) {
-			State value(new_state.sValue.c_str());
+			value = new_state.sValue.c_str();
 			const Value &deref = owner->getValue(new_state.sValue.c_str());
 			if (deref != SymbolTable::Null) {
 				DBG_M_ACTIONS << *this << " dereferenced " << new_state << " to " << deref << "\n";
@@ -178,12 +187,23 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 							}
 							else {
 								std::stringstream ss;
-								ss << "Transition from " << t.source << " to "
+								ss << owner->getName() << " "  << "Transition from " << t.source << " to "
 									<< value << " denied due to condition " << t.condition->last_evaluation;
-								error_str = ss.str().c_str();
-								DBG_M_ACTIONS << owner->getName() << " "  << ss.str() << "\n";
-								status = New;
-								return NeedsRetry;
+								error_str = strdup(ss.str().c_str());
+								MessageLog::instance()->add(ss.str().c_str());
+								DBG_M_ACTIONS << ss.str() << "\n";
+								if (t.abort_on_failure) {
+									AbortActionTemplate aat(true, error_str.get());
+									AbortAction *aa = (AbortAction*)aat.factory(owner);
+									owner->enqueueAction(aa);
+									status = Failed;
+									return status;
+								}
+								else {
+									status = New;
+									owner->setNeedsCheck();
+									return NeedsRetry;
+								}
 							}
 						}
 					}
@@ -305,6 +325,7 @@ Action::Status SetStateAction::checkComplete() {
 					cleanupTrigger();
 				}
 				owner->stop(this);
+				owner->notifyDependents();
 				return status;
 			}
 			else {

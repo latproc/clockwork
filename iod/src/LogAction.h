@@ -33,9 +33,7 @@ struct LogActionTemplate : public ActionTemplate {
     LogActionTemplate(const Value &v) : message(v), predicate(0) { }
     LogActionTemplate(Predicate *pred) : message(SymbolTable::Null), predicate(pred) { }
     virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-        return out << message;
-    }
+	  std::ostream &operator<<(std::ostream &out) const;
     Value message;
     Predicate *predicate;
 };

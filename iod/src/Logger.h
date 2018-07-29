@@ -72,7 +72,7 @@ public:
 		NameMapIterator iter = name_map.find(name);
 		if (iter != name_map.end()) state_flags.insert((*iter).second);
 	}
-	bool includes(int flag_num) { return state_flags.count(flag_num); }
+	bool includes(int flag_num);
 	bool includes(std::string name) {
 		return name_map.find(name) != name_map.end();
 	}

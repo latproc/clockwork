@@ -26,21 +26,27 @@ void append_char(int ch);
 "~"                 return MATCHES;
 16BIT               return WORD;
 32BIT               return DOUBLEWORD;
-ABORT				return ABORT;
-ABS					return ABS;
+ABORT								return ABORT;
+ABS									return ABS;
+ADD									return ADD;
+AFTER								return AFTER;
 ALL                 return ALL;
 AND                 return AND;
 ANY                 return ANY;
 ARE                 return ARE;
 ASSIGN              return ASSIGN;
 AT                  return AT;
-AS					return AS;
+AS									return AS;
+ASCENDING						return ASCENDING;
+ASC									return ASC;
 BECOMES             return BECOMES;
+BEFORE							return BEFORE;
 BETWEEN             return BETWEEN;
 BITSET              return BITSET;
 BY                  return BY;
 CALL				return CALL;
 CATCH				return CATCH;
+CHANGING		return CHANGING;
 CHANNEL             return CHANNEL;
 CLASS				return CLASS;
 CLEAR               return CLEAR;
@@ -56,6 +62,8 @@ CREATE              return CREATE;
 DEC                 return DEC;
 DEFAULT             return DEFAULT;
 DEFAULTS            return DEFAULTS;
+DESCENDING					return DESCENDING;
+DESC								return DESC;
 DIFFERENCE          return DIFFERENCE;
 DISABLE             return DISABLE;
 DISABLED            return DISABLED;
@@ -73,6 +81,7 @@ EXPORT              return EXPORT;
 EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;
 EXTRACT             return EXTRACT;
+FAILURE							return FAILURE;
 FIRST               return FIRST;
 FLOAT32			return FLOAT32;
 FLOAT				return FLOAT;
@@ -84,6 +93,7 @@ IGNORES				return IGNORES;
 INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;
+INDEX								return INDEX;
 INTERFACE           return INTERFACE;
 INTEGER				return INTEGER;
 ITEM                return ITEM;
@@ -207,14 +217,15 @@ WITHIN              return WITHIN;
 }
 
 0           {
-	yylval.iVal = atoi(yytext);
+	yylval.iVal = 0;
 	return INTEGERVAL;
 }
 
 
 [-]{0,1}[0-9][0-9]* {
-    yylval.iVal = atoi(yytext);
-    return INTEGERVAL;
+	char *rest = 0;
+	yylval.iVal = strtol(yytext, &rest, 10);
+	return INTEGERVAL;
 }
 
 "%BEGIN_PLUGIN"			BEGIN PLUGIN_CODE;

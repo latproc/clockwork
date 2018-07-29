@@ -37,6 +37,7 @@
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
 #include <signal.h>
+#include <sys/stat.h>
 
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
@@ -218,7 +219,7 @@ int main (int argc, char const *argv[])
         std::ofstream out(modbus_map());
         if (!out) {
             std::cerr << "not able to open " << modbus_map() << " for write\n";
-            return false;
+            return 1;
         }    
         while (m_iter != MachineInstance::end()) {
             (*m_iter)->exportModbusMapping(out);
@@ -228,10 +229,28 @@ int main (int argc, char const *argv[])
 
 		return load_result;
 	}
+	if (export_to_c()) {
+		const char *export_path = "/tmp/cw_export";
+		std::list<MachineClass*>::iterator iter = MachineClass::all_machine_classes.begin();
+		if (mkdir(export_path, 0770) == -1 && errno != EEXIST) {
+			std::cerr << "failed to create export directory /tmp/cw_export.. aborting\n";
+			return 1;
+		}
+		while (iter != MachineClass::all_machine_classes.end()) {
+			MachineClass *mc = *iter++;
+			if (mc->name == "POINT") continue;
+			if (mc->name == "SYSTEM") continue;
+			char basename[80];
+			snprintf(basename, 80, "%s/cw_%s", export_path, mc->name.c_str());
+			const std::string fname(basename);
+			mc->cExport(fname);
+		}
+		return 0;
+	}
 	
 	MQTTInterface::instance()->init();
 	MQTTInterface::instance()->start();
-    
+
 	std::list<Output *> output_list;
 	{
         {
@@ -332,9 +351,6 @@ int main (int argc, char const *argv[])
 	IODHardwareActivation iod_activation;
 	ProcessingThread &processMonitor(ProcessingThread::create(&machine, iod_activation, *stateMonitor));
 
-	//zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_REP);
-	//resource_mgr.bind("inproc://resource_mgr");
-    
 	zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
 	sim_io.bind("inproc://ethercat_sync");
     

@@ -214,7 +214,9 @@ public:
 	static unsigned int lastIndex() { return last_idx; }
 	CommandSocketInfo(Channel *chn);
 	~CommandSocketInfo();
+	const std::string &commandSocketName() { return cmd_socket_name; }
 protected:
+	std::string cmd_socket_name;
 	static unsigned int last_idx;
 	static boost::mutex mutex;
 };
@@ -276,7 +278,6 @@ public:
 	bool isClient(); 	// does this channel connect to another instance of clockwork?
 	bool syncRemoteStates(std::list<char *> &);
 	void syncInterfaceProperties(MachineInstance *m, std::list<char *> &);
-	std::string getCommandSocketName(bool client_endpoint);
 	zmq::socket_t *createCommandSocket(bool client_endpoint);
 
 	void addSocket(int route_id, const char *addr);

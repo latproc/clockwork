@@ -75,8 +75,7 @@ MachineInstance *_settings = 0;
 
 void ClockworkProcessManager::SetTime(uint64_t t) {
 	ClockworkInterpreter *cw = ClockworkInterpreter::instance();
-	assert(t >= cw->now());
-	cw->current_time = t;
+	if (t >= cw->now()) cw->current_time = t;
 }
 
 ClockworkInterpreter::ClockworkInterpreter() : cycle_delay(0), default_poll_delay(0) {
@@ -101,7 +100,11 @@ MachineInstance *ClockworkInterpreter::settings() { return _settings; }
 
 void usage(int argc, char const *argv[])
 {
-    std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store] [-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize] \n";
+    std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store]\n"
+		<< "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
+		<< "[-mp modbus_port] [-ps persistent_store_port]"
+		<< "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics"
+		<< "\n";
 }
 
 static void listDirectory( const std::string pathToCheck, std::list<std::string> &file_list)
@@ -947,6 +950,9 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 		}
 		else if (strcmp(argv[i], "--nostats") == 0 ) { // command port
 			enable_statistics(false);
+		}
+		else if (strcmp(argv[i], "--export_c") == 0 ) { // command port
+			set_export_to_c(true);
 		}
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {
