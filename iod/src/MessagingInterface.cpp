@@ -526,7 +526,7 @@ void MessagingInterface::connect() {
 		if (pthread_equal(owner_thread, pthread_self())) {
 			FileLogger fl(program_name); fl.f() << hostname<<":"<<port 
 				<<" attempt to call socket connect from a thread that isn't the owner\n";
-			return;
+		  // return; // no longer returning here, we have some evidence this is not a good test. TBD
 		}
 		DBG_CHANNELS << "calling connect on " << url << "\n";
 		socket->connect(url.c_str());

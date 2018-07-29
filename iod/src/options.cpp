@@ -39,6 +39,7 @@ static bool keep_stats = false;
 static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
 static unsigned long cycle_time_ = 1000;
+static bool c_export = false;
 
 const char *device_name() { return dev_name; }
 void set_device_name(const char *new_name) {
@@ -156,5 +157,12 @@ void set_cycle_time(unsigned long new_time) {
 	cycle_time_ = new_time; 
 }
 unsigned long get_cycle_time() { return cycle_time_; }
+
+bool export_to_c() {
+	return c_export;
+}
+void set_export_to_c(bool which) {
+	c_export = which;
+}
 
 

@@ -32,7 +32,7 @@ void DynamicValue::flushCache() {
 }
 
 const Value &DynamicValue::operator()(MachineInstance *m) {
-    setScope(m);
+    if (scope != m) setScope(m);
     return operator()();
 }
 
@@ -187,8 +187,8 @@ AnyInValue::AnyInValue(const AnyInValue &other) {
 	state_property = 0;
 }
 
-Value &AnyInValue::operator()(MachineInstance *mi) {
-	
+const Value &AnyInValue::operator()() {
+	MachineInstance *mi = scope;
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
 	if (state_property == 0) {
@@ -240,7 +240,8 @@ AllInValue::AllInValue(const AllInValue &other) {
     machine_list = 0;
 	state_property = 0;
 }
-Value &AllInValue::operator()(MachineInstance *mi) {
+const Value &AllInValue::operator()() {
+	MachineInstance *mi = scope;
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
 	machine_list = mi->lookup(machine_list_name);
@@ -283,8 +284,8 @@ AnyEnabledDisabledValue::AnyEnabledDisabledValue(const AnyEnabledDisabledValue &
 	machine_list = 0;
 }
 
-Value &AnyEnabledDisabledValue::operator()(MachineInstance *mi) {
-
+const Value &AnyEnabledDisabledValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -313,7 +314,8 @@ AllEnabledDisabledValue::AllEnabledDisabledValue(const AllEnabledDisabledValue &
 	machine_list = 0;
 }
 
-Value &AllEnabledDisabledValue::operator()(MachineInstance *mi) {
+const Value &AllEnabledDisabledValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -344,7 +346,8 @@ CountValue::CountValue(const CountValue &other) {
 	state_property = 0;
 }
 
-Value &CountValue::operator()(MachineInstance *mi) {
+const Value &CountValue::operator()() {
+	MachineInstance *mi = scope;
 	if (state_property == 0)
 		state_property = &mi->getValue(state.c_str());
 	machine_list = mi->lookup(machine_list_name);
@@ -465,7 +468,8 @@ SumValue::SumValue(const SumValue &other) {
 	machine_list = 0;
 }
 
-Value &SumValue::operator()(MachineInstance *mi) {
+const Value &SumValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -499,7 +503,8 @@ MeanValue::MeanValue(const MeanValue &other) {
 	machine_list = 0;
 }
 
-Value &MeanValue::operator()(MachineInstance *mi) {
+const Value &MeanValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -536,7 +541,8 @@ MinValue::MinValue(const MinValue &other) {
 	property = other.property;
 }
 
-Value &MinValue::operator()(MachineInstance *mi) {
+const Value &MinValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -571,7 +577,8 @@ MaxValue::MaxValue(const MaxValue &other) {
 	property = other.property;
 }
 
-Value &MaxValue::operator()(MachineInstance *mi) {
+const Value &MaxValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list) {
 		char buf[400];
@@ -605,8 +612,8 @@ ExpressionValue::ExpressionValue(const ExpressionValue &other) {
 	condition = other.condition;
 }
 
-Value &ExpressionValue::operator()(MachineInstance *mi) {
-
+const Value &ExpressionValue::operator()() {
+	MachineInstance *mi = scope;
 	last_process_time = currentTime();
 
 	last_result = condition(mi);
@@ -626,7 +633,8 @@ IncludesValue::IncludesValue(const IncludesValue &other) {
     machine_list = 0;
 }
 
-Value &IncludesValue::operator()(MachineInstance *mi) {
+const Value &IncludesValue::operator()() {
+	MachineInstance *mi = scope;
 	if (machine_list == NULL) machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
 		char buf[400];
@@ -655,12 +663,13 @@ SizeValue::SizeValue(const SizeValue &other) {
     machine_list = 0;
 }
 
-Value &SizeValue::operator()(MachineInstance *mi) {
-	machine_list = mi->lookup(machine_list_name);
+const Value &SizeValue::operator()() {
+	if (!scope) return SymbolTable::Null;
+	machine_list = scope->lookup(machine_list_name);
 	if (!machine_list)  {
 		char buf[400];
 		snprintf(buf, 400, "%s: no machine %s for SIZE test",
-				 mi->getName().c_str(), machine_list_name.c_str());
+				 scope->getName().c_str(), machine_list_name.c_str());
 		MessageLog::instance()->add(buf);
 		last_result = 0; return last_result;
 	}
@@ -847,7 +856,8 @@ BitsetValue::BitsetValue(const BitsetValue &other) {
     machine_list = 0;
     state = other.state;
 }
-Value &BitsetValue::operator()(MachineInstance *mi) {
+const Value &BitsetValue::operator()() {
+	MachineInstance *mi = scope;
 	machine_list = mi->lookup(machine_list_name);
 	if (!machine_list)  {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_list_name << " for LIST operation\n";
@@ -881,7 +891,8 @@ EnabledValue::EnabledValue(const EnabledValue &other) {
     machine = 0;
 }
 DynamicValue *EnabledValue::clone() const { return new EnabledValue(*this); }
-Value &EnabledValue::operator()(MachineInstance *mi) {
+const Value &EnabledValue::operator()() {
+		MachineInstance *mi = scope;
     machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for ENABLED test\n";
@@ -902,7 +913,8 @@ DisabledValue::DisabledValue(const DisabledValue &other) {
     machine = 0;
 }
 DynamicValue *DisabledValue::clone() const { return new DisabledValue(*this); }
-Value &DisabledValue::operator()(MachineInstance *mi) {
+const Value &DisabledValue::operator()() {
+		MachineInstance *mi = scope;
     machine = mi->lookup(machine_name);
     if (!machine)  {
         std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for DISABLED test\n";
@@ -947,7 +959,8 @@ ExistsValue::ExistsValue(const ExistsValue &other) {
 	machine = 0;
 }
 DynamicValue *ExistsValue::clone() const { return new ExistsValue(*this); }
-Value &ExistsValue::operator()(MachineInstance *mi) {
+const Value &ExistsValue::operator()() {
+	MachineInstance *mi = scope;
 	machine = mi->lookup(machine_name);
 	if (!machine)  {
 		last_result = false;
@@ -963,7 +976,8 @@ std::ostream &operator<<(std::ostream &out, const ExistsValue &val) { return val
 
 
 DynamicValue *ClassNameValue::clone() const { return new ClassNameValue(*this); }
-Value &ClassNameValue::operator()(MachineInstance *mi) {
+const Value &ClassNameValue::operator()() {
+	MachineInstance *mi = scope;
 	machine = mi->lookup(machine_name);
 	if (!machine || !machine->getStateMachine())  {
 		std::stringstream ss; ss << mi->getName() << " no machine " << machine_name << " for CLASS test\n";
@@ -980,7 +994,8 @@ std::ostream &operator<<(std::ostream &out, const ClassNameValue &val) { return 
 
 
 DynamicValue *ChangingStateValue::clone() const { return new ChangingStateValue(*this); }
-Value &ChangingStateValue::operator()(MachineInstance *mi) {
+const Value &ChangingStateValue::operator()() {
+	MachineInstance *mi = scope;
 	machine = mi->lookup(machine_name);
 	if (!machine || !machine->getStateMachine())  {
 		std::stringstream ss;

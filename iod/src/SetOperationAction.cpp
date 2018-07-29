@@ -69,6 +69,12 @@ SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationAct
 				source_a_machine(0), source_b_machine(0),
         dest_machine(0),  operation(dat->operation),
 			 remove_selected(dat->remove_selected), start_pos(dat->start_pos), end_pos(dat->end_pos) {
+	if (count.dynamicValue())
+		 count.dynamicValue()->setScope(scope);
+	if (start_pos.dynamicValue())
+		start_pos.dynamicValue()->setScope(scope);
+	if (end_pos.dynamicValue())
+		end_pos.dynamicValue()->setScope(scope);
 }
 
 SetOperationAction::SetOperationAction() : Action(), dest_machine(0) {
@@ -102,13 +108,13 @@ bool MachineIncludesParameter(MachineInstance *m, Value &param) {
 }
 
 Action::Status SetOperationAction::run() {
-	owner->start(this);
+		owner->start(this);
     try {
-		// do not retain cached values since set operations may be working
-		// with changed items from other lists
-		source_a.cached_machine = 0;
-		source_b.cached_machine = 0;
-		dest.cached_machine = 0;
+				// do not retain cached values since set operations may be working
+				// with changed items from other lists
+				source_a.cached_machine = 0;
+				source_b.cached_machine = 0;
+				dest.cached_machine = 0;
         source_a_machine = owner->lookup(source_a);
         source_b_machine = owner->lookup(source_b);
         dest_machine = owner->lookup(dest);
@@ -423,35 +429,42 @@ SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationAct
 Action::Status SelectSetOperation::doOperation() {
     int num_copied = 0;
     long to_copy;
-	if (!source_a_machine) {
-		error_str = "No source machine for copy";
-		status = Failed;
-		return status;
-	}
+		if (!source_a_machine) {
+			error_str = "No source machine for copy";
+			status = Failed;
+			return status;
+		}
 
-	{
-		if (start_pos.kind == Value::t_symbol || start_pos.kind == Value::t_string) {
-			Value v = scope->properties.lookup(start_pos.sValue.c_str());
-			if (!v.asInteger(sp)) sp = -1;
-		}
-		else {
-			if (!start_pos.asInteger(sp)) sp = -1;
-		}
-		if (sp == -1) sp = 0;
+		{
+			if (start_pos.kind == Value::t_symbol || start_pos.kind == Value::t_string) {
+				Value v = scope->properties.lookup(start_pos.sValue.c_str());
+				if (!v.asInteger(sp)) sp = -1;
+			}
+			else {
+				if (!start_pos.asInteger(sp)) sp = -1;
+			}
+			if (sp == -1) sp = 0;
 
-		if (end_pos.kind == Value::t_symbol || end_pos.kind == Value::t_string) {
-			Value v = scope->properties.lookup(end_pos.sValue.c_str());
-			if (!v.asInteger(ep)) ep = -1;
+			if (end_pos.kind == Value::t_symbol || end_pos.kind == Value::t_string) {
+				Value v = scope->properties.lookup(end_pos.sValue.c_str());
+				if (!v.asInteger(ep)) ep = -1;
+			}
+			else {
+				if (!end_pos.asInteger(ep)) ep = -1;
+			}
+			if (count.kind == Value::t_integer && count == -1) {
+				if (ep != -1) count = ep - sp + 1;
+			}
 		}
-		else {
-			if (!end_pos.asInteger(ep)) ep = -1;
-		}
-		if (count == -1) {
-			if (ep != -1) count = ep - sp + 1;
-		}
-	}
     if (source_a_machine) {
-        if (count < 0 || !count.asInteger(to_copy)) to_copy = source_a_machine->parameters.size();
+			if (count.kind == Value::t_symbol) {
+				const Value &prop = owner->getValue(count);
+				if (prop == SymbolTable::Null || !prop.asInteger(to_copy))
+					to_copy = source_a_machine->parameters.size();
+			}
+			else
+				if ( (count.kind == Value::t_integer && count < 0) || !count.asInteger(to_copy))
+					to_copy = source_a_machine->parameters.size();
 #ifdef DEPENDENCYFIX
         Value last;
         MachineInstance *last_machine = 0;

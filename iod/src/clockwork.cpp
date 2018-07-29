@@ -951,6 +951,9 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 		else if (strcmp(argv[i], "--nostats") == 0 ) { // command port
 			enable_statistics(false);
 		}
+		else if (strcmp(argv[i], "--export_c") == 0 ) { // command port
+			set_export_to_c(true);
+		}
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {
             usage(argc, argv);

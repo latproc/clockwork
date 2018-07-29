@@ -51,6 +51,7 @@ SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTempl
 Action::Status SendMessageAction::run() {
 	owner->start(this);
 	if (target != 0) {
+		target.cached_machine = 0; // clear cached value
 		target_machine = owner->lookup(target);
 		DBG_ACTIONS << *this << "\n";
 		if (!target_machine) {
@@ -96,7 +97,7 @@ Action::Status SendMessageAction::run() {
 			std::stringstream ss;
 			ss << *this << " Error: cannot find target machine " << target;
 			MessageLog::instance()->add(ss.str().c_str());
-			NB_MSG << ss.str();
+			NB_MSG << ss.str() << "\n";
 			status = Action::Failed;
 		}
 	}

@@ -283,7 +283,7 @@ bool numeric_types(Value::Kind a, Value::Kind b) {
 }
 
 bool Value::operator>=(const Value &other) const {
-    Kind a = kind;
+	Kind a = kind;
 	Kind b = other.kind;
 
 	if (a == t_symbol) a = t_string;
@@ -1046,19 +1046,22 @@ std::string Value::asString() const {
             snprintf(buf, 25, "%ld", iValue);
             return buf;
         }
-		case t_float:
-		{
-			char buf[25];
-			snprintf(buf, 25, "%6.6lf", fValue);
-			return buf;
-		}
+				case t_float:
+				{
+					char buf[25];
+					snprintf(buf, 25, "%6.6lf", fValue);
+					return buf;
+				}
         case t_empty: return "null";
         case t_symbol:
         case t_string:
             return sValue;
         case t_dynamic:
-            return "<dynamic value>";
-            
+				{
+					const Value &tmp((*dyn_value)());
+					return tmp.asString();
+				}
+
         default:
             break;
     }
@@ -1089,6 +1092,11 @@ bool Value::asBoolean(bool &x) const {
 				x = false; return true;
 			}
 			else return false;
+		case t_dynamic:
+		{
+			const Value &tmp((*dyn_value)());
+			return tmp.asBoolean(x);
+		}
 		default:
 			return false;
 	}
@@ -1116,6 +1124,10 @@ bool Value::asInteger(long &x) const {
 		x = (bValue) ? 1 : 0;
 		return true;
 	}
+	else if (kind == t_dynamic) {
+		const Value &tmp((*dyn_value)());
+		return tmp.asInteger(x);
+	}
 	return false;
 }
 
@@ -1140,6 +1152,10 @@ bool Value::asFloat(double &x) const {
 	else if (kind == t_bool) {
 		x = (bValue) ? 1.0 : 0.0;
 		return true;
+	}
+	else if (kind == t_dynamic) {
+		const Value &tmp((*dyn_value)());
+		return tmp.asFloat(x);
 	}
 	return false;
 }

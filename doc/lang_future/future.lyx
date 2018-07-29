@@ -1036,16 +1036,20 @@ It should be assumed that there is no guarantee that non-blocking steps
 A function may be invoked by a CALL statement in which case the calling
  machine blocks until the function is complete.
  On completion, a result property 'RESULT' will contain the result of the
- function and this can be automatically assigned to a local property.
+ function.
+ RESULT is actually a REFERENCE (see section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "subsec:References"
+
+\end_inset
+
+) so it can return multiple properties and a reference to a machine.
  For example:
 \end_layout
 
 \begin_layout LyX-Code
-property := CALL method ON machine;
-\end_layout
 
-\begin_layout Standard
-which is equivalent to:
 \end_layout
 
 \begin_layout LyX-Code
@@ -1053,11 +1057,22 @@ CALL method ON machine;
 \end_layout
 
 \begin_layout LyX-Code
-property := RESULT;
+property := RESULT.val;
+\end_layout
+
+\begin_layout LyX-Code
+SEND go TO RESULT.ITEM;
 \end_layout
 
 \begin_layout Subsection
 References
+\begin_inset CommandInset label
+LatexCommand label
+name "subsec:References"
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
