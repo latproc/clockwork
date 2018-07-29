@@ -1,0 +1,5 @@
+export BASE=/opt/latproc
+export CW=$BASE/iod/cw
+export IOSH=$BASE/iod/iosh
+export SAMPLER=$BASE/iod/cw
+export TESTS=$BASE/tests

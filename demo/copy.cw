@@ -1,0 +1,1 @@
+../tests/copy.cw

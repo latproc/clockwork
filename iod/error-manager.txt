@@ -1,0 +1,41 @@
+Error manager
+
+fixed memory size - calculate automatically
+circular buffer - drop messages as new messages hit limit
+typed messages
+command to collect the list
+write to file on exit
+load from file on startup
+
+
+class LogEntry {
+    LogEntry(const char *msg) : message(msg) { size_ = strlen(msg); }
+    const std::string &entry() const { return message; }
+    unsigned int size() { return size_; }
+private:
+    unsigned int size_;
+    std::string message;
+};
+
+class MessageLog {
+
+private:
+    MessageLog(unsigned int maxmem = 1024*1024) : max_memory(maxmem), current_memory(0) { }
+    void load(const char *filename);
+    unsigned int max_memory;
+    unsigned int current_memory;
+    std::list<LogEntry*> entries;
+    add(const char *text) {
+        unsigned int extra = strlen(text);
+        std::list<LogEntry*>::reverse_iterator iter = entries.begin();
+        while (iter != entries.end()  && current_memory + newlen > max_memory) {
+            LogEntry *e = *iter;
+            current_memory -= e->size();
+            iter = entries.erase(iter);
+            delete e;
+        }
+        entries.push_back(new LogEntry(text));
+    }
+};
+
+

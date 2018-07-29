@@ -1,0 +1,153 @@
+PANELSCREEN MACHINE BaseList, ScreenList, CmdList {
+	OPTION POLLING_TIME 20000;
+	EXPORT COMMANDS Reset;
+	Screen LIST; Done LIST;
+
+	Restart WHEN SIZE OF Done > 0 && ANY Done ARE false;
+	TestTrue WHEN SIZE OF Screen > 0 && ALL Screen ARE true;
+	TestFalse WHEN SIZE OF Screen > 0 && ALL Screen ARE false;
+	GetNextTest WHEN SIZE OF ScreenList > 0 && SIZE OF Screen == 0;
+	Waiting WHEN SIZE OF Done > 0 || SIZE OF Screen > 0;
+	Idle DEFAULT;	
+
+	ENTER Restart { LOCK ScreenList; CLEAR ScreenList; CLEAR Done; CLEAR Screen; CLEAR CmdList; }
+	ENTER Waiting { SEND Reset TO Screen; }
+	ENTER TestTrue { MOVE 1 FROM Screen TO Done; }
+	ENTER TestFalse { SEND Change TO Screen; }
+	ENTER GetNextTest {
+		CLEAR Screen; MOVE 1 FROM ScreenList TO Screen; SEND Reset TO Screen;
+		IF ( SIZE OF ScreenList == 0 ) {
+			SEND Jump TO Screen;
+		}
+	}
+	ENTER Idle {
+		COPY ALL FROM BaseList TO ScreenList;
+		UNLOCK ScreenList;
+	}
+
+	COMMAND Reset { 
+		IF (SELF != Idle) { LOG "Reset"; LOCK ScreenList; CLEAR ScreenList; CLEAR Done; CLEAR Screen; CLEAR CmdList; }  
+	}
+}
+
+# ScreenNo must be set in the config of SCREENTEST MACHINE
+SCREENTEST MACHINE Test, CmdList {
+	true WHEN Test IS true;
+	false DEFAULT;
+
+	COMMAND Jump { PUSH ScreenNo TO CmdList; LOG SELF.NAME + " pushed " + ScreenNo + " from Jump" } 
+	COMMAND Change WITHIN false { PUSH ScreenNo TO CmdList; LOG SELF.NAME + " pushed " + ScreenNo + " from Change" }
+	COMMAND Reset { LOG "Reset No actions on " + SELF.NAME + " " + NOW; }
+}
+
+# ScreenNo must be set in the config of SCREENTEST MACHINE
+SCREENJUMP MACHINE CmdList {
+	Idle INITIAL;
+	EXPORT COMMANDS Jump;
+	COMMAND Jump { PUSH ScreenNo TO CmdList; }
+}
+
+SCREENTRACK MACHINE GoodComms, Panel2Control, Control2Panel, CmdList {
+	Allowed CHANGEALLOWED Control2Panel, Panel2Control;
+
+	NewCommand WHEN SELF IS NewCommand && Allowed IS false || SELF IS Idle && CmdList != empty && GoodComms IS on,
+		EXECUTE MoveIdle WHEN GoodComms IS on && TIMER >= 500;
+	Follow WHEN SELF IS Idle && CmdList IS empty && Allowed IS false && GoodComms IS on;
+	Idle DEFAULT;
+
+	ENTER NewCommand { Control2Panel.VALUE := TAKE LAST FROM CmdList; LOG "Got New Screen No: " + Control2Panel.VALUE; }
+	ENTER Follow { Control2Panel.VALUE := Panel2Control.VALUE; LOG "Following Panel: " + Control2Panel.VALUE }
+	COMMAND MoveIdle { Control2Panel.VALUE := Panel2Control.VALUE; LOG "MoveIdle: " + Control2Panel.VALUE }
+
+#	ENTER INIT { Control2Panel.VALUE := 0; }
+}
+
+SCREENFORK MACHINE Test, ScreenList, L_True, L_False {
+	true STATE;
+	wait STATE;
+	false INITIAL;
+
+	COMMAND Change {
+		LOCK ScreenList;
+		SET SELF TO true;
+		IF (Test IS true) {
+			COPY ALL FROM L_True TO ScreenList;
+		} ELSE {
+			COPY ALL FROM L_False TO ScreenList;
+		};
+		UNLOCK ScreenList;
+	}
+	COMMAND Reset { SET SELF TO false; }
+	COMMAND Jump { SEND Change TO SELF; } 
+	RECEIVE Test.true_enter { SET SELF TO false; }
+	RECEIVE Test.false_enter { SET SELF TO false; }
+
+}
+
+# ScreenNo must be set in the config of SCREENIDLERETURN MACHINE
+SCREENIDLERETURN MACHINE Panel2Control, M_PanelControl {
+	OPTION resetTimeout 60;
+	reset WHEN SELF IS waiting && TIMER >= resetTimeout;
+	waiting WHEN Panel2Control == ScreenNo;
+	idle DEFAULT;
+
+	ENTER reset { CALL Reset ON M_PanelControl; LOG "reset M_PanelControl"; }
+
+}
+
+CHANGEALLOWED MACHINE Control2Panel, Panel2Control {
+	true WHEN Control2Panel.VALUE == Panel2Control.VALUE;
+	false DEFAULT;
+}
+
+SCREENCONNECTED MACHINE I_PanelGood {
+	Connected TIMER (timeout:15000);
+	on WHEN SELF IS on && Connected IS stopped;
+	on WHEN SELF IS on && Connected IS running;
+	on WHEN SELF IS on && Connected != expired;
+	off DEFAULT;
+
+	RECEIVE I_PanelGood.on_enter {
+		SET SELF TO on;
+		SEND reset TO Connected;
+		SEND start TO Connected;
+	}
+
+}
+
+QUESTION2GUARD MACHINE Question {
+	true WHEN Question IS on || Question IS off || Question IS unknown;
+	false DEFAULT;
+}
+
+QUESTION2ENABLE MACHINE Question {
+	true WHEN Question DISABLED;
+	false DEFAULT;
+}
+
+SCREENQUESTION MACHINE {
+	EXPORT STATES on, off, ask;
+	EXPORT COMMANDS No, Yes;
+	unknown INITIAL;
+	off STATE;
+	on STATE;
+	ask STATE;
+
+	COMMAND Question { SET SELF TO ask; }
+  COMMAND No { SET SELF TO off; }
+  COMMAND Yes { SET SELF TO on; }
+	COMMAND Reset { SET SELF TO unknown; }
+}
+
+INPUT2GUARD MACHINE Input {
+	true WHEN Input IS on;
+	false WHEN Input IS off;
+	unknown DEFAULT;
+}
+
+INPUT2INVERTGUARD MACHINE Input {
+	true WHEN Input IS off;
+	false WHEN Input IS on;
+	unknown DEFAULT;
+}
+

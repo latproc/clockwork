@@ -1,0 +1,10 @@
+VELOCITYMONITOR MACHINE pos_in {
+	OPTION startup_enabled false;
+	OPTION filter 0;
+	OPTION delay 10;
+	OPTION VALUE 0;
+	check WHEN SELF IS idle && TIMER>=delay;
+	idle DEFAULT;
+	ENTER check { VALUE := pos_in.Velocity; }
+}
+

@@ -1,0 +1,59 @@
+PictureSystem CHANNEL {
+#	MONITORS trigger;
+	RECEIVES CapturePhoto;
+}
+
+Trigger MACHINE {
+    incoming_images LIST;
+	on STATE;
+	off INITIAL;
+	ENTER on { LOG "on"; SEND "CapturePhoto" TO PictureSystem  }
+	ENTER off { LOG "off" }
+	COMMAND press { SET SELF TO on; }
+    RECEIVE CaptureDone { 
+        bale_ref := TAKE FIRST FROM incoming_images; 
+        SET SELF TO off;
+        SEND NewLot TO lot_manager;
+    }
+}
+trigger Trigger;
+
+TriggerMonitor MACHINE trigger {
+    watching WHEN trigger IS on,
+        EXECUTE error WHEN TIMER > 3000;
+    idle DEFAULT;
+        
+    RECEIVE error { 
+        LOG "error: picture was not taken"; 
+        SET trigger TO off;
+    }
+}
+trigger_monitor TriggerMonitor trigger;
+
+Loader MACHINE {
+    idle DEFAULT;
+    loading STATE;
+    LEAVE loading { SEND "BaleLoaded" TO PictureSystem }
+}
+loader Loader;
+
+LotManager MACHINE {
+    idle DEFAULT;
+    RECEIVE NewLot { msg := "NewLot " + trigger.bale_ref; SEND msg TO PictureSystem }
+}
+lot_manager LotManager;
+
+ImageManager MACHINE {
+    OPTION bale_ref 0;
+    RECEIVE CaptureDone { PUSH bale_ref TO trigger.incoming_images; SEND "CaptureDone" TO trigger }
+    RECEIVE Forward { SEND "Forward" TO PictureSystem }
+    RECEIVE Reverse { SEND "Reverse" TO PictureSystem }
+    RECEIVE Clear { SEND "Clear" TO PictureSystem }
+}
+image_manager ImageManager;
+
+ROUTE "CaptureDone" TO image_manager;
+ROUTE "Forward" TO image_manager;
+ROUTE "Reverse" TO image_manager;
+ROUTE "Clear" TO image_manager;
+ROUTE "NewLot" TO lot_manager;

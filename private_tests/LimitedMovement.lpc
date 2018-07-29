@@ -1,0 +1,97 @@
+# Single direction movement controllers that stop before an end point
+
+/*                          
+When movement direction increases position:
+ 
+             start_braking            end
+                  |              |     |
+  0 ---...--------|--------------|-----|-----...--- 32676
+        moving    |  ramping     |     |  stopped
+                  |                    |
+                  | <-braking_window-> |
+
+    start_braking := end - window
+
+    power_factor 
+        =: 1 WHEN IA_Pos.VALUE <= start_braking
+        =: 0 WHEN IA_Pos.VALUE > end - stopping_distance
+        =: ( IA_Pos.VALUE - start_braking ) * 1000 / ( braking_window - stopping_distance ) OTHERWISE;
+
+*/
+
+LimitForwardMovementController MACHINE C_IndexController, C_Drive, IA_Pos {
+	OPTION stopping_distance 200;  # within the braking window
+	OPTION end 20000;
+	OPTION movement_direction 1;
+	OPTION braking_window 1000;
+	OPTION ramping_window 0; # calculated
+	OPTION start_braking 0; # calculated
+	OPTION power 0;  # requested power
+
+	inactive WHEN NOT C_IndexController DISABLED;
+	update WHEN SELF IS NOT stopped AND TIMER >= 20;
+	start WHEN movement_direction == 1 AND IA_Pos.Position <= start_braking AND power != 0 AND C_Drive.VALUE == 0;
+	moving WHEN movement_direction == 1 AND IA_Pos.Position <= start_braking AND power != 0;
+	stopping WHEN movement_direction == 1 AND IA_Pos.Position > end - stopping_distance AND C_Drive.VALUE != 0;
+	ramp WHEN movement_direction == 1 AND power != 0;
+	stopped WHEN power == 0;
+	unknown DEFAULT;
+	setup INITIAL;
+
+	ENTER start { C_Drive.VALUE := power; }
+	ENTER ramp { 
+		power_factor := ( IA_Pos.Position - start_braking ) * 1000 / ramping_window; 
+		IF (power_factor > 0 AND power_factor <= 1000 AND power > 0 AND power < 1000) {
+			C_Drive.VALUE := power * (1000 - power_factor) / 1000;
+		}
+		ELSE {
+			C_Drive.VALUE := 0; power := 0;
+		}
+	}
+	ENTER stopping { power := 0; C_Drive.VALUE := 0; }
+	ENTER unknown { C_Drive.VALUE := 0; }
+
+	ENTER setup { 
+		ramping_window := braking_window - stopping_distance;
+		start_braking := end - braking_window;
+	}
+} 
+
+LimitReverseMovementController MACHINE C_IndexController, C_Drive, IA_Pos {
+	OPTION stopping_distance 200;  # within the braking window
+	OPTION end 9000;
+	OPTION movement_direction -1;
+	OPTION braking_window 1000;
+	OPTION ramping_window 0; # calculated
+	OPTION start_braking 0; # calculated
+	OPTION power 0;  # requested power
+
+	inactive WHEN NOT C_IndexController DISABLED;
+	update WHEN SELF IS NOT stopped AND TIMER >= 20;
+	start WHEN movement_direction == -1 AND IA_Pos.Position >= start_braking AND power != 0 AND C_Drive.VALUE == 0;
+	moving WHEN movement_direction == -1 AND IA_Pos.Position >= start_braking AND power != 0;
+	stopping WHEN movement_direction == -1 AND IA_Pos.Position < end + stopping_distance AND C_Drive.VALUE != 0;
+	ramp WHEN movement_direction == -1 AND C_Drive.VALUE != 0;
+	stopped WHEN power == 0;
+	unknown DEFAULT;
+	setup INITIAL;
+
+	ENTER start { C_Drive.VALUE := power; }
+	ENTER ramp { 
+		power_factor := ( start_braking - IA_Pos.Position ) * 1000 / ramping_window; 
+		IF (power_factor > 0 AND power_factor <= 1000 AND power > 0 AND power < 1000) {
+			C_Drive.VALUE := power * (1000 - power_factor) / 1000;
+		}
+		ELSE {
+			C_Drive.VALUE := 0; power := 0;
+		}
+	}
+	ENTER stopping { power := 0; C_Drive.VALUE := 0; }
+	ENTER unknown { C_Drive.VALUE := 0; }
+
+	ENTER setup { 
+		ramping_window := braking_window - stopping_distance;
+		start_braking := end + braking_window;
+	}
+
+}

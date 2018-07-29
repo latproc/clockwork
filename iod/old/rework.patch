@@ -1,0 +1,64 @@
+diff --git a/iod/CMakeLists.txt b/iod/CMakeLists.txt
+index 2f5fcdb..bfbc5ac 100644
+--- a/iod/CMakeLists.txt
++++ b/iod/CMakeLists.txt
+@@ -101,23 +101,23 @@ set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
+ set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
+ # Create custom command for flex/lex (note the outputs)
+  ADD_CUSTOM_COMMAND(
+-   SOURCE ${CLOCKWORK_DIR}/cwlang.lpp
++#   SOURCE ${CLOCKWORK_DIR}/cwlang.lpp
+    COMMAND ${FLEX_EXECUTABLE} 
+    ARGS -o${CMAKE_BINARY_DIR}/cwlang.yy.cpp
+ 		${CLOCKWORK_DIR}/cwlang.lpp
+-   TARGET ClockworkParser
+-   OUTPUTS ${cw_lex_output})
++		#   TARGET ClockworkParser
++   OUTPUT ${cw_lex_output})
+ 
+ # Create custom command for bison/yacc (note the DEPENDS)
+  ADD_CUSTOM_COMMAND(
+-   SOURCE ${CLOCKWORK_DIR}/cwlang.ypp
++#   SOURCE ${CLOCKWORK_DIR}/cwlang.ypp
+    COMMAND ${BISON_EXECUTABLE} 
+    ARGS -y 
+         -o ${CMAKE_BINARY_DIR}/cwlang.tab.cpp
+ 		-g -v -d ${CLOCKWORK_DIR}/cwlang.ypp
+-   TARGET ClockworkParser
++		#TARGET ClockworkParser
+    DEPENDS ${CLOCKWORK_DIR}/cwlang.lpp
+-   OUTPUTS ${cw_yacc_output})
++   OUTPUT ${cw_yacc_output})
+ 
+ # Add generated source to the list of sources
+  SET(Clockwork_SRCS ${Clockwork_SRCS} ${cw_yacc_output} ${cw_lex_output})
+@@ -237,23 +237,23 @@ set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)
+ set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
+ # Create custom command for flex/lex (note the outputs)
+  ADD_CUSTOM_COMMAND(
+-   SOURCE ${CLOCKWORK_DIR}/cmdline.lpp
++# SOURCE ${CLOCKWORK_DIR}/cmdline.lpp
+    COMMAND ${FLEX_EXECUTABLE} 
+    ARGS -o${CMAKE_BINARY_DIR}/cmdline.yy.cpp
+ 		${CLOCKWORK_DIR}/cmdline.lpp
+-   TARGET ClockworkParser
+-   OUTPUTS ${iosh_lex_output})
++		#TARGET ClockworkParser
++   OUTPUT ${iosh_lex_output})
+ 
+ # Create custom command for bison/yacc (note the DEPENDS)
+  ADD_CUSTOM_COMMAND(
+-   SOURCE ${CLOCKWORK_DIR}/cmdline.ypp
++#   SOURCE ${CLOCKWORK_DIR}/cmdline.ypp
+    COMMAND ${BISON_EXECUTABLE} 
+    ARGS -y 
+         -o ${CMAKE_BINARY_DIR}/cmdline.tab.cpp
+ 		-g -v -d ${CLOCKWORK_DIR}/cmdline.ypp
+-   TARGET ClockworkParser
++		#TARGET ClockworkParser
+    DEPENDS ${CLOCKWORK_DIR}/cmdline.lpp
+-   OUTPUTS ${iosh_yacc_output})
++   OUTPUT ${iosh_yacc_output})
+ 
+ # Since the parser source does not exists yet when cmake is run, mark
+ # it as generated

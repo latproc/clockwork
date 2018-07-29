@@ -1,0 +1,107 @@
+# Annotated output from the apartment test. 
+#
+# the simulation is controlled through a debug shell where commands
+# can be entered. The commands used (interactively) to control this
+# were:
+
+# first set the timers to shorter values for the sake of the test
+1> PROPERTY controller dim_timer 12000;
+2> PROPERTY controller on_timer 60000;
+
+# toggle input on for floor 1
+3> SET in1 TO on; SET in1 TO off;
+
+# after the lights went dim, toggle the input on floor 3 to test
+# the on-timer reset logic
+
+4> SET in3 TO on; SET in3 TO off;
+
+
+# An event sampler was used to monitor the process and its 
+# log follows.  The  log has the form:
+# timestamp (ms) machine state|'value' state_number|value
+#
+# where the timestamp is number of millisecs since the sampler was started
+
+
+# ---- annotated log follows
+# the timer property adjustments corresponding to commands 1,2 above 
+69621	controller.dim_timer	value	12000
+73245	controller.on_timer	value	60000
+
+# the raw input io turning on on floor 1 (command 3 above)
+88269	in1	on	1
+
+# the linked light switch for in1 automatically comes on_timer
+88269	floor1_button	on	1
+
+# the raw input io turning off on floor 1 (command 3 above)
+88270	in1	off	2
+
+# a flurry of state changes culminating in all stairwell lights 
+# turning on at full power (analogue value 32767)
+88280	controller	turningOn	3
+88280	controller	on	1
+88280	floor1_button	off	2
+88289	floor1_light	on	1
+88289	aout1.VALUE	value	32767
+88289	floor2_light	on	1
+88289	aout2.VALUE	value	32767
+88290	floor3_light	on	1
+88290	aout3.VALUE	value	32767
+88290	floor4_light	on	1
+88290	aout4.VALUE	value	32767
+#...time passes...
+
+#controller has been on for (just over) 60000ms so it dims the lights
+148281	controller	dimmed	4
+148296	floor1_light	dimmed	4
+148296	aout1.VALUE	value	22937
+148296	floor2_light	dimmed	4
+148296	aout2.VALUE	value	22937
+148296	floor3_light	dimmed	4
+148297	aout3.VALUE	value	22937
+148297	floor4_light	dimmed	4
+148297	aout4.VALUE	value	22937
+
+# the switch on floor 3 is pressed (command 4 above)
+150859	in3	on	1
+150859	floor3_button	on	1
+
+# the switch on floor 3 turns off (command 4 above)
+150861	in3	off	2
+150866	controller	turningOn	3
+150866	controller	on	1
+150867	floor3_button	off	2
+150876	floor1_light	on	1
+150876	aout1.VALUE	value	32767
+150877	floor2_light	on	1
+150877	aout2.VALUE	value	32767
+150877	floor3_light	on	1
+150877	aout3.VALUE	value	32767
+150877	floor4_light	on	1
+150877	aout4.VALUE	value	32767
+#...time passes again...
+
+#controller has been on for 60000ms so it dims the lights
+210867	controller	dimmed	4
+210883	floor1_light	dimmed	4
+210883	aout1.VALUE	value	22937
+210883	floor2_light	dimmed	4
+210883	aout2.VALUE	value	22937
+210883	floor3_light	dimmed	4
+210883	aout3.VALUE	value	22937
+210883	floor4_light	dimmed	4
+210883	aout4.VALUE	value	22937
+#...time passes...
+
+#controller has been dimmed for 12000ms so it turns the lights off
+222869	controller	off	2
+222885	floor1_light	off	2
+222885	aout1.VALUE	value	0
+222885	floor2_light	off	2
+222885	aout2.VALUE	value	0
+222886	floor3_light	off	2
+222886	aout3.VALUE	value	0
+222886	floor4_light	off	2
+222886	aout4.VALUE	value	0

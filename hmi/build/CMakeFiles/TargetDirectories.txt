@@ -1,0 +1,6 @@
+/Users/martin/latproc/hmi/build/CMakeFiles/Clockwork.dir
+/Users/martin/latproc/hmi/build/CMakeFiles/MBMaster.dir
+/Users/martin/latproc/hmi/build/CMakeFiles/core_panel.dir
+/Users/martin/latproc/hmi/build/CMakeFiles/grab_machine.dir
+/Users/martin/latproc/hmi/build/CMakeFiles/loader_control.dir
+/Users/martin/latproc/hmi/build/CMakeFiles/modbus_sample.dir

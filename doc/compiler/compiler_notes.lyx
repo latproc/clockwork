@@ -1,0 +1,671 @@
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+The clockwork compiler
+\end_layout
+
+\begin_layout Author
+Martin Leadbeater
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Standard
+The objective of this document is to provide an explanation of the clockwork
+ compiler.
+ The role of this compiler is to convert a clockwork program that runs in
+ the interpreter into a C program that can then be further compiled and
+ linked to form a native executable.
+ There will be an option to translate to nesC
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Gay:2003:NLH:780822.781133"
+
+\end_inset
+
+ rather than to C this well enable compilation of modules to suit the TinyOS
+ operating system for small microcontrollers.
+\end_layout
+
+\begin_layout Subsection
+Thoughts
+\end_layout
+
+\begin_layout Itemize
+it would be good to be tickless and put the processor to slee when possible
+\end_layout
+
+\begin_layout Itemize
+need to be able to send pub/sub messages to the outside world
+\end_layout
+
+\begin_layout Itemize
+use mqtt rather than zmq for external messaging?
+\end_layout
+
+\begin_layout Itemize
+how to deal with topic size in a small micro?
+\end_layout
+
+\begin_layout Itemize
+run preemptive or non-preemptive?
+\end_layout
+
+\begin_layout Itemize
+initially use coroutines rather than tasks to actually manage clockwork
+ operation
+\end_layout
+
+\begin_layout Itemize
+write a scheduled task that looks at what cw items to wake up
+\end_layout
+
+\begin_layout Subsection
+Kernel
+\end_layout
+
+\begin_layout Standard
+The kernel of clockwork manages a cyclic process that monitors I/O changes
+ to trigger application events, which, in turn cause state changes in the
+ model and thus cause actions to be invoked.
+\end_layout
+
+\begin_layout LyX-Code
+syncronise_io()
+\end_layout
+
+\begin_layout LyX-Code
+process_commands()
+\end_layout
+
+\begin_layout LyX-Code
+check_scheduler()
+\end_layout
+
+\begin_layout LyX-Code
+dispatch_messages()
+\end_layout
+
+\begin_layout LyX-Code
+evaluate_machines()
+\end_layout
+
+\begin_layout LyX-Code
+perform_actions()
+\end_layout
+
+\begin_layout Standard
+The above steps are defined as below.
+\end_layout
+
+\begin_layout Description
+synchronise_io updates state changes from I/O into clockwork objects and
+ sets io changes based on clockwork requests
+\end_layout
+
+\begin_layout LyX-Code
+import io state into an io state memory buffer
+\end_layout
+
+\begin_layout LyX-Code
+find clockwork entities linked to that I/O.
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+If an object is requesting a change
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+if the new state corresponds to the requested state
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+reset the request
+\end_layout
+
+\end_deeper
+\end_deeper
+\begin_layout LyX-Code
+if the new state is different to the requested state
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+perform a state change on that device (notifying dependents)
+\end_layout
+
+\end_deeper
+\begin_layout Description
+process_commands checks whether command messages have been sent and if so,
+ executes them
+\end_layout
+
+\begin_layout Description
+check_scheduler wakes up tasks linked to triggers (eg software timers, condition
+s)
+\end_layout
+
+\begin_layout Description
+dispatch_messages checks queued messages, identifies target objects and
+ forwards the messages to the targets
+\end_layout
+
+\begin_layout Description
+evaluate_machines looks at idle machines and performs state and message
+ queue checks
+\end_layout
+
+\begin_layout Description
+perform_actions looks at active machines and attempts to continue execution
+ of actions
+\end_layout
+
+\begin_layout Section
+Architectural overview
+\end_layout
+
+\begin_layout Standard
+Each machine implements a list of states, a map of key value pairs, a stack
+ of current actions, a list of stable state expressions and a list of dependent
+ machines.
+ Expressions can make reference to the state or properties of other machines
+ and each of these items are therefore directly addressable.
+ 
+\end_layout
+
+\begin_layout Standard
+Each machine operates as a coroutine or small thread within the main application.
+ Threads set an allocation of cpu time by a cooperative process.
+\end_layout
+
+\begin_layout Standard
+We wish to implement a low memory model to enable compilation on micro controlle
+rs as well as a large memory version that may involve very large numbers
+ of interconnected machines.
+\end_layout
+
+\begin_layout Section
+Target translations
+\end_layout
+
+\begin_layout Standard
+Hand crafted examples
+\end_layout
+
+\begin_layout LyX-Code
+Flasher MACHINE {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN SELF IS on, EXECUTE flip WHEN TIMER>=1000;
+\end_layout
+
+\begin_layout LyX-Code
+off WHEN SELF IS off, EXECUTE flip WHEN TIMER>=1000;
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND flip { SEND next TO SELF }
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION on TO off ON next;
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION off TO on ON next;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+When implemented in C there are several things to note, we consider some
+ example machines
+\end_layout
+
+\begin_layout LyX-Code
+%BEGIN_PLUGIN
+\end_layout
+
+\begin_layout LyX-Code
+int check_states(void *scope) {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+PREPARE_DATA
+\end_layout
+
+\begin_layout LyX-Code
+if (data->SELF->current == on) set_state(scope, on);
+\end_layout
+
+\begin_layout LyX-Code
+else if (data->SELF->current == off set_state(scope, on);
+\end_layout
+
+\begin_layout LyX-Code
+perform_subconditions();
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+int poll_actions(void *scope) {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+if (data->current_step == empty) {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+int msg = get_next_message();
+\end_layout
+
+\begin_layout LyX-Code
+if (msg == msgFlasher_flip) begin_action(actFlasher_flip);
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+else {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+continue_action();
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+int continue_action(struct *classFlasher) {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+int status = none;
+\end_layout
+
+\begin_layout LyX-Code
+switch data->current_step {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+case empty: return status;
+\end_layout
+
+\begin_layout LyX-Code
+case Flasher_flip_st001:
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+status = perform_send(next, SELF);
+\end_layout
+
+\begin_layout LyX-Code
+data->current_step = Flasher_flip_st002;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+case Flasher_flip_st002:
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+if (status == running) return status;
+\end_layout
+
+\begin_layout LyX-Code
+if (status == error) { data->current_step = Flasher_flip_done; return status;
+ }
+\end_layout
+
+\begin_layout LyX-Code
+if (status == done) { data->current_step = Flasher_flip_done; return status;
+ }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+case Flasher_flip_done:
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+return;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+default: return;
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+void perform_subconditions() {
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+%END_PLUGIN
+\end_layout
+
+\begin_layout Subsection
+Main loop
+\end_layout
+
+\begin_layout Standard
+Implicit in every clockwork program there is a main loop that keeps the
+ driver alive until a shutdown is executed.
+\end_layout
+
+\begin_layout LyX-Code
+while (!shutdown_seen) {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+collect_status();
+\end_layout
+
+\begin_layout LyX-Code
+run_scheduled_tasks();
+\end_layout
+
+\begin_layout LyX-Code
+process_machines();
+\end_layout
+
+\begin_layout LyX-Code
+send_response();
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsection
+Virtual machine
+\end_layout
+
+\begin_layout Standard
+Each machine runs as a coroutine or virtual thread.
+\end_layout
+
+\begin_layout Subsection
+Actions
+\end_layout
+
+\begin_layout Standard
+Each action is message based and may involve multiple steps.
+ These steps are managed by use of a state machine.
+\end_layout
+
+\begin_layout LyX-Code
+states { New, Running, Complete, Failed, Suspended, NeedsRetry }
+\end_layout
+
+\begin_layout LyX-Code
+struct Machine {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+uint16_t state;
+\end_layout
+
+\begin_layout LyX-Code
+uint32_t timer;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsection
+Machine List
+\end_layout
+
+\begin_layout Standard
+Each machine has a set of data that it uses to maintain its state.
+ Since the data is compiled, it is not necessary for machines to hold a
+ list of machine references, these can be implemented by pointers defined
+ at compile time.
+ For this purpose, all machines are stored within one list and each machine's
+ state is accessable via offset within that list.
+\end_layout
+
+\begin_layout Standard
+The single, global machine list is used to store all parameters and local
+ variables.
+ The language provides no way to determine the address of a machine and
+ there is no way to perform arithmetic on these addresses.
+\end_layout
+
+\begin_layout Subsection
+Timers
+\end_layout
+
+\begin_layout Standard
+Each machine has a timer that indicates how long the machine has been in
+ its current state.
+ The timer resolution is in milliseconds by default but this can be changed
+ by a global configuration.
+\end_layout
+
+\begin_layout Subsection
+Properties
+\end_layout
+
+\begin_layout Standard
+Each machine has a variable list of properties but that list is not currently
+ known at compile time without consideration of the entire configuration
+ since remote machines may set and monitor these properties at any time
+ (this may be a bad design in the language).
+ Properties are listed globally by the compiler and linked in the same way
+ that parameters and locals are linked.
+\end_layout
+
+\begin_layout Subsection
+Conditions
+\end_layout
+
+\begin_layout Standard
+Each automatic state has an associated condition of arbitrary complexity.
+ Conditions have clauses that involve scalars, properties and machine states
+\end_layout
+
+\begin_layout Section
+References
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset bibtex
+LatexCommand bibtex
+bibfiles "CompilerRefs"
+options "acm"
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

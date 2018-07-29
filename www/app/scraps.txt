@@ -1,0 +1,16 @@
+			/*LabeledRect.fromObject = function (object, callback) {
+				var _enlivenedObjects;
+				fabric.util.enlivenObjects(object.objects, function (enlivenedObjects) {
+					delete object.objects;
+					_enlivenedObjects = enlivenedObjects;
+				});
+				return new LabeledRect(_enlivenedObjects, object);
+			};
+			LabeledRect.fromObject = function (object, callback) {
+				fabric.util.enlivenObjects(object.objects, function (enlivenedObjects) {
+					delete object.objects;
+					callback && calback(new LabeledRect(enlivenedObjects, object));
+				});
+			};
+			*/
+			LabeledRect.async = false;

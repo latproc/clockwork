@@ -1,0 +1,107 @@
+
+PIDCONFIGURATION MACHINE {
+	OPTION PERSISTENT true;
+	EXPORT RW 32BIT Kp, Ki, Kd;
+
+	OPTION SumLimitHigh 100000.0;
+	OPTION SumLimitLow 100000.0; 
+	OPTION RampIncLimit 20000;		# maximum increase control power per cycle
+
+  OPTION Speed1 250;
+  OPTION Power1 14500;
+  OPTION Speed2 3800;
+  OPTION Power2 26000;
+
+	OPTION Kp 0.0;
+	OPTION Ki 0.0;
+	OPTION Kd 0.0;
+
+  OPTION startDelay 100;
+}
+
+PIDSTATE MACHINE Config, Process, Output {
+	OPTION Err 0;
+	OPTION ErrSum 0;
+	OPTION ErrRate 0; 
+	OPTION Adjustment 0;
+  OPTION Target 0;
+  OPTION initialPower 0;
+	
+	LOCAL OPTION de 0;
+	LOCAL OPTION lastErr 0; 
+	LOCAL OPTION t 0;
+	LOCAL OPTION lastT 0;
+  LOCAL OPTION out 0;
+	LOCAL OPTION tmpErrSum 0;
+
+  active WHEN SELF IS active && Target > 0;
+  active WHEN SELF IS starting && TIMER >= Config.startDelay;
+  starting WHEN SELF IS starting;
+  idle INITIAL;
+  idle DEFAULT;
+
+  ENTER idle { Output.VALUE := 0; }
+	
+  COMMAND Activate {
+    IF (Target != 0) {
+      Slope := (Config.Power2 - Config.Power1) / (Config.Speed2 - Config.Speed1);
+      initialPower := (Target - Config.Speed1) * Slope + Config.Power1;
+      Output.VALUE := initialPower; 
+      SET SELF TO active;
+    }; 
+  }
+	COMMAND Reset { Err := 0; ErrSum := 0; ErrRate := 0 ; SET SELF TO idle; }
+	COMMAND calcAdjust WITHIN active {
+		t := Process.IOTIME / 1000;
+		Err := Target AS FLOAT - Process.VALUE;
+		dt := (t - lastT);
+		tmpErrSum := ErrSum + Err * dt;
+		IF (tmpErrSum > Config.SumLimitHigh) {
+			ErrSum := Config.SumLimitHigh AS FLOAT;
+		} ELSE {
+			IF (tmpErrSum < Config.SumLimitLow * -1) {
+				ErrSum := Config.SumLimitLow * -1 AS FLOAT;
+			} ELSE {
+				ErrSum := tmpErrSum;
+			}
+		};
+		lastT := t;
+		ErrRate := (Err - lastErr) / dt;
+		lastErr := Err;
+		calcKp := Err * Config.Kp;
+		calcKi := ErrSum * Config.Ki;
+		caclKd := ErrRate * Config.Kd;
+		#Adjustment := (Err * Config.Kp + ErrSum * Config.Ki + ErrRate * Config.Kd) AS INTEGER;
+		Adjustment := (calcKp + calcKi + caclKd) AS INTEGER;
+
+		IF (Output.VALUE + Adjustment > 0 && Output.VALUE + Adjustment <= 32767) {
+			Output.VALUE := Output.VALUE + Adjustment;
+		};
+	}
+}
+
+S_PIDSettings PIDCONFIGURATION;
+
+C_PID PIDSTATE S_PIDSettings, IA_Encoder, OA_GrabConveyorPV1A;
+
+
+PIDCLOCK MACHINE Encoder, pid {
+	OPTION VALUE 0;
+	LOCAL OPTION IOTIME 0;
+
+	update WHEN SELF IS idle && TIMER >= 100;
+	idle DEFAULT;
+
+
+	ENTER update { 
+		VALUE := Encoder.VALUE;
+		IOTIME := Encoder.IOTIME;
+		SEND calcAdjust TO pid;
+	}
+
+}
+
+IA_Encoder PIDCLOCK IA_GrabConveyorFrequency, C_PID;
+
+
+

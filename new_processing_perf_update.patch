@@ -1,0 +1,592 @@
+diff --git a/iod/src/Dispatcher.cpp b/iod/src/Dispatcher.cpp
+index 02de03b..e10ebe5 100644
+--- a/iod/src/Dispatcher.cpp
++++ b/iod/src/Dispatcher.cpp
+@@ -33,6 +33,7 @@
+ #include <zmq.hpp>
+ #include "Channel.h"
+ #include <pthread.h>
++#include "ProcessingThread.h"
+ 
+ Dispatcher *Dispatcher::instance_ = NULL;
+ 
+@@ -314,6 +315,7 @@ void Dispatcher::idle()
+                             if (mi)
+                             {
+ 								SharedWorkSet::instance()->add(mi);
++								ProcessingThread::activate(mi);
+                                 Action *curr = mi->executingCommand();
+                                 if (curr)
+                                 {
+diff --git a/iod/src/MachineInstance.cpp b/iod/src/MachineInstance.cpp
+index 111a3ce..6778070 100644
+--- a/iod/src/MachineInstance.cpp
++++ b/iod/src/MachineInstance.cpp
+@@ -56,6 +56,7 @@
+ #endif //USE_SDO
+ #include "ECInterface.h"
+ #endif
++#include "ProcessingThread.h"
+ 
+ extern int num_errors;
+ extern std::list<std::string>error_messages;
+@@ -363,18 +364,23 @@ void MachineInstance::setNeedsCheck() {
+ 	if (!needs_check) { 
+ 		++needs_check;  DBG_AUTOSTATES << _name << " needs check\n"; 
+ 		++total_machines_needing_check;
++		if (_name == "trans")
++			int x = 1;
+ 	}
+ 	if (!active_actions.empty() || !mail_queue.empty()) {
+ 		//DBG_MSG << _name << " queued for action processing\n";
+ 		SharedWorkSet::instance()->add(this);
++		ProcessingThread::activate(this);
+ 	}
+ 	else if (getStateMachine()->allow_auto_states) {
+ 		//DBG_MSG << _name << " queued for stable state checks\n";
+ 		pending_state_change.insert(this);
++		ProcessingThread::activate(this);
+ 	}
+ 	else {
+ 		//DBG_MSG << _name << " queued for action processing\n";
+ 		SharedWorkSet::instance()->add(this);
++		ProcessingThread::activate(this);
+ 	}
+ 	next_poll = 0;
+ 	if (state_machine->token_id == ClockworkToken::LIST) {
+@@ -391,16 +397,6 @@ void MachineInstance::setNeedsCheck() {
+ 			if (dep->is_enabled) dep->setNeedsCheck();
+ 		}
+ 	}
+-#if 0
+-	if (io_interface) {
+-		DBG_MSG << _name << " has hw io, updating dependent machines\n";
+-		std::set<MachineInstance*>::iterator dep_iter = depends.begin();
+-		while (dep_iter != depends.end()) {
+-			MachineInstance *dep = *dep_iter++;
+-			if (dep->is_enabled) dep->setNeedsCheck();
+-		}
+-	}
+-#endif
+ }
+ 
+ std::string &MachineInstance::fullName() const {
+@@ -457,6 +453,7 @@ void MachineInstance::enqueueAction(Action *a){
+ 	DBG_ACTIONS << _name << " New Action queued: " << *a << "\n";
+ 	has_work = true;
+ 	SharedWorkSet::instance()->add(this);
++	ProcessingThread::activate(this);
+ }
+ 
+ void MachineInstance::enqueue(const Package &package) {
+@@ -522,6 +519,7 @@ void MachineInstance::checkActions() {
+ 	num_machines_with_work++;
+ 	has_work = true;
+ 	SharedWorkSet::instance()->add(this);
++	ProcessingThread::activate(this);
+ 	DBG_AUTOSTATES  << _name << " ADDED to machines with work " << SharedWorkSet::instance()->size() << "\n";
+ }
+ 
+@@ -1318,7 +1316,14 @@ void MachineInstance::resetNeedsCheck() {
+ 	needs_check = 0;
+ }
+ 
++bool MachineInstance::queuedForStableStateTest() {
++	return pending_state_change.count(this);
++}
++
++
+ void MachineInstance::idle() {
++	ProcessingThread::suspend(this);
++
+ 	if (error_state) {
+ 		return;
+ 	}
+@@ -1415,6 +1420,8 @@ void MachineInstance::idle() {
+ 		}
+ 	}
+ 	if (mail_queue.empty() && active_actions.empty()) has_work = false;
++	if (has_work)
++		ProcessingThread::activate(this);
+ 
+ 	return;
+ }
+@@ -1443,7 +1450,7 @@ uint64_t total_processing_time = 0;
+ long total_aborts = 0;
+ 
+ #if 1
+-bool MachineInstance::processAll(uint32_t max_time, PollType which) {
++bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which) {
+ 
+ 	uint64_t start_processing = nowMicrosecs();
+ 	process_time = start_processing;
+@@ -1459,19 +1466,23 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
+ 		if (mi) mi->setNeedsCheck();
+ 	}
+ 
++
+ 	num_machines_with_work = 0;
+ 	process_time = nowMicrosecs();
+-	boost::recursive_mutex &mutex = SharedWorkSet::instance()->getMutex();
++	//boost::recursive_mutex &mutex(SharedWorkSet::instance()->getMutex());
+ 	{
+-		boost::recursive_mutex::scoped_lock lock(mutex);
+-		std::set<MachineInstance*>::iterator busy_it = SharedWorkSet::instance()->begin();
+-		while (busy_it != SharedWorkSet::instance()->end() ) {
++		//boost::recursive_mutex::scoped_lock lock(mutex);
++		//std::set<MachineInstance*>::iterator busy_it = SharedWorkSet::instance()->begin();
++		//while (busy_it != SharedWorkSet::instance()->end() ) {
++
++		std::set<MachineInstance*>::iterator busy_it = to_process.begin();
++		while (busy_it != to_process.end() ) {
+ 			MachineInstance *mi = *busy_it;
+ 			// is it possible for a non active machine to be executing a command?
+-			if (mi->isActive() || mi->executingCommand()) {
++			if (mi->isActive() || mi->executingCommand() || !mi->mail_queue.empty()) {
+ 				mi->idle();
+-				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
+-					++num_machines_with_work;
++//				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
++//					++num_machines_with_work;
+ 			}
+ 			if (mi->state_machine && mi->state_machine->plugin)
+ 				mi->state_machine->plugin->poll_actions(mi);
+@@ -1479,9 +1490,11 @@ bool MachineInstance::processAll(uint32_t max_time, PollType which) {
+ 					|| (!mi->has_work && !mi->executingCommand() ) ) 
+ 			{
+ 					if (!mi->has_work && !mi->executingCommand())  {
+-						busy_it = SharedWorkSet::instance()->erase(busy_it);
++						SharedWorkSet::instance()->remove(mi);
++						busy_it = to_process.erase(busy_it);
+ 						if (mi->is_active) {
+ 							pending_state_change.insert(mi);
++							ProcessingThread::activate(mi);
+ 						}
+ 					}
+ 					else
+@@ -1648,21 +1661,20 @@ void MachineInstance::checkPluginStates() {
+ }
+ 
+ // Warning: max_time is ignored in this method
+-bool MachineInstance::checkStableStates(uint32_t max_time) {
++bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process, uint32_t max_time) {
+ 	total_machines_needing_check = 0;
+-	std::set<MachineInstance *>::iterator iter = MachineInstance::pending_state_change.begin();
+-	while (iter != MachineInstance::pending_state_change.end() ) {
+-		MachineInstance *mi = *iter;
++	std::set<MachineInstance *>::iterator iter = to_process.begin();
++	while (iter != to_process.end() ) {
++		MachineInstance *mi = *iter++;
+ 		if (!mi->executingCommand() && mi->mail_queue.empty()) {
+ 			// unless the machine is disabled leave the state check on the queue until it is stable
+-			if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states || !mi->setStableState()) iter = pending_state_change.erase(iter); else iter++;
++			if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states || !mi->setStableState()) pending_state_change.erase(mi);
+ 		}
+ 		else if (mi->enabled()) {
+ 			SharedWorkSet::instance()->add(mi);
+-			iter = pending_state_change.erase(iter); // this machine has other work, it should no longer be on the pending state change queue
++			pending_state_change.erase(mi); // this machine has other work, it should no longer be on the pending state change queue
++			ProcessingThread::activate(mi);
+ 		}
+-		else
+-			iter++;
+ 	}
+ 	return true;
+ }
+@@ -2740,6 +2752,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
+ 	HandleMessageAction *hma = new HandleMessageAction(this, hmat);
+ 	enqueueAction(hma);
+ 	SharedWorkSet::instance()->add(this);
++	ProcessingThread::activate(this);
+ }
+ 
+ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) {
+@@ -3277,6 +3290,7 @@ void MachineInstance::push(Action *new_action) {
+ 	num_machines_with_work++;
+ 	has_work = true;
+ 	SharedWorkSet::instance()->add(this);
++	ProcessingThread::activate(this);
+ 	if (tracing() && isTraceable()) {
+ 		resetTemporaryStringStream();
+ 		ss << "starting action: " << *new_action;
+@@ -3302,6 +3316,8 @@ void MachineInstance::updateLastEvaluationTime() {
+ 
+ bool MachineInstance::setStableState() {
+ 	bool changed_state = false;
++	ProcessingThread::suspend(this); // assume this machine will not have anything else to do after checking states
++
+ 	CaptureDuration cd(stable_states_stats);
+ 	DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()  <<")\n";
+ 	if (!state_machine || !state_machine->allow_auto_states) {
+diff --git a/iod/src/MachineInstance.h b/iod/src/MachineInstance.h
+index 9033029..efd64d4 100644
+--- a/iod/src/MachineInstance.h
++++ b/iod/src/MachineInstance.h
+@@ -405,10 +405,10 @@ public:
+ 	void resetNeedsCheck();
+ 	void resetTemporaryStringStream();
+ 
+-    static bool processAll(uint32_t max_time, PollType which);
++    static bool processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which);
+ 	//static void updateAllTimers(PollType which);
+ 	//void updateTimer(long dt);
+-	static bool checkStableStates(uint32_t max_time);
++	static bool checkStableStates(std::set<MachineInstance *> &to_process, uint32_t max_time);
+ 	static void checkPluginStates();
+ 	static size_t countAutomaticMachines() { return automatic_machines.size(); }
+ 	static void displayAutomaticMachines();
+@@ -502,7 +502,9 @@ public:
+     virtual void setNeedsCheck();
+     uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
+     void updateLastEvaluationTime();
+-    
++
++	bool queuedForStableStateTest();
++
+     virtual long filter(long val) { return val; }
+     
+     void publish();
+@@ -533,7 +535,7 @@ protected:
+ 	std::vector<std::string>state_names; // used for mapping modbus offsets to states
+ 	std::vector<std::string>command_names; // used for mapping modbus offsets to states
+ 	ModbusAddressable::ExportType modbus_exported;
+-	
++
+ 	int error_state; // error number of the current error if any
+ 	State saved_state; // save state before error
+ 	Value current_state_val;
+diff --git a/iod/src/Message.h b/iod/src/Message.h
+index 8e056a5..4665031 100644
+--- a/iod/src/Message.h
++++ b/iod/src/Message.h
+@@ -131,6 +131,7 @@ public:
+     virtual bool receives(const Message&, Transmitter *t) = 0;
+     virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false ) = 0;
+ 	virtual void enqueue(const Package &package);
++	bool hasMail() { return !mail_queue.empty(); }
+     long getId() const { return id; }
+ protected:
+ 		
+diff --git a/iod/src/MessagingInterface.cpp b/iod/src/MessagingInterface.cpp
+index 09f0a70..e77a576 100644
+--- a/iod/src/MessagingInterface.cpp
++++ b/iod/src/MessagingInterface.cpp
+@@ -121,7 +121,7 @@ void MessageHeader::reply() {
+ 
+ zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
+ 
+-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout) {
++bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout) {
+ 	char tnam[100];
+ 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+ 	assert(pgn_rc == 0);
+@@ -187,7 +187,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
+ 	return false;
+ }
+ 
+-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, MessageHeader &header) {
++bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout, MessageHeader &header) {
+ 	//    struct timeval now;
+ 	//    gettimeofday(&now, 0);
+ 	//    uint64_t when = now.tv_sec * 1000000L + now.tv_usec + timeout;
+@@ -267,7 +267,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
+ 	return false;
+ }
+ 
+-bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, uint64_t timeout) {
++bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, int64_t timeout) {
+ 	char tnam[100];
+ 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+ 	assert(pgn_rc == 0);
+@@ -282,7 +282,9 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
+ 		try {
+ 			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
+ 			int n = zmq::poll( &items[0], 1, timeout);
+-			if (!n && block) continue;
++			if (!n && block) {
++				usleep(10); continue;
++			}
+ 			if (items[0].revents & ZMQ_POLLIN) {
+ 				//{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
+ 				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
+@@ -398,7 +400,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
+ }
+ 
+ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
+-				 uint32_t timeout_us, MessageHeader header) {
++				 int32_t timeout_us, MessageHeader header) {
+ 	char tnam[100];
+ 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+ 	assert(pgn_rc == 0);
+@@ -411,14 +413,14 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
+ 	size_t len;
+ 	MessageHeader response_header;
+ 	//bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, int *source) {
+-	if (safeRecv(sock, &buf, &len, true, (uint64_t)timeout_us, response_header)) {
++	if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us, response_header)) {
+ 		response = buf;
+ 		return true;
+ 	}
+ 	return false;
+ }
+ 
+-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us) {
++bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
+ 	char tnam[100];
+ 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+ 	assert(pgn_rc == 0);
+@@ -429,7 +431,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, ui
+ 
+ 	char *buf = 0;
+ 	size_t len = 0;
+-	if (safeRecv(sock, &buf, &len, true, (uint64_t)timeout_us)) {
++	if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us)) {
+ 		response = buf;
+ 		return true;
+ 	}
+diff --git a/iod/src/MessagingInterface.h b/iod/src/MessagingInterface.h
+index 7c6dbf4..b199eb3 100644
+--- a/iod/src/MessagingInterface.h
++++ b/iod/src/MessagingInterface.h
+@@ -75,13 +75,13 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen);
+ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, MessageHeader header);
+ 
+ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block,
+-			  size_t &response_len, uint64_t timeout);
+-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout);
+-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, MessageHeader &hdr);
++			  size_t &response_len, int64_t timeout);
++bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout);
++bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout, MessageHeader &hdr);
+ 
+ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, MessageHeader header,
+-				 uint32_t timeout_us = 0);
+-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, uint32_t timeout_us = 0);
++				 int32_t timeout_us = 0);
++bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us = 0);
+ 
+ class MessagingInterface : public Receiver {
+ public:
+diff --git a/iod/src/ProcessingThread.cpp b/iod/src/ProcessingThread.cpp
+index 6965c1c..c41f2f3 100644
+--- a/iod/src/ProcessingThread.cpp
++++ b/iod/src/ProcessingThread.cpp
+@@ -35,6 +35,7 @@
+ #include <map>
+ #include <utility>
+ #include <fstream>
++#include <set>
+ #include "cJSON.h"
+ 
+ #include "MachineInstance.h"
+@@ -460,6 +461,16 @@ void ProcessingThread::setProcessingThreadInstance( ProcessingThread* pti) {
+ 	instance_ = pti;
+ }
+ 
++void ProcessingThread::activate(MachineInstance *m) {
++	boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
++	instance()->runnable.insert(m);
++}
++
++void ProcessingThread::suspend(MachineInstance *m) {
++	instance()->runnable.erase(m);
++}
++
++
+ void ProcessingThread::operator()()
+ {
+ 
+@@ -630,22 +641,26 @@ void ProcessingThread::operator()()
+ 
+ 			internals->process_manager.SetTime(curr_t);
+ 
+-			machines_have_work = MachineInstance::workToDo();
++			//machines_have_work = MachineInstance::workToDo();
++			machines_have_work = !runnable.empty();
+ 			if (machines_have_work)
+ 				poll_wait = 0;
+-			else
+-				poll_wait = internals->cycle_delay / 1000;
++			else {
++				//poll_wait = internals->cycle_delay / 1000;
++				//if (poll_wait == 0) poll_wait = 10;
++				poll_wait = 100;
++			}
+ 
+ 			//if (Watchdog::anyTriggered(curr_t))
+ 			//	Watchdog::showTriggered(curr_t, true);
+ 			systems_waiting = pollZMQItems(poll_wait, items, 6 + internals->channel_sockets.size(), 
+ 				ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
+-			//DBG_MSG << "loop. status: " << status << " proc: " << processing_state
+-			//	<< " waiting: " << systems_waiting << "\n";
+-			if (systems_waiting > 0 || status == e_waiting) break;
++
++			//if (systems_waiting > 0 || status == e_waiting) break;
++			//if (curr_t - last_checked_machines > machine_check_delay || machines_have_work ) break;
++			if (systems_waiting > 0 || machines_have_work) break;
+ 			if (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
+-			if (curr_t - last_checked_machines > machine_check_delay || machines_have_work ) break;
+-			if (!MachineInstance::pluginMachines().empty()) break;  //&& curr_t - last_checked_plugins >= 1000) break;
++			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
+ #ifdef KEEPSTATS
+ 			avg_poll_time.update();
+ 			usleep(10);
+@@ -665,7 +680,8 @@ void ProcessingThread::operator()()
+ 					<< ( (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
+ 					<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
+ 					<< ( (!io_work_queue.empty()) ? " io work" : "")
+-					<< ( (curr_t - last_checked_machines > machine_check_delay && machines_have_work) ? " machines" : "")
++					//<< ( (curr_t - last_checked_machines > machine_check_delay && machines_have_work) ? " machines" : "")
++					<< ( (machines_have_work) ? " machines" : "")
+ 					<< ( (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
+ 					<< "\n";
+ 			}
+@@ -718,6 +734,7 @@ void ProcessingThread::operator()()
+ 
+ 		if (program_done) break;
+ 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
++			NB_MSG << " processing io changes\n";
+ #ifdef KEEPSTATS
+ 			AutoStat stats(avg_iowork_time);
+ #endif
+@@ -754,7 +771,7 @@ void ProcessingThread::operator()()
+ #ifdef KEEPSTATS
+ 				AutoStat stats(avg_cmd_processing);
+ #endif
+-				//NB_MSG << "Processing: incoming data from client\n";
++				NB_MSG << "Processing: incoming data from client\n";
+ 				size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
+ 				if (len) status = e_waiting_cmd;
+ 			}
+@@ -772,6 +789,7 @@ void ProcessingThread::operator()()
+ 			}
+ 		}
+ 		if (status == e_handling_dispatch) {
++			NB_MSG << " processing dispatcher\n";
+ 			if (processing_state != eIdle) {
+ 				// cannot process dispatch events at present
+ 				status = e_waiting;
+@@ -962,21 +980,58 @@ void ProcessingThread::operator()()
+ 	#ifdef KEEPSTATS
+ 					avg_clockwork_time.start();
+ 	#endif
+-					if (MachineInstance::processAll(150000, MachineInstance::NO_BUILTINS))
+-						processing_state = eStableStates;
++					std::set<MachineInstance *> to_process;
++					{
++						boost::mutex::scoped_lock(runnable_mutex);
++						std::set<MachineInstance *>::iterator iter = runnable.begin();
++						while (iter != runnable.end()) {
++							MachineInstance *mi = *iter;
++							if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail())
++								to_process.insert(mi);
++							if (!mi->queuedForStableStateTest()) {
++								iter = runnable.erase(iter);
++							}
++							else iter++;
++						}
++					}
++
++					if (!to_process.empty()) {
++						NB_MSG << "processing machines\n";
++						MachineInstance::processAll(to_process, 150000, MachineInstance::NO_BUILTINS);
++					}
++					processing_state = eStableStates;
+ 				}
+ 				if (processing_state == eStableStates)
+ 				{
+-					if (MachineInstance::checkStableStates(150000)) {
+-						if (i<num_loops-1)
+-							processing_state = ePollingMachines;
+-						else {
+-							processing_state = eIdle;
+-							last_checked_machines = curr_t; // check complete
++					std::set<MachineInstance *> to_process;
++					{	boost::mutex::scoped_lock(runnable_mutex);
++						std::set<MachineInstance *>::iterator iter = runnable.begin();
++						while (iter != runnable.end()) {
++							MachineInstance *mi = *iter;
++							if (mi->executingCommand() || !mi->pendingEvents().empty()) {
++								iter++;
++								continue;
++							}
++							if (mi->queuedForStableStateTest()) {
++								to_process.insert(mi);
++								iter = runnable.erase(iter);
++							}
++							else iter++;
++						}
++					}
++
++					if (!to_process.empty()) {
++						NB_MSG << "processing stable states\n";
++						MachineInstance::checkStableStates(to_process, 150000);
++					}
++					if (i<num_loops-1)
++						processing_state = ePollingMachines;
++					else {
++						processing_state = eIdle;
++						last_checked_machines = curr_t; // check complete
+ #ifdef KEEPSTATS
+-							avg_clockwork_time.update();
++						avg_clockwork_time.update();
+ #endif
+-						}
+ 					}
+ 				}
+ 			}
+diff --git a/iod/src/ProcessingThread.h b/iod/src/ProcessingThread.h
+index 9e5d9eb..ccd9ef9 100644
+--- a/iod/src/ProcessingThread.h
++++ b/iod/src/ProcessingThread.h
+@@ -1,6 +1,8 @@
+ #ifndef __cw_processingthread_h__
+ #define __cw_processingthread_h__
+ 
++#include <set>
++#include <boost/thread/mutex.hpp>
+ #include "ClientInterface.h"
+ #include "clockwork.h"
+ 
+@@ -27,6 +29,9 @@ public:
+ 	CommandSocketInfo *addCommandChannel(Channel *);
+ 	CommandSocketInfo *addCommandChannel(CommandSocketInfo*);
+ 
++	static void activate(MachineInstance *m);
++	static void suspend(MachineInstance *m);
++
+ 	void operator()();
+ 
+ 	void stop();
+@@ -48,12 +53,18 @@ public:
+ 
+     void waitForCommandProcessing(zmq::socket_t &resource_mgr);
+ 
++	std::set<MachineInstance*>::iterator begin() { return runnable.begin(); }
++	std::set<MachineInstance*>::iterator end() { return runnable.end(); }
++
+ private:
+     
+     ProcessingThread(const ProcessingThread &other);
+     ProcessingThread &operator=(const ProcessingThread &other);
+ 	HardwareActivation &activate_hardware;
+ 	IODCommandThread &command_interface;
++
++	boost::recursive_mutex runnable_mutex;
++	std::set<MachineInstance*> runnable;
+ };
+ 
+ #endif
+diff --git a/iod/src/cw.cpp b/iod/src/cw.cpp
+index 934205a..df5982b 100644
+--- a/iod/src/cw.cpp
++++ b/iod/src/cw.cpp
+@@ -370,7 +370,7 @@ int main (int argc, char const *argv[])
+         MQTTInterface::instance()->collectState();
+ 
+         //sim_io.send("ecat", 4);
+-        safeRecv(sim_io, buf, 10, false, response_len, 100000);
++        safeRecv(sim_io, buf, 10, false, response_len, 100);
+         struct timeval now;
+         gettimeofday(&now,0);
+         

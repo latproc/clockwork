@@ -1,0 +1,3 @@
+/Users/martin/latproc/modbus/build/CMakeFiles/Clockwork.dir
+/Users/martin/latproc/modbus/build/CMakeFiles/address.dir
+/Users/martin/latproc/modbus/build/CMakeFiles/mbmon.dir

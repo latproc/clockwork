@@ -1,0 +1,311 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Human Machine Interface (HMI) Manual
+\end_layout
+
+\begin_layout Author
+Martin Leadbeater
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Subsection
+Purpose
+\end_layout
+
+\begin_layout Standard
+This manual describes the user interface tools for clockwork.
+\end_layout
+
+\begin_layout Subsection
+Overview
+\end_layout
+
+\begin_layout Standard
+There are several human interface tools for clockwork:
+\end_layout
+
+\begin_layout Itemize
+Modbus terminals
+\end_layout
+
+\begin_layout Itemize
+Web pages
+\end_layout
+
+\begin_layout Itemize
+Command interface (iosh)
+\end_layout
+
+\begin_layout Itemize
+Client (to be developed)
+\end_layout
+
+\begin_layout Itemize
+Terminal-based event monitors (scope)
+\end_layout
+
+\begin_layout Itemize
+Simulation
+\end_layout
+
+\begin_layout Section
+Web Interface
+\end_layout
+
+\begin_layout Standard
+The web server sends ØMQ messages to clockwork to obtain a list of devices
+ for display.
+ Each item in the resulting list includes properties to describe the current
+ state of the device as well as some web hints that can be used during layout.
+ An example result for a single device is:
+\end_layout
+
+\begin_layout Standard
+{
+\end_layout
+
+\begin_layout Standard
+"name": "EC_00_IN_05",
+\end_layout
+
+\begin_layout Standard
+"class": "Input",
+\end_layout
+
+\begin_layout Standard
+"value": 0,
+\end_layout
+
+\begin_layout Standard
+"tab": "Inputs",
+\end_layout
+
+\begin_layout Standard
+"state": "off",
+\end_layout
+
+\begin_layout Standard
+"enabled": true
+\end_layout
+
+\begin_layout Standard
+}
+\end_layout
+
+\begin_layout Itemize
+the `tab' property is used by the web server to group items into various
+ tabbed groups on the web page.
+\end_layout
+
+\begin_layout Itemize
+the index page of the web site provides a way to view and control devices
+ without a login, this page is primarily designed for use with the automatic
+ bus informatoin gathering program, beckhoffd
+\end_layout
+
+\begin_layout Itemize
+objects in clockwork can set the property 'type' in order to behave like
+ an Input, Output, AnalogueInput or AnalogueOutput
+\end_layout
+
+\begin_layout Itemize
+the class and state properties are combined with an underscore separator
+ to define an image name that is displayed next to the item name on the
+ web site.
+\end_layout
+
+\begin_layout Itemize
+in the case of Analogue inputs and outputs, the icon name used does not
+ include the state name
+\end_layout
+
+\begin_layout Itemize
+the 'module' property indicates the group to use for display of this item
+ on the index page.
+ It is assumed that all items in a module are grouped together
+\end_layout
+
+\begin_layout Itemize
+the module_name property provides the text to be used for the module on
+ the index page
+\end_layout
+
+\begin_layout Subsection
+Web updates
+\end_layout
+
+\begin_layout Standard
+The structure of the web page is set when the page is loaded, after that
+ a refresh function (javascript) is called every second to collect state
+ and property data from all items and this data is used to update the indicators
+ on the web page.
+\end_layout
+
+\begin_layout Section
+Simulation
+\end_layout
+
+\begin_layout Standard
+Clockwork is primarily used in industrial control applications where it
+ monitors and controls various items of machinery.
+ In order to develop clockwork programs it is useful to be able to describe
+ aspects of the physical world that influence the design.
+ In particular, the following items should be able to be presented graphically:
+\end_layout
+
+\begin_layout Itemize
+extension and retraction
+\end_layout
+
+\begin_layout Itemize
+rotation of a beam about a pivot
+\end_layout
+
+\begin_layout Itemize
+change in position of an object
+\end_layout
+
+\begin_layout Itemize
+linking a point on one object with a point (possibly moving) on another
+\end_layout
+
+\begin_layout Itemize
+time series data
+\end_layout
+
+\begin_layout Itemize
+bar/column charts
+\end_layout
+
+\begin_layout Itemize
+pie/proportion charts
+\end_layout
+
+\begin_layout Standard
+Initially 2D graphic display is acceptable, however the simultation must
+ be able to move to a 3D representation asap.
+\end_layout
+
+\begin_layout Standard
+To define a presentation, each simulated object may include a representation.
+\end_layout
+
+\begin_layout Subsection
+Representations
+\end_layout
+
+\begin_layout Standard
+A representation is a graphical model that is linked to a clockwork machine.
+ 
+\end_layout
+
+\begin_layout LyX-Code
+Cylinder MODEL {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+SOURCE filename; # the name of a loadable graphic object in a supported
+ format
+\end_layout
+
+\begin_layout LyX-Code
+POSITION x,y,z; # the 3D position of the loaded graphic object
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+world WORLD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+CAMERA x,y,z; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\end_body
+\end_document

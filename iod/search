@@ -1,0 +1,8 @@
+#!/bin/sh
+
+[ "$1" = "" ] && exit
+
+path="$2"
+[ "$path" = "" ] && path=.
+
+grep -r "$1" "$path"  | egrep -v '\.svn'

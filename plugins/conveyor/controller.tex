@@ -1,0 +1,144 @@
+\input cwebmac
+% Note that to use the listing command to read the source
+% file into an appendix, you need to enable eplain
+% which will clash with cwebmac because of the multiple use of ifpdf
+% the easiest way around this is to input cwebmac after eplain and
+% remove the auto generated input cwebmac at the beginning
+% of {thisfile}.tex
+%\input eplain
+%\input cwebmac
+
+\acrofalse
+\def\title{TITLE}
+%\pagewidth=15.5cm
+%\pageheight=25.5cm
+%\fullpageheight=25.8cm
+%\setpage
+\input graphicx
+\input picture
+\def\startlist{\medskip\leftskip=2pc}
+\def\endlist{\medskip\leftskip=0pt}
+\def\label#1{\expandafter\let\csname lbl#1\endcsname\secno}
+\def\ref#1{\csname lbl#1\endcsname}
+	
+\noinx
+\nosecs
+\nocon
+\noatl
+%
+%\titletrue
+%\vskip1in\noindent{\titlefont \title}\hfill\par
+%\vskip0.5cm\noindent{Author\par\noindent\today}\hfill\par
+
+
+
+\N{1}{1}Introduction.\medskip
+
+\noindent
+This program attempts to control a conveyor carrying a wool bale
+by appropriate variations of a an power output value
+given an input reading of a position encoder. There
+are several practical considerations such as the fact that:
+
+\startlist
+$\bullet$ the conveyor control hardware has a certain delay before
+control instructions have an effect at the output
+
+$\bullet$ the control change itself takes time to move from
+one setting to another, this time may be insignificant
+
+\endlist
+
+The program attempts to determine an approximate power setting
+to achieve a certain speed and makes small adjustments to that level
+to control the speed.
+
+The program outline is constructed as follows.
+% note that the 'h' tag inserts defines created using the 'd' tag
+
+\Y\B\X3:Include necessary header files\X\6
+\ATH\6
+\X2:Define fundamental types and declarations needed by other declarations\X\6
+\X4:Declare types, functions and shared variables\X\6
+\X5:Implement functions\X\7
+\&{int} \\{main}(\&{int} \\{argc}${},\39{}$\&{char} ${}{*}\\{argv}[\,]){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\X6:Declare main function variables\X\6
+\X7:Initialise the application structures\X\6
+\X8:Perform the application task\X\6
+\&{return} \T{0};\6
+\4${}\}{}$\2\par
+\fi
+
+\M{2}The \CEE/ language does not have a boolean type so we
+define one for use throughout our program.
+%\Y\B\F\.{BOOL} \5
+\\{double}\par
+\B\4\D$\.{FALSE}$ \5
+\T{0}\par
+\B\4\D$\.{TRUE}$ \5
+\T{1}\par
+\Y\B\4\X2:Define fundamental types and declarations needed by other
+declarations\X${}\E{}$\6
+\&{typedef} \&{int} \&{BOOL};\par
+\U1.\fi
+
+\M{3}The program needs some standard libraries for access to
+input and output on standard io streams and for access to
+functions such as {\tt exit()}.
+
+\Y\B\4\X3:Include necessary header files\X${}\E{}$\6
+\8\#\&{include} \.{<stdio.h>}\6
+\8\#\&{include} \.{<stdlib.h>}\par
+\U1.\fi
+
+\M{4}In this template there are no functions or shared variables.
+
+\Y\B\4\X4:Declare types, functions and shared variables\X${}\E{}$\par
+\U1.\fi
+
+\M{5}There are no functions to implement.
+
+\Y\B\4\X5:Implement functions\X${}\E{}$\par
+\U1.\fi
+
+\M{6}There are no variables.
+
+\Y\B\4\X6:Declare main function variables\X${}\E{}$\par
+\U1.\fi
+
+\M{7}No initialisation is required.
+
+\Y\B\4\X7:Initialise the application structures\X${}\E{}$\par
+\U1.\fi
+
+\M{8}This is a hello world application so we simply
+say hello.
+
+\Y\B\4\X8:Perform the application task\X${}\E{}$\6
+\\{printf}(\.{"Hello\ World\\n"});\par
+\U1.\fi
+
+\N{1}{9}Programmers notes.
+Under Mac~OS~X or Linux, the program
+can be compiled and linked using:
+\startlist\par {\tt ctangle controller.w}
+\par {\tt cc -o controller controller.c}
+\endlist
+
+\fi
+
+\M{10}Index.\medskip
+
+% include the C source (requires eplain)
+% * The \CEE/ source file.
+%
+%\listing{controller.c}
+
+\fi
+
+
+\inx
+\fin
+\con
