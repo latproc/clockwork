@@ -1,2 +1,0 @@
-#define HMI_VERSION_MAJOR 0
-#define HMI_VERSION_MINOR 8

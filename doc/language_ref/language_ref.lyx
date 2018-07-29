@@ -131,6 +131,27 @@ define transition rules that determine what actions can be performed and
 define state entry functions that execute when a machine enters a state
 \end_layout
 
+\begin_layout Itemize
+monitor the operation of a machine by sampling events as they occur and
+ interactively inspecting the state and properties of internal components
+\end_layout
+
+\begin_layout Itemize
+view the state and properties of the machine in a web browser
+\end_layout
+
+\begin_layout Itemize
+view the operation of a machine in a 3D view
+\end_layout
+
+\begin_layout Itemize
+interface to serial devices, network devices and modbus devices
+\end_layout
+
+\begin_layout Itemize
+program embedded devices and microcontrollers (not yet available)
+\end_layout
+
 \begin_layout Subsection
 Machines
 \end_layout
@@ -179,10 +200,6 @@ AndGate MACHINE input1, input2
 
 \begin_layout LyX-Code
 {
-\begin_inset Separator latexpar
-\end_inset
-
-
 \end_layout
 
 \begin_deeper
@@ -255,10 +272,6 @@ FLAG MACHINE
 
 \begin_layout LyX-Code
 {
-\begin_inset Separator latexpar
-\end_inset
-
-
 \end_layout
 
 \begin_deeper
@@ -296,15 +309,11 @@ The above AndGate machine does not directly control any other part of the
 \end_layout
 
 \begin_layout LyX-Code
-AndGate MACHINE input1, input2, output
+AndGateSwitch MACHINE input1, input2, output
 \end_layout
 
 \begin_layout LyX-Code
 {
-\begin_inset Separator latexpar
-\end_inset
-
-
 \end_layout
 
 \begin_deeper
@@ -346,7 +355,7 @@ b FLAG;
 \end_layout
 
 \begin_layout LyX-Code
-and_gate AndGate a, b, light;
+and_gate AndGateSwitch a, b, light;
 \end_layout
 
 \begin_layout Standard
@@ -357,10 +366,6 @@ This approach, where we pass the object to be controlled makes the linkage
 
 \begin_layout LyX-Code
 LightController MACHINE input, output {
-\begin_inset Separator latexpar
-\end_inset
-
-
 \end_layout
 
 \begin_deeper
@@ -370,7 +375,7 @@ LightController MACHINE input, output {
 status open
 
 \begin_layout Plain Layout
-Note the test 1==1 is a functional placeholder; the indention is to define
+Note the test 1==1 is a functional placeholder; the intention is to define
  the value TRUE for this kind of situation.
 \end_layout
 
@@ -384,34 +389,24 @@ Note the test 1==1 is a functional placeholder; the indention is to define
 }
 \end_layout
 
+\begin_layout LyX-Code
+light FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+a FLAG; b FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGate a, b;
+\end_layout
+
+\begin_layout LyX-Code
+lc LightController and_gate, light
+\end_layout
+
 \begin_layout Standard
-in this case, AndGate does not manipulate or even know about the output:
-\end_layout
-
-\begin_layout LyX-Code
-AndGate MACHINE input1, input2
-\end_layout
-
-\begin_layout LyX-Code
-{
-\begin_inset Separator latexpar
-\end_inset
-
-
-\end_layout
-
-\begin_deeper
-\begin_layout LyX-Code
-on WHEN input1 IS on AND input2 IS on;
-\end_layout
-
-\begin_layout LyX-Code
-off DEFAULT;
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-}
+in this case, AndGate does not manipulate or even know about the output.
 \end_layout
 
 \begin_layout Standard
@@ -1200,7 +1195,7 @@ returns the bitwise inverse of the rhs
 \begin_inset Caption Standard
 
 \begin_layout Plain Layout
-Expression operators
+C-based Expression operators
 \begin_inset CommandInset label
 LatexCommand label
 name "tab:Expression-operators"
@@ -1366,11 +1361,7 @@ As another example, the following machine tries to stay in an inverted state
 \end_layout
 
 \begin_layout LyX-Code
-Inverted MACHINE input { 
-\begin_inset Separator latexpar
-\end_inset
-
-
+Inverted MACHINE input {
 \end_layout
 
 \begin_deeper
@@ -1414,11 +1405,7 @@ The above definition may be made more strict by tightening the definition
 \end_layout
 
 \begin_layout LyX-Code
-Inverted MACHINE input { 
-\begin_inset Separator latexpar
-\end_inset
-
-
+Inverted MACHINE input {
 \end_layout
 
 \begin_deeper
@@ -1477,10 +1464,6 @@ The following Machine changes between a `ready' and `started' state when
 
 \begin_layout LyX-Code
 StartStopTimer MACHINE {
-\begin_inset Separator latexpar
-\end_inset
-
-
 \end_layout
 
 \begin_deeper
@@ -1525,10 +1508,6 @@ The following machine steps through states upon receipt of the `next' command
 
 \begin_layout LyX-Code
 Cycle MACHINE {
-\begin_inset Separator latexpar
-\end_inset
-
-
 \end_layout
 
 \begin_deeper
@@ -1545,11 +1524,7 @@ c_finished FLAG;
 \end_layout
 
 \begin_layout LyX-Code
-a WHEN SELF IS a OR SELF IS INIT OR SELF IS changing, 
-\begin_inset Separator latexpar
-\end_inset
-
-
+a WHEN SELF IS a OR SELF IS INIT OR SELF IS changing,
 \end_layout
 
 \begin_deeper
@@ -1559,11 +1534,7 @@ TAG a_finished WHEN TIMER > 5000;
 
 \end_deeper
 \begin_layout LyX-Code
-b WHEN SELF IS b OR SELF IS changing, 
-\begin_inset Separator latexpar
-\end_inset
-
-
+b WHEN SELF IS b OR SELF IS changing,
 \end_layout
 
 \begin_deeper
@@ -1573,11 +1544,7 @@ TAG b_finished WHEN TIMER > 5000;
 
 \end_deeper
 \begin_layout LyX-Code
-c WHEN SELF IS c OR SELF IS changing, 
-\begin_inset Separator latexpar
-\end_inset
-
-
+c WHEN SELF IS c OR SELF IS changing,
 \end_layout
 
 \begin_deeper
@@ -1669,8 +1636,7 @@ Commands are lists of actions that are executed in response to receipt of
 \end_layout
 
 \begin_layout Standard
-Note: there is currently no way to abort the exectuion of a command, this
- feature will be added in future.
+
 \end_layout
 
 \begin_layout Standard
@@ -1679,7 +1645,7 @@ The mechanism for this will be to add clauses to identify timeouts or other
 \end_layout
 
 \begin_layout LyX-Code
-COMMAND example { statements }, EXECUTE command WHEN predicate
+COMMAND example { statements } ON ERROR message
 \end_layout
 
 \begin_layout Standard
@@ -1687,7 +1653,7 @@ or
 \end_layout
 
 \begin_layout LyX-Code
-COMMAND example { statements }, THROW error WHEN predicate
+COMMAND example { statements } ON TIMEOUT message
 \end_layout
 
 \begin_layout Subsection
@@ -1709,8 +1675,8 @@ Machines can be grouped together into lists.
 \end_layout
 
 \begin_layout Itemize
-every entry in the list must be unique, attempting to include an item a
- second time does nothing
+machines may be placed on a list but every entry in the list must be unique,
+ attempting to include an item a second time leads to undefined bahaviour
 \end_layout
 
 \begin_layout Itemize

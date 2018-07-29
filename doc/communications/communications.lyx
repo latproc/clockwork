@@ -83,7 +83,7 @@ Communications
 \end_layout
 
 \begin_layout Abstract
-This document describes the future communications framework for Clockwork.
+This document describes the communications framework for Clockwork.
  A Clockwork driver program provides a runtime environment to execute several
  machines in parallel.
  Each driver may communicate with other programs via message passing and
@@ -1472,6 +1472,17 @@ Channels currently share a connection to the standard command channel but
 
 \begin_layout Itemize
 Test channels that are marked as publishers but instantiated in clockwork
+\end_layout
+
+\begin_layout Itemize
+Each channel has a CommandSocketInfo pointer in its internal data.
+ This structure is used to hold information about communication with the
+ main processing thread.
+\end_layout
+
+\begin_layout Itemize
+A CommandSocketInfo is created when setDefinition is called on a channel
+ as long as the structure has not already been allocated 
 \end_layout
 
 \begin_layout Section
