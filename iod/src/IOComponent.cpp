@@ -575,10 +575,11 @@ public:
 	}
 
 	double filter() {
-		if ((unsigned int)length(positions) < *filter_len) return getBufferValue(positions, 0);
+		unsigned int filter_length = *filter_len;
+		if ((unsigned int)length(positions) < filter_length) return getBufferValue(positions, 0);
 		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
 		double res = 0;
-		for (unsigned int i=0; i < *filter_len; ++i) {
+		for (unsigned int i=0; i < filter_length; ++i) {
 			double f = (double)getBufferValue(positions, i);
 			//printf(" %.3f,%.3f ",f, f*c[i]); 
 			res += f * c[i];
@@ -635,7 +636,8 @@ int32_t AnalogueInput::filter(int32_t raw) {
 	}
 	else if ( !config->filter_type || (config->filter_type && *config->filter_type == 1))  {
 		int32_t mean = (bufferAverage(config->positions, *config->filter_len) + 0.5f);
-		if ( (uint32_t)abs(mean - config->last_sent) >= *config->tolerance) {
+		long delta = abs(mean - config->last_sent);
+		if ( delta >= *config->tolerance) {
 			config->last_sent = mean;
 		}
 	}
@@ -808,7 +810,8 @@ int32_t Counter::filter(int32_t val) {
 #endif
 	if (*internals->tolerance>1) {
 		int32_t mean = (bufferAverage(internals->positions, *internals->filter_len) + 0.5f);
-		if ( (uint32_t)abs(mean - internals->last_sent) >= *internals->tolerance) {
+		long delta = (uint32_t)abs(mean - internals->last_sent);
+		if ( delta >= *internals->tolerance) {
 			internals->last_sent = mean;
 		}
 	}

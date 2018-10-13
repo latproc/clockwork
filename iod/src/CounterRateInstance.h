@@ -10,9 +10,9 @@ protected:
   CounterRateInstance(CStringHolder name, const char * type, InstanceType instance_type = MACHINE_INSTANCE);
 public:
   ~CounterRateInstance();
-  void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
-  long filter(long val);
-  virtual void idle();
+	virtual bool setValue(const std::string &property, const Value &new_value, uint64_t authority = 0) override;
+  long filter(long val) override;
+	virtual void idle() override;
   //virtual bool hasWork();
   CounterRateFilterSettings *getSettings() { return settings; }
 private:

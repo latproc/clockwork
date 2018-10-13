@@ -20,7 +20,8 @@ bool CounterRateInstance::hasWork() {
 }
 #endif
 
-void CounterRateInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
+bool CounterRateInstance::setValue(const std::string &property, const Value &update, uint64_t authority) {
+	Value new_value(update);
 	if (property == "VALUE") {
 		if (new_value.kind == Value::t_symbol) {
 			new_value = lookup(new_value.sValue.c_str());
@@ -32,8 +33,7 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value,
 		}
 
 		//reset once the buffers have been filled with zeros
-		if (!val) ++settings->zero_count;
-        else settings->zero_count = 0;
+		if (!val) ++settings->zero_count; else settings->zero_count = 0;
 		if (settings->zero_count > settings->readings.length()) {
 			settings->zero_count = 0;
 			// reset buffers;
@@ -41,8 +41,8 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value,
 			settings->readings.reset();
 		}
 
-        if ( (settings->update_t - settings->last_update_t)/1000 == 0 )
-            return;
+    if ( (settings->update_t - settings->last_update_t)/1000 == 0 )
+        return false;
         settings->last_update_t = settings->update_t;
 		uint64_t delta_t = settings->update_t - settings->start_t;
         settings->readings.append( val, delta_t);
@@ -61,6 +61,7 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value,
 	}
 	else
 		MachineInstance::setValue(property, new_value);
+	return true;
 }
 
 long CounterRateInstance::filter(long val) {

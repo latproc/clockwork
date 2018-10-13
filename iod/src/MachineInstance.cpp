@@ -1231,7 +1231,7 @@ void MachineInstance::addParameter(const Parameter &p, MachineInstance *mi, int 
 	}
 	else {
 		if (!before) position++;
-		if (position < parameters.size())
+		if ((unsigned int)position < parameters.size())
 			parameters.insert(parameters.begin()+position, p);
 		else
 			parameters.push_back(p);
@@ -3682,7 +3682,15 @@ fl.f() << _name << " Sending modbus update " << property_name  << " " << new_val
 	}
 }
 
-void MachineInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
+bool MachineInstance::setValue(const std::string &property, const Value &new_value, uint64_t authority) {
+
+	if (property.length() == 0) {
+		char buf[100];
+		snprintf(buf, 100, "%s: attempt to set property with empty name", _name.c_str());
+		MessageLog::instance()->add(buf);
+		DBG_MSG << buf << "\n";
+		return false;
+	}
 
 	DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
 	if (property.find('.') != std::string::npos) {
@@ -3693,14 +3701,14 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		MachineInstance *other = lookup(name);
 		if (other) {
 			if (prop.length()) {
-				DBG_M_PROPERTIES << *other << " setting property " << prop << " to " << new_value << "\n";
-				other->setValue(prop, new_value);
+				return other->setValue(prop, new_value);
 			}
 			else {
 				char buf[100];
 				snprintf(buf, 100, "%s bad request to set property %s", _name.c_str(), property.c_str() );
 				MessageLog::instance()->add(buf);
 				DBG_MSG << buf << "\n";
+				return false;
 			}
 		}
 		else {
@@ -3709,11 +3717,12 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 					 _name.c_str(), name.c_str(), property.c_str() );
 			MessageLog::instance()->add(buf);
 			DBG_PROPERTIES << buf << "\n";
+			return false;
 		}
 	}
 	else {
 
-		// Ths expected authority facility ensures that only
+		// This expected authority facility ensures that only
 		// authorised sources are able to update a property
 		// In the case of a shadow, if the current method
 		// was not called with the
@@ -3727,36 +3736,43 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 				Channel *chn = ownerChannel();
 				if (chn && chn->current_state != ChannelImplementation::DISCONNECTED) {
 					chn->sendPropertyChangeMessage(this, fullName(), property, new_value, authority);
+					return true;
 					//fl.f() << _name << "forwarding property change request to owner channel\n";
 				}
 				else if (chn) {
 					//fl.f() << _name << "cannot forward property change request because the channel is disconnected\n";
 				}
 			}
-			return;
+			return false;
 		}
 
 		Value property_val(property); // use this value in comparisons for performance
+		bool was_changed = false;
 
 		if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
 			long new_delay = 0;
 			if (new_value.asInteger(new_delay)) idle_time = new_delay;
 			if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
 				*MachineInstance::polling_delay = new_delay;
+				was_changed = true;
 			}
 		}
 		else if (property_val.token_id == ClockworkToken::TRACEABLE) {
 			if (new_value == "TRUE") is_traceable = true;
 			if (new_value == "FALSE") is_traceable = false;
+			return true; // special case, short-circuit other tests
 		}
 
-		// often variables are named in the GLOBAL list, if we find the property in that list
-		// we try to change ask that machine to set its VALUE.
-		if (state_machine->global_references.count(property)) {
-			MachineInstance *global_machine = state_machine->global_references[property];
-			if (global_machine && global_machine->state_machine->token_id != ClockworkToken::CONSTANT)
-				global_machine->setValue("VALUE", new_value);
-			return;
+		// often variables are VALUE properties in named machines in the GLOBAL list
+		std::map<std::string, MachineInstance *>::const_iterator global_var = state_machine->global_references.find(property);
+		if (global_var != state_machine->global_references.end()) {
+			MachineInstance *global_machine = (*global_var).second;
+			if (global_machine && global_machine->state_machine->token_id != ClockworkToken::CONSTANT) {
+				DBG_PROPERTIES << global_machine->getName() << " setting property VALUE to " << new_value << "\n";
+				return global_machine->setValue("VALUE", new_value);
+			}
+			NB_MSG << "attempt to set a value on global constant " << property << ". ignored\n";
+			return false;
 		}
 		// try the current instance ofthe machine, then the machine class and finally the global symbols
 		DBG_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
@@ -3766,12 +3782,10 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
 			MachineInstance *global_machine = lookup(property);
 			if (global_machine) {
-				if ( global_machine->state_machine->token_id != ClockworkToken::CONSTANT ) {
-					global_machine->setValue("VALUE", new_value);
-					return;
-				}
+				if ( global_machine->state_machine->token_id != ClockworkToken::CONSTANT )
+					return global_machine->setValue("VALUE", new_value);
 				NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
-				return;
+				return false;
 			}
 		}
 
@@ -3779,81 +3793,80 @@ void MachineInstance::setValue(const std::string &property, Value new_value, uin
 		{
 			std::string old_val(properties.lookup(property.c_str()).asString());
 			mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
+			return true;
 		}
 
 		if (new_value.kind == Value::t_integer && state_machine && state_machine->plugin && state_machine->plugin->filter) {
-			new_value.iValue = state_machine->plugin->filter(this, new_value.iValue);
+			int filtered_value = state_machine->plugin->filter(this, new_value.iValue);
+			was_changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
+			if (was_changed) properties.add(property, filtered_value, SymbolTable::ST_REPLACE);
 		}
-		bool changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
-		if (changed ){
-			if (property_val.token_id != ClockworkToken::TRACE &&
-				property_val.token_id != ClockworkToken::DEBUG)
-				setNeedsCheck();
-			properties.add(property, new_value, SymbolTable::ST_REPLACE);
+		else {
+		  was_changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
+			if (was_changed) properties.add(property, new_value, SymbolTable::ST_REPLACE);
+		}
+		if (!was_changed) return true; // value was ok but was already the same
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
-			if ( property_val.token_id == ClockworkToken::tokVALUE && _type == "SDOENTRY") {
-				SDOEntry *entry = SDOEntry::find(_name);
-				if (entry) {
-					Value io_value = entry->readValue();
-					if (entry->ready()  && io_value != new_value) {
-							DBG_MSG << "updating " << _name << " io: " << io_value << " new: " << new_value << "\n";
-						ECInterface::instance()->queueInitialisationRequest(entry, new_value);
-					}
+		if ( property_val.token_id == ClockworkToken::tokVALUE && _type == "SDOENTRY") {
+			SDOEntry *entry = SDOEntry::find(_name);
+			if (entry) {
+				Value io_value = entry->readValue();
+				if (entry->ready()  && io_value != new_value) {
+						DBG_MSG << "updating " << _name << " io: " << io_value << " new: " << new_value << "\n";
+					ECInterface::instance()->queueInitialisationRequest(entry, new_value);
 				}
 			}
-			else
+		}
+		else
 #endif //USE_SDO
 #endif
-			if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
-				char buf[100];
-				errno = 0;
-				long value =0; // TBD deal with sign
-				if (new_value.asInteger(value))
-				{
-					//snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
-					if (io_interface->address.is_signed)
-						io_interface->setValue( (int32_t)(value & 0xffffffff));
-					else
-						io_interface->setValue( (uint32_t)(value & 0xffffffff));
-					properties.add("VALUE", value, SymbolTable::ST_REPLACE);
-				}
-				else {
-					snprintf(buf, 100, "%s: could not set value to %s", _name.c_str(), new_value.asString().c_str());
-					MessageLog::instance()->add(buf);
-					NB_MSG << buf << "\n";
-				}
-			}
-			if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+		if ( property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
+			char buf[100];
+			errno = 0;
+			long value =0; // TBD deal with sign
+			if (new_value.asInteger(value))
 			{
-				//std::string old_val(properties.lookup(property.c_str()).asString());
-				mq_interface->publish(properties.lookup("topic").asString(), new_value.asString(), this);
+				//snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
+				if (io_interface->address.is_signed)
+					io_interface->setValue( (int32_t)(value & 0xffffffff));
+				else
+					io_interface->setValue( (uint32_t)(value & 0xffffffff));
+				properties.add("VALUE", value, SymbolTable::ST_REPLACE);
 			}
+			else {
+				snprintf(buf, 100, "%s: could not set value to %s", _name.c_str(), new_value.asString().c_str());
+				MessageLog::instance()->add(buf);
+				NB_MSG << buf << "\n";
+			}
+		}
+		if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface && property_val.token_id == ClockworkToken::tokMessage )
+		{
+			//std::string old_val(properties.lookup(property.c_str()).asString());
+			mq_interface->publish(properties.lookup("topic").asString(), new_value.asString(), this);
+		}
 
-			std::string property_name(modbusName(property, property_val));
-			if (published) {
-				Channel::sendPropertyChange(this, property.c_str(), new_value, authority);
+		std::string property_name(modbusName(property, property_val));
+		if (published) {
+			Channel::sendPropertyChange(this, property.c_str(), new_value, authority);
 
-				// update modbus with the new value
-				if (modbus_exports.count(property_name)){
-					Channel::sendModbusUpdate(this, property_name, new_value);
-				}
+			// update modbus with the new value
+			if (modbus_exports.count(property_name)){
+				Channel::sendModbusUpdate(this, property_name, new_value);
 			}
-			{
-				Message changed_msg("PROPERTY_CHANGE");
-				if (receives_functions.count(changed_msg) && !hasPending(changed_msg))
-					enqueue(Package(this, this, changed_msg));
-			}
+		}
+		{
+			Message changed_msg("PROPERTY_CHANGE");
+			if (receives_functions.count(changed_msg) && !hasPending(changed_msg))
+				enqueue(Package(this, this, changed_msg));
 		}
 		// only tell dependent machines to recheck predicates if the property
 		// actually changes value
-		if (changed) {
-			if (property_val.token_id != ClockworkToken::TRACE &&
-				property_val.token_id != ClockworkToken::DEBUG) {
-				setNeedsCheck();
-				notifyDependents();
-			}
+		if (property_val.token_id != ClockworkToken::TRACE && property_val.token_id != ClockworkToken::DEBUG) {
+			setNeedsCheck();
+			notifyDependents();
 		}
+		return true;
 	}
 }
 

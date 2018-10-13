@@ -205,7 +205,7 @@ public:
 };
 
 Action::Status IntersectSetOperation::doOperation() {
-    unsigned int num_copied = 0;
+    long num_copied = 0;
     long to_copy;
     if (!source_a_machine) {
         status = Failed;

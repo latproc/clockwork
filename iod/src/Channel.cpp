@@ -37,18 +37,14 @@ State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
 
-
 class chn_scoped_lock {
 public:
 	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) {
-//		NB_MSG << location << " LOCKING...\n";
 		lock.lock();
-//		NB_MSG << location << " LOCKED...\n";
 	}
 	~chn_scoped_lock() {
 		lock.unlock();
-//		NB_MSG << location << " UNLOCKED\n";
-		}
+	}
 	std::string location;
 	boost::mutex &mutex;
 	boost::unique_lock<boost::mutex> lock;
@@ -379,7 +375,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 		enableShadows();
 		setNeedsCheck();
 		if (isClient()) {
-			snprintf(buf, 100, "Channel %s is client; setting state to DOWNLOADING", name.c_str());
+			snprintf(buf, 100, "Channel %s (client); setting state to DOWNLOADING", name.c_str());
 			MessageLog::instance()->add(buf);
 			DBG_CHANNELS << buf << "\n";
 			SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING" );
@@ -409,7 +405,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 		mh.start_time = microsecs();
 		std::string ack;
 		if (isClient()) {
-			snprintf(buf, 100, "Channel %s is client; sending 'status' to partner", name.c_str());
+			snprintf(buf, 100, "Channel %s (client); sending 'status' to partner", name.c_str());
 			MessageLog::instance()->add(buf);
 			DBG_CHANNELS << buf << "\n";
 
@@ -418,12 +414,12 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 			safeSend(*cmd_client, "status", 6, mh);
 		}
 		else {
-			//sendMessage("done", *cmd_client, ack, mh);
-			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
 			snprintf(buf, 100, "Channel %s is server; sending 'done' to partner", name.c_str());
 			MessageLog::instance()->add(buf);
 			DBG_CHANNELS << buf << "\n";
 
+			//sendMessage("done", *cmd_client, ack, mh);
+			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
 			mh.needReply(true);
 			safeSend(*cmd_client, "done", 4, mh);
 		}
@@ -967,10 +963,6 @@ void Channel::operator()() {
 	NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
 	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 	internals->command_sock->connect( internals->cmd_sock_info->address.c_str() );
-
-	usleep(50);
-	internals->command_sock->send("TEST", 4);
-	usleep(50);
 
 	zmq::socket_t remote_sock(*MessagingInterface::getContext(), ZMQ_PAIR);
 	char sock_crtl_name[20];

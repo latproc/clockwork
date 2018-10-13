@@ -369,7 +369,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 		}
 	}
 
-    bool IODCommandGetProperty::run(std::vector<Value> &params) {
+	bool IODCommandGetProperty::run(std::vector<Value> &params) {
 	    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
 	    if (m) {
 			if (params.size() != 3) {
@@ -398,88 +398,62 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 
 	}
 
-    bool IODCommandProperty::run(std::vector<Value> &params) {
-        //if (params.size() == 4) {
-		    MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
-		    if (m) {
-                if (params.size() > 5)
-				{
-                    error_str = "Usage: PROPERTY machine property value";
-                    return false;
-				}
-                else if (params.size() == 4 || params.size() == 5) {
-                    if (m->debug()) {
-                        DBG_PROPERTIES << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
-                    }
-					long authority = 0;
-					bool use_authority = false;
-					if (params.size() == 5 && params[4].asInteger(authority) ) {
-						use_authority = true;
-					}
-					if (use_authority && authority && !m->isShadow()) {
-						error_str = "Refusing to change property due to authorisation conflict";
-						NB_MSG << error() << "\n";
-						return false;
-					}
-					if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
-						long x;
-						char *p;
-						x = strtol(params[3].asString().c_str(), &p, 10);
-						if (use_authority)
-							if (*p == 0)
-								m->setValue(params[2].asString(), x, authority);
-							else
-								m->setValue(params[2].asString(), params[3], authority);
-						else
-							if (*p == 0)
-								m->setValue(params[2].asString(), x);
-							else
-								m->setValue(params[2].asString(), params[3]);
-					}
-					else {
-						if (use_authority)
-							m->setValue(params[2].asString(), params[3], authority);
-						else
-							m->setValue(params[2].asString(), params[3]);
-					}
-                }
-#if 0
-				// Disabled the following feature
-				else {
-                    // extra parameters implies the value contains spaces so
-					// we find the tail of the parameter string and use that for the property value
-                    size_t pos = raw_message_.find(params[2].asString().c_str());
-                    if (pos == std::string::npos) {
-                        error_str = "Unexpected parameter error ";
-                        return false;
-                    }
-                    pos += params[2].asString().length();
-                    while (raw_message_[pos] == ' ') ++pos; // skip the parameter spacing
-                    const char *p = raw_message_.c_str() + pos;
-                    m->setValue(params[2].asString(), p);
-                }
-#endif
-                result_str = "OK";
-                return true;
-			}
-	        else {
-				char buf[200];
-				snprintf(buf, 200, "Unknown device: %s", params[1].asString().c_str() );
-	            error_str = buf;
-	            return false;
-	        }
-		/*}
-         else {
-			std::stringstream ss;
-			ss << "Unrecognised parameters in ";
-			std::ostream_iterator<std::string> out(ss, " ");
-			std::copy(params.begin(), params.end(), out);
-			ss << ".  Usage: PROPERTY property_name value";
-			error_str = ss.str();
+bool IODCommandProperty::run(std::vector<Value> &params) {
+	bool changed = false;
+	//if (params.size() == 4) {
+	MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
+	if (m) {
+		if (params.size() > 5){
+			error_str = "Usage: PROPERTY machine property value";
 			return false;
 		}
-         */
+		else if (params.size() == 4 || params.size() == 5) {
+			if (m->debug()) {
+				DBG_PROPERTIES << "setting property " << params[1] << "." << params[2] << " to " << params[3] << "\n";
+			}
+			long authority = 0;
+			bool use_authority = false;
+			if (params.size() == 5 && params[4].asInteger(authority) ) {
+				use_authority = true;
+			}
+			if (use_authority && authority && !m->isShadow()) {
+				error_str = "Refusing to change property due to authorisation conflict";
+				NB_MSG << error() << "\n";
+				return false;
+			}
+			if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
+				long x;
+				char *p;
+				x = strtol(params[3].asString().c_str(), &p, 10);
+				if (use_authority)
+					if (*p == 0)
+						changed = m->setValue(params[2].asString(), x, authority);
+					else
+						changed = m->setValue(params[2].asString(), params[3], authority);
+				else
+					if (*p == 0)
+						changed = m->setValue(params[2].asString(), x);
+					else
+						changed = m->setValue(params[2].asString(), params[3]);
+			}
+			else {
+				if (use_authority)
+					changed = m->setValue(params[2].asString(), params[3], authority);
+				else
+					changed = m->setValue(params[2].asString(), params[3]);
+			}
+		}
+		if (changed) result_str = "OK";
+		else error_str = "Could not set property";
+		return changed;
 	}
+	else {
+		char buf[200];
+		snprintf(buf, 200, "Unknown device: %s", params[1].asString().c_str() );
+					error_str = buf;
+					return false;
+	}
+}
 
 bool IODCommandList::run(std::vector<Value> &params) {
 	std::ostringstream ss;
