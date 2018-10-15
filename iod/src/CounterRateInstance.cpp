@@ -14,9 +14,7 @@ CounterRateInstance::~CounterRateInstance() { delete settings; }
 
 #if 0
 bool CounterRateInstance::hasWork() {
-	struct timeval now;
-	gettimeofday(&now, 0);
-	return ( (uint64_t)now.tv_sec*1000000L + now.tv_usec >= (uint64_t) next_poll);
+	return ( microsecs() >= (uint64_t) next_poll);
 }
 #endif
 
@@ -74,9 +72,7 @@ long CounterRateInstance::filter(long val) {
 
 void CounterRateInstance::idle() {
 	if (!io_interface) {
-		struct timeval now;
-		gettimeofday(&now, 0);
-		uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+		uint64_t now_t = microsecs();
 		if (settings->update_t + 2000 < now_t) {
 			long new_val = (long)((float)settings->position + settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
 			setValue("VALUE", new_val);

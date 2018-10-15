@@ -281,9 +281,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 			std::set<IOComponent *> &updated_machines) {
 	io_clock = clock;
 	// receive process data updates and mask to yield updated components
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    current_time = now.tv_sec * 1000000 + now.tv_usec;
+    current_time = microsecs();
 
 	assert(data != io_process_data);
 
@@ -844,9 +842,7 @@ int32_t Counter::filter(int32_t val) {
 }
 
 CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {
-    struct timeval now;
-    gettimeofday(&now, 0);
-    start_t = now.tv_sec * 1000000 + now.tv_usec;
+    start_t = microsecs();
 }
 
 int32_t CounterRate::filter(int32_t val) {

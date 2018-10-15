@@ -542,7 +542,7 @@ DynamicValue *VariableValue::clone() const {
 
 class MachineTimerValue : public DynamicValue {
 	public:
-		MachineTimerValue(MachineInstance *mi): machine_instance(mi) { }
+    MachineTimerValue(MachineInstance *mi): machine_instance(mi) { last_result = 0; }
 		Value &operator()(MachineInstance *m)  {
 			assert(machine_instance);
 			if (!machine_instance) { last_result = false; return last_result; }
@@ -552,7 +552,6 @@ class MachineTimerValue : public DynamicValue {
 				long msecs = (long)get_diff_in_microsecs(&now, &machine_instance->start_time)/1000;
 				last_result = msecs;
 			}
-			//DBG_MSG << m->getName() << " update timer value " << last_result << "\n";
 			return last_result;
 		}
 		Value &operator()()  {
@@ -563,9 +562,7 @@ class MachineTimerValue : public DynamicValue {
 		}
 		Value *getLastResult() { return &last_result; }
 		void resume() {
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			uint64_t now_v = now.tv_sec * 1000000 + now.tv_usec - last_result.iValue*1000;
+			uint64_t now_v = microsecs() - last_result.iValue*1000;
 			machine_instance->start_time.tv_sec = now_v / 1000000;
 			machine_instance->start_time.tv_usec = now_v % 1000000;
 		}
@@ -812,9 +809,7 @@ void MachineInstance::describe(std::ostream &out) {
 	const Value *current_timer_val = getTimerVal();
 	out << "Timer: " << *current_timer_val << "\n";
 	if (stable_states.size() || state_machine->token_id == ClockworkToken::LIST) {
-		struct timeval now;
-		gettimeofday(&now, 0);
-		long now_t = now.tv_sec * 1000000 + now.tv_usec;
+		long now_t = microsecs();
 		uint64_t delta = now_t - last_state_evaluation_time;
 		out << "Last stable state evaluation (";
 		simple_deltat(out, delta);
@@ -2750,9 +2745,7 @@ void MachineInstance::push(Action *new_action) {
 }
 
 void MachineInstance::updateLastEvaluationTime() {
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	last_state_evaluation_time = now.tv_sec * 1000000 + now.tv_usec;
+  last_state_evaluation_time = microsecs();
 	if (idle_time)
 		next_poll = last_state_evaluation_time + idle_time;
 	else {
@@ -3179,7 +3172,13 @@ const Value *MachineInstance::resolve(std::string property) {
 		// try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 		const Value *res = 0;
 		Value property_val(property); // tokenise the property
-		// variables may refer to an initialisation value passed in as a parameter.
+    if (property_val.token_id == ClockworkToken::TIMER) {
+      // we do not use the precalculated timer here since this may be being accessed
+      // within an action handler of a nother machine and will not have been updated
+      // since the last evaluation of stable states.
+      return getTimerVal();
+    }
+    // variables may refer to an initialisation value passed in as a parameter.
 		if (state_machine->token_id == ClockworkToken::VARIABLE
 				|| state_machine->token_id == ClockworkToken::CONSTANT) {
 			for (unsigned int i=0; i<parameters.size(); ++i) {
@@ -3224,16 +3223,7 @@ const Value *MachineInstance::resolve(std::string property) {
 			}
 		}
 		DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
-		if (property_val.token_id == ClockworkToken::TIMER) {
-			// we do not use the precalculated timer here since this may be being accessed
-			// within an action handler of a nother machine and will not have been updated
-			// since the last evaluation of stable states.
-			return getTimerVal();
-			//state_timer.dynamicValue()->operator()(this);
-			//DBG_M_PROPERTIES << getName() << " timer: " << state_timer << "\n";
-			//return &state_timer;
-		}
-		else if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
+		if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
 			return res;
 		}
 		else if (SymbolTable::isKeyword(property_val)) {

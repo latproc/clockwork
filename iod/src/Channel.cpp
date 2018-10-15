@@ -1320,15 +1320,12 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
 }
 
 void ChannelImplementation::modified() {
-    struct timeval now;
-    gettimeofday(&now, 0);
-    last_modified = now.tv_sec * 1000000L + now.tv_usec;
+    last_modified = microsecs();
 }
 
+
 void ChannelImplementation::checked() {
-    struct timeval now;
-    gettimeofday(&now, 0);
-    last_checked = now.tv_sec * 1000000L + now.tv_usec;
+    last_checked = microsecs();
 }
 
 static void copyJSONArrayToSet(cJSON *obj, const char *key, std::set<std::string> &res) {

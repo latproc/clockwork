@@ -185,7 +185,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         if (strcmp("NOW", name) == 0) {
             struct timeval now;
             gettimeofday(&now,0);
-            unsigned long msecs = (now.tv_sec * 1000000L + now.tv_usec + 500) / 1000;
+            unsigned long msecs = (microsecs() + 500) / 1000;
             res = msecs;
             return res;
         }
@@ -234,7 +234,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
 				if (strcmp("TIMESEQ", name) == 0) {
 					struct timeval t;
 					gettimeofday(&t,0);
-					uint64_t msecs = ((t.tv_sec * 1000000L + t.tv_usec) / 1000) % 1000;
+					uint64_t msecs = (microsecs() / 1000) % 1000;
 					char buf[40];
 					const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
 					if (sizeof(long long) == sizeof(uint64_t))

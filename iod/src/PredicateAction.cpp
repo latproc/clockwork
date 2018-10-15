@@ -42,9 +42,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
 	p->clearError();
 	if (v.kind == Value::t_symbol) {
 		if (v.sValue == "TIMER") {
-            v = *m->getTimerVal();
-			//long msecs = (m->timer.tv_sec % 100000) * 1000 + (m->timer.tv_usec / 1000);
-			//v = (int)msecs;
+      v = *m->getTimerVal();
 		}
 		else {
 			Value prop = m->getValue(v.sValue); // property lookup

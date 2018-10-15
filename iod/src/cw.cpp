@@ -379,18 +379,15 @@ int main (int argc, char const *argv[])
 	}
 
     NB_MSG << "processing has started\n";
-    struct timeval then;
-    gettimeofday(&then,0);
+    uint64_t then = microsecs();
     while (!program_done) {
         MQTTInterface::instance()->collectState();
 
         //sim_io.send("ecat", 4);
         safeRecv(sim_io, buf, 10, false, response_len, 100);
-        struct timeval now;
-        gettimeofday(&now,0);
+        uint64_t now = microsecs();
         
-        int64_t delta = (uint64_t)(now.tv_sec - then.tv_sec) * 1000000 
-					+ ( (uint64_t)now.tv_usec - (uint64_t)then.tv_usec);
+        int64_t delta = now - then;
         // use the clockwork interpreter's current cycle delay
         const Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
         assert(cycle_delay_v);
