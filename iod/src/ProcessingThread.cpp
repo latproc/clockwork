@@ -550,7 +550,7 @@ void ProcessingThread::operator()()
 		while (!program_done)
 		{
 			MEMCHECK();
-			curr_t = nowMicrosecs();
+			curr_t = microsecs();
 			internals->process_manager.SetTime(curr_t);
 			//TBD add a guard here to detect/prevent rapid cycling
 
@@ -729,20 +729,17 @@ void ProcessingThread::operator()()
 			// check the command interface and any command channels for activity
 			bool have_command = false;
 			if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
-				//NB_MSG << "Processing thread has a command from the client interface\n";
 				have_command = true;
 			}
 			else {
 				for (unsigned int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + num_channels; ++i) {
 					if (items[i].revents & ZMQ_POLLIN) {
-						//NB_MSG << "Processing thread has a command from a channel command interface\n";
 						have_command = true;
 						break;
 					}
 				}
 			}
 			if ( have_command) {
-				//NB_MSG << "processing incoming commands\n";
 				uint64_t start_time = microsecs();
 				uint64_t now = start_time;
 #ifdef KEEPSTATS

@@ -28,8 +28,6 @@
 #include "FireTriggerAction.h"
 #include "AbortAction.h"
 
-uint64_t nowMicrosecs();
-
 Action *SetStateActionTemplate::factory(MachineInstance *mi)
 { 
 	return new SetStateAction(mi, *this);
@@ -296,7 +294,7 @@ Action::Status SetStateAction::checkComplete() {
 		}
 	}
 
-	if (trigger && nowMicrosecs() - trigger->startTime() > 10000 ) {
+	if (trigger && microsecs() - trigger->startTime() > 10000 ) {
 		trigger->report("taking a long time");
 	}
 

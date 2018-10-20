@@ -53,7 +53,6 @@ struct WaitAction : public Action {
     virtual std::ostream &operator<<(std::ostream &out)const;
 	virtual bool usesTimer() { return true; }
 
-    struct timeval start_time;
     long wait_time;
     std::string property_name;
 	bool use_property;

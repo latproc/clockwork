@@ -1597,7 +1597,7 @@ void Channel::sendThrottledUpdates() {
 	}
 	bool do_modbus = definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
 	bool do_properties = definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
-	last_throttled_send = nowMicrosecs();
+	last_throttled_send = microsecs();
 	std::map<MachineInstance *, MachineRecord*>::iterator iter = throttled_items.begin();
 	while (iter != throttled_items.end()) {
 		std::pair<MachineInstance *, MachineRecord*> item = *iter;
@@ -2360,7 +2360,7 @@ void Channel::setupCommandSockets() {
 // This method is executed on the main thread
 void Channel::handleChannels() {
 	if (!all) return;
-	uint64_t now = nowMicrosecs();
+	uint64_t now = microsecs();
 	std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         const std::pair<std::string, Channel *> &item = *iter++;

@@ -1035,7 +1035,7 @@ long total_aborts = 0;
 
 bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32_t max_time, PollType which) {
 
-	uint64_t start_processing = nowMicrosecs();
+	uint64_t start_processing = microsecs();
 	rate_calc_process_time = start_processing;
 
 	std::list<Package*>::iterator evt_iter = pending_events.begin();
@@ -1051,7 +1051,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 
 
 	num_machines_with_work = 0;
-	rate_calc_process_time = nowMicrosecs();
+	rate_calc_process_time = microsecs();
 	//boost::recursive_mutex &mutex(SharedWorkSet::instance()->getMutex());
 	{
 		//boost::recursive_mutex::scoped_lock lock(mutex);
@@ -1093,7 +1093,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 	}
 
 #if 0
-  uint64_t now = nowMicrosecs();
+  uint64_t now = microsecs();
 	total_processing_time += now - start_processing;
 	if (now - start_processing < max_time) ++loop_count; // completed a pass through all machines
 
@@ -1115,14 +1115,10 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 }
 
 void MachineInstance::checkPluginStates() {
-	//std::list<uint64_t> stats;
-	//uint64_t start_processing = nowMicrosecs();
 	std::set<MachineInstance *>::iterator pl_iter = plugin_machines.begin();
 	while (pl_iter != plugin_machines.end())  {
 		MachineInstance *m = *pl_iter++;
 		if (!m->is_enabled) continue;
-		//if (m->next_poll > start_processing) { continue; }
-		//uint64_t start = nowMicrosecs();
 		if (m->state_machine && m->state_machine->plugin)  {
 			if ( m->state_machine->plugin->state_check) {
 				m->state_machine->plugin->state_check(m);
@@ -1131,8 +1127,6 @@ void MachineInstance::checkPluginStates() {
 				m->state_machine->plugin->poll_actions(m);
 			}
 		}
-		//uint64_t delta = nowMicrosecs() - start;
-		//stats.push_back(delta);
 	}
 }
 

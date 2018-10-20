@@ -66,7 +66,6 @@ Action::Status WaitAction::run() {
         else
             wait_time = v.iValue;
     }
-    gettimeofday(&start_time, 0);
     if (wait_time == 0) {
 		if (trigger && !trigger->fired() && trigger->enabled()) {
 			trigger->fire();
@@ -93,13 +92,6 @@ Action::Status WaitAction::run() {
 }
 
 Action::Status WaitAction::checkComplete() {
-/*
-    struct timeval now;
-    gettimeofday(&now, 0);
-    long delta = get_diff_in_microsecs(&now, &start_time);
-	if (delta >= wait_time * 1000) { status = Complete; owner->stop(this); }
-//    else DBG_M_ACTIONS << "still waiting " << (wait_time*1000-delta) << "\n";
-*/
 	DBG_M_MESSAGING << owner->getName() << " " << *this << " checking if complete\n";
 	if (!trigger) {
 		DBG_M_MESSAGING << owner->getName() << " " << *this << " has no trigger\n";
