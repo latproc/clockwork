@@ -146,7 +146,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
 		if (found != receives.end()) {
 			const std::pair<Message, MachineCommandTemplate*> &item = *found;
 			ofs << "// " <<(*item.second) << "\n";
-			for (int i = 0; i<(item.second)->action_templates.size(); ++i) {
+			for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
 				ActionTemplate*at = (item.second)->action_templates.at(i);
 				if (at) ofs << "// " << (*at) << "\n";
 			}
@@ -164,7 +164,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
 				<< "int cw_" << name << "_" << item.first
 				<< "(struct cw_" << name << " *m, ccrContParam) {"
 				<< "// " <<(*item.second) << "\n";
-				for (int i = 0; i<(item.second)->action_templates.size(); ++i) {
+				for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
 					ActionTemplate*at = (item.second)->action_templates.at(i);
 					if (at) ofs << "// " << (*at) << "\n";
 				}
@@ -189,7 +189,7 @@ void MachineClass::exportCommands(std::ostream &ofs)
 		if (found != commands.end()) {
 			const std::pair<std::string, MachineCommandTemplate*> &item = *found;
 			ofs << "// " <<(*item.second) << "\n";
-			for (int i = 0; i<(item.second)->action_templates.size(); ++i) {
+			for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
 				ActionTemplate*at = (item.second)->action_templates.at(i);
 				if (at) ofs << "// " << (*at) << "\n";
 			}
@@ -338,7 +338,7 @@ bool MachineClass::cExport(const std::string &filename) {
 		<< "int cw_" << name << "_check_state(struct cw_" << name << " *m) {\n"
 		<< "  int new_state = 0; enter_func new_state_enter = 0;\n";
 
-		for (int i=0; i<stable_states.size(); ++i) {
+		for (unsigned int i=0; i<stable_states.size(); ++i) {
 			const StableState &s = stable_states.at(i);
 			if (i>0) ofs << " //  else\n";
 			ofs

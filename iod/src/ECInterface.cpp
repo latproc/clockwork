@@ -1256,13 +1256,9 @@ void ECInterface::receiveState() {
 
 	if (active) {
 		// receive process data
-		//struct timeval now;
-		//gettimeofday(&now, 0);
-		//reference_time = ((uint64_t)now.tv_sec*1000000L + now.tv_usec) % 0x100000000;
 		uint64_t now = microsecs();
 		int64_t dt = now - last_update;
 		if (dt < 100) {
-			//std::cout << "recv too quick " << dt << "..delaying\n";
 			usleep(100);
 			now = microsecs();
 			dt = now - last_update;

@@ -1,8 +1,14 @@
 
 BasicTimer MACHINE {
+    OPTION startup_enabled FALSE;
     off WHEN TIMER>3000;
     on INITIAL;
 }
+BasicFollower MACHINE timer {
+   on WHEN timer.TIMER > 1000;
+   off DEFAULT;
+}
+basicFollower BasicFollower basicTimer;
 
 LongTimer MACHINE {
     OPTION duration 10000; # default to 10 secs

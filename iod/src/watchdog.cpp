@@ -67,7 +67,7 @@ int64_t Watchdog::now() {
 	boost::mutex::scoped_lock lock(time_mutex);
 	struct timeval now;
 	gettimeofday(&now, 0);
-	return (uint64_t) now.tv_sec*1000000 + (uint64_t)now.tv_usec;
+	return (uint64_t) now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
 }
 
 bool Watchdog::running() const { return is_running; }
