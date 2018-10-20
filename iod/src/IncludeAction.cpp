@@ -190,7 +190,7 @@ Action::Status IncludeAction::run() {
 					}
 					else {
 						if (machine->_type == "LIST" && expand) {
-							for (int i = 0; i<machine->parameters.size(); i++) {
+							for (unsigned int i = 0; i<machine->parameters.size(); i++) {
 								MachineInstance *item = machine->parameters[i].machine;
 								list_machine->addParameter(machine->parameters[i].val, item, pos, before);
 								if (pos >= 0) ++pos; // not adding at the end 

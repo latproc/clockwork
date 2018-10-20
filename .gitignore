@@ -65,3 +65,15 @@ webio.db
 devices.dat
 states.dat
 persist_scratch_*
+libs/
+demo/
+iot/
+doxygen/
+examples/
+hmi/
+libclockwork/
+private_tests/
+iod/old/
+modbus/
+plugins/
+

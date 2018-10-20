@@ -242,9 +242,7 @@ static unsigned long start_t = 0;
 
 std::ostream &timestamp(std::ostream &out)
 {
-	struct timeval now;
-	gettimeofday(&now, 0);
-	unsigned long t = now.tv_sec*1000000 + now.tv_usec - start_t;
+	unsigned long t = microsecs() - start_t;
 	return out << (t / 1000) ;
 }
 
@@ -912,9 +910,7 @@ int main(int argc, const char * argv[])
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
 
-	struct timeval now;
-	gettimeofday(&now, 0);
-	start_t = now.tv_sec*1000000 + now.tv_usec;
+	start_t = microsecs();
 	int cw_port;
 	std::string hostname;
 

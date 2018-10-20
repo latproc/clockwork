@@ -851,17 +851,14 @@ Value Predicate::evaluate(MachineInstance *m) {
     std::list<ExprNode>::const_iterator work = stack.stack.begin();
 	ExprNode evaluated(eval_stack(m, work));
     Value res = *(evaluated.val);
-    struct timeval now;
-    gettimeofday(&now, 0);
-    long t = now.tv_sec*1000000 + now.tv_usec;
+    long t = microsecs();
     last_evaluation_time = t;
     return res;
 }
 
 bool Condition::operator()(MachineInstance *m) {
 	if (predicate) {
-        struct timeval now;
-//        if (predicate->last_evaluation_time < m->lastStateEvaluationTime() ) {
+      //if (predicate->last_evaluation_time < m->lastStateEvaluationTime() ) {
 			//std::cout << "clearing predicate stack\n";
             predicate->stack.stack.clear();
 //		}
@@ -883,8 +880,7 @@ bool Condition::operator()(MachineInstance *m) {
         last_result = *res.val;
         std::stringstream ss;
         ss << last_result << " " << *predicate;
-        gettimeofday(&now, 0);
-        long t = now.tv_sec*1000000 + now.tv_usec;
+        long t = microsecs();
         predicate->last_evaluation_time = t;
         last_evaluation = ss.str();
 	    if (last_result.kind == Value::t_bool)

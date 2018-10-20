@@ -9,14 +9,14 @@ FlagInterface INTERFACE {
 #	OPTION z 100;
     EXPORT STATES on,off;
 
-    on STATE;
-	off STATE;
-	stopped STATE;
-    INIT INITIAL;
+  on STATE;
+  off STATE;
+  stopped STATE;
+  INIT INITIAL;
     
-    COMMAND turnOn;
-    COMMAND turnOff;
-    COMMAND toggle;
+  COMMAND turnOn;
+  COMMAND turnOff;
+  COMMAND toggle;
 }
 
 /*
@@ -30,11 +30,11 @@ FlagInterface INTERFACE {
 FlasherChannel CHANNEL {
 	OPTION host "127.0.0.1";
 	OPTION port 7720;
-    UPDATES flasher FlagInterface;
-    UPDATES flag FlagInterface;
+  UPDATES flasher FlagInterface;
+  UPDATES flag FlagInterface;
 	UPDATES client_flag FlagInterface;
-    UPDATES item1 ItemInterface;
-    UPDATES item2 ItemInterface;
+  UPDATES item1 ItemInterface;
+  UPDATES item2 ItemInterface;
 }
 
 # The FlasherChannel updates two machines that happen to both

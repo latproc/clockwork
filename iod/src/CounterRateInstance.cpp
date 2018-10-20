@@ -14,13 +14,12 @@ CounterRateInstance::~CounterRateInstance() { delete settings; }
 
 #if 0
 bool CounterRateInstance::hasWork() {
-	struct timeval now;
-	gettimeofday(&now, 0);
-	return ( (uint64_t)now.tv_sec*1000000L + now.tv_usec >= (uint64_t) next_poll);
+	return ( microsecs() >= (uint64_t) next_poll);
 }
 #endif
 
-void CounterRateInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
+bool CounterRateInstance::setValue(const std::string &property, const Value &update, uint64_t authority) {
+	Value new_value(update);
 	if (property == "VALUE") {
 		if (new_value.kind == Value::t_symbol) {
 			new_value = lookup(new_value.sValue.c_str());
@@ -32,8 +31,7 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value,
 		}
 
 		//reset once the buffers have been filled with zeros
-		if (!val) ++settings->zero_count;
-        else settings->zero_count = 0;
+		if (!val) ++settings->zero_count; else settings->zero_count = 0;
 		if (settings->zero_count > settings->readings.length()) {
 			settings->zero_count = 0;
 			// reset buffers;
@@ -41,8 +39,8 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value,
 			settings->readings.reset();
 		}
 
-        if ( (settings->update_t - settings->last_update_t)/1000 == 0 )
-            return;
+    if ( (settings->update_t - settings->last_update_t)/1000 == 0 )
+        return false;
         settings->last_update_t = settings->update_t;
 		uint64_t delta_t = settings->update_t - settings->start_t;
         settings->readings.append( val, delta_t);
@@ -61,6 +59,7 @@ void CounterRateInstance::setValue(const std::string &property, Value new_value,
 	}
 	else
 		MachineInstance::setValue(property, new_value);
+	return true;
 }
 
 long CounterRateInstance::filter(long val) {
@@ -73,9 +72,7 @@ long CounterRateInstance::filter(long val) {
 
 void CounterRateInstance::idle() {
 	if (!io_interface) {
-		struct timeval now;
-		gettimeofday(&now, 0);
-		uint64_t now_t = now.tv_sec * 1000000 + now.tv_usec;
+		uint64_t now_t = microsecs();
 		if (settings->update_t + 2000 < now_t) {
 			long new_val = (long)((float)settings->position + settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
 			setValue("VALUE", new_val);

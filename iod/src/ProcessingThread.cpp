@@ -794,9 +794,10 @@ void ProcessingThread::operator()()
 							if (!buf) continue;
 							IODCommand *command = parseCommandString(buf);
 							if (command) {
+								bool ok = false;
 								try {
 									//NB_MSG << "processing thread executing " << buf << "\n";
-									(*command)();
+									ok  = (*command)();
 									//NB_MSG << "execution result " << command->result() << "\n";
 								}
 								catch (std::exception e) {
@@ -806,7 +807,7 @@ void ProcessingThread::operator()()
 								delete[] buf;
 
 								if (mh.needsReply() || mh.getId() == default_id) {
-									char *response = strdup(command->result());
+									char *response = strdup( (ok) ? command->result() : command->error());
 									MessageHeader rh(mh);
 									rh.source = mh.dest;
 									rh.dest = mh.source;

@@ -125,9 +125,7 @@ class CaptureDuration {
 public:
     CaptureDuration(Statistic &stat) :statistic(stat) {
         if (keep_statistics()) {
-            struct timeval now;
-            gettimeofday(&now,0);
-            start = now.tv_sec*1000000L + now.tv_usec;
+            start = microsecs();
         }
         else start = 0;
     }
@@ -136,7 +134,7 @@ public:
         if (keep_statistics()) {
             struct timeval now;
             gettimeofday(&now,0);
-            uint64_t duration = now.tv_sec*1000000L + now.tv_usec - start;
+            uint64_t duration = microsecs() - start;
             statistic.add(duration);
         }
     };
