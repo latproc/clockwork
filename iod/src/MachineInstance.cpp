@@ -2524,7 +2524,7 @@ void MachineInstance::setInitialState(bool resume) {
 			if (state_machine->token_id == ClockworkToken::LIST )
 				fixListState(*this);
 			else
-				setState(state_machine->initial_state,expected_authority, resume);
+				setState(state_machine->initial_state, expected_authority, resume);
 			setNeedsCheck();
 		}
 	}
@@ -2595,15 +2595,6 @@ void MachineInstance::enable() {
 		b->enable();
 	}
 
-#if 1
-	if (isActive() && !isShadow()) {
-		std::string msgstr(_name);
-		msgstr += "_enabled";
-		Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);
-		sendMessageToReceiver(msg, this, false);
-	}
-#endif
-
 	if (_type == "LIST")
 		fixListState(*this);
 	else if (_type == "REFERENCE") {
@@ -2618,6 +2609,15 @@ void MachineInstance::enable() {
 	}
 	else
 		setInitialState(true);
+
+#if 1
+  if (isActive() && !isShadow()) {
+    std::string msgstr(_name);
+    msgstr += "_enabled";
+    Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);
+    sendMessageToReceiver(msg, this, false);
+  }
+#endif
 
 	setNeedsCheck();
 	// if any dependent machines are already enabled, make sure they know we are awake

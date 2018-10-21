@@ -356,7 +356,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 		}
 	}
 
-	Action::Status res = MachineInstance::setState(new_state, resume);
+	Action::Status res = MachineInstance::setState(new_state, authority, resume);
 	char buf[100];
 
 /*
@@ -437,7 +437,6 @@ void Channel::start() {
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 	DBG_CHANNELS << "Channel " << name << " starting from thread "<< tnam << "\n";
-
 
 	if (isClient()) {
 		startSubscriber();
@@ -1197,6 +1196,8 @@ void Channel::startSubscriber() {
     fl.f() << "Failed to start subscriber thread; aborting\n";
     exit(1);
   }
+
+  setState(state_machine->initial_state);
 
   connect_responder = new ChannelConnectMonitor(this);
   disconnect_responder = new ChannelDisconnectMonitor(this);
