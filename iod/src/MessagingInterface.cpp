@@ -49,6 +49,10 @@ zmq::context_t *MessagingInterface::zmq_context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 bool MessagingInterface::abort_all = false;
 
+uint64_t nowMicrosecs() {
+  return microsecs();
+}
+
 uint64_t nowMicrosecs(const struct timeval &now) {
 	return (uint64_t) now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
 }
