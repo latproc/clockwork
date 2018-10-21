@@ -134,11 +134,10 @@ public:
 	CommandSocketInfo *cmd_sock_info;
 	MessageRouter router;
 	boost::thread *router_thread;
-	ChannelInternals() :command_sock(0), cmd_sock_info(0), router_thread(0) {}
-	std::string getCommandSocketName(bool client_endpoint);
+  bool thread_started;
+  ChannelInternals() :command_sock(0), cmd_sock_info(0), router_thread(0), thread_started(false) {}
+  std::string getCommandSocketName(bool client_endpoint);
 };
-
-
 
 MachineRef::MachineRef() : refs(1) {
 }
@@ -933,6 +932,9 @@ void Channel::operator()() {
 		}
 	}
 #endif
+
+  internals->thread_started = true;
+
 	usleep(500);
 	char start_cmd[20];
 	DBG_CHANNELS << "channel " << name << " thread waiting for start message from command server\n";
@@ -1187,6 +1189,14 @@ void Channel::startSubscriber() {
 
 	// create a socket to communicate with the newly started subscriber thread
 	cmd_client = createCommandSocket(true);
+
+  int count = 0;
+  while (++count < 10 && !internals->thread_started) { usleep(100); }
+  if (!internals->thread_started) {
+    FileLogger fl(program_name);
+    fl.f() << "Failed to start subscriber thread; aborting\n";
+    exit(1);
+  }
 
   connect_responder = new ChannelConnectMonitor(this);
   disconnect_responder = new ChannelDisconnectMonitor(this);
