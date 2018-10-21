@@ -32,7 +32,6 @@ WaitAction::WaitAction(MachineInstance *mi, WaitActionTemplate &wat)
 }
 
 WaitAction::~WaitAction() {
-	NB_MSG << "Destructing " << *this;
 }
 
 Action *WaitActionTemplate::factory(MachineInstance *mi) { 

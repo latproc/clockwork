@@ -408,18 +408,12 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 			snprintf(buf, 100, "Channel %s (client); sending 'status' to partner", name.c_str());
 			MessageLog::instance()->add(buf);
 			DBG_CHANNELS << buf << "\n";
-
-			//sendMessage("status", *cmd_client, ack, mh);
-			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " to start request\n";
 			safeSend(*cmd_client, "status", 6, mh);
 		}
 		else {
 			snprintf(buf, 100, "Channel %s is server; sending 'done' to partner", name.c_str());
 			MessageLog::instance()->add(buf);
 			DBG_CHANNELS << buf << "\n";
-
-			//sendMessage("done", *cmd_client, ack, mh);
-			//DBG_CHANNELS << "channel " << name << " got ack: " << ack << " when finished upload\n";
 			mh.needReply(true);
 			safeSend(*cmd_client, "done", 4, mh);
 		}
@@ -814,7 +808,7 @@ void Channel::stopServer() {
 
 void Channel::checkStateChange(std::string event) {
   char buf[100];
-	DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << name << "\n";
+	DBG_CHANNELS << "Channel " << name << " received " << event << " in " << current_state << " on " << name << "\n";
 
 	//if (event == "ack" && current_state != ChannelImplementation::DOWNLOADING && current_state != ChannelImplementation::UPLOADING)
 	//	return;
@@ -848,7 +842,7 @@ void Channel::checkStateChange(std::string event) {
 		// we rely on the client resending if necessary
 		if ( current_state == ChannelImplementation::CONNECTED && event == "status" )
 			setState(ChannelImplementation::UPLOADING);
-		if ( current_state == ChannelImplementation::WAITSTART && event == "status" )
+		else if ( current_state == ChannelImplementation::WAITSTART && event == "status" )
 			setState(ChannelImplementation::UPLOADING);
 		else if (current_state == ChannelImplementation::ACTIVE && event == "status") {
 			{FileLogger fl(program_name); fl.f() << "ignoring " << event << " while active\n"; }
@@ -944,10 +938,14 @@ void Channel::operator()() {
 	DBG_CHANNELS << "channel " << name << " thread waiting for start message from command server\n";
 	size_t start_len;
 	safeRecv(*cmd_server, start_cmd, 20, true, start_len, 0);
-	if (!start_len) {
-		FileLogger fl(program_name);
-		fl.f() << name << " error getting start message\n";
-	}
+  if (!start_len) {
+    FileLogger fl(program_name);
+    fl.f() << name << " error getting start message\n";
+  }
+  else {
+    FileLogger fl(program_name);
+    fl.f() << name << " got message from server: " << start_cmd << "\n";
+  }
 	safeSend(*cmd_server, "ok", 2);
 
 	zmq::pollitem_t *items = 0;
@@ -1190,23 +1188,23 @@ void Channel::startSubscriber() {
 	// create a socket to communicate with the newly started subscriber thread
 	cmd_client = createCommandSocket(true);
 
+  connect_responder = new ChannelConnectMonitor(this);
+  disconnect_responder = new ChannelDisconnectMonitor(this);
+  if (isClient())
+    communications_manager->monit_subs.addResponder(ZMQ_EVENT_CONNECTED, connect_responder);
+  else
+    communications_manager->monit_subs.addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
+  communications_manager->monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
+
 	// start the subcriber thread
 	DBG_CHANNELS << name << " sending command start message\n";
 	cmd_client->send("start",5);
 	char buf[100];
 	DBG_CHANNELS << name << " sent command start message\n";
 	size_t buflen = cmd_client->recv(buf, 100);
-	DBG_CHANNELS << name << " command start message acknowledged\n";
 	buf[buflen] = 0;
+  DBG_CHANNELS << "Channel " << name << " got response to start: " << buf << "\n";
 
-	connect_responder = new ChannelConnectMonitor(this);
-	disconnect_responder = new ChannelDisconnectMonitor(this);
-	if (isClient())
-		communications_manager->monit_subs.addResponder(ZMQ_EVENT_CONNECTED, connect_responder);
-	else
-		communications_manager->monit_subs.addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
-	communications_manager->monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
-	DBG_CHANNELS << "Channel " << name << " got response to start: " << buf << "\n";
 }
 
 // NOTE this method is not currently called
