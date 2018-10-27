@@ -549,9 +549,11 @@ class MachineTimerValue : public DynamicValue {
 			if (machine_instance->enabled()) {
 				struct timeval now;
 				gettimeofday(&now, NULL);
-				long msecs = (long)get_diff_in_microsecs(&now, &machine_instance->start_time)/1000;
-				last_result = msecs;
+				uint64_t msecs = get_diff_in_microsecs(&now, &machine_instance->start_time)/1000;
+        if (sizeof(long) == 4) msecs = msecs & 0x7fffffff;
+				last_result = (long)msecs;
 			}
+      assert(last_result.iValue >= 0);
 			return last_result;
 		}
 		Value &operator()()  {
@@ -562,7 +564,7 @@ class MachineTimerValue : public DynamicValue {
 		}
 		Value *getLastResult() { return &last_result; }
 		void resume() {
-			uint64_t now_v = microsecs() - last_result.iValue*1000;
+			uint64_t now_v = microsecs() - (uint64_t)(last_result.iValue*1000L);
 			machine_instance->start_time.tv_sec = now_v / 1000000;
 			machine_instance->start_time.tv_usec = now_v % 1000000;
 		}
@@ -810,10 +812,15 @@ void MachineInstance::describe(std::ostream &out) {
 	out << "Timer: " << *current_timer_val << "\n";
 	if (stable_states.size() || state_machine->token_id == ClockworkToken::LIST) {
 		long now_t = microsecs();
-		uint64_t delta = now_t - last_state_evaluation_time;
-		out << "Last stable state evaluation (";
-		simple_deltat(out, delta);
-		out << "):\n";
+    if (last_state_evaluation_time) {
+      uint64_t delta = now_t - last_state_evaluation_time;
+      out << "Last stable state evaluation (";
+      simple_deltat(out, delta);
+      out << "):\n";
+    }
+    else {
+      out << "stable state evaluation not run\n";
+    }
 		for (unsigned int i=0; i<stable_states.size(); ++i) {
 			out << "  " << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
 			if (stable_states[i].condition.last_result == true) {
