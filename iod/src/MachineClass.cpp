@@ -134,24 +134,25 @@ void MachineClass::exportHandlers(std::ostream &ofs)
 	std::list<State*>::iterator iter = states.begin();
 	while (iter != states.end()) {
 		const State *s = *iter++;
-		ofs
-		<< "int cw_" << name << "_enter_" << s->getName()
-		<< "(struct cw_" << name << " *m, ccrContParam) {";
-		std::string fn_name(s->getName());
-		fn_name += "_enter";
-		if (name == "Ramp") {
-			int x = 0;
-		}
+    std::string fn_name(s->getName());
+    fn_name += "_enter";
 		std::multimap<Message, MachineCommandTemplate*>::iterator found = receives.find(Message(fn_name.c_str()));
-		if (found != receives.end()) {
-			const std::pair<Message, MachineCommandTemplate*> &item = *found;
+    ofs
+    << "int cw_" << name << "_enter_" << s->getName()
+    << "(struct cw_" << name << " *m, ccrContParam) {";
+    if (name == "Ramp") {
+      int x = 0;
+    }
+    if (found != receives.end()) {
+      const std::pair<Message, MachineCommandTemplate*> &item = *found;
 			ofs << "// " <<(*item.second) << "\n";
 			for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
 				ActionTemplate*at = (item.second)->action_templates.at(i);
-				if (at) ofs << "// " << (*at) << "\n";
-			}
+        if (at) { ofs << "\t"; at->toC(ofs); ofs << ";\n"; }
+      }
 		}
-		ofs << "  m->machine.execute = 0;\n  return 1;\n}\n";
+    else ofs << "\n";
+    ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
 	}
 
 	{
@@ -159,16 +160,17 @@ void MachineClass::exportHandlers(std::ostream &ofs)
 		while (iter != receives.end()) {
 			const std::pair<Message, MachineCommandTemplate*> &item = *iter++;
 			std::string msg(item.first.getText().substr(0, item.first.getText().find('_')));
-			if (state_names.find(msg) == state_names.end()) {
+      if (msg.find('_') != std::string::npos) msg = msg.substr(msg.find('_'));
+			if (msg != initial_state.getName() && state_names.find(msg) == state_names.end()) {
 				ofs
-				<< "int cw_" << name << "_" << item.first
+				<< "int cw_" << name << "_" << item.first.getText()
 				<< "(struct cw_" << name << " *m, ccrContParam) {"
 				<< "// " <<(*item.second) << "\n";
 				for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
 					ActionTemplate*at = (item.second)->action_templates.at(i);
-					if (at) ofs << "// " << (*at) << "\n";
+          if (at) { ofs << "\t"; at->toC(ofs); ofs << ";\n"; }
 				}
-				ofs << "  m->machine.execute = 0;\n  return 1;\n}\n";
+				ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
 			}
 		}
 
@@ -182,7 +184,7 @@ void MachineClass::exportCommands(std::ostream &ofs)
 	while (iter != states.end()) {
 		const State *s = *iter++;
 		ofs
-		<< "int " << name << "_enter_" << s->getName()
+		<< "\tint " << name << "_enter_" << s->getName()
 		<< "(struct cw_" << name << " *m, ccrContParam) {";
 		std::string fn_name(s->getName());
 		std::multimap<std::string, MachineCommandTemplate*>::iterator found = commands.find(fn_name);
@@ -191,10 +193,10 @@ void MachineClass::exportCommands(std::ostream &ofs)
 			ofs << "// " <<(*item.second) << "\n";
 			for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
 				ActionTemplate*at = (item.second)->action_templates.at(i);
-				if (at) ofs << "// " << (*at) << "\n";
+				if (at) ofs << "\t// " << (*at) << "\n";
 			}
 		}
-		ofs << "m->machine.execute = 0; return 1; }\n";
+		ofs << "\tm->machine.execute = 0; return 1; }\n";
 	}
 }
 
@@ -205,6 +207,7 @@ bool MachineClass::cExport(const std::string &filename) {
 	std::stringstream values;
 	std::stringstream refs;
 	std::stringstream setup;
+  std::stringstream handlers;
 	{
 		std::string header(filename);
 		header += ".h";
@@ -233,8 +236,9 @@ bool MachineClass::cExport(const std::string &filename) {
 				const Parameter &p = *p_iter++;
 				params << ", MachineBase *" <<p.val;
 				values << ", " << p.val;
-				refs << "MachineBase *_" << p.val << ";\n";
-				setup << "m->_" << p.val << " = " << p.val << ";\n";
+				refs << "\tMachineBase *_" << p.val << ";\n";
+				setup << "\tm->_" << p.val << " = " << p.val << ";\n";
+        setup << "\tif (" << p.val<< ") MachineDependencies_add(" << p.val << ", cw_" << name << "_To_MachineBase(m));\n";
 			}
 			if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
 				ofh << ", int pin";
@@ -258,28 +262,30 @@ bool MachineClass::cExport(const std::string &filename) {
 			ofs
 			<< "\n#include \"base_includes.h\"\n"
 			<< "#include \"cw_" << name << ".h\""
-			<< "\n//static const char* TAG = \"" << name << "\";"
-			<< "\n#define DEBUG_LOG 0\n"
+			<< "\nstatic const char* TAG = \"" << name << "\";"
+      << "\n#define DEBUG_LOG 0\n"
+      << "\n#define Value int\n"
 			<< "struct cw_" << name << " {\n"
-			<< "MachineBase machine;\n"
-			<< "int gpio_pin;\n"
-			<< "struct IOAddress addr;\n"
+			<< "\tMachineBase machine;\n"
+			<< "\tint gpio_pin;\n"
+			<< "\tstruct IOAddress addr;\n"
 			<< refs.str();
 			SymbolTableConstIterator pnames_iter = properties.begin();
 			while (pnames_iter != properties.end()) {
 					const std::pair<std::string, Value> prop = *pnames_iter++;
-					ofs<< "Value " << prop.first << "; // " << prop.second << "\n";
+					ofs<< "\tValue " << prop.first << "; // " << prop.second << "\n";
 			}
 			std::map<std::string, Value>::iterator opts_iter = options.begin();
 			while (opts_iter != options.end()) {
 				const std::pair<std::string, Value> opt = *opts_iter++;
-				ofs<< "Value " << opt.first << "; // " << opt.second << "\n";
+				ofs<< "\tValue " << opt.first << "; // " << opt.second << "\n";
 			}
 		ofs
 		<< "};\n";
 		}
 
-		ofs << "int cw_" << name << "_check_state(struct cw_" << name << " *m);\n";
+    ofs << "int cw_" << name << "_handle_message(struct MachineBase *ramp, struct MachineBase *machine, int state);\n";
+    ofs << "int cw_" << name << "_check_state(struct cw_" << name << " *m);\n";
 
 		ofs
 		<< "struct cw_" << name << " *create_cw_" << name << "(const char *name";
@@ -287,15 +293,20 @@ bool MachineClass::cExport(const std::string &filename) {
 			ofs << ", int pin";
 		}
 		ofs << params.str() << ") {\n"
-		<< "struct cw_" << name << " *p = (struct cw_" << name << " *)malloc(sizeof(struct cw_" << name << "));\n"
-		<< "Init_cw_" << name << "(p, name";
+		<< "\tstruct cw_" << name << " *p = (struct cw_" << name << " *)malloc(sizeof(struct cw_" << name << "));\n"
+		<< "\tInit_cw_" << name << "(p, name";
 		if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
 			ofs << ", pin";
 		}
 
 		ofs << values.str() << ");\n"
-		<< "return p;\n"
+		<< "\treturn p;\n"
 		<< "}\n";
+
+    // export enter functions for states
+    exportHandlers(ofs);
+    handlers << "\tMachineActions_add(cw_" << name << "_To_MachineBase(m), (enter_func)cw_"
+      << name << "_enter_" << initial_state.getName() << ");\n";
 
 		ofs
 		<< "void Init_cw_" << name << "(struct cw_" << name << " *m, const char *name";
@@ -303,56 +314,58 @@ bool MachineClass::cExport(const std::string &filename) {
 			ofs << ", int pin";
 		}
 		ofs << params.str() << ") {\n"
-		<< "initMachineBase(&m->machine, name);\n"
-		<< "init_io_address(&m->addr, 0, 0, 0, 0, iot_none, IO_STABLE);\n"
+		<< "\tinitMachineBase(&m->machine, name);\n"
+		<< "\tinit_io_address(&m->addr, 0, 0, 0, 0, iot_none, IO_STABLE);\n"
 		<< setup.str();
 		SymbolTableConstIterator pnames_iter = properties.begin();
 		while (pnames_iter != properties.end()) {
 			const std::pair<std::string, Value> prop = *pnames_iter++;
-			ofs<< "m->" << prop.first << " = " << prop.second << ";\n";
+			ofs << "\tm->" << prop.first << " = " << prop.second << ";\n";
 		}
 		std::map<std::string, Value>::iterator opts_iter = options.begin();
 		while (opts_iter != options.end()) {
 			const std::pair<std::string, Value> opt = *opts_iter++;
-			ofs<< "m->" << opt.first << " = " << opt.second << ";\n";
+			ofs<< "\tm->" << opt.first << " = " << opt.second << ";\n";
 		}
 		ofs
-		<< "m->machine.state = 0;\n"
-		<< "m->machine.check_state = ( int(*)(MachineBase*) )cw_" << name << "_check_state;\n"
-		<< "markPending(&m->machine);\n"
+		<< "\tm->machine.state = state_cw_" << name << "_" << initial_state << ";\n"
+    << "\tm->machine.check_state = ( int(*)(MachineBase*) )cw_" << name << "_check_state;\n"
+    << handlers.str()
+		<< "\tmarkPending(&m->machine);\n"
 		<< "}\n";
 
 		ofs
 		<< "struct IOAddress *cw_" << name << "_getAddress(struct cw_" << name << " *p) {\n"
-		<< "  return (p->addr.io_type == iot_none) ? 0 : &p->addr;\n"
+		<< "\treturn (p->addr.io_type == iot_none) ? 0 : &p->addr;\n"
 		<< "}\n";
 
 		ofs
 		<< "MachineBase *cw_" << name << "_To_MachineBase(struct cw_" << name << " *p) { return &p->machine; }\n";
 
-		// export enter functions for states
-		exportHandlers(ofs);
 		//exportCommands(ofs);
 
 		ofs
 		<< "int cw_" << name << "_check_state(struct cw_" << name << " *m) {\n"
-		<< "  int new_state = 0; enter_func new_state_enter = 0;\n";
+		<< "\tint new_state = 0; enter_func new_state_enter = 0;\n";
 
 		for (unsigned int i=0; i<stable_states.size(); ++i) {
 			const StableState &s = stable_states.at(i);
-			if (i>0) ofs << " //  else\n";
+			if (i>0) ofs << "\telse\n";
 			ofs
-			<< "//  if (" << *s.condition.predicate << ") {\n"
-			<< "//    new_state = state_cw_" << name << "_" << s.state_name << ";\n"
-			<< "//    new_state_enter = (enter_func)cw_" << name << "_enter_" << s.state_name << ";\n"
-			<< "//  }\n";
+      << "\tif (";
+      s.condition.predicate->toC(ofs);
+      ofs << ") {\n"
+			<< "\t\tnew_state = state_cw_" << name << "_" << s.state_name << ";\n"
+			<< "\t\tnew_state_enter = (enter_func)cw_" << name << "_enter_" << s.state_name << ";\n"
+			<< "\t}\n";
 		}
 
 		ofs
-		<< "  if (new_state != m->machine.state)\n"
-		<< "    changeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter);\n"
-		<< "  return 1;\n"
-		<< "}\n";
+    << "\tif (new_state != m->machine.state) {\n"
+		<< "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter);\n"
+		<< "\t\treturn 1;\n"
+    << "\t}\n"
+    << "\treturn 0;\n}\n";
 	}
 	return false;
 }

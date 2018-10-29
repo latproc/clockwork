@@ -29,13 +29,12 @@
 class MachineInstance;
 
 struct PredicateActionTemplate : public ActionTemplate {
-	PredicateActionTemplate(Predicate *p) : predicate(p) { }
-    ~PredicateActionTemplate();
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-		return out << *predicate;
-    }
-	Predicate *predicate;
+  PredicateActionTemplate(Predicate *p) : predicate(p) { }
+  ~PredicateActionTemplate();
+  virtual Action *factory(MachineInstance *mi);
+  std::ostream &operator<<(std::ostream &out) const;
+  void toC(std::ostream &out) const;
+  Predicate *predicate;
 };
 
 struct PredicateAction : public Action {

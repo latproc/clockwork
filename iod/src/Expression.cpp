@@ -37,41 +37,53 @@ static int max_count = 0;
 static int last_max = 0;
 
 std::ostream &operator <<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
-    std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
-        const char *opstr;
-        switch (op) {
-            case opNone: opstr = "None"; break;
-            case opGE: opstr = ">="; break;
-            case opGT: opstr = ">"; break;
-            case opLE: opstr = "<="; break;
-            case opLT: opstr = "<"; break;
-            case opEQ: opstr = "=="; break;
-            case opNE: opstr = "!="; break;
-            case opAND: opstr = "AND"; break;
-            case opOR: opstr = "OR"; break;
-			case opNOT: opstr = "NOT"; break;
-			case opUnaryMinus: opstr = "-"; break;
-			case opPlus: opstr = "+"; break;
-			case opMinus: opstr = "-"; break;
-			case opTimes: opstr = "*"; break;
-			case opDivide: opstr = "/"; break;
-			case opAbsoluteValue: opstr = "ABS"; break;
-			case opMod: opstr = "%"; break;
-			case opAssign: opstr = ":="; break;
-            case opMatch: opstr = "~"; break;
-            case opBitAnd: opstr = "&"; break;
-            case opBitOr: opstr = "|"; break;
-            case opNegate: opstr = "~"; break;
-            case opBitXOr: opstr = "^"; break;
-			case opInteger: opstr = "AS INTEGER"; break;
-			case opFloat: opstr = "AS FLOAT"; break;
-            case opAny: opstr = "ANY"; break;
-            case opAll: opstr = "ALL"; break;
-            case opCount: opstr = "COUNT"; break;
-            case opIncludes: opstr = "INCLUDES"; break;
-        }
-        return out << opstr;
-    }
+std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
+  const char *opstr;
+  switch (op) {
+    case opNone: opstr = "None"; break;
+    case opGE: opstr = ">="; break;
+    case opGT: opstr = ">"; break;
+    case opLE: opstr = "<="; break;
+    case opLT: opstr = "<"; break;
+    case opEQ: opstr = "=="; break;
+    case opNE: opstr = "!="; break;
+    case opAND: opstr = "AND"; break;
+    case opOR: opstr = "OR"; break;
+    case opNOT: opstr = "NOT"; break;
+    case opUnaryMinus: opstr = "-"; break;
+    case opPlus: opstr = "+"; break;
+    case opMinus: opstr = "-"; break;
+    case opTimes: opstr = "*"; break;
+    case opDivide: opstr = "/"; break;
+    case opAbsoluteValue: opstr = "ABS"; break;
+    case opMod: opstr = "%"; break;
+    case opAssign: opstr = ":="; break;
+    case opMatch: opstr = "~"; break;
+    case opBitAnd: opstr = "&"; break;
+    case opBitOr: opstr = "|"; break;
+    case opNegate: opstr = "~"; break;
+    case opBitXOr: opstr = "^"; break;
+    case opInteger: opstr = "AS INTEGER"; break;
+    case opFloat: opstr = "AS FLOAT"; break;
+    case opAny: opstr = "ANY"; break;
+    case opAll: opstr = "ALL"; break;
+    case opCount: opstr = "COUNT"; break;
+    case opIncludes: opstr = "INCLUDES"; break;
+  }
+  return out << opstr;
+}
+
+void toC(std::ostream &out, const PredicateOperator op) {
+  const char *opstr;
+  switch (op) {
+    case opAND: out << "&&"; break;
+    case opOR: out << "||"; break;
+    case opNOT: out << "!"; break;
+    case opAssign: out << "="; break;
+    default:
+      out << op;
+  }
+}
 
 static bool stringEndsWith(const std::string &str, const std::string &subs) {
 	size_t n1 = str.length();
@@ -346,6 +358,38 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
         else out << " " << entry;
 	}
     return out;
+}
+
+
+void Predicate::toC(std::ostream &out) const {
+  if (left_p) {
+    if (op != opAssign) out << "(";
+    if (op != opNOT && op != opInteger && op != opFloat)
+      left_p->toC(out); // ignore the lhs for NOT operators
+    out << " "; ::toC(out, op); out << " ";
+    if (right_p) right_p->toC(out);
+    if (op != opAssign) out << ")";
+  }
+  else {
+    if (cached_entry) {
+      if (entry.kind == Value::t_symbol)
+        out << "m->" << entry;
+      else
+        out << entry;
+      if (entry.kind == Value::t_symbol) out << " (" << *cached_entry << ")";
+    }
+    else if (last_calculation) {
+      out << entry;
+      if (entry.kind == Value::t_symbol || entry.kind == Value::t_dynamic)
+        out <<  " (" << *last_calculation << ") ";
+    }
+    else {
+      if (entry.kind == Value::t_symbol)
+        out << "m->" << entry;
+      else
+        out << entry;
+    }
+  }
 }
 
 

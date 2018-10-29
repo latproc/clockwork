@@ -76,3 +76,28 @@ std::ostream &ExpressionAction::operator<<(std::ostream &out) const {
 Action *ExpressionActionTemplate::factory(MachineInstance *mi) { 
   return new ExpressionAction(mi, *this); 
 }
+
+ExpressionActionTemplate::ExpressionActionTemplate(CStringHolder var, opType oper) : lhs(var), rhs(1), op(oper) {
+  if (op == opDec) rhs = -1;
+}
+ExpressionActionTemplate::ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v) : lhs(var), rhs(v), op(oper) {
+  if (op == opDec) rhs = -v;
+}
+ExpressionActionTemplate::ExpressionActionTemplate(CStringHolder var, opType oper, int a) : lhs(var), rhs(a), op(oper) {
+  if (op == opDec) rhs = -a; else rhs = a;
+}
+ExpressionActionTemplate::ExpressionActionTemplate(CStringHolder var, opType oper, const char *a) : lhs(var), rhs(a), op(oper) {
+  assert(op == opSet);
+}
+std::ostream &ExpressionActionTemplate::operator<<(std::ostream &out) const {
+  switch(op) {
+    case opInc: out << "INC "; break;
+    case opDec: out << "DEC "; break;
+    case opSet: out << "SET "; break;
+  }
+  return out << lhs.get() << " " << rhs << " " << "\n";
+}
+
+void ExpressionActionTemplate::toC(std::ostream &out) const {
+  return operator<<(out);
+}

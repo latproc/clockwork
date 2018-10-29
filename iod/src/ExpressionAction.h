@@ -28,27 +28,14 @@
 
 struct ExpressionActionTemplate : public ActionTemplate {
 	enum opType { opInc, opDec, opSet };
-	ExpressionActionTemplate(CStringHolder var, opType oper) : lhs(var), rhs(1), op(oper) { 
-		if (op == opDec) rhs = -1;
-	}
-	ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v) : lhs(var), rhs(v), op(oper) { 
-		if (op == opDec) rhs = -v;
-	}
-	ExpressionActionTemplate(CStringHolder var, opType oper, int a) : lhs(var), rhs(a), op(oper) { 
-		if (op == opDec) rhs = -a; else rhs = a;
-	}
-	ExpressionActionTemplate(CStringHolder var, opType oper, const char *a) : lhs(var), rhs(a), op(oper) { 
-		assert(op == opSet);
-	}
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
-		switch(op) {
-			case opInc: out << "INC "; break;
-			case opDec: out << "DEC "; break;
-			case opSet: out << "SET "; break;
-		}
-		return out << lhs.get() << " " << rhs << " " << "\n";
-    }
+  ExpressionActionTemplate(CStringHolder var, opType oper);
+  ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v);
+  ExpressionActionTemplate(CStringHolder var, opType oper, int a);
+  ExpressionActionTemplate(CStringHolder var, opType oper, const char *a);
+  virtual Action *factory(MachineInstance *mi);
+  std::ostream &operator<<(std::ostream &out) const;
+  void toC(std::ostream &out) const;
+
 	CStringHolder lhs;
 	Value rhs;
 	opType op;

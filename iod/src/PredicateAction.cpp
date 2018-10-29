@@ -32,6 +32,14 @@ PredicateActionTemplate::~PredicateActionTemplate() {
     delete predicate;
 }
 
+std::ostream &PredicateActionTemplate::operator<<(std::ostream &out) const {
+  predicate->toC(out);
+  return out;
+}
+
+void PredicateActionTemplate::toC(std::ostream &out) const {
+  out << "Assignment " << predicate->left_p->entry << " := " << *(predicate->right_p);
+}
 
 Action *PredicateActionTemplate::factory(MachineInstance *mi) { 
   return new PredicateAction(mi, *this); 

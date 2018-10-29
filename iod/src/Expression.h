@@ -34,6 +34,7 @@ enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR
 	opInteger, opFloat, opAbsoluteValue
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
+void toC(std::ostream &out, const PredicateOperator op);
 
 struct ExprNode {
 	ExprNode(const Value *a, const Value *name = NULL);
@@ -115,7 +116,8 @@ public:
 	Predicate(const Predicate &other);
 	Predicate &operator=(const Predicate &other);
     const Value &getTimerValue();
-    std::ostream &operator <<(std::ostream &out) const;
+  std::ostream &operator <<(std::ostream &out) const;
+  void toC(std::ostream &out) const;
     Value evaluate(MachineInstance *m);
     void flushCache();
     /* predicate clauses may involve timers that need to be scheduled or cleared

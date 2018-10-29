@@ -33,10 +33,13 @@ typedef std::vector<std::string> ActionParameterList;
 class MachineInstance;
 
 class Action;
-struct ActionTemplate {
-    virtual ~ActionTemplate() {}
-    virtual Action *factory(MachineInstance *mi) = 0;
-    virtual std::ostream & operator<<(std::ostream &out) const { return out << "(ActionTemplate)"; }
+class ActionTemplate {
+public:
+  ActionTemplate() {}
+  virtual ~ActionTemplate() {}
+  void toC(std::ostream &out) const;
+  virtual Action *factory(MachineInstance *mi) = 0;
+  virtual std::ostream & operator<<(std::ostream &out) const { return out << "(ActionTemplate)"; }
 };
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 

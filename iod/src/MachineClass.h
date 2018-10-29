@@ -86,7 +86,7 @@ public:
 	std::set<std::string> property_names;
 	std::set<std::string> command_names;
 
-	void exportHandlers(std::ostream &ofs);
+  void exportHandlers(std::ostream &ofs);
 	void exportCommands(std::ostream &ofs);
 	bool cExport(const std::string &filename);
 

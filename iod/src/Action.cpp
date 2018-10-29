@@ -9,6 +9,10 @@
 #include "MessageLog.h"
 #include "AbortAction.h"
 
+void ActionTemplate::toC(std::ostream &out) const {
+  return operator<<(out);
+}
+
 std::list<Trigger*> all_triggers;
 static boost::recursive_mutex trigger_list_mutex;
 

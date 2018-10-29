@@ -3,9 +3,9 @@
 
 Ramp MACHINE clock, output {
   OPTION start 1000;
-  OPTION end 10000;
+  OPTION end 30000;
   OPTION direction 0;
-  OPTION step 10;
+  OPTION step 800;
   OPTION VALUE 0;
 
   top WHEN VALUE >= end AND direction > 0;
