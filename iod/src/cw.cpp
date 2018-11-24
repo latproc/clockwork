@@ -236,6 +236,16 @@ int main (int argc, char const *argv[])
 			std::cerr << "failed to create export directory /tmp/cw_export.. aborting\n";
 			return 1;
 		}
+    // setup global ids for all state names
+    ExportState::add_state("INIT");
+    while (iter != MachineClass::all_machine_classes.end()) {
+      MachineClass *mc = *iter++;
+      std::set<std::string>::iterator iter = mc->state_names.begin();
+      while (iter != mc->state_names.end()) {
+        ExportState::add_state(*iter++);
+      }
+    }
+    iter = MachineClass::all_machine_classes.begin();
 		while (iter != MachineClass::all_machine_classes.end()) {
 			MachineClass *mc = *iter++;
 			if (mc->name == "POINT") continue;

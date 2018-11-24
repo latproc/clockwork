@@ -129,8 +129,41 @@ MachineCommandTemplate *MachineClass::findMatchingCommand(std::string cmd_name, 
 	return 0;
 }
 
+
+std::string method_name(const std::string msg) {
+  char buf[msg.length()+1];
+  const char *p = msg.c_str();
+  char *q = buf;
+  while (*p) {
+    if (*p == '.') *q++ = '_';
+    else *q++ = *p;
+    ++p;
+  }
+  *q = 0;
+  return buf;
+}
+
+// Messages that appear in clockwork programs as strings are converted to
+// functions in the source
+const Value &ExportState::symbol(const char *name) { return messages.find(name); }
+const Value &ExportState::create_symbol(const char *name) {
+  messages.add(name, Value(method_name(name)));
+  return messages.find(name);
+}
+void ExportState::add_state(const std::string name) {
+  std::map<std::string, int>::iterator found = state_ids.find(name);
+  if (found == state_ids.end())
+    state_ids[name] =  state_ids.size() + 1;
+}
+int ExportState::lookup(const std::string name) {
+  std::map<std::string, int>::iterator found = state_ids.find(name);
+  if (found == state_ids.end()) return -1;
+  else return (*found).second;
+}
+
 void MachineClass::exportHandlers(std::ostream &ofs)
 {
+#if 0
 	std::list<State*>::iterator iter = states.begin();
 	while (iter != states.end()) {
 		const State *s = *iter++;
@@ -140,9 +173,6 @@ void MachineClass::exportHandlers(std::ostream &ofs)
     ofs
     << "int cw_" << name << "_enter_" << s->getName()
     << "(struct cw_" << name << " *m, ccrContParam) {";
-    if (name == "Ramp") {
-      int x = 0;
-    }
     if (found != receives.end()) {
       const std::pair<Message, MachineCommandTemplate*> &item = *found;
 			ofs << "// " <<(*item.second) << "\n";
@@ -154,7 +184,50 @@ void MachineClass::exportHandlers(std::ostream &ofs)
     else ofs << "\n";
     ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
 	}
+#endif
+  std::stringstream received_message_handlers;
+  {
+    std::multimap<Message, MachineCommandTemplate*>::const_iterator recv_iter = receives.begin();
+    while (recv_iter != receives.end()) {
+      const std::pair<Message, MachineCommandTemplate*> item = *recv_iter++;
+      ofs
+      << "int cw_" << name << "_" << method_name(item.first.getText())
+      << "(struct cw_" << name << " *m, ccrContParam) {";
+      ofs << "// " <<(*item.second) << "\n";
+      for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
+        ActionTemplate*at = (item.second)->action_templates.at(i);
+        if (at) { ofs << "\t"; at->toC(ofs); ofs << ";\n"; }
+      }
+      ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
+      // if this method is not an enter handler it needs to be inserted into the handle_message
+      bool handled = item.first.isEnter();
+      if (item.first.isSimple()) {
+        std::string machine_name = item.first.getText();
+        size_t name_pos = machine_name.find(".");
+        if (name_pos != std::string::npos) {
+          machine_name.erase(name_pos);
+          std::string msg_name(item.first.getText().substr(name_pos+1));
+          size_t enter_pos = msg_name.find("_enter");
+          if (enter_pos != std::string::npos && enter_pos == msg_name.length() - 6) {
+            msg_name.erase(enter_pos);
+            received_message_handlers << "\t if (source == m->_"
+              << machine_name
+              << " && state == " << ExportState::lookup(msg_name)
+              << ")\n"
+              << "\t\tMachineActions_add(m, (enter_func)"
+              << "cw_" << name << "_"
+              << method_name(item.first.getText())
+              << ");\n";
+            handled = true;
+          }
+        }
+      }
+      if (!handled)
+        std::cout << "Warning: Not handling " << item.first.getText() << "\n";
+    }
+  }
 
+#if 0
 	{
 		std::multimap<Message, MachineCommandTemplate*>::iterator iter = receives.begin();
 		while (iter != receives.end()) {
@@ -163,7 +236,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
       if (msg.find('_') != std::string::npos) msg = msg.substr(msg.find('_'));
 			if (msg != initial_state.getName() && state_names.find(msg) == state_names.end()) {
 				ofs
-				<< "int cw_" << name << "_" << item.first.getText()
+				<< "int cw_" << name << "_" << method_name(item.first.getText())
 				<< "(struct cw_" << name << " *m, ccrContParam) {"
 				<< "// " <<(*item.second) << "\n";
 				for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
@@ -173,13 +246,26 @@ void MachineClass::exportHandlers(std::ostream &ofs)
 				ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
 			}
 		}
-
 	}
+#endif
+
+  std::string external_handlers = received_message_handlers.str();
+  ofs
+   << "int cw_" << name << "_handle_message(struct MachineBase *obj, struct MachineBase *source, int state) {\n"
+   << "\tstruct cw_" << name << " *m = (struct cw_" << name << " *)obj;\n"
+   //<< "\tif (m->_clock == source && state == state_Pulse_on) {\n"
+   //<< "\t\tMachineActions_add(m, (enter_func)cw_" << name << "_clock_on_enter);\n"
+   //<< "\t}\n"
+   << external_handlers
+   << "\treturn 1;\n"
+   << "}\n";
+
 }
 
 
 void MachineClass::exportCommands(std::ostream &ofs)
 {
+#if 0
 	std::list<State*>::iterator iter = states.begin();
 	while (iter != states.end()) {
 		const State *s = *iter++;
@@ -198,7 +284,15 @@ void MachineClass::exportCommands(std::ostream &ofs)
 		}
 		ofs << "\tm->machine.execute = 0; return 1; }\n";
 	}
+#else
+  std::multimap<Message, MachineCommandTemplate*>::const_iterator recv_iter = receives.begin();
+  while (recv_iter != receives.end()) {
+    const std::pair<Message, MachineCommandTemplate*> item = *recv_iter++;
+  }
+#endif
 }
+
+std::map<std::string, int> ExportState::state_ids;
 
 bool MachineClass::cExport(const std::string &filename) {
 	// TODO: redo this with some kind of templating system
@@ -219,11 +313,10 @@ bool MachineClass::cExport(const std::string &filename) {
 
 		// export statenumbers
 		{
-			int statenum = 0;
 			std::list<State*>::iterator iter = states.begin();
 			while (iter != states.end()) {
 				const State *s = *iter++;
-				ofh << "#define state_cw_" << name << "_" << s->getName() << " " << statenum++ << "\n";
+        ofh << "#define state_cw_" << name << "_" << s->getName() << " " << ExportState::lookup(s->getName()) << "\n";
 			}
 		}
 		ofh
@@ -236,7 +329,8 @@ bool MachineClass::cExport(const std::string &filename) {
 				const Parameter &p = *p_iter++;
 				params << ", MachineBase *" <<p.val;
 				values << ", " << p.val;
-				refs << "\tMachineBase *_" << p.val << ";\n";
+        MachineInstance *p_machine = MachineInstance::find(p.val.asString().c_str());
+        refs << "\tMachineBase *_" << p.val << ";\n";
 				setup << "\tm->_" << p.val << " = " << p.val << ";\n";
         setup << "\tif (" << p.val<< ") MachineDependencies_add(" << p.val << ", cw_" << name << "_To_MachineBase(m));\n";
 			}
@@ -306,7 +400,7 @@ bool MachineClass::cExport(const std::string &filename) {
     // export enter functions for states
     exportHandlers(ofs);
     handlers << "\tMachineActions_add(cw_" << name << "_To_MachineBase(m), (enter_func)cw_"
-      << name << "_enter_" << initial_state.getName() << ");\n";
+      << name << "_" << initial_state.getName() << "_enter);\n";
 
 		ofs
 		<< "void Init_cw_" << name << "(struct cw_" << name << " *m, const char *name";
@@ -330,6 +424,7 @@ bool MachineClass::cExport(const std::string &filename) {
 		ofs
 		<< "\tm->machine.state = state_cw_" << name << "_" << initial_state << ";\n"
     << "\tm->machine.check_state = ( int(*)(MachineBase*) )cw_" << name << "_check_state;\n"
+    << "\tm->machine.handle = (message_func)cw_" << name << "_handle_message; // handle message from other machines\n"
     << handlers.str()
 		<< "\tmarkPending(&m->machine);\n"
 		<< "}\n";
@@ -348,22 +443,47 @@ bool MachineClass::cExport(const std::string &filename) {
 		<< "int cw_" << name << "_check_state(struct cw_" << name << " *m) {\n"
 		<< "\tint new_state = 0; enter_func new_state_enter = 0;\n";
 
+    bool uses_timer = false;
+    std::stringstream schedules;
+
 		for (unsigned int i=0; i<stable_states.size(); ++i) {
 			const StableState &s = stable_states.at(i);
 			if (i>0) ofs << "\telse\n";
-			ofs
-      << "\tif (";
-      s.condition.predicate->toC(ofs);
-      ofs << ") {\n"
-			<< "\t\tnew_state = state_cw_" << name << "_" << s.state_name << ";\n"
-			<< "\t\tnew_state_enter = (enter_func)cw_" << name << "_enter_" << s.state_name << ";\n"
-			<< "\t}\n";
+      Value timer_val;
+      if (s.condition.predicate->usesTimer(timer_val)) {
+        uses_timer = true;
+      }
+      if (s.condition.predicate->priority != 1) { // DEFAULT state
+        ofs << "\tif (";
+        s.condition.predicate->toC(ofs);
+        ofs << ") {\n";
+      }
+      else {
+        ofs << "\t{\n"; // no condition on the default case
+      }
+      ofs << "\t\tnew_state = state_cw_" << name << "_" << s.state_name << ";\n";
+      std::string enter_msg_name(s.state_name);
+      enter_msg_name += "_enter";
+      if (receives.find(Message(enter_msg_name.c_str())) != receives.end())
+        ofs << "\t\tnew_state_enter = (enter_func)cw_" << name << "_" << enter_msg_name << ";\n";
+			ofs << "\t}\n";
 		}
 
 		ofs
-    << "\tif (new_state != m->machine.state) {\n"
-		<< "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter);\n"
-		<< "\t\treturn 1;\n"
+    << "\tif (new_state && new_state != m->machine.state) {\n"
+    << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter);\n";
+    ofs
+    << "\tstruct RTScheduler *scheduler = RTScheduler_get();\n"
+    << "\twhile (!scheduler) {\n"
+    << "\t\ttaskYIELD();\n"
+    << "\t\tscheduler = RTScheduler_get();\n"
+    << "\t}\n"
+    << "\tif (m->delay > m->machine.TIMER) {\n"
+    << "\t\tRTScheduler_add(scheduler, ScheduleItem_create(m->delay - m->machine.TIMER, &m->machine));\n"
+    << "\t\tRTScheduler_release();\n"
+    << "\t}\n";
+
+		ofs << "\t\treturn 1;\n"
     << "\t}\n"
     << "\treturn 0;\n}\n";
 	}

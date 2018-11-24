@@ -1,5 +1,5 @@
 Pulse MACHINE out {
-  OPTION delay 1000;
+  OPTION delay 100;
 
   on WHEN SELF IS off AND TIMER >= delay;
   off DEFAULT;

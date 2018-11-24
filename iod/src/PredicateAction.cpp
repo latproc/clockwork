@@ -105,26 +105,26 @@ Value eval(Predicate *p, MachineInstance *m){
 			case opDivide: res = l / r; break;
 			case opAbsoluteValue: if (r < 0) res = -r; else res = r; break;
 			case opMod: res = l % r; break;
-            case opBitAnd: res = l & r; break;
-            case opBitOr: res = l | r; break;
-            case opBitXOr: res = l ^ r; break;
-            case opNegate: res = ~r; break;
+      case opBitAnd: res = l & r; break;
+      case opBitOr: res = l | r; break;
+      case opBitXOr: res = l ^ r; break;
+      case opNegate: res = ~r; break;
 			case opInteger: res = r.trunc(); break;
 			case opFloat: res = r.toFloat(); break;
 			case opAssign: res = r; break; // TBD
-            case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
-            case opAny:
-            case opAll:
-            case opIncludes:
-            case opCount: {
-                DynamicValue *dyn_v = r.dynamicValue();
-                if (dyn_v) return dyn_v->operator()(m);
-            }
-                break;
-	        case opNone: res = 0;
-                break;
-            default:
-                std::cerr << "Error: unhandled operator " << p->op << " in evaluating predicate\n";
+      case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
+      case opAny:
+      case opAll:
+      case opIncludes:
+      case opCount: {
+          DynamicValue *dyn_v = r.dynamicValue();
+          if (dyn_v) return dyn_v->operator()(m);
+      }
+      break;
+      case opNone: res = 0;
+            break;
+        default:
+            std::cerr << "Error: unhandled operator " << p->op << " in evaluating predicate\n";
 	    }
 		
 		if (m && m->debug()) {

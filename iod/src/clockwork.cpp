@@ -530,16 +530,16 @@ void semantic_analysis() {
 
     std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
     while (iter != machines.end()) {
-        MachineInstance *m = (*iter).second;
-	    if (!m) {
-			std::stringstream ss;
-			ss << "## - Warning: machine table entry " << (*iter).first << " has no machine";
-			++num_errors;
-			error_messages.push_back(ss.str());
-		}
-        else
-			machine_instances[m->fullName()] = m;
-        iter++;
+      MachineInstance *m = (*iter).second;
+      if (!m) {
+        std::stringstream ss;
+        ss << "## - Warning: machine table entry " << (*iter).first << " has no machine";
+        ++num_errors;
+        error_messages.push_back(ss.str());
+      }
+      else
+        machine_instances[m->fullName()] = m;
+      iter++;
     }
     
     // display machine classes and build a map of names to classes

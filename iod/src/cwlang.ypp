@@ -1087,7 +1087,8 @@ ENTER SYMBOL /* state name */ action
     }
     DBG_PARSER << "\n";
 
-    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
+    Message msg(msg_name.c_str(), Message::ENTERMSG);
+    current_machineclass->receives.insert(std::make_pair(msg, mc));
 }
 ;
 
@@ -1107,7 +1108,7 @@ LEAVE SYMBOL action
     }
     DBG_PARSER << "\n";
 
-    current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str())), mc));
+current_machineclass->receives.insert(std::make_pair(Message(strdup(msg_name.c_str()), Message::LEAVEMSG), mc));
 #else
     /* raise an error if cw is run on configs with LEAVE functions but the feature is not enabled */
     std::stringstream ss;

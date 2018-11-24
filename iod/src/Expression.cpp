@@ -372,8 +372,14 @@ void Predicate::toC(std::ostream &out) const {
   }
   else {
     if (cached_entry) {
-      if (entry.kind == Value::t_symbol)
-        out << "m->" << entry;
+      if (entry.kind == Value::t_symbol) {
+        if (entry.sValue == "SELF")
+          out << "m->machine.state";
+        else if (entry.sValue == "TIMER")
+          out << "m->machine.TIMER";
+        else
+          out << "m->" << entry;
+      }
       else
         out << entry;
       if (entry.kind == Value::t_symbol) out << " (" << *cached_entry << ")";
@@ -384,8 +390,14 @@ void Predicate::toC(std::ostream &out) const {
         out <<  " (" << *last_calculation << ") ";
     }
     else {
-      if (entry.kind == Value::t_symbol)
-        out << "m->" << entry;
+      if (entry.kind == Value::t_symbol) {
+        if (entry.sValue == "SELF")
+          out << "m->machine.state";
+        else if (entry.sValue == "TIMER")
+          out << "m->machine.TIMER";
+        else
+          out << "m->" << entry;
+      }
       else
         out << entry;
     }

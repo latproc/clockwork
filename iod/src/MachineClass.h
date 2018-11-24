@@ -32,6 +32,17 @@ class MachineCommandTemplate;
 class MachineInstance;
 class Plugin;
 
+class ExportState {
+public:
+  const Value &symbol(const char *name);
+  const Value &create_symbol(const char *name);
+  static void add_state(const std::string name);
+  static int lookup(const std::string name);
+private:
+  SymbolTable messages;
+  static std::map<std::string, int> state_ids;
+};
+
 class MachineClass {
 public:
   MachineClass(const char *class_name);
