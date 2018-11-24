@@ -58,17 +58,14 @@ uint64_t nowMicrosecs(const struct timeval &now) {
 }
 
 int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then) {
-	//   uint64_t t = (now->tv_sec - then->tv_sec);
-	//   t = t * 1000000 + (now->tv_usec - then->tv_usec);
-	//	return t;
-	uint64_t now_t = (uint64_t)now->tv_sec * 1000000L + now->tv_usec;
-	uint64_t then_t = (uint64_t)then->tv_sec * 1000000L + then->tv_usec;
+	uint64_t now_t = (uint64_t)now->tv_sec * 1000000L + (uint64_t)now->tv_usec;
+	uint64_t then_t = (uint64_t)then->tv_sec * 1000000L + (uint64_t)then->tv_usec;
 	int64_t t = now_t - then_t;
 	return t;
 }
 
 int64_t get_diff_in_microsecs(uint64_t now_t, const struct timeval *then) {
-	uint64_t then_t = (uint64_t)then->tv_sec * 1000000L + then->tv_usec;
+	uint64_t then_t = (uint64_t)then->tv_sec * 1000000L + (uint64_t)then->tv_usec;
 	int64_t t = now_t - then_t;
 	return t;
 }

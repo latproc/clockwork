@@ -99,5 +99,5 @@ std::ostream &ExpressionActionTemplate::operator<<(std::ostream &out) const {
 }
 
 void ExpressionActionTemplate::toC(std::ostream &out) const {
-  return operator<<(out);
+  operator<<(out);
 }

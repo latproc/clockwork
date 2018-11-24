@@ -35,13 +35,13 @@
 class CStringHolder {
 public:
     CStringHolder(char *s) : s_str(0), str(s) { }
-	CStringHolder(const char *s) : s_str(0), str(strdup(s)) { }
-	CStringHolder(const CStringHolder &orig)  : s_str(0), str(0) {
+	  CStringHolder(const char *s) : s_str(0), str(strdup(s)) { }
+	  CStringHolder(const CStringHolder &orig)  : s_str(0), str(0) {
 		if (orig.str) str = strdup(orig.str);
 		s_str = orig.s_str;
 	}
 	CStringHolder & operator=(const CStringHolder &orig) {
-        if (str) { free(str); str = 0; }
+    if (str) { free(str); str = 0; }
 		if (orig.str) str = strdup(orig.str);
 		s_str = orig.s_str;
 		return *this;

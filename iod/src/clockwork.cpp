@@ -1096,7 +1096,7 @@ void initialise_machines() {
 		// enable all persistent variables and set their value to the
 		// value in the map.
 		m_iter = MachineInstance::begin();
-        while (m_iter != MachineInstance::end()) {
+    while (m_iter != MachineInstance::end()) {
 			MachineInstance *m = *m_iter++;
 			if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true") ) {
 				std::string name(m->fullName());

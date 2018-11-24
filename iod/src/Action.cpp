@@ -10,7 +10,7 @@
 #include "AbortAction.h"
 
 void ActionTemplate::toC(std::ostream &out) const {
-  return operator<<(out);
+  operator<<(out);
 }
 
 std::list<Trigger*> all_triggers;
