@@ -1326,7 +1326,7 @@ bool IODCommandChannel::run(std::vector<Value> &params) {
         }
         {
           char buf[120];
-          snprintf(buf, 120, "Channel %s created on port %d", ch_name.asString().c_str(), portval.iValue);
+          snprintf(buf, 120, "Channel %s created on port %ld", ch_name.asString().c_str(), portval.iValue);
           MessageLog::instance()->add(buf);
         }
         while (true) {

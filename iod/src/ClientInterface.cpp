@@ -461,10 +461,10 @@ void IODCommandThread::operator()() {
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
 
-	//MyMonitor monit(&cti->socket);
-	//boost::thread cmd_monitor(boost::ref(monit));
+	MyMonitor monit(&cti->socket);
+	boost::thread cmd_monitor(boost::ref(monit));
     
-    int linger = 0; // do not wait at socket close time
+  int linger = 0; // do not wait at socket close time
 	cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 	char url_buf[30];
 	int retries = 2; // attempt to use the default command port and auto allocate another if necessary
@@ -490,8 +490,8 @@ void IODCommandThread::operator()() {
 	}
 	NB_MSG << "Client Interface available on port: " << port << "\n";
 
-    zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
-    access_req.bind("inproc://resource_mgr");
+  zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
+  access_req.bind("inproc://resource_mgr");
 
 	zmq::socket_t command_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
 	command_sync.bind("inproc://command_sync");
@@ -548,7 +548,7 @@ void IODCommandThread::operator()() {
 				char *buf = 0;
 				size_t response_len;
 				if (safeRecv(command_sync, &buf, &response_len, true, 0)) {
-#if 0
+#if 1
 					{
 						char line[80];
 						snprintf(line, 80, "%s", buf);

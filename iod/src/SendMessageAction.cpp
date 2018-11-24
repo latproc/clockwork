@@ -41,8 +41,7 @@ Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
 std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
 	return out << "SendMessageActionTemplate "
 		<< message << " "
-		<< ( (target != 0) ? target : "")
-		<< "\n";
+    << ( (target != 0) ? target : "");
 }
 
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)

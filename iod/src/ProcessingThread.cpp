@@ -793,9 +793,9 @@ void ProcessingThread::operator()()
 							if (command) {
 								bool ok = false;
 								try {
-									//NB_MSG << "processing thread executing " << buf << "\n";
+									NB_MSG << "processing thread executing " << buf << "\n";
 									ok  = (*command)();
-									//NB_MSG << "execution result " << command->result() << "\n";
+									NB_MSG << "execution result " << command->result() << "\n";
 								}
 								catch (std::exception e) {
 									FileLogger fl(program_name);

@@ -623,7 +623,7 @@ void MessageRouter::poll() {
 	for (unsigned int i=0; i<num_socks; ++i) if (items[i].revents & ZMQ_POLLIN)++c;
 	if (!c) return;
 
-#if 0
+#if 1
 	if (c) {
 		std::cout << "activity: ";
 		for (unsigned int i=0; i<num_socks; ++i) {
@@ -701,6 +701,7 @@ void MessageRouter::poll() {
 					//DBG_CHANNELS << "Sending '" << disp << "'\n";
 					mh.start_time = microsecs();
 					safeSend(*internals->remote, buf, len, mh);
+          DBG_CHANNELS << "sent " << buf << "\n";
 				}
 				else
 					DBG_CHANNELS << "dropped message due to filter\n";
