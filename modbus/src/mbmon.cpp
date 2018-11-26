@@ -24,7 +24,7 @@
 
 bool iod_connected = false;
 bool update_status = true;
-const char *program_name;
+//const char *program_name;
 
 /*
 void getTimeString(char *buf, size_t buf_size) {
