@@ -161,22 +161,22 @@ ScheduledItem::ScheduledItem(long delay, Package *p) :package(p), action(0), tri
 
 ScheduledItem::ScheduledItem(long delay, Action *a) :package(0), action(a), trigger(0) {
 	delivery_time = calcDeliveryTime(delay);
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+	DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(long delay, Trigger *t) :package(0), action(0), trigger(t->retain()) {
 	delivery_time = calcDeliveryTime(delay);
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+  DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(uint64_t starting, long delay, Action *a) : package(0), action(a), trigger(0) {
 	delivery_time = starting + delay;
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+  DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(uint64_t starting, long delay, Trigger *t) : package(0), action(0), trigger(t->retain()) {
 	delivery_time = starting + delay;
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+  DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 

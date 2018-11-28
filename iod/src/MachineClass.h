@@ -38,9 +38,13 @@ public:
   const Value &create_symbol(const char *name);
   static void add_state(const std::string name);
   static int lookup(const std::string name);
+  static void add_message(const std::string name);
+  static std::map<std::string, int> &all_messages() { return message_ids; }
 private:
   SymbolTable messages;
-  static std::map<std::string, int> state_ids;
+  static std::map<std::string, int> string_ids;
+  static std::map<std::string, int> message_ids;
+
 };
 
 class MachineClass {
@@ -54,6 +58,7 @@ public:
   std::set<std::string> state_names;
   std::multimap<std::string, StableState> stable_state_xref;
   std::vector<StableState> stable_states;
+  std::list<Predicate *> timer_clauses;
   std::multimap<std::string, MachineCommandTemplate*> commands;
   std::map<Message, MachineCommandTemplate*> enter_functions;
   std::multimap<Message, MachineCommandTemplate*> receives;
@@ -75,6 +80,7 @@ public:
   void disableAutomaticStateChanges();
   void enableAutomaticStateChanges();
   static MachineClass *find(const char *name);
+  void collectTimerPredicates();
 
 	virtual void addProperty(const char *name); // used in interfaces to list synced properties
 	virtual void addPrivateProperty(const char *name); // used in interfaces to list synced properties

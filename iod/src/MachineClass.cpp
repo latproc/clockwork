@@ -12,6 +12,15 @@
 std::list<MachineClass*> MachineClass::all_machine_classes;
 std::map<std::string, MachineClass> MachineClass::machine_classes;
 
+// TODO: relocate this
+static bool stringEndsWith(const std::string &str, const std::string &subs) {
+  size_t n1 = str.length();
+  size_t n2 = subs.length();
+  if (n1 >= n2 && str.substr(n1-n2) == subs)
+    return true;
+  return false;
+}
+
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
 	name(class_name), allow_auto_states(true), token_id(0), plugin(0),
@@ -151,14 +160,19 @@ const Value &ExportState::create_symbol(const char *name) {
   return messages.find(name);
 }
 void ExportState::add_state(const std::string name) {
-  std::map<std::string, int>::iterator found = state_ids.find(name);
-  if (found == state_ids.end())
-    state_ids[name] =  state_ids.size() + 1;
+  std::map<std::string, int>::iterator found = string_ids.find(name);
+  if (found == string_ids.end())
+    string_ids[name] =  string_ids.size() + 1;
 }
 int ExportState::lookup(const std::string name) {
-  std::map<std::string, int>::iterator found = state_ids.find(name);
-  if (found == state_ids.end()) return -1;
+  std::map<std::string, int>::iterator found = string_ids.find(name);
+  if (found == string_ids.end()) return -1;
   else return (*found).second;
+}
+void ExportState::add_message(const std::string name) {
+  std::map<std::string, int>::iterator found = message_ids.find(name);
+  if (found == message_ids.end())
+    message_ids[name] =  message_ids.size() + 1;
 }
 
 void MachineClass::exportHandlers(std::ostream &ofs)
@@ -262,6 +276,16 @@ void MachineClass::exportHandlers(std::ostream &ofs)
 
 }
 
+void MachineClass::collectTimerPredicates() {
+  for (size_t i=0; i<stable_states.size(); ++i) {
+    stable_states[i].condition.predicate->findTimerClauses(timer_clauses);
+    stable_states[i].collectTimerPredicates();
+  }
+  std::list<Predicate*>::const_iterator ti = timer_clauses.begin();
+  while (ti != timer_clauses.end()) {
+    std::cout << "MACHINE " << name << " timer clause: " << *(*ti++) << "\n";
+  }
+}
 
 void MachineClass::exportCommands(std::ostream &ofs)
 {
@@ -292,7 +316,8 @@ void MachineClass::exportCommands(std::ostream &ofs)
 #endif
 }
 
-std::map<std::string, int> ExportState::state_ids;
+std::map<std::string, int> ExportState::string_ids;
+std::map<std::string, int> ExportState::message_ids;
 
 bool MachineClass::cExport(const std::string &filename) {
 	// TODO: redo this with some kind of templating system
@@ -355,6 +380,7 @@ bool MachineClass::cExport(const std::string &filename) {
 		{
 			ofs
 			<< "\n#include \"base_includes.h\"\n"
+      << "#include \"message_ids.h\"\n"
 			<< "#include \"cw_" << name << ".h\""
 			<< "\nstatic const char* TAG = \"" << name << "\";"
       << "\n#define DEBUG_LOG 0\n"
@@ -380,6 +406,9 @@ bool MachineClass::cExport(const std::string &filename) {
 
     ofs << "int cw_" << name << "_handle_message(struct MachineBase *ramp, struct MachineBase *machine, int state);\n";
     ofs << "int cw_" << name << "_check_state(struct cw_" << name << " *m);\n";
+    if (timer_clauses.size()) {
+      ofs << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m);\n";
+    }
 
 		ofs
 		<< "struct cw_" << name << " *create_cw_" << name << "(const char *name";
@@ -399,6 +428,30 @@ bool MachineClass::cExport(const std::string &filename) {
 
     // export enter functions for states
     exportHandlers(ofs);
+
+    if (timer_clauses.size()) {
+      ofs
+      << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m) {\n"
+      << "  uint64_t val = ";
+      std::list<Predicate*>::const_iterator iter = timer_clauses.begin();
+      Predicate *p = *iter++;
+      Predicate *l = p->left_p;
+      Predicate *r = p->right_p;
+      p = (l && l->entry.kind == Value::t_symbol && (l->entry.token_id == ClockworkToken::TIMER || stringEndsWith(l->entry.sValue,".TIMER"))) ? r : l;
+      p->toC(ofs);
+      ofs << ";\n  uint64_t res = val;\n";
+      while (iter != timer_clauses.end()) {
+        Predicate *p = *iter++;
+        Predicate *l = p->left_p;
+        Predicate *r = p->right_p;
+        p = (l && l->entry.kind == Value::t_symbol && (l->entry.token_id == ClockworkToken::TIMER || stringEndsWith(l->entry.sValue,".TIMER"))) ? r : l;
+        ofs << "  uint64_t val = "; p->toC(ofs);
+        ofs << "  if (val < res) res = val;\n";
+      }
+      ofs << "  return res;\n}\n";
+    }
+
+
     handlers << "\tMachineActions_add(cw_" << name << "_To_MachineBase(m), (enter_func)cw_"
       << name << "_" << initial_state.getName() << "_enter);\n";
 
@@ -471,22 +524,28 @@ bool MachineClass::cExport(const std::string &filename) {
 
 		ofs
     << "\tif (new_state && new_state != m->machine.state) {\n"
-    << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter);\n";
-    ofs
-    << "\tstruct RTScheduler *scheduler = RTScheduler_get();\n"
-    << "\twhile (!scheduler) {\n"
-    << "\t\ttaskYIELD();\n"
-    << "\t\tscheduler = RTScheduler_get();\n"
-    << "\t}\n"
-    << "\tif (m->delay > m->machine.TIMER) {\n"
-    << "\t\tRTScheduler_add(scheduler, ScheduleItem_create(m->delay - m->machine.TIMER, &m->machine));\n"
-    << "\t\tRTScheduler_release();\n"
-    << "\t}\n";
-
-		ofs << "\t\treturn 1;\n"
-    << "\t}\n"
-    << "\treturn 0;\n}\n";
+    << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter); // TODO: fix me\n";
+    if (timer_clauses.size()) {
+      ofs
+      << "\t\tuint64_t delay = cw_" << name << "_next_trigger_time(m);\n"
+      << "\t\tstruct RTScheduler *scheduler = RTScheduler_get();\n"
+      << "\t\twhile (!scheduler) {\n"
+      << "\t\t\ttaskYIELD();\n"
+      << "\t\t\tscheduler = RTScheduler_get();\n"
+      << "\t\t}\n"
+      << "\t\tif (delay > m->machine.TIMER)"
+      << " RTScheduler_add(scheduler, ScheduleItem_create(delay - m->machine.TIMER, &m->machine));\n"
+      << "\t\telse\n"
+      << "\t\t\tif (m->machine.execute) markPending(&m->machine);\n"
+      << "\t\tRTScheduler_release();\n"
+      << "\t\treturn 1;\n"
+      << "\t}\n}\n";
+    }
+    else {
+      ofs << "\t}\n\treturn 0;\n}\n";
+    }
 	}
+
 	return false;
 }
 

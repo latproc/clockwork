@@ -255,6 +255,24 @@ int main (int argc, char const *argv[])
 			const std::string fname(basename);
 			mc->cExport(fname);
 		}
+
+    std::string msg_header(export_path);
+    msg_header += "/cw_message_ids.h";
+    std::ofstream msg_h(msg_header);
+    msg_h
+    << "#ifndef __cw_message_ids_h__\n"
+    << "#define __cw_message_ids_h__\n\n";
+    // export messages
+    {
+      std::map<std::string, int> messages = ExportState::all_messages();
+      std::map<std::string, int>::const_iterator iter = messages.begin();
+      while (iter != messages.end()) {
+        const std::pair<std::string, int>&item = *iter++;
+        msg_h << "#define cw_message_" << item.first << " " << item.second << "\n";
+      }
+    }
+    msg_h << "\n#endif\n";
+
 		return 0;
 	}
 	

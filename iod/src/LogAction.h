@@ -32,8 +32,9 @@ struct LogActionTemplate : public ActionTemplate {
     LogActionTemplate(CStringHolder msg) : message(msg.get()), predicate(0) { }
     LogActionTemplate(const Value &v) : message(v), predicate(0) { }
     LogActionTemplate(Predicate *pred) : message(SymbolTable::Null), predicate(pred) { }
-    virtual Action *factory(MachineInstance *mi);
-	  std::ostream &operator<<(std::ostream &out) const;
+    virtual Action *factory(MachineInstance *mi) override;
+	  virtual std::ostream &operator<<(std::ostream &out) const override;
+    virtual void toC(std::ostream &out) const override;
     Value message;
     Predicate *predicate;
 };
