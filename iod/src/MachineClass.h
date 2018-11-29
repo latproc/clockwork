@@ -38,7 +38,7 @@ public:
   const Value &create_symbol(const char *name);
   static void add_state(const std::string name);
   static int lookup(const std::string name);
-  static void add_message(const std::string name);
+  static void add_message(const std::string name, int value = -1);
   static std::map<std::string, int> &all_messages() { return message_ids; }
 private:
   SymbolTable messages;

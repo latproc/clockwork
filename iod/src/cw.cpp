@@ -245,6 +245,10 @@ int main (int argc, char const *argv[])
         ExportState::add_state(*iter++);
       }
     }
+    // setup standard message ids
+    ExportState::add_message("turnOff", -100);
+    ExportState::add_message("turnOn", -101);
+
     iter = MachineClass::all_machine_classes.begin();
 		while (iter != MachineClass::all_machine_classes.end()) {
 			MachineClass *mc = *iter++;
@@ -268,7 +272,8 @@ int main (int argc, char const *argv[])
       std::map<std::string, int>::const_iterator iter = messages.begin();
       while (iter != messages.end()) {
         const std::pair<std::string, int>&item = *iter++;
-        msg_h << "#define cw_message_" << item.first << " " << item.second << "\n";
+        if (item.second >= 0) // don't export standard messages, they are define in runtime.h
+          msg_h << "#define cw_message_" << item.first << " " << item.second << "\n";
       }
     }
     msg_h << "\n#endif\n";

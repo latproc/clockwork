@@ -169,10 +169,13 @@ int ExportState::lookup(const std::string name) {
   if (found == string_ids.end()) return -1;
   else return (*found).second;
 }
-void ExportState::add_message(const std::string name) {
-  std::map<std::string, int>::iterator found = message_ids.find(name);
-  if (found == message_ids.end())
-    message_ids[name] =  message_ids.size() + 1;
+// states and messages share the same id range; messages also have their own
+// hash to make it easy to generate a global message id header file
+void ExportState::add_message(const std::string name, int value) {
+  std::map<std::string, int>::iterator found = string_ids.find(name);
+  if (found == string_ids.end())
+    string_ids[name] =  (value == -1) ? string_ids.size() + 1 : value;
+  message_ids[name] = string_ids[name];
 }
 
 void MachineClass::exportHandlers(std::ostream &ofs)
@@ -539,11 +542,12 @@ bool MachineClass::cExport(const std::string &filename) {
       << "\t\t\tif (m->machine.execute) markPending(&m->machine);\n"
       << "\t\tRTScheduler_release();\n"
       << "\t\treturn 1;\n"
-      << "\t}\n}\n";
+      << "\t}\n";
     }
     else {
-      ofs << "\t}\n\treturn 0;\n}\n";
+      ofs << "\t}\n";
     }
+    ofs << "\treturn 0;\n}\n";
 	}
 
 	return false;

@@ -47,9 +47,9 @@ std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
 void SendMessageActionTemplate::toC(std::ostream &out) const {
   ExportState::add_message(message.asString());
 
-  out << "// cw_send(";
-  if (target.asString() != "") out << "m->" << target << ", "; else out << "0, ";
-  out << "cw_message_" << message << ");";
+  out << "cw_send(";
+  if (target.asString() != "") out << "m->_" << target << ", "; else out << "0, ";
+  out << "m, cw_message_" << message << ")";
 }
 
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
