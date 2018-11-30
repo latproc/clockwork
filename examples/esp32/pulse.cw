@@ -6,4 +6,6 @@ Pulse MACHINE out {
 
   ENTER on { LOG "on"; SEND turnOn TO out; }
   ENTER off { LOG "off"; SEND turnOff TO out; }
+
+  RECEIVE toggle_speed { delay := 1100 - delay; }
 }
