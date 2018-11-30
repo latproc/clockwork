@@ -371,36 +371,16 @@ void Predicate::toC(std::ostream &out) const {
     if (op != opAssign) out << ")";
   }
   else {
-    if (cached_entry) {
-      if (entry.kind == Value::t_symbol) {
-        if (entry.sValue == "SELF")
-          out << "m->machine.state";
-        else if (entry.sValue == "TIMER")
-          out << "m->machine.TIMER";
-        else
-          out << "m->" << entry;
-      }
+    if (entry.kind == Value::t_symbol) {
+      if (entry.sValue == "SELF")
+        out << "m->machine.state";
+      else if (entry.sValue == "TIMER")
+        out << "m->machine.TIMER";
       else
-        out << entry;
-      if (entry.kind == Value::t_symbol) out << " (" << *cached_entry << ")";
+        out << "m->" << entry;
     }
-    else if (last_calculation) {
+    else
       out << entry;
-      if (entry.kind == Value::t_symbol || entry.kind == Value::t_dynamic)
-        out <<  " (" << *last_calculation << ") ";
-    }
-    else {
-      if (entry.kind == Value::t_symbol) {
-        if (entry.sValue == "SELF")
-          out << "m->machine.state";
-        else if (entry.sValue == "TIMER")
-          out << "m->machine.TIMER";
-        else
-          out << "m->" << entry;
-      }
-      else
-        out << entry;
-    }
   }
 }
 

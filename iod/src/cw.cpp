@@ -238,6 +238,10 @@ int main (int argc, char const *argv[])
 		}
     // setup global ids for all state names
     ExportState::add_state("INIT");
+    ExportState::add_state("off");
+    ExportState::add_state("on");
+    ExportState::add_state("unstable");
+    ExportState::add_state("stable");
     while (iter != MachineClass::all_machine_classes.end()) {
       MachineClass *mc = *iter++;
       std::set<std::string>::iterator iter = mc->state_names.begin();

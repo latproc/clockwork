@@ -38,7 +38,9 @@ std::ostream &PredicateActionTemplate::operator<<(std::ostream &out) const {
 }
 
 void PredicateActionTemplate::toC(std::ostream &out) const {
-  out << "Assignment " << predicate->left_p->entry << " := " << *(predicate->right_p);
+  predicate->left_p->toC(out);
+  out << " = ";
+  predicate->right_p->toC(out);
 }
 
 Action *PredicateActionTemplate::factory(MachineInstance *mi) { 

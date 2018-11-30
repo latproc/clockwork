@@ -238,6 +238,14 @@ void MachineClass::exportHandlers(std::ostream &ofs)
             handled = true;
           }
         }
+        else {
+          received_message_handlers << "\tif (state == cw_message_" << machine_name << ")\n"
+          << "\t\tMachineActions_add(m, (enter_func)"
+          << "cw_" << name << "_"
+          << method_name(item.first.getText())
+          << ");\n";
+          handled = true;
+        }
       }
       if (!handled)
         std::cout << "Warning: Not handling " << item.first.getText() << "\n";
@@ -330,13 +338,27 @@ bool MachineClass::cExport(const std::string &filename) {
 	std::stringstream refs;
 	std::stringstream setup;
   std::stringstream handlers;
+
+  {
+    std::vector<Parameter>::iterator p_iter = parameters.begin();
+    while (p_iter != parameters.end()) {
+      const Parameter &p = *p_iter++;
+      params << ", MachineBase *" <<p.val;
+      values << ", " << p.val;
+      MachineInstance *p_machine = MachineInstance::find(p.val.asString().c_str());
+      refs << "\tMachineBase *_" << p.val << ";\n";
+      setup << "\tm->_" << p.val << " = " << p.val << ";\n";
+      setup << "\tif (" << p.val<< ") MachineDependencies_add(" << p.val << ", cw_" << name << "_To_MachineBase(m));\n";
+    }
+  }
+
 	{
 		std::string header(filename);
 		header += ".h";
 		std::ofstream ofh(header);
 		ofh
-		<< "#ifndef __" << name << "_h__\n"
-		<< "#define __" << name << "_h__\n"
+		<< "#ifndef __cw_" << name << "_h__\n"
+		<< "#define __cw_" << name << "_h__\n"
 		<< "\n#include \"runtime.h\"\n";
 
 		// export statenumbers
@@ -347,33 +369,37 @@ bool MachineClass::cExport(const std::string &filename) {
         ofh << "#define state_cw_" << name << "_" << s->getName() << " " << ExportState::lookup(s->getName()) << "\n";
 			}
 		}
-		ofh
-		<< "struct cw_" << name << ";\n"
+    ofh
+    << "#define Value int\n"
+    << "struct cw_" << name << " {\n"
+    << "\tMachineBase machine;\n"
+    << "\tint gpio_pin;\n"
+    << "\tstruct IOAddress addr;\n"
+    << refs.str();
+    SymbolTableConstIterator pnames_iter = properties.begin();
+    while (pnames_iter != properties.end()) {
+      const std::pair<std::string, Value> prop = *pnames_iter++;
+      ofh<< "\tValue " << prop.first << "; // " << prop.second << "\n";
+    }
+    std::map<std::string, Value>::iterator opts_iter = options.begin();
+    while (opts_iter != options.end()) {
+      const std::pair<std::string, Value> opt = *opts_iter++;
+      ofh << "\tValue " << opt.first << "; // " << opt.second << "\n";
+    }
+    ofh << "};\n"
 		<< "struct IOAddress *cw_" << name << "_getAddress(struct cw_" << name << " *p);\n"
 		<< "struct cw_" << name << " *create_cw_" << name << "(const char *name";
-		{
-			std::vector<Parameter>::iterator p_iter = parameters.begin();
-			while (p_iter != parameters.end()) {
-				const Parameter &p = *p_iter++;
-				params << ", MachineBase *" <<p.val;
-				values << ", " << p.val;
-        MachineInstance *p_machine = MachineInstance::find(p.val.asString().c_str());
-        refs << "\tMachineBase *_" << p.val << ";\n";
-				setup << "\tm->_" << p.val << " = " << p.val << ";\n";
-        setup << "\tif (" << p.val<< ") MachineDependencies_add(" << p.val << ", cw_" << name << "_To_MachineBase(m));\n";
-			}
-			if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
-				ofh << ", int pin";
-			}
-			ofh << params.str() << ");\n"
-			<< "void Init_cw_" << name << "(struct cw_" << name << " * " << ", const char *name";
-			if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
-				ofh << ", int pin";
-			}
-			ofh << params.str() << ");\n"
-			<< "MachineBase *cw_" << name << "_To_MachineBase(struct cw_" << name << " *);\n"
-			<< "#endif\n";
-		}
+    if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
+      ofh << ", int pin";
+    }
+    ofh << params.str() << ");\n"
+    << "void Init_cw_" << name << "(struct cw_" << name << " * " << ", const char *name";
+    if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
+      ofh << ", int pin";
+    }
+    ofh << params.str() << ");\n"
+    << "MachineBase *cw_" << name << "_To_MachineBase(struct cw_" << name << " *);\n"
+    << "#endif\n";
 	}
 	{
 		std::string source(filename);
@@ -383,28 +409,10 @@ bool MachineClass::cExport(const std::string &filename) {
 		{
 			ofs
 			<< "\n#include \"base_includes.h\"\n"
-      << "#include \"message_ids.h\"\n"
+      << "#include \"cw_message_ids.h\"\n"
 			<< "#include \"cw_" << name << ".h\""
 			<< "\nstatic const char* TAG = \"" << name << "\";"
-      << "\n#define DEBUG_LOG 0\n"
-      << "\n#define Value int\n"
-			<< "struct cw_" << name << " {\n"
-			<< "\tMachineBase machine;\n"
-			<< "\tint gpio_pin;\n"
-			<< "\tstruct IOAddress addr;\n"
-			<< refs.str();
-			SymbolTableConstIterator pnames_iter = properties.begin();
-			while (pnames_iter != properties.end()) {
-					const std::pair<std::string, Value> prop = *pnames_iter++;
-					ofs<< "\tValue " << prop.first << "; // " << prop.second << "\n";
-			}
-			std::map<std::string, Value>::iterator opts_iter = options.begin();
-			while (opts_iter != options.end()) {
-				const std::pair<std::string, Value> opt = *opts_iter++;
-				ofs<< "\tValue " << opt.first << "; // " << opt.second << "\n";
-			}
-		ofs
-		<< "};\n";
+      << "\n#define DEBUG_LOG 0\n";
 		}
 
     ofs << "int cw_" << name << "_handle_message(struct MachineBase *ramp, struct MachineBase *machine, int state);\n";
@@ -448,10 +456,11 @@ bool MachineClass::cExport(const std::string &filename) {
         Predicate *l = p->left_p;
         Predicate *r = p->right_p;
         p = (l && l->entry.kind == Value::t_symbol && (l->entry.token_id == ClockworkToken::TIMER || stringEndsWith(l->entry.sValue,".TIMER"))) ? r : l;
-        ofs << "  uint64_t val = "; p->toC(ofs);
-        ofs << "  if (val < res) res = val;\n";
+        ofs << "\tval = "; p->toC(ofs);
+        ofs << ";\n";
+        ofs << "\tif (val < res) res = val;\n";
       }
-      ofs << "  return res;\n}\n";
+      ofs << "\treturn res;\n}\n";
     }
 
 
@@ -491,7 +500,7 @@ bool MachineClass::cExport(const std::string &filename) {
 		<< "}\n";
 
 		ofs
-		<< "MachineBase *cw_" << name << "_To_MachineBase(struct cw_" << name << " *p) { return &p->machine; }\n";
+		<< "MachineBase *cw_" << name << "_To_MachineBase(struct cw_" << name << " *p) { return &p->machine; }\n\n";
 
 		//exportCommands(ofs);
 
@@ -525,27 +534,29 @@ bool MachineClass::cExport(const std::string &filename) {
 			ofs << "\t}\n";
 		}
 
-		ofs
-    << "\tif (new_state && new_state != m->machine.state) {\n"
-    << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter); // TODO: fix me\n";
     if (timer_clauses.size()) {
       ofs
-      << "\t\tuint64_t delay = cw_" << name << "_next_trigger_time(m);\n"
+      << "\tuint64_t delay = cw_" << name << "_next_trigger_time(m);\n"
+      << "\tif (delay > m->machine.TIMER) {\n"
       << "\t\tstruct RTScheduler *scheduler = RTScheduler_get();\n"
       << "\t\twhile (!scheduler) {\n"
       << "\t\t\ttaskYIELD();\n"
       << "\t\t\tscheduler = RTScheduler_get();\n"
       << "\t\t}\n"
-      << "\t\tif (delay > m->machine.TIMER)"
-      << " RTScheduler_add(scheduler, ScheduleItem_create(delay - m->machine.TIMER, &m->machine));\n"
-      << "\t\telse\n"
-      << "\t\t\tif (m->machine.execute) markPending(&m->machine);\n"
+      << "\t\tRTScheduler_add(scheduler, ScheduleItem_create(delay - m->machine.TIMER, &m->machine));\n"
       << "\t\tRTScheduler_release();\n"
+      << "\t}\n"
+      << "\tif (new_state && new_state != m->machine.state) {\n"
+      << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter); // TODO: fix me\n"
+      << "\t\tmarkPending(&m->machine);\n"
       << "\t\treturn 1;\n"
       << "\t}\n";
     }
     else {
-      ofs << "\t}\n";
+      ofs << "\tif (new_state && new_state != m->machine.state) {\n"
+      << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter); // TODO: fix me\n"
+      << "\t\treturn 1;\n"
+      << "\t}\n";
     }
     ofs << "\treturn 0;\n}\n";
 	}
