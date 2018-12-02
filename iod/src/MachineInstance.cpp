@@ -1665,7 +1665,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		}
 		/* TBD optimise the timer triggers to only schedule the earliest trigger */
     if (trigger) { if (trigger->enabled()) trigger->disable(); trigger = trigger->release(); }
-    Value earliestTimer = earliestScheduleTime(state_machine->timer_clauses);
+    Value earliestTimer = earliestScheduleTime(timer_predicates);
     Value saved = earliestTimer;
     for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
       StableState &s = stable_states[ss_idx];
@@ -2653,18 +2653,20 @@ Value MachineInstance::earliestScheduleTime(const std::list<Predicate*> &predica
       // test whether the calculated timer value is in the future or the past
       // if the time (t) hasn't arrived yet, a schedule must be set, if the time is in the past
       // there is no need to set a schedule
+      MachineInstance *timer_machine = 0;
       if (source->entry.token_id == ClockworkToken::TIMER) { // local timer test
-        if (t >= *getTimerVal())
-          clause_time = t - *getTimerVal();
+        timer_machine = this;
       }
       else if (stringEndsWith(source->entry.sValue,".TIMER")) { // local or remote timer test
         size_t pos = source->entry.sValue.length() - 6;
         std::string machine_name = source->entry.sValue.substr(0, pos);
-        MachineInstance *m = lookup(machine_name);
-        if (m && t >= *m->getTimerVal())
-          clause_time = t - *m->getTimerVal();
-     }
-
+        timer_machine = lookup(machine_name);
+      }
+      if (timer_machine) {
+        const Value *t_val = timer_machine->getTimerVal();
+        if (t >= *t_val)
+          clause_time = t - *t_val;
+      }
       if (clause_time != SymbolTable::Null) {
         if (schedule_time == SymbolTable::Null)
           schedule_time = clause_time;
@@ -2725,7 +2727,7 @@ bool MachineInstance::setStableState() {
 		}
 	}
 	else {
-    Value schedule_time = earliestScheduleTime(state_machine->timer_clauses);
+    Value schedule_time = earliestScheduleTime(timer_predicates);
     if (trigger && trigger->enabled()) {
       trigger->disable();
       trigger = trigger->release();
@@ -2864,6 +2866,14 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 			&& (machine_class->stable_states.size() || machine_class->name == "LIST" || machine_class->name == "REFERENCE"
 				|| (machine_class->plugin && machine_class->plugin->state_check)) )
 		automatic_machines.push_back(this);
+  {
+    std::list<Predicate*>::const_iterator iter = machine_class->timer_clauses.begin();
+    while (iter != machine_class->timer_clauses.end()) {
+      const Predicate *p = *iter++;
+      timer_predicates.push_back(new Predicate(*p));
+    }
+  }
+
 	BOOST_FOREACH(StableState &s, machine_class->stable_states) {
 		stable_states.push_back(s);
 		stable_states[stable_states.size()-1].setOwner(this); //

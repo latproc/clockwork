@@ -440,17 +440,22 @@ bool MachineClass::cExport(const std::string &filename) {
     // export enter functions for states
     exportHandlers(ofs);
 
+    // generate a function to find the earliest time that the next timer might trigger
+    // TODO: update to take into account the source timer being tested.
     if (timer_clauses.size()) {
       ofs
       << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m) {\n"
+      << "uint64_t res = 1000000000;\n"
       << "  uint64_t val = ";
       std::list<Predicate*>::const_iterator iter = timer_clauses.begin();
-      Predicate *p = *iter++;
-      Predicate *l = p->left_p;
-      Predicate *r = p->right_p;
-      p = (l && l->entry.kind == Value::t_symbol && (l->entry.token_id == ClockworkToken::TIMER || stringEndsWith(l->entry.sValue,".TIMER"))) ? r : l;
-      p->toC(ofs);
-      ofs << ";\n  uint64_t res = val;\n";
+      Predicate *pp = *iter++;
+      Predicate *l = pp->left_p;
+      Predicate *r = pp->right_p;
+      Predicate *sub_p = (l && l->entry.kind == Value::t_symbol && (l->entry.token_id == ClockworkToken::TIMER || stringEndsWith(l->entry.sValue,".TIMER"))) ? r : l;
+      sub_p->toC(ofs);
+      ofs << ";\n";
+      //MachineInstance *source = resolve_timer_machine( (sub_p == r) ? l : r); // TODO
+      ofs << "\tres = val;\n";  // TODO: only do this if val is > timer (for the correct timer)
       while (iter != timer_clauses.end()) {
         Predicate *p = *iter++;
         Predicate *l = p->left_p;

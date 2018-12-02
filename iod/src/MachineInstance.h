@@ -342,6 +342,7 @@ public:
 	unsigned int action_errors;
 	bool is_changing;
   Trigger *trigger;
+  std::list<Predicate *>timer_predicates;
 	Channel* owner_channel;
 
 private:

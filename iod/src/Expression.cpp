@@ -130,7 +130,9 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
       if (left_p->entry.kind == Value::t_symbol
           && (left_p->entry.token_id == ClockworkToken::TIMER
               || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
-            clauses.push_back(this);
+            Predicate *p = new Predicate(*this);
+            p->flushCache();
+            clauses.push_back(p);
           }
     }
     else
@@ -140,7 +142,9 @@ void Predicate::findTimerClauses(std::list<Predicate*>&clauses) {
     if (!right_p->left_p) {
       if (right_p->entry.kind == Value::t_symbol
           && (right_p->entry.token_id == ClockworkToken::TIMER || stringEndsWith(right_p->entry.sValue,".TIMER"))) {
-        clauses.push_back(this);
+        Predicate *p = new Predicate(*this);
+        p->flushCache();
+        clauses.push_back(p);
       }
     }
     else {
