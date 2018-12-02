@@ -2634,6 +2634,8 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
   return false;
 }
 
+// find the next *future* schedule time taking into account whether the
+// timer test is against the current machine or another
 Value MachineInstance::earliestScheduleTime(const std::list<Predicate*> &predicates) {
   Value schedule_time;
   size_t num_timer_clauses = predicates.size();
@@ -2643,12 +2645,32 @@ Value MachineInstance::earliestScheduleTime(const std::list<Predicate*> &predica
       Predicate *p = *pred_iter++;
       Predicate *l = p->left_p;
       Predicate *r = p->right_p;
-      p = (l && l->entry.kind == Value::t_symbol && (l->entry.token_id == ClockworkToken::TIMER  || stringEndsWith(l->entry.sValue,".TIMER"))) ? r : l;
+      // identify which side of the expression is the value and which is the source timer being tested
+      Predicate *sub_p = (l && (l->entry.kind == Value::t_symbol || stringEndsWith(l->entry.sValue,".TIMER"))) ? r : l;
+      Predicate *source = (sub_p == r) ? l : r;
+      Value clause_time;
+      Value t = sub_p->evaluate(this);
+      // test whether the calculated timer value is in the future or the past
+      // if the time (t) hasn't arrived yet, a schedule must be set, if the time is in the past
+      // there is no need to set a schedule
+      if (source->entry.token_id == ClockworkToken::TIMER) { // local timer test
+        if (t >= *getTimerVal())
+          clause_time = t - *getTimerVal();
+      }
+      else if (stringEndsWith(source->entry.sValue,".TIMER")) { // local or remote timer test
+        size_t pos = source->entry.sValue.length() - 6;
+        std::string machine_name = source->entry.sValue.substr(0, pos);
+        MachineInstance *m = lookup(machine_name);
+        if (m && t >= *m->getTimerVal())
+          clause_time = t - *m->getTimerVal();
+     }
 
-      if (schedule_time == SymbolTable::Null)
-        schedule_time = p->evaluate(this);
-      else
-        schedule_time = std::min(schedule_time, p->evaluate(this));
+      if (clause_time != SymbolTable::Null) {
+        if (schedule_time == SymbolTable::Null)
+          schedule_time = clause_time;
+        else
+          schedule_time = std::min(schedule_time, clause_time);
+      }
     }
   }
   return schedule_time;

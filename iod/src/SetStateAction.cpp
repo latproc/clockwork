@@ -224,6 +224,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			}
 			if (status == Complete) {
 				owner->stop(this);
+#if 0
 				State value(new_state.sValue.c_str());
 				if (owner->getStateMachine()->isStableState(value)) {
 					std::multimap<std::string, StableState>::iterator iter(owner->getStateMachine()->stable_state_xref.find(new_state.sValue));
@@ -245,7 +246,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 						delete ptd;
 					}
 				}
-
+#endif
 			}
 			return status;
 		}

@@ -58,7 +58,7 @@ static uint64_t calcDeliveryTime(long delay) {
 	if (delay<0) {
 		DBG_SCHEDULER << "***** negative delta: " << delay << "\n";
 	}
-	DBG_SCHEDULER << "setTime: " << res << "\n";
+	DBG_SCHEDULER << "deliveryTime: " << res << "\n";
 	return res;
 }
 

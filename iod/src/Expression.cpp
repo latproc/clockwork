@@ -161,6 +161,7 @@ const Value &Predicate::getTimerValue() {
   return SymbolTable::Null;
 }
 
+#if 0
 PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *earliest, MachineInstance *target) // setup timer events that trigger the supplied machine
 {
   const long MIN_TIMER = -100000;
@@ -321,6 +322,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
   if (right_p) earliest = right_p->scheduleTimerEvents(earliest, target);
   return earliest;
 }
+#endif
 
 void Predicate::clearTimerEvents(MachineInstance *target) // clear all timer events scheduled for the supplid machine
 {

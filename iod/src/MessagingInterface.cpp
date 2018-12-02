@@ -156,7 +156,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
 			bool got_response = false;
-#if 1
+#if 0
 			bool got_address = false;
 #endif
 			if (items[0].revents & ZMQ_POLLIN) {
@@ -167,7 +167,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							memcpy(&header, message.data(), sizeof(MessageHeader));
-#if 1
+#if 0
               NB_MSG << "received message header\n";
 							got_address = true;
 #endif
@@ -181,7 +181,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
             if (strcmp(*buf, "status") == 0)
               int x = 1;
 
-#if 1
+#if 0
 						if (*response_len > 0) {
 							if (got_address) {
 								{FileLogger fl(program_name); fl.f() << tnam << " received 	addressed message " << header << " " << (*buf) << "\n"; }
@@ -288,7 +288,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			if (buflen>0){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
+			//if (buflen>0){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );
