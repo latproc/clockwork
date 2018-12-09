@@ -498,8 +498,11 @@ void IODCommandThread::operator()() {
 
 	char start_cli[20];
 	do { // wait to start
-		size_t len;
-		safeRecv(access_req, start_cli, 19, true, len, -1);
+		size_t len = 0;
+    if (!safeRecv(access_req, start_cli, 19, true, len, -1)) {
+      usleep(100000);
+      continue;
+    }
 		if (len>20) {
 			start_cli[19] = 0;
 			FileLogger fl(program_name); fl.f() << "client interface startup got unexpected: " << start_cli << "\n";
