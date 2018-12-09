@@ -574,22 +574,19 @@ void ProcessingThread::operator()()
 				num_channels = idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
 			}
 
-			//machines_have_work = MachineInstance::workToDo();
 			{
-				static size_t last_runnable_count = 0;
-				boost::mutex::scoped_lock(runnable_mutex);
-				machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
-				size_t runnable_count = runnable.size();
-				if (runnable_count != last_runnable_count) {
-					//DBG_MSG << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
-					last_runnable_count = runnable_count;
-				}
+        bool have_runnable = !runnable.empty();
+        bool have_events = !MachineInstance::pendingEvents().empty();
+				machines_have_work = have_runnable || have_events;
 			}
-			if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty())
+			if (machines_have_work)
 				poll_wait = 1;
-			else {
+      else if (IOComponent::updatesWaiting())
+        poll_wait = 1;
+      else if (!io_work_queue.empty())
+        poll_wait = 1;
+			else
 				poll_wait = 100;
-			}
 
 			//if (Watchdog::anyTriggered(curr_t))
 			//	Watchdog::showTriggered(curr_t, true);
@@ -911,14 +908,18 @@ void ProcessingThread::operator()()
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
-							if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
+              if (!mi->enabled())
+                iter = runnable.erase(iter); // machine is disabled, it will get requeued when enabled again
+              else if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
 								to_process.insert(mi);
   							if (!mi->queuedForStableStateTest()) {
   								iter = runnable.erase(iter);
   							}
   							else iter++;
               }
-							else iter++;
+              else {
+                iter = runnable.erase(iter);
+              }
 						}
 					}
 
