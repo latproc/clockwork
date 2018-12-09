@@ -214,11 +214,18 @@ bool SubscriptionManager::requestChannel() {
 		if (!smi->sent_request || smi->send_time - now > SubscriptionManagerInternals::channel_request_timeout) {
       try {
         zmq::message_t m;
-        setup().recv(&m, ZMQ_DONTWAIT);
-        long len = m.size();
-        char *buf = new char(len+1);
-        buf[len] = 0;
-        FileLogger fl(program_name); fl.f() << channel_name<< " got unexpected: " << buf << "\n" << std::flush;
+        if (!setup().recv(&m, ZMQ_DONTWAIT)) {
+          if (smi->sent_request) {
+            FileLogger fl(program_name); fl.f() << channel_name<< " response timed out, waited: " << (smi->send_time - now) << std::flush;
+            return false;
+          }
+        }
+        else {
+          long len = m.size();
+          char *buf = new char(len+1);
+          buf[len] = 0;
+          FileLogger fl(program_name); fl.f() << channel_name<< " got unexpected: " << buf << "\n" << std::flush;
+        }
       }
       catch (zmq::error_t ex) {
         {FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
@@ -538,7 +545,7 @@ void MessageRouter::addDefaultRoute(int type, const std::string address) {
 	internals->default_dest = def;
 }
 void MessageRouter::addRemoteSocket(int type, const std::string address) {
-	scoped_lock lock("setRemoteSocket", internals->data_mutex);
+	scoped_lock lock("addRemoteSocket", internals->data_mutex);
 	zmq::socket_t *remote_sock = new zmq::socket_t(*MessagingInterface::getContext(), type);
 	DBG_CHANNELS << "MessageRouter connecting to remote socket " << address << "\n";
 	remote_sock->connect(address.c_str());
@@ -592,7 +599,7 @@ void MessageRouter::poll() {
 
 	items[0].socket = (void*)(*internals->remote);
 	items[0].fd = 0;
-	items[0].events = ZMQ_POLLIN;
+	items[0].events = ZMQ_POLLIN | ZMQ_POLLERR;
 	items[0].revents = 0;
 	int idx = 1;
 
@@ -601,14 +608,14 @@ void MessageRouter::poll() {
 		std::pair<int, RouteInfo*>item = *iter++;
 		items[idx].socket = (void*)(*(item.second)->sock);
 		items[idx].fd = 0;
-		items[idx].events = ZMQ_POLLIN;
+		items[idx].events = ZMQ_POLLIN | ZMQ_POLLERR;
 		items[idx].revents = 0;
 		destinations[idx-1] = item.first;
 		++idx;
 	}
 
 	try {
-		int rc = zmq::poll(items, num_socks, 2);
+		int rc = zmq::poll(items, num_socks, 100);
 		if (rc == 0) { return; }
 	}
 	catch (zmq::error_t zex) {
@@ -619,11 +626,16 @@ void MessageRouter::poll() {
 		assert(false);
 	}
 
+  for (unsigned int i=0; i<num_socks; ++i) if (items[i].revents & ZMQ_POLLERR) {
+    char buf[150];
+    snprintf(buf, 150, "Channel: ZMQ Error on route %d", i);
+    MessageLog::instance()->add(buf);
+  }
 	int c = 0;
 	for (unsigned int i=0; i<num_socks; ++i) if (items[i].revents & ZMQ_POLLIN)++c;
 	if (!c) return;
 
-#if 1
+#if 0
 	if (c) {
 		std::cout << "activity: ";
 		for (unsigned int i=0; i<num_socks; ++i) {
@@ -670,7 +682,7 @@ void MessageRouter::poll() {
 				mh.start_time = microsecs();
 				safeSend(*internals->default_dest, buf, len);
 			}
-#if 1
+#if 0
 			else {
 				DBG_CHANNELS << "Message " << buf << " needed a default route but none has been set\n";
 			}

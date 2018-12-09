@@ -44,7 +44,7 @@
 
 
 uint64_t client_watchdog_timer = 0;
-//extern bool machine_is_ready;
+extern bool machine_is_ready;
 static Watchdog *wd;
 
 IODCommandThread *IODCommandThread::instance_;
@@ -530,7 +530,7 @@ void IODCommandThread::operator()() {
 			catch (zmq::error_t zex) {
 				{
 					FileLogger fl(program_name);
-					fl.f() << "Client Interface exception during poll()\n";
+					fl.f() << "Client Interface exception during poll() " << zex.what() << "\n";
 				}
 				usleep(100);
 				continue;
@@ -540,15 +540,23 @@ void IODCommandThread::operator()() {
 			// use a shorter activity poll for a while since something is happening
 			(poll_time < 4) ? poll_time = 2 : poll_time -= 2;
 
+      // check for zmq errors
+      for (int i=0; i<3; ++i) {
+        if ( items[i].revents & ZMQ_POLLERR) {
+          char buf[150];
+          snprintf(buf, 150, "Processing thread saw zmq error on socket %d", i);
+          MessageLog::instance()->add(buf);
+        }
+      }
+
 			/*
 			   processing thread will call: (*command)(params) for all pending commands
 			 */
-
 			if ( items[2].revents & ZMQ_POLLIN) {
 				char *buf = 0;
 				size_t response_len;
 				if (safeRecv(command_sync, &buf, &response_len, true, 0)) {
-#if 1
+#if 0
 					{
 						char line[80];
 						snprintf(line, 80, "%s", buf);
@@ -570,7 +578,7 @@ void IODCommandThread::operator()() {
 			if ( items[0].revents & ZMQ_POLLIN) {
 				zmq::message_t request;
 				if (!cti->socket.recv (&request)) continue; // interrupted system call
-#if 0
+#if 1
 				if (!machine_is_ready) {
 					const char *tosend = "Ignored during startup";
 					safeSend(cti->socket, tosend, strlen(tosend));

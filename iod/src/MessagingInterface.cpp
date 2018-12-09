@@ -177,7 +177,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 						*buf = new char[*response_len+1];
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
-            NB_MSG << "received msg: " << *buf << "\n";
+            NB_MSG << "received msg: " << *buf << " from remote\n";
             if (strcmp(*buf, "status") == 0)
               int x = 1;
 
@@ -242,14 +242,14 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 				usleep(10); continue;
 			}
 			if (items[0].revents & ZMQ_POLLIN) {
-				//{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
+				{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
 				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
 				if (response_len > 0 && response_len < (unsigned int)buflen) {
 					buf[response_len] = 0;
-					//if (response_len>10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n"; }
+          //if (response_len>10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n"; }
 				}
 				else {
-					//if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
+          //if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
 				}
 				if (!response_len && block) continue;
 			}

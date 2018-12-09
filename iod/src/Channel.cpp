@@ -577,9 +577,6 @@ void Channel::dropConnection() {
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "DISCONNECTED" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 	}
-  else if (communications_manager->monit_subs.disconnected()) {
-    int x = 1;
-  }
 //	if (connections == 0) {
 //    DBG_CHANNELS << "last connection dropped, stopping channel " << _name << "\n";
 //    stopServer();
@@ -869,7 +866,9 @@ void Channel::checkStateChange(std::string event) {
     }
     else if ( current_state == ChannelImplementation::WAITSTART ) {
       if (event == "status") setState(ChannelImplementation::UPLOADING);
-      else DBG_CHANNELS << name << ": unexpected event " << event << " in " << current_state << "\n";
+      else {
+        DBG_CHANNELS << name << ": unexpected event " << event << " in " << current_state << "\n";
+      }
     }
 		else if (current_state == ChannelImplementation::ACTIVE && event == "status") {
 			{FileLogger fl(program_name); fl.f() << "ignoring " << event << " while active\n"; }
@@ -2416,7 +2415,6 @@ void Channel::setupCommandSockets() {
 		}
 	}
 }
-
 
 // This method is executed on the main thread
 void Channel::handleChannels() {
