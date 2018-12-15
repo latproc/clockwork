@@ -542,9 +542,6 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
     if (p->mi)
       found = p->mi;
     else {
-#if 0
-      const Value *prop = 0;
-#endif
       // before looking up machines, check for specific keywords
       if (left && v->sValue == "DEFAULT") { // default state has a low priority but always returns true
         p->cached_entry = &SymbolTable::True;
@@ -567,41 +564,12 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
         p->cached_entry = v;
         return p->cached_entry;
       }
-#if 1
       else {
-        return m->resolve(v->sValue);
+        const Value *res = m->resolve(v->sValue);
+        while (res->kind == Value::t_symbol)
+          res = m->resolve(res->sValue);
+        return res;
       }
-#else
-      else if ((prop = &m->properties.lookup(v->sValue.c_str()))) {
-        return prop;
-      }
-      else {
-        prop = &m->getValue(v->sValue); // property lookup
-        if (*prop != SymbolTable::Null) {
-          // do not cache timer values. TBD subclass Value for dynamic values..
-          if ( !stringEndsWith(v->sValue, ".TIMER"))
-            p->cached_entry = prop;
-          else
-            p->last_calculation = prop;
-          return prop;
-        }
-      }
-      found = m->lookup(p->entry);
-      p->mi = found; // cache the machine we just looked up with the predicate
-      if (p->mi) {
-        // found a machine, make sure we get to hear if that machine changes state or if its properties change
-        if (p->mi != m) {
-          p->mi->addDependancy(m); // ensure this condition will be updated when p->mi changes
-          m->listenTo(p->mi);
-        }
-      }
-      else {
-        std::stringstream ss;
-        ss << "## - Warning: " << m->getName() << " couldn't find a machine called " << p->entry;
-        p->setErrorString(ss.str());
-        //DBG_MSG << p->errorString() << "\n";
-      }
-#endif
     }
     // if we found a reference to a machine but that machine is a variable or constant, we
     // are actually interested in its 'VALUE' property
@@ -884,9 +852,9 @@ Value Predicate::evaluate(MachineInstance *m) {
     stack.stack.clear();
   if (stack.stack.size() == 0)
     if (!prep(stack, this, m, true, needs_reevaluation)) {
-      std::stringstream ss;
-      ss << m->getName() << " Predicate failed to resolve: " << *this << "\n";
-      MessageLog::instance()->add(ss.str().c_str());
+      std::ostream &out = MessageLog::instance()->get_stream();
+      out << m->getName() << " Predicate failed to resolve: " << *this << "\n";
+      MessageLog::instance()->release_stream();
       return false;
     }
   //Stack work(stack);
@@ -900,37 +868,30 @@ Value Predicate::evaluate(MachineInstance *m) {
 
 bool Condition::operator()(MachineInstance *m) {
   if (predicate) {
-    //if (predicate->last_evaluation_time < m->lastStateEvaluationTime() ) {
-    //std::cout << "clearing predicate stack\n";
     predicate->stack.stack.clear();
-    //		}
     if (predicate->stack.stack.size() == 0 ) {
       if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {
-        std::stringstream ss;
-        ss << m->getName() << " condition failed: predicate failed to resolve: " << *this->predicate << "\n";
-        MessageLog::instance()->add(ss.str().c_str());
+        std::ostream &out = MessageLog::instance()->get_stream();
+        out << m->getName() << " condition failed: predicate failed to resolve: " << *this->predicate << "\n";
+        MessageLog::instance()->release_stream();
         return false;
       }
-      //std::cout << "predicate stack prepared ok: " << *predicate << "\n";
     }
-    //else
-    //std::cout << "predicate stack already prepared.. skipping preparation\n";
-    //std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
-    //Stack work(predicate->stack);
     std::list<ExprNode>::const_iterator work = predicate->stack.stack.begin();
     ExprNode res(eval_stack(m, work));
     last_result = *res.val;
-    std::stringstream ss;
-    ss << last_result << " " << *predicate;
+    std::ostream &out = MessageLog::instance()->get_stream();
+    out << last_result << " " << *predicate;
     long t = microsecs();
     predicate->last_evaluation_time = t;
-    last_evaluation = ss.str();
+    last_evaluation = MessageLog::instance()->access_stream_message();
+    MessageLog::instance()->close_stream();
     if (last_result.kind == Value::t_bool)
       return last_result.bValue;
     else {
-      std::stringstream ss;
-      ss << "warning:  last result of " << *predicate << " is not boolean: " << last_result << "\n";
-      MessageLog::instance()->add(ss.str().c_str());
+      std::ostream &out = MessageLog::instance()->get_stream();
+      out << "warning:  last result of " << *predicate << " is not boolean: " << last_result << "\n";
+      MessageLog::instance()->release_stream();
     }
   }
   return false;

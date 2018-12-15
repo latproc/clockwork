@@ -216,7 +216,7 @@ bool SubscriptionManager::requestChannel() {
         zmq::message_t m;
         if (!setup().recv(&m, ZMQ_DONTWAIT)) {
           if (smi->sent_request) {
-            FileLogger fl(program_name); fl.f() << channel_name<< " response timed out, waited: " << (smi->send_time - now) << std::flush;
+            FileLogger fl(program_name); fl.f() << channel_name<< " response timed out; waited: " << (smi->send_time - now) << "\n" << std::flush;
             return false;
           }
         }

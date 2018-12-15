@@ -110,7 +110,7 @@ sample_flag2 FLAG (export:rw, tab:Tests);
 }
 monitor Monitor(tab:Outputs) flash1;
 sample_flag3 FLAG (export:ro, tab:Tests);
-sample_flag4 FLAG (export:rw, tab:Tests);
+sample_flag4 FLAG (export:rw, tab:Tests, PERSISTENT: true);
 
 count FLAG (export:rw, tab:Tests); # counter should count while this is on
 Counter MACHINE run_flag {

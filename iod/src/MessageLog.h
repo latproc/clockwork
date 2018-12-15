@@ -41,6 +41,11 @@ public:
     void load(const char *filename);
     
     void save(const char *filename) const;
+
+    std::ostream &get_stream(); // locks access to the message stream and returns it
+    void release_stream(); // adds the message stream buffer to the log and releases the lock
+    std::string access_stream_message() const; // access the content of the message stream buffer
+    void close_stream(); // releases the lock but does not add the message stream buffer to the log
     
 private:
     MessageLog();
@@ -51,6 +56,7 @@ private:
     unsigned int current_memory;
     std::list<LogEntry*> entries;
     static boost::mutex mutex_;
+    std::stringstream output;
 };
 
 
