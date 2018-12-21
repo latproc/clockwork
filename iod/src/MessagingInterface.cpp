@@ -242,7 +242,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 				usleep(10); continue;
 			}
 			if (items[0].revents & ZMQ_POLLIN) {
-				{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
+				//{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
 				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
 				if (response_len > 0 && response_len < (unsigned int)buflen) {
 					buf[response_len] = 0;

@@ -1,6 +1,11 @@
 # can we have one property refer to another?
 #
-pr1 PropertyReferenceOne;
+#pr1 PropertyReferenceOne;
+
+Simple MACHINE {
+  OPTION y 2;
+}
+pr1 Simple;
 pr2 PropertyReferenceTwo pr1;
 
 PropertyReferenceOne MACHINE {

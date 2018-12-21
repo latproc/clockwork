@@ -116,9 +116,14 @@ static void cleanupErrorClause(bool deallocate = false) {
 }
 
 struct Subcondition {
-    Predicate *predicate;
+  Predicate *predicate;
 	const char *name;
 	const char *command;
+};
+
+struct PinDefinition {
+  std::string name;
+  std::string type;
 };
 
 %}
@@ -163,6 +168,7 @@ struct Subcondition {
 	Value *val;
 	Parameter *param;
 	struct Subcondition *subcond;
+  struct PinDefinition *pin
 };
 
 %token <iVal> INTEGERVAL
