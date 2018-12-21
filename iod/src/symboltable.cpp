@@ -167,8 +167,6 @@ bool SymbolTable::isKeyword(const Value &name) {
 			return keywords->exists(name.sValue.c_str());
 	}
     return false;
-
-
 }
 
 /* Symbol table key values, calculated every time they are referenced */

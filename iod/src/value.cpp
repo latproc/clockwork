@@ -133,6 +133,14 @@ Value::Value(DynamicValue *dv) : kind(t_dynamic),cached_value(0) {
     dyn_value = DynamicValue::ref(dv);
 }
 
+void Value::toString() {
+  if (kind == t_symbol) kind = t_string;
+}
+
+void Value::toSymbol() {
+  if (kind == t_string) kind = t_symbol;
+}
+
 Value &Value::operator=(const Value &orig){
 //    listValue.erase(listValue.begin(), listValue.end());
     kind=orig.kind;
