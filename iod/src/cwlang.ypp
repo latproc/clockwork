@@ -168,7 +168,7 @@ struct PinDefinition {
 	Value *val;
 	Parameter *param;
 	struct Subcondition *subcond;
-  struct PinDefinition *pin
+  struct PinDefinition *pin;
 };
 
 %token <iVal> INTEGERVAL
@@ -250,7 +250,8 @@ option_setting:
 SYMBOL value {
 	std::string name($1);
 	Value v(*$2);
-  if (v.kind == Value::t_symbol) v.toString(); // the only way to define symbol properties is via 'REFERS TO'
+  if (v.kind == Value::t_symbol)
+    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->options[name] = v;
 	delete $2;
 }
@@ -264,7 +265,8 @@ local_option_setting:
 SYMBOL value {
 	std::string name($1);
 	Value v(*$2);
-  if (v.kind == Value::t_symbol) v.toString(); // the only way to define symbol properties is via 'REFERS TO'
+  if (v.kind == Value::t_symbol)
+    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->options[name] = v;
 	current_machineclass->addPrivateProperty(name);
 //	NB_MSG << current_machineclass->name << " local option: "
@@ -2072,7 +2074,8 @@ SYMBOL PROPSEP value
 {
     DBG_PARSER << "property: " << $1 << " = " << *$3 << "\n";
     Value v(*$3);
-    if (v.kind == Value::t_symbol) v.toString(); // the only way to define symbol properties is via 'REFERS TO'
+    if (v.kind == Value::t_symbol)
+      v.toString(); // the only way to define symbol properties is via 'REFERS TO'
     // TODO: bug here; if the machine has OPTION x REFERS TO y; then it should be valid to override the default value with another symbol
     properties.add($1, v);
     delete $3;
