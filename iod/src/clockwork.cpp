@@ -521,7 +521,7 @@ void predefine_special_machines() {
   channels->setStateMachine(list_class);
 
   ClockworkInterpreter::instance()->setup(settings);
-  settings->setValue("NAME", device_name());
+  settings->setValue("NAME", Value(device_name(), Value::t_string));
 }
 
 void semantic_analysis() {

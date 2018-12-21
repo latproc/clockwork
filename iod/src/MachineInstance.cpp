@@ -2244,7 +2244,7 @@ void MachineInstance::start(Action *a) {
 	if (tracing() && isTraceable()) {
 		resetTemporaryStringStream();
 		ss << "starting action: " << *a;
-		setValue("TRACE", ss.str());
+    setValue("TRACE", Value(ss.str(), Value::t_string));
 	}
 	DBG_M_ACTIONS << _name << " STARTING: " << *a << "\n";
 
@@ -2606,7 +2606,7 @@ void MachineInstance::push(Action *new_action) {
 	if (tracing() && isTraceable()) {
 		resetTemporaryStringStream();
 		ss << "starting action: " << *new_action;
-		setValue("TRACE", ss.str());
+    setValue("TRACE", Value(ss.str(), Value::t_string));
 	}
 	DBG_M_ACTIONS << _name << " ADDED to machines with work " << SharedWorkSet::instance()->size() << "\n";
 	return;
@@ -2752,7 +2752,7 @@ bool MachineInstance::setStableState() {
 						if (tracing() && isTraceable()) {
 							resetTemporaryStringStream();
 							ss << current_state.getName() <<"->" << s.state_name << " " << *s.condition.predicate;
-							setValue("TRACE", ss.str());
+							setValue("TRACE", Value(ss.str(), Value::t_string));
 						}
 						if (s.subcondition_handlers) {
 							std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
@@ -2780,7 +2780,7 @@ bool MachineInstance::setStableState() {
 								if (tracing() && isTraceable()) {
 									resetTemporaryStringStream();
 									ss << current_state.getName() <<"->" << s.state_name << " " << *ch->condition.predicate;
-									setValue("TRACE", ss.str());
+									setValue("TRACE", Value(ss.str(), Value::t_string));
 								}
 								if (s.timer_predicates.size()) {
 									schedule_time = std::min(schedule_time, earliestScheduleTime(s.timer_predicates));
@@ -4223,16 +4223,16 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 	DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value << "\n";
 	int index = (base_addr.getGroup() <<16) + base_addr.getAddress() + offset;
 	if (!modbus_addresses.count(index)) {
-		std::stringstream ss;
-		ss << name << " Error: bad modbus address lookup for " << base_addr;
-		MessageLog::instance()->add(ss.str().c_str());
+    std::ostream &out = MessageLog::instance()->get_stream();
+		out << name << " Error: bad modbus address lookup for " << base_addr;
+    MessageLog::instance()->release_stream();
 		return;
 	}
 	std::string item_name = modbus_addresses[index];
 	if (!modbus_exports.count(item_name)) {
-		std::stringstream ss;
+    std::ostream &out = MessageLog::instance()->get_stream();
 		ss << name << " Error: bad modbus name lookup for " << item_name;
-		MessageLog::instance()->add(ss.str().c_str());
+    MessageLog::instance()->release_stream();
 		return;
 	}
 	ModbusAddress addr = modbus_exports[item_name];
