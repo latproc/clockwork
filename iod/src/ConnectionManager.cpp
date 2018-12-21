@@ -266,29 +266,37 @@ bool SubscriptionManager::requestChannel() {
 		return false;
 	}
 	if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()){
-        char buf[1000];
-        if (!safeRecv(setup(), buf, 1000, false, len, 2)) {
-			return false; // attempt a connection but do not wait very long before giving up
-		}
-		else {
-        	if (len < 1000) buf[len] =0;
-					{FileLogger fl(program_name);
-					fl.f() << "safeRecv got data: " << buf << " in waiting setup\n";
-					}
-				}
-        if (len == 0) return false; // no data yet
-        if (len < 1000) buf[len] = 0; else buf[999] = 0;
-        cJSON *chan = cJSON_Parse(buf);
-    cJSON *channel_error = cJSON_GetObjectItem(chan, "error");
-    if (channel_error) {
-      char err_msg[1100];
-      snprintf(err_msg, 1100, "Error getting channel: %s", buf);
-      MessageLog::instance()->add(err_msg);
-      { FileLogger fl(program_name); fl.f() << buf << "\n";}
-      cJSON_Delete(chan);
+    char buf[1000];
+    if (!safeRecv(setup(), buf, 1000, false, len, 2)) {
+      return false; // attempt a connection but do not wait very long before giving up
+    }
+    else {
+      if (len < 1000) buf[len] =0;
+      {FileLogger fl(program_name);
+      fl.f() << "safeRecv got data: " << buf << " in waiting setup\n";
+      }
+    }
+    if (len == 0) return false; // no data yet
+    if (len < 1000) buf[len] = 0; else buf[999] = 0;
+    cJSON *channel_error =0;
+    cJSON *chan = cJSON_Parse(buf);
+    if (!chan) {
+      std::ostream &out = MessageLog::instance()->get_stream();
+      out << "invalid JSON received from channel: " << buf;
+      MessageLog::instance()->release_stream();
       setSetupStatus(e_error);
       return false;
     }
+        if (chan) channel_error = cJSON_GetObjectItem(chan, "error");
+        if (channel_error) {
+          char err_msg[1100];
+          snprintf(err_msg, 1100, "Error getting channel: %s", buf);
+          MessageLog::instance()->add(err_msg);
+          { FileLogger fl(program_name); fl.f() << buf << "\n";}
+          cJSON_Delete(chan);
+          setSetupStatus(e_error);
+          return false;
+        }
 				DBG_CHANNELS << "Got channel " << buf << "\n";
         setSetupStatus(SubscriptionManager::e_settingup_subscriber);
         if (len && len<1000) {
