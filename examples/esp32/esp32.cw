@@ -1,0 +1,32 @@
+DIGITALIO MACHINE pin { idle INITIAL; }
+ADC MACHINE pin { idle INITIAL; }
+PIN MACHINE pin { idle INITIAL; }
+CPU MACHINE { idle INITIAL; }
+BOARD MACHINE cpu { idle INITIAL; }
+
+ESP32 MACHINE {
+	ADC_1 ADC 6;
+  GPIO33 DIGITALIO 33;
+  GPIO34 DIGITALIO 34;
+  GPIO16 DIGITALIO 16;
+}
+OLIMEX_GATEWAY32 MACHINE cpu{
+  LED  PIN cpu.GPIO33;
+  BUT1 PIN cpu.GPIO34;
+  GPIO16 PIN cpu.GPIO16;
+}
+
+INPUT MACHINE module, item {
+	off INITIAL;
+  on STATE;
+  COMMAND turnOn { SET SELF TO on; }
+  COMMAND turnOff { SET SELF TO off; }
+}
+
+OUTPUT MACHINE module, item {
+	off INITIAL;
+  on STATE;
+  COMMAND turnOn { SET SELF TO on; }
+  COMMAND turnOff { SET SELF TO off; }
+}
+

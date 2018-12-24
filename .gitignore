@@ -69,7 +69,6 @@ libs/
 demo/
 iot/
 doxygen/
-examples/
 hmi/
 libclockwork/
 private_tests/
