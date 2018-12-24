@@ -282,6 +282,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
    //<< "\t\tMachineActions_add(m, (enter_func)cw_" << name << "_clock_on_enter);\n"
    //<< "\t}\n"
    << external_handlers
+   << "\tmarkPending(obj);\n"
    << "\treturn 1;\n"
    << "}\n";
 
@@ -410,9 +411,11 @@ bool MachineClass::cExport(const std::string &filename) {
 			ofs
 			<< "\n#include \"base_includes.h\"\n"
       << "#include \"cw_message_ids.h\"\n"
-			<< "#include \"cw_" << name << ".h\""
-			<< "\nstatic const char* TAG = \"" << name << "\";"
-      << "\n#define DEBUG_LOG 0\n";
+			<< "#include \"cw_" << name << ".h\"\n"
+      << "#define DEBUG_LOG 0\n"
+      << "#if DEBUG_LOG\n"
+      << "static const char* TAG = \"" << name << "\";\n"
+      << "#endif\n\n";
 		}
 
     ofs << "int cw_" << name << "_handle_message(struct MachineBase *ramp, struct MachineBase *machine, int state);\n";
@@ -445,8 +448,8 @@ bool MachineClass::cExport(const std::string &filename) {
     if (timer_clauses.size()) {
       ofs
       << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m) {\n"
-      << "uint64_t res = 1000000000;\n"
-      << "  uint64_t val = ";
+      << "\tuint64_t res = 1000000000;\n"
+      << "\tuint64_t val = ";
       std::list<Predicate*>::const_iterator iter = timer_clauses.begin();
       Predicate *pp = *iter++;
       Predicate *l = pp->left_p;
@@ -511,7 +514,7 @@ bool MachineClass::cExport(const std::string &filename) {
 
 		ofs
 		<< "int cw_" << name << "_check_state(struct cw_" << name << " *m) {\n"
-		<< "\tint new_state = 0; enter_func new_state_enter = 0;\n";
+    << "\tint res = 0;\n\tint new_state = 0; enter_func new_state_enter = 0;\n";
 
     bool uses_timer = false;
     std::stringstream schedules;
@@ -539,31 +542,26 @@ bool MachineClass::cExport(const std::string &filename) {
 			ofs << "\t}\n";
 		}
 
+    ofs << "\tif (new_state && new_state != m->machine.state) {\n"
+    << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter); // TODO: fix me\n"
+    << "\t\tmarkPending(&m->machine);\n"
+    << "\t\res = 1;\n"
+    << "\t}\n";
+
     if (timer_clauses.size()) {
       ofs
       << "\tuint64_t delay = cw_" << name << "_next_trigger_time(m);\n"
-      << "\tif (delay > m->machine.TIMER) {\n"
+      << "\tif (delay > 0) {\n"
       << "\t\tstruct RTScheduler *scheduler = RTScheduler_get();\n"
       << "\t\twhile (!scheduler) {\n"
       << "\t\t\ttaskYIELD();\n"
       << "\t\t\tscheduler = RTScheduler_get();\n"
       << "\t\t}\n"
-      << "\t\tRTScheduler_add(scheduler, ScheduleItem_create(delay - m->machine.TIMER, &m->machine));\n"
+      << "\t\tRTScheduler_add(scheduler, ScheduleItem_create(delay, &m->machine));\n"
       << "\t\tRTScheduler_release();\n"
-      << "\t}\n"
-      << "\tif (new_state && new_state != m->machine.state) {\n"
-      << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter); // TODO: fix me\n"
-      << "\t\tmarkPending(&m->machine);\n"
-      << "\t\treturn 1;\n"
       << "\t}\n";
     }
-    else {
-      ofs << "\tif (new_state && new_state != m->machine.state) {\n"
-      << "\t\tchangeMachineState(cw_" << name << "_To_MachineBase(m), new_state, new_state_enter); // TODO: fix me\n"
-      << "\t\treturn 1;\n"
-      << "\t}\n";
-    }
-    ofs << "\treturn 0;\n}\n";
+    ofs << "\treturn res;\n}\n";
 	}
 
 	return false;

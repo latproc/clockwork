@@ -84,7 +84,6 @@ std::list<MachineClass *> all_classes;
 std::list<ChannelDefinition> all_channeldefs;
 ChannelDefinition::Feature current_feature;
 std::set<ChannelDefinition::Feature> *current_features = 0;
-//std::list<MachineDetails*>deferred_instantiations;
 
 static MachineInstance *addMachine(const char *name, const char *type,
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
@@ -119,11 +118,6 @@ struct Subcondition {
   Predicate *predicate;
 	const char *name;
 	const char *command;
-};
-
-struct PinDefinition {
-  std::string name;
-  std::string type;
 };
 
 %}
@@ -168,7 +162,6 @@ struct PinDefinition {
 	Value *val;
 	Parameter *param;
 	struct Subcondition *subcond;
-  struct PinDefinition *pin;
 };
 
 %token <iVal> INTEGERVAL

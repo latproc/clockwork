@@ -139,6 +139,11 @@ class IODHardwareActivation : public HardwareActivation {
 		}
 };
 
+void write_pin_definitions(std::ostream &out) {
+  out << "#define cw_OLIMEX_GATEWAY32_LED 33\n#define cw_OLIMEX_GATEWAY32_BUT1 34\n";
+  out << "#define cw_OLIMEX_GATEWAY32_GPIO16 16\n";
+}
+
 int main (int argc, char const *argv[])
 {
 	char *pn = strdup(argv[0]);
@@ -253,16 +258,106 @@ int main (int argc, char const *argv[])
     ExportState::add_message("turnOff", -100);
     ExportState::add_message("turnOn", -101);
 
+    // the following classes will not be instantiated in the exported code
+    std::set<std::string> ignore;
+    ignore.insert("SYSTEMSETTINGS");
+    ignore.insert("DIGITALIO");
+    ignore.insert("PIN");
+    ignore.insert("VARIABLE");
+    ignore.insert("CONSTANT");
+    ignore.insert("ADC");
+    ignore.insert("LIST");
+    ignore.insert("REFERENCE");
+    ignore.insert("ESP32");
+    ignore.insert("OLIMEX_GATEWAY32");
+
     iter = MachineClass::all_machine_classes.begin();
 		while (iter != MachineClass::all_machine_classes.end()) {
 			MachineClass *mc = *iter++;
-			if (mc->name == "POINT") continue;
-			if (mc->name == "SYSTEM") continue;
+			if (ignore.count(mc->name)) continue;
 			char basename[80];
 			snprintf(basename, 80, "%s/cw_%s", export_path, mc->name.c_str());
 			const std::string fname(basename);
 			mc->cExport(fname);
 		}
+
+    // machine instantiations
+    {
+      std::map<std::string, std::string> rt_names;
+      rt_names["INPUT"] = "PointInput";
+      rt_names["OUTPUT"] = "PointOutput";
+      rt_names["ANALOGINPUT"] = "ANALOGINPUT";
+      rt_names["ANALOGOUTPUT"] = "ANALOGOUTPUT";
+
+      std::string setup_file(export_path);
+      setup_file += "/cw_setup.c";
+      std::ofstream setup(setup_file);
+      setup << "#include <iointerface.h>\n#include \"driver/gpio.h\"\n\n";
+      write_pin_definitions(setup);
+      setup <<
+      "struct RTIOInterface *interface = RTIOInterface_get();\n"
+      << "while (!interface) {\n"
+      << "  taskYIELD();\n"
+      << "  interface = RTIOInterface_get();\n"
+      << "}\n";
+     std::list<MachineInstance*>::iterator instances = MachineInstance::begin();
+      while (instances != MachineInstance::end()) {
+        MachineInstance *m = *instances++;
+        if (m->_type == "INPUT" || m->_type == "OUTPUT") {
+          std::string item_name = std::string("cw_inst_") + m->getName();
+          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
+          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ");\n";
+          setup << "gpio_pad_select_gpio(" << pin_name << ");\n";
+          setup << "gpio_set_direction(" << pin_name << ", GPIO_MODE_" << m->_type << ");\n";
+
+          setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
+          setup << "\tif (m->init) m->init();\n";
+          setup << "\tstruct IOItem *item_" << item_name
+            << " = IOItem_create(m, cw_" << rt_names[m->_type] << "_getAddress(" << item_name << "), " << pin_name << ");\n";
+          setup << "\tRTIOInterface_add(interface, item_" << item_name << ");\n}\n";
+        }
+        else if (m->_type == "ANALOGINPUT") {
+          std::string item_name = std::string("cw_inst_") + m->getName();
+          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
+          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, ADC_CHANNEL_0, 0);\n";
+
+          setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
+          setup << "\tif (m->init) m->init();\n";
+          setup << "\tstruct IOItem *item_" << item_name
+          << " = IOItem_create(m, cw_" << rt_names[m->_type] << "_getAddress(" << item_name << "), " << pin_name << ");\n";
+          setup << "\tRTIOInterface_add(interface, item_" << item_name << ");\n}\n";
+        }
+        else if (m->_type == "ANALOGOUTPUT") {
+          std::string item_name = std::string("cw_inst_") + m->getName();
+          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
+          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, LEDC_CHANNEL_0);\n";
+
+          setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
+          setup << "\tif (m->init) m->init();\n";
+          setup << "\tstruct IOItem *item_" << item_name
+          << " = IOItem_create(m, cw_" << rt_names[m->_type] << "_getAddress(" << item_name << "), " << pin_name << ");\n";
+          setup << "\tRTIOInterface_add(interface, item_" << item_name << ");\n}\n";
+        }
+        else if (!ignore.count(m->_type)) {
+          std::string item_name = std::string("cw_inst_") + m->getName();
+          setup << "struct " << m->_type << " *" << item_name << " = create_cw_" << m->_type << "(\"" << m->getName() << "\"";
+          for (size_t i = 0; i<m->parameters.size(); ++i) {
+            if (m->parameters[i].machine)
+              setup << ", cw_inst_" << m->parameters[i].machine->getName();
+            else
+              setup << ", " << m->parameters[i].val;
+          }
+          setup << ");\n";
+
+          setup
+            << "{\n\tstruct MachineBase *m = cw_" << m->_type << "_To_MachineBase(" << item_name << ");\n"
+            << "\tif (m->init) m->init();\n"
+          << "}\n";
+
+        }
+      }
+    }
+
 
     std::string msg_header(export_path);
     msg_header += "/cw_message_ids.h";
