@@ -290,7 +290,7 @@ int main (int argc, char const *argv[])
       rt_names["ANALOGOUTPUT"] = "ANALOGOUTPUT";
 
       std::string setup_file(export_path);
-      setup_file += "/cw_setup.c";
+      setup_file += "/cw_setup.inc";
       std::ofstream setup(setup_file);
       setup << "#include <iointerface.h>\n#include \"driver/gpio.h\"\n\n";
       write_pin_definitions(setup);
@@ -358,7 +358,7 @@ int main (int argc, char const *argv[])
       }
     }
 
-
+    {
     std::string msg_header(export_path);
     msg_header += "/cw_message_ids.h";
     std::ofstream msg_h(msg_header);
@@ -367,7 +367,7 @@ int main (int argc, char const *argv[])
     << "#define __cw_message_ids_h__\n\n";
     // export messages
     {
-      std::map<std::string, int> messages = ExportState::all_messages();
+      std::map<std::string, int> &messages = ExportState::all_messages();
       std::map<std::string, int>::const_iterator iter = messages.begin();
       while (iter != messages.end()) {
         const std::pair<std::string, int>&item = *iter++;
@@ -376,6 +376,27 @@ int main (int argc, char const *argv[])
       }
     }
     msg_h << "\n#endif\n";
+    }
+
+    // symbol ids
+    {
+    std::string msg_header(export_path);
+    msg_header += "/cw_symbol_ids.h";
+    std::ofstream msg_h(msg_header);
+    msg_h
+    << "#ifndef __cw_symbol_ids_h__\n"
+    << "#define __cw_symbol_ids_h__\n\n";
+    // export messages
+    {
+      std::map<std::string, int> &symbols = ExportState::all_symbols();
+      std::map<std::string, int>::const_iterator iter = symbols.begin();
+      while (iter != symbols.end()) {
+        const std::pair<std::string, int>&item = *iter++;
+        msg_h << "#define " << item.first << " " << item.second << "\n";
+      }
+    }
+    msg_h << "\n#endif\n";
+    }
 
 		return 0;
 	}

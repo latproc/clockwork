@@ -30,6 +30,7 @@
 #include "MessageLog.h"
 #include "ProcessingThread.h"
 #include "MessageLog.h"
+#include "ExportState.h"
 
 
 static int count_instances = 0;
@@ -203,31 +204,6 @@ std::ostream &Predicate::operator <<(std::ostream &out) const {
   return out;
 }
 
-
-void Predicate::toC(std::ostream &out) const {
-  if (left_p) {
-    if (op != opAssign) out << "(";
-    if (op != opNOT && op != opInteger && op != opFloat)
-      left_p->toC(out); // ignore the lhs for NOT operators
-    out << " "; ::toC(out, op); out << " ";
-    if (right_p) right_p->toC(out);
-    if (op != opAssign) out << ")";
-  }
-  else {
-    if (entry.kind == Value::t_symbol) {
-      if (entry.sValue == "SELF")
-        out << "m->machine.state";
-      else if (entry.sValue == "TIMER")
-        out << "m->machine.TIMER";
-      else
-        out << "m->" << entry;
-    }
-    else
-      out << entry;
-  }
-}
-
-
 // Conditions
 Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0) {
   if (other.left_p) left_p = new Predicate( *(other.left_p) );
@@ -276,6 +252,100 @@ Predicate &Predicate::operator=(const Predicate &other) {
   needs_reevaluation = true;
   return *this;
 }
+
+PredicateSymbolDetails::PredicateSymbolDetails(std::string n, std::string t, std::string e): name(n), type(t), export_name(e) {
+
+}
+
+PredicateSymbolDetails::PredicateSymbolDetails() { }
+
+bool PredicateSymbolDetails::operator<(const PredicateSymbolDetails &other) const {
+  return name < other.name;
+}
+
+static std::string interpret_name(const std::string &name) {
+  std::string type("unknown");
+  if (name == "TIMER" || stringEndsWith(name, ".TIMER"))
+    type = "timer";
+  else if (name == "SELF")
+    type = "machine";
+  else if (name == "VALUE")
+    type = "property";
+  else if (name == "DEFAULT")
+    type = "ignored";
+  return type;
+}
+
+void Predicate::findSymbols(std::set<PredicateSymbolDetails> &symbols, const Predicate *parent) const {
+  if (left_p) left_p->findSymbols(symbols, this);
+  if (right_p) right_p->findSymbols(symbols, this);
+  if (entry.kind == Value::t_symbol) {
+    std::string var(entry.sValue);
+    size_t pos = var.rfind('.');
+    if (pos != std::string::npos)
+      var = var.substr(pos+1);
+
+    std::string export_name(entry.sValue);
+    pos = export_name.find('.');
+    while (pos != std::string::npos) {
+      export_name[pos] = '_';
+      pos = export_name.find('.', pos+1);
+    }
+    std::string type(interpret_name(export_name));
+    if (type == "unknown" && parent) { // look deeper into the current context
+      Predicate *other = parent->left_p;
+      if (other == this) other = parent->right_p;
+      if (other && other->entry != SymbolTable::Null) {
+        Value val(other->entry);
+        if (val.kind == Value::t_string || val.kind == Value::t_symbol) {
+          std::string other_type(interpret_name(val.sValue));
+          if (other_type != "unknown")
+            type = other_type;
+          else
+            int x = 1;
+        }
+      }
+    }
+    else if (!parent)
+      int x = 1;
+    symbols.insert(PredicateSymbolDetails(entry.sValue, type, export_name));
+  }
+}
+
+void Predicate::toC(std::ostream &out) const {
+  std::map<std::string, PredicateSymbolDetails> &symbols(ExportState::all_symbol_names());
+  if (left_p) {
+    if (op != opAssign) out << "(";
+    if (op != opNOT && op != opInteger && op != opFloat)
+      left_p->toC(out); // ignore the lhs for NOT operators
+    out << " "; ::toC(out, op); out << " ";
+    if (right_p) right_p->toC(out);
+    if (op != opAssign) out << ")";
+  }
+  else {
+    if (entry.kind == Value::t_symbol) {
+      if (entry.sValue == "TIMER")
+        out << "m->machine.TIMER";
+      else {
+        std::map<std::string, PredicateSymbolDetails>::iterator item = symbols.find(entry.sValue);
+        if (item != symbols.end()) {
+          const PredicateSymbolDetails &psd = (*item).second;
+          if (psd.export_name == "off")
+            int x = 1;
+          if (psd.type == "state")
+            out << "v->l_" << psd.export_name;
+          else
+            out << "*v->l_" << psd.export_name;
+        }
+        else
+          out << "v->l_" << entry.sValue;
+      }
+    }
+    else
+      out << entry;
+  }
+}
+
 
 void Predicate::flushCache() {
   cached_entry = 0;

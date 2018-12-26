@@ -23,8 +23,8 @@
 
 #include <iostream>
 #include "symboltable.h"
+#include "ExportState.h"
 #include <list>
-
 
 class MachineInstance;
 
@@ -127,6 +127,8 @@ public:
   void findTimerClauses(std::list<Predicate*>&clauses);
   PredicateTimerDetails *scheduleTimerEvents(PredicateTimerDetails *earliest, MachineInstance *target); // setup timer events that trigger the supplied machine
   void clearTimerEvents(MachineInstance *target); // clear all timer events scheduled for the supplid machine
+
+  void findSymbols(std::set<PredicateSymbolDetails> &, const Predicate *parent) const;
 
   int priority; // used for the default predicate
   bool lookup_error;

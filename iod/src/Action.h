@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <boost/foreach.hpp>
 #include "Message.h"
+#include "Expression.h"
 
 typedef std::vector<std::string> ActionParameterList;
 class MachineInstance;
