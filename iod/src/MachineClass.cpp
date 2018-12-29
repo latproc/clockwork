@@ -248,7 +248,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
               << machine_name
               << " && state == " << ExportState::lookup(msg_name)
               << ")\n"
-              << "\t\tMachineActions_add(m, (enter_func)"
+              << "\t\tMachineActions_add(obj, (enter_func)"
               << "cw_" << name << "_"
               << method_name(item.first.getText())
               << ");\n";
@@ -257,7 +257,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
         }
         else {
           received_message_handlers << "\tif (state == cw_message_" << machine_name << ")\n"
-          << "\t\tMachineActions_add(m, (enter_func)"
+          << "\t\tMachineActions_add(obj, (enter_func)"
           << "cw_" << name << "_"
           << method_name(item.first.getText())
           << ");\n";
@@ -301,9 +301,6 @@ void MachineClass::exportHandlers(std::ostream &ofs)
   ofs
    << "int cw_" << name << "_handle_message(struct MachineBase *obj, struct MachineBase *source, int state) {\n"
    << "\tstruct cw_" << name << " *m = (struct cw_" << name << " *)obj;\n"
-   //<< "\tif (m->_clock == source && state == state_Pulse_on) {\n"
-   //<< "\t\tMachineActions_add(m, (enter_func)cw_" << name << "_clock_on_enter);\n"
-   //<< "\t}\n"
    << external_handlers
    << "\tmarkPending(obj);\n"
    << "\treturn 1;\n"
@@ -392,7 +389,7 @@ static std::string generate_name_lookup(std::string var, std::string to_lookup, 
       res << " = &m->" << var << ";\n";
   }
   else {
-    res << "\t{\n\tMachineBase *mm = m;\n";
+    res << "\t{\n\tMachineBase *mm = &m->machine;\n";
     while (pos != std::string::npos) {
       std::string nm( to_lookup.substr(start, pos-start) );
       res << "\tmm = mm->lookup_machine(mm, sym_" << nm << ");\n";

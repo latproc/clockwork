@@ -321,7 +321,7 @@ int main (int argc, char const *argv[])
         else if (m->_type == "ANALOGINPUT") {
           std::string item_name = std::string("cw_inst_") + m->getName();
           std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
-          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, ADC_CHANNEL_0, 0);\n";
+          setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, ADC_CHANNEL_0, 0);\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
           setup << "\tif (m->init) m->init();\n";
@@ -332,7 +332,7 @@ int main (int argc, char const *argv[])
         else if (m->_type == "ANALOGOUTPUT") {
           std::string item_name = std::string("cw_inst_") + m->getName();
           std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
-          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, LEDC_CHANNEL_0);\n";
+          setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, LEDC_CHANNEL_0);\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
           setup << "\tif (m->init) m->init();\n";
@@ -342,10 +342,10 @@ int main (int argc, char const *argv[])
         }
         else if (!ignore.count(m->_type)) {
           std::string item_name = std::string("cw_inst_") + m->getName();
-          setup << "struct " << m->_type << " *" << item_name << " = create_cw_" << m->_type << "(\"" << m->getName() << "\"";
+          setup << "struct cw_" << m->_type << " *" << item_name << " = create_cw_" << m->_type << "(\"" << m->getName() << "\"";
           for (size_t i = 0; i<m->parameters.size(); ++i) {
             if (m->parameters[i].machine)
-              setup << ", cw_inst_" << m->parameters[i].machine->getName();
+              setup << ", (MachineBase*)cw_inst_" << m->parameters[i].machine->getName();
             else
               setup << ", " << m->parameters[i].val;
           }

@@ -49,7 +49,7 @@ void SendMessageActionTemplate::toC(std::ostream &out) const {
 
   out << "cw_send(";
   if (target.asString() != "") out << "m->_" << target << ", "; else out << "0, ";
-  out << "m, cw_message_" << message << ")";
+  out << "&m->machine, cw_message_" << message << ")";
 }
 
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
