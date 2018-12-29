@@ -273,6 +273,8 @@ static std::string interpret_name(const std::string &name) {
     type = "property";
   else if (name == "DEFAULT")
     type = "ignored";
+  else
+    int x = 1;
   return type;
 }
 

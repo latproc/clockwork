@@ -513,17 +513,13 @@ bool MachineClass::cExport(const std::string &filename) {
       << "static const char* TAG = \"" << name << "\";\n"
       << "\n";
 		}
-    // export statenumbers
-    {
-      std::list<State*>::iterator iter = states.begin();
-      while (iter != states.end()) {
-        const State *s = *iter++;
-        ofs << "#define state_cw_" << s->getName() << " " << ExportState::lookup(s->getName()) << "\n";
-        symbols[s->getName()] = PredicateSymbolDetails(s->getName(), "state", s->getName());
-      }
-    }
 
     // prepare variables for symbols
+    std::list<State*>::iterator iter = states.begin();
+    while (iter != states.end()) {
+      const State *s = *iter++;
+      symbols[s->getName()] = PredicateSymbolDetails(s->getName(), "state", s->getName());
+    }
     for (unsigned int i=0; i<stable_states.size(); ++i) {
       std::set<PredicateSymbolDetails> state_symbols;
       const StableState &s = stable_states.at(i);
@@ -543,13 +539,14 @@ bool MachineClass::cExport(const std::string &filename) {
       }
     }
 
+    std::string lookup_vars(std::string("\tstruct cw_") + name + " *m;\n");
+    std::string lookup_vars_init;
+    std::set<std::string>used_states;
     {
-      std::string lookup_vars(std::string("\tstruct cw_") + name + " *m;\n");
-      std::string lookup_vars_init;
       {
         std::map<std::string, PredicateSymbolDetails>::iterator iter = symbols.begin();
         while (iter != symbols.end()) {
-          const PredicateSymbolDetails &psd = (*iter++).second;
+          const PredicateSymbolDetails &psd = (*iter).second;
           if (psd.type != "ignored") {
             std::string type(psd.type);
             if (type == "unknown") {
@@ -571,18 +568,38 @@ bool MachineClass::cExport(const std::string &filename) {
                   int x = 1;
               }
             }
-            if (type == "unknown")
-              std::cout << "Unknown type for " << psd.name << " in " << name << "\n";
+            if (type == "unknown") {
+              std::cout << "Unknown type for " << psd.name << " in " << name << "; assuming state\n";
+              type = "state";
+              used_states.insert(psd.name);
+              symbols[psd.name] = PredicateSymbolDetails(psd.name, type, psd.export_name);
+            }
             lookup_vars_init += generate_name_lookup(psd.export_name, psd.name, type);
             lookup_vars += generate_name_lookup_decls(psd.export_name, psd.name, type);
           }
+          iter++;
         }
-        ofs << "struct cw_" << name << "_Vars {\n" << lookup_vars << "};\n";
-        ofs << "static void init_Vars(struct cw_" << name << " *m, struct cw_" << name << "_Vars *v) {\n"
-        << "\tv->m = m;\n"
-        << lookup_vars_init << "}\n";
       }
     }
+
+    // export statenumbers
+    {
+      std::list<State*>::iterator iter = states.begin();
+      while (iter != states.end()) {
+        const State *s = *iter++;
+        used_states.insert(s->getName());
+      }
+      std::set<std::string>::iterator us_iter = used_states.begin();
+      while (us_iter != used_states.end()) {
+        const std::string &s = *us_iter++;
+        ofs << "#define state_cw_" << s << " " << ExportState::lookup(s) << "\n";
+      }
+    }
+
+    ofs << "struct cw_" << name << "_Vars {\n" << lookup_vars << "};\n";
+    ofs << "static void init_Vars(struct cw_" << name << " *m, struct cw_" << name << "_Vars *v) {\n"
+    << "\tv->m = m;\n"
+    << lookup_vars_init << "}\n";
 
     // generate the lookup function
     {
@@ -682,7 +699,7 @@ bool MachineClass::cExport(const std::string &filename) {
     << "\tm->machine.check_state = ( int(*)(MachineBase*) )cw_" << name << "_check_state;\n"
     << "\tm->machine.handle = (message_func)cw_" << name << "_handle_message; // handle message from other machines\n"
     << "\tm->machine.lookup = (lookup_func)cw_" << name << "_lookup; // lookup symbols within this machine\n"
-    << "\tm->machine.lookup_machine = (lookup_func)cw_" << name << "_lookup_machine; // lookup symbols within this machine\n"
+    << "\tm->machine.lookup_machine = (lookup_machine_func)cw_" << name << "_lookup_machine; // lookup symbols within this machine\n"
     << "\tm->vars = (struct cw_" << name << "_Vars *)malloc(sizeof(struct cw_" << name << "_Vars));\n"
     << "\tinit_Vars(m, m->vars);\n"
     << handlers.str()

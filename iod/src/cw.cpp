@@ -141,7 +141,7 @@ class IODHardwareActivation : public HardwareActivation {
 
 void write_pin_definitions(std::ostream &out) {
   out << "#define cw_OLIMEX_GATEWAY32_LED 33\n#define cw_OLIMEX_GATEWAY32_BUT1 34\n";
-  out << "#define cw_OLIMEX_GATEWAY32_GPIO16 16\n";
+  out << "#define cw_OLIMEX_GATEWAY32_GPIO16 16\n#define cw_OLIMEX_GATEWAY32_GPIO17 17\n";
 }
 
 int main (int argc, char const *argv[])
@@ -257,6 +257,8 @@ int main (int argc, char const *argv[])
     // setup standard message ids
     ExportState::add_message("turnOff", -100);
     ExportState::add_message("turnOn", -101);
+
+    ExportState::add_symbol("sym_VALUE", 1);
 
     // the following classes will not be instantiated in the exported code
     std::set<std::string> ignore;

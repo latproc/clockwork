@@ -23,7 +23,7 @@ public:
   static void add_state(const std::string name);
   static int lookup(const std::string name);
   static void add_message(const std::string name, int value = -1);
-  static std::map<std::string, int> &all_messages() { return message_ids; }
+  static std::map<std::string, int> &all_messages() { return string_ids; }
   static int lookup_symbol(const std::string name);
   static void add_symbol(const std::string name, int value = -1);
   static std::map<std::string, int> &all_symbols() { return symbols; }
