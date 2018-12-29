@@ -7,7 +7,7 @@ gateway32 OLIMEX_GATEWAY32 esp32; # board defined in the runtime support
 
 button INPUT gateway32, gateway32.BUT1;
 led OUTPUT gateway32, gateway32.LED;
-aout ANALOGOUTPUT gateway32, gateway32.GPIO16 gateway32.cpu.GPIO16;
+aout ANALOGOUTPUT gateway32, gateway32.GPIO16;
 
 pulser Pulse (delay:50) led;
 ramp Ramp pulser, aout;
