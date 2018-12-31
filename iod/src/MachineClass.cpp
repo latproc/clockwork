@@ -193,28 +193,6 @@ void ExportState::add_symbol(const std::string name, int value) {
 
 void MachineClass::exportHandlers(std::ostream &ofs)
 {
-#if 0
-	std::list<State*>::iterator iter = states.begin();
-	while (iter != states.end()) {
-		const State *s = *iter++;
-    std::string fn_name(s->getName());
-    fn_name += "_enter";
-		std::multimap<Message, MachineCommandTemplate*>::iterator found = receives.find(Message(fn_name.c_str()));
-    ofs
-    << "int cw_" << name << "_enter_" << s->getName()
-    << "(struct cw_" << name << " *m, ccrContParam) {";
-    if (found != receives.end()) {
-      const std::pair<Message, MachineCommandTemplate*> &item = *found;
-			ofs << "// " <<(*item.second) << "\n";
-			for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
-				ActionTemplate*at = (item.second)->action_templates.at(i);
-        if (at) { ofs << "\t"; at->toC(ofs); ofs << ";\n"; }
-      }
-		}
-    else ofs << "\n";
-    ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
-	}
-#endif
   std::stringstream received_message_handlers;
   {
     bool init_seen = false;
@@ -223,16 +201,42 @@ void MachineClass::exportHandlers(std::ostream &ofs)
       const std::pair<Message, MachineCommandTemplate*> item = *recv_iter++;
       if (method_name(item.first.getText()) == "INIT_enter")
         init_seen = true;
-      ofs
-      << "int cw_" << name << "_" << method_name(item.first.getText())
-      << "(struct cw_" << name << " *m, ccrContParam) {\n"
-      << "\tstruct cw_" << name << "_Vars *v = m->vars;\n";
-      ofs << "// " <<(*item.second) << "\n";
+
+      bool can_block = false;
       for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
         ActionTemplate*at = (item.second)->action_templates.at(i);
-        if (at) { ofs << "\t"; at->toC(ofs); ofs << ";\n"; }
+        if (at && at->canBlock()) can_block = true;
       }
-      ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
+      ofs
+      << "int cw_" << name << "_" << method_name(item.first.getText())
+      << "(struct cw_" << name << " *m, ccrContParam) {\n";
+      std::string saved_prefix = ExportState::instance()->prefix();
+      if (can_block) {
+        ofs << "\tccrBeginContext;\n";
+        ExportState::instance()->set_prefix(std::string("ctx->") + saved_prefix);
+      }
+      ofs << "\tstruct cw_" << name << "_Vars *v;\n";
+      std::stringstream actions;
+      for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
+        ActionTemplate*at = (item.second)->action_templates.at(i);
+        if (at) { at->toC(actions, ofs); }
+      }
+      if (can_block) {
+        ofs << "\tccrEndContext(ctx);\n\tccrBegin(ctx);\n";
+        ofs << "\tctx->v = m->vars;\n";
+        ExportState::instance()->set_prefix(saved_prefix);
+      }
+      else {
+        ofs << "\tv = m->vars;\n";
+      }
+      ofs << actions.str();
+      ofs << "\tm->machine.execute = 0;\n";
+      if (can_block) {
+        ofs << "\tccrFinish(1);\n}\n";
+      }
+      else {
+        ofs << "\treturn 1;\n}\n";
+      }
       // if this method is not an enter handler it needs to be inserted into the handle_message
       bool handled = item.first.isEnter();
       if (item.first.isSimple()) {
@@ -275,28 +279,6 @@ void MachineClass::exportHandlers(std::ostream &ofs)
     }
   }
 
-#if 0
-	{
-		std::multimap<Message, MachineCommandTemplate*>::iterator iter = receives.begin();
-		while (iter != receives.end()) {
-			const std::pair<Message, MachineCommandTemplate*> &item = *iter++;
-			std::string msg(item.first.getText().substr(0, item.first.getText().find('_')));
-      if (msg.find('_') != std::string::npos) msg = msg.substr(msg.find('_'));
-			if (msg != initial_state.getName() && state_names.find(msg) == state_names.end()) {
-				ofs
-				<< "int cw_" << name << "_" << method_name(item.first.getText())
-				<< "(struct cw_" << name << " *m, ccrContParam) {"
-				<< "// " <<(*item.second) << "\n";
-				for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
-					ActionTemplate*at = (item.second)->action_templates.at(i);
-          if (at) { ofs << "\t"; at->toC(ofs); ofs << ";\n"; }
-				}
-				ofs << "\tm->machine.execute = 0;\n\treturn 1;\n}\n";
-			}
-		}
-	}
-#endif
-
   std::string external_handlers = received_message_handlers.str();
   ofs
    << "int cw_" << name << "_handle_message(struct MachineBase *obj, struct MachineBase *source, int state) {\n"
@@ -305,7 +287,6 @@ void MachineClass::exportHandlers(std::ostream &ofs)
    << "\tmarkPending(obj);\n"
    << "\treturn 1;\n"
    << "}\n";
-
 }
 
 void MachineClass::collectTimerPredicates() {

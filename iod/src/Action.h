@@ -38,9 +38,10 @@ class ActionTemplate {
 public:
   ActionTemplate() {}
   virtual ~ActionTemplate() {}
-  virtual void toC(std::ostream &out) const;
+  virtual void toC(std::ostream &out, std::ostream &vars) const;
   virtual Action *factory(MachineInstance *mi) = 0;
   virtual std::ostream & operator<<(std::ostream &out) const { return out << "(ActionTemplate)"; }
+  virtual bool canBlock() const { return false; }
 };
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 

@@ -33,7 +33,7 @@ struct PredicateActionTemplate : public ActionTemplate {
   ~PredicateActionTemplate();
   virtual Action *factory(MachineInstance *mi);
   std::ostream &operator<<(std::ostream &out) const;
-  void toC(std::ostream &out) const;
+  void toC(std::ostream &out, std::ostream &vars) const override;
   Predicate *predicate;
 };
 

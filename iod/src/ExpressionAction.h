@@ -34,7 +34,7 @@ struct ExpressionActionTemplate : public ActionTemplate {
   ExpressionActionTemplate(CStringHolder var, opType oper, const char *a);
   virtual Action *factory(MachineInstance *mi);
   std::ostream &operator<<(std::ostream &out) const;
-  void toC(std::ostream &out) const;
+  void toC(std::ostream &out, std::ostream &vars) const;
 
 	CStringHolder lhs;
 	Value rhs;

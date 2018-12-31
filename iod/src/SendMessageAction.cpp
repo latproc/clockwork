@@ -44,12 +44,12 @@ std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
     << ( (target != 0) ? target : "");
 }
 
-void SendMessageActionTemplate::toC(std::ostream &out) const {
+void SendMessageActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
   ExportState::add_message(message.asString());
 
-  out << "cw_send(";
+  out << "\tcw_send(";
   if (target.asString() != "") out << "m->_" << target << ", "; else out << "0, ";
-  out << "&m->machine, cw_message_" << message << ")";
+  out << "&m->machine, cw_message_" << message << ");\n";
 }
 
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)

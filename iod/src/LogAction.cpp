@@ -67,13 +67,13 @@ std::ostream &LogAction::operator<<(std::ostream &out)const {
 	return out << "LOG " << val;
 }
 
-void LogActionTemplate::toC(std::ostream &out) const {
+void LogActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
   if (!predicate)
-    out << "ESP_LOGI(TAG, \"%lld %s\", upTime(), " << '"' << message << "\")";
+    out << "\tESP_LOGI(TAG, \"%lld %s\", upTime(), " << '"' << message << "\");\n";
   else {
-    out << "ESP_LOGI(TAG, \"%lld %s\", upTime(), ";
+    out << "\tESP_LOGI(TAG, \"%lld %s\", upTime(), ";
     predicate->toC(out);
-    out << ")";
+    out << ");\n";
   }
 }
 

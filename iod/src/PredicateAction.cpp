@@ -37,12 +37,12 @@ std::ostream &PredicateActionTemplate::operator<<(std::ostream &out) const {
   return out;
 }
 
-void PredicateActionTemplate::toC(std::ostream &out) const {
-  if (predicate->left_p->entry.kind == Value::t_symbol && predicate->left_p->entry.sValue.find('.') != std::string::npos)
-    int x=1;
+void PredicateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  out << "\t";
   predicate->left_p->toC(out);
   out << " = ";
   predicate->right_p->toC(out);
+  out << ";\n";
 }
 
 Action *PredicateActionTemplate::factory(MachineInstance *mi) { 

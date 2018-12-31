@@ -241,6 +241,7 @@ int main (int argc, char const *argv[])
 			std::cerr << "failed to create export directory /tmp/cw_export.. aborting\n";
 			return 1;
 		}
+    ExportState::instance()->set_prefix("v->l_"); // see implementation of toC in actiontemplates and predicates
     // setup global ids for all state names
     ExportState::add_state("INIT");
     ExportState::add_state("off");

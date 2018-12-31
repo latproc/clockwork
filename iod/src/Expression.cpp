@@ -335,12 +335,12 @@ void Predicate::toC(std::ostream &out) const {
           if (psd.export_name == "off")
             int x = 1;
           if (psd.type == "state")
-            out << "v->l_" << psd.export_name;
+            out << ExportState::instance()->prefix() << psd.export_name;
           else
-            out << "*v->l_" << psd.export_name;
+            out << "*" << ExportState::instance()->prefix() << psd.export_name;
         }
         else
-          out << "v->l_" << entry.sValue;
+          out << ExportState::instance()->prefix() << entry.sValue;
       }
     }
     else

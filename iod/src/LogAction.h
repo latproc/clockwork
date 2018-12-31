@@ -34,7 +34,7 @@ struct LogActionTemplate : public ActionTemplate {
     LogActionTemplate(Predicate *pred) : message(SymbolTable::Null), predicate(pred) { }
     virtual Action *factory(MachineInstance *mi) override;
 	  virtual std::ostream &operator<<(std::ostream &out) const override;
-    virtual void toC(std::ostream &out) const override;
+    virtual void toC(std::ostream &out, std::ostream &vars) const override;
     Value message;
     Predicate *predicate;
 };

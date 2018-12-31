@@ -9,7 +9,7 @@
 #include "MessageLog.h"
 #include "AbortAction.h"
 
-void ActionTemplate::toC(std::ostream &out) const {
+void ActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
   operator<<(out);
 }
 

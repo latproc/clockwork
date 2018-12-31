@@ -17,7 +17,10 @@ public:
 };
 
 class ExportState {
+private:
+  ExportState() {}
 public:
+  static ExportState *instance();
   const Value &symbol(const char *name);
   const Value &create_symbol(const char *name);
   static void add_state(const std::string name);
@@ -29,8 +32,13 @@ public:
   static std::map<std::string, int> &all_symbols() { return symbols; }
   static std::map<std::string, PredicateSymbolDetails> &all_symbol_names() { return symbol_names; }
 
+  void set_prefix(std::string prefix) { variable_prefix = prefix; }
+  const std::string &prefix() { return variable_prefix; }
+
 private:
   SymbolTable messages;
+  std::string variable_prefix;
+  static ExportState *_instance;
   static std::map<std::string, int> string_ids;
   static std::map<std::string, int> message_ids;
   static std::map<std::string, int> symbols;

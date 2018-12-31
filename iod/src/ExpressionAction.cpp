@@ -98,6 +98,8 @@ std::ostream &ExpressionActionTemplate::operator<<(std::ostream &out) const {
   return out << lhs.get() << " " << rhs << " " << "\n";
 }
 
-void ExpressionActionTemplate::toC(std::ostream &out) const {
+void ExpressionActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  out << "\t";
   operator<<(out);
+  out << "\n";
 }
