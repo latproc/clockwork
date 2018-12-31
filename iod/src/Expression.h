@@ -118,6 +118,7 @@ public:
   const Value &getTimerValue();
   std::ostream &operator <<(std::ostream &out) const;
   void toC(std::ostream &out) const;
+  void toCstring(std::ostream &out, std::stringstream &vars) const;
   Value evaluate(MachineInstance *m);
   void flushCache();
   /* predicate clauses may involve timers that need to be scheduled or cleared

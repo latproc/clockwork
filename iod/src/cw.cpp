@@ -367,7 +367,8 @@ int main (int argc, char const *argv[])
     std::ofstream msg_h(msg_header);
     msg_h
     << "#ifndef __cw_message_ids_h__\n"
-    << "#define __cw_message_ids_h__\n\n";
+    << "#define __cw_message_ids_h__\n\n"
+    << "\nconst char *name_from_id(int id);\n";
     // export messages
     {
       std::map<std::string, int> &messages = ExportState::all_messages();
@@ -381,24 +382,43 @@ int main (int argc, char const *argv[])
     msg_h << "\n#endif\n";
     }
 
+    {
+      std::string msg_support(export_path);
+      msg_support += "/cw_message_ids.c";
+      std::ofstream msg_c(msg_support);
+      msg_c
+      << "\nconst char *name_from_id(int id) {\n";
+      {
+        std::map<std::string, int> &messages = ExportState::all_messages();
+        std::map<std::string, int>::const_iterator iter = messages.begin();
+        while (iter != messages.end()) {
+          const std::pair<std::string, int>&item = *iter++;
+          msg_c << "\tif (id==" << item.second << ") return \"" << item.first << "\";\n";
+        }
+        msg_c << "\treturn \"*unknown*\";\n";
+      }
+      msg_c << "}\n";
+    }
+
     // symbol ids
     {
-    std::string msg_header(export_path);
-    msg_header += "/cw_symbol_ids.h";
-    std::ofstream msg_h(msg_header);
-    msg_h
-    << "#ifndef __cw_symbol_ids_h__\n"
-    << "#define __cw_symbol_ids_h__\n\n";
-    // export messages
-    {
-      std::map<std::string, int> &symbols = ExportState::all_symbols();
-      std::map<std::string, int>::const_iterator iter = symbols.begin();
-      while (iter != symbols.end()) {
-        const std::pair<std::string, int>&item = *iter++;
-        msg_h << "#define " << item.first << " " << item.second << "\n";
+      std::string msg_header(export_path);
+      msg_header += "/cw_symbol_ids.h";
+      std::ofstream msg_h(msg_header);
+      msg_h
+      << "#ifndef __cw_symbol_ids_h__\n"
+      << "#define __cw_symbol_ids_h__\n\n";
+      // export messages
+      {
+        std::map<std::string, int> &symbols = ExportState::all_symbols();
+        std::map<std::string, int>::const_iterator iter = symbols.begin();
+        while (iter != symbols.end()) {
+          const std::pair<std::string, int>&item = *iter++;
+          msg_h << "#define " << item.first << " " << item.second << "\n";
+        }
       }
-    }
-    msg_h << "\n#endif\n";
+
+      msg_h << "\n#endif\n";
     }
 
 		return 0;

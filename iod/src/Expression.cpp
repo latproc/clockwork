@@ -348,6 +348,34 @@ void Predicate::toC(std::ostream &out) const {
   }
 }
 
+void Predicate::toCstring(std::ostream &out, std::stringstream &vars) const {
+  std::map<std::string, PredicateSymbolDetails> &symbols(ExportState::all_symbol_names());
+  if (left_p) {
+    if (op != opAssign) out << "(";
+    if (op != opNOT && op != opInteger && op != opFloat)
+      left_p->toCstring(out, vars); // ignore the lhs for NOT operators
+    out << " "; ::toC(out, op); out << " ";
+    if (right_p) right_p->toCstring(out, vars);
+    if (op != opAssign) out << ")";
+  }
+  else {
+    if (entry.kind == Value::t_symbol) {
+      std::map<std::string, PredicateSymbolDetails>::iterator item = symbols.find(entry.sValue);
+      if (item != symbols.end()) {
+        const PredicateSymbolDetails &psd = (*item).second;
+        out << psd.export_name << " (%ld)";
+        vars << ",(long)" << ExportState::instance()->prefix() << psd.export_name;
+      }
+      else {
+        out << entry.sValue << " (%ld)";
+        vars << ",(long)" << ExportState::instance()->prefix() << entry.sValue;
+      }
+    }
+    else
+      out << entry;
+  }
+}
+
 
 void Predicate::flushCache() {
   cached_entry = 0;
