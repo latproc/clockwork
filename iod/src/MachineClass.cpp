@@ -759,7 +759,7 @@ bool MachineClass::cExport(const std::string &filename) {
         s.condition.predicate->toCstring(desc, desc_vars);
         when_clauses << "\tsnprintf(buf, 200, \"" << s.state_name << " [%d]: "
           << desc.str() << "\"" << ",state_cw_" << s.state_name << desc_vars.str() << ");\n";
-        when_clauses << "\tESP_LOGI(TAG,\"%lld %s\", upTime(), buf);\n";
+        when_clauses << "\tsendMQTT(\"/response\", buf);\n";
         ofs << "\tif (";
         s.condition.predicate->toC(ofs);
         ofs << ") /* " << s.state_name << " */ {\n";
@@ -801,9 +801,9 @@ bool MachineClass::cExport(const std::string &filename) {
     << "\tstruct cw_" << name << "_Vars_backup *v = m->backup;\n"
     << "{\n\tchar buf[100];\n"
     << "\tsnprintf(buf, 100, \"%s: %s  Class: " << name << "\", m->machine.name, name_from_id(m->machine.state));\n"
-    << "\tESP_LOGI(TAG,\"%s\", buf);\n"
+    << "\tsendMQTT(\"/response\", buf);\n"
     << "\tsnprintf(buf, 100, \"Timer: %ld\", m->machine.TIMER);\n"
-    << "\tESP_LOGI(TAG,\"%s\", buf);\n"
+    << "\tsendMQTT(\"/response\", buf);\n"
     << "}\n"
     << when_clauses.str()
     << "}\n";
