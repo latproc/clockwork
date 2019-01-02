@@ -338,8 +338,13 @@ static std::string generate_name_lookup_decls(std::string var, std::string to_lo
     res << "\tunsigned int l_" << var << ";\n";
   else if (type == "timer" || stringEndsWith(to_lookup, ".TIMER"))
     res << "\tunsigned long *l_" << var << ";\n";
-  else
+  else {
+    if (to_lookup.find('.') != std::string::npos) {
+      res << "\tMachineBase *l_m_" << var << ";\n";
+      ExportState::instance()->remotes().insert(var); // used to access the machine owning the variable
+    }
     res << "\tValue *l_" << var << ";\n";
+  }
   return res.str();
 }
 
@@ -400,8 +405,10 @@ static std::string generate_name_lookup(std::string var, std::string to_lookup, 
       res << "\tv->l_" << var << " = &mm->" << short_name << ";\n";
     else if (short_name == "STATE")
       res << "\tv->l_" << var << " = &mm->state;\n";
-    else
+    else {
+      res << "\tv->l_m_" << var << " = mm;\n";
       res << "\tv->l_" << var << " = mm->lookup(mm, sym_" << short_name << ");\n";
+    }
     res << "\t}\n";
   }
   return res.str();

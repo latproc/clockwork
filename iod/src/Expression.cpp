@@ -332,9 +332,7 @@ void Predicate::toC(std::ostream &out) const {
         std::map<std::string, PredicateSymbolDetails>::iterator item = symbols.find(entry.sValue);
         if (item != symbols.end()) {
           const PredicateSymbolDetails &psd = (*item).second;
-          if (psd.export_name == "off")
-            int x = 1;
-          if (psd.type == "state")
+         if (psd.type == "state")
             out << ExportState::instance()->prefix() << psd.export_name;
           else
             out << "*" << ExportState::instance()->prefix() << psd.export_name;

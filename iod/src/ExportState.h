@@ -35,6 +35,7 @@ public:
   void set_prefix(std::string prefix) { variable_prefix = prefix; }
   const std::string &prefix() { return variable_prefix; }
 
+  std::set<std::string> &remotes() { return remote_properties; }
 private:
   SymbolTable messages;
   std::string variable_prefix;
@@ -43,6 +44,7 @@ private:
   static std::map<std::string, int> message_ids;
   static std::map<std::string, int> symbols;
   static std::map<std::string, PredicateSymbolDetails> symbol_names;
+  std::set<std::string> remote_properties;
 };
 
 #endif

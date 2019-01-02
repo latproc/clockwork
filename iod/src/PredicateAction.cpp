@@ -39,10 +39,34 @@ std::ostream &PredicateActionTemplate::operator<<(std::ostream &out) const {
 
 void PredicateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
   out << "\t";
-  predicate->left_p->toC(out);
-  out << " = ";
-  predicate->right_p->toC(out);
-  out << ";\n";
+  if (predicate->left_p->entry.kind == Value::t_symbol) {
+    std::string var = predicate->left_p->entry.sValue;
+    std::map<std::string, PredicateSymbolDetails> &symbols(ExportState::all_symbol_names());
+    std::map<std::string, PredicateSymbolDetails>::iterator item = symbols.find(var);
+    if (item != symbols.end()) {
+      const PredicateSymbolDetails &psd = (*item).second;
+      std::string prop = ExportState::instance()->prefix() + psd.export_name;
+     if (ExportState::instance()->remotes().find((*item).second.export_name) != ExportState::instance()->remotes().end()) {
+        std::string machine = ExportState::instance()->prefix() + "m_"  + psd.export_name;
+        out << machine << "->set_value(" << machine << "," << prop << ",";
+        predicate->right_p->toC(out);
+        out << ");\n";
+      }
+      else{
+        out << "m->machine.set_value(&m->machine, " << prop << ",";
+        predicate->right_p->toC(out);
+        out << ");\n";
+      }
+    }
+    else
+      assert(false);
+  }
+  else {
+    predicate->left_p->toC(out);
+    out << " = ";
+    predicate->right_p->toC(out);
+    out << ";\n";
+  }
 }
 
 Action *PredicateActionTemplate::factory(MachineInstance *mi) { 

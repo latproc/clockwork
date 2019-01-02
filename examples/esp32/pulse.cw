@@ -1,14 +1,13 @@
-Pulse MACHINE out {
+Pulse MACHINE {
   OPTION delay 100;
 
   on WHEN SELF IS off AND TIMER >= delay;
   off DEFAULT;
 
-  ENTER on { LOG " on"; SEND turnOn TO out; }
-  ENTER off { LOG " off"; SEND turnOff TO out; }
+  #ENTER on { LOG " on"; SEND turnOn TO out; }
+  #ENTER off { LOG " off"; SEND turnOff TO out; }
 
   RECEIVE toggle_speed { 
-    WAIT 15;
     delay := 1100 - delay;
-    }
+  }
 }
