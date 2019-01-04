@@ -46,14 +46,14 @@ void PredicateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
     if (item != symbols.end()) {
       const PredicateSymbolDetails &psd = (*item).second;
       std::string prop = ExportState::instance()->prefix() + psd.export_name;
-     if (ExportState::instance()->remotes().find((*item).second.export_name) != ExportState::instance()->remotes().end()) {
+      if (ExportState::instance()->remotes().find((*item).second.export_name) != ExportState::instance()->remotes().end()) {
         std::string machine = ExportState::instance()->prefix() + "m_"  + psd.export_name;
-        out << machine << "->set_value(" << machine << "," << prop << ",";
+        out << machine << "->set_value(" << machine << ",\"" << var.substr(var.rfind('.')+1) << "\" ," << prop << ",";
         predicate->right_p->toC(out);
         out << ");\n";
       }
       else{
-        out << "m->machine.set_value(&m->machine, " << prop << ",";
+        out << "m->machine.set_value(&m->machine, \"" << var << "\", " << prop << ",";
         predicate->right_p->toC(out);
         out << ");\n";
       }

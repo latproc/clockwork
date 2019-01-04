@@ -145,6 +145,16 @@ void write_pin_definitions(std::ostream &out) {
   out << "#define cw_OLIMEX_GATEWAY32_GPIO32 32\n#define cw_OLIMEX_GATEWAY32_GPIO11 11\n";
 }
 
+void exportPropertyInitialisation(const MachineInstance *m, const std::string name, std::ostream &setup) {
+  SymbolTableConstIterator iter = m->properties.begin();
+  while (iter != m->properties.end()) {
+    const std::pair<std::string, Value> &item = *iter++;
+    if (item.first != "NAME") {
+      setup << "\t" << name << "->" << item.first << " = " << item.second << ";\n";
+    }
+  }
+}
+
 int main (int argc, char const *argv[])
 {
 	char *pn = strdup(argv[0]);
@@ -315,6 +325,7 @@ int main (int argc, char const *argv[])
           setup << "gpio_set_direction(" << pin_name << ", GPIO_MODE_" << m->_type << ");\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
+          exportPropertyInitialisation(m, item_name, setup);
           setup << "\tif (m->init) m->init();\n";
           setup << "\tstruct IOItem *item_" << item_name
             << " = IOItem_create(m, cw_" << rt_names[m->_type] << "_getAddress(" << item_name << "), " << pin_name << ");\n";
@@ -326,6 +337,7 @@ int main (int argc, char const *argv[])
           setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, ADC_CHANNEL_0, 0);\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
+          exportPropertyInitialisation(m, item_name, setup);
           setup << "\tif (m->init) m->init();\n";
           setup << "\tstruct IOItem *item_" << item_name
           << " = IOItem_create(m, cw_" << rt_names[m->_type] << "_getAddress(" << item_name << "), " << pin_name << ");\n";
@@ -337,6 +349,7 @@ int main (int argc, char const *argv[])
           setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, LEDC_CHANNEL_0);\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
+          exportPropertyInitialisation(m, item_name, setup);
           setup << "\tif (m->init) m->init();\n";
           setup << "\tstruct IOItem *item_" << item_name
           << " = IOItem_create(m, cw_" << rt_names[m->_type] << "_getAddress(" << item_name << "), " << pin_name << ");\n";
@@ -354,9 +367,10 @@ int main (int argc, char const *argv[])
           setup << ");\n";
 
           setup
-            << "{\n\tstruct MachineBase *m = cw_" << m->_type << "_To_MachineBase(" << item_name << ");\n"
-            << "\tif (m->init) m->init();\n"
-          << "}\n";
+          << "{\n\tstruct MachineBase *m = cw_" << m->_type << "_To_MachineBase(" << item_name << ");\n";
+          exportPropertyInitialisation(m, item_name, setup);
+          setup << "\tif (m->init) m->init();\n";
+          setup << "}\n";
 
         }
       }

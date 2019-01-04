@@ -13,7 +13,7 @@ left_dir OUTPUT gateway32, gateway32.GPIO32;
 right_dir OUTPUT gateway32, gateway32.LED;
 
 pulser Pulse (delay:50);
-left_motor Ramp(start: 8000) pulser, left, left_dir;
+left_motor Ramp(start: 13000, end: 15000) pulser, left, left_dir;
 right_motor Ramp pulser, right, right_dir;
 d_button DebouncedInput button;
 speed_select SpeedSelect d_button, pulser;
