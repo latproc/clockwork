@@ -200,16 +200,15 @@ int main (int argc, char const *argv[])
     if (dependency_graph()) {
         std::ofstream graph(dependency_graph());
         if (graph) {
-            graph << "digraph G {\n";
+          graph << "digraph G {\n\tnode [shape=record];\n";
             std::list<MachineInstance *>::iterator m_iter;
             m_iter = MachineInstance::begin();
             while (m_iter != MachineInstance::end()) {
                 MachineInstance *mi = *m_iter++;
-                if (!mi->depends.empty()) {
-                    BOOST_FOREACH(MachineInstance *dep, mi->depends) {
-                        graph << mi->getName() << " -> " << dep->getName()<< ";\n";
-                    }
-                }
+              for (int i=0; i<mi->parameters.size(); ++i) {
+                if (mi->parameters[i].machine)
+                  graph << mi->parameters[i].machine->getName() << " -> " << mi->getName() << ";\n";
+              }
             }
             graph << "}\n";
         }
