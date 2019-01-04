@@ -40,7 +40,10 @@ const char *debug_config();
     
 void set_dependency_graph(const char *name);
 const char *dependency_graph();
-    
+
+void set_graph_root(const char *root);
+const char *graph_root();
+
 void set_publisher_port(int port, bool required = false);
 int publisher_port();
 bool publisher_port_fixed();

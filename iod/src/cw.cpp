@@ -155,6 +155,16 @@ void exportPropertyInitialisation(const MachineInstance *m, const std::string na
   }
 }
 
+void collect_connected_machines(std::set<MachineInstance *> &included_machines, MachineInstance *mi) {
+  if (mi) {
+    included_machines.insert(mi);
+    for (int i=0; i<mi->parameters.size(); ++i) {
+      if (mi->parameters[i].machine)
+        collect_connected_machines(included_machines, mi->parameters[i].machine);
+    }
+  }
+}
+
 int main (int argc, char const *argv[])
 {
 	char *pn = strdup(argv[0]);
@@ -210,11 +220,18 @@ int main (int argc, char const *argv[])
     if (dependency_graph()) {
         std::ofstream graph(dependency_graph());
         if (graph) {
+          std::set<MachineInstance *> included_machines;
+          if (graph_root()) {
+            MachineInstance *mi = MachineInstance::find(graph_root());
+            collect_connected_machines(included_machines, mi);
+          }
           graph << "digraph G {\n\tnode [shape=record];\n";
             std::list<MachineInstance *>::iterator m_iter;
             m_iter = MachineInstance::begin();
             while (m_iter != MachineInstance::end()) {
-                MachineInstance *mi = *m_iter++;
+              MachineInstance *mi = *m_iter++;
+              if (graph_root() && included_machines.find(mi) == included_machines.end())
+                continue;
               for (int i=0; i<mi->parameters.size(); ++i) {
                 if (mi->parameters[i].machine)
                   graph << mi->parameters[i].machine->getName() << " -> " << mi->getName() << ";\n";

@@ -920,6 +920,9 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
      else if (strcmp(argv[i], "-g") == 0 && i < argc-1) { // dependency graph file
        set_dependency_graph(argv[++i]);
      }
+     else if (strcmp(argv[i], "-r") == 0 && i < argc-1) { // dependency graph root
+       set_graph_root(argv[++i]);
+     }
      else if (strcmp(argv[i], "-p") == 0 && i < argc-1) { // publisher port
        set_publisher_port((int)strtol(argv[++i], 0, 10), true);
      }
