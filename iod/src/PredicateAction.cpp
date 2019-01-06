@@ -43,23 +43,23 @@ void PredicateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
     std::string var = predicate->left_p->entry.sValue;
     std::map<std::string, PredicateSymbolDetails> &symbols(ExportState::all_symbol_names());
     std::map<std::string, PredicateSymbolDetails>::iterator item = symbols.find(var);
-    if (item != symbols.end()) {
-      const PredicateSymbolDetails &psd = (*item).second;
-      std::string prop = ExportState::instance()->prefix() + psd.export_name;
-      if (ExportState::instance()->remotes().find((*item).second.export_name) != ExportState::instance()->remotes().end()) {
-        std::string machine = ExportState::instance()->prefix() + "m_"  + psd.export_name;
-        out << machine << "->set_value(" << machine << ",\"" << var.substr(var.rfind('.')+1) << "\" ," << prop << ",";
-        predicate->right_p->toC(out);
-        out << ");\n";
-      }
-      else{
-        out << "m->machine.set_value(&m->machine, \"" << var << "\", " << prop << ",";
-        predicate->right_p->toC(out);
-        out << ");\n";
-      }
+    PredicateSymbolDetails psd;
+    if (item != symbols.end())
+      psd = (*item).second;
+    else // this symbol hasn't been seen in when-clauses, properties etc
+      psd = Predicate::PredicateSymbolDetailsFromValue(predicate->left_p->entry);
+    std::string prop = ExportState::instance()->prefix() + psd.export_name;
+    if (ExportState::instance()->remotes().find(psd.export_name) != ExportState::instance()->remotes().end()) {
+      std::string machine = ExportState::instance()->prefix() + "m_"  + psd.export_name;
+      out << machine << "->set_value(" << machine << ",\"" << var.substr(var.rfind('.')+1) << "\" ," << prop << ",";
+      predicate->right_p->toC(out);
+      out << ");\n";
     }
-    else
-      assert(false);
+    else{
+      out << "m->machine.set_value(&m->machine, \"" << var << "\", " << prop << ",";
+      predicate->right_p->toC(out);
+      out << ");\n";
+    }
   }
   else {
     predicate->left_p->toC(out);

@@ -396,7 +396,7 @@ void predefine_special_machines() {
   MachineClass *subscriber_class = new MachineClass("MQTTSUBSCRIBER");
   subscriber_class->parameters.push_back(Parameter("broker"));
   subscriber_class->parameters.push_back(Parameter("topic"));
-  subscriber_class->options["message"] = "";
+  subscriber_class->options["message"] = 0; // Value("", Value::t_string); //TODO: exported code cannot handle string messages
 
   MachineClass *broker_class = new MachineClass("MQTTBROKER");
   broker_class->parameters.push_back(Parameter("host"));

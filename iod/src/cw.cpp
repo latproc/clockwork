@@ -288,19 +288,24 @@ int main (int argc, char const *argv[])
     ExportState::add_message("property_change", -102);
 
     ExportState::add_symbol("sym_VALUE", 1);
+    ExportState::add_symbol("sym_broker", 2);
+    ExportState::add_symbol("sym_message", 3);
 
     // the following classes will not be instantiated in the exported code
     std::set<std::string> ignore;
-    ignore.insert("SYSTEMSETTINGS");
-    ignore.insert("DIGITALIO");
-    ignore.insert("PIN");
-    ignore.insert("VARIABLE");
-    ignore.insert("CONSTANT");
     ignore.insert("ADC");
-    ignore.insert("LIST");
-    ignore.insert("REFERENCE");
+    ignore.insert("ANALOGINPUT");
+    ignore.insert("ANALOGOUTPUT");
+    ignore.insert("CONSTANT");
+    ignore.insert("DIGITALIO");
     ignore.insert("ESP32");
+    ignore.insert("LIST");
     ignore.insert("OLIMEX_GATEWAY32");
+    ignore.insert("PIN");
+    ignore.insert("POINT");
+    ignore.insert("REFERENCE");
+    ignore.insert("SYSTEMSETTINGS");
+    ignore.insert("VARIABLE");
 
     iter = MachineClass::all_machine_classes.begin();
 		while (iter != MachineClass::all_machine_classes.end()) {
@@ -361,9 +366,10 @@ int main (int argc, char const *argv[])
           setup << "\tRTIOInterface_add(interface, item_" << item_name << ");\n}\n";
         }
         else if (m->_type == "ANALOGOUTPUT") {
+          const Value &channel = m->getValue("channel");
           std::string item_name = std::string("cw_inst_") + m->getName();
           std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
-          setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, LEDC_CHANNEL_0);\n";
+          setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, LEDC_CHANNEL_" << channel.iValue << ");\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
           exportPropertyInitialisation(m, item_name, setup);

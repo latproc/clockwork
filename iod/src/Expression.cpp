@@ -278,23 +278,28 @@ static std::string interpret_name(const std::string &name) {
   return type;
 }
 
+PredicateSymbolDetails Predicate::PredicateSymbolDetailsFromValue(const Value &entry) {
+  std::string var(entry.sValue);
+  size_t pos = var.rfind('.');
+  if (pos != std::string::npos)
+    var = var.substr(pos+1);
+
+  std::string export_name(entry.sValue);
+  pos = export_name.find('.');
+  while (pos != std::string::npos) {
+    export_name[pos] = '_';
+    pos = export_name.find('.', pos+1);
+  }
+  std::string type(interpret_name(export_name));
+  return PredicateSymbolDetails(entry.sValue, type, export_name);
+}
+
 void Predicate::findSymbols(std::set<PredicateSymbolDetails> &symbols, const Predicate *parent) const {
   if (left_p) left_p->findSymbols(symbols, this);
   if (right_p) right_p->findSymbols(symbols, this);
   if (entry.kind == Value::t_symbol) {
-    std::string var(entry.sValue);
-    size_t pos = var.rfind('.');
-    if (pos != std::string::npos)
-      var = var.substr(pos+1);
-
-    std::string export_name(entry.sValue);
-    pos = export_name.find('.');
-    while (pos != std::string::npos) {
-      export_name[pos] = '_';
-      pos = export_name.find('.', pos+1);
-    }
-    std::string type(interpret_name(export_name));
-    if (type == "unknown" && parent) { // look deeper into the current context
+    PredicateSymbolDetails psd(PredicateSymbolDetailsFromValue(entry));
+    if (psd.type == "unknown" && parent) { // look deeper into the current context
       Predicate *other = parent->left_p;
       if (other == this) other = parent->right_p;
       if (other && other->entry != SymbolTable::Null) {
@@ -302,7 +307,7 @@ void Predicate::findSymbols(std::set<PredicateSymbolDetails> &symbols, const Pre
         if (val.kind == Value::t_string || val.kind == Value::t_symbol) {
           std::string other_type(interpret_name(val.sValue));
           if (other_type != "unknown")
-            type = other_type;
+            psd.type = other_type;
           else
             int x = 1;
         }
@@ -310,7 +315,7 @@ void Predicate::findSymbols(std::set<PredicateSymbolDetails> &symbols, const Pre
     }
     else if (!parent)
       int x = 1;
-    symbols.insert(PredicateSymbolDetails(entry.sValue, type, export_name));
+    symbols.insert(psd);
   }
 }
 

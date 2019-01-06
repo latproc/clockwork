@@ -130,6 +130,7 @@ public:
   void clearTimerEvents(MachineInstance *target); // clear all timer events scheduled for the supplid machine
 
   void findSymbols(std::set<PredicateSymbolDetails> &, const Predicate *parent) const;
+  static PredicateSymbolDetails PredicateSymbolDetailsFromValue(const Value &entry);
 
   int priority; // used for the default predicate
   bool lookup_error;

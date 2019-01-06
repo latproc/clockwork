@@ -9,6 +9,7 @@
 #include "Parameter.h"
 #include "ModbusInterface.h"
 #include "ExportState.h"
+#include "PredicateAction.h"
 
 std::list<MachineClass*> MachineClass::all_machine_classes;
 std::map<std::string, MachineClass> MachineClass::machine_classes;
@@ -549,7 +550,12 @@ bool MachineClass::cExport(const std::string &filename) {
         std::map<std::string, PredicateSymbolDetails>::iterator found = symbols.find(psd.name);
         if (found != symbols.end()) {
           const PredicateSymbolDetails &other = (*found).second;
-          if (other.type != psd.type) {
+          if (psd.type == "unknown" && other.type != "unknown") {
+            PredicateSymbolDetails update(psd);
+            update.type = other.type;
+            symbols[psd.name] = update;
+          }
+          else if (other.type != psd.type) {
             int x = 1;
           }
         }
@@ -557,6 +563,38 @@ bool MachineClass::cExport(const std::string &filename) {
           symbols[psd.name] = psd;
       }
     }
+    // also look through actions
+    std::multimap<Message, MachineCommandTemplate*>::const_iterator recv_iter = receives.begin();
+    while (recv_iter != receives.end()) {
+      const std::pair<Message, MachineCommandTemplate*> item = *recv_iter++;
+      for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
+        ActionTemplate*at = (item.second)->action_templates.at(i);
+        PredicateActionTemplate *pat = dynamic_cast<PredicateActionTemplate*>(at);
+        if (pat) {
+          std::set<PredicateSymbolDetails> pat_symbols;
+          pat->predicate->findSymbols(pat_symbols, 0);
+          std::set<PredicateSymbolDetails>::iterator iter = pat_symbols.begin();
+          while (iter != pat_symbols.end()) {
+            const PredicateSymbolDetails &psd = (*iter++);
+            std::map<std::string, PredicateSymbolDetails>::iterator found = symbols.find(psd.name);
+            if (found != symbols.end()) {
+              const PredicateSymbolDetails &other = (*found).second;
+              if (psd.type == "unknown" && other.type != "unknown") {
+                PredicateSymbolDetails update(psd);
+                update.type = other.type;
+                symbols[psd.name] = update;
+              }
+              else if (other.type != psd.type) {
+                int x = 1;
+              }
+            }
+            else
+              symbols[psd.name] = psd;
+          }
+        }
+      }
+    }
+
 
     std::string lookup_vars(std::string("\tstruct cw_") + name + " *m;\n");
     std::string lookup_vars_init;
@@ -766,7 +804,7 @@ bool MachineClass::cExport(const std::string &filename) {
         s.condition.predicate->toCstring(desc, desc_vars);
         when_clauses << "\tsnprintf(buf, 200, \"" << s.state_name << " [%d]: "
           << desc.str() << "\"" << ",state_cw_" << s.state_name << desc_vars.str() << ");\n";
-        when_clauses << "\tsendMQTT(\"/response\", buf);\n";
+        when_clauses << "\tsendMQTT(0, \"/response\", buf);\n";
         ofs << "\tif (";
         s.condition.predicate->toC(ofs);
         ofs << ") /* " << s.state_name << " */ {\n";
@@ -808,9 +846,9 @@ bool MachineClass::cExport(const std::string &filename) {
     << "\tstruct cw_" << name << "_Vars_backup *v = m->backup;\n"
     << "{\n\tchar buf[100];\n"
     << "\tsnprintf(buf, 100, \"%s: %s  Class: " << name << "\", m->machine.name, name_from_id(m->machine.state));\n"
-    << "\tsendMQTT(\"/response\", buf);\n"
+    << "\tsendMQTT(0, \"/response\", buf);\n"
     << "\tsnprintf(buf, 100, \"Timer: %ld\", m->machine.TIMER);\n"
-    << "\tsendMQTT(\"/response\", buf);\n"
+    << "\tsendMQTT(0,\"/response\", buf);\n"
     << "}\n"
     << when_clauses.str()
     << "}\n";
