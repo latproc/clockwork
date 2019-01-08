@@ -165,6 +165,13 @@ void collect_connected_machines(std::set<MachineInstance *> &included_machines, 
   }
 }
 
+static std::string base_name(const std::string &src) {
+  std::string base(src);
+  size_t pos = base.rfind('.');
+  if (pos != std::string::npos) base = base.substr(pos+1);
+  return base;
+}
+
 int main (int argc, char const *argv[])
 {
 	char *pn = strdup(argv[0]);
@@ -291,26 +298,114 @@ int main (int argc, char const *argv[])
     ExportState::add_symbol("sym_broker", 2);
     ExportState::add_symbol("sym_message", 3);
 
-    // the following classes will not be instantiated in the exported code
+    // the following classes will not be exported in the exported code
     std::set<std::string> ignore;
     ignore.insert("ADC");
-    ignore.insert("ANALOGINPUT");
-    ignore.insert("ANALOGOUTPUT");
+    ignore.insert("CLOCKWORK");
+    ignore.insert("CONDITION");
     ignore.insert("CONSTANT");
+    ignore.insert("COUNTER");
+    ignore.insert("COUNTERRATE");
+    ignore.insert("DAC");
+    ignore.insert("DIGITALIN");
     ignore.insert("DIGITALIO");
-    ignore.insert("ESP32");
+    ignore.insert("ETHERNET");
+    ignore.insert("JTAG");
     ignore.insert("LIST");
-    ignore.insert("OLIMEX_GATEWAY32");
     ignore.insert("PIN");
     ignore.insert("POINT");
+    ignore.insert("RATEESTIMATOR");
     ignore.insert("REFERENCE");
+    ignore.insert("SDIO");
+    ignore.insert("SPI");
+    ignore.insert("STATUS_FLAG");
     ignore.insert("SYSTEMSETTINGS");
+    ignore.insert("TOUCH");
+    ignore.insert("UART");
     ignore.insert("VARIABLE");
+
+    // these classes are internal and can be instantiated but not exported
+    std::set<std::string> internal;
+    internal.insert("ANALOGINPUT");
+    internal.insert("ANALOGOUTPUT");
+    internal.insert("MQTTBROKER");
+    internal.insert("MQTTPUBLISHER");
+    internal.insert("MQTTSUBSCRIBER");
+    internal.insert("BOARD");
+    internal.insert("CPU");
+    internal.insert("FLAG");
+    internal.insert("MODULE");
+    internal.insert("INPUT");
+    internal.insert("OUTPUT");
+    internal.insert("EXTERNAL");
+
+
+    // pin definitions
+    std::stringstream pin_definitions;
+
+    // find the board and CPU being used
+    MachineInstance *cpu = 0;
+    MachineInstance *board = 0;
+
+    std::list<MachineInstance*>::iterator instances = MachineInstance::begin();
+    while (instances != MachineInstance::end()) {
+      MachineInstance *m = *instances++;
+      MachineClass *parent = 0;
+      if (m->getStateMachine() && (parent = m->getStateMachine()->parent)) {
+        if (parent->name == "CPU") {
+          assert(!cpu);
+          cpu = m;
+        }
+        else if (parent->name == "BOARD") {
+          assert(!board);
+          board = m;
+        }
+      }
+    }
+    if (board)
+      assert(cpu);
 
     iter = MachineClass::all_machine_classes.begin();
 		while (iter != MachineClass::all_machine_classes.end()) {
 			MachineClass *mc = *iter++;
-			if (ignore.count(mc->name)) continue;
+      if (mc->parent && mc->parent->name == "CPU") {
+        std::map<std::string, Value>::iterator iter = mc->options.begin();
+        while (iter != mc->options.end()) {
+          const std::pair<std::string, Value> &item = *iter++;
+          pin_definitions << "#define cw_" << mc->name << "_" << item.first << " ";
+          size_t n = item.first.length();
+          while (n++ < 25) pin_definitions << " ";
+          pin_definitions << item.second << "\n";
+        }
+      }
+      else if (mc->parent && mc->parent->name == "BOARD") {
+        std::map<std::string, Value> pins;
+        std::map<std::string, Value>::iterator iter = mc->options.begin();
+        while (iter != mc->options.end()) {
+          const std::pair<std::string, Value> &item = *iter++;
+          pin_definitions << "#define cw_" << mc->name << "_" << item.first << " ";
+          size_t n = item.first.length();
+          while (n++ < 25) pin_definitions << " ";
+
+          if (item.second.kind == Value::t_symbol) {
+            size_t pos = item.second.sValue.find('.');
+            if (pos == std::string::npos) {
+              pins[item.first] = pins[item.second.sValue];
+              pin_definitions << pins[item.second.sValue];
+            }
+            else {
+              std::string pin = item.second.sValue.substr(pos+1);
+              const Value &val = cpu->getValue(pin);
+              pin_definitions << val << "\n";
+            }
+          }
+          else
+            pin_definitions << item.second << "\n";
+        }
+      }
+			if (ignore.count(mc->name) || internal.count(mc->name)) continue;
+      if (mc->name == "CPU" || mc->name == "BOARD") continue;
+      if (mc->parent && (mc->parent->name == "CPU" || mc->parent->name == "BOARD")) continue;
 			char basename[80];
 			snprintf(basename, 80, "%s/cw_%s", export_path, mc->name.c_str());
 			const std::string fname(basename);
@@ -329,7 +424,7 @@ int main (int argc, char const *argv[])
       setup_file += "/cw_setup.inc";
       std::ofstream setup(setup_file);
       setup << "#include <iointerface.h>\n#include \"driver/gpio.h\"\n\n";
-      write_pin_definitions(setup);
+      setup << pin_definitions.str();
       setup <<
       "struct RTIOInterface *interface = RTIOInterface_get();\n"
       << "while (!interface) {\n"
@@ -339,9 +434,15 @@ int main (int argc, char const *argv[])
      std::list<MachineInstance*>::iterator instances = MachineInstance::begin();
       while (instances != MachineInstance::end()) {
         MachineInstance *m = *instances++;
+        MachineClass *mc = m->getStateMachine();
+        if (m->getName() == "lolibot")
+          int x = 1;
+        if (mc && mc->parent && (mc->parent->name == "CPU" || mc->parent->name == "BOARD")) continue;
+
         if (m->_type == "INPUT" || m->_type == "OUTPUT") {
           std::string item_name = std::string("cw_inst_") + m->getName();
-          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
+          std::string local_pin_name(base_name(m->parameters[1].real_name));
+          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + local_pin_name;
           setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ");\n";
           setup << "gpio_pad_select_gpio(" << pin_name << ");\n";
           setup << "gpio_set_direction(" << pin_name << ", GPIO_MODE_" << m->_type << ");\n";
@@ -355,7 +456,8 @@ int main (int argc, char const *argv[])
         }
         else if (m->_type == "ANALOGINPUT") {
           std::string item_name = std::string("cw_inst_") + m->getName();
-          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
+          std::string local_pin_name(base_name(m->parameters[1].real_name));
+          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + local_pin_name;
           setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, ADC_CHANNEL_0, 0);\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
@@ -368,7 +470,8 @@ int main (int argc, char const *argv[])
         else if (m->_type == "ANALOGOUTPUT") {
           const Value &channel = m->getValue("channel");
           std::string item_name = std::string("cw_inst_") + m->getName();
-          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + m->parameters[1].machine->getName();
+          std::string local_pin_name(base_name(m->parameters[1].real_name));
+          std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + local_pin_name;
           setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, LEDC_CHANNEL_" << channel.iValue << ");\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";

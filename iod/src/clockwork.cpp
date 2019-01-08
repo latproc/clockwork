@@ -348,6 +348,7 @@ void predefine_special_machines() {
   aout_class->initial_state = State("stable");
   aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
+#if 0
   MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
   pid_class->parameters.push_back(Parameter("module"));
   pid_class->parameters.push_back(Parameter("offset"));
@@ -359,6 +360,7 @@ void predefine_special_machines() {
   pid_class->default_state = State("stable");
   pid_class->initial_state = State("stable");
   pid_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+#endif
 
   MachineClass *list_class = new MachineClass("LIST");
   list_class->addState("empty");
@@ -691,13 +693,20 @@ void semantic_analysis() {
           }
         }
         else {
-          std::stringstream ss;
-          ss << "Warning: no instance " << p_i.sValue
-          << " (" << mi->parameters[i].real_name << ")"
-          << " found for " << mi->getName();
-          error_messages.push_back(ss.str());
-          MessageLog::instance()->add(ss.str().c_str());
-          ++num_errors;
+          const Value &prop = mi->getValue(mi->parameters[i].real_name);
+          if (prop != SymbolTable::Null) {
+            mi->parameters[i].val = prop;
+            mi->parameters[i].machine = 0;
+          }
+          else {
+            std::stringstream ss;
+            ss << "Error: no instance " << p_i.sValue
+            << " (" << mi->parameters[i].real_name << ")"
+            << " found for " << mi->getName();
+            error_messages.push_back(ss.str());
+            MessageLog::instance()->add(ss.str().c_str());
+            ++num_errors;
+          }
         }
       }
       else {

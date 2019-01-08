@@ -80,7 +80,6 @@ MachineInstance *current_machine = 0;
 MachineClass *current_machineclass = 0;
 ChannelDefinition *current_channelclass = 0;
 Channel *current_channel = 0;
-std::list<MachineClass *> all_classes;
 std::list<ChannelDefinition> all_channeldefs;
 ChannelDefinition::Feature current_feature;
 std::set<ChannelDefinition::Feature> *current_features = 0;
@@ -148,7 +147,8 @@ struct Subcondition {
 %token FLOAT32 SUM ABS MIN MAX MEAN
 %token CHANGING FAILURE ADD AFTER BEFORE
 %token ASCENDING ASC DESCENDING DESC INDEX
-%token REFERS FIND SEEK
+%token REFERS FIND SEEK CPU BOARD
+%token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
 
 %union {
 	bool bVal;
@@ -290,7 +290,6 @@ definition_header '{' definition_body '}' {
         DBG_PARSER << "states: " << current_machineclass->states.size() << "\n";
         DBG_PARSER << "num transitions: " << current_machineclass->transitions.size() << "\n";
 
-        all_classes.push_back(current_machineclass);
         current_machineclass = NULL;
     }
 }
@@ -565,6 +564,23 @@ SYMBOL STATEMACHINE parameters {
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();
 }
+| SYMBOL CPU {
+  DBG_PARSER << " machine class  "  << $1 << "\n";
+  current_machineclass = new MachineClass($1);
+  MachineClass *cpu_class = MachineClass::find("CPU");
+  if (!cpu_class) cpu_class = new MachineClass("CPU");
+  current_machineclass->parent = cpu_class;
+  current_parameters.clear();
+}
+| SYMBOL BOARD parameters {
+  DBG_PARSER << " machine class   "  << $1 << "\n";
+  current_machineclass = new MachineClass($1);
+  MachineClass *board_class = MachineClass::find("BOARD");
+  if (!board_class) board_class = new MachineClass("BOARD");
+  current_machineclass->parent = board_class;
+  std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
+  current_parameters.clear();
+}
 ;
 
 definition_body:
@@ -576,6 +592,7 @@ definition_section:
 GLOBAL global_references ';'
 | OPTION option_settings ';'
 | LOCAL OPTION local_option_settings ';'
+| pin_definitions
 | export_clause
 | local_machine_instantiation
 | command
@@ -744,6 +761,73 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
 	cleanupErrorClause(true);
 }
 ;
+
+pin_definitions:
+pin_definition
+| pin_definition ';' pin_definition
+
+pin_definition:
+SYMBOL DIGITALIO INTEGERVAL ';'{
+  std::string name($1);
+  int x = $3;
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL DIGITALIN INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL ADC INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL TOUCH INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL SDIO INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL ETHERNET INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL DAC INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL SPI INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL PIN INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL PIN SYMBOL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL JTAG INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
+| SYMBOL UART INTEGERVAL ';'{
+  std::string name($1);
+  current_machineclass->options[name] = $3;
+  //current_machineclass->addProperty(name.c_str());
+}
 
 state_definition:
 SYMBOL STATE {

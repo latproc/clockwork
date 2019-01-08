@@ -26,7 +26,7 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 
 MachineClass::MachineClass(const char *class_name) : default_state("unknown"), initial_state("INIT"),
 	name(class_name), allow_auto_states(true), token_id(0), plugin(0),
-	polling_delay(0)
+	polling_delay(0), parent(0)
 {
 	addState("INIT");
 	token_id = Tokeniser::instance()->getTokenId(class_name);
@@ -423,6 +423,7 @@ static void subst_all(std::string &s, char old, char replacement) {
   }
 }
 
+#if 0
 static void subst_all(std::string &s, std::string old, std::string replacement) {
   size_t start = 0;
   size_t pos;
@@ -430,8 +431,7 @@ static void subst_all(std::string &s, std::string old, std::string replacement) 
     s.replace(pos, old.length(), replacement);
   }
 }
-
-
+#endif
 std::map<std::string, int> ExportState::string_ids;
 std::map<std::string, int> ExportState::message_ids;
 std::map<std::string, int> ExportState::symbols;
