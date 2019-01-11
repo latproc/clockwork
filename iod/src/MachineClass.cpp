@@ -217,7 +217,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
         ofs << "\tccrBeginContext;\n";
         ExportState::instance()->set_prefix(std::string("ctx->") + saved_prefix);
       }
-      ofs << "\tstruct cw_" << name << "_Vars *v;\n";
+      ofs << "\tstruct cw_" << name << "_Vars_backup *v;\n";
       std::stringstream actions;
       for (unsigned int i = 0; i<(item.second)->action_templates.size(); ++i) {
         ActionTemplate*at = (item.second)->action_templates.at(i);
@@ -225,11 +225,11 @@ void MachineClass::exportHandlers(std::ostream &ofs)
       }
       if (can_block) {
         ofs << "\tccrEndContext(ctx);\n\tccrBegin(ctx);\n";
-        ofs << "\tctx->v = m->vars;\n";
+        ofs << "\tctx->v = m->backup;\n";
         ExportState::instance()->set_prefix(saved_prefix);
       }
       else {
-        ofs << "\tv = m->vars;\n";
+        ofs << "\tv = m->backup;\n";
       }
       ofs << actions.str();
       ofs << "\tm->machine.execute = 0;\n";
@@ -787,7 +787,7 @@ bool MachineClass::cExport(const std::string &filename) {
 
 		ofs
 		<< "int cw_" << name << "_check_state(struct cw_" << name << " *m) {\n"
-    << "\tstruct cw_" << name << "_Vars *v = m->vars;\n"
+    << "\tstruct cw_" << name << "_Vars_backup *v = m->backup;\n"
     << "\tint res = 0;\n\tint new_state = 0; enter_func new_state_enter = 0;\n"
     << "\tbackup_Vars(m);\n";
 

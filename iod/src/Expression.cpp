@@ -340,7 +340,7 @@ void Predicate::toC(std::ostream &out) const {
          if (psd.type == "state")
             out << ExportState::instance()->prefix() << psd.export_name;
           else
-            out << "*" << ExportState::instance()->prefix() << psd.export_name;
+            out << ExportState::instance()->prefix() << psd.export_name;
         }
         else
           out << ExportState::instance()->prefix() << entry.sValue;

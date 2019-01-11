@@ -49,14 +49,15 @@ void PredicateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
     else // this symbol hasn't been seen in when-clauses, properties etc
       psd = Predicate::PredicateSymbolDetailsFromValue(predicate->left_p->entry);
     std::string prop = ExportState::instance()->prefix() + psd.export_name;
+    std::string prop_var = "m->vars->l_";
     if (ExportState::instance()->remotes().find(psd.export_name) != ExportState::instance()->remotes().end()) {
-      std::string machine = ExportState::instance()->prefix() + "m_"  + psd.export_name;
-      out << machine << "->set_value(" << machine << ",\"" << var.substr(var.rfind('.')+1) << "\" ," << prop << ",";
+      std::string machine = prop_var + "m_"  + psd.export_name;
+      out << machine << "->set_value(" << machine << ",\"" << var.substr(var.rfind('.')+1) << "\" ," << (prop_var + psd.export_name) << ",";
       predicate->right_p->toC(out);
       out << ");\n";
     }
     else{
-      out << "m->machine.set_value(&m->machine, \"" << var << "\", " << prop << ",";
+      out << "m->machine.set_value(&m->machine, \"" << var << "\", " << (prop_var + psd.export_name) << ",";
       predicate->right_p->toC(out);
       out << ");\n";
     }
