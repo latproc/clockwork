@@ -197,10 +197,11 @@ void MachineClass::exportHandlers(std::ostream &ofs)
   std::stringstream received_message_handlers;
   {
     bool init_seen = false;
+    std::string initial_state_message = initial_state.getName() + "_enter";
     std::multimap<Message, MachineCommandTemplate*>::const_iterator recv_iter = receives.begin();
     while (recv_iter != receives.end()) {
       const std::pair<Message, MachineCommandTemplate*> item = *recv_iter++;
-      if (method_name(item.first.getText()) == "INIT_enter")
+      if (method_name(item.first.getText()) == initial_state_message)
         init_seen = true;
 
       bool can_block = false;
