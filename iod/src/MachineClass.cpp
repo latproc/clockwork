@@ -241,16 +241,16 @@ void MachineClass::exportHandlers(std::ostream &ofs)
       // if this method is not an enter handler it needs to be inserted into the handle_message
       bool handled = item.first.isEnter();
       if (item.first.isSimple()) {
-        std::string machine_name = item.first.getText();
-        size_t name_pos = machine_name.find(".");
+        std::string message_name = item.first.getText();
+        size_t name_pos = message_name.find(".");
         if (name_pos != std::string::npos) {
-          machine_name.erase(name_pos);
+          message_name.erase(name_pos);
           std::string msg_name(item.first.getText().substr(name_pos+1));
           size_t enter_pos = msg_name.find("_enter");
           if (enter_pos != std::string::npos && enter_pos == msg_name.length() - 6) {
             msg_name.erase(enter_pos);
             received_message_handlers << "\t if (source == m->_"
-              << machine_name
+              << message_name
               << " && state == " << ExportState::lookup(msg_name)
               << ")\n"
               << "\t\tMachineActions_add(obj, (enter_func)"
@@ -261,7 +261,8 @@ void MachineClass::exportHandlers(std::ostream &ofs)
           }
         }
         else {
-          received_message_handlers << "\tif (state == cw_message_" << machine_name << ")\n"
+          ExportState::add_message(message_name);
+          received_message_handlers << "\tif (state == cw_message_" << message_name << ")\n"
           << "\t\tMachineActions_add(obj, (enter_func)"
           << "cw_" << name << "_"
           << method_name(item.first.getText())
@@ -723,12 +724,10 @@ bool MachineClass::cExport(const std::string &filename) {
         std::map<std::string, PredicateSymbolDetails>::iterator found = ExportState::all_symbol_names().find(source_name);
         if (found != ExportState::all_symbol_names().end()) {
           const PredicateSymbolDetails &psd = (*found).second;
-          int x = 1;
           ofs << "\tval = "; sub_p->toC(ofs);
           ofs << " - *v->l_" << psd.export_name << ";\n";
         }
         else {
-          int x = 1;
           ofs << "\tval = "; sub_p->toC(ofs);
           ofs << " - m->machine.TIMER;\n";
         }
