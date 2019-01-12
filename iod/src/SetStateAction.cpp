@@ -42,6 +42,14 @@ Action *MoveStateActionTemplate::factory(MachineInstance *mi)
 	return new MoveStateAction(mi, *this);
 }
 
+void SetStateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  std::string machine_name(target.get());
+  out << "\tif (executing(m->_" << machine_name << ")) {"
+  << "\t\tccrReturn(0);\n"
+  << "\t}\n"
+  << "changeMachineState(m->_" << machine_name << ", state_cw_" << new_state << ", 0);\n";
+}
+
 SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth)
 : Action(mi), target(t.target), saved_state(t.new_state), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) { }
 

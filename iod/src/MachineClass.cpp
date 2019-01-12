@@ -681,7 +681,7 @@ bool MachineClass::cExport(const std::string &filename) {
     ofs << "int cw_" << name << "_handle_message(struct MachineBase *ramp, struct MachineBase *machine, int state);\n";
     ofs << "int cw_" << name << "_check_state(struct cw_" << name << " *m);\n";
     if (timer_clauses.size()) {
-      ofs << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m, struct cw_" << name << "_Vars *v);\n";
+      ofs << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m, struct cw_" << name << "_Vars_backup *v);\n";
     }
 
 		ofs
@@ -708,7 +708,7 @@ bool MachineClass::cExport(const std::string &filename) {
     // TODO: update to take into account the source timer being tested.
     if (timer_clauses.size()) {
       ofs
-      << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m, struct cw_" << name << "_Vars *v) {\n"
+      << "uint64_t cw_" << name << "_next_trigger_time(struct cw_" << name << " *m, struct cw_" << name << "_Vars_backup *v) {\n"
       << "\tint64_t res = 1000000000;\n"
       << "\tint64_t val = 0;\n"
       << "\t//TODO: remove possible duplicates here\n";
@@ -726,7 +726,7 @@ bool MachineClass::cExport(const std::string &filename) {
         if (found != ExportState::all_symbol_names().end()) {
           const PredicateSymbolDetails &psd = (*found).second;
           ofs << "\tval = "; sub_p->toC(ofs);
-          ofs << " - *v->l_" << psd.export_name << ";\n";
+          ofs << " - v->l_" << psd.export_name << ";\n";
         }
         else {
           ofs << "\tval = "; sub_p->toC(ofs);
@@ -749,6 +749,7 @@ bool MachineClass::cExport(const std::string &filename) {
 		}
 		ofs << params.str() << ") {\n"
 		<< "\tinitMachineBase(&m->machine, name);\n"
+    << "\tm->machine.class_name = \"" << name << "\";\n"
 		<< "\tinit_io_address(&m->addr, 0, 0, 0, 0, iot_none, IO_STABLE);\n"
 		<< setup.str();
 		SymbolTableConstIterator pnames_iter = properties.begin();
