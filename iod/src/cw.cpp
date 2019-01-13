@@ -297,6 +297,12 @@ int main (int argc, char const *argv[])
     ExportState::add_symbol("sym_VALUE", 1);
     ExportState::add_symbol("sym_broker", 2);
     ExportState::add_symbol("sym_message", 3);
+    ExportState::add_symbol("sym_channel", 4);
+    ExportState::add_symbol("sym_max_output", 5);
+    ExportState::add_symbol("sym_num_pixels", 6);
+    ExportState::add_symbol("sym_pin", 7);
+    ExportState::add_symbol("sym_out", 8);
+    ExportState::add_symbol("sym_in", 9);
 
     // the following classes will not be exported in the exported code
     std::set<std::string> ignore;
@@ -338,7 +344,7 @@ int main (int argc, char const *argv[])
     internal.insert("INPUT");
     internal.insert("OUTPUT");
     internal.insert("EXTERNAL");
-
+    internal.insert("DIGITALLEDS");
 
     // pin definitions
     std::stringstream pin_definitions;
@@ -440,12 +446,14 @@ int main (int argc, char const *argv[])
         if (mc && mc->parent && (mc->parent->name == "CPU" || mc->parent->name == "BOARD")) continue;
 
         if (m->_type == "INPUT" || m->_type == "OUTPUT") {
+          const Value &level = m->getValue("level");
           std::string item_name = std::string("cw_inst_") + m->getName();
           std::string local_pin_name(base_name(m->parameters[1].real_name));
           std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + local_pin_name;
-          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ");\n";
+          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", " << level.iValue <<  ");\n";
           setup << "gpio_pad_select_gpio(" << pin_name << ");\n";
           setup << "gpio_set_direction(" << pin_name << ", GPIO_MODE_" << m->_type << ");\n";
+          if (m->_type == "OUTPUT") setup << "gpio_set_level(" << pin_name << ", " << level.iValue << ");\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
           exportPropertyInitialisation(m, item_name, setup);

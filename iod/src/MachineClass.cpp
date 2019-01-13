@@ -275,7 +275,7 @@ void MachineClass::exportHandlers(std::ostream &ofs)
         std::cout << "Warning: Not handling " << item.first.getText() << "\n";
     }
     if (!init_seen) {
-      ofs << "int cw_" << name << "_INIT_enter(struct cw_" << name << " *m, ccrContParam) {\n"
+      ofs << "int cw_" << name << "_" << initial_state_message << "(struct cw_" << name << " *m, ccrContParam) {\n"
       << "\tm->machine.execute = 0;\n"
       << "\treturn 1;\n"
       << "};\n";
