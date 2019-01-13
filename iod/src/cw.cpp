@@ -450,7 +450,10 @@ int main (int argc, char const *argv[])
           std::string item_name = std::string("cw_inst_") + m->getName();
           std::string local_pin_name(base_name(m->parameters[1].real_name));
           std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + local_pin_name;
-          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", " << level.iValue <<  ");\n";
+          setup << "struct " << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name;
+          if (m->_type == "OUTPUT")
+            setup << ", " << level.iValue;
+          setup <<  ");\n";
           setup << "gpio_pad_select_gpio(" << pin_name << ");\n";
           setup << "gpio_set_direction(" << pin_name << ", GPIO_MODE_" << m->_type << ");\n";
           if (m->_type == "OUTPUT") setup << "gpio_set_level(" << pin_name << ", " << level.iValue << ");\n";
