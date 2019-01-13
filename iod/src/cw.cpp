@@ -431,13 +431,7 @@ int main (int argc, char const *argv[])
       std::ofstream setup(setup_file);
       setup << "#include <iointerface.h>\n#include \"driver/gpio.h\"\n\n";
       setup << pin_definitions.str();
-      setup <<
-      "struct RTIOInterface *interface = RTIOInterface_get();\n"
-      << "while (!interface) {\n"
-      << "  taskYIELD();\n"
-      << "  interface = RTIOInterface_get();\n"
-      << "}\n";
-     std::list<MachineInstance*>::iterator instances = MachineInstance::begin();
+      std::list<MachineInstance*>::iterator instances = MachineInstance::begin();
       while (instances != MachineInstance::end()) {
         MachineInstance *m = *instances++;
         MachineClass *mc = m->getStateMachine();
@@ -469,7 +463,7 @@ int main (int argc, char const *argv[])
           std::string item_name = std::string("cw_inst_") + m->getName();
           std::string local_pin_name(base_name(m->parameters[1].real_name));
           std::string pin_name = std::string("cw_") +  m->parameters[0].machine->_type + "_" + local_pin_name;
-          setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, ADC_CHANNEL_0, 0);\n";
+          setup << "struct cw_" << rt_names[m->_type] << " *" << item_name << " = create_cw_" << rt_names[m->_type] << "(\"" << m->getName() << "\", " << pin_name << ", 0, 0, " << local_pin_name << " , 0);\n";
 
           setup << "{\n\tstruct MachineBase *m = cw_" << rt_names[m->_type] << "_To_MachineBase(" << item_name << ");\n";
           exportPropertyInitialisation(m, item_name, setup);
