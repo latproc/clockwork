@@ -5,14 +5,6 @@ See the LICENCES file for license information.
 Martin Leadbeater,  martin.leadbeater@gmail.com
 
 
-PLEASE NOTE: 
-	This software is a work in progress and is not yet
-	likely to work on your equipment. 
-
-
-
-
-
    Latproc - Language and Tools for Process Control
 
 Introduction
