@@ -10,9 +10,9 @@ Trading as Vale Park Software Development
 
 <br/>
   
-   Latproc - Language and Tools for Process Control
+# Latproc - Language and Tools for Process Control
 
-Introduction
+## Introduction
 
 This software provides a high level, finite statemachine-based language 
 called Clockwork that can be used to describe process control systems. 
@@ -23,7 +23,7 @@ system (http://www.beckhoff.de/) through the IgH EtherCAT Master for Linux
 Below are some instructions to help you build the program please
 see the documentation for details about the language itself.
 
-Instructions
+### Dependencies
 
    Note: this software requires that the following software be installed:
 
@@ -39,14 +39,14 @@ Instructions
 	
 	also we use flex, bison, the GNU compiler suite
 
+## Getting Started
 
-   Part A - Building Latproc tools for standalone experimentation
+### Part A - Building Latproc tools for standalone experimentation
 
 The instructions in this part build the Clockwork programming language interpreter
 without the need for the IgH EtherCAT Master.
 
 Note, the Makefile used here assumes libzmq is installed in /usr/local/
-
 
 * pull the latproc project from git
 
@@ -66,19 +66,23 @@ Note, the Makefile used here assumes libzmq is installed in /usr/local/
 <br/>
 
   
-   Part B - setting up the user database for the web interface (optional)
+### Part B - setting up the user database for the web interface (optional)
 
-   Latproc comes with a basic web server and some php scripts that display the state of the system in web panels or display a 3D representation of the model (advanced usage). These pages require a login using a local database for the accounts. The user database can be created using scripts/create_webiodb.
+Latproc comes with a basic web server and some php scripts that display the state of the system in web panels or display a 3D representation of the model (advanced usage). These pages require a login using a local database for the accounts. The user database can be created using scripts/create_webiodb.
 
    By default it will be created in www/app with the name 'webio.db' these
      settings can be changed in settings.php
 
   TODO: fix the above documentation and revisit the web implementation (old and clunky)
+  
+  TODO: Add a comment about our GUI toolkit, humid (https://github.com/latproc/humid as an alternative to the web interface)
+  
+  TODO: Mention that iosh can be used to get started)
 
 <br/>
 <br/>
 
-   Part C - Setting up the IgH EtherCAT software to be used but the Latproc software
+### Part C - Setting up the IgH EtherCAT software to be used but the Latproc software
 
 This is only needed when you are using Clockwork with your EtherCAT hardware. 
 
