@@ -1,10 +1,15 @@
-Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+Copyright (C) 2012-2019 Martin Leadbeater, Michael O'Connor
 
 See the LICENCES file for license information.
 
-Martin Leadbeater,  martin.leadbeater@gmail.com
+<img align="right" width="140" height="61" src="http://www.valeparksoftwaredevelopment.com.au/img/vpsd-logo.png">
 
+Martin Leadbeater,  
+Trading as Vale Park Software Development
+[![paypal](https://www.paypalobjects.com/en_AU/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=BPB7XTK7UH6LA&source=url)
 
+<br/>
+  
    Latproc - Language and Tools for Process Control
 
 Introduction
