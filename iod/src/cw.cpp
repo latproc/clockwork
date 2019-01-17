@@ -293,6 +293,11 @@ int main (int argc, char const *argv[])
     ExportState::add_message("turnOff", -100);
     ExportState::add_message("turnOn", -101);
     ExportState::add_message("property_change", -102);
+    ExportState::add_message("black", -103);
+    ExportState::add_message("red", -104);
+    ExportState::add_message("green", -105);
+    ExportState::add_message("blue", -106);
+    ExportState::add_message("white", -107);
 
     ExportState::add_symbol("sym_VALUE", 1);
     ExportState::add_symbol("sym_broker", 2);
@@ -303,6 +308,14 @@ int main (int argc, char const *argv[])
     ExportState::add_symbol("sym_pin", 7);
     ExportState::add_symbol("sym_out", 8);
     ExportState::add_symbol("sym_in", 9);
+    ExportState::add_symbol("sym_r", 10);
+    ExportState::add_symbol("sym_g", 11);
+    ExportState::add_symbol("sym_b", 12);
+    ExportState::add_symbol("sym_min", 13);
+    ExportState::add_symbol("sym_max", 14);
+    ExportState::add_symbol("sym_strip", 15);
+    ExportState::add_symbol("sym_position", 16);
+
 
     // the following classes will not be exported in the exported code
     std::set<std::string> ignore;
@@ -344,7 +357,8 @@ int main (int argc, char const *argv[])
     internal.insert("INPUT");
     internal.insert("OUTPUT");
     internal.insert("EXTERNAL");
-    internal.insert("DIGITALLEDS");
+    internal.insert("LEDSTRIP");
+    internal.insert("DIGITALLED");
 
     // pin definitions
     std::stringstream pin_definitions;
@@ -419,6 +433,7 @@ int main (int argc, char const *argv[])
 		}
 
     // machine instantiations
+
     {
       std::map<std::string, std::string> rt_names;
       rt_names["INPUT"] = "PointInput";
@@ -428,6 +443,12 @@ int main (int argc, char const *argv[])
 
       std::string setup_file(export_path);
       setup_file += "/cw_setup.inc";
+
+      // while exporting machine instantiations, we also look for special things, for example,
+      // LEDSTRIPs and DIGITALLEDs.  These require extra initialisation to link them together.
+      std::list<MachineInstance*> led_strips;
+      std::list<MachineInstance*> digital_leds;
+
       std::ofstream setup(setup_file);
       setup << "#include <iointerface.h>\n#include \"driver/gpio.h\"\n\n";
       setup << pin_definitions.str();
@@ -435,6 +456,8 @@ int main (int argc, char const *argv[])
       while (instances != MachineInstance::end()) {
         MachineInstance *m = *instances++;
         MachineClass *mc = m->getStateMachine();
+        if (mc && mc->name == "LEDSTRIP") led_strips.push_back(m);
+        else if (mc && mc->name == "DIGITALLED") digital_leds.push_back(m);
         if (m->getName() == "lolibot")
           int x = 1;
         if (mc && mc->parent && (mc->parent->name == "CPU" || mc->parent->name == "BOARD")) continue;
@@ -503,6 +526,15 @@ int main (int argc, char const *argv[])
           setup << "\tif (m->init) m->init();\n";
           setup << "}\n";
 
+        }
+      }
+      if (led_strips.size() && digital_leds.size()) {
+        instances = digital_leds.begin();
+        while (instances != digital_leds.end()) {
+          MachineInstance *m = *instances++;
+          MachineClass *mc = m->getStateMachine();
+          if (m->parameters.size() == 2 && m->parameters[0].machine->_type == "LEDSTRIP")
+            setup << "add_led_to_strip(cw_inst_" << m->parameters[0].machine->getName() << ", cw_inst_" << m->getName() << ");\n";
         }
       }
     }

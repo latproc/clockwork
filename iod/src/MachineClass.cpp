@@ -772,6 +772,7 @@ bool MachineClass::cExport(const std::string &filename) {
     << "\tm->vars = (struct cw_" << name << "_Vars *)malloc(sizeof(struct cw_" << name << "_Vars));\n"
     << "\tm->backup = (struct cw_" << name << "_Vars_backup *)malloc(sizeof(struct cw_" << name << "_Vars_backup));\n"
     << "\tinit_Vars(m, m->vars);\n"
+    << "\tbackup_Vars(m);\n"
     << handlers.str()
 		<< "\tmarkPending(&m->machine);\n"
 		<< "}\n";
