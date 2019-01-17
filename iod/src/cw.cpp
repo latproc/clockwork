@@ -315,7 +315,12 @@ int main (int argc, char const *argv[])
     ExportState::add_symbol("sym_max", 14);
     ExportState::add_symbol("sym_strip", 15);
     ExportState::add_symbol("sym_position", 16);
-
+    ExportState::add_symbol("sym_bytesPerPixel", 17);
+    ExportState::add_symbol("sym_T0H", 18);
+    ExportState::add_symbol("sym_T1H", 19);
+    ExportState::add_symbol("sym_T0L", 20);
+    ExportState::add_symbol("sym_T1L", 21);
+    ExportState::add_symbol("sym_TRS", 22);
 
     // the following classes will not be exported in the exported code
     std::set<std::string> ignore;
