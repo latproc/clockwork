@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 2.6)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
-set (Latproc_VERSION_MINOR 9.5)
+set (Latproc_VERSION_MINOR 9.6)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
