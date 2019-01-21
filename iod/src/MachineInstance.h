@@ -281,6 +281,7 @@ public:
 	static void sort();
 
   virtual void setNeedsCheck();
+  Value earliestScheduleTime(const std::list<Predicate*> &predicates);
   uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
   void updateLastEvaluationTime();
 
@@ -340,6 +341,8 @@ public:
 	Cache *cache;
 	unsigned int action_errors;
 	bool is_changing;
+  Trigger *trigger;
+  std::list<Predicate *>timer_predicates;
 	Channel* owner_channel;
 
 private:

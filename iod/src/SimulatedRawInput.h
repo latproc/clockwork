@@ -57,7 +57,7 @@ private:
 		if ( (last_event == e_on && state == s_on) || (last_event == e_off && state == s_off)) return;
 		struct timeval now;
 		gettimeofday(&now, 0);
-		long t = get_diff_in_microsecs(&now, &last);
+		uint64_t = get_diff_in_microsecs(&now, &last);
 		if (t >= switch_time_usec) {
 			if (last_event == e_on) state = s_on; 
             else if (last_event == e_off ) state = s_off;

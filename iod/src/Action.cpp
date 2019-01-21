@@ -9,10 +9,12 @@
 #include "MessageLog.h"
 #include "AbortAction.h"
 
+void ActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  operator<<(out);
+}
+
 std::list<Trigger*> all_triggers;
 static boost::recursive_mutex trigger_list_mutex;
-
-uint64_t nowMicrosecs();
 
 class TriggerInternals {
 public:
@@ -20,13 +22,13 @@ public:
 	uint64_t start_time;
 	uint64_t last_report;
 	TriggerInternals() {
-		start_time = nowMicrosecs();
+		start_time = microsecs();
 		last_report = 0;
 	}
 };
 
 void Trigger::report(const char *msg) {
-	uint64_t now = nowMicrosecs();
+	uint64_t now = microsecs();
 	if (now - _internals->last_report > 1000) {
 //		DBG_ACTIONS << name << " " << msg << "\n";
 		_internals->last_report = now;

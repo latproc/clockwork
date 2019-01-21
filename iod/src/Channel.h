@@ -322,6 +322,11 @@ public:
 	void putCompletedCommand(IODCommand *cmd);
 	IODCommand *getCompletedCommand();
 */
+private:
+  void prepareCommandSocketAndSubscriber();
+  void blockThreadUntilStart();
+  bool receivedStateChangeMessage(zmq::socket_t &remote_sock, char* &data, size_t &len);
+
 protected:
 	ChannelInternals *internals;
 

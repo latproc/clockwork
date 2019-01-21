@@ -1853,7 +1853,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 						for (k = 0; k < pdo.entry_count; k++) {
 							cJSON *json_entry = cJSON_CreateObject();
 							m.getPdoEntry(&entry, slave.position, i, j, k);
-#if 1
+#if 0
 							std::cout << " entry: " << k 
 								<< "{" 
 								<< entry_pos << ", "

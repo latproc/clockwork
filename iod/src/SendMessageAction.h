@@ -26,12 +26,14 @@
 #include "symboltable.h"
 
 class MachineInstance;
+class ExportState;
 
 struct SendMessageActionTemplate : public ActionTemplate {
 	SendMessageActionTemplate(Value msg, Value dest);
 	SendMessageActionTemplate(Value msg, MachineInstance *dest);
-    virtual Action *factory(MachineInstance *mi);
-    virtual std::ostream &operator<<(std::ostream &out)const;
+  virtual Action *factory(MachineInstance *mi) override;
+  virtual std::ostream &operator<<(std::ostream &out)const override;
+  virtual void toC(std::ostream &out, std::ostream &vars) const override;
 	Value message;
 	Value target;
 	MachineInstance *target_machine;

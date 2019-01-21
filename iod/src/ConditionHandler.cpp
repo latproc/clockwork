@@ -41,7 +41,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
 					if (tracing() && machine->isTraceable()) {
 						machine->resetTemporaryStringStream();
 						machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
-						machine->setValue("TRACE", machine->ss.str());
+            machine->setValue("TRACE", Value(machine->ss.str(), Value::t_string));
 					}
 					const State *on = flag->state_machine->findState("on");
 					if (!flag->isActive()) {
@@ -58,7 +58,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
 				if (tracing() && machine->isTraceable()) {
 					machine->resetTemporaryStringStream();
 					machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
-					machine->setValue("TRACE", machine->ss.str());
+          machine->setValue("TRACE", Value(machine->ss.str(), Value::t_string));
 				}
 				const State *off = flag->state_machine->findState("off");
 				if (!flag->isActive()) flag->setState(*off);

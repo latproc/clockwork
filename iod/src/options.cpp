@@ -29,6 +29,7 @@ const char *persistent_store_name  = 0;
 const char *modbus_map_name = 0;
 const char *debug_config_name = 0;
 const char *dependency_graph_name = 0;
+const char *dependency_graph_root = 0;
 static int publisher_port_num = 5556;
 static bool publisher_port_num_required = false;
 static int persistent_port_num = 5557;
@@ -95,6 +96,14 @@ void set_dependency_graph(const char *name) {
 
 const char *dependency_graph() {
     return dependency_graph_name;
+}
+
+const char *graph_root() {
+  return dependency_graph_root;
+}
+
+void set_graph_root(const char *root) {
+  dependency_graph_root = root;
 }
 
 void set_publisher_port(int port, bool required) {

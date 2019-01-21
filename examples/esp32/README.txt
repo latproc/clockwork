@@ -10,4 +10,4 @@ then run the interpreter passing this directory and an option to trigger the exp
 
   build/cw --export_c ../examples/esp32/
 
-
+files will be written to /tmp/cw_export

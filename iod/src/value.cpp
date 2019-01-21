@@ -41,7 +41,7 @@ static bool stringToFloat(const std::string &s, double &x);
 uint64_t microsecs() {
     struct timeval now;
     gettimeofday(&now, 0);
-    return (uint64_t)now.tv_sec * 1000000L + now.tv_usec;
+    return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
 }
 
 static const double ZERO_DISTANCE = 1.0E-5;
@@ -131,6 +131,14 @@ Value::Value(DynamicValue &dv) : kind(t_dynamic),cached_value(0) {
 // this form takes ownership of the passed DynamiValue rather than makes a clone
 Value::Value(DynamicValue *dv) : kind(t_dynamic),cached_value(0) {
     dyn_value = DynamicValue::ref(dv);
+}
+
+void Value::toString() {
+  if (kind == t_symbol) kind = t_string;
+}
+
+void Value::toSymbol() {
+  if (kind == t_string) kind = t_symbol;
 }
 
 Value &Value::operator=(const Value &orig){

@@ -143,7 +143,7 @@ void SocketMonitor::on_event_bind_failed(const zmq_event_t &event_, const char* 
         //DBG_MSG << socket_name<< " on_event_bind_failed " << addr_ << "\n";
 }
 void SocketMonitor::on_event_accepted(const zmq_event_t &event_, const char* addr_) {
-	//DBG_MSG << socket_name << " on_event_accepted " << event_.value << " " << addr_ << "\n";
+	DBG_MSG << " on_event_accepted " << event_.value << " " << addr_ << "\n";
 	disconnected_ = false;
 	checkResponders(event_, addr_);
 	}

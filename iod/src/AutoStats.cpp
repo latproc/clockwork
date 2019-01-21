@@ -3,8 +3,6 @@
 #include "value.h"
 #include "AutoStats.h"
 
-extern uint64_t nowMicrosecs();
-
 AutoStatStorage::AutoStatStorage(const char *time_name, const char *rate_name, unsigned int reset_every)
 	: start_time(0), last_update(0), total_polls(0), total_time(0),
 		total_delays(0), rate_property(0), time_property(0),reset_point(reset_every) {
@@ -31,15 +29,15 @@ void AutoStatStorage::update(uint64_t now, uint64_t duration) {
 	}
 }
 bool AutoStatStorage::running() { return start_time != 0; };
-void AutoStatStorage::start() { start_time = nowMicrosecs(); }
+void AutoStatStorage::start() { start_time = microsecs(); }
 void AutoStatStorage::stop() {
 	if (start_time) {
-		uint64_t now = nowMicrosecs(); update(now, now-start_time);
+		uint64_t now = microsecs(); update(now, now-start_time);
 		start_time = 0;
 	}
 }
 void AutoStatStorage::update() {
-	uint64_t now = nowMicrosecs();
+	uint64_t now = microsecs();
 	if (start_time) {update(now, now-start_time); }
 	start_time = now;
 }
@@ -58,8 +56,8 @@ const long *AutoStatStorage::setupPropertyRef(const char *machine_name, const ch
 	return &prop.iValue;
 }
 
-AutoStat::AutoStat(AutoStatStorage &storage) : storage_(storage) { start_time = nowMicrosecs(); }
+AutoStat::AutoStat(AutoStatStorage &storage) : storage_(storage) { start_time = microsecs(); }
 AutoStat::~AutoStat() {
-	uint64_t now = nowMicrosecs();
+	uint64_t now = microsecs();
 	storage_.update(now, now-start_time);
 }

@@ -96,7 +96,7 @@ The objective of this document is to provide an explanation of the clockwork
  The role of this compiler is to convert a clockwork program that runs in
  the interpreter into a C program that can then be further compiled and
  linked to form a native executable.
- There will be an option to translate to nesC
+ There may one day be an option to translate to nesC
 \begin_inset CommandInset citation
 LatexCommand cite
 key "Gay:2003:NLH:780822.781133"
@@ -107,12 +107,18 @@ key "Gay:2003:NLH:780822.781133"
  operating system for small microcontrollers.
 \end_layout
 
+\begin_layout Standard
+For the time being the focus is on building an implementation for FreeRTOS
+ and in particular FreeRTOS on the ESP32 platform from Esperiff.
+ This choice is arbitrary and it is important to support a range of platforms.
+\end_layout
+
 \begin_layout Subsection
 Thoughts
 \end_layout
 
 \begin_layout Itemize
-it would be good to be tickless and put the processor to slee when possible
+it would be good to be tickless and put the processor to sleep when possible
 \end_layout
 
 \begin_layout Itemize
@@ -270,8 +276,232 @@ rs as well as a large memory version that may involve very large numbers
  of interconnected machines.
 \end_layout
 
+\begin_layout Subsection
+Language features
+\end_layout
+
+\begin_layout Description
+Command describes what to do when specific messages are received
+\end_layout
+
+\begin_layout Description
+Receive describes what to do with specific messages when they are received
+\end_layout
+
+\begin_layout Description
+Rules describe what state a machine should be based on observed states of
+ other inputs
+\end_layout
+
+\begin_layout Description
+Stable
+\begin_inset space ~
+\end_inset
+
+States are states that machines automatically settle into based on evalulation
+ of rules
+\end_layout
+
+\begin_layout Description
+Transitions define movement from one state to another based on a received
+ message
+\end_layout
+
 \begin_layout Section
 Target translations
+\end_layout
+
+\begin_layout Standard
+NOTE: the implementation has changed a lot since this was drafted; lots
+ to do here.
+\end_layout
+
+\begin_layout Subsection
+Expressions
+\end_layout
+
+\begin_layout Standard
+Elements within expressions may be references or values; values are simpler
+ to translate because the mapping of clockwork values to C types is more-or-less
+ one-to-one.
+ References can be harder to translate because the context in which they
+ are used is important, consider some examples:
+\end_layout
+
+\begin_layout Enumerate
+SELF == on # state omparison
+\end_layout
+
+\begin_layout Enumerate
+x == y # property comparison or state comparison
+\end_layout
+
+\begin_layout Enumerate
+x.STATE == y # state comparison
+\end_layout
+
+\begin_layout Enumerate
+x.STATE == 
+\begin_inset Quotes eld
+\end_inset
+
+t
+\begin_inset Quotes erd
+\end_inset
+
+ # string comparison
+\end_layout
+
+\begin_layout Enumerate
+x,x == y.y # property comparison
+\end_layout
+
+\begin_layout Enumerate
+x.x == y # property or state comparison
+\end_layout
+
+\begin_layout Standard
+The problem of translating elements is made more difficult by the fact that
+ two instances of a machine may have different behaviour depending on the
+ parameters passed to them:
+\end_layout
+
+\begin_layout LyX-Code
+One MACHINE { a FLAG; }
+\end_layout
+
+\begin_layout LyX-Code
+Two MACHINE { OPTION a 
+\begin_inset Quotes eld
+\end_inset
+
+off
+\begin_inset Quotes erd
+\end_inset
+
+; }
+\end_layout
+
+\begin_layout LyX-Code
+Demo MACHINE x { 
+\end_layout
+
+\begin_layout LyX-Code
+  OPTION on 
+\begin_inset Quotes eld
+\end_inset
+
+on
+\begin_inset Quotes erd
+\end_inset
+
+; 
+\end_layout
+
+\begin_layout LyX-Code
+  active WHEN x.a == on;
+\end_layout
+
+\begin_layout LyX-Code
+  idle DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Here the name of a state in an element of One is the same as the value of
+ a property of Two; This is ugly code but legal; it would be nicer if separate
+ operators were used for property comparison (
+\begin_inset Quotes eld
+\end_inset
+
+==
+\begin_inset Quotes erd
+\end_inset
+
+) vs state comparison (
+\begin_inset Quotes eld
+\end_inset
+
+IS
+\begin_inset Quotes erd
+\end_inset
+
+) but in the meantime what is to be done? 
+\end_layout
+
+\begin_layout Standard
+The resolution of elements of an expression may be able to be managed via
+ a 'resolve' function, crafted specifically for each exported machine.
+ Currently, the above 'active' state state test translates to a property
+ comparison:
+\end_layout
+
+\begin_layout LyX-Code
+if ((m->x.a == m->on))
+\end_layout
+
+\begin_layout LyX-Code
+	new_state = state_cw_Demo_active;
+\end_layout
+
+\begin_layout Standard
+On the surface, the above seems fine but in C this depends on 'x' having
+ a field 'a' and that implies some type casting:
+\end_layout
+
+\begin_layout LyX-Code
+struct cw_One *x = (struct cw_One *)m->_x;
+\end_layout
+
+\begin_layout LyX-Code
+if ((x->a == m->on)) 
+\end_layout
+
+\begin_layout LyX-Code
+	new_state = state_cw_Demo_active;
+\end_layout
+
+\begin_layout Standard
+And of course, the above breaks if the parameter 'x' is not actually of
+ that type.
+\end_layout
+
+\begin_layout Standard
+If a state comparison were chosen instead, the code would look like:
+\end_layout
+
+\begin_layout LyX-Code
+//TBD...
+\end_layout
+
+\begin_layout LyX-Code
+struct cw_One *x = (struct cw_One *)m->_x;
+\end_layout
+
+\begin_layout LyX-Code
+if ((x->_a->state == state_cw_FLAG_on))
+\end_layout
+
+\begin_layout LyX-Code
+	new_state = state_cw_Demo_active;
+\end_layout
+
+\begin_layout Standard
+This has the same problem and further requries that the test of the state
+ of 'a' is actually a valid state of 'a' by checking the machine: 'FLAG'.
+\end_layout
+
+\begin_layout Standard
+To resolve the above without introducing slow lookups during execution,
+ the exporter generates getter methods for properties, components and states;
+ this method is part of the MachineBase structure:
+\end_layout
+
+\begin_layout Subsection
+Examples
 \end_layout
 
 \begin_layout Standard

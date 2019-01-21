@@ -52,13 +52,13 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
         std::map<std::string, MachineInstance*>::iterator pos = device->handlers.find(message->topic);
 	if (pos != device->handlers.end()) {
 		MachineInstance *m = (*pos).second;
-		m->setValue("topic", message->topic);
+    m->setValue("topic", Value(message->topic, Value::t_string));
 		char *tmp = 0;
 		long val = strtol(payload, &tmp, 10);
 		if (tmp && *tmp == 0)
 			m->setValue("message", val);
 		else
-			m->setValue("message", payload);
+      m->setValue("message", Value(payload, Value::t_string));
 		const char *evt = payload;
 		std::string event("");
 		event += evt;
@@ -195,9 +195,9 @@ bool MQTTModule::publish(const std::string &topic, const std::string &message, M
         }
         return false;
     }
-    m->setValue("topic", topic.c_str());
+  m->setValue("topic", Value(topic.c_str(), Value::t_string));
     if (m->getValue("message").asString() != message)
-        m->setValue("message", message.c_str());
+      m->setValue("message", Value(message.c_str(), Value::t_string));
     handlers[topic] = m;
     m->mq_interface = this;
     return true;
