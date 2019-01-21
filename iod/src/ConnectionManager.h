@@ -171,7 +171,7 @@ public:
 	// Status tracks the state of the connection between the subscription
 	// manager and the command interface of the remote application
 	enum Status {e_not_used, e_startup, e_disconnected, e_waiting_connect,
-		e_settingup_subscriber, e_waiting_subscriber, e_waiting_setup, e_done };
+		e_settingup_subscriber, e_waiting_subscriber, e_waiting_setup, e_done, e_error, e_connected };
 
 	// SubStatus tracks the state of the connection between each of the subscription
 	// manager's subscription channel; this is the main data channel for a subscription.

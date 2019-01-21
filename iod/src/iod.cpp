@@ -140,7 +140,7 @@ class ClockworkDeviceConfigurator : public DeviceConfigurator {
 bool setupEtherCatThread() {
 	if (!ECInterface::instance()->initialised) {
 		std::cout << "Cannect setup the EtherCAT thread until the interface is initialised\n";
-		return false;
+		exit(1);
 	}
 #ifndef EC_SIMULATOR
 	{
@@ -297,14 +297,13 @@ class IODHardwareActivation : public HardwareActivation {
     IODHardwareActivation() : setup_done(false) {}
 		bool initialiseHardware() {
       assert(!setup_done);
-      setup_done = true;
 			if (setupEtherCatThread()) {
 #ifdef USE_SDO
 				ECInterface::instance()->beginModulePreparation();
 #endif
-				return true;
+				setup_done = true;
 			}
-			else return false;
+			return setup_done;
 		}
 		void operator()(void) {
 			NB_MSG << "----------- Initialising machines ------------\n";

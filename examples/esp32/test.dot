@@ -1,0 +1,26 @@
+
+//button FLAG;
+//led FLAG;
+//pulser Pulse (delay:50) led;
+//aout VARIABLE 0;
+//ramp Ramp pulser, aout;
+//d_button DebouncedInput button;
+//speed_select SpeedSelect d_button, pulser;
+
+digraph G  {
+  graph [splines=ortho];
+  button [shape=box];
+  d_button [shape=box];
+  pulser [shape=box];
+  aout [shape=box];
+  ramp [shape=box];
+  led [shape=box];
+  speed_select [shape=box];
+
+  button -> d_button;
+  d_button -> speed_select;
+  pulser -> speed_select;
+  pulser -> ramp;
+  pulser -> led;
+  ramp -> aout;
+}

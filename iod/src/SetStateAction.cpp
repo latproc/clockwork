@@ -28,8 +28,6 @@
 #include "FireTriggerAction.h"
 #include "AbortAction.h"
 
-uint64_t nowMicrosecs();
-
 Action *SetStateActionTemplate::factory(MachineInstance *mi)
 { 
 	return new SetStateAction(mi, *this);
@@ -42,6 +40,14 @@ std::ostream &SetStateActionTemplate::operator<<(std::ostream &out) const {
 Action *MoveStateActionTemplate::factory(MachineInstance *mi)
 { 
 	return new MoveStateAction(mi, *this);
+}
+
+void SetStateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  std::string machine_name(target.get());
+  out << "\tif (executing(m->_" << machine_name << ")) {"
+  << "\t\tccrReturn(0);\n"
+  << "\t}\n"
+  << "changeMachineState(m->_" << machine_name << ", state_cw_" << new_state << ", 0);\n";
 }
 
 SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth)
@@ -111,7 +117,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			}
 			else {
 				char buf[150];
-				snprintf(buf, 150, "Error: Machine %s asked to change to unknown state %s",
+        snprintf(buf, 150, "Error: Machine %s asked to change to unknown state (%s)",
 					machine->getName().c_str(), deref.sValue.c_str());
 				MessageLog::instance()->add(buf);
 			}
@@ -226,6 +232,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 			}
 			if (status == Complete) {
 				owner->stop(this);
+#if 0
 				State value(new_state.sValue.c_str());
 				if (owner->getStateMachine()->isStableState(value)) {
 					std::multimap<std::string, StableState>::iterator iter(owner->getStateMachine()->stable_state_xref.find(new_state.sValue));
@@ -247,7 +254,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 						delete ptd;
 					}
 				}
-
+#endif
 			}
 			return status;
 		}
@@ -296,7 +303,7 @@ Action::Status SetStateAction::checkComplete() {
 		}
 	}
 
-	if (trigger && nowMicrosecs() - trigger->startTime() > 10000 ) {
+	if (trigger && microsecs() - trigger->startTime() > 10000 ) {
 		trigger->report("taking a long time");
 	}
 

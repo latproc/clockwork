@@ -240,6 +240,10 @@ IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0), dir
 void IOComponent::setInitialState() {
 }
 
+int IOComponent::updatesWaiting() {
+  return updatedComponentsOut.size();
+}
+
 void IOComponent::updatesSent(bool which){
 	//if (which) std::cout << "updates sent\n";
 	updates_sent = which;

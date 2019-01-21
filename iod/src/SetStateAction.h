@@ -32,8 +32,11 @@ class MachineInstance;
 
 struct SetStateActionTemplate : public ActionTemplate {
     SetStateActionTemplate(CStringHolder targ, Value newstate) : target(targ), new_state(newstate) { }
-    virtual Action *factory(MachineInstance *mi);
-		std::ostream &operator<<(std::ostream &out) const;
+    virtual Action *factory(MachineInstance *mi) override;
+		virtual std::ostream &operator<<(std::ostream &out) const override;
+    virtual void toC(std::ostream &out, std::ostream &vars) const override;
+    virtual bool canBlock() const override { return true; }
+
     CStringHolder target;
     Value new_state;
     std::string trigger_event;

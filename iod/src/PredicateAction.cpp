@@ -32,6 +32,43 @@ PredicateActionTemplate::~PredicateActionTemplate() {
     delete predicate;
 }
 
+std::ostream &PredicateActionTemplate::operator<<(std::ostream &out) const {
+  predicate->toC(out);
+  return out;
+}
+
+void PredicateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  out << "\t";
+  if (predicate->left_p->entry.kind == Value::t_symbol) {
+    std::string var = predicate->left_p->entry.sValue;
+    std::map<std::string, PredicateSymbolDetails> &symbols(ExportState::all_symbol_names());
+    std::map<std::string, PredicateSymbolDetails>::iterator item = symbols.find(var);
+    PredicateSymbolDetails psd;
+    if (item != symbols.end())
+      psd = (*item).second;
+    else // this symbol hasn't been seen in when-clauses, properties etc
+      psd = Predicate::PredicateSymbolDetailsFromValue(predicate->left_p->entry);
+    std::string prop = ExportState::instance()->prefix() + psd.export_name;
+    std::string prop_var = "m->vars->l_";
+    if (ExportState::instance()->remotes().find(psd.export_name) != ExportState::instance()->remotes().end()) {
+      std::string machine = prop_var + "m_"  + psd.export_name;
+      out << machine << "->set_value(" << machine << ",\"" << var.substr(var.rfind('.')+1) << "\" ," << (prop_var + psd.export_name) << ",";
+      predicate->right_p->toC(out);
+      out << ");\n";
+    }
+    else{
+      out << "m->machine.set_value(&m->machine, \"" << var << "\", " << (prop_var + psd.export_name) << ",";
+      predicate->right_p->toC(out);
+      out << ");\n";
+    }
+  }
+  else {
+    predicate->left_p->toC(out);
+    out << " = ";
+    predicate->right_p->toC(out);
+    out << ";\n";
+  }
+}
 
 Action *PredicateActionTemplate::factory(MachineInstance *mi) { 
   return new PredicateAction(mi, *this); 
@@ -97,26 +134,26 @@ Value eval(Predicate *p, MachineInstance *m){
 			case opDivide: res = l / r; break;
 			case opAbsoluteValue: if (r < 0) res = -r; else res = r; break;
 			case opMod: res = l % r; break;
-            case opBitAnd: res = l & r; break;
-            case opBitOr: res = l | r; break;
-            case opBitXOr: res = l ^ r; break;
-            case opNegate: res = ~r; break;
+      case opBitAnd: res = l & r; break;
+      case opBitOr: res = l | r; break;
+      case opBitXOr: res = l ^ r; break;
+      case opNegate: res = ~r; break;
 			case opInteger: res = r.trunc(); break;
 			case opFloat: res = r.toFloat(); break;
 			case opAssign: res = r; break; // TBD
-            case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
-            case opAny:
-            case opAll:
-            case opIncludes:
-            case opCount: {
-                DynamicValue *dyn_v = r.dynamicValue();
-                if (dyn_v) return dyn_v->operator()(m);
-            }
-                break;
-	        case opNone: res = 0;
-                break;
-            default:
-                std::cerr << "Error: unhandled operator " << p->op << " in evaluating predicate\n";
+      case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
+      case opAny:
+      case opAll:
+      case opIncludes:
+      case opCount: {
+          DynamicValue *dyn_v = r.dynamicValue();
+          if (dyn_v) return dyn_v->operator()(m);
+      }
+      break;
+      case opNone: res = 0;
+            break;
+        default:
+            std::cerr << "Error: unhandled operator " << p->op << " in evaluating predicate\n";
 	    }
 		
 		if (m && m->debug()) {

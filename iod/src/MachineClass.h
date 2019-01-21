@@ -43,6 +43,7 @@ public:
   std::set<std::string> state_names;
   std::multimap<std::string, StableState> stable_state_xref;
   std::vector<StableState> stable_states;
+  std::list<Predicate *> timer_clauses;
   std::multimap<std::string, MachineCommandTemplate*> commands;
   std::map<Message, MachineCommandTemplate*> enter_functions;
   std::multimap<Message, MachineCommandTemplate*> receives;
@@ -64,6 +65,7 @@ public:
   void disableAutomaticStateChanges();
   void enableAutomaticStateChanges();
   static MachineClass *find(const char *name);
+  void collectTimerPredicates();
 
 	virtual void addProperty(const char *name); // used in interfaces to list synced properties
 	virtual void addPrivateProperty(const char *name); // used in interfaces to list synced properties
@@ -86,7 +88,9 @@ public:
 	std::set<std::string> property_names;
 	std::set<std::string> command_names;
 
-	void exportHandlers(std::ostream &ofs);
+  MachineClass *parent;
+
+  void exportHandlers(std::ostream &ofs);
 	void exportCommands(std::ostream &ofs);
 	bool cExport(const std::string &filename);
 

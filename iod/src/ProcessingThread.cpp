@@ -1,21 +1,21 @@
 /*
-   Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+	 Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
-   This file is part of Latproc
+	 This file is part of Latproc
 
-   Latproc is free software; you can redistribute it and/or
-   modify it under the terms of the GNU General Public License
-   as published by the Free Software Foundation; either version 2
-   of the License, or (at your option) any later version.
+	 Latproc is free software; you can redistribute it and/or
+	 modify it under the terms of the GNU General Public License
+	 as published by the Free Software Foundation; either version 2
+	 of the License, or (at your option) any later version.
 
-   Latproc is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+	 Latproc is distributed in the hope that it will be useful,
+	 but WITHOUT ANY WARRANTY; without even the implied warranty of
+	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	 GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with Latproc; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+	 You should have received a copy of the GNU General Public License
+	 along with Latproc; if not, write to the Free Software
+	 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 #include <assert.h>
@@ -475,7 +475,7 @@ void ProcessingThread::operator()()
 	assert(system);
 
 	enum { s_update_idle, s_update_sent } update_state = s_update_idle;
-    
+		
 	bool commands_started = false;
 
 	enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
@@ -550,7 +550,7 @@ void ProcessingThread::operator()()
 		while (!program_done)
 		{
 			MEMCHECK();
-			curr_t = nowMicrosecs();
+			curr_t = microsecs();
 			internals->process_manager.SetTime(curr_t);
 			//TBD add a guard here to detect/prevent rapid cycling
 
@@ -574,22 +574,19 @@ void ProcessingThread::operator()()
 				num_channels = idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
 			}
 
-			//machines_have_work = MachineInstance::workToDo();
 			{
-				static size_t last_runnable_count = 0;
-				boost::mutex::scoped_lock(runnable_mutex);
-				machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
-				size_t runnable_count = runnable.size();
-				if (runnable_count != last_runnable_count) {
-					//DBG_MSG << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
-					last_runnable_count = runnable_count;
-				}
+				bool have_runnable = !runnable.empty();
+				bool have_events = !MachineInstance::pendingEvents().empty();
+				machines_have_work = have_runnable || have_events;
 			}
-			if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty())
+			if (machines_have_work)
 				poll_wait = 1;
-			else {
+			else if (IOComponent::updatesWaiting())
+				poll_wait = 1;
+			else if (!io_work_queue.empty())
+				poll_wait = 1;
+			else
 				poll_wait = 100;
-			}
 
 			//if (Watchdog::anyTriggered(curr_t))
 			//	Watchdog::showTriggered(curr_t, true);
@@ -729,20 +726,17 @@ void ProcessingThread::operator()()
 			// check the command interface and any command channels for activity
 			bool have_command = false;
 			if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
-				//NB_MSG << "Processing thread has a command from the client interface\n";
 				have_command = true;
 			}
 			else {
 				for (unsigned int i = dynamic_poll_start_idx; i < dynamic_poll_start_idx + num_channels; ++i) {
 					if (items[i].revents & ZMQ_POLLIN) {
-						//NB_MSG << "Processing thread has a command from a channel command interface\n";
 						have_command = true;
 						break;
 					}
 				}
 			}
 			if ( have_command) {
-				//NB_MSG << "processing incoming commands\n";
 				uint64_t start_time = microsecs();
 				uint64_t now = start_time;
 #ifdef KEEPSTATS
@@ -796,9 +790,9 @@ void ProcessingThread::operator()()
 							if (command) {
 								bool ok = false;
 								try {
-									//NB_MSG << "processing thread executing " << buf << "\n";
+									NB_MSG << "processing thread executing " << buf << "\n";
 									ok  = (*command)();
-									//NB_MSG << "execution result " << command->result() << "\n";
+									NB_MSG << "execution result " << command->result() << "\n";
 								}
 								catch (std::exception e) {
 									FileLogger fl(program_name);
@@ -914,14 +908,21 @@ void ProcessingThread::operator()()
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
-							if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
+							if (!mi->enabled())
+								iter = runnable.erase(iter); // machine is disabled, it will get requeued when enabled again
+							else if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
 								to_process.insert(mi);
-  							if (!mi->queuedForStableStateTest()) {
-  								iter = runnable.erase(iter);
-  							}
-  							else iter++;
-              }
-							else iter++;
+								if (!mi->queuedForStableStateTest()) {
+									iter = runnable.erase(iter);
+								}
+								else iter++;
+							}
+							else {
+								if (!mi->queuedForStableStateTest()) {
+									iter = runnable.erase(iter);
+								}
+								else iter++;
+							}
 						}
 					}
 
@@ -938,7 +939,7 @@ void ProcessingThread::operator()()
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
-							if (mi->executingCommand() || !mi->pendingEvents().empty()) {
+							if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
 								iter++;
 								continue;
 							}
@@ -946,7 +947,8 @@ void ProcessingThread::operator()()
 								to_process.insert(mi);
 								iter = runnable.erase(iter);
 							}
-							else iter++;
+							else
+								iter = runnable.erase(iter);
 						}
 					}
 
@@ -1015,7 +1017,7 @@ void ProcessingThread::operator()()
 				 IOComponent::updatesWaiting() 
 				 || IOComponent::getHardwareState() != IOComponent::s_operational
 				)
-		   ) {
+			 ) {
 #ifdef KEEPSTATS
 			avg_update_time.start();
 #endif
