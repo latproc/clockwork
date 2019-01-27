@@ -48,7 +48,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
         char *payload = new char[message->payloadlen + 1];
         memcpy(payload, message->payload, message->payloadlen);
         payload[message->payloadlen] = 0;
-        std::cout << message->topic << ": " << payload << "\n";
+        //std::cout << message->topic << ": " << payload << "\n";
         std::map<std::string, MachineInstance*>::iterator pos = device->handlers.find(message->topic);
 	if (pos != device->handlers.end()) {
 		MachineInstance *m = (*pos).second;
@@ -74,14 +74,15 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
 			m->execute(msg, device);
 		}
 		else {
-			std::set<MachineInstance*>::iterator iter = m->depends.begin();
-			while (iter != m->depends.end()) {
-				MachineInstance *mi = *iter++;
-				Message msg(event.c_str(), (is_enter)?Message::ENTERMSG : Message::SIMPLEMSG);
-				mi->execute(msg, m);
-			}
-		}
-        }
+      m->notifyDependents();
+//      std::set<MachineInstance*>::iterator iter = m->depends.begin();
+//      while (iter != m->depends.end()) {
+//        MachineInstance *mi = *iter++;
+//        Message msg(event.c_str(), (is_enter)?Message::ENTERMSG : Message::SIMPLEMSG);
+//        mi->execute(msg, m);
+//      }
+    }
+  }
 	delete[] payload;
     }
 }
@@ -357,7 +358,7 @@ void MQTTInterface::collectState() {
         MQTTModule *module = *iter++;
         int rc = mosquitto_loop(module->mosq, -1, 1);
         if (rc != MOSQ_ERR_SUCCESS) {
-            std::cout << "Error: " << rc << " polling mosquitto\n";
+            std::cout << "Error: " << rc << " " << strerror(rc) << " polling mosquitto\n";
             module->connect();
         }
     }
