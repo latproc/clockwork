@@ -251,6 +251,14 @@ Persistence via persistd
 Property type and state enforcement via STRICT
 \end_layout
 
+\begin_layout Itemize
+WAITing for a machine to enter a state currently only checks that the state
+ name has changed.
+ It should also wait for the enter_function to have been processed.
+ A complex solution to this problems is discussed later; utilising CHANGING
+ STATE operators but perhaps there is a simpler method also.
+\end_layout
+
 \begin_layout Subsubsection
 Not implemented
 \end_layout
@@ -711,8 +719,8 @@ test
 \end_layout
 
 \begin_layout LyX-Code
-OPTION c REFER TO a.b; ## the when update is used the target machine will
- read its c value from its local/param a.b
+OPTION c REFER TO a.b; ## when update is used the target machine will read
+ its c value from its local/param a.b
 \end_layout
 
 \end_deeper
