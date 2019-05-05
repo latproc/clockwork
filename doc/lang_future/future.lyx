@@ -855,6 +855,10 @@ SUM OF list [ not implemented yet]
 VALUE OF symbol [when is this needed]
 \end_layout
 
+\begin_layout Itemize
+INVALID statename
+\end_layout
+
 \begin_layout Subsubsection
 Automatic properties
 \end_layout
@@ -1006,11 +1010,11 @@ NEXT # attempt to get a record from the external source and update linked
 }
 \end_layout
 
+\end_deeper
 \begin_layout LyX-Code
 }
 \end_layout
 
-\end_deeper
 \begin_layout Standard
 They can be linked to a property set:
 \end_layout
@@ -1474,6 +1478,49 @@ off,on has the same effect; since no value is given, it defaults to 0, 1
 
 \begin_layout Description
 on=1:1,off=0:1 is the complete specification, avoiding the use of defaults
+\end_layout
+
+\begin_layout Standard
+Often several control signals or status signals share a single 8- or 16-bit
+ memory location.
+ In clockwork, each of the status bits is represented by a MACHINE object
+ and the setup is managed by use of the SHARES syntax.
+ GIven a control word defined like this:
+\end_layout
+
+\begin_layout LyX-Code
+Control: xxxEMMMR
+\end_layout
+
+\begin_layout LyX-Code
+Bits:    76543210
+\end_layout
+
+\begin_layout Standard
+where E is the 'Enable' control bit and R is a 'Reset' command and MMM is
+ a 3-bit 'Mode' value, clockwork can be configured as follows:
+\end_layout
+
+\begin_layout LyX-Code
+control DIGITALOUTPUT module1, 0; # the 1st component (an 8 bit value) of
+ module1
+\end_layout
+
+\begin_layout LyX-Code
+enable FLAG SHARES control.VALUE(offset:4);
+\end_layout
+
+\begin_layout LyX-Code
+reset FLAG SHARES control.VALUE(offset:0);
+\end_layout
+
+\begin_layout LyX-Code
+mode DIGITALOUTPUT SHARES control.VALUE(offset:1, size:3);
+\end_layout
+
+\begin_layout Standard
+With this configuration, the program can set mode.VALUE to anything from
+ 0 (0x000) to 7 (0b111).
 \end_layout
 
 \begin_layout Subsubsection
