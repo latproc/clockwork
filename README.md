@@ -62,6 +62,16 @@ Note, the Makefile used here assumes libzmq is installed in /usr/local/
 
  * the 'cw' program is the clockwork interpreter and 'iosh' is the commandline shell that lets you monitor, debug and control your running clockwork programs.
 
+ We have added a test system using googletest (https://github.com/google/googletest). To enable it, 
+ create a file called LocalCMakeLists.txt in the 'iod' directory containing the line:
+
+ set (RUN_TESTS ON)
+
+ That will cause the googletest projects to be cloned into the project. To run the tests, 
+ build as above and then:
+
+ make debug-test
+
 <br/>
 <br/>
 
@@ -82,7 +92,7 @@ Latproc comes with a basic web server and some php scripts that display the stat
 <br/>
 <br/>
 
-### Part C - Setting up the IgH EtherCAT software to be used but the Latproc software
+### Part C - Setting up the IgH EtherCAT software to be used with the Latproc software
 
 This is only needed when you are using Clockwork with your EtherCAT hardware. 
 
