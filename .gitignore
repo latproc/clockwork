@@ -49,6 +49,7 @@ Thumbs.db
 ._*
 *.lyx?
 .~*
+.vscode/
 
 #project build files
 iod/build/
@@ -58,6 +59,18 @@ modbus/xcode/
 etc/
 bin/
 
+# compiled or generated files
+ec_tool/
+iod/cw
+iod/device_connector
+iod/iod
+iod/iod_nosdo
+iod/iod_sdo
+iod/iosh
+iod/modbusd
+iod/persistd
+
+
 #project runtime scraps
 modbus_mappings.bak
 persist.dat
@@ -65,6 +78,7 @@ webio.db
 devices.dat
 states.dat
 persist_scratch_*
+
 libs/
 demo/
 iot/
@@ -75,4 +89,15 @@ private_tests/
 iod/old/
 modbus/
 plugins/
+doc/communications/communications.tex
+doc/lang_future/future.tex
+doc/language_ref/language_ref.tex
+doc/user_guide/user_guide.tex
+iod/LocalCMakeLists.txt
 
+# built apps
+iod/cw
+iod/device_connector
+iod/iosh
+iod/modbusd
+iod/persistd

@@ -90,7 +90,6 @@ int find_matches(rexp_info *info, std::vector<std::string> &variables, const cha
             if (so != -1 && eo != -1) {
                 memcpy(match_buf, string+so, eo - so);
                 match_buf[eo-so] = 0;
-				std::cout << "pushing: '" << match_buf << "\n";
 				variables.push_back(match_buf);
             }
         }

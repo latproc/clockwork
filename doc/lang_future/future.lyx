@@ -154,11 +154,19 @@ Replace the current symbol table and Value system with a more efficient
 \end_layout
 
 \begin_layout Itemize
-Type extensions 
+Type extensions (ecept for channels)
 \end_layout
 
 \begin_layout Itemize
 Records/Property Sets
+\end_layout
+
+\begin_layout Itemize
+Database/Key-Value
+\end_layout
+
+\begin_layout Itemize
+Queue
 \end_layout
 
 \begin_layout Subsection
@@ -265,6 +273,10 @@ Not implemented
 
 \begin_layout Itemize
 Macros
+\end_layout
+
+\begin_layout Itemize
+State validation during handlers
 \end_layout
 
 \begin_layout Subsection

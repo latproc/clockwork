@@ -347,16 +347,19 @@ void ProcessingThread::setProcessingThreadInstance( ProcessingThread* pti) {
 }
 
 void ProcessingThread::activate(MachineInstance *m) {
+	if (!instance()) return;
 	boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
 	instance()->runnable.insert(m);
 }
 
 void ProcessingThread::suspend(MachineInstance *m) {
+	if (!instance()) return;
 	boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
 	instance()->runnable.erase(m);
 }
 
 bool ProcessingThread::is_pending(MachineInstance *m) {
+	if (!instance()) return false;
 	boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
 	return instance()->runnable.count(m);
 }

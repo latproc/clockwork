@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <map>
 #include <assert.h>
-#include <ecrt.h>
-#include <tool/MasterDevice.h>
+//#include <ecrt.h>
+//#include <tool/MasterDevice.h>
 #include <ECInterface.h>
 #include <Statistics.h>
 #include <libxml/xmlreader.h>

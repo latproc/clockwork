@@ -25,22 +25,24 @@
 #include <sys/types.h>
 
 #include "IODCommand.h"
+
+/* the entry details structure is used to gather extra data about
+ an entry in a module that the Etherlab master structures doesn't
+ normally give us.
+ */
+class EntryDetails {
+public:
+    std::string name;
+    unsigned int entry_index;
+    unsigned int sm_index;
+    unsigned int pdo_index;
+};
+
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #include <map>
 #include "value.h"
 
-/* the entry details structure is used to gather extra data about
-  an entry in a module that the Etherlab master structures doesn't
-  normally give us. 
-*/
-class EntryDetails {
-public:
-	std::string name;
-	unsigned int entry_index;
-	unsigned int sm_index;
-	unsigned int pdo_index;
-};
 
 #ifdef USE_SDO
 class SDOEntry;
@@ -92,7 +94,27 @@ typedef struct ECDomainState{} ec_domain_state_t;
 typedef struct ECSlaveConfig{} ec_slave_config_t;
 typedef struct ECSlaveConfigState{} ec_slave_config_state_t;
 typedef struct ECPDOEntryReg{} ec_pdo_entry_reg_t;
+typedef struct ECPDOEntryInfo{
+    unsigned int index;
+    unsigned int subindex;
+    uint8_t bit_length;
+} ec_pdo_entry_info_t;
+typedef struct ECPDOInfo {
+    unsigned int index;
+    unsigned int n_entries;
+    ec_pdo_entry_info_t *entries;
+} ec_pdo_info_t;
+typedef struct ECSyncInfo{
+    uint8_t index;
+    uint8_t dir;
+    uint8_t watchdog_mode;
+    unsigned int n_pdos;
+    ec_pdo_info_t *pdos;
+} ec_sync_info_t;
 
+const int EC_DIR_INPUT = 0;
+const int EC_DIR_OUTPUT = 1;
+const int EC_WD_DEFAULT = 0;
 #endif
 #include <time.h>
 #include <vector>

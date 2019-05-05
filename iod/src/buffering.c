@@ -3,30 +3,30 @@
 #include <stdlib.h>
 #include "buffering.h"
 #include <assert.h>
-#ifdef TEST
 #include <math.h>
-#endif
 
 struct CircularBuffer *createBuffer(int size)
 {
+	  if (size <= 0) return 0;
     struct CircularBuffer *buf = (struct CircularBuffer *)malloc(sizeof(struct CircularBuffer));
     buf->bufsize = size;
     buf->front = -1;
     buf->back = -1;
     buf->values = (double*)malloc( sizeof(double) * size);
     buf->times = (uint64_t*)malloc( sizeof(uint64_t) * size);
-	buf->total = 0;
+	  buf->total = 0;
     return buf;
 }
 
 void destroyBuffer(struct CircularBuffer *buf) {
+	  if (!buf) return;
     free(buf->values);
     free(buf->times);
     free(buf);
 }
 
 int bufferIndexFor(struct CircularBuffer *buf, int i) {
-	int l = length(buf);
+	int l = bufferLength(buf);
 	/* it is a non recoverable error to access the buffer without 
 		adding a value */
 	if (l == 0) { assert(0); abort(); }
@@ -62,7 +62,7 @@ double rate(struct CircularBuffer *buf, int n) {
 
 int findMovement(struct CircularBuffer *buf, double amount, int max_len) {
 	/* reading the buffer without entering data is a non-recoverable error */
-	int l = length(buf);
+	int l = bufferLength(buf);
 	if (l == 0) { assert(0); abort(); }
 	int n = 0;
 	int idx = buf->front;
@@ -91,7 +91,8 @@ double rateDebug(struct CircularBuffer *buf) {
 }
 
 double bufferAverage(struct CircularBuffer *buf, int n) {
-	int l = length(buf);
+	if (n<0) return 0;
+	int l = bufferLength(buf);
 	if (n>l) n = l;
 	return (n==0) ? n : bufferSum(buf, n) / n;
 }
@@ -107,7 +108,7 @@ long getBufferTime(struct CircularBuffer *buf, int n) {
 }
 
 double getBufferValueAt(struct CircularBuffer *buf, unsigned long t) {
-	int n = length(buf) - 1;
+	int n = bufferLength(buf) - 1;
 	int idx = bufferIndexFor(buf, n);
 
 	if (buf->times[idx] >= t) return buf->values[idx];
@@ -121,7 +122,7 @@ double getBufferValueAt(struct CircularBuffer *buf, unsigned long t) {
 
 double bufferSum(struct CircularBuffer *buf, int n) {
 	//return buf->total;
-	int i = length(buf);
+	int i = bufferLength(buf);
 	if (i>n) i = n;
 	double tot = 0.0;
 	while (i) {
@@ -135,7 +136,7 @@ int size(struct CircularBuffer *buf) {
     return buf->bufsize;
 }
 
-int length(struct CircularBuffer *buf) {
+int bufferLength(struct CircularBuffer *buf) {
     if (buf->front == -1) return 0;
     return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
 }
@@ -147,7 +148,7 @@ double getTime(struct CircularBuffer *buf, int n) {
 double slope(struct CircularBuffer *buf) {
     double sumX = 0.0, sumY = 0.0, sumXY = 0.0;
     double sumXsquared = 0.0, sumYsquared = 0.0;
-    int n = length(buf)-1;
+    int n = bufferLength(buf)-1;
     double t0 = getTime(buf, n);
 		int i = 0;
     for (i = n-1; i>0; i--) {
@@ -164,7 +165,7 @@ double slope(struct CircularBuffer *buf) {
     return m;
 }
 
-#ifdef TEST
+#ifdef TESTING
 
 int failures = 0;
 
@@ -196,7 +197,7 @@ int main(int argc, const char *argv[]) {
 		printf("rate returned %.3lf\n", rate(mybuf, 4) ); 
 	}
 	++tests; if (slope(mybuf) != 1.5) { fail(tests); }
-	++tests; if (length(mybuf) != test_buffer_size) { fail(tests); }
+	++tests; if (bufferLength(mybuf) != test_buffer_size) { fail(tests); }
 	++tests; if (sum(mybuf, size(mybuf)) / test_buffer_size != average(mybuf,size(mybuf))) 
 				{ fail(tests); }
 	if (test_buffer_size == 4) { /* this test only works if the buffer is of length 4 */

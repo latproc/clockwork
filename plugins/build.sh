@@ -16,6 +16,11 @@ out=`cat $script | awk '
 	print 
 	}'`
 
+if [ "$out" = "" ]; then
+	echo "Error: no PLUGIN statement found"
+	exit 1;
+fi
+
 cat "$script" | awk -v file="$script" '
 	BEGIN {
 #		print "#include \"plugin.inc\""

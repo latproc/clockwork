@@ -18,7 +18,7 @@ struct CircularBuffer {
 struct CircularBuffer *createBuffer(int size);
 void destroyBuffer(struct CircularBuffer *buf);
 int size(struct CircularBuffer *buf);
-int length(struct CircularBuffer *buf);
+int bufferLength(struct CircularBuffer *buf);
 double bufferAverage(struct CircularBuffer *buf, int n);
 double bufferSum(struct CircularBuffer *buf, int n);
 double getBufferValue(struct CircularBuffer *buf, int n);

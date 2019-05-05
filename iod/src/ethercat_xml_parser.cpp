@@ -4,9 +4,11 @@
 #include <algorithm>
 #include <map>
 #include <assert.h>
+#ifndef EC_SIMULATOR
 #include <ecrt.h>
-#include <errno.h>
 #include <tool/MasterDevice.h>
+#endif
+#include <errno.h>
 #include <ECInterface.h>
 #include <Statistics.h>
 #include <libxml/xmlreader.h>
@@ -121,7 +123,7 @@ uint64_t EtherCATXMLParser::intFromHex(const char *s) {
 	errno = 0;
 	unsigned long res = strtol(s, &rem, 16);
 	if (errno != 0)  {
-		std::cout << " error " << strerror(errno) << " converting " << s << " to an integer\n";
+		std::cout << " error '" << strerror(errno) << "' converting '" << s << "' to an integer\n";
 		return 0;
 	}
 	return res;
@@ -255,14 +257,17 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 						enter(in_device_type);
 						matched_device = 0;
 						attributes.clear();
-						uint64_t pc = 0, rn = 0;
+						uint64_t pc = 0, rn = 0, mi = 0;
 						if (xmlTextReaderHasAttributes(reader)) {
 							captureAttribute(reader, "ProductCode", attributes);
 							captureAttribute(reader, "ModuleIdent", attributes);
 							captureAttribute(reader, "RevisionNo", attributes);
-							pc = intFromHex((const char *)attributes["ProductCode"].c_str()+2);
-							uint64_t mi = intFromHex((const char *)attributes["ModuleIdent"].c_str()+2);
-							rn = intFromHex( (const char *)attributes["RevisionNo"].c_str()+2);
+							if ( attributes.find("ProductCode") != attributes.end() )
+								pc = intFromHex((const char *)attributes["ProductCode"].c_str()+2);
+							if ( attributes.find("ModuleIdent") != attributes.end() )
+								mi = intFromHex((const char *)attributes["ModuleIdent"].c_str()+2);
+							if ( attributes.find("RevisionNo") != attributes.end() )
+								rn = intFromHex( (const char *)attributes["RevisionNo"].c_str()+2);
 
 							// check whether this device matches on the user is looking for
 							for (unsigned int i = 0; i<xml_configured.size(); ++i) {
@@ -657,8 +662,10 @@ bool EtherCATXMLParser::loadDeviceConfigurationXML(const char *filename) {
 		while ( (res = xmlTextReaderRead(reader)) == 1) {
 			processToken(reader);
 		}
-		if (res)
+		if (res) {
 			std::cerr << "Parse error reading " << filename << "\n";
+			return false;
+		}
 		xmlFreeTextReader(reader);
 		return true;
 	}

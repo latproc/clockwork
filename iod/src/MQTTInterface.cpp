@@ -48,41 +48,43 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
         char *payload = new char[message->payloadlen + 1];
         memcpy(payload, message->payload, message->payloadlen);
         payload[message->payloadlen] = 0;
-        std::cout << message->topic << ": " << payload << "\n";
+        //std::cout << message->topic << ": " << payload << "\n";
         std::map<std::string, MachineInstance*>::iterator pos = device->handlers.find(message->topic);
-	if (pos != device->handlers.end()) {
-		MachineInstance *m = (*pos).second;
-    m->setValue("topic", Value(message->topic, Value::t_string));
-		char *tmp = 0;
-		long val = strtol(payload, &tmp, 10);
-		if (tmp && *tmp == 0)
-			m->setValue("message", val);
-		else
-      m->setValue("message", Value(payload, Value::t_string));
-		const char *evt = payload;
-		std::string event("");
-		event += evt;
-		bool is_enter = false;
-		if (strcmp(evt,"on") == 0 || strcmp(evt, "off") == 0) {
-			event += "_enter";
-			is_enter = true;
-		}
-		else
-			event = "property_change";
-		if (m->_type == "POINT" && (event ==  "on_enter" || event == "off_enter")) {
-			Message msg(event.c_str(), Message::ENTERMSG);
-			m->execute(msg, device);
-		}
-		else {
-			std::set<MachineInstance*>::iterator iter = m->depends.begin();
-			while (iter != m->depends.end()) {
-				MachineInstance *mi = *iter++;
-				Message msg(event.c_str(), (is_enter)?Message::ENTERMSG : Message::SIMPLEMSG);
-				mi->execute(msg, m);
-			}
-		}
+        if (pos != device->handlers.end()) {
+            MachineInstance *m = (*pos).second;
+            m->setValue("topic", Value(message->topic, Value::t_string));
+            char *tmp = 0;
+            long val = strtol(payload, &tmp, 10);
+            if (tmp && *tmp == 0)
+                m->setValue("message", val);
+            else
+                m->setValue("message", Value(payload, Value::t_string));
+            const char *evt = payload;
+            std::string event(evt);
+            bool is_enter = false;
+            // this is a hack: on & off is a state change but everything else is a property change!?
+            if (strcmp(evt,"on") == 0 || strcmp(evt, "off") == 0) {
+                event += "_enter";
+                is_enter = true;
+            }
+            else
+                event = "property_change";
+            if (m->_type == "POINT" && (event ==  "on_enter" || event == "off_enter")) {
+                Message msg(event.c_str(), Message::ENTERMSG);
+                m->execute(msg, device);
+            }
+            else {
+                m->notifyDependents();
+                // the following needs some thought. we we want property_change events here?
+                // std::set<MachineInstance*>::iterator iter = m->depends.begin();
+                // while (iter != m->depends.end()) {
+                //   MachineInstance *mi = *iter++;
+                //   Message msg(event.c_str(), (is_enter)?Message::ENTERMSG : Message::SIMPLEMSG);
+                //   mi->execute(msg, m);
+                // }
+            }
         }
-	delete[] payload;
+        delete[] payload;
     }
 }
 
@@ -357,7 +359,7 @@ void MQTTInterface::collectState() {
         MQTTModule *module = *iter++;
         int rc = mosquitto_loop(module->mosq, -1, 1);
         if (rc != MOSQ_ERR_SUCCESS) {
-            std::cout << "Error: " << rc << " polling mosquitto\n";
+            std::cout << "Error: " << rc << " " << strerror(rc) << " polling mosquitto\n";
             module->connect();
         }
     }

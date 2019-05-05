@@ -1054,7 +1054,7 @@ int loadConfig(std::list<std::string> &files) {
     f_iter++;
   }
 
-  if (!opened_file) return 1;
+  //if (!opened_file) return 1;
 
   if (num_errors > 0)
   {
@@ -1081,8 +1081,7 @@ int loadConfig(std::list<std::string> &files) {
     return 2;
   }
 
-  NB_MSG << " Configuration loaded. " << MachineInstance::countAutomaticMachines() << " automatic machines\n";
-  //MachineInstance::displayAutomaticMachines();
+  //NB_MSG << " Configuration loaded. " << MachineInstance::countAutomaticMachines() << " automatic machines\n";
   return 0;
 }
 
@@ -1146,33 +1145,7 @@ void initialise_machines() {
   while (m_iter != MachineInstance::end()) {
     MachineInstance *mi = *m_iter++;
     mi->markActive();
-#if 0
-    if (!mi->receives_functions.empty() || mi->commands.size()
-        || (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
-        || mi->isModbusExported()
-        || mi->uses_timer
-        || mi->mq_interface
-        || mi->stable_states.size() > 0
-        || mi->_type == "LIST"
-        || mi->_type == "REFERENCE"
-        || mi->_type == "CONDITION"
-        || mi->_type == "COUNTERRATE"
-        || mi->_type == "RATEESTIMATOR"
-        || (mi->getStateMachine() && mi->getStateMachine()->plugin )
-        || mi->isActive() // constructor marked this machine type as active
-        ) {
-      mi->markActive();
-      DBG_INITIALISATION << mi->getName() << " is active\n";
-      ++num_active;
-    }
-    else {
-      mi->markPassive();
-      DBG_INITIALISATION << mi->getName() << " is passive\n";
-      ++num_passive;
-    }
-#endif
   }
-  NB_MSG << num_passive << " passive and " << num_active << " active machines\n";
 
   // enable all other machines
 
