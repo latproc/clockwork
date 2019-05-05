@@ -55,6 +55,11 @@ add_test(NAME test_bit_ops COMMAND test_bit_ops)
 
 add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp )
 set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
+add_custom_command(
+        TARGET test_ecat_xml POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${PROJECT_SOURCE_DIR}/tests/test.xml
+                ${CMAKE_CURRENT_BINARY_DIR}/test.xml)
 
 target_link_libraries(test_ecat_xml gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} xml2 pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
