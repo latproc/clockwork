@@ -95,6 +95,21 @@ static const std::string entryKey("Entry");
 static const std::string smKey("Sm");
 static const std::string altSmMappingKey("AlternativeSmMapping");
 
+std::vecttor<std::string, int> key_to_state;
+
+ParserState stateFromKey(ParserState current, const std::string &key) {
+	if (key == deviceKey || key == moduleKey) return in_device;
+	if (current == in_device && key == typeKey) return in_device_type;
+	if (current == in_device && key == nameKey) return in_device_name;
+	if (key == smKey) return in_sm; 
+	if (key == pdoKey) return in_pdo; 
+	if (current == in_pdo && key == nameKey) return in_pdo_name; 
+	if (current == in_pdo && key == indexKey) return in_pdo_index; 
+	if (current == in_pdo && key == entryKey) return in_pdo_entry; 
+	if (key == altSmMappingKey) return in_alt_sm_mapping; 
+	return ps_unknown;
+}
+
 EtherCATXMLParser::EtherCATXMLParser( DeviceConfigurator &dc)
 : state(skipping), configurator(dc), current_depth(0), current_device(0), matched_device(0),
 	current_alt_sm(0), selected_alt_sm(0), current_sm_mapping(0), num_device_entries(0),
@@ -118,7 +133,7 @@ void EtherCATXMLParser::init() {
 	current_pdo_start_entry = 0;
 }
 
-uint64_t EtherCATXMLParser::intFromHex(const char *s) {
+uint64_t XMLHelper::intFromHex(const char *s) {
 	char *rem = 0;
 	errno = 0;
 	unsigned long res = strtol(s, &rem, 16);
@@ -129,7 +144,7 @@ uint64_t EtherCATXMLParser::intFromHex(const char *s) {
 	return res;
 }
 
-uint64_t EtherCATXMLParser::intFromStr(const char *s) {
+uint64_t XMLHelper::intFromStr(const char *s) {
 	char *r = 0;
 	long val;
 	if (strncmp("#x",s,2) == 0 || strncmp("0x", s, 2) == 0)
@@ -263,13 +278,13 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 							captureAttribute(reader, "ModuleIdent", attributes);
 							captureAttribute(reader, "RevisionNo", attributes);
 							if ( attributes.find("ProductCode") != attributes.end() )
-								pc = intFromHex((const char *)attributes["ProductCode"].c_str()+2);
+								pc = XMLHelper::intFromHex((const char *)attributes["ProductCode"].c_str()+2);
 							if ( attributes.find("ModuleIdent") != attributes.end() )
-								mi = intFromHex((const char *)attributes["ModuleIdent"].c_str()+2);
+								mi = XMLHelper::intFromHex((const char *)attributes["ModuleIdent"].c_str()+2);
 							if ( attributes.find("RevisionNo") != attributes.end() )
-								rn = intFromHex( (const char *)attributes["RevisionNo"].c_str()+2);
+								rn = XMLHelper::intFromHex( (const char *)attributes["RevisionNo"].c_str()+2);
 
-							// check whether this device matches on the user is looking for
+							// found a device in the xml, check whether this device matches one the user is looking for
 							for (unsigned int i = 0; i<xml_configured.size(); ++i) {
 								DeviceInfo *info;
 								if ( ( info = xml_configured[i])
@@ -283,7 +298,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 							if ( attributes.find("ProductCode") != attributes.end() )
 								current_device->product_code = intFromStr(attributes["ProductCode"].c_str());
 							else if ( attributes.find("ModuleIdent") != attributes.end() )
-								current_device->product_code = intFromStr(attributes["<ModuleIdent"].c_str());
+								current_device->product_code = intFromStr(attributes["ModuleIdent"].c_str());
 							if ( attributes.find("RevisionNo") != attributes.end() )
 								current_device->revision_no = intFromStr(attributes["RevisionNo"].c_str());
 							else
