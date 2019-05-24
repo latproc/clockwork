@@ -15,7 +15,7 @@ queue LIST;
   idle DEFAULT;
 
 ENTER getWeight {
-	    raw := TAKE FIRST FROM queue;
+    raw := TAKE FIRST FROM queue;
     tmp := COPY `[0-9][0-9]+` FROM raw;
     n_tmp := "1" + tmp;
     tmp := n_tmp;

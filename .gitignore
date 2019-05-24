@@ -89,10 +89,6 @@ private_tests/
 iod/old/
 modbus/
 plugins/
-doc/communications/communications.tex
-doc/lang_future/future.tex
-doc/language_ref/language_ref.tex
-doc/user_guide/user_guide.tex
 iod/LocalCMakeLists.txt
 
 # built apps
@@ -101,3 +97,5 @@ iod/device_connector
 iod/iosh
 iod/modbusd
 iod/persistd
+# documentation is in LyX, ignore temporary files
+*.tex
