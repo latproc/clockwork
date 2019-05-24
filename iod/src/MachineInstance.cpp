@@ -359,11 +359,15 @@ bool MachineInstance::uses(MachineInstance *other) {
 	if (other->_type == "ANALOGOUTPUT") return true;
 	if (other->_type == "STATUS_FLAG") return true;
 	if (other->_type == "FLAG") return true;
+	if (other->_type == "DIGITALINPUT") return true;
+	if (other->_type == "DIGITALOUTPUT") return true;
 	if (_type == "POINT") return false;
 	if (_type == "ANALOGINPUT") return true;
+	if (_type == "DIGITALINPUT") return true;
 	if (other->_type == "COUNTER") return true;
 	if (_type == "COUNTERRATE") return true;
 	if (_type == "ANALOGOUTPUT") return true;
+	if (_type == "DIGITALOUTPUT") return true;
 	if (_type == "STATUS_FLAG") return true;
 	if (_type == "FLAG") return false;
 	return other->_name < _name;

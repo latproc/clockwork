@@ -285,7 +285,6 @@ void predefine_special_machines() {
   point_class->initial_state = State("off");
   point_class->disableAutomaticStateChanges();
 
-
   MachineClass *ain_class = new MachineClass("ANALOGINPUT");
   ain_class->parameters.push_back(Parameter("module"));
   ain_class->parameters.push_back(Parameter("offset"));
@@ -299,6 +298,17 @@ void predefine_special_machines() {
   ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("Velocity", Value(0), SymbolTable::ST_REPLACE);
+
+	MachineClass *din_class = new MachineClass("DIGITALINPUT");
+	din_class->parameters.push_back(Parameter("module"));
+	din_class->parameters.push_back(Parameter("offset"));
+	din_class->addState("stable");
+	din_class->addState("unstable");
+	din_class->default_state = State("stable");
+	din_class->initial_state = State("stable");
+	din_class->disableAutomaticStateChanges();
+	din_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
+	din_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
   MachineClass *cnt_class = new MachineClass("COUNTER");
   cnt_class->parameters.push_back(Parameter("module"));
@@ -348,19 +358,14 @@ void predefine_special_machines() {
   aout_class->initial_state = State("stable");
   aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
-#if 0
-  MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
-  pid_class->parameters.push_back(Parameter("module"));
-  pid_class->parameters.push_back(Parameter("offset"));
-  pid_class->parameters.push_back(Parameter("settings"));
-  pid_class->parameters.push_back(Parameter("position"));
-  pid_class->parameters.push_back(Parameter("speed"));
-  pid_class->addState("stable");
-  pid_class->addState("unstable");
-  pid_class->default_state = State("stable");
-  pid_class->initial_state = State("stable");
-  pid_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-#endif
+	MachineClass *dout_class = new MachineClass("DIGITALOUTPUT");
+	dout_class->parameters.push_back(Parameter("module"));
+	dout_class->parameters.push_back(Parameter("offset"));
+	dout_class->addState("stable");
+	dout_class->addState("unstable");
+	dout_class->default_state = State("stable");
+	dout_class->initial_state = State("stable");
+	dout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
   MachineClass *list_class = new MachineClass("LIST");
   list_class->addState("empty");
@@ -601,6 +606,8 @@ void semantic_analysis() {
       // make sure that analogue machines have a value property
       if (machine_class->name == "ANALOGOUTPUT"
           || machine_class->name == "ANALOGINPUT"
+					|| machine_class->name == "DIGITALOUTPUT"
+					|| machine_class->name == "DIGITALINPUT"
           || machine_class->name == "COUNTER"
           || machine_class->name == "COUNTERRATE"
           || machine_class->name == "RATEESTIMATOR"
