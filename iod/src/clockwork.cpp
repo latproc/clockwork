@@ -1022,14 +1022,14 @@ int loadConfig(std::list<std::string> &files) {
   }
 
   /* load configuration from files named on the commandline */
-  int opened_file = 0;
+  //int opened_file = 0;
   std::list<std::string>::iterator f_iter = files.begin();
   while (f_iter != files.end())
   {
     const char *filename = (*f_iter).c_str();
     if (filename[0] != '-')
     {
-      opened_file = 1;
+      //opened_file = 1;
       yyin = fopen(filename, "r");
       if (yyin)
       {
@@ -1050,7 +1050,7 @@ int loadConfig(std::list<std::string> &files) {
     }
     else if (strlen(filename) == 1) /* '-' means stdin */
     {
-      opened_file = 1;
+      //opened_file = 1;
       NB_MSG << "\nProcessing stdin\n";
       yyfilename = "stdin";
       yyin = stdin;

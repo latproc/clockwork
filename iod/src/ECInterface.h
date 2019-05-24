@@ -43,6 +43,41 @@ public:
 #include <map>
 #include "value.h"
 
+// SlaveInfo holds the details of the slave type and version
+class SlaveInfo {
+	public:
+	SlaveInfo() : position(0), product_code(0), vendor_id(0), revision(0), ec_info(0) {}
+	SlaveInfo(const SlaveInfo &other) : position(other.position), product_code(other.product_code), 
+		vendor_id(other.vendor_id), revision(other.revision)
+	{
+#ifndef EC_SIMULATOR
+		if (other.ec_info) {
+			ec_info = new ec_slave_info_t;
+			*ec_info = *other.ec_info;
+		}
+		else ec_info = 0;
+#endif
+	}
+	~SlaveInfo() { delete ec_info; }
+
+	int position;
+	uint32_t product_code;
+	uint32_t vendor_id;
+	uint32_t revision;
+	std::string name;
+#ifndef EC_SIMULATOR
+	void set_slave_info(ec_slave_info_t &info) {
+		ec_info = new ec_slave_info_t;
+		memcpy(ec_info, &info, sizeof(ec_slave_info_t));
+		position = ec_info->position;
+		product_code = ec_info->product_code;
+		vendor_id = ec_info->vendor_id;
+		revision = ec_info->revision_number;
+		name = ec_info->name;
+	}
+	ec_slave_info_t *ec_info;
+#endif
+};
 
 #ifdef USE_SDO
 class SDOEntry;

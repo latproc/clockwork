@@ -100,17 +100,24 @@ public:
 	virtual bool configure(DeviceInfo *dev) = 0;
 };
 
+class XMLHelper {
+  public:
+	static uint64_t intFromHex(const char *s);
+	static uint64_t intFromStr(const char *s);
+};
 
 class EtherCATXMLParser {
 public:
 
 std::vector<DeviceInfo *> xml_configured;
 
-enum ParserState { skipping, in_device, in_device_type, in_device_name, in_subnode, in_pdo,
+enum ParserState { ps_unknown, skipping, in_device, in_device_type, in_device_name, in_subnode, in_pdo,
 			in_pdo_index, in_pdo_name, in_pdo_entry, in_alt_sm_mapping, in_sm };
 
 ParserState state;
 DeviceConfigurator &configurator;
+
+static ParserState stateFromKey(EtherCATXMLParser::ParserState current, const std::string &key);
 
 unsigned int current_depth;
 DeviceInfo *current_device;
@@ -119,10 +126,6 @@ DeviceInfo* matched_device;
 EtherCATXMLParser( DeviceConfigurator &dc);
 
 void init();
-
-uint64_t intFromHex(const char *s);
-
-uint64_t intFromStr(const char *s);
 
 std::string entry_name(const std::string &s);
 

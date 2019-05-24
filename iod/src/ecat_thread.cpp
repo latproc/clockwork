@@ -65,7 +65,7 @@
 
 extern bool machine_is_ready;
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
-static bool machine_was_ready = false;
+extern bool machine_was_ready;
 uint64_t next_ecat_receive = 0;
 
 EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000),last_ping(0) { 

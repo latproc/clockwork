@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iterator>
 #include <algorithm>
+#include <vector>
 #include <map>
 #include <assert.h>
 #ifndef EC_SIMULATOR
@@ -95,6 +96,21 @@ static const std::string entryKey("Entry");
 static const std::string smKey("Sm");
 static const std::string altSmMappingKey("AlternativeSmMapping");
 
+std::map<std::string, int> key_to_state;
+
+EtherCATXMLParser::ParserState EtherCATXMLParser::stateFromKey(EtherCATXMLParser::ParserState current, const std::string &key) {
+	if (key == deviceKey || key == moduleKey) return in_device;
+	if (current == in_device && key == typeKey) return in_device_type;
+	if (current == in_device && key == nameKey) return in_device_name;
+	if (key == smKey) return in_sm; 
+	if (key == pdoKey) return in_pdo; 
+	if (current == in_pdo && key == nameKey) return in_pdo_name; 
+	if (current == in_pdo && key == indexKey) return in_pdo_index; 
+	if (current == in_pdo && key == entryKey) return in_pdo_entry; 
+	if (key == altSmMappingKey) return in_alt_sm_mapping; 
+	return ps_unknown;
+}
+
 EtherCATXMLParser::EtherCATXMLParser( DeviceConfigurator &dc)
 : state(skipping), configurator(dc), current_depth(0), current_device(0), matched_device(0),
 	current_alt_sm(0), selected_alt_sm(0), current_sm_mapping(0), num_device_entries(0),
@@ -118,7 +134,7 @@ void EtherCATXMLParser::init() {
 	current_pdo_start_entry = 0;
 }
 
-uint64_t EtherCATXMLParser::intFromHex(const char *s) {
+uint64_t XMLHelper::intFromHex(const char *s) {
 	char *rem = 0;
 	errno = 0;
 	unsigned long res = strtol(s, &rem, 16);
@@ -129,7 +145,7 @@ uint64_t EtherCATXMLParser::intFromHex(const char *s) {
 	return res;
 }
 
-uint64_t EtherCATXMLParser::intFromStr(const char *s) {
+uint64_t XMLHelper::intFromStr(const char *s) {
 	char *r = 0;
 	long val;
 	if (strncmp("#x",s,2) == 0 || strncmp("0x", s, 2) == 0)
@@ -148,12 +164,12 @@ std::string EtherCATXMLParser::entry_name(const std::string &s) {
 	return s;
 }
 
-void EtherCATXMLParser::enter(ParserState new_state) {
+void EtherCATXMLParser::enter(EtherCATXMLParser::ParserState new_state) {
 	//std::cout << state << "->" << new_state << "\n";
 	state = new_state;
 }
 
-void EtherCATXMLParser::reenter(ParserState new_state) {
+void EtherCATXMLParser::reenter(EtherCATXMLParser::ParserState new_state) {
 	//std::cout << state << "->" << new_state << "\n";
 	state = new_state;
 }
@@ -263,13 +279,13 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 							captureAttribute(reader, "ModuleIdent", attributes);
 							captureAttribute(reader, "RevisionNo", attributes);
 							if ( attributes.find("ProductCode") != attributes.end() )
-								pc = intFromHex((const char *)attributes["ProductCode"].c_str()+2);
+								pc = XMLHelper::intFromHex((const char *)attributes["ProductCode"].c_str()+2);
 							if ( attributes.find("ModuleIdent") != attributes.end() )
-								mi = intFromHex((const char *)attributes["ModuleIdent"].c_str()+2);
+								mi = XMLHelper::intFromHex((const char *)attributes["ModuleIdent"].c_str()+2);
 							if ( attributes.find("RevisionNo") != attributes.end() )
-								rn = intFromHex( (const char *)attributes["RevisionNo"].c_str()+2);
+								rn = XMLHelper::intFromHex( (const char *)attributes["RevisionNo"].c_str()+2);
 
-							// check whether this device matches on the user is looking for
+							// found a device in the xml, check whether this device matches one the user is looking for
 							for (unsigned int i = 0; i<xml_configured.size(); ++i) {
 								DeviceInfo *info;
 								if ( ( info = xml_configured[i])
@@ -281,11 +297,11 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 						if (matched_device) {
 							current_device = new DeviceInfo;
 							if ( attributes.find("ProductCode") != attributes.end() )
-								current_device->product_code = intFromStr(attributes["ProductCode"].c_str());
+								current_device->product_code = XMLHelper::intFromStr(attributes["ProductCode"].c_str());
 							else if ( attributes.find("ModuleIdent") != attributes.end() )
-								current_device->product_code = intFromStr(attributes["<ModuleIdent"].c_str());
+								current_device->product_code = XMLHelper::intFromStr(attributes["ModuleIdent"].c_str());
 							if ( attributes.find("RevisionNo") != attributes.end() )
-								current_device->revision_no = intFromStr(attributes["RevisionNo"].c_str());
+								current_device->revision_no = XMLHelper::intFromStr(attributes["RevisionNo"].c_str());
 							else
 								current_device->revision_no = 0;
 						}
@@ -405,7 +421,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 					ConfigurationDetails &config(current_device->config);
 					if (!config.c_syncs) config.init();
 					std::string cb = attributes["ControlByte"];
-					uint8_t b_cb = 0xff & intFromStr(cb.c_str());
+					uint8_t b_cb = 0xff & XMLHelper::intFromStr(cb.c_str());
 					std::cout << "SM. Name: "
 						<< attributes["Name"] << " ControlByte: " << cb  << " "
 						<< (b_cb & 0x0c ? "Output" : "Input" )<< "\n";
@@ -488,7 +504,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 				if (matched_device && (kind == XML_READER_TYPE_TEXT || kind == XML_READER_TYPE_CDATA) ) {
 					assert(current_device);
 					if (xmlTextReaderHasValue(reader)) {
-						current_pdo_index = intFromStr((const char *)xmlTextReaderConstValue(reader));
+						current_pdo_index = XMLHelper::intFromStr((const char *)xmlTextReaderConstValue(reader));
 						capturing_pdo = false;
 						current_sm_index = -1;
 						current_alt_sm_mapping_index = -1;
@@ -505,7 +521,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 							}
 						}
 						else if ( attributes.find("Sm") != attributes.end() ) { // have a SM number
-							current_sm_index = intFromStr(attributes["Sm"].c_str());
+							current_sm_index = XMLHelper::intFromStr(attributes["Sm"].c_str());
 							capturing_pdo = true;
 						}
 						std::cout << "PDO Index: ";
@@ -532,9 +548,9 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 							std::cout << "\t" << item.first <<  " " << item.second << "\n";
 						}
 						ec_pdo_entry_info_t *e = &current_device->config.c_entries[n];
-						e->index = intFromStr( entry_attributes["Index"].c_str());
-						e->subindex = intFromStr( entry_attributes["SubIndex"].c_str());
-						e->bit_length = intFromStr( entry_attributes["BitLen"].c_str());
+						e->index = XMLHelper::intFromStr( entry_attributes["Index"].c_str());
+						e->subindex = XMLHelper::intFromStr( entry_attributes["SubIndex"].c_str());
+						e->bit_length = XMLHelper::intFromStr( entry_attributes["BitLen"].c_str());
 						std::cout << "Added entry: " << std::hex << "0x" <<e->index << std::dec
 							<< ", " << (int)e->subindex << ", " << (int)e->bit_length << "\n";
 
@@ -573,7 +589,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 						if (attributes.find("No") != attributes.end()) {
 							current_sm_mapping = new SmMapping();
 							current_alt_sm->mappings.push_back(current_sm_mapping);
-							current_sm_mapping->num = intFromStr( attributes["No"].c_str() );
+							current_sm_mapping->num = XMLHelper::intFromStr( attributes["No"].c_str() );
 						}
 					}
 				}
@@ -586,7 +602,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 						if (xmlTextReaderHasValue(reader))  {
 							//if (!current_alt_sm->pdos) current_alt_sm->pdos = new unsigned int(current_alt_sm->alloc_size);
 							current_sm_mapping->pdos[ current_sm_mapping->n_pdos++ ] =
-								0xffff & intFromStr((const char *)xmlTextReaderConstValue(reader));
+								0xffff & XMLHelper::intFromStr((const char *)xmlTextReaderConstValue(reader));
 						}
 					}
 				}
@@ -602,7 +618,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 					if (current_alt_sm && current_alt_sm->is_default)
 						std::cout << " (Default) ";
 
-					unsigned int curr_mapping = intFromStr(attributes["No"].c_str());
+					unsigned int curr_mapping = XMLHelper::intFromStr(attributes["No"].c_str());
 					std::cout << " No: " << curr_mapping
 						<< ( matched_device->selected_alt_sm_name.length()
 							&& matched_device->selected_alt_sm_name == sm_name ? " [selected]" : "")

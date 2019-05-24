@@ -62,11 +62,9 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
                 m->setValue("message", Value(payload, Value::t_string));
             const char *evt = payload;
             std::string event(evt);
-            bool is_enter = false;
             // this is a hack: on & off is a state change but everything else is a property change!?
             if (strcmp(evt,"on") == 0 || strcmp(evt, "off") == 0) {
                 event += "_enter";
-                is_enter = true;
             }
             else
                 event = "property_change";
