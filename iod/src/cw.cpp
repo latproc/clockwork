@@ -352,6 +352,8 @@ int main (int argc, char const *argv[])
     std::set<std::string> internal;
     internal.insert("ANALOGINPUT");
     internal.insert("ANALOGOUTPUT");
+		internal.insert("DIGITALINPUT");
+		internal.insert("DIGITALOUTPUT");
     internal.insert("MQTTBROKER");
     internal.insert("MQTTPUBLISHER");
     internal.insert("MQTTSUBSCRIBER");
@@ -445,6 +447,8 @@ int main (int argc, char const *argv[])
       rt_names["OUTPUT"] = "PointOutput";
       rt_names["ANALOGINPUT"] = "ANALOGINPUT";
       rt_names["ANALOGOUTPUT"] = "ANALOGOUTPUT";
+			rt_names["DIGITALINPUT"] = "DIGITALINPUT";
+			rt_names["DIGITALOUTPUT"] = "DIGITALOUTPUT";
 
       std::string setup_file(export_path);
       setup_file += "/cw_setup.inc";
