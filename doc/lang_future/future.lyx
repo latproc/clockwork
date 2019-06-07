@@ -463,7 +463,47 @@ a := (a + x) AS INTEGER;
 \end_layout
 
 \begin_layout Standard
-The precedence of AS is 
+Equality tests for floating point values can given a tolerance:
+\end_layout
+
+\begin_layout Standard
+x == y WITHIN 0.001;
+\end_layout
+
+\begin_layout Subsubsection
+Engineering values
+\end_layout
+
+\begin_layout Standard
+We could explore the ability to refer to values with units, to help readability
+ and clarify the calculations being performed.
+ The IN keyword can be used to express values in other units.
+\end_layout
+
+\begin_layout LyX-Code
+x := 1 hr;
+\end_layout
+
+\begin_layout LyX-Code
+y := x IN min;
+\end_layout
+
+\begin_layout Standard
+There are a small set of predefined endineering values but this set can
+ be extended within user configurations.
+ TBD work on this syntax
+\end_layout
+
+\begin_layout LyX-Code
+hr EXPRESSED IN min USES { min / 60 }
+\end_layout
+
+\begin_layout LyX-Code
+min EXPRESSED IN hr USES { hr * 60 }
+\end_layout
+
+\begin_layout Standard
+Probably the term 'EXPRESSED' could be omitted here.
 \end_layout
 
 \begin_layout Subsubsection
@@ -667,9 +707,9 @@ Property Sets
 \end_layout
 
 \begin_layout Standard
-Property Sets are groups of property names that can be used to initialise
- machines or used to change the value of several properties at the same
- time.
+Property Sets are a wat to structure or group property names that can be
+ used to initialise machines or used to change the value of several properties
+ at the same time.
 \end_layout
 
 \begin_layout Standard
@@ -776,6 +816,10 @@ Partial updates from Property Sets should also be possible
 
 \begin_layout LyX-Code
 COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
+\end_layout
+
+\begin_layout Standard
+See also comments about structured data, below.
 \end_layout
 
 \begin_layout Subsubsection
@@ -1072,6 +1116,10 @@ property := RESULT.val;
 
 \begin_layout LyX-Code
 SEND go TO RESULT.ITEM;
+\end_layout
+
+\begin_layout Standard
+TBD add details about parameters.
 \end_layout
 
 \begin_layout Subsection
@@ -1465,6 +1513,68 @@ on=1:1,off=0:1 is the complete specification, avoiding the use of defaults
 \end_layout
 
 \begin_layout Subsubsection
+Structured Data
+\end_layout
+
+\begin_layout Standard
+TBD add details about structures, JSON and XML and transactions/atomic changes.
+\end_layout
+
+\begin_layout Standard
+OPTION value { x:0, y:0 }
+\end_layout
+
+\begin_layout Standard
+LOCK value;
+\end_layout
+
+\begin_layout Standard
+value.x := 3;
+\end_layout
+
+\begin_layout Standard
+value.y := 4;
+\end_layout
+
+\begin_layout Standard
+RELEASE value or perhaps COMMIT value (either would release the lock)
+\end_layout
+
+\begin_layout Standard
+Should we use the 'WITHIN' syntax:
+\end_layout
+
+\begin_layout Standard
+WITHIN value x := 3, y:= 7;
+\end_layout
+
+\begin_layout Subsubsection
+Constrained Data
+\end_layout
+
+\begin_layout Standard
+See LET.
+\end_layout
+
+\begin_layout Standard
+CONSTRAIN x,y : y := x+ 5; # this would iteratively attempt to solve for
+ x.
+ 
+\end_layout
+
+\begin_layout Standard
+Should we add EQUIVALENT (better name?) clauses:
+\end_layout
+
+\begin_layout Standard
+CONSTRAIN x,y : y := x + 5 EQUIVALENT x := y - 5;
+\end_layout
+
+\begin_layout Standard
+If there is no solution for a constraint, an error is raised.
+\end_layout
+
+\begin_layout Subsubsection
 Persistence
 \end_layout
 
@@ -1645,6 +1755,10 @@ Error:
 \end_deeper
 \begin_layout LyX-Code
 }
+\end_layout
+
+\begin_layout Standard
+TBD how should this be used to enable validation when done?
 \end_layout
 
 \begin_layout Standard
