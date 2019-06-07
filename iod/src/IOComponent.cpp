@@ -131,6 +131,7 @@ static void display(uint8_t *p, unsigned int count = 0);
 #endif
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
+    if (bitpos >= 8) return;
 	uint8_t bitmask = 1<<bitpos;
 	if (val) *q |= bitmask; else *q &= (uint8_t)(0xff - bitmask);
 }
@@ -578,7 +579,7 @@ public:
 
 	double filter() {
 		unsigned int filter_length = *filter_len;
-		if ((unsigned int)length(positions) < filter_length) return getBufferValue(positions, 0);
+		if ((unsigned int)bufferLength(positions) < filter_length) return getBufferValue(positions, 0);
 		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
 		double res = 0;
 		for (unsigned int i=0; i < filter_length; ++i) {
@@ -737,7 +738,7 @@ void update(uint64_t read_time) {
 }
 	
 double filter() {
-	if ((unsigned int)length(positions) < 9) return getBufferValue(positions,0);
+	if ((unsigned int)bufferLength(positions) < 9) return getBufferValue(positions,0);
 	double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
 	double res = 0;
 	for (unsigned int i=0; i<9; ++i) {

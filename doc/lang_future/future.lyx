@@ -154,11 +154,19 @@ Replace the current symbol table and Value system with a more efficient
 \end_layout
 
 \begin_layout Itemize
-Type extensions 
+Type extensions (ecept for channels)
 \end_layout
 
 \begin_layout Itemize
 Records/Property Sets
+\end_layout
+
+\begin_layout Itemize
+Database/Key-Value
+\end_layout
+
+\begin_layout Itemize
+Queue
 \end_layout
 
 \begin_layout Subsection
@@ -265,6 +273,10 @@ Not implemented
 
 \begin_layout Itemize
 Macros
+\end_layout
+
+\begin_layout Itemize
+State validation during handlers
 \end_layout
 
 \begin_layout Subsection
@@ -887,6 +899,10 @@ SUM OF list [ not implemented yet]
 VALUE OF symbol [when is this needed]
 \end_layout
 
+\begin_layout Itemize
+INVALID statename
+\end_layout
+
 \begin_layout Subsubsection
 Automatic properties
 \end_layout
@@ -1038,11 +1054,11 @@ NEXT # attempt to get a record from the external source and update linked
 }
 \end_layout
 
+\end_deeper
 \begin_layout LyX-Code
 }
 \end_layout
 
-\end_deeper
 \begin_layout Standard
 They can be linked to a property set:
 \end_layout
@@ -1512,6 +1528,53 @@ off,on has the same effect; since no value is given, it defaults to 0, 1
 on=1:1,off=0:1 is the complete specification, avoiding the use of defaults
 \end_layout
 
+\begin_layout Standard
+Often several control signals or status signals share a single 8- or 16-bit
+ memory location.
+ In clockwork, each of the status bits is represented by a MACHINE object
+ and the setup is managed by use of the OVERLAPS syntax.
+ Given a control word defined like this:
+\end_layout
+
+\begin_layout LyX-Code
+Control: xxxEMMMR
+\end_layout
+
+\begin_layout LyX-Code
+Bits:    76543210
+\end_layout
+
+\begin_layout Standard
+where x bits aren't used, E is the 'Enable' control bit and R is a 'Reset'
+ command and MMM is a 3-bit 'Mode' value, clockwork can be configured as
+ follows:
+\end_layout
+
+\begin_layout LyX-Code
+# access the 1st component (an 8 bit value) of module1:
+\end_layout
+
+\begin_layout LyX-Code
+control DIGITALOUTPUT(size:8) module1, 0; 
+\end_layout
+
+\begin_layout LyX-Code
+enable FLAG OVERLAPS control.VALUE(offset:4);
+\end_layout
+
+\begin_layout LyX-Code
+reset FLAG OVERLAPS control.VALUE(offset:0);
+\end_layout
+
+\begin_layout LyX-Code
+mode DIGITALOUTPUT(size:3) OVERLAPS control.VALUE(offset:1);
+\end_layout
+
+\begin_layout Standard
+With this configuration, the program can set mode.VALUE to any 3-bit value,
+ i.e., a value from 0 (0x0) to 7 (0b111).
+\end_layout
+
 \begin_layout Subsubsection
 Structured Data
 \end_layout
@@ -1579,7 +1642,7 @@ Persistence
 \end_layout
 
 \begin_layout Standard
-Currently persistencs is a hack using a property `PERSISTENT' that causes
+Currently persistence is a hack using a property `PERSISTENT' that causes
  a machine to announce statue or property changes on a persitence channel
  whenever a change occurs.
  This is to be upgraded to become a feature of the language and the following
@@ -2337,7 +2400,7 @@ size the size (in bytes) of the entry (TBD fix this and implement support
 The object has a VALUE property that can be set and read within the code
  and an IOTIME that indicates the last time the entry was read from the
  io hardware.
- A `defautl' property can also be set to indicate that this entry is to
+ A `default' property can also be set to indicate that this entry is to
  be initialised before the control logic is given access to the hardware.
 \end_layout
 

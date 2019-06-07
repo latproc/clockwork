@@ -588,6 +588,10 @@ namespace ValueOperations {
 				return b.iValue;
 			else if (b.kind == Value::t_float)
 				return b.fValue;
+			else if (a.kind == Value::t_string)
+				return Value(a.sValue + b.asString(), Value::t_string); 
+			else if (a.kind == Value::t_symbol)
+				return Value(a.sValue + b.asString()); 
 			return 0;
 		}
 		std::ostream& operator<<(std::ostream&out) const { out << "add"; return out; }
@@ -615,6 +619,10 @@ namespace ValueOperations {
 				return -b.iValue;
 			else if (b.kind == Value::t_float)
 				return -b.fValue;
+			else if (a.kind == Value::t_string)
+				return a; 
+			else if (a.kind == Value::t_symbol)
+				return a; 
 			return 0;
 		}
 		std::ostream& operator<<(std::ostream&out) const { out << "subtract"; return out; }
@@ -647,7 +655,7 @@ namespace ValueOperations {
 	struct Divide : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const { 
 			if (a.kind == Value::t_integer) {
-				if (a.iValue == 0) return 0;
+				if (a.iValue == 0) return a;
 				if (b.kind == Value::t_integer) {
 					if (b.iValue == 0) {
 						if (a.iValue < 0) return INT_MIN; else return INT_MAX;
@@ -661,7 +669,9 @@ namespace ValueOperations {
 					}
 					else
 						return (double)a.iValue / b.fValue;
-				else return 0;
+				else {
+					return a;
+				}
 			}
 			else if (a.kind == Value::t_float) {
 				if (a.fValue == 0) return 0.0;
@@ -681,7 +691,7 @@ namespace ValueOperations {
 				else
 					return 0;
 			}
-			return 0;
+			return a;
 		}
 		std::ostream& operator<<(std::ostream&out) const { out << "divide"; return out; }
 		virtual std::string toString() const { return "divide"; }
@@ -757,7 +767,7 @@ struct TypeFix {
 				}
 			}
 			else if (a.kind == Value::t_string || a.kind == Value::t_symbol) {
-				return a.sValue + b.asString();
+				return (*op)(a, b.asString());
 			}
 			/*
 			else if (b.kind == Value::t_integer && (a.kind == Value::t_string || a.kind == Value::t_symbol) ){
@@ -789,7 +799,12 @@ private:
 	Value v_;
 };
 
-Value &Value::operator+(const Value &other) {
+Value Value::operator+(const Value &other) {
+	Value res(*this);
+	return res += other;
+}
+
+Value &Value::operator+=(const Value &other) {
 	if ( kind != other.kind) {
 		Sum op;
 		TypeFix tf;
@@ -824,7 +839,12 @@ Value Value::operator-(void) const {
 	return *this;
 }
 
-Value &Value::operator-(const Value &other) {
+Value Value::operator-(const Value &other) {
+	Value res(*this);
+	return res -= other;
+}
+
+Value &Value::operator-=(const Value &other) {
 	if (kind != other.kind) {
 		Minus op;
 		TypeFix tf;
@@ -839,7 +859,12 @@ Value &Value::operator-(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator*(const Value &other) {
+Value Value::operator*(const Value &other) {
+	Value res(*this);
+	return res *= other;
+}
+
+Value &Value::operator*=(const Value &other) {
 	if (kind != other.kind) {
 		if (kind == t_string || kind == t_symbol) {
 			char buf[200];
@@ -864,7 +889,12 @@ Value &Value::operator*(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator/(const Value &other) {
+Value Value::operator/(const Value &other) {
+	Value res(*this);
+	return res /= other;
+}
+
+Value &Value::operator/=(const Value &other) {
 	if (kind != other.kind) {
 		Divide op;
 		TypeFix tf;
@@ -892,8 +922,12 @@ Value &Value::operator/(const Value &other) {
 	}
 	return *this;
 }
+Value Value::operator%(const Value &other) {
+	Value res(*this);
+	return res %= other;
+}
 
-Value &Value::operator%(const Value &other) {
+Value &Value::operator%=(const Value &other) {
 	if (kind != other.kind) {
 		Modulus op;
 		TypeFix tf;
@@ -911,13 +945,16 @@ Value &Value::operator%(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator &(const Value &other) {
+Value Value::operator &(const Value &other) {
+	Value res(*this);
+	return res &= other;
+}
+
+Value &Value::operator &=(const Value &other) {
 	if (kind != other.kind) {
 		BitAnd op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue = iValue & other.iValue; break;
@@ -927,13 +964,16 @@ Value &Value::operator &(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator |(const Value &other) {
+Value Value::operator |(const Value &other) {
+	Value res(*this);
+	return res |= other;
+}
+
+Value &Value::operator |=(const Value &other) {
 	if (kind != other.kind) {
 		BitOr op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue = iValue | other.iValue; break;
@@ -943,13 +983,16 @@ Value &Value::operator |(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator ^(const Value &other) {
+Value Value::operator ^(const Value &other) {
+	Value res(*this);
+	return res ^= other;
+}
+
+Value &Value::operator ^=(const Value &other) {
 	if (kind != other.kind) {
 		BitXOr op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue = iValue ^ other.iValue; break;

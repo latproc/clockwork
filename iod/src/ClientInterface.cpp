@@ -45,6 +45,7 @@
 
 uint64_t client_watchdog_timer = 0;
 extern bool machine_is_ready;
+extern bool machine_was_ready;
 static Watchdog *wd;
 
 IODCommandThread *IODCommandThread::instance_;
@@ -581,8 +582,8 @@ void IODCommandThread::operator()() {
 			if ( items[0].revents & ZMQ_POLLIN) {
 				zmq::message_t request;
 				if (!cti->socket.recv (&request)) continue; // interrupted system call
-#if 1
-				if (!machine_is_ready) {
+#if 0
+				if (!machine_is_ready || machine_was_ready) {
 					const char *tosend = "Ignored during startup";
 					safeSend(cti->socket, tosend, strlen(tosend));
 					continue;

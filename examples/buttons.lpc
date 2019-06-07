@@ -1,0 +1,31 @@
+# talking to arduino-type device over the serial port
+# to read an anlog button keyboard
+#
+# run this along with device connector:
+#
+# device_connector --serial_port /dev/tty.usbserial-A900ced4 
+# 		--serial_settings 115200:8:9:1:N --property panel.key  
+#		--pattern '[0-9]+' --name control --watch_property control.UpdateRate --channel PanelChannel
+#
+
+Panel MACHINE control {
+
+	OPTION key -1;
+
+	fix WHEN key>1000;
+	fast WHEN key >=700;	ENTER fast { control.UpdateRate := ">d" +200 + ";"; key := -1; }
+	slow WHEN key >=120; 	ENTER slow { control.UpdateRate := ">d" + 800 + ";"; key := -1; }
+	fix WHEN key != -1;	ENTER fix { key := -1; }
+	idle DEFAULT;
+
+}
+
+Control MACHINE {
+	OPTION UpdateRate ">d2000;";
+}
+
+control Control;
+panel Panel control;
+
+PanelChannel CHANNEL { MONITORS control; }
+

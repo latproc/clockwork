@@ -69,6 +69,7 @@
 
 bool program_done = false;
 bool machine_is_ready = false;
+bool machine_was_ready = false;
 
 void usage(int argc, char *argv[]);
 void displaySymbolTable();
@@ -158,7 +159,7 @@ void exportPropertyInitialisation(const MachineInstance *m, const std::string na
 void collect_connected_machines(std::set<MachineInstance *> &included_machines, MachineInstance *mi) {
   if (mi) {
     included_machines.insert(mi);
-    for (int i=0; i<mi->parameters.size(); ++i) {
+    for (unsigned int i=0; i<mi->parameters.size(); ++i) {
       if (mi->parameters[i].machine)
         collect_connected_machines(included_machines, mi->parameters[i].machine);
     }
@@ -239,7 +240,7 @@ int main (int argc, char const *argv[])
               MachineInstance *mi = *m_iter++;
               if (graph_root() && included_machines.find(mi) == included_machines.end())
                 continue;
-              for (int i=0; i<mi->parameters.size(); ++i) {
+              for (unsigned int i=0; i<mi->parameters.size(); ++i) {
                 if (mi->parameters[i].machine)
                   graph << mi->parameters[i].machine->getName() << " -> " << mi->getName() << ";\n";
               }
@@ -352,6 +353,8 @@ int main (int argc, char const *argv[])
     std::set<std::string> internal;
     internal.insert("ANALOGINPUT");
     internal.insert("ANALOGOUTPUT");
+		internal.insert("DIGITALINPUT");
+		internal.insert("DIGITALOUTPUT");
     internal.insert("MQTTBROKER");
     internal.insert("MQTTPUBLISHER");
     internal.insert("MQTTSUBSCRIBER");
@@ -445,6 +448,8 @@ int main (int argc, char const *argv[])
       rt_names["OUTPUT"] = "PointOutput";
       rt_names["ANALOGINPUT"] = "ANALOGINPUT";
       rt_names["ANALOGOUTPUT"] = "ANALOGOUTPUT";
+			rt_names["DIGITALINPUT"] = "DIGITALINPUT";
+			rt_names["DIGITALOUTPUT"] = "DIGITALOUTPUT";
 
       std::string setup_file(export_path);
       setup_file += "/cw_setup.inc";
