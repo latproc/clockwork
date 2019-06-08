@@ -35,9 +35,7 @@
 #include "options.h"
 #include "anet.h"
 #include "MessageLog.h"
-#include "Dispatcher.h"
 #include "MessageEncoding.h"
-#include "Channel.h"
 #include "SocketMonitor.h"
 #include "ConnectionManager.h"
 
