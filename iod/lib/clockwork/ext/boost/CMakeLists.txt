@@ -13,7 +13,7 @@ if (MINGW_BUILD)
         boost_program_options
     )
 else()
-    FIND_PACKAGE(Boost 1.58 COMPONENTS system filesystem thread chrono program_options REQUIRED)
+    FIND_PACKAGE(Boost 1.55 COMPONENTS system filesystem thread chrono program_options REQUIRED)
     if (Boost_FOUND)
         set(LIBRARY ${Boost_LIBRARIES})
         set(INCLUDE ${Boost_INCLUDE_DIR})
