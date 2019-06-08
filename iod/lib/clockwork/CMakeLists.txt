@@ -68,3 +68,6 @@ set_property(GLOBAL PROPERTY ${exe_name}_INCLUDE_DIRS
 include_directories(
     ${${exe_name}_INCLUDE_DIRS}
 )
+
+install(TARGETS ${exe_name}
+				LIBRARY DESTINATION ${PROJECT_SOURCE_DIR})
