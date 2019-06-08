@@ -31,7 +31,6 @@
 #include "dynamic_value.h"
 #endif
 #include "symboltable.h"
-#include "options.h"
 #include "anet.h"
 #include "MessageLog.h"
 #include "MessageEncoding.h"

@@ -32,7 +32,6 @@
 #include "dynamic_value.h"
 #endif
 #include "symboltable.h"
-#include "options.h"
 #include "anet.h"
 #include "MessageLog.h"
 #include "MessageEncoding.h"
@@ -41,7 +40,7 @@
 
 static std::string STATE_ERROR("Operation cannot be accomplished in current state");
 
-std::string STATUS_NAMES[] {
+std::string STATUS_NAMES[10] {
   "not_used", "startup", "disconnected", "waiting_connect", "settingup_subscriber",
   "waiting_subscriber", "waiting_setup", "done", "error", "e_connected"
 };

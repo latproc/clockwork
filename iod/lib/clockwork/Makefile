@@ -1,6 +1,6 @@
 all:	
 	[ -d "build" ] || mkdir build
-	cd build && cmake .. && make -j install
+	cd build && cmake .. && make -j 
 
 test:
 	cd build && make test
@@ -28,6 +28,3 @@ debug-test:
 
 debug-install:	debug
 	cd build/Debug && make install
-
-clean:
-	rm -rf build
