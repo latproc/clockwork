@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -19,12 +19,15 @@
 */
 
 #include <assert.h>
+#include "Win32Helper.h"
 #include "MessagingInterface.h"
 #include <iostream>
 #include <exception>
 #include <math.h>
 #include <zmq.hpp>
 #include <map>
+#include <random> // mingw only?
+#include <boost/random.hpp>
 #include "Logger.h"
 #include "DebugExtra.h"
 #include "cJSON.h"
@@ -34,10 +37,17 @@
 #include "symboltable.h"
 #include "anet.h"
 #include "MessageLog.h"
+
+#if __MINGW32__
+    #include <io.h>
+#else
+#endif
+
+
 #include "MessageEncoding.h"
+
 #include "string.h"
 
-const char *program_name;
 static std::string STATE_ERROR("Operation cannot be accomplished in current state");
 
 
@@ -45,6 +55,16 @@ MessagingInterface *MessagingInterface::current = 0;
 zmq::context_t *MessagingInterface::zmq_context = 0;
 std::map<std::string, MessagingInterface *>MessagingInterface::interfaces;
 bool MessagingInterface::abort_all = false;
+
+int my_close(int fd)
+{
+#if __MINGW32__
+    return _close(fd);
+#else
+    return close(fd);
+#endif
+}
+
 
 uint64_t nowMicrosecs() {
   return microsecs();
@@ -76,12 +96,13 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
 bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout) {
+#ifndef WIN32
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
-
+	{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
+#endif
 	*response_len = 0;
 	if (block && timeout == 0) timeout = 500;
 
@@ -120,7 +141,11 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			return (*response_len == 0) ? false : true;
 		}
 		catch (zmq::error_t e) {
-			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			std::cerr 
+#ifndef WIN32
+			<< tnam 
+#endif
+			<< " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
 					FileLogger fl(program_name);
@@ -128,7 +153,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				}
 				if (block) continue;
 			}
-			usleep(10);
+			boost::this_thread::sleep_for(boost::chrono::microseconds(10));
 			return false;
 		}
 	}
@@ -137,9 +162,9 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 
 bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout, MessageHeader &header) {
 
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
+	// char tnam[100];
+	// int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	// assert(pgn_rc == 0);
 
   //{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
 
@@ -201,7 +226,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			else return false;
 		}
 		catch (zmq::error_t e) {
-			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			std::cerr << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
 					FileLogger fl(program_name);
@@ -209,7 +234,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				}
 				if (block) continue;
 			}
-			usleep(10);
+			boost::this_thread::sleep_for(boost::chrono::microseconds(10));
 			return false;
 		}
 	}
@@ -221,11 +246,13 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 }
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, int64_t timeout) {
+#ifndef WIN32
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
 	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
+#endif
 
 	response_len = 0;
 	int retries = 5;
@@ -260,10 +287,10 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			if (--retries == 0) {
 				exit(EXIT_FAILURE);
 			}
-			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
+			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n";
 				if (block) continue;
 			}
-			usleep(10);
+			boost::this_thread::sleep_for(boost::chrono::microseconds(10));
 			return false;
 		}
 	}
@@ -324,13 +351,13 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 }
 
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
-
+#ifndef WIN32
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
 	//if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " sending " << buf << "\n"; }
-
+#endif
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::message_t msg(buflen);
@@ -380,12 +407,13 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
+#ifndef WIN32
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
 	//NB_MSG << tnam << " sendMessage " << msg << "\n";
-
+#endif
 	safeSend(sock, msg, strlen(msg));
 
 	char *buf = 0;
@@ -420,8 +448,10 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
 
 MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start, ProtocolType proto)
 		: Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
-			connection(-1), port(port_), owner_thread(0), started_(false) {
+			connection(-1), port(port_), started_(false) {
+#ifndef WIN32
 		    owner_thread = pthread_self();
+#endif
 		is_publisher = true;
 		hostname = "*";
 		std::stringstream ss;
@@ -441,7 +471,9 @@ void MessagingInterface::start() {
 		return;
 	}
 	if (protocol == eCLOCKWORK || protocol == eZMQ|| protocol == eCHANNEL) {
+#ifndef WIN32
 		owner_thread = pthread_self();
+#endif
 		if (hostname == "*" || hostname == "0.0.0.0") {
 			NB_MSG << "binding " << url << "\n";
 			socket->bind(url.c_str());
@@ -456,17 +488,20 @@ void MessagingInterface::start() {
 	}
 }
 
-void MessagingInterface::stop() { 
+void MessagingInterface::stop() {
 	started_ = false;
 }
 
-bool MessagingInterface::started() { 
+bool MessagingInterface::started() {
 	return started_;
 }
 
 MessagingInterface::MessagingInterface(std::string host, int remote_port, bool deferred, ProtocolType proto)
 		:Receiver("messaging_interface"), protocol(proto), socket(0),is_publisher(false),
-            connection(-1), hostname(host), port(remote_port), owner_thread(0), started_(false) {
+            connection(-1), hostname(host), port(remote_port), started_(false) {
+#ifndef WIN32
+		owner_thread = pthread_self();
+#endif
 		std::stringstream ss;
 		ss << "tcp://" << host << ":" << port;
 		url = ss.str();
@@ -501,7 +536,11 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
     while (true) {
         try{
             zmq::socket_t test_bind(*MessagingInterface::getContext(), ZMQ_PULL);
-            res = random() % (end-start+1) + start;
+
+            boost::random::mt19937 rng;
+            boost::random::uniform_int_distribution<> my_random(start, end);
+            res = my_random(rng);
+            // res = random() % (end-start+1) + start;
             if (checked_ports.count(res) && checked_ports.size() < end-start+1) continue;
             checked_ports.insert(res);
             snprintf(address_buf, 40, "tcp://0.0.0.0:%d", res);
@@ -529,11 +568,13 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
 
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ || protocol == eCHANNEL) {
+#ifndef WIN32
 		if (pthread_equal(owner_thread, pthread_self())) {
 			FileLogger fl(program_name); fl.f() << hostname<<":"<<port 
 				<<" attempt to call socket connect from a thread that isn't the owner\n";
 		  // return; // no longer returning here, we have some evidence this is not a good test. TBD
 		}
+#endif
 		DBG_CHANNELS << "calling connect on " << url << "\n";
 		socket->connect(url.c_str());
 		int linger = 0;
@@ -552,8 +593,8 @@ void MessagingInterface::connect() {
 
 MessagingInterface::~MessagingInterface() {
 	int retries = 3;
-	while  (retries-- && connection != -1) { 
-		int err = close(connection);
+	while  (retries-- && connection != -1) {
+		int err = my_close(connection);
 		if (err == -1 && errno == EINTR) continue;
 		connection = -1;
 	}
@@ -573,6 +614,7 @@ void MessagingInterface::handle(const Message&msg, Transmitter *from, bool needs
 
 
 char *MessagingInterface::send(const char *txt) {
+#ifndef WIN32
 	if (owner_thread != pthread_self()) {
 		char tnam1[100], tnam2[100];
 		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
@@ -591,6 +633,7 @@ char *MessagingInterface::send(const char *txt) {
 		<< " '" << tnam1 << "'"
 		<< std::dec << "\n";
 	}
+#endif
 
     if (!is_publisher){
         DBG_MESSAGING << getName() << " sending message " << txt << " on " << url << "\n";
@@ -599,7 +642,7 @@ char *MessagingInterface::send(const char *txt) {
         DBG_MESSAGING << getName() << " sending message " << txt << "\n";
     }
     size_t len = strlen(txt);
-    
+
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
@@ -707,7 +750,7 @@ bool MessagingInterface::send_raw(const char *msg) {
 	    if (written != len) {
 	        snprintf(error, ANET_ERR_LEN, "error sending message: %s", msg );
 	        MessageLog::instance()->add(error);
-			close(connection);
+			my_close(connection);
 			connect();
 	    }
 		else return true;
@@ -722,16 +765,16 @@ char *MessagingInterface::sendCommand(std::string cmd, std::list<Value> *params)
     return response;
 }
 
-/* TBD, this may need to be optimised, one approach would be to use a 
+/* TBD, this may need to be optimised, one approach would be to use a
  templating system; a property message looks like this:
- 
- { "command":    "PROPERTY", "params":   
+
+ { "command":    "PROPERTY", "params":
     [
          { "type":  "NAME", "value":    $1 },
          { "type":   "NAME", "value":   $2 },
          { "type":  TYPEOF($3), "value":  $3 }
      ] }
- 
+
  */
 
 char *MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value p3)
@@ -763,4 +806,3 @@ char *MessagingInterface::sendState(std::string cmd, std::string name, std::stri
 	return response;
  */
 }
-

@@ -21,7 +21,9 @@
 #ifndef __REGULAR_EXPRESSIONS_H__
 #define __REGULAR_EXPRESSIONS_H__
 
-#include <regex.h>
+#if __MINGW32__
+#else
+    #include <regex.h>
 #include <vector>
 #include <string>
 
@@ -48,13 +50,13 @@ int is_integer(const char *string);
 
 /* tests the precompiled pattern against the text provided and return zero if the
     match succeeded.
-    
-    If the entire matched pattern is returned in variables[0] and 
+
+    If the entire matched pattern is returned in variables[0] and
     if there are any subexpressions, the corresponding matches are returned in variables[1]..[n]
 */
 int find_matches(rexp_info *info, std::vector<std::string> &variables, const char *string);
 
-/* substitute the subt string into the text. Using the precompiled pattern. 
+/* substitute the subt string into the text. Using the precompiled pattern.
 
     If the precompiled pattern contains subexpressions, these are first extracted
     into variables by the use of find_matches().
@@ -67,4 +69,5 @@ typedef int (match_func)(const char *match, int index, void *user_data);
 int each_match(rexp_info *info, const char *text, size_t *end_offset, match_func f, void *user_data);
 
 
+#endif
 #endif

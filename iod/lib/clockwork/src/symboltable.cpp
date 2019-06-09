@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -19,6 +19,7 @@
 */
 
 #include <iostream>
+#include <boost/random.hpp>
 #include <iterator>
 #include "value.h"
 #include "symboltable.h"
@@ -28,6 +29,7 @@
 #include "Logger.h"
 #include <boost/foreach.hpp>
 #include <utility>
+#include <climits>
 #include "DebugExtra.h"
 
 const Value SymbolTable::Null;
@@ -188,71 +190,82 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
 		else if (strcmp("RANDOM", name) == 0) {
-			unsigned long val = random();
+
+            boost::random::mt19937 rng;
+            boost::random::uniform_int_distribution<> my_random(0, ULONG_MAX);
+            unsigned long val = my_random(rng);
+			// unsigned long val = random();
 			std::cout << " random value " << val << "\n";
 			res = val;
 			return res;
 		}
         // the remaining values are all time fields
-        time_t now = time(0);
-        struct tm lt;
-        localtime_r(&now, &lt);
-        if (strcmp("SECONDS", name) == 0) {
-            res = lt.tm_sec;
+        boost::chrono::system_clock::time_point now_time_point = boost::chrono::system_clock::now();
+        std::time_t now = boost::chrono::system_clock::to_time_t(now_time_point);
+        #if __MINGW32__
+            return 0;
+        #else
+            // time_t now = time(0);
+            struct tm lt;
+            localtime_r(&now, &lt);
+            if (strcmp("SECONDS", name) == 0) {
+                res = lt.tm_sec;
+                return res;
+            }
+            if (strcmp("MINUTE", name) == 0) {
+                res = lt.tm_min;
+                return res;
+            }
+            if (strcmp("HOUR", name) == 0) {
+                res = lt.tm_hour;
+                return res;
+            }
+            if (	strcmp("DAY", name) == 0) {
+                res = lt.tm_mday;
+                return res;
+            }
+            if (strcmp("MONTH", name) == 0) {
+                res = lt.tm_mon+1;
+                return res;
+            }
+            if (strcmp("YEAR", name) == 0) {
+                res = lt.tm_year + 1900;
+                return res;
+            }
+            if (strcmp("YR", name) == 0) {
+                res = lt.tm_year - 100;
+                return res;
+            }
+            if (strcmp("TIMEZONE", name) == 0) {
+                res = lt.tm_zone;
+                return res;
+            }
+    		if (strcmp("TIMESEQ", name) == 0) {
+    			struct timeval t;
+    			gettimeofday(&t,0);
+    			uint64_t msecs = (microsecs() / 1000) % 1000;
+    			char buf[40];
+    			const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
+    			if (sizeof(long long) == sizeof(uint64_t))
+    					fmt = "%02d%02d%02d%02d%02d%02d%03llu";
+    			snprintf(buf, 40, fmt,
+    							 lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
+    			res = buf;
+                res.toString();
+    			return res;
+    		}
+            if (strcmp("TIMESTAMP", name) == 0) {
+                char buf[40];
+                ctime_r(&now, buf);
+                size_t n = strlen(buf);
+                if (n>1 && buf[n-1] == '\n') buf[n-1] = 0;
+                res = buf;
+                res.toString();
+                return res;
+            }
             return res;
-        }
-        if (strcmp("MINUTE", name) == 0) {
-            res = lt.tm_min;
-            return res;
-        }
-        if (strcmp("HOUR", name) == 0) {
-            res = lt.tm_hour;
-            return res;
-        }
-        if (	strcmp("DAY", name) == 0) {
-            res = lt.tm_mday;
-            return res;
-        }
-        if (strcmp("MONTH", name) == 0) {
-            res = lt.tm_mon+1;
-            return res;
-        }
-        if (strcmp("YEAR", name) == 0) {
-            res = lt.tm_year + 1900;
-            return res;
-        }
-        if (strcmp("YR", name) == 0) {
-            res = lt.tm_year - 100;
-            return res;
-        }
-        if (strcmp("TIMEZONE", name) == 0) {
-            res = lt.tm_zone;
-            return res;
-        }
-				if (strcmp("TIMESEQ", name) == 0) {
-					struct timeval t;
-					gettimeofday(&t,0);
-					uint64_t msecs = (microsecs() / 1000) % 1000;
-					char buf[40];
-					const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
-					if (sizeof(long long) == sizeof(uint64_t))
-							fmt = "%02d%02d%02d%02d%02d%02d%03llu";
-					snprintf(buf, 40, fmt,
-									 lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
-					res = buf;
-          res.toString();
-					return res;
-				}
-        if (strcmp("TIMESTAMP", name) == 0) {
-            char buf[40];
-            ctime_r(&now, buf);
-            size_t n = strlen(buf);
-            if (n>1 && buf[n-1] == '\n') buf[n-1] = 0;
-            res = buf;
-            res.toString();
-            return res;
-        }
-        return res;
+        #endif
+
     }
     return Null;
 }
@@ -358,7 +371,7 @@ void Value::addItem(Value next_value) {
             listValue.push_front(Value(fValue));
         else if (kind == t_string)
             listValue.push_front(Value(sValue.c_str()));
-        
+
         kind = t_list;
         listValue.push_front(next_value);
     }
@@ -402,4 +415,3 @@ std::ostream &SymbolTable::operator <<(std::ostream & out) const {
 std::ostream &operator <<( std::ostream &out, const SymbolTable &st) {
     return st.operator<<(out);
 }
-

@@ -154,7 +154,7 @@ char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value 
 char *MessageEncoding::encodeState(const std::string &machine, const std::string &state, uint64_t authority) {
 	size_t msglen = machine.length() + state.length() + 80;
 	char *buf = (char *)malloc(msglen);
-	snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\", %lld]} ", machine.c_str(), state.c_str(), authority);
+    snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\", %lld]} ", machine.c_str(), state.c_str(), authority);
 	return buf;
 /*
     cJSON *msg = cJSON_CreateObject();

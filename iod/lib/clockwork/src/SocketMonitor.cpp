@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -19,6 +19,7 @@
 */
 
 #include <assert.h>
+#include "Win32Helper.h"
 #include "MessagingInterface.h"
 #include <iostream>
 #include <exception>
@@ -34,7 +35,9 @@
 #include "symboltable.h"
 #include "anet.h"
 #include "MessageLog.h"
+
 #include "MessageEncoding.h"
+
 #include "SocketMonitor.h"
 
 static std::string constructSocketName() {
@@ -53,10 +56,12 @@ SocketMonitor::~SocketMonitor() {
 void SocketMonitor::operator()() {
 		char thread_name[100];
 		snprintf(thread_name, 100, "iod skt monitor %s", monitor_socket_name.c_str());
+#ifndef WIN32
 #ifdef __APPLE__
         pthread_setname_np(thread_name);
 #else
         pthread_setname_np(pthread_self(), thread_name);
+#endif
 #endif
 	int exception_count = 0;
     while (!aborted) {
@@ -162,7 +167,7 @@ void SocketMonitor::on_event_disconnected(const zmq_event_t &event_, const char*
 void SocketMonitor::on_event_unknown(const zmq_event_t &event_, const char* addr_) {
         DBG_MSG << monitor_socket_name << " on_event_unknown " << addr_ << "\n";
 }
-    
+
 bool SocketMonitor::disconnected() { return disconnected_;}
 
 void SocketMonitor::addResponder(uint16_t event, EventResponder *responder) {
@@ -176,4 +181,3 @@ void SocketMonitor::removeResponder(uint16_t event, EventResponder *responder) {
         if (curr.second == responder) found = responders.erase(found); else found++;
     }
 }
-

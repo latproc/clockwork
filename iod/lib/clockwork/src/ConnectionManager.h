@@ -91,10 +91,14 @@ public:
 	virtual int numSocks() =0;
 	void abort();
 	bool ready() { return rate_limiter.ready(); }
+#ifndef WIN32
 	const pthread_t &ownerThread() const { return owner_thread; }
+#endif
 protected:
 	ConnectionManagerInternals *internals;
+#ifndef WIN32
 	pthread_t owner_thread;
+#endif
 	bool aborted;
 	std::map<std::string, MachineShadow *> machines;
 	RateLimiter rate_limiter;

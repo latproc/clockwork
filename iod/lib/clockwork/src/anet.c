@@ -31,14 +31,17 @@
 //#include "fmacros.h"
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
+#if __MINGW32__
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
-#include <netdb.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -67,11 +70,20 @@ static void anetSetError(char *err, const char *fmt, ...)
 
 int anetNonBlock(char *err, int fd)
 {
-    int flags;
 
     /* Set the socket nonblocking.
      * Note that fcntl(2) for F_GETFL and F_SETFL can't be
      * interrupted by a signal. */
+
+     // int ioctlsocket(
+     //   SOCKET s,
+     //   long   cmd,
+     //   u_long *argp
+     // );
+#if __MINGW32__
+    return 0;
+#else
+    int flags;
     if ((flags = fcntl(fd, F_GETFL)) == -1) {
         anetSetError(err, "fcntl(F_GETFL): %s\n", strerror(errno));
         return ANET_ERR;
@@ -81,6 +93,8 @@ int anetNonBlock(char *err, int fd)
         return ANET_ERR;
     }
     return ANET_OK;
+#endif
+
 }
 
 int anetTcpNoDelay(char *err, int fd)
@@ -116,8 +130,10 @@ int anetTcpKeepAlive(char *err, int fd)
 
 int anetResolve(char *err, char *host, char *ipbuf)
 {
+#ifdef __MINGW32__
+    return 0;
+#else
     struct sockaddr_in sa;
-
     sa.sin_family = AF_INET;
     if (inet_aton(host, &sa.sin_addr) == 0) {
         struct hostent *he;
@@ -131,6 +147,8 @@ int anetResolve(char *err, char *host, char *ipbuf)
     }
     strcpy(ipbuf,inet_ntoa(sa.sin_addr));
     return ANET_OK;
+#endif
+
 }
 
 #define ANET_CONNECT_NONE 0
@@ -146,21 +164,31 @@ static int anetTcpGenericConnect(char *err, const char *addr, int port, int flag
     }
     /* Make sure connection-intensive things like the redis benckmark
      * will be able to close/open sockets a zillion of times */
+#if __MINGW32__
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof(on));
+#else
     setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+#endif
 
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
-    if (inet_aton(addr, &sa.sin_addr) == 0) {
-        struct hostent *he;
 
-        he = gethostbyname(addr);
-        if (he == NULL) {
-            anetSetError(err, "can't resolve: %s\n", addr);
-            close(s);
-            return ANET_ERR;
+    #ifdef __MINGW32__
+        return 0;
+    #else
+        if (inet_aton(addr, &sa.sin_addr) == 0) {
+            struct hostent *he;
+
+            he = gethostbyname(addr);
+            if (he == NULL) {
+                anetSetError(err, "can't resolve: %s\n", addr);
+                close(s);
+                return ANET_ERR;
+            }
+            memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
         }
-        memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
-    }
+    #endif
+
     if (flags & ANET_CONNECT_NONBLOCK) {
         if (anetNonBlock(err,s) != ANET_OK)
             return ANET_ERR;
@@ -227,12 +255,19 @@ int anetTcpServer(char *err, int port, char *bindaddr)
 {
     int s, on = 1;
     struct sockaddr_in sa;
-    
+
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         anetSetError(err, "socket: %s\n", strerror(errno));
         return ANET_ERR;
     }
-    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1) {
+
+    #if __MINGW32__
+        int sock_opt_res = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof(on));
+    #else
+        int sock_opt_res = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    #endif
+
+    if (sock_opt_res == -1) {
         anetSetError(err, "setsockopt SO_REUSEADDR: %s\n", strerror(errno));
         close(s);
         return ANET_ERR;
@@ -242,11 +277,16 @@ int anetTcpServer(char *err, int port, char *bindaddr)
     sa.sin_port = htons(port);
     sa.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bindaddr) {
-        if (inet_aton(bindaddr, &sa.sin_addr) == 0) {
-            anetSetError(err, "Invalid bind address\n");
-            close(s);
-            return ANET_ERR;
-        }
+        #ifdef __MINGW32__
+            return 0;
+        #else
+            if (inet_aton(bindaddr, &sa.sin_addr) == 0) {
+                anetSetError(err, "Invalid bind address\n");
+                close(s);
+                return ANET_ERR;
+            }
+        #endif
+
     }
     if (bind(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
         anetSetError(err, "bind: %s\n", strerror(errno));

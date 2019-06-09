@@ -1,4 +1,6 @@
 #include <iostream>
+#include "Win32Helper.h"
+#ifndef WIN32
 #include <sys/time.h>
 #include "rate.h"
 
@@ -30,6 +32,7 @@ bool RateLimiter::ready() {
 	}
 	return false;
 }
+#endif
 
 #ifdef TESTING
 

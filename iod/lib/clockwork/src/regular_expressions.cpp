@@ -19,7 +19,9 @@
 */
 
 #include <unistd.h>
-#include <regex.h>
+#if __MINGW32__
+#else
+    #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,8 +68,8 @@ int execute_pattern(rexp_info *info, const char *string)
 
 /* tests the precompiled pattern against the text provided and return zero if the
     match succeeded.
-    
-    If the entire matched pattern is returned in variables[0] and 
+
+    If the entire matched pattern is returned in variables[0] and
     if there are any subexpressions, the corresponding matches are returned in variables[1]..[n]
 */
 int find_matches(rexp_info *info, std::vector<std::string> &variables, const char *string)
@@ -75,14 +77,14 @@ int find_matches(rexp_info *info, std::vector<std::string> &variables, const cha
 	int res = 0;
 	if (info->compilation_result == 0)
 	 	res = regexec(&info->regex, string, info->regex.re_nsub+1, info->matches, 0);
-    
+
     if (res == 0)
     {
         unsigned int i;
         /* using length of entire match for a string buffer to avoid remallocing buf for each one */
         regoff_t len = info->matches[0].rm_eo - info->matches[0].rm_so + 1;
         char *match_buf = (char*)malloc(len);
-        
+
         for (i=0; i <= info->regex.re_nsub; i++)
         {
             regoff_t so = info->matches[i].rm_so;
@@ -90,16 +92,16 @@ int find_matches(rexp_info *info, std::vector<std::string> &variables, const cha
             if (so != -1 && eo != -1) {
                 memcpy(match_buf, string+so, eo - so);
                 match_buf[eo-so] = 0;
-                variables.push_back(match_buf);
+				variables.push_back(match_buf);
             }
         }
         free(match_buf);
     }
-    
+
 	return res;
 }
 
-/* substitute the subt string into the text. Using the precompiled pattern. 
+/* substitute the subt string into the text. Using the precompiled pattern.
 
     If the precompiled pattern contains subexpressions, these are first extracted
     into variables by the use of find_matches().
@@ -122,15 +124,15 @@ char * substitute_pattern(rexp_info *info, std::vector<std::string> &variables, 
         const char *q = string;
         int prev_eo = 0;
         int i = 0;
-        /* normally this substitution is intended to replace the entire 
+        /* normally this substitution is intended to replace the entire
             match with a substitute string. The code below allows for
             an idea where we might substitute just the subexpressions
             with the replacement string. That idea is flawed, however,
             since regexec only returns the last matching substring anyway.
-            
+
             If you want to enable that behaviour, insert the following
             to create a loop.
-            
+
                     i = 1;
                     while (i <= info->regex.re_nsub)
 
@@ -170,7 +172,7 @@ int each_match(rexp_info *info, const char *text, size_t *end_idx, match_func f,
         regoff_t so = info->matches[0].rm_so;
         regoff_t eo = info->matches[0].rm_eo;
         if (eo != -1 && so != -1 && eo>so && result == 0)
-        {  
+        {
             for (unsigned int index = 0; index <= info->regex.re_nsub; ++index) {
                 regoff_t so_i = info->matches[index].rm_so;
                 regoff_t eo_i = info->matches[index].rm_eo;
@@ -259,7 +261,7 @@ static char *interpret_escapes(const char *str)
 
 void display_matches(rexp_info *info, std::vector<std::string> &symbols)
 {
-    /* find_matches will have created symbols REXP_0..REXP_n if 
+    /* find_matches will have created symbols REXP_0..REXP_n if
          the respective subexpression matched */
     int i;
     const char *match = NULL;
@@ -272,14 +274,14 @@ void display_matches(rexp_info *info, std::vector<std::string> &symbols)
 /* test routine.
 
   usage: test_regexp [-p pattern] [-s substitution] text ...
-  
+
   example usage:
-  
+
   test_regexp -p '[a-z]+[ ]*=[ ]*([0-9]+)[ ]*;' -s '' 'a=1; b=2'
-  
-  which should give: 
-  
-  a=1; b=2 matches [a-z]+[ ]*=[ ]*([0-9]+)[ ]*; 
+
+  which should give:
+
+  a=1; b=2 matches [a-z]+[ ]*=[ ]*([0-9]+)[ ]*;
   substuting :  b=2
   match: REXP_0 = a=1;
   match: REXP_1 = 1
@@ -318,7 +320,7 @@ int main(int argc, char *argv[])
 		    expecting_pattern = 1;
         else if (strcmp(argv[i], "-s") == 0)
 		    expecting_subst = 1;
-		else 
+		else
         {
             char *text = interpret_escapes(argv[i]);
             rexp_info *info;
@@ -343,12 +345,11 @@ int main(int argc, char *argv[])
                     display_matches(info, symbols);
                 }
 
-            
+
             free(text);
         }
 	}
 	return 0;
 }
 #endif
-
-
+#endif

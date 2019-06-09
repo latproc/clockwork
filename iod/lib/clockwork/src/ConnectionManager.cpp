@@ -19,6 +19,7 @@
 */
 
 #include <assert.h>
+#include "Win32Helper.h"
 #include "MessagingInterface.h"
 #include <iostream>
 #include <exception>
@@ -84,7 +85,10 @@ public:
 	virtual ~ConnectionManagerInternals() {}
 };
 
-ConnectionManager::ConnectionManager() : internals(0),owner_thread(pthread_self()), aborted(false) {
+ConnectionManager::ConnectionManager() : internals(0),aborted(false) {
+#ifndef WIN32
+  owner_thread = pthread_self();
+#endif
 }
 
 void ConnectionManager::abort() { aborted = true; }
@@ -987,4 +991,3 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	}
     return true;
 }
-

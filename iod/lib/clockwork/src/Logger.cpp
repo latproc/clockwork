@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -33,6 +33,7 @@ LogState* LogState::state_instance = 0;
 static std::string header;
 Logger *Logger::logger_instance = 0;
 struct timeval last_time;
+const char *program_name = "main";
 
 int Logger::None;
 int Logger::Debug;
@@ -90,14 +91,19 @@ std::ostream &FileLogger::f() {
 FileLogger::~FileLogger() { delete internals;  lock.unlock();}
 
 void FileLogger::getTimeString(char *buf, size_t buf_size) {
-  struct timeval now_tv;
-  gettimeofday(&now_tv,0);
-  struct tm now_tm;
-  localtime_r(&now_tv.tv_sec, &now_tm);
-  uint32_t msec = now_tv.tv_usec;
-  snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%06d ",
-       now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
-       now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
+  // struct timeval now_tv;
+  // gettimeofday(&now_tv,0);
+  // struct tm now_tm;
+
+    boost::chrono::system_clock::time_point now = boost::chrono::system_clock::now();
+    std::time_t now_tt = boost::chrono::system_clock::to_time_t(now);
+    snprintf(buf, buf_size, "%s", std::ctime(&now_tt));
+
+  // localtime_r(&now_tv.tv_sec, &now_tm);
+  // uint32_t msec = now_tv.tv_usec;
+  // snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%06d ",
+  //      now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
+  //      now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
 }
 
 
@@ -110,14 +116,17 @@ void Logger::setLevel(std::string level_name){
 }
 
 void Logger::getTimeString(char *buf, size_t buf_size) {
-	struct timeval now_tv;
-	gettimeofday(&now_tv,0);
-	struct tm now_tm;
-	localtime_r(&now_tv.tv_sec, &now_tm);
-	uint32_t msec = now_tv.tv_usec;
-	snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%06d ",
-			 now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
-			 now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
+    boost::chrono::system_clock::time_point now = boost::chrono::system_clock::now();
+    std::time_t now_tt = boost::chrono::system_clock::to_time_t(now);
+    snprintf(buf, buf_size, "%s", std::ctime(&now_tt));
+	// struct timeval now_tv;
+	// gettimeofday(&now_tv,0);
+	// struct tm now_tm;
+	// localtime_r(&now_tv.tv_sec, &now_tm);
+	// uint32_t msec = now_tv.tv_usec;
+	// snprintf(buf, 50,"%04d-%02d-%02d %02d:%02d:%02d.%06d ",
+	// 		 now_tm.tm_year+1900, now_tm.tm_mon+1, now_tm.tm_mday,
+	// 		 now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
 }
 bool LogState::includes(int flag_num) {
 	return state_flags.count(flag_num);
@@ -163,8 +172,7 @@ int main(int argc,char* *argv){
     DBG_MSG<<"this is a Debug log test\n";
     NB_MSG<<"this is an Important log test\n";
     INF_MSG<<"this is not very Important\n";
-    
+
     return 0;
 }
 #endif
-

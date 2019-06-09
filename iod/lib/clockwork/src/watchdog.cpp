@@ -3,14 +3,15 @@
 #include <string>
 #include <sys/time.h>
 #include <unistd.h>
+#include "Win32Helper.h"
 #include "boost/thread/mutex.hpp"
 #include "watchdog.h"
 #include "Logger.h"
 
 std::map<std::string, Watchdog *>Watchdog::all;
 
-Watchdog::Watchdog(const char *wdname, int64_t timeout, bool autostart, bool once_only ) 
-	: name(wdname), last_time(0), time_out(timeout*1000), one_shot(once_only), is_running(autostart) { 
+Watchdog::Watchdog(const char *wdname, int64_t timeout, bool autostart, bool once_only )
+	: name(wdname), last_time(0), time_out(timeout*1000), one_shot(once_only), is_running(autostart) {
 	all[name] = this;
 }
 
@@ -37,7 +38,7 @@ void Watchdog::reset() {
 	//std::cout <<  name << " reset " << ( (is_running) ? "running" : "not running") << "\n";
 	trigger_time = 0;
 }
-	
+
 bool Watchdog::triggered(int64_t t) {
 	boost::mutex::scoped_lock lock(mutex);
 	if (t == 0) t = now();
@@ -119,10 +120,10 @@ bool Watchdog::showTriggered(uint64_t t, bool reset, std::ostream &out) {
 
 #ifdef TESTING
 int main(int argc, char *argv[] ) {
-	
+
 	Watchdog wd1("WD1", 100); wd1.start();
 	Watchdog wd2("WD2", 100); wd1.start();
-	
+
 	wd1.poll(); wd2.poll();
 	for(int i=0; i<20; ++i) {
 		wd1.poll();
@@ -130,9 +131,9 @@ int main(int argc, char *argv[] ) {
 		if (wd1.triggered(now)) { std::cout << "wd1 triggered:"<< (now - wd1.last()) <<"\n"; wd1.reset(); }
 		if (wd2.triggered(now)) { std::cout << "wd2 triggered:"<< (now - wd2.last()) <<"\n"; wd2.reset();}
 		usleep(5000);
-		
+
 	}
-	
+
 	return EXIT_SUCCESS;
 }
 #endif

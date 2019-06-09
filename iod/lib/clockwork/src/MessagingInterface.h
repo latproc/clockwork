@@ -1,18 +1,18 @@
 /*
  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
- 
+
  This file is part of Latproc
- 
+
  Latproc is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
  as published by the Free Software Foundation; either version 2
  of the License, or (at your option) any later version.
- 
+
  Latproc is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with Latproc; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -80,7 +80,7 @@ public:
 					  Value p2 = SymbolTable::Null,
 					  Value p3 = SymbolTable::Null);
 	char *sendState(std::string cmd, std::string name, std::string state_name);
-	
+
 	//Receiver interface
 	virtual bool receives(const Message&, Transmitter *t);
 	virtual void handle(const Message&, Transmitter *from, bool needs_receipt = false );
@@ -88,7 +88,7 @@ public:
 	static bool aborted() { return abort_all; }
 	static void abort() { abort_all = true; }
 	const std::string &getURL() const { return url; }
-	
+
 private:
 	static zmq::context_t *zmq_context;
 	void connect();
@@ -101,7 +101,9 @@ private:
 	int connection;
 	std::string hostname;
 	int port;
+#ifndef WIN32
 	pthread_t owner_thread;
+#endif
 	static bool abort_all;
 	bool started_;
 };
