@@ -44,7 +44,7 @@ include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_disable_action COMMAND test_disable_action)
 
 add_executable(test_buffering test_buffering.cpp )
-target_link_libraries(test_buffering gmock_main Clockwork cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
+target_link_libraries(test_buffering gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_buffering COMMAND test_buffering)
 
@@ -53,7 +53,7 @@ target_link_libraries(test_bit_ops gmock_main cw_interpreter Clockwork ${ZeroMQ_
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
 
-add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp )
+add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp)
 set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
 add_custom_command(
         TARGET test_ecat_xml POST_BUILD
@@ -61,7 +61,7 @@ add_custom_command(
                 ${PROJECT_SOURCE_DIR}/tests/test.xml
                 ${CMAKE_CURRENT_BINARY_DIR}/test.xml)
 
-target_link_libraries(test_ecat_xml gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} xml2 pthread dl)
+target_link_libraries(test_ecat_xml gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} xml2 pthread dl)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_ecat_xml COMMAND test_ecat_xml)
 

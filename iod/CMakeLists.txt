@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
@@ -10,7 +10,7 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
 
-cmake_policy(SET CMP0008 OLD)
+cmake_policy(SET CMP0008 NEW)
 cmake_policy(SET CMP0015 NEW)
 
 #set (CMAKE_VERBOSE_MAKEFILE false)
@@ -30,6 +30,7 @@ set (CMAKE_CXX_FLAGS_RELEASE "-O")
 set (CMAKE_EXE_FLAGS_DEBUG "-g ")
 set (CMAKE_EXE_FLAGS_RELEASE "-O")
 
+set (CLOCKWORK_LIB_DIR ${PROJECT_SOURCE_DIR}/lib/clockwork/src/)
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/src/)
 set (BUILD_DIR ${PROJECT_SOURCE_DIR}/build)
 
@@ -47,52 +48,19 @@ FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
 
+add_subdirectory(ext)
+add_subdirectory(lib)
+
 INCLUDE_DIRECTORIES(${ZeroMQ_INCLUDE_DIR})
 
-set(HEADER_FILES
-	${CLOCKWORK_DIR}/MessagingInterface.h
-	${CLOCKWORK_DIR}/SocketMonitor.h
-	${CLOCKWORK_DIR}/ConnectionManager.h
-	${CLOCKWORK_DIR}/MessageLog.h
-	${CLOCKWORK_DIR}/MessageEncoding.h
-	${CLOCKWORK_DIR}/MessageHeader.h
-	${CLOCKWORK_DIR}/regular_expressions.h
-	${CLOCKWORK_DIR}/Logger.h
-	${CLOCKWORK_DIR}/anet.h
-	${CLOCKWORK_DIR}/cJSON.h
-	${CLOCKWORK_DIR}/DebugExtra.h
-	${CLOCKWORK_DIR}/value.h
-	${CLOCKWORK_DIR}/symboltable.h
-	${CLOCKWORK_DIR}/rate.h
-	${CLOCKWORK_DIR}/watchdog.h
-	${CLOCKWORK_DIR}/Message.h
-    )
-
-add_library (Clockwork
-	${CLOCKWORK_DIR}/MessagingInterface.cpp
-	${CLOCKWORK_DIR}/MessageLog.cpp
-	${CLOCKWORK_DIR}/MessageEncoding.cpp
-	${CLOCKWORK_DIR}/MessageHeader.cpp
-	${CLOCKWORK_DIR}/regular_expressions.cpp
-	${CLOCKWORK_DIR}/CommandManager.cpp
-	${CLOCKWORK_DIR}/SocketMonitor.cpp
-	${CLOCKWORK_DIR}/ConnectionManager.cpp
-	${CLOCKWORK_DIR}/Logger.cpp
-	${CLOCKWORK_DIR}/anet.c
-	${CLOCKWORK_DIR}/cJSON.c
-	${CLOCKWORK_DIR}/DebugExtra.cpp
-	${CLOCKWORK_DIR}/value.cpp
-	${CLOCKWORK_DIR}/symboltable.cpp
-	${CLOCKWORK_DIR}/rate.cpp
-	${CLOCKWORK_DIR}/Message.cpp
-	${CLOCKWORK_DIR}/watchdog.cpp
-	${HEADER_FILES}
-)
+get_property(Clockwork_INCLUDE_DIRS GLOBAL PROPERTY Clockwork_INCLUDE_DIRS)
+INCLUDE_DIRECTORIES(${Clockwork_INCLUDE_DIRS})
 
 include_directories("/usr/local/include")
 include_directories("/opt/local/include")
 include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_BINARY_DIR}")
+include_directories("${CLOCKWORK_LIB_DIR}")
 include_directories("${CLOCKWORK_DIR}")
 
 LINK_DIRECTORIES("/usr/local/lib")
@@ -120,21 +88,17 @@ set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
 set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
-#   SOURCE ${CLOCKWORK_DIR}/cwlang.lpp
    COMMAND ${FLEX_EXECUTABLE}
    ARGS -o${CMAKE_BINARY_DIR}/cwlang.yy.cpp
 		${CLOCKWORK_DIR}/cwlang.lpp
-		#   TARGET ClockworkParser
    OUTPUT ${cw_lex_output})
 
 # Create custom command for bison/yacc (note the DEPENDS)
  ADD_CUSTOM_COMMAND(
-#   SOURCE ${CLOCKWORK_DIR}/cwlang.ypp
    COMMAND ${BISON_EXECUTABLE}
    ARGS -y
         -o ${CMAKE_BINARY_DIR}/cwlang.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cwlang.ypp
-		#TARGET ClockworkParser
    DEPENDS ${CLOCKWORK_DIR}/cwlang.lpp
    OUTPUT ${cw_yacc_output})
 
@@ -151,24 +115,24 @@ INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
 
 set (Clockwork_Headers
 	src/Action.h			src/AbortAction.h	src/Expression.h	src/Transition.h	src/ConditionHandler.h
-  src/MachineInstance.h		src/SetListEntriesAction.h	src/cJSON.h src/StableState.h
-	src/CallMethodAction.h		src/ExpressionAction.h		src/Message.h
+  src/MachineInstance.h		src/SetListEntriesAction.h	src/StableState.h
+	src/CallMethodAction.h		src/ExpressionAction.h		
   src/MachineShadowInstance.h src/CounterRateInstance.h src/CounterRateFilterSettings.h
   src/SetOperationAction.h	src/clockwork.h src/Parameter.h src/MachineClass.h
   src/SharedWorkSet.h src/MachineInterface.h src/MachineDetails.h src/ActionList.h
   src/RateEstimatorInstance.h
-	src/Channel.h			src/FireTriggerAction.h		src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
-	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h		src/ShutdownAction.h		src/cwlang.h
-	src/ClientInterface.h		src/IOComponent.h		src/MessagingInterface.h	src/SimulatedRawInput.h		src/domain.h
-	src/CommandManager.h		src/IODCommand.h		src/ModbusInterface.h		src/SimulatedRawOutput.h	src/dynamic_value.h
-	src/ConnectionManager.h		src/IODCommands.h		src/PatternAction.h		src/SocketMonitor.h		src/ecat_thread.h
+	src/Channel.h			src/FireTriggerAction.h	src/SetStateAction.h		src/cmdline.h
+	src/ClearListAction.h		src/HandleMessageAction.h	src/ShutdownAction.h		src/cwlang.h
+	src/ClientInterface.h		src/IOComponent.h		src/SimulatedRawInput.h		src/domain.h
+	src/IODCommand.h		src/ModbusInterface.h		src/SimulatedRawOutput.h
+	src/IODCommands.h		src/PatternAction.h	src/ecat_thread.h
 	src/ControlSystemMachine.h	src/IfCommandAction.h		src/PersistentStore.h		src/SortListAction.h		src/filtering.h
 	src/CopyPropertiesAction.h	src/IncludeAction.h		src/Plugin.h			src/State.h			src/hw_config.h
-	src/DebugExtra.h		src/LockAction.h		src/PolledMessageHandler.h	src/Statistic.h			src/options.h
-	src/DisableAction.h		src/LogAction.h			src/PopListAction.h		src/Statistics.h		src/rate.h
-	src/Dispatcher.h		src/Logger.h			src/PredicateAction.h		src/UnlockAction.h		src/regular_expressions.h
-	src/ECInterface.h		src/MQTTDCommand.h		src/ProcessingThread.h		src/WaitAction.h		src/symboltable.h
-	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h		src/anet.h			src/value.h
+	src/LockAction.h		src/PolledMessageHandler.h	src/Statistic.h			src/options.h
+	src/DisableAction.h		src/LogAction.h			src/PopListAction.h		src/Statistics.h
+	src/Dispatcher.h		src/PredicateAction.h		src/UnlockAction.h
+	src/ECInterface.h		src/MQTTDCommand.h		src/ProcessingThread.h		src/WaitAction.h
+	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h	
 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
@@ -203,7 +167,6 @@ set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULAT
 
 add_executable(cw src/cw.cpp )
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-#target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
 target_link_libraries(cw cw_interpreter Clockwork dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
@@ -278,21 +241,17 @@ set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)
 set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
-# SOURCE ${CLOCKWORK_DIR}/cmdline.lpp
    COMMAND ${FLEX_EXECUTABLE}
    ARGS -o${CMAKE_BINARY_DIR}/cmdline.yy.cpp
 		${CLOCKWORK_DIR}/cmdline.lpp
-		#TARGET ClockworkParser
    OUTPUT ${iosh_lex_output})
 
 # Create custom command for bison/yacc (note the DEPENDS)
  ADD_CUSTOM_COMMAND(
-#   SOURCE ${CLOCKWORK_DIR}/cmdline.ypp
    COMMAND ${BISON_EXECUTABLE}
    ARGS -y
         -o ${CMAKE_BINARY_DIR}/cmdline.tab.cpp
 		-g -v -d ${CLOCKWORK_DIR}/cmdline.ypp
-		#TARGET ClockworkParser
    DEPENDS ${CLOCKWORK_DIR}/cmdline.lpp
    OUTPUT ${iosh_yacc_output})
 
