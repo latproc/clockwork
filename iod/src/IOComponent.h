@@ -169,7 +169,7 @@ public:
 	int index() { return io_index; } // this component's index into the io array
 	void setIndex(int idx) { io_index=idx; }
 
-	static int updatesWaiting() { return outputs_waiting; }
+  static int updatesWaiting();
 	Direction direction() { return direction_; }
 
 	enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };

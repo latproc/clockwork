@@ -706,7 +706,7 @@ void displayList(MachineInstance *m) {
         delim = ",";
     }
     ss << "]";
-    m->setValue("DEBUG", ss.str().c_str());
+    m->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
 }
 
 Value &PopListBackValue::operator()(MachineInstance *mi) {

@@ -426,21 +426,21 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
 				char *p;
 				x = strtol(params[3].asString().c_str(), &p, 10);
 				if (use_authority)
-					if (*p == 0)
+					if (params[3].asString().length() > 0 && *p == 0)
 						changed = m->setValue(params[2].asString(), x, authority);
 					else
 						changed = m->setValue(params[2].asString(), params[3], authority);
 				else
-					if (*p == 0)
+					if (params[3].asString().length() > 0 && *p == 0)
 						changed = m->setValue(params[2].asString(), x);
 					else
 						changed = m->setValue(params[2].asString(), params[3]);
 			}
 			else {
 				if (use_authority)
-					changed = m->setValue(params[2].asString(), params[3], authority);
+					changed = m->setValue(params[2].asString(), params[3].asString(), authority);
 				else
-					changed = m->setValue(params[2].asString(), params[3]);
+					changed = m->setValue(params[2].asString(), params[3].asString());
 			}
 		}
 		if (changed) result_str = "OK";
@@ -1251,126 +1251,128 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 	return true;
 };
 
-    bool IODCommandChannel::run(std::vector<Value> &params) {
-        if (params.size() >= 2) {
-            Value ch_name = params[1];
-            Channel *chn = Channel::find(ch_name.asString());
-            if (chn) {
-                size_t n = params.size();
-                if (n == 3) {
-                    if (params[2] == "REMOVE") {
-                        delete chn;
-                        result_str = "OK";
-                        return true;
-                    }
-                }
-                if (n == 5 && params[2] == "ADD" && params[3] == "MONITOR") {
-                    chn->addMonitor(params[4].asString().c_str());
-                    result_str = "OK";
-                    return true;
-                }
-                if (n == 6 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PATTERN") {
-                    chn->addMonitorPattern(params[5].asString().c_str());
-                    result_str = "OK";
-                    return true;
-                }
-                if (n == 7 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PROPERTY") {
-                    chn->addMonitorProperty(params[5].asString().c_str(),params[6]);
-                    result_str = "OK";
-                    return true;
-                }
-                if (n == 5 && params[2] == "REMOVE" && params[3] == "MONITOR") {
-                    chn->removeMonitor(params[4].asString().c_str());
-                    result_str = "OK";
-                    return true;
-                }
-                if (n == 6 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[4] == "PATTERN") {
-                    chn->removeMonitorPattern(params[5].asString().c_str());
-                    result_str = "OK";
-                    return true;
-                }
-                if (n == 7 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[5] == "PROPERTY") {
-                    chn->removeMonitorProperty(params[5].asString().c_str(),params[6]);
-                    result_str = "OK";
-                    return true;
-                }
-
-            }
-            else {
-				if (ch_name == "PERSISTENCE_CHANNEL") {
-					if (!persistent_store()) {
-						char buf[100];
-						snprintf(buf, 100, "Persistence is not configured for channel %s", ch_name.asString().c_str());
-						MessageLog::instance()->add(buf);
-						error_str = MessageEncoding::encodeError(buf);
-						return false;
-					}
-				}
-                ChannelDefinition *defn = ChannelDefinition::find(ch_name.asString().c_str());
-                if (!defn) {
-					char buf[100];
-					snprintf(buf, 100, "No such channel: %s", ch_name.asString().c_str());
-                    error_str = MessageEncoding::encodeError(buf);
-                    return false;
-                }
-
-                chn = Channel::findByType(ch_name.asString());
-				if (!chn) {
-					std::cout << "no channel found, creating one\n";
-					long port = 0;
-
-					//Value portval = (defn->properties.exists("port")) ? defn->properties.lookup("port") : SymbolTable::Null;
-					Value portval = defn->getValue("port");
-					std::cout << "default port for channel: " << portval << "\n";
-					if (portval == SymbolTable::Null || !portval.asInteger(port))
-						port = Channel::uniquePort();
-					else {
-						NB_MSG << " using default channel port: " << port << " for channel " << ch_name << "\n";
-					}
-                    while (true) {
-                        try {
-							std::cout << "instantiating a channel on port " << port << "\n";
-							chn = defn->instantiate(port);
-							assert(chn);
-							if (ch_name == "PERSISTENCE_CHANNEL") {
-								chn->setValue("PersistentStore", persistent_store(), Value::t_string);
-							}
-							chn->start();
-							chn->enable();
-							break;
-                        }
-                        catch (zmq::error_t err) {
-                            if (zmq_errno() == EADDRINUSE) {
-                                NB_MSG << "address is in use\n";
-                            }
-                            error_str = zmq_strerror(zmq_errno());
-                            std::cerr << error_str << "\n";
-                            exit(1);
-                        }
-                    }
-                }
-            }
-            cJSON *res_json = cJSON_CreateObject();
-            cJSON_AddNumberToObject(res_json, "port", chn->getPort());
-            cJSON_AddStringToObject(res_json, "name", chn->getName().c_str());
-			cJSON_AddNumberToObject(res_json, "authority", chn->definition()->getAuthority());
-            char *res = cJSON_Print(res_json);
-            result_str = res;
-            free(res);
-            cJSON_Delete(res_json);
-            return true;
+bool IODCommandChannel::run(std::vector<Value> &params) {
+  if (params.size() >= 2) {
+    Value ch_name = params[1];
+    Channel *chn = Channel::find(ch_name.asString());
+    if (chn) {
+      size_t n = params.size();
+      if (n == 3) {
+        if (params[2] == "REMOVE") {
+          delete chn;
+          result_str = "OK";
+          return true;
         }
-        std::stringstream ss;
-        ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [ ( PATTERN string | PROPERTY string string ) ]  ]";
-        for (unsigned int i=0; i<params.size()-1; ++i) {
-            ss<< params[i] << " ";
-        }
-        ss << params[params.size()-1];
-        char *msg = strdup(ss.str().c_str());
-        error_str = msg;
-        free(msg);
-        return false;
+      }
+      if (n == 5 && params[2] == "ADD" && params[3] == "MONITOR") {
+        chn->addMonitor(params[4].asString().c_str());
+        result_str = "OK";
+        return true;
+      }
+      if (n == 6 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PATTERN") {
+        chn->addMonitorPattern(params[5].asString().c_str());
+        result_str = "OK";
+        return true;
+      }
+      if (n == 7 && params[2] == "ADD" && params[3] == "MONITOR" && params[4] == "PROPERTY") {
+        chn->addMonitorProperty(params[5].asString().c_str(),params[6]);
+        result_str = "OK";
+        return true;
+      }
+      if (n == 5 && params[2] == "REMOVE" && params[3] == "MONITOR") {
+        chn->removeMonitor(params[4].asString().c_str());
+        result_str = "OK";
+        return true;
+      }
+      if (n == 6 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[4] == "PATTERN") {
+        chn->removeMonitorPattern(params[5].asString().c_str());
+        result_str = "OK";
+        return true;
+      }
+      if (n == 7 && params[2] == "REMOVE" && params[3] == "MONITOR" && params[5] == "PROPERTY") {
+        chn->removeMonitorProperty(params[5].asString().c_str(),params[6]);
+        result_str = "OK";
+        return true;
+      }
+
     }
+    else {
+      if (ch_name == "PERSISTENCE_CHANNEL") {
+        if (!persistent_store()) {
+          char buf[100];
+          snprintf(buf, 100, "Persistence is not configured for channel %s", ch_name.asString().c_str());
+          MessageLog::instance()->add(buf);
+          error_str = MessageEncoding::encodeError(buf);
+          return false;
+        }
+      }
+      ChannelDefinition *defn = ChannelDefinition::find(ch_name.asString().c_str());
+      if (!defn) {
+        char buf[100];
+        snprintf(buf, 100, "No such channel: %s", ch_name.asString().c_str());
+        MessageLog::instance()->add(buf);
+        error_str = MessageEncoding::encodeError(buf);
+        return false;
+      }
+
+      chn = Channel::findByType(ch_name.asString());
+      if (!chn) {
+        std::cout << "no channel found, creating one\n";
+        long port = 0;
+
+        Value portval = defn->getValue("port");
+        if (portval == SymbolTable::Null || !portval.asInteger(port)) {
+          port = Channel::uniquePort();
+        }
+        {
+          char buf[120];
+          snprintf(buf, 120, "Channel %s created on port %ld", ch_name.asString().c_str(), portval.iValue);
+          MessageLog::instance()->add(buf);
+        }
+        while (true) {
+          try {
+            std::cout << "instantiating a channel on port " << port << "\n";
+            chn = defn->instantiate(port);
+            assert(chn);
+            if (ch_name == "PERSISTENCE_CHANNEL") {
+              chn->setValue("PersistentStore", persistent_store(), Value::t_string);
+            }
+            chn->start();
+            chn->enable();
+            break;
+          }
+          catch (zmq::error_t err) {
+            if (zmq_errno() == EADDRINUSE) {
+              NB_MSG << "address is in use\n";
+            }
+            error_str = zmq_strerror(zmq_errno());
+            std::cerr << error_str << "\n";
+            exit(1);
+          }
+        }
+      }
+    }
+    cJSON *res_json = cJSON_CreateObject();
+    cJSON_AddNumberToObject(res_json, "port", chn->getPort());
+    cJSON_AddStringToObject(res_json, "name", chn->getName().c_str());
+    cJSON_AddNumberToObject(res_json, "authority", chn->definition()->getAuthority());
+    char *res = cJSON_Print(res_json);
+    result_str = res;
+    free(res);
+    cJSON_Delete(res_json);
+    return true;
+  }
+  std::stringstream ss;
+  ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [ ( PATTERN string | PROPERTY string string ) ]  ]";
+  for (unsigned int i=0; i<params.size()-1; ++i) {
+    ss<< params[i] << " ";
+  }
+  ss << params[params.size()-1];
+  char *msg = strdup(ss.str().c_str());
+  error_str = msg;
+  free(msg);
+  return false;
+}
 
     bool IODCommandUnknown::run(std::vector<Value> &params) {
         if (params.size() == 0) {

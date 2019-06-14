@@ -93,8 +93,10 @@ static std::list<SDOEntry *>prepared_sdo_entries;
 static std::list<SDOEntry *>new_sdo_entries;
 #endif //USE_SDO
 
+#ifdef KEEP_STATS
 Statistic recv_to_update("Receive to update");
 Statistic update_to_recv("Update to receive");
+#endif
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_details(0) {
 	offsets = new unsigned int[64];
@@ -1255,11 +1257,11 @@ void ECInterface::receiveState() {
 	}
 
 	if (active) {
-		// receive process data
+#ifdef KEEP_STATS
 		uint64_t now = microsecs();
 		int64_t dt = now - last_update;
 		if (dt < 100) {
-			usleep(100);
+			usleep(100); // TODO: what is this doing here?
 			now = microsecs();
 			dt = now - last_update;
 		}
@@ -1269,6 +1271,8 @@ void ECInterface::receiveState() {
 			update_to_recv.report(std::cout);
 			update_to_recv.reset();
 		}
+#endif
+		// receive process data
 		ecrt_master_receive(master);
 		ecrt_domain_process(domain1);
 #ifdef USE_DC
@@ -1442,6 +1446,7 @@ void ECInterface::sendUpdates() {
 #endif
     ecrt_domain_queue(domain1);
 
+#ifdef KEEP_STATS
 	{
 	uint64_t t = microsecs();
 	int64_t dt = t - last_receive;
@@ -1452,6 +1457,7 @@ void ECInterface::sendUpdates() {
 		recv_to_update.reset();
 	}
 	}
+#endif
 
     ecrt_master_send(master);
 #endif
@@ -1853,7 +1859,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 						for (k = 0; k < pdo.entry_count; k++) {
 							cJSON *json_entry = cJSON_CreateObject();
 							m.getPdoEntry(&entry, slave.position, i, j, k);
-#if 1
+#if 0
 							std::cout << " entry: " << k 
 								<< "{" 
 								<< entry_pos << ", "

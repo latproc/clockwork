@@ -41,7 +41,15 @@ Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
 std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
 	return out << ( (abort_after) ? "ThrowMessageActionTemplate" : "SendMessageActionTemplate ")
 		<< message << " "
-	  << ( (target != 0) ? target : "");
+    << ( (target != 0) ? target : "");
+}
+
+void SendMessageActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  ExportState::add_message(message.asString());
+
+  out << "\tcw_send(";
+  if (target.asString() != "") out << "m->_" << target << ", "; else out << "0, ";
+  out << "&m->machine, cw_message_" << message << ");\n";
 }
 
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
