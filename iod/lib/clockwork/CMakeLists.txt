@@ -5,6 +5,10 @@ set(exe_name "Clockwork")
 SET(BUILD_SHARED_LIBS ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LocalCMakeLists.txt")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/LocalCMakeLists.txt")
+endif()
+
 #################################
 ##        find library         ##
 #################################
@@ -17,6 +21,7 @@ set(INCLUDE
     ${ZMQ-Dep_INCLUDE_DIRS}
     ${Boost-Dep_INCLUDE_DIRS}
     ${Curl-Dep_INCLUDE_DIRS}
+		${INCLUDE}
 )
 set(LIBRARY
     ZMQ-Dep

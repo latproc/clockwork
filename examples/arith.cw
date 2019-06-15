@@ -45,23 +45,22 @@ x VARIABLE 1;
 y VARIABLE 2;
 test_machine ComparisonTest x, y;
 
-/* Now we define a test driver that runs tests in the machine given by parameter 
+/* Now we define a test driver that runs tests in the script given by parameter 
 
     Note that the driver waits for a run command (eg from iosh: SEND driver.run)
     
-    The test machine is expected to enter a working state while its run
-    command executes and then to enter an error or ok state when the
+    The script machine is expected to enter a working state while its run
+    command executes and then to enter an error or ok state when its
     tests are completed.
     
     To reset the test script, it is disabled and reenabled; this process
-    causes a machine to reinitialise.
+    causes it to reinitialise.
     
     If the machine under test does not change state within 10 seconds (10000ms),
     it is assumed to have stalled and the driver regards this as an error.
 */
 Driver MACHINE test {
 	OPTION execution_timeout 10000;
-    script TestScript test;
     error WHEN  SELF IS error || SELF IS waiting && TIMER > execution_timeout;
     ok WHEN script IS ok ;
     waiting WHEN script IS working;
@@ -71,7 +70,9 @@ Driver MACHINE test {
     COMMAND abort { DISABLE script; ENABLE script; }
     ENTER error { LOG "error"; CALL abort ON SELF }
 }
-driver Driver test_machine;
+script TestScript test_machine;
+driver Driver script;
+
 
 /* Here is the TestScript; during the working state, the machine
     changes the values of the inputs to the test and monitors
@@ -151,7 +152,6 @@ TestScript MACHINE test {
 		y.VALUE := 1.1;
 		WAITFOR test IS eq;
 
-		
         SET SELF TO ok;
     }
 }

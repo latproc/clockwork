@@ -965,7 +965,7 @@ void MachineInstance::idle() {
 			if (res == Action::Failed) {
 				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error();
 				MessageLog::instance()->add(ss.str().c_str());
-				NB_MSG << ss.str() << "\n";
+				//NB_MSG << ss.str() << "\n";
 			}
 			else if (res != Action::Complete) {
 				DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";

@@ -210,7 +210,7 @@ Action::Status MachineCommand::run() {
 				ss << " Failed to start an action: " << *this;
 			char *msg = strdup(ss.str().c_str());
 			MessageLog::instance()->add(msg);
-			NB_MSG << msg << "\n";
+			//NB_MSG << msg << "\n";
 			error_str = msg;
 			status = stat;
 			owner->stop(this);
