@@ -21,6 +21,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/ConnectionManager.h
 	${CLOCKWORK_DIR}/MessageLog.h
 	${CLOCKWORK_DIR}/MessageEncoding.h
+	${CLOCKWORK_DIR}/MessageHeader.h
 	${CLOCKWORK_DIR}/regular_expressions.h
 	${CLOCKWORK_DIR}/Logger.h
 	${CLOCKWORK_DIR}/anet.h
@@ -36,6 +37,7 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/MessagingInterface.cpp
     ${CLOCKWORK_DIR}/MessageLog.cpp
     ${CLOCKWORK_DIR}/MessageEncoding.cpp
+    ${CLOCKWORK_DIR}/MessageHeader.cpp
     ${CLOCKWORK_DIR}/regular_expressions.cpp
     ${CLOCKWORK_DIR}/Logger.cpp
     ${CLOCKWORK_DIR}/anet.c

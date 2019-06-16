@@ -9,12 +9,6 @@ std::ostream &operator<<(std::ostream &out, const StableState &ss) {
 }
 
 StableState::~StableState() {
-	if (trigger) {
-		if (trigger->enabled()) {
-			trigger->disable();
-		}
-		trigger = trigger->release();
-	}
 	if (subcondition_handlers) {
 		subcondition_handlers->clear();
 		delete subcondition_handlers;
@@ -28,6 +22,7 @@ StableState::StableState (const StableState &other)
 	if (other.subcondition_handlers) {
 		subcondition_handlers = new std::list<ConditionHandler>;
 		std::copy(other.subcondition_handlers->begin(), other.subcondition_handlers->end(), back_inserter(*subcondition_handlers));
+    std::copy(other.timer_predicates.begin(), other.timer_predicates.end(), back_inserter(timer_predicates));
 	}
 }
 
@@ -74,4 +69,18 @@ std::ostream &StableState::operator<< (std::ostream &out) const {
 
 void StableState::triggerFired(Trigger *trig) {
 	if (owner) owner->setNeedsCheck();
+}
+
+void StableState::collectTimerPredicates() {
+  if (!subcondition_handlers) return;
+  assert(timer_predicates.size() == 0);
+  std::list<ConditionHandler>::const_iterator iter = subcondition_handlers->begin();
+  while (iter != subcondition_handlers->end()) {
+    const ConditionHandler &ch = *iter++;
+    ch.condition.predicate->findTimerClauses(timer_predicates);
+  }
+  std::list<Predicate*>::const_iterator ti = timer_predicates.begin();
+  while (ti != timer_predicates.end()) {
+    std::cout << "subcondition on " << state_name << " timer clause: " << *(*ti++) << "\n";
+  }
 }

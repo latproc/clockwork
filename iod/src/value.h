@@ -70,6 +70,9 @@ public:
 //	Value operator[](int index);
 //	Value operator[](std::string index);
 
+  void toString(); // convert the value to a string from a symbol
+  void toSymbol(); // convert the value to a symbol from a string
+
     Kind kind;
     bool bValue;
     long iValue;

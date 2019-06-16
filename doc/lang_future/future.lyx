@@ -251,6 +251,14 @@ Persistence via persistd
 Property type and state enforcement via STRICT
 \end_layout
 
+\begin_layout Itemize
+WAITing for a machine to enter a state currently only checks that the state
+ name has changed.
+ It should also wait for the enter_function to have been processed.
+ A complex solution to this problems is discussed later; utilising CHANGING
+ STATE operators but perhaps there is a simpler method also.
+\end_layout
+
 \begin_layout Subsubsection
 Not implemented
 \end_layout
@@ -370,7 +378,8 @@ Dynamic instantiation
 Since machines are defined statically there is no way to create a new machine
  or destroy one that is not needed.
  The language uses properties to store values and although machines can
- be named, there is no way to make a property that refers to a machine.
+ be named, there is no way to make a property that refers to a machine although
+ it is possible to have a reference to a machine.
  It is not even possible to save the state of a machine and restore that
  state later.
  [this is changing (see LIST), TBD]
@@ -639,7 +648,8 @@ EACH item IN set DO command
 
 \begin_layout Standard
 at present, a message can be sent to all members of a set by sending the
- message to the set
+ message to the set but there is no simple way to know when the message
+ has been handled by all machines.
 \end_layout
 
 \begin_layout Subsubsection
@@ -709,8 +719,8 @@ test
 \end_layout
 
 \begin_layout LyX-Code
-OPTION c REFER TO a.b; ## the when update is used the target machine will
- read its c value from its local/param a.b
+OPTION c REFER TO a.b; ## when update is used the target machine will read
+ its c value from its local/param a.b
 \end_layout
 
 \end_deeper
@@ -1131,6 +1141,103 @@ Calling clear on the reference will unassign the object that was previously
 \begin_layout Standard
 Note: Initially, the language does not provide a way to return an object
  from a function.
+\end_layout
+
+\begin_layout Subsection
+Iterator
+\end_layout
+
+\begin_layout Standard
+An ITERATOR is like a REFERENCE except that it is linked to an item within
+ a list.
+ Iterators provide additional methods, 'prev' and 'next'.
+ When an ITERATOR points to a member of its list, it is 'ASSIGNED' if it
+ is moved before the first value or after the last value, it is 'EMPTY'.
+\end_layout
+
+\begin_layout LyX-Code
+iter ITERATOR list; # automatically assigns FIRST OF LIST to iter
+\end_layout
+
+\begin_layout LyX-Code
+working WHEN iter IS ASSIGNED;
+\end_layout
+
+\begin_layout LyX-Code
+idle DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+ENTER working { LOG iter.ITEM.NAME; SEND next TO iter; }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER idle { LOG 
+\begin_inset Quotes eld
+\end_inset
+
+------
+\begin_inset Quotes erd
+\end_inset
+
+; RESET iter; }
+\end_layout
+
+\begin_layout Standard
+The FIND statement can be used to search a list for a match and return an
+ iterator at the found position.
+\end_layout
+
+\begin_layout Standard
+Similarly, the SEEK command can be used to obtain an iterator that points
+ to a specific index within a list.
+\end_layout
+
+\begin_layout Standard
+ITERATORs may be assigned to REFERENCEs so the following code is ok except
+ that the reference has no ability to move through the list.
+\end_layout
+
+\begin_layout LyX-Code
+ref REFERENCE;
+\end_layout
+
+\begin_layout LyX-Code
+iter ITERATOR;
+\end_layout
+
+\begin_layout LyX-Code
+a OBJECT(val:1); b OBJECT(val:3);
+\end_layout
+
+\begin_layout LyX-Code
+list LIST a, b;
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND example {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+x := FIND ITEM.val == 3 IN list;
+\end_layout
+
+\begin_layout LyX-Code
+ASSIGN x TO iter; IF iter ASSIGNED { SEND prev TO iter; }
+\end_layout
+
+\begin_layout LyX-Code
+ASSIGN x TO ref; # ref still works as a REFERENCE 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+
 \end_layout
 
 \begin_layout Subsection

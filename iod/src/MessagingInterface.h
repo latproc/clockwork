@@ -35,7 +35,7 @@
 #include "MessageEncoding.h"
 #include "MessageHeader.h"
 
-uint64_t nowMicrosecs();
+uint64_t nowMicrosecs(); // deprecated
 uint64_t nowMicrosecs(const struct timeval &now);
 int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then);
 int64_t get_diff_in_microsecs(uint64_t now, const struct timeval *then);

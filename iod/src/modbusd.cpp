@@ -1113,11 +1113,9 @@ int main(int argc, const char * argv[])
 #endif
 
 			}
-			else if (cmd == "DEBUG")
+			else if (cmd == "DEBUG" && params.size() >= 2 && (params[1].kind == Value::t_symbol || params[1].kind == Value::t_string))
 			{
-				assert(params.size() >= 2);
-				assert(params[1].kind == Value::t_symbol);
-				debug =  (params[1].sValue == "ON") ? true : false;
+				debug = params[1].sValue == "ON";
 			}
 		}
 	}

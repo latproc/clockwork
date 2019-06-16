@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 2.6)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
-set (Latproc_VERSION_MINOR 9.5)
+set (Latproc_VERSION_MINOR 9.6)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
@@ -166,7 +166,7 @@ set (Clockwork_Headers
 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
-	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
+	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h src/ExportState.h
 )
 
 set (Clockwork_SRCS
@@ -190,7 +190,7 @@ set (Clockwork_SRCS
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
-	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
+	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp src/ExportState.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )

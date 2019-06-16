@@ -167,8 +167,6 @@ bool SymbolTable::isKeyword(const Value &name) {
 			return keywords->exists(name.sValue.c_str());
 	}
     return false;
-
-
 }
 
 /* Symbol table key values, calculated every time they are referenced */
@@ -242,6 +240,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
 					snprintf(buf, 40, fmt,
 									 lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
 					res = buf;
+          res.toString();
 					return res;
 				}
         if (strcmp("TIMESTAMP", name) == 0) {
@@ -250,6 +249,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             size_t n = strlen(buf);
             if (n>1 && buf[n-1] == '\n') buf[n-1] = 0;
             res = buf;
+            res.toString();
             return res;
         }
         return res;
