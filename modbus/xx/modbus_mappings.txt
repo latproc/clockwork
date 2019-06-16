@@ -1,1 +1,0 @@
-../../hmi/tests/modbus_mappings.txt

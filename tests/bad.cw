@@ -1,7 +1,0 @@
-BADPARAMETER MACHINE param {
-	INIT INITIAL;
-}
-
-MyMachine DOESNTEXIST;
-
-my_machine BADPARAMETER p1;

@@ -1,4 +1,0 @@
-
-ScreenList LIST;
-MyPanel SCREENTRACK PanelScreen, RequestScreen, ScreenList;
-

@@ -1,0 +1,46 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0303 
+header_name {.h} 
+code_name {.cxx}
+class GrabUserInterface {open
+} {
+  Function {make_window()} {open
+  } {
+    Fl_Window {} {open selected
+      xywh {105 148 642 587} type Double hide
+    } {
+      Fl_Button {} {
+        label {Raise Cutter}
+        xywh {325 35 100 25}
+      }
+      Fl_Button {} {
+        label {Lower Cutter}
+        xywh {325 70 100 25}
+      }
+      Fl_Button {} {
+        label {Raise Grab}
+        xywh {215 35 90 25}
+      }
+      Fl_Button {} {
+        label {Lower Grab}
+        xywh {215 70 90 25}
+      }
+      Fl_Button {} {
+        label {Tip Bale}
+        xywh {40 195 120 25}
+      }
+      Fl_Check_Button {} {
+        label {Cutter Conveyor Forward}
+        xywh {250 165 190 25} down_box DOWN_BOX
+      }
+      Fl_Check_Button {} {
+        label {Cutter Conveyor Reverse}
+        xywh {250 195 190 25} down_box DOWN_BOX
+      }
+      Fl_Check_Button {} {
+        label {Automatic Mode}
+        xywh {40 165 140 25} down_box DOWN_BOX
+      }
+    }
+  }
+} 

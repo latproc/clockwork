@@ -1,0 +1,13 @@
+0:02049	I_BaleOnLoader	Discrete
+0:02050	I_BaleAtLoaderPos	Discrete
+0:02051	I_LoaderUp	Discrete
+0:02052	I_LoaderBlockOn	Discrete
+0:02053	I_PanelBlockIgnore	Discrete
+0:02054	I_X33BlockIgnore	Discrete
+1:02049	O_LoaderBlock	Discrete
+1:02050 M_WeightAvailable Discrete
+4:01001	M_rawScales.rawWeight	Signed_int_16
+4:01002	M_rawScales.rawDecWeight	Signed_int_16
+4:01003	M_rawScales.rawSteady	Signed_int_16
+4:01004	M_rawScales.rawUnderWeight	Signed_int_16
+4:01005	M_rawScales.rawOverWeight	Signed_int_16

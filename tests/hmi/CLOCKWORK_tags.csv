@@ -1,3 +1,0 @@
-ProtocolID,DeviceName,TagName,DataType,DataCount,Retentive,Address,ArrayStart,ArrayEnd
-211,CLOCKWORK,flag.on,Discrete,1,FALSE,'11000,0,0
-211,CLOCKWORK,flag.off,Discrete,1,FALSE,'11001,0,0

@@ -1,2 +1,0 @@
-/Users/martin/projects/latproc/github/latproc/libclockwork/build/CMakeFiles/UniquePort.dir
-/Users/martin/projects/latproc/github/latproc/libclockwork/build/CMakeFiles/clockwork.dir

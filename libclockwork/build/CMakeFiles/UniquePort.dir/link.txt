@@ -1,1 +1,0 @@
-/usr/bin/c++   -g -Wall -Wl,-search_paths_first -Wl,-headerpad_max_install_names   CMakeFiles/UniquePort.dir/uniqueport.cpp.o  -o UniquePort  libclockwork.a /usr/local/lib/libzmq.dylib /usr/local/lib/libmosquitto.so /usr/local/lib/libboost_system.dylib /usr/local/lib/libboost_program_options.dylib /usr/local/lib/libboost_filesystem.dylib 

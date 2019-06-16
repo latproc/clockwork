@@ -1,2 +1,0 @@
-#define MBM_VERSION_MAJOR 0
-#define MBM_VERSION_MINOR 1

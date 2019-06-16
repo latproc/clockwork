@@ -1,6 +1,0 @@
-Screen_Untitled_003 STRUCTURE EXTENDS SCREEN {
-  Untitled_006 INDICATOR(behaviour: 1,bg_color: "0.7843,0.7843,0.1176,0.7843",caption: "INDICATOR",height: 112,pos_x: 461,pos_y: 92,remote: "flag.off",text_colour: "0.0000,0.0000,0.0000,0.0000",value_scale: 1.000000,width: 166);
-  Untitled_008 INDICATOR(behaviour: 1,bg_color: "0.7843,0.7843,0.1176,0.7843",caption: "INDICATOR",height: 110,pos_x: 652,pos_y: 92,remote: "flag.on",text_colour: "0.0000,0.0000,0.0000,0.0000",value_scale: 1.000000,width: 178);
-  Untitled_009 INDICATOR(behaviour: 0,bg_color: "0.0000,0.0000,0.0000,0.0000",caption: "flag.off",height: 25,pos_x: 546,pos_y: 324,remote: "flag.off",text_colour: "0.0000,0.0000,0.0000,0.0000",value_scale: 1.000000,width: 60);
-  Untitled_011 INDICATOR(behaviour: 0,bg_color: "0.0000,0.0000,0.0000,0.0000",caption: "flag.on",height: 25,pos_x: 663,pos_y: 324,remote: "flag.on",text_colour: "0.0000,0.0000,0.0000,0.0000",value_scale: 1.000000,width: 60);
-}

@@ -1,3 +1,0 @@
-picture system python leaks
-persistd ack process to check if system is up
-

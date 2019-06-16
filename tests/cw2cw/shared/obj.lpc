@@ -1,5 +1,0 @@
-OBJ MACHINE {
-	OPTION Count 0;
-	Working STATE;
-	Idle INITIAL;
-}

@@ -1,2 +1,0 @@
-1:01000	flag.on	Discrete	1
-1:01001	flag.off	Discrete	1
