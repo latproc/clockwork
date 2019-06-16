@@ -9,10 +9,12 @@
 #include "MessageLog.h"
 #include "AbortAction.h"
 
+void ActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
+  operator<<(out);
+}
+
 std::list<Trigger*> all_triggers;
 static boost::recursive_mutex trigger_list_mutex;
-
-uint64_t nowMicrosecs();
 
 class TriggerInternals {
 public:
@@ -20,13 +22,13 @@ public:
 	uint64_t start_time;
 	uint64_t last_report;
 	TriggerInternals() {
-		start_time = nowMicrosecs();
+		start_time = microsecs();
 		last_report = 0;
 	}
 };
 
 void Trigger::report(const char *msg) {
-	uint64_t now = nowMicrosecs();
+	uint64_t now = microsecs();
 	if (now - _internals->last_report > 1000) {
 //		DBG_ACTIONS << name << " " << msg << "\n";
 		_internals->last_report = now;
@@ -185,7 +187,8 @@ void Action::reset() {
 	status = New;
 	error_str=""; result_str="";
 	saved_status=Running; blocked=0;
-	started_=false;
+	started_ = false;
+	aborted_ = false;
 	cleanupTrigger();
 }
 
@@ -281,19 +284,21 @@ Action::Status Action::operator()() {
 	start_time = microsecs();
 	status = Running; // important because run() checks the current state
 	status = run();
-	if (status == Failed) {
-		if (error_msg) {
-			AbortActionTemplate aat(true, error_msg->get());
-			AbortAction *aa = (AbortAction*)aat.factory(owner);
-			owner->enqueueAction(aa);
-		}
-		else if (timeout_msg) {
-			AbortActionTemplate aat(true, timeout_msg->get());
-			AbortAction *aa = (AbortAction*)aat.factory(owner);
-			owner->enqueueAction(aa);
-		}
-	}
+	if (status == Failed) reportError();
 	return status;
+}
+
+void Action::reportError() {
+	if (error_msg) {
+		AbortActionTemplate aat(true, error_msg->get());
+		AbortAction *aa = (AbortAction*)aat.factory(owner);
+		owner->enqueueAction(aa);
+	}
+	else if (timeout_msg) {
+		AbortActionTemplate aat(true, timeout_msg->get());
+		AbortAction *aa = (AbortAction*)aat.factory(owner);
+		owner->enqueueAction(aa);
+	}
 }
 
 void Action::recover() {

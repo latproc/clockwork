@@ -124,7 +124,7 @@ public:
   const Value &getValue(const std::string &property); // provides the current value of an object accessible in the scope of this machine
   const Value *getValuePtr(Value &property); // provides the current value of an object accessible in the scope of this machine
   const Value &getValue(Value &property); // provides the current value of an object accessible in the scope of this machine
-  virtual void setValue(const std::string &property, Value new_value, uint64_t authority = 0);
+  virtual bool setValue(const std::string &property, const Value &new_value, uint64_t authority = 0);
   const Value *resolve(std::string property); // provides a pointer to the value of an object that can be evaluated in the future
 
   void setStateMachine(MachineClass *machine_class);
@@ -281,6 +281,7 @@ public:
 	static void sort();
 
   virtual void setNeedsCheck();
+  Value earliestScheduleTime(const std::list<Predicate*> &predicates);
   uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
   void updateLastEvaluationTime();
 
@@ -340,6 +341,8 @@ public:
 	Cache *cache;
 	unsigned int action_errors;
 	bool is_changing;
+  Trigger *trigger;
+  std::list<Predicate *>timer_predicates;
 	Channel* owner_channel;
 
 private:

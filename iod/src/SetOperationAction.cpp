@@ -36,7 +36,7 @@ static void debugParameterChange(MachineInstance *dest_machine) {
 		delim = ",";
 	}
 	snprintf(buf+n, bufsize-n, "]");
-	dest_machine->setValue("DEBUG", buf);
+  dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
 }
 
 SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value b,
@@ -205,7 +205,7 @@ public:
 };
 
 Action::Status IntersectSetOperation::doOperation() {
-    unsigned int num_copied = 0;
+    long num_copied = 0;
     long to_copy;
     if (!source_a_machine) {
         status = Failed;
@@ -413,7 +413,7 @@ Action::Status DifferenceSetOperation::doOperation() {
         delim = ",";
     }
     ss << "]";
-    dest_machine->setValue("DEBUG", ss.str().c_str());
+  dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
     status = Complete;
     return status;
 }
@@ -571,8 +571,8 @@ Action::Status SelectSetOperation::doOperation() {
         delim = ",";
     }
     ss << "]";
-	source_a_machine->localised_names.erase("ITEM");
-    dest_machine->setValue("DEBUG", ss.str().c_str());
+	  source_a_machine->localised_names.erase("ITEM");
+    dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
     status = Complete;
     return status;
 }

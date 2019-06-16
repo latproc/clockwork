@@ -37,7 +37,7 @@ static void debugParameterChange(MachineInstance *dest_machine) {
 		if (n >= 999) break;
 	}
 	snprintf(buf+n, 1000-n, "]");
-	dest_machine->setValue("DEBUG", buf);
+  dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
 }
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val, Value pos, bool insert_before, bool expand_items)
@@ -190,7 +190,7 @@ Action::Status IncludeAction::run() {
 					}
 					else {
 						if (machine->_type == "LIST" && expand) {
-							for (int i = 0; i<machine->parameters.size(); i++) {
+							for (unsigned int i = 0; i<machine->parameters.size(); i++) {
 								MachineInstance *item = machine->parameters[i].machine;
 								list_machine->addParameter(machine->parameters[i].val, item, pos, before);
 								if (pos >= 0) ++pos; // not adding at the end 

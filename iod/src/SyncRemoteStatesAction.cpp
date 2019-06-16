@@ -72,8 +72,8 @@ Action::Status SyncRemoteStatesAction::execute()
 	char buf[200];
 	Channel *chn = dynamic_cast<Channel*>(owner);
 	if (internals->process_state == SyncRemoteStatesActionInternals::ps_init) {
-		snprintf(buf, 200, "%s Sync remote states - init", chn->getName().c_str());
-		MessageLog::instance()->add(buf);
+		//snprintf(buf, 200, "%s Sync remote states - init", chn->getName().c_str());
+		//MessageLog::instance()->add(buf);
 		owner->start(this);
 		status = Running;
 #if 0
@@ -103,20 +103,20 @@ Action::Status SyncRemoteStatesAction::execute()
 
 	if (internals->process_state == SyncRemoteStatesActionInternals::ps_sending_messages)
 	{
-		snprintf(buf, 200, "%s Sync remote states - process state: sending messages", chn->getName().c_str());
-		MessageLog::instance()->add(buf);
-		DBG_CHANNELS << buf << "\n";
+		//snprintf(buf, 200, "%s Sync remote states - process state: sending messages", chn->getName().c_str());
+		//MessageLog::instance()->add(buf);
+		//DBG_CHANNELS << buf << "\n";
 		if (*internals->iter == internals->messages.end()) {
-			snprintf(buf, 200, "%s Sync remote states - done", chn->getName().c_str());
-			MessageLog::instance()->add(buf);
-			DBG_CHANNELS << buf << "\n";
+			//snprintf(buf, 200, "%s Sync remote states - done", chn->getName().c_str());
+			//MessageLog::instance()->add(buf);
+			//DBG_CHANNELS << buf << "\n";
 			internals->message_state = SyncRemoteStatesActionInternals::e_done;
 		}
 		if (internals->message_state == SyncRemoteStatesActionInternals::e_sending) {
 			char *current_message = *(*internals->iter);
-			snprintf(buf, 200, "%s Sync remote states - sending: %s", chn->getName().c_str(), current_message);
-			MessageLog::instance()->add(buf);
-			DBG_CHANNELS << buf << "\n";
+			//snprintf(buf, 200, "%s Sync remote states - sending: %s", chn->getName().c_str(), current_message);
+			//MessageLog::instance()->add(buf);
+			//DBG_CHANNELS << buf << "\n";
 
 			internals->header.needReply(false);
 			internals->header.start_time = microsecs();
@@ -130,18 +130,18 @@ Action::Status SyncRemoteStatesAction::execute()
 		else if (internals->message_state == SyncRemoteStatesActionInternals::e_receiving) {
 			char *repl; size_t len;
 			if (safeRecv(*internals->sock, &repl, &len, false, 0, internals->header)) {
-				snprintf(buf, 200, "%s Sync remote states - received reply %s", chn->getName().c_str(), repl);
-				MessageLog::instance()->add(buf);
-				DBG_CHANNELS << buf << "\n";
+				//snprintf(buf, 200, "%s Sync remote states - received reply %s", chn->getName().c_str(), repl);
+				//MessageLog::instance()->add(buf);
+				//DBG_CHANNELS << buf << "\n";
 				internals->message_state = SyncRemoteStatesActionInternals::e_done;
 				delete[] repl;
 			}
 			else return Running;
 		}
 		if (internals->message_state == SyncRemoteStatesActionInternals::e_done)  {
-			snprintf(buf, 200, "%s Sync remote states - message done", chn->getName().c_str());
-			MessageLog::instance()->add(buf);
-			DBG_CHANNELS << buf << "\n";
+			//snprintf(buf, 200, "%s Sync remote states - message done", chn->getName().c_str());
+			//MessageLog::instance()->add(buf);
+			//DBG_CHANNELS << buf << "\n";
 			if (*internals->iter != internals->messages.end()) {
 				internals->message_state = SyncRemoteStatesActionInternals::e_sending;
 			}
@@ -151,7 +151,7 @@ Action::Status SyncRemoteStatesAction::execute()
 			if (!internals->iter) { // finished sending messages
 				if (internals->process_state == SyncRemoteStatesActionInternals::ps_sending_messages) {
 					//safeSend(*cmd_client, "done", 4);
-					std::string ack;
+					//std::string ack;
 					//MessageHeader mh(ChannelInternals::SOCK_CTRL, ChannelInternals::SOCK_CTRL, false);
 					//sendMessage("done", *cmd_client, ack, mh);
 					internals->header.dest = MessageHeader::SOCK_CTRL;
@@ -166,8 +166,8 @@ Action::Status SyncRemoteStatesAction::execute()
 	}
 	else if (internals->process_state == SyncRemoteStatesActionInternals::ps_waiting_ack) {
 		//snprintf(buf, 200, "%s Sync remote states - awaiting ack", chn->getName().c_str());
-		MessageLog::instance()->add(buf);
-		DBG_CHANNELS << buf << "\n";
+		//MessageLog::instance()->add(buf);
+		//DBG_CHANNELS << buf << "\n";
 		char *ack; size_t len;
 		if (safeRecv(*internals->sock, &ack, &len, false, 0, internals->header)) {
 			DBG_CHANNELS << "channel " << chn->name << " got " << ack << " from server\n";

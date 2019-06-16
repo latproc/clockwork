@@ -13,9 +13,7 @@
 #include "MessageLog.h"
 
 static uint64_t currentTime() {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return now.tv_sec * 1000000 + now.tv_usec;
+    return microsecs();
 }
 
 DynamicValue *DynamicValue::clone() const {
@@ -708,7 +706,7 @@ void displayList(MachineInstance *m) {
         delim = ",";
     }
     ss << "]";
-    m->setValue("DEBUG", ss.str().c_str());
+    m->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
 }
 
 Value &PopListBackValue::operator()(MachineInstance *mi) {

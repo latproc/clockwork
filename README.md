@@ -1,21 +1,18 @@
-Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+Copyright (C) 2012-2019 Martin Leadbeater, Michael O'Connor
 
 See the LICENCES file for license information.
 
-Martin Leadbeater,  martin.leadbeater@gmail.com
+<img align="right" width="140" height="61" src="http://www.valeparksoftwaredevelopment.com.au/img/vpsd-logo.png">
 
+Martin Leadbeater,  
+Trading as Vale Park Software Development
+[![paypal](https://www.paypalobjects.com/en_AU/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=BPB7XTK7UH6LA&source=url)
 
-PLEASE NOTE: 
-	This software is a work in progress and is not yet
-	likely to work on your equipment. 
+<br/>
+  
+# Latproc - Language and Tools for Process Control
 
-
-
-
-
-   Latproc - Language and Tools for Process Control
-
-Introduction
+## Introduction
 
 This software provides a high level, finite statemachine-based language 
 called Clockwork that can be used to describe process control systems. 
@@ -26,26 +23,30 @@ system (http://www.beckhoff.de/) through the IgH EtherCAT Master for Linux
 Below are some instructions to help you build the program please
 see the documentation for details about the language itself.
 
-Instructions
+### Dependencies
 
    Note: this software requires that the following software be installed:
 
-	* libmodbus (http://libmodbus.org/)  - for communication with modbus/tcp terminals
+	* libmodbus (http://libmodbus.org/)  - for communication with modbus/tcp terminals (you don't actually need one of these terminals to use Clockwork though.
 
 	* zeromq (http://www.zeromq.org/) - for inter-program messaging
+	
+	* zmq-pp (https://github.com/zeromq/zmqpp.git) - C++ interface for zmq
 
 	* boost (http://boost.org/) - various c++ bits and pieces
 
 	* mosquitto (http://mosquitto.org) - MQTT broker and protocol implementation
+	
+	also we use flex, bison, the GNU compiler suite
 
+## Getting Started
 
-   Part A - Building Latproc tools for standalone experimentation
+### Part A - Building Latproc tools for standalone experimentation
 
 The instructions in this part build the Clockwork programming language interpreter
 without the need for the IgH EtherCAT Master.
 
 Note, the Makefile used here assumes libzmq is installed in /usr/local/
-
 
 * pull the latproc project from git
 
@@ -53,27 +54,47 @@ Note, the Makefile used here assumes libzmq is installed in /usr/local/
 
 * change to the latproc directory and build the interpreter
 
+  ```
   cd latproc/iod
-  make -f Makefile.cw
+  make debug
+  cp build/iosh .
+  cp build/cw .
 
+ * the 'cw' program is the clockwork interpreter and 'iosh' is the commandline shell that lets you monitor, debug and control your running clockwork programs.
 
+ We have added a test system using googletest (https://github.com/google/googletest). To enable it, 
+ create a file called LocalCMakeLists.txt in the 'iod' directory containing the line:
 
+ set (RUN_TESTS ON)
 
+ That will cause the googletest projects to be cloned into the project. To run the tests, 
+ build as above and then:
+
+ make debug-test
+
+<br/>
+<br/>
 
   
-   Part B - setting up the user database for the web interface
+### Part B - setting up the user database for the web interface (optional)
 
-   The user database can be created using scripts/create_webiodb.
+Latproc comes with a basic web server and some php scripts that display the state of the system in web panels or display a 3D representation of the model (advanced usage). These pages require a login using a local database for the accounts. The user database can be created using scripts/create_webiodb.
 
    By default it will be created in www/app with the name 'webio.db' these
      settings can be changed in settings.php
 
+  TODO: fix the above documentation and revisit the web implementation (old and clunky)
+  
+  TODO: Add a comment about our GUI toolkit, humid (https://github.com/latproc/humid as an alternative to the web interface)
+  
+  TODO: Mention that iosh can be used to get started)
 
+<br/>
+<br/>
 
+### Part C - Setting up the IgH EtherCAT software to be used with the Latproc software
 
-   Part C - Setting up the IgH EtherCAT software to be used but the Latproc software
-
-
+This is only needed when you are using Clockwork with your EtherCAT hardware. 
 
 The following instructions are brutally terse at present and we apologise
 for that. Please watch this space for more precise instructions.

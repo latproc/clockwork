@@ -165,13 +165,11 @@ void Dispatcher::idle()
 	// we get to this point. Note that this thread will then
 	// block until it gets a sync-start from the driver.
     started = true;
-	DBG_MSG << "Dispatcher started\n";
 
 	char buf[11];
 	size_t response_len = 0;
 	safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
 	buf[response_len]= 0;
-	NB_MSG << "Dispatcher got sync start: " << buf << "\n";
 
     /*
     { // wait for a start command
@@ -334,14 +332,12 @@ void Dispatcher::idle()
                     }
                     else
                     {
-						std::cout << "Warning: sending " << m << " to all receivers\n";
                         ReceiverList::iterator iter = all_receivers.begin();
                         while (iter != all_receivers.end())
                         {
                             Receiver *r = *iter++;
                             if (r->receives(m, from)) {
                                 r->enqueue(*p);
-                                //MachineInstance::forceIdleCheck();
                             }
                         }
                     }

@@ -44,7 +44,8 @@
 
 
 uint64_t client_watchdog_timer = 0;
-//extern bool machine_is_ready;
+extern bool machine_is_ready;
+extern bool machine_was_ready;
 static Watchdog *wd;
 
 IODCommandThread *IODCommandThread::instance_;
@@ -461,10 +462,10 @@ void IODCommandThread::operator()() {
 
     NB_MSG << "------------------ Command Thread Started -----------------\n";
 
-	//MyMonitor monit(&cti->socket);
-	//boost::thread cmd_monitor(boost::ref(monit));
+	MyMonitor monit(&cti->socket);
+	boost::thread cmd_monitor(boost::ref(monit));
     
-    int linger = 0; // do not wait at socket close time
+  int linger = 0; // do not wait at socket close time
 	cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
 	char url_buf[30];
 	int retries = 2; // attempt to use the default command port and auto allocate another if necessary
@@ -490,22 +491,25 @@ void IODCommandThread::operator()() {
 	}
 	NB_MSG << "Client Interface available on port: " << port << "\n";
 
-    zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
-    access_req.bind("inproc://resource_mgr");
+  zmq::socket_t access_req(*MessagingInterface::getContext(), ZMQ_PAIR);
+  access_req.bind("inproc://resource_mgr");
 
 	zmq::socket_t command_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
 	command_sync.bind("inproc://command_sync");
 
 	char start_cli[20];
 	do { // wait to start
-		size_t len;
-		safeRecv(access_req, start_cli, 19, true, len, -1);
-		if (len>20) {
-			start_cli[19] = 0;
-			FileLogger fl(program_name); fl.f() << "client interface startup got unexpected: " << start_cli << "\n";
-		}
+		size_t len = 0;
+    if (!safeRecv(access_req, start_cli, 19, true, len, -1)) {
+      usleep(100000);
+      continue;
+    }
+//		if (len>20) {
+//			start_cli[19] = 0;
+//			FileLogger fl(program_name); fl.f() << "client interface startup got unexpected: " << start_cli << "\n";
+//		}
 		if (len<20) start_cli[len] = 0;;
-		NB_MSG << "client thread received: "  << start_cli << "\n";
+		//NB_MSG << "client thread received: "  << start_cli << "\n";
 		usleep(100000);
 	} while (strcmp(start_cli, "start") != 0);
 
@@ -530,7 +534,7 @@ void IODCommandThread::operator()() {
 			catch (zmq::error_t zex) {
 				{
 					FileLogger fl(program_name);
-					fl.f() << "Client Interface exception during poll()\n";
+					fl.f() << "Client Interface exception during poll() " << zex.what() << "\n";
 				}
 				usleep(100);
 				continue;
@@ -540,10 +544,18 @@ void IODCommandThread::operator()() {
 			// use a shorter activity poll for a while since something is happening
 			(poll_time < 4) ? poll_time = 2 : poll_time -= 2;
 
+      // check for zmq errors
+      for (int i=0; i<3; ++i) {
+        if ( items[i].revents & ZMQ_POLLERR) {
+          char buf[150];
+          snprintf(buf, 150, "Processing thread saw zmq error on socket %d", i);
+          MessageLog::instance()->add(buf);
+        }
+      }
+
 			/*
 			   processing thread will call: (*command)(params) for all pending commands
 			 */
-
 			if ( items[2].revents & ZMQ_POLLIN) {
 				char *buf = 0;
 				size_t response_len;
@@ -571,7 +583,7 @@ void IODCommandThread::operator()() {
 				zmq::message_t request;
 				if (!cti->socket.recv (&request)) continue; // interrupted system call
 #if 0
-				if (!machine_is_ready) {
+				if (!machine_is_ready || machine_was_ready) {
 					const char *tosend = "Ignored during startup";
 					safeSend(cti->socket, tosend, strlen(tosend));
 					continue;

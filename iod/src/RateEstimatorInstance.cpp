@@ -76,7 +76,8 @@ RateEstimatorInstance::RateEstimatorInstance(CStringHolder name, const char * ty
 	}
 RateEstimatorInstance::~RateEstimatorInstance() { delete settings; }
 
-void RateEstimatorInstance::setValue(const std::string &property, Value new_value, uint64_t authority) {
+bool RateEstimatorInstance::setValue(const std::string &property, const Value &update, uint64_t authority) {
+	Value new_value(update);
 	if (property == "VALUE") {
 		if (new_value.kind == Value::t_symbol) {
 			new_value = lookup(new_value.sValue.c_str());
@@ -93,7 +94,7 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 			settings->property_changed = false;
 		}
 
-        // use current time - start time as t0 to avoid floating point resolution issues
+		// use current time - start time as t0 to avoid floating point resolution issues
 		if (settings->start_t == 0) settings->start_t = settings->update_t;
 		uint64_t delta_t = settings->update_t - settings->start_t;
 		settings->position = (int32_t)val;
@@ -114,9 +115,10 @@ void RateEstimatorInstance::setValue(const std::string &property, Value new_valu
 
 		MachineInstance::setValue(property, settings->velocity);
 		MachineInstance::setValue("position", settings->position);
+		return true;
 	}
 	else
-		MachineInstance::setValue(property, new_value);
+		return MachineInstance::setValue(property, new_value);
 }
 
 long RateEstimatorInstance::filter(long val) {

@@ -125,7 +125,7 @@ int get_input(char *buf, int size)
 		cmdline_done = true;
     	return YY_NULL;
 	}
-    if (strlen(line) > size - 2) {
+    if (strlen(line) + 2 > (unsigned int)size) {
         yyerror("input line too long");
         return YY_NULL;
     }

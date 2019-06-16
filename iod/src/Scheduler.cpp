@@ -18,6 +18,7 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <inttypes.h>
 #include <iostream>
 #include <iomanip>
 #include "Logger.h"
@@ -58,7 +59,7 @@ static uint64_t calcDeliveryTime(long delay) {
 	if (delay<0) {
 		DBG_SCHEDULER << "***** negative delta: " << delay << "\n";
 	}
-	DBG_SCHEDULER << "setTime: " << res << "\n";
+	DBG_SCHEDULER << "deliveryTime: " << res << "\n";
 	return res;
 }
 
@@ -72,7 +73,11 @@ std::string Scheduler::getStatus() {
 		snprintf(buf, 300, "busy");
 	else {
 		snprintf(buf, 300, "state: %d, is ready: %d"
+#ifdef PRId64
+			" items: %ld, now: %" PRId64 "\n"
+#else
 			" items: %ld, now: %lld\n"
+#endif
 			"last notification: %10.6f\nwait time: %10.6f",
 				 state, ready(now), items.size(), (now - ProcessingThread::programStartTime()),
 				(float)notification_sent/1000000.0f, (float)wait_duration/1000000.0f);
@@ -161,22 +166,22 @@ ScheduledItem::ScheduledItem(long delay, Package *p) :package(p), action(0), tri
 
 ScheduledItem::ScheduledItem(long delay, Action *a) :package(0), action(a), trigger(0) {
 	delivery_time = calcDeliveryTime(delay);
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+	DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(long delay, Trigger *t) :package(0), action(0), trigger(t->retain()) {
 	delivery_time = calcDeliveryTime(delay);
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+  DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(uint64_t starting, long delay, Action *a) : package(0), action(a), trigger(0) {
 	delivery_time = starting + delay;
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+  DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(uint64_t starting, long delay, Trigger *t) : package(0), action(0), trigger(t->retain()) {
 	delivery_time = starting + delay;
-	DBG_SCHEDULER << "scheduled action: " << delivery_time << "\n";
+  DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 
@@ -219,7 +224,7 @@ int64_t Scheduler::getNextDelay() {
 	if (empty()) return 1000000;
     ScheduledItem *top = next();
 	next_time = top->delivery_time;
-	return next_time - nowMicrosecs();
+	return next_time - microsecs();
 }
 
 int64_t Scheduler::getNextDelay(uint64_t start) {
@@ -240,14 +245,14 @@ void Scheduler::add(ScheduledItem*item) {
 	}
 	top = next();
 	next_time = top->delivery_time;
-	long delay = next_time - nowMicrosecs();
+	long delay = next_time - microsecs();
 	if (delay <= next_delay_time || next_delay_time <= 0) { // && delay>=0 && next_delay_time>=0) {
 		next_delay_time = delay;
 		if (internals->thread_ptr) internals->thread_ptr->interrupt();
 	}
 #if 0
 	uint64_t last_notification = notification_sent; // this may be changed by the scheduler
-	long wait_duration = nowMicrosecs() - last_notification;
+	long wait_duration = microsecs() - last_notification;
 	if (ready() ||  !last_notification) {
 		if (!update_notify) {
 			update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
@@ -258,7 +263,7 @@ void Scheduler::add(ScheduledItem*item) {
 			wd->poll();
 			try {
 				safeSend(*update_notify,"poke",4);
-				notification_sent = nowMicrosecs();
+				notification_sent = microsecs();
 				break;
 			}		
 			catch(zmq::error_t err) {
@@ -321,7 +326,7 @@ void Scheduler::idle() {
 
 	state = e_waiting;
 	bool is_ready;
-	uint64_t last_poll = nowMicrosecs();
+	uint64_t last_poll = microsecs();
 	while (state != e_aborted) {
 		next_delay_time = getNextDelay(last_poll);
 		if (!ready(last_poll) && state == e_waiting) {
@@ -335,7 +340,7 @@ void Scheduler::idle() {
 				// permit interruption
 			}
 		}
-		last_poll = nowMicrosecs();
+		last_poll = microsecs();
 		is_ready = ready(last_poll);
 		if (!is_ready && state == e_waiting) continue;
 
@@ -383,7 +388,7 @@ void Scheduler::idle() {
 				delete item;
 				++items_found;
 			}
-			last_poll = nowMicrosecs();
+			last_poll = microsecs();
 			is_ready = ready(last_poll);
 		}
 		//if (items_found)
