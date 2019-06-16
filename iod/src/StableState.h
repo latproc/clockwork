@@ -49,19 +49,23 @@ public:
 	void triggerFired(Trigger *trigger);
 	void refreshTimer();
 
+	bool isTransitional() const;
+	bool isPrivate() const;
+	bool isSpecial() const;
+
 	const Value &name() { return _name; }
-  void refreshTimer();
   void collectTimerPredicates();
 
 	std::string state_name;
 	Condition condition;
 	bool uses_timer;
 	Value timer_val;
+	Trigger *trigger;
 	std::list<ConditionHandler> *subcondition_handlers;
   MachineInstance *owner;
+  std::list<Predicate*>timer_predicates;
 private:
 	Value _name;
-  std::list<Predicate*>timer_predicates;
 };
 std::ostream &operator<<(std::ostream &out, const StableState &ss);
 

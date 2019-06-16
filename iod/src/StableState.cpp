@@ -36,7 +36,7 @@ StableState& StableState::operator=(const StableState* other) {
 	owner = other->owner;
 	return *this;
 }
-/*
+
 bool StableState::isSpecial() const{
 	const State *s = owner->getStateMachine()->findState(_name.asString().c_str());
 	assert(s);
@@ -65,7 +65,6 @@ std::ostream &StableState::operator<< (std::ostream &out) const {
 	else
 		return out << _name << ((isTransitional())?"*":"");
 }
- */
 
 void StableState::triggerFired(Trigger *trig) {
 	if (owner) owner->setNeedsCheck();

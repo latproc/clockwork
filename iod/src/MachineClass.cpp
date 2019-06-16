@@ -10,6 +10,7 @@
 #include "ModbusInterface.h"
 #include "ExportState.h"
 #include "PredicateAction.h"
+#include "MessageLog.h"
 
 std::list<MachineClass*> MachineClass::all_machine_classes;
 std::map<std::string, MachineClass> MachineClass::machine_classes;
@@ -53,8 +54,10 @@ void MachineClass::addState(const State &state) {
 	StateMap::iterator found = states.find(state.getName());
 	if (found == states.end())
 		states[state.getName()] = new State(state);
-	else
+	else {
 		*((*found).second) = state;
+    MessageLog::instance()->add("Machine ", name, "already has state ", state.getName());
+  }
 }
 void MachineClass::addState(const char *name) {
 	if (states.find(name) == states.end())
@@ -540,9 +543,10 @@ bool MachineClass::cExport(const std::string &filename) {
 		}
 
     // prepare variables for symbols
-    std::list<State*>::iterator iter = states.begin();
+		StateMap::iterator iter = states.begin();
     while (iter != states.end()) {
-      const State *s = *iter++;
+      const StateMap::value_type item = *iter++;
+			State *s = item.second;
       symbols[s->getName()] = PredicateSymbolDetails(s->getName(), "state", s->getName());
     }
     for (unsigned int i=0; i<stable_states.size(); ++i) {
@@ -648,9 +652,10 @@ bool MachineClass::cExport(const std::string &filename) {
 
     // export statenumbers
     {
-      std::list<State*>::iterator iter = states.begin();
+      StateMap::iterator iter = states.begin();
       while (iter != states.end()) {
-        const State *s = *iter++;
+				StateMap::value_type item = *iter++;
+        const State *s = item.second;
         used_states.insert(s->getName());
       }
       std::set<std::string>::iterator us_iter = used_states.begin();
