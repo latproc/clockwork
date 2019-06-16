@@ -89,7 +89,7 @@ private_tests/
 iod/old/
 modbus/
 plugins/
-iod/LocalCMakeLists.txt
+LocalCMakeLists.txt
 
 # built apps
 iod/cw

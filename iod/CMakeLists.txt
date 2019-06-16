@@ -1,5 +1,10 @@
 cmake_minimum_required (VERSION 2.8)
-project (Latproc)
+
+cmake_policy(SET CMP0048 NEW)
+cmake_policy(SET CMP0008 NEW)
+cmake_policy(SET CMP0015 NEW)
+
+project (Latproc VERSION 0.9.6)
 
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.6)
@@ -8,10 +13,6 @@ set (RUN_TESTS OFF)
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
-
-
-cmake_policy(SET CMP0008 NEW)
-cmake_policy(SET CMP0015 NEW)
 
 #set (CMAKE_VERBOSE_MAKEFILE false)
 

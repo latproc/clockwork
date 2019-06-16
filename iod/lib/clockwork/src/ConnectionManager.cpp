@@ -96,7 +96,7 @@ void ConnectionManager::abort() { aborted = true; }
 std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix, const char *default_name) {
 	if (!val)
 		return default_name;
-	int len = strlen(val);
+	size_t len = strlen(val);
 	if (prefix) len += strlen(prefix);
 	if (suffix) len += strlen(suffix);
 	char buf[len+1];
@@ -594,7 +594,7 @@ void MessageRouter::removeFilter(int route_id, MessageFilter *filter) {
 void MessageRouter::poll() {
 	boost::unique_lock<boost::mutex> lock(internals->data_mutex);
 	if (!internals->remote) { usleep(10); return; }
-	unsigned int num_socks = internals->routes.size()+1;
+	size_t num_socks = internals->routes.size()+1;
 
 	if (internals->saved_num_items != num_socks) {
 		if (internals->destinations) delete[] internals->destinations;

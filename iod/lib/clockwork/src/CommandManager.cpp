@@ -23,7 +23,7 @@
 #include <exception>
 #include <math.h>
 #include "Win32Helper.h"
-//#include <dru_zmq_dep.hpp> TBD, broke this somehow
+//#include <dru_zmq_dep.hpp> // TBD, broke this somehow
 #include <zmq.hpp>
 #include <map>
 #include "Logger.h"

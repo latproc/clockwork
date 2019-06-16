@@ -965,7 +965,7 @@ void MachineInstance::idle() {
 			if (res == Action::Failed) {
 				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error();
 				MessageLog::instance()->add(ss.str().c_str());
-				NB_MSG << ss.str() << "\n";
+				//NB_MSG << ss.str() << "\n";
 			}
 			else if (res != Action::Complete) {
 				DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
@@ -1450,9 +1450,7 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	if (!enabled()) {
 		return false;
 	}
-	// passive machines do not receive messages
-	//if (!is_active) return false;
-	// all active machines receive messages from themselves but now we
+	// all machines receive messages from themselves but now we
 	// check if there is a handler in the case of enter and leave messages
 	// enter and leave functions are no longer automatically accepted
 	if (m.isSimple() || m.isEnable()) {
@@ -1526,9 +1524,6 @@ uint64_t MachineInstance::requiredAuthority() {
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
 	if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
-		//FileLogger fl(program_name);
-		//fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
-		//<< " needed: " << expected_authority << " got " << authority << "\n";
 		if (isShadow()) {
 			Channel *chn = ownerChannel();
 			if (chn && chn->current_state == ChannelImplementation::ACTIVE)
@@ -1539,9 +1534,6 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			return Action::Failed;
 	}
 	else if (expected_authority == 0 && authority != 0)  {
-		//FileLogger fl(program_name);
-		//fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
-		//<< " needed: " << expected_authority << " got " << authority << "\n";
 		return Action::Failed;
 	}
 

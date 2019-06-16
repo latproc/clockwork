@@ -101,7 +101,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
+	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
 #endif
 	*response_len = 0;
 	if (block && timeout == 0) timeout = 500;
@@ -126,7 +126,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 						*buf = new char[*response_len+1];
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
-						if (*response_len>0){FileLogger fl(program_name); fl.f() << tnam << " received: " << *buf << "\n"; }
+						//if (*response_len>0){FileLogger fl(program_name); fl.f() << tnam << " received: " << *buf << "\n"; }
 						return true;
 					}
 					else {
@@ -190,7 +190,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							memcpy(&header, message.data(), sizeof(MessageHeader));
 #if 0
-              NB_MSG << "received message header\n";
+            				NB_MSG << "received message header\n";
 							got_address = true;
 #endif
 							continue;
@@ -199,9 +199,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 						*buf = new char[*response_len+1];
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
-            NB_MSG << "received msg: " << *buf << " from remote\n";
-            if (strcmp(*buf, "status") == 0)
-              int x = 1;
+						//DBG_MSG << "received msg: " << *buf << " from remote\n";
 
 #if 0
 						if (*response_len > 0) {

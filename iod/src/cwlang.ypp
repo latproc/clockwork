@@ -1443,14 +1443,12 @@ SET SYMBOL TO value error_clause  {
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
-	current_action = new AbortActionTemplate(true, $2);
+	current_action = new SendMessageActionTemplate($2, "SELF", true /*abort after send*/);
 }
 | THROW STRINGVAL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
-	current_action = new AbortActionTemplate(true, $2);
+	current_action = new SendMessageActionTemplate($2, "SELF", true /*abort after send*/);
 }
 | SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
     if (current_action) current_actions->push_back(current_action);

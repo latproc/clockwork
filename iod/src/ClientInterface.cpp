@@ -504,12 +504,12 @@ void IODCommandThread::operator()() {
       usleep(100000);
       continue;
     }
-		if (len>20) {
-			start_cli[19] = 0;
-			FileLogger fl(program_name); fl.f() << "client interface startup got unexpected: " << start_cli << "\n";
-		}
+//		if (len>20) {
+//			start_cli[19] = 0;
+//			FileLogger fl(program_name); fl.f() << "client interface startup got unexpected: " << start_cli << "\n";
+//		}
 		if (len<20) start_cli[len] = 0;;
-		NB_MSG << "client thread received: "  << start_cli << "\n";
+		//NB_MSG << "client thread received: "  << start_cli << "\n";
 		usleep(100000);
 	} while (strcmp(start_cli, "start") != 0);
 
