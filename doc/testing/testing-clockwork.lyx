@@ -1,0 +1,465 @@
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Testing Clockwork
+\end_layout
+
+\begin_layout Standard
+This document is to discuss how we add a testing framework to clockwork.
+ Clockwork was not built with unit tests in mind and the implementation
+ is less that perfect.
+ We intend to add a testing framework and try to improve this situation.
+\end_layout
+
+\begin_layout Section*
+Getting Started
+\end_layout
+
+\begin_layout Standard
+We have selected google-test and google-mock for testing.
+ To enable tests, create a file 'LocalCMakeLists.txt' in the iod directory
+ and include the line:
+\end_layout
+
+\begin_layout LyX-Code
+set (RUN_TESTS ON)
+\end_layout
+
+\begin_layout Standard
+The make command will then download google-test and google-mock and build
+ the test programs
+\end_layout
+
+\begin_layout Standard
+The cmake configuration only builds tests if RUN_TESTS is on.
+\end_layout
+
+\begin_layout Section*
+Approaches
+\end_layout
+
+\begin_layout Standard
+In order to mock classes, we need to find a way to use C++ features that
+ mock framwork components to simplify testing of the interface being tested.
+\end_layout
+
+\begin_layout Standard
+Consider the DISABLE statement within clockwork; this statement should cause
+ the disable() method of a machine instance to be called.
+\end_layout
+
+\begin_layout Enumerate
+it calls disable on the MachineInstance if it exists
+\end_layout
+
+\begin_layout Enumerate
+it throws an exception if the MachineInstance does not exist
+\end_layout
+
+\begin_layout Enumerate
+it completes immediately
+\end_layout
+
+\begin_layout Standard
+The parser builds a list that describes the actions to be executed when
+ certain events occur during the execution of a program, mode commonly the
+ event will be entry of a state.
+ Actions conform to a particular interface:
+\end_layout
+
+\begin_layout LyX-Code
+class Action {
+\end_layout
+
+\begin_layout LyX-Code
+  public:
+\end_layout
+
+\begin_layout LyX-Code
+    virtual ActionStatus operator() = 0;
+\end_layout
+
+\begin_layout LyX-Code
+    virtual bool completed() = 0;
+\end_layout
+
+\begin_layout LyX-Code
+    virtual bool running() = 0;
+\end_layout
+
+\begin_layout LyX-Code
+    ...
+\end_layout
+
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+The parser does not construct actions directly, rather it creates action
+ templates when the appropriate event is triggered its actions are instantiated
+ and provided with a reference to the machine that is executing them.
+ This machine refererence is the scope of the action; when executed, the
+ actions operate on the machine or related machines from the perspective
+ of this scope.
+ Currently this is done using ActionTemplate classes that have a factory
+ method that instantiates an action, given a MachineInstance scope.
+\end_layout
+
+\begin_layout LyX-Code
+DisableActionTemplate dat(
+\begin_inset Quotes eld
+\end_inset
+
+switch');
+\end_layout
+
+\begin_layout LyX-Code
+DisableAction *da = dat.factory(machine_instance);
+\end_layout
+
+\begin_layout Standard
+This factory method is useful because a list of actions can be instantiated
+ and executed without knowing anything about their types:
+\end_layout
+
+\begin_layout LyX-Code
+std::list<ActionTemplate*> action_templates;
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+for (auto iter = action_templates.begin(); iter != action_templates.end();
+ iter++) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+Action *a = *iter.factory(machine_instance);
+\end_layout
+
+\begin_layout LyX-Code
+(*a)();
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+We would like to be able to write tests for actions and to do that we would
+ like to use mocks to verify that the action use methods of a limited interface
+ without having to mock an entire MachineInstance or setup complicated test
+ conditions.
+ 
+\end_layout
+
+\begin_layout Subsection*
+Template approach
+\end_layout
+
+\begin_layout Standard
+This approach changes ActionTemplate so it uses an 'Actionable' class rather
+ than a MachineInstance
+\end_layout
+
+\begin_layout LyX-Code
+template<class Actionable>class ActionTemplate {
+\end_layout
+
+\begin_layout LyX-Code
+public:
+\end_layout
+
+\begin_layout LyX-Code
+  ActionTemplate() {}
+\end_layout
+
+\begin_layout LyX-Code
+  virtual ~ActionTemplate() {}
+\end_layout
+
+\begin_layout LyX-Code
+  virtual Action *factory(Actionable *scope) = 0;
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+In normal use, the ActionTemplate would be instantiated to use MachineInstance:
+\end_layout
+
+\begin_layout LyX-Code
+DisableActionTemplate<MachineInstance> dat(
+\begin_inset Quotes eld
+\end_inset
+
+switch
+\begin_inset Quotes erd
+\end_inset
+
+);
+\end_layout
+
+\begin_layout LyX-Code
+DisableAction *da = dat.factory(machine_instance);
+\end_layout
+
+\begin_layout Standard
+When testing, we instantiate the ActionTemplate with a mocked class
+\end_layout
+
+\begin_layout LyX-Code
+class MockDisableable {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+MOCK_METHOD0(disable, void());
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+MockDisableable machine_instance;
+\end_layout
+
+\begin_layout LyX-Code
+EXPECT_CALL(machine_instance, disable()).Times(Once());
+\end_layout
+
+\begin_layout LyX-Code
+DisableActionTemplate<MockDisableable> dat(
+\begin_inset Quotes eld
+\end_inset
+
+switch
+\begin_inset Quotes erd
+\end_inset
+
+);
+\end_layout
+
+\begin_layout LyX-Code
+DisableAction *da = dat.factory(machine_instance);
+\end_layout
+
+\begin_layout LyX-Code
+ActionStatus status = (*da)();
+\end_layout
+
+\begin_layout Standard
+The above should work bit it is a significant refactoring project.
+\end_layout
+
+\begin_layout Subsection*
+Adapter approach
+\end_layout
+
+\begin_layout LyX-Code
+// ActionTemplates take actionable items to create Actions
+\end_layout
+
+\begin_layout LyX-Code
+class Actionable {
+\end_layout
+
+\begin_layout LyX-Code
+	public:
+\end_layout
+
+\begin_layout LyX-Code
+	virtual ~Actionable() = 0;
+\end_layout
+
+\begin_layout LyX-Code
+	virtual MachineInstance *machine_instance() = 0;
+\end_layout
+
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+class Disableable : public Actionable {
+\end_layout
+
+\begin_layout LyX-Code
+  public:
+\end_layout
+
+\begin_layout LyX-Code
+  virtual ~Disableable() = 0;
+\end_layout
+
+\begin_layout LyX-Code
+  virtual void disable() = 0;
+\end_layout
+
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+class MockDisableable : public Disableable {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+MOCK_METHOD0(disable, void());
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+class MachineInstanceDisableableProxy : public Disableable {
+\end_layout
+
+\begin_layout LyX-Code
+  public:
+\end_layout
+
+\begin_layout LyX-Code
+    MachineInstanceDisableableProxy(MachineInstance *m) : mi(m) {}
+\end_layout
+
+\begin_layout LyX-Code
+    ~MachineInstanceDisabelableProxy() {}
+\end_layout
+
+\begin_layout LyX-Code
+    virtual void disable() { mi->disable(); }
+\end_layout
+
+\begin_layout LyX-Code
+    virtual MachineInstance *machine_instance() { return mi; }
+\end_layout
+
+\begin_layout LyX-Code
+  private:
+\end_layout
+
+\begin_layout LyX-Code
+   MachineInstance *mi;
+\end_layout
+
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+The problem we hit here is: how do we implement ActionTemplate::factory?
+ The factory needs to instantiate an Action given a scope but the methods
+ used in that scope are different for each Action class.
+ When instantiating actions for execution, there is no information about
+ what 'Actionable' type to instantiate.
+\end_layout
+
+\end_body
+\end_document

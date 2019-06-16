@@ -426,21 +426,21 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
 				char *p;
 				x = strtol(params[3].asString().c_str(), &p, 10);
 				if (use_authority)
-					if (*p == 0)
+					if (params[3].asString().length() > 0 && *p == 0)
 						changed = m->setValue(params[2].asString(), x, authority);
 					else
 						changed = m->setValue(params[2].asString(), params[3], authority);
 				else
-					if (*p == 0)
+					if (params[3].asString().length() > 0 && *p == 0)
 						changed = m->setValue(params[2].asString(), x);
 					else
 						changed = m->setValue(params[2].asString(), params[3]);
 			}
 			else {
 				if (use_authority)
-					changed = m->setValue(params[2].asString(), params[3], authority);
+					changed = m->setValue(params[2].asString(), params[3].asString(), authority);
 				else
-					changed = m->setValue(params[2].asString(), params[3]);
+					changed = m->setValue(params[2].asString(), params[3].asString());
 			}
 		}
 		if (changed) result_str = "OK";

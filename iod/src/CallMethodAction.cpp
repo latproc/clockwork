@@ -104,6 +104,8 @@ Action::Status CallMethodAction::run() {
 		MessageLog::instance()->add(buf);
 		status = Action::Failed;
 		error_str = strdup(buf);
+		abort();
+		owner->stop(this);
 	}
 	return status;
 }

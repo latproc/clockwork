@@ -162,6 +162,7 @@ void MachineInstance::setNeedsCheck() {
 		DBG_AUTOSTATES << _name << " needs check\n";
 		++total_machines_needing_check;
 	}
+	// TODO: only activate the machine if not already_pending..
 	++needs_check;
 	if (!active_actions.empty() || !mail_queue.empty()) {
 		DBG_M_MESSAGING << _name << " queued for action processing\n";
@@ -358,11 +359,15 @@ bool MachineInstance::uses(MachineInstance *other) {
 	if (other->_type == "ANALOGOUTPUT") return true;
 	if (other->_type == "STATUS_FLAG") return true;
 	if (other->_type == "FLAG") return true;
+	if (other->_type == "DIGITALINPUT") return true;
+	if (other->_type == "DIGITALOUTPUT") return true;
 	if (_type == "POINT") return false;
 	if (_type == "ANALOGINPUT") return true;
+	if (_type == "DIGITALINPUT") return true;
 	if (other->_type == "COUNTER") return true;
 	if (_type == "COUNTERRATE") return true;
 	if (_type == "ANALOGOUTPUT") return true;
+	if (_type == "DIGITALOUTPUT") return true;
 	if (_type == "STATUS_FLAG") return true;
 	if (_type == "FLAG") return false;
 	return other->_name < _name;
@@ -959,7 +964,7 @@ void MachineInstance::idle() {
 			if (res == Action::Failed) {
 				std::stringstream ss; ss << _name << ": Action " << *curr << " failed: " << curr->error();
 				MessageLog::instance()->add(ss.str().c_str());
-				NB_MSG << ss.str() << "\n";
+				//NB_MSG << ss.str() << "\n";
 			}
 			else if (res != Action::Complete) {
 				DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
@@ -1075,7 +1080,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 //				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
 //					++num_machines_with_work;
 			}
-			if (mi->state_machine && mi->state_machine->plugin)
+			if (mi->state_machine && mi->state_machine->plugin && mi->state_machine->plugin->poll_actions)
 				mi->state_machine->plugin->poll_actions(mi);
 			if ( (mi->state_machine && mi->state_machine->plugin)
 					|| (!mi->has_work && !mi->executingCommand() ) )
@@ -1441,9 +1446,7 @@ bool MachineInstance::receives(const Message&m, Transmitter *from) {
 	if (!enabled()) {
 		return false;
 	}
-	// passive machines do not receive messages
-	//if (!is_active) return false;
-	// all active machines receive messages from themselves but now we
+	// all machines receive messages from themselves but now we
 	// check if there is a handler in the case of enter and leave messages
 	// enter and leave functions are no longer automatically accepted
 	if (m.isSimple() || m.isEnable()) {
@@ -1517,9 +1520,6 @@ uint64_t MachineInstance::requiredAuthority() {
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
 	if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
-		//FileLogger fl(program_name);
-		//fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
-		//<< " needed: " << expected_authority << " got " << authority << "\n";
 		if (isShadow()) {
 			Channel *chn = ownerChannel();
 			if (chn && chn->current_state == ChannelImplementation::ACTIVE)
@@ -1530,9 +1530,6 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			return Action::Failed;
 	}
 	else if (expected_authority == 0 && authority != 0)  {
-		//FileLogger fl(program_name);
-		//fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
-		//<< " needed: " << expected_authority << " got " << authority << "\n";
 		return Action::Failed;
 	}
 
@@ -1668,9 +1665,12 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			if (new_state.getName() == s.state_name && s.timer_predicates.size()) {
 				if (earliestTimer == SymbolTable::Null)
 					earliestTimer = earliestScheduleTime(s.timer_predicates);
-				else
-					earliestTimer = std::min(earliestTimer, earliestScheduleTime(s.timer_predicates));
-				if (saved != earliestTimer) std::cout << _name << ":" << s << "subcondition timer is earlier\n";
+                else {
+                    Value pred_timer = earliestScheduleTime(s.timer_predicates);
+                    if (pred_timer != SymbolTable::Null)
+                        earliestTimer = std::min(earliestTimer, pred_timer);
+                }
+				if (saved != earliestTimer) std::cout << _name << ":" << s.state_name << " subcondition timer is earlier " << earliestTimer << " vs " << saved << "\n";
 			}
 		}
 
@@ -3697,11 +3697,12 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
 		DBG_PROPERTIES << getName() << " setting property " << property << " to " << new_value << "\n";
 		const Value &prev_value = properties.lookup(property.c_str());
 
-		if (prev_value.kind == Value::t_symbol) {
-			setNeedsCheck();
-			notifyDependents();
-			return setValue(prev_value.sValue, new_value);
-		};
+		// TODO: Fix this indirection in the case the property is not a reference
+//		if (prev_value.kind == Value::t_symbol) {
+//			setNeedsCheck();
+//			notifyDependents();
+//			return setValue(prev_value.sValue, new_value);
+//		};
 
 		if (prev_value == SymbolTable::Null && property_val.token_id != ClockworkToken::tokVALUE && property != _name) {
 			// the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally

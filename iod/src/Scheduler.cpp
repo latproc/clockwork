@@ -18,6 +18,7 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <inttypes.h>
 #include <iostream>
 #include <iomanip>
 #include "Logger.h"
@@ -72,7 +73,11 @@ std::string Scheduler::getStatus() {
 		snprintf(buf, 300, "busy");
 	else {
 		snprintf(buf, 300, "state: %d, is ready: %d"
+#ifdef PRId64
+			" items: %ld, now: %" PRId64 "\n"
+#else
 			" items: %ld, now: %lld\n"
+#endif
 			"last notification: %10.6f\nwait time: %10.6f",
 				 state, ready(now), items.size(), (now - ProcessingThread::programStartTime()),
 				(float)notification_sent/1000000.0f, (float)wait_duration/1000000.0f);

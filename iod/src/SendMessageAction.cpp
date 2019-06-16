@@ -27,11 +27,11 @@
 #include "MessageLog.h"
 #include "Dispatcher.h"
 
-SendMessageActionTemplate::SendMessageActionTemplate(Value msg, Value dest)
-: message(msg), target(dest), target_machine(0) {}
+SendMessageActionTemplate::SendMessageActionTemplate(Value msg, Value dest, bool should_throw)
+: message(msg), target(dest), target_machine(0), abort_after(should_throw) {}
 
-SendMessageActionTemplate::SendMessageActionTemplate(Value msg, MachineInstance *dest)
-: message(msg), target(dest->fullName()), target_machine(dest) {}
+SendMessageActionTemplate::SendMessageActionTemplate(Value msg, MachineInstance *dest, bool should_throw)
+: message(msg), target(dest->fullName()), target_machine(dest), abort_after(should_throw) {}
 
 
 Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
@@ -39,7 +39,7 @@ Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
-	return out << "SendMessageActionTemplate "
+	return out << ( (abort_after) ? "ThrowMessageActionTemplate" : "SendMessageActionTemplate ")
 		<< message << " "
     << ( (target != 0) ? target : "");
 }
@@ -53,7 +53,8 @@ void SendMessageActionTemplate::toC(std::ostream &out, std::ostream &vars) const
 }
 
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
-: Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine) {}
+: Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine),
+  abort_after(eat.abort_after) {}
 
 Action::Status SendMessageAction::run() {
 	owner->start(this);
@@ -93,6 +94,11 @@ Action::Status SendMessageAction::run() {
 					if (entry) owner->sendMessageToReceiver(new Message(msg_str.c_str()), entry);
 				}
 			}
+			if (abort_after) {
+				abort();
+				error_str = "Exception message thrown";
+				status = Action::Failed;
+			}
 			status = Action::Complete;
 		}
 		else {
@@ -118,8 +124,8 @@ Action::Status SendMessageAction::checkComplete() {
 
 std::ostream &SendMessageAction::operator<<(std::ostream &out) const {
 	if (!target_machine)
-		return out << owner->getName() << ": SendMessageAction " << message << " TO unknown target: " << target.asString() << "\n";
+		return out << owner->getName() << ": SendMessageAction " << message << " TO unknown target: " << target.asString();
 	else
-		return out << owner->getName() << ": SendMessageAction " << message << " TO " << target << "\n";
+		return out << owner->getName() << ": SendMessageAction " << message << " TO " << target;
 }
 		

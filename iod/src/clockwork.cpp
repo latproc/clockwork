@@ -285,7 +285,6 @@ void predefine_special_machines() {
   point_class->initial_state = State("off");
   point_class->disableAutomaticStateChanges();
 
-
   MachineClass *ain_class = new MachineClass("ANALOGINPUT");
   ain_class->parameters.push_back(Parameter("module"));
   ain_class->parameters.push_back(Parameter("offset"));
@@ -299,6 +298,17 @@ void predefine_special_machines() {
   ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("Velocity", Value(0), SymbolTable::ST_REPLACE);
+
+	MachineClass *din_class = new MachineClass("DIGITALINPUT");
+	din_class->parameters.push_back(Parameter("module"));
+	din_class->parameters.push_back(Parameter("offset"));
+	din_class->addState("stable");
+	din_class->addState("unstable");
+	din_class->default_state = State("stable");
+	din_class->initial_state = State("stable");
+	din_class->disableAutomaticStateChanges();
+	din_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
+	din_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
   MachineClass *cnt_class = new MachineClass("COUNTER");
   cnt_class->parameters.push_back(Parameter("module"));
@@ -348,19 +358,14 @@ void predefine_special_machines() {
   aout_class->initial_state = State("stable");
   aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
-#if 0
-  MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
-  pid_class->parameters.push_back(Parameter("module"));
-  pid_class->parameters.push_back(Parameter("offset"));
-  pid_class->parameters.push_back(Parameter("settings"));
-  pid_class->parameters.push_back(Parameter("position"));
-  pid_class->parameters.push_back(Parameter("speed"));
-  pid_class->addState("stable");
-  pid_class->addState("unstable");
-  pid_class->default_state = State("stable");
-  pid_class->initial_state = State("stable");
-  pid_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-#endif
+	MachineClass *dout_class = new MachineClass("DIGITALOUTPUT");
+	dout_class->parameters.push_back(Parameter("module"));
+	dout_class->parameters.push_back(Parameter("offset"));
+	dout_class->addState("stable");
+	dout_class->addState("unstable");
+	dout_class->default_state = State("stable");
+	dout_class->initial_state = State("stable");
+	dout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
 
   MachineClass *list_class = new MachineClass("LIST");
   list_class->addState("empty");
@@ -601,6 +606,8 @@ void semantic_analysis() {
       // make sure that analogue machines have a value property
       if (machine_class->name == "ANALOGOUTPUT"
           || machine_class->name == "ANALOGINPUT"
+					|| machine_class->name == "DIGITALOUTPUT"
+					|| machine_class->name == "DIGITALINPUT"
           || machine_class->name == "COUNTER"
           || machine_class->name == "COUNTERRATE"
           || machine_class->name == "RATEESTIMATOR"
@@ -1015,14 +1022,14 @@ int loadConfig(std::list<std::string> &files) {
   }
 
   /* load configuration from files named on the commandline */
-  int opened_file = 0;
+  //int opened_file = 0;
   std::list<std::string>::iterator f_iter = files.begin();
   while (f_iter != files.end())
   {
     const char *filename = (*f_iter).c_str();
     if (filename[0] != '-')
     {
-      opened_file = 1;
+      //opened_file = 1;
       yyin = fopen(filename, "r");
       if (yyin)
       {
@@ -1043,7 +1050,7 @@ int loadConfig(std::list<std::string> &files) {
     }
     else if (strlen(filename) == 1) /* '-' means stdin */
     {
-      opened_file = 1;
+      //opened_file = 1;
       NB_MSG << "\nProcessing stdin\n";
       yyfilename = "stdin";
       yyin = stdin;
@@ -1054,7 +1061,7 @@ int loadConfig(std::list<std::string> &files) {
     f_iter++;
   }
 
-  if (!opened_file) return 1;
+  //if (!opened_file) return 1;
 
   if (num_errors > 0)
   {
@@ -1081,8 +1088,7 @@ int loadConfig(std::list<std::string> &files) {
     return 2;
   }
 
-  NB_MSG << " Configuration loaded. " << MachineInstance::countAutomaticMachines() << " automatic machines\n";
-  //MachineInstance::displayAutomaticMachines();
+  //NB_MSG << " Configuration loaded. " << MachineInstance::countAutomaticMachines() << " automatic machines\n";
   return 0;
 }
 
@@ -1146,33 +1152,7 @@ void initialise_machines() {
   while (m_iter != MachineInstance::end()) {
     MachineInstance *mi = *m_iter++;
     mi->markActive();
-#if 0
-    if (!mi->receives_functions.empty() || mi->commands.size()
-        || (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
-        || mi->isModbusExported()
-        || mi->uses_timer
-        || mi->mq_interface
-        || mi->stable_states.size() > 0
-        || mi->_type == "LIST"
-        || mi->_type == "REFERENCE"
-        || mi->_type == "CONDITION"
-        || mi->_type == "COUNTERRATE"
-        || mi->_type == "RATEESTIMATOR"
-        || (mi->getStateMachine() && mi->getStateMachine()->plugin )
-        || mi->isActive() // constructor marked this machine type as active
-        ) {
-      mi->markActive();
-      DBG_INITIALISATION << mi->getName() << " is active\n";
-      ++num_active;
-    }
-    else {
-      mi->markPassive();
-      DBG_INITIALISATION << mi->getName() << " is passive\n";
-      ++num_passive;
-    }
-#endif
   }
-  NB_MSG << num_passive << " passive and " << num_active << " active machines\n";
 
   // enable all other machines
 

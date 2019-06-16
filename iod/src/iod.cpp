@@ -74,6 +74,7 @@
 
 bool program_done = false;
 bool machine_is_ready = false;
+bool machine_was_ready = false;
 
 void usage(int argc, char *argv[]);
 void displaySymbolTable();
@@ -114,6 +115,7 @@ void load_debug_config()
 
 std::list<DeviceInfo*>collected_configurations;
 std::map<unsigned int, DeviceInfo*> slave_configuration;
+
 class ClockworkDeviceConfigurator : public DeviceConfigurator {
 	public:
 
@@ -135,130 +137,155 @@ class ClockworkDeviceConfigurator : public DeviceConfigurator {
 		}
 };
 
+#ifndef EC_SIMULATOR
+SlaveInfo getSlaveInfo(ec_slave_info_t &info) {
+	SlaveInfo res;
+	res.set_slave_info(info);
+	return res;
+}
 
+void collectSlaves(std::vector<SlaveInfo> &slave_arr) {
+	std::list<ec_slave_info_t> slaves;
+	ECInterface::instance()->listSlaves(slaves);
+	
+	std::transform(slaves.begin(), slaves.end(), std::back_inserter(slave_arr), getSlaveInfo);
+	std::cout << "found " << slave_arr.size() << " slaves on the bus\n";
+}
+#endif
+
+
+
+class ModuleSpec {
+	public:
+		ModuleSpec(MachineInstance *m) :
+		  position(safe_mutable_value(m, "position")),
+		  xml_filename(safe_mutable_value(m, "config_file")),
+		  selected_sm(safe_mutable_value(m, "alternate_sync_manager")),
+		  product_code(safe_mutable_value(m, "ProductCode")),
+		  revision_no(safe_mutable_value(m, "RevisionNo")) {
+		}
+        Value &safe_mutable_value(MachineInstance *m, const char *name) { Value *v = m->getMutableValue(name); return (v) ? *v : local_value; }
+	Value local_value;
+	Value &position;
+	Value &xml_filename;
+	Value &selected_sm ;
+	Value &product_code;
+	Value &revision_no;
+};
+
+DeviceInfo *find_configured_device(DeviceInfo &dev) {
+	std::cout << "checking for " << dev<< "\n";
+	DeviceInfo *di = 0;
+	std::list<DeviceInfo*>::iterator iter = collected_configurations.begin();
+	while (iter != collected_configurations.end()) {
+		DeviceInfo *item = *iter++;
+		if ( dev == *item ) {
+			std::cout << " using item " << *item << "\n";
+			di = item;
+			break;
+		}
+		std::cout << "no match with " << *item << "\n";
+	}
+	return di;
+}
+
+void update_device_spec_from_bus(ModuleSpec &spec, unsigned int position, std::vector<SlaveInfo> &slave_arr) {
+	if (position < slave_arr.size()) {
+		if (spec.product_code == SymbolTable::Null)
+			spec.product_code = (long)slave_arr[ position ].product_code;
+		if (spec.revision_no == SymbolTable::Null)
+			spec.revision_no = (long)slave_arr[ position ].revision;
+		if (spec.selected_sm == SymbolTable::Null) 
+		  spec.selected_sm = Value("", Value::t_string);
+	}
+}
+
+void loadSlaveConfigurations() {
+	//determine which EtherCAT modules are to use configurations loaded from
+	// XML files
+	// build a list of modules with xml configs and a list of xml file references
+	//   collecting product code and revision numbers if specified
+	// where product codes and revision numbers are not specified in the config
+	//   the module in the bus position will be used
+	// search the bus to complete the product_code/release_no details if necessary
+	// search the xml files for matching modules
+	ClockworkDeviceConfigurator configurator;
+	EtherCATXMLParser parser(configurator);
+
+	std::vector<SlaveInfo> slave_arr;
+#ifndef EC_SIMULATOR
+	collectSlaves(slave_arr);
+#endif
+
+	std::list<MachineInstance*>::iterator iter = MachineInstance::begin();
+	std::set<std::string> xml_files;
+	while (iter != MachineInstance::end())
+	{
+		const int error_buf_size = 100;
+		char error_buf[error_buf_size];
+		MachineInstance *m = *iter++;
+		if (m->_type == "MODULE") {
+			ModuleSpec seek(m);
+			if (seek.position == SymbolTable::Null) continue; // MODULE does not have a position
+			if (seek.xml_filename != SymbolTable::Null) {
+				std::cout << "using xml configuration file " << seek.xml_filename 
+					<< " for " << m->getName() << " at position " << seek.position << "\n";
+				xml_files.insert(seek.xml_filename.sValue);
+				update_device_spec_from_bus(seek, seek.position.iValue, slave_arr);
+				
+				parser.xml_configured.clear();
+				DeviceInfo *dev = new DeviceInfo(seek.product_code.iValue, seek.revision_no.iValue, seek.selected_sm.sValue.c_str() );
+				parser.xml_configured.push_back( dev );
+				parser.init();
+				if (!parser.loadDeviceConfigurationXML(seek.xml_filename.sValue.c_str())) {
+					std::cerr << "Warning: failed to load module configuration from " 
+       						<< seek.xml_filename<< "\n";
+				}
+				else {
+					DeviceInfo *di = find_configured_device(*dev);
+					if (di) {
+						slave_configuration[seek.position.iValue] = di;
+						const ec_slave_info_t &slave( *(slave_arr[ seek.position.iValue ].ec_info) );
+						ECModule *module = new ECModule();
+
+						module->name = slave.name;
+						module->alias = slave.alias;
+						module->position = slave.position;
+						module->vendor_id = slave.vendor_id;
+						module->product_code = slave.product_code;
+						module->revision_no = slave.revision_number;
+						module->syncs = di->config.c_syncs;
+						module->pdos = 0;
+						module->pdo_entries = di->config.c_entries;
+						module->sync_count = di->config.num_syncs;
+						module->entry_details = di->config.c_entry_details;
+						module->num_entries = di->config.num_entries;
+#ifndef EC_SIMULATOR
+						if (!ECInterface::instance()->addModule(module, true))  {
+							delete module; // module may be already registered
+							std::cerr << "failed to add module " << module->name << "\n";
+						}
+#endif
+					}
+					else {
+						std::cout << "error: found " << collected_configurations.size() 
+							<< " for slave at position " << seek.position 
+							<< " when searching xml file for device " 
+							<< std::hex << seek.product_code.iValue << "/" << seek.revision_no.iValue << std::dec << ":" << seek.selected_sm.sValue << "\n";
+					}
+				}
+			}
+		}
+	}
+}
 
 bool setupEtherCatThread() {
 	if (!ECInterface::instance()->initialised) {
 		std::cout << "Cannect setup the EtherCAT thread until the interface is initialised\n";
 		exit(1);
 	}
-#ifndef EC_SIMULATOR
+	loadSlaveConfigurations();
 	{
-		//determine which EtherCAT modules are to use configurations loaded from
-		// XML files
-		// build a list of modules with xml configs and a list of xml file references
-		//   collecting product code and revision numbers if specified
-		// where product codes and revision numbers are not specified in the config
-		//   the module in the bus position will be used
-		// search the bus to complete the product_code/release_no details if necessary
-		// search the xml files for matching modules
-		ClockworkDeviceConfigurator configurator;
-		EtherCATXMLParser parser(configurator);
-
-		std::list<ec_slave_info_t> slaves;
-		ECInterface::instance()->listSlaves(slaves);
-		std::vector<ec_slave_info_t> slave_arr;
-		std::copy(slaves.begin(), slaves.end(), std::back_inserter(slave_arr));
-		std::cout << "found " << slave_arr.size() << " slaves on the bus\n";
-
-		std::list<MachineInstance*>::iterator iter = MachineInstance::begin();
-		std::set<std::string> xml_files;
-		while (iter != MachineInstance::end())
-		{
-			const int error_buf_size = 100;
-			char error_buf[error_buf_size];
-			MachineInstance *m = *iter++;
-			if (m->_type == "MODULE") {
-				const Value &position = m->getValue("position");
-				const Value &xml_filename = m->getValue("config_file");
-				const Value &selected_sm = m->getValue("alternate_sync_manager");
-				const Value &product_code = m->getValue("ProductCode");
-				const Value &revision_no = m->getValue("RevisionNo");
-				if (xml_filename != SymbolTable::Null) {
-					std::cout << "using xml configuration file " << xml_filename << " for " << m->getName() << " at position " << position << "\n";
-					xml_files.insert(xml_filename.sValue);
-					Value pc(product_code);
-					Value rn(revision_no);
-					Value sm(selected_sm);
-					if (product_code == SymbolTable::Null ) {
-						// find product code of the device at this position
-						const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
-						pc = (long)slave.product_code;
-						std::cout << "setting product code for position " << position.iValue
-							<< " to " 
-							<< std::hex << "0x" << pc << std::dec 
-							<< " from bus slave at position " << position.iValue
-							<< "\n";
-					}
-					else {
-						std::cout << "using config file product code "
-							<< std::hex << "0x" << pc << std::dec 
-							<< " for position " << position.iValue
-							<< "\n";
-					}
-					if (revision_no == SymbolTable::Null) {
-						rn =  (long)slave_arr[ position.iValue ].revision_number;
-						// find product code of the device at this position
-						const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
-						std::cout << "setting product code for position " << position.iValue
-							<< " to " 
-							<< std::hex << "0x" << rn << std::dec << "\n";
-					}
-					if (sm == SymbolTable::Null) sm = Value("", Value::t_string);
-					
-					parser.xml_configured.clear();
-					DeviceInfo *dev = new DeviceInfo(pc.iValue, rn.iValue, sm.sValue.c_str() );
-					parser.xml_configured.push_back( dev );
-					parser.init();
-					if (!parser.loadDeviceConfigurationXML(xml_filename.sValue.c_str())) {
-						std::cerr << "Warning: failed to load module configuration from " << xml_filename<< "\n";
-					}
-					else {
-						std::cout << "checking for " << *dev<< "\n";
-						DeviceInfo *di = 0;
-						std::list<DeviceInfo*>::iterator iter = collected_configurations.begin();
-						while (iter != collected_configurations.end()) {
-							DeviceInfo *item = *iter++;
-							if ( *dev == *item ) {
-								std::cout << " using item " << *item << "\n";
-								di = item;
-								break;
-							}
-							std::cout << "no match with " << *item << "\n";
-						}
-						//if (collected_configurations.size() == 1) {
-						if (di) {
-							slave_configuration[position.iValue] = di;
-							const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
-							ECModule *module = new ECModule();
-
-							module->name = slave.name;
-							module->alias = slave.alias;
-							module->position = slave.position;
-							module->vendor_id = slave.vendor_id;
-							module->product_code = slave.product_code;
-							module->revision_no = slave.revision_number;
-							module->syncs = di->config.c_syncs;
-							module->pdos = 0;
-							module->pdo_entries = di->config.c_entries;
-							module->sync_count = di->config.num_syncs;
-							module->entry_details = di->config.c_entry_details;
-							module->num_entries = di->config.num_entries;
-							if (!ECInterface::instance()->addModule(module, true))  {
-								delete module; // module may be already registered
-								std::cerr << "failed to add module " << module->name << "\n";
-							}
-
-						}
-						else {
-							std::cout << "error: found " << collected_configurations.size() << " for slave at position " << position 
-								<< " when earching xml file for device " 
-								<< std::hex << pc.iValue << "/" << rn.iValue << std::dec << ":" << sm.sValue << "\n";
-						}
-					}
-				}
-			}
-		}
 #if 0
 		// having collected a number of xml files we load the manual configurations
 		std::set<std::string>::iterator fi(xml_files.begin());
@@ -272,13 +299,13 @@ bool setupEtherCatThread() {
 		}
 		std::cout << "Collected " << collected_configurations.size() << " configurations\n\n";
 #endif
-		
+#ifndef EC_SIMULATOR
 		char *slave_config = collectSlaveConfig(true);
 		if (slave_config) free(slave_config);
 		ECInterface::instance()->configureModules();
 		ECInterface::instance()->registerModules();
-	}
 #endif
+	}
 	generateIOComponentModules(slave_configuration);
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO

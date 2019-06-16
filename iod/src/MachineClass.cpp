@@ -622,7 +622,7 @@ bool MachineClass::cExport(const std::string &filename) {
                 type = "property";
               }
               else {
-                for (int i=0; i<parameters.size(); ++i) {
+                for (size_t i=0; i<parameters.size(); ++i) {
                   if (parameters[i].val.kind == Value::t_symbol && parameters[i].val.sValue == psd.name) {
                     type = "machine";
                   }

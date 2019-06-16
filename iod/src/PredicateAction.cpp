@@ -97,7 +97,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
 		}
 	}
     else if (v.kind == Value::t_dynamic) {
-        DynamicValue *dv = v.dynamicValue();
+        DynamicValueBase *dv = v.dynamicValue();
         if (dv) return dv->operator()(m);
         return false;
     }
@@ -146,7 +146,7 @@ Value eval(Predicate *p, MachineInstance *m){
       case opAll:
       case opIncludes:
       case opCount: {
-          DynamicValue *dyn_v = r.dynamicValue();
+          DynamicValueBase *dyn_v = r.dynamicValue();
           if (dyn_v) return dyn_v->operator()(m);
       }
       break;

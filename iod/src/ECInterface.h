@@ -25,21 +25,58 @@
 #include <sys/types.h>
 
 #include "IODCommand.h"
+
+/* the entry details structure is used to gather extra data about
+ an entry in a module that the Etherlab master structures doesn't
+ normally give us.
+ */
+class EntryDetails {
+public:
+    std::string name;
+    unsigned int entry_index;
+    unsigned int sm_index;
+    unsigned int pdo_index;
+};
+
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #include <map>
 #include "value.h"
 
-/* the entry details structure is used to gather extra data about
-  an entry in a module that the Etherlab master structures doesn't
-  normally give us. 
-*/
-class EntryDetails {
-public:
+// SlaveInfo holds the details of the slave type and version
+class SlaveInfo {
+	public:
+	SlaveInfo() : position(0), product_code(0), vendor_id(0), revision(0), ec_info(0) {}
+	SlaveInfo(const SlaveInfo &other) : position(other.position), product_code(other.product_code), 
+		vendor_id(other.vendor_id), revision(other.revision)
+	{
+#ifndef EC_SIMULATOR
+		if (other.ec_info) {
+			ec_info = new ec_slave_info_t;
+			*ec_info = *other.ec_info;
+		}
+		else ec_info = 0;
+#endif
+	}
+	~SlaveInfo() { delete ec_info; }
+
+	int position;
+	uint32_t product_code;
+	uint32_t vendor_id;
+	uint32_t revision;
 	std::string name;
-	unsigned int entry_index;
-	unsigned int sm_index;
-	unsigned int pdo_index;
+#ifndef EC_SIMULATOR
+	void set_slave_info(ec_slave_info_t &info) {
+		ec_info = new ec_slave_info_t;
+		memcpy(ec_info, &info, sizeof(ec_slave_info_t));
+		position = ec_info->position;
+		product_code = ec_info->product_code;
+		vendor_id = ec_info->vendor_id;
+		revision = ec_info->revision_number;
+		name = ec_info->name;
+	}
+	ec_slave_info_t *ec_info;
+#endif
 };
 
 #ifdef USE_SDO
@@ -92,7 +129,27 @@ typedef struct ECDomainState{} ec_domain_state_t;
 typedef struct ECSlaveConfig{} ec_slave_config_t;
 typedef struct ECSlaveConfigState{} ec_slave_config_state_t;
 typedef struct ECPDOEntryReg{} ec_pdo_entry_reg_t;
+typedef struct ECPDOEntryInfo{
+    unsigned int index;
+    unsigned int subindex;
+    uint8_t bit_length;
+} ec_pdo_entry_info_t;
+typedef struct ECPDOInfo {
+    unsigned int index;
+    unsigned int n_entries;
+    ec_pdo_entry_info_t *entries;
+} ec_pdo_info_t;
+typedef struct ECSyncInfo{
+    uint8_t index;
+    uint8_t dir;
+    uint8_t watchdog_mode;
+    unsigned int n_pdos;
+    ec_pdo_info_t *pdos;
+} ec_sync_info_t;
 
+const int EC_DIR_INPUT = 0;
+const int EC_DIR_OUTPUT = 1;
+const int EC_WD_DEFAULT = 0;
 #endif
 #include <time.h>
 #include <vector>
