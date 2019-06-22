@@ -86,7 +86,7 @@ public:
 };
 
 ConnectionManager::ConnectionManager() : internals(0),aborted(false) {
-#ifndef WIN32
+#ifndef _WIN32
   owner_thread = pthread_self();
 #endif
 }

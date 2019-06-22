@@ -192,7 +192,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
 		else if (strcmp("RANDOM", name) == 0) {
 
             boost::random::mt19937 rng;
-            boost::random::uniform_int_distribution<> my_random(0, ULONG_MAX);
+            boost::random::uniform_int_distribution<> my_random(0, UINT_MAX);
             unsigned long val = my_random(rng);
 			// unsigned long val = random();
 			std::cout << " random value " << val << "\n";

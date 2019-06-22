@@ -1,18 +1,18 @@
 /*
  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
- 
+
  This file is part of Latproc
- 
+
  Latproc is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
  as published by the Free Software Foundation; either version 2
  of the License, or (at your option) any later version.
- 
+
  Latproc is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with Latproc; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -44,7 +44,7 @@ public:
 	CommunicationPoll *instance() {
 		if (!instance_) instance_ = new CommunicationPoll; return instance_;
 	}
-	
+
 private:
 	CommunicationPoll *instance_;
 	CommunicationPoll();
@@ -61,7 +61,7 @@ public:
 	void setEndPoint(const char *endpt);
 	std::string &endPoint() { return sock_addr; }
 	const std::string &socketName() const { return socket_name; }
-	
+
 private:
 	std::string socket_name;
 	std::string sock_addr;
@@ -87,16 +87,16 @@ public:
 	virtual bool setupConnections() =0;
 	virtual bool checkConnections() =0;
 	virtual bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) =0;
-	
+
 	virtual int numSocks() =0;
 	void abort();
 	bool ready() { return rate_limiter.ready(); }
-#ifndef WIN32
+#ifndef _WIN32
 	const pthread_t &ownerThread() const { return owner_thread; }
 #endif
 protected:
 	ConnectionManagerInternals *internals;
-#ifndef WIN32
+#ifndef _WIN32
 	pthread_t owner_thread;
 #endif
 	bool aborted;
@@ -157,8 +157,8 @@ private:
 /*
  Subscription Manager - create and maintain a connection to a remote clockwork driver
 
- The command socket is used to request a channel and a subscriber is created to 
- listen for activity from the server. The main thread can communicate with the 
+ The command socket is used to request a channel and a subscriber is created to
+ listen for activity from the server. The main thread can communicate with the
  server via a request/reply connection to a thread running the subscription manager.
 
  Commands arriving from the program's main thread
@@ -192,11 +192,11 @@ public:
 	void setSetupMonitor(SingleConnectionMonitor *monitor);
 	void createSubscriberSocket(const char *chame);
 	void init();
-	
+
 	bool requestChannel();
 
 	void configureSetupConnection(const char *host, int port);
-	
+
 	bool setupConnections();
 	bool checkConnections(); // test whether setup and subscriber channels are connected
 

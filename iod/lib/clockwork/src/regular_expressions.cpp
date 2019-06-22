@@ -19,9 +19,6 @@
 */
 
 #include <unistd.h>
-#if __MINGW32__
-#else
-    #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +28,7 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#ifndef _WIN32
 
 rexp_info *create_pattern(const char *pat)
 {
@@ -226,6 +224,15 @@ int is_symbol(const char *string)
 	return matches(string, "[A-Za-z][A-Za-z0-9_.]*");
 }
 
+
+#else // _WIN32
+
+int matches(const char *string, const char *pattern) {
+    return 0;
+}
+
+#endif
+
 #ifdef TESTING
 
 
@@ -351,5 +358,4 @@ int main(int argc, char *argv[])
 	}
 	return 0;
 }
-#endif
-#endif
+#endif // TESTING

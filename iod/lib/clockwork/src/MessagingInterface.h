@@ -101,7 +101,7 @@ private:
 	int connection;
 	std::string hostname;
 	int port;
-#ifndef WIN32
+#ifndef _WIN32
 	pthread_t owner_thread;
 #endif
 	static bool abort_all;

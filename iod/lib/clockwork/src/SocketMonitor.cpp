@@ -56,7 +56,7 @@ SocketMonitor::~SocketMonitor() {
 void SocketMonitor::operator()() {
 		char thread_name[100];
 		snprintf(thread_name, 100, "iod skt monitor %s", monitor_socket_name.c_str());
-#ifndef WIN32
+#ifndef _WIN32
 #ifdef __APPLE__
         pthread_setname_np(thread_name);
 #else
