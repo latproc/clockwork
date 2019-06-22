@@ -27,29 +27,38 @@
 
 class State {
 public:
-    State(const char *name);
-    State(int val);
-    State(const State &orig);
-    virtual ~State() {}
-    State &operator=(const State &other);
-    std::ostream &operator<<(std::ostream &out) const;
-    virtual bool operator==(const State &other) const;
-    virtual bool operator!=(const State &other) const;
-    const std::string &getName() const { return text; }
-    int getId() const { return token_id; }
-    bool is(int tok) { return token_id == tok; }
-    Value *getNameValue() { return &name; }
+	State(const std::string &name);
+	State(const char *name);
+	State(int val);
+	State(const State &orig);
+	virtual ~State() {}
+	State &operator=(const State &other);
+	std::ostream &operator<<(std::ostream &out) const;
+	virtual bool operator==(const State &other) const;
+	virtual bool operator!=(const State &other) const;
+	const std::string &getName() const { return text; }
+	int getId() const { return token_id; }
+	bool is(int tok) { return token_id == tok; }
+	const Value *getNameValue() const { return &name; }
 	int getIntValue() { return val; }
 
 	void enter(void *data) const;
 	void setEnterFunction( void (*f)(void *) );
 
+	bool isPrivate() const;
+	void setPrivate(bool which);
+
+	bool isTransitional() const;
+	void setTransitional(bool which);
+
 private:
-    std::string text;
-    int val;
-    Value name;
-    int token_id;
+	std::string text;
+	int val;
+	Value name;
+	int token_id;
 	void (*enter_proc)(void *);
+	bool is_private;
+	bool is_transitional; // is a leaving or entering transitional state
 };
 
 std::ostream &operator<<(std::ostream &out, const State &m);

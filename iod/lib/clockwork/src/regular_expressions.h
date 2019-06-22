@@ -21,9 +21,9 @@
 #ifndef __REGULAR_EXPRESSIONS_H__
 #define __REGULAR_EXPRESSIONS_H__
 
-#if __MINGW32__
-#else
-    #include <regex.h>
+#ifndef _WIN32
+#include <regex.h>
+#endif
 #include <vector>
 #include <string>
 
@@ -32,8 +32,10 @@ typedef struct rexp_info
   char *pattern;
   int compilation_result;
   char *compilation_error;
+#ifndef _WIN32
   regex_t regex;
   regmatch_t *matches;
+#endif
 } rexp_info;
 
 rexp_info *create_pattern(const char *pat);
@@ -68,6 +70,4 @@ typedef int (match_func)(const char *match, int index, void *user_data);
 
 int each_match(rexp_info *info, const char *text, size_t *end_offset, match_func f, void *user_data);
 
-
-#endif
 #endif

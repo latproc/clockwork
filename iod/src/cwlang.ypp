@@ -144,7 +144,7 @@ struct Subcondition {
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
-%token FLOAT32 SUM ABS MIN MAX MEAN
+%token FLOAT32 SUM ABS MIN MAX MEAN PRIVATE
 %token CHANGING FAILURE ADD AFTER BEFORE
 %token ASCENDING ASC DESCENDING DESC INDEX
 %token REFERS FIND SEEK CPU BOARD
@@ -362,6 +362,7 @@ interface_defn_section:
 	current_name_list.clear();
 }
 | state_definition ';'
+| export_clause
 ;
 
 channel_definition:
@@ -726,7 +727,6 @@ transitory_state:
 SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
     current_machineclass->addState($1);
-    current_machineclass->state_names.insert($1);
 
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
@@ -739,7 +739,6 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
 | SYMBOL /*state name */ DURING SYMBOL /* command */ property_block error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
     current_machineclass->addState($1);
-    current_machineclass->state_names.insert($1);
 
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     properties = property_stack.back();
@@ -832,7 +831,10 @@ SYMBOL DIGITALIO INTEGERVAL ';'{
 state_definition:
 SYMBOL STATE {
     current_machineclass->addState($1); // add to states to permit changes to this state
-    current_machineclass->state_names.insert($1);
+}
+|SYMBOL PRIVATE STATE {
+	State s($1); s.setPrivate(true);
+	current_machineclass->addState(s); // add to states to permit changes to this state
 }
 | SYMBOL DEFAULT {
     DBG_PARSER << " default state " << $1 << "\n" ;
@@ -841,13 +843,11 @@ SYMBOL STATE {
     ss.state_name = $1;
     current_machineclass->stable_states.push_back(ss);
     current_machineclass->addState($1);// add to states to permit changes to this state
-    current_machineclass->state_names.insert($1);
 }
 | SYMBOL INITSTATE {
     DBG_PARSER << " default state " << $1 << "\n" ;
     current_machineclass->initial_state = $1;
     current_machineclass->addState($1);// add to states list to permit changes to this state
-    current_machineclass->state_names.insert($1);
 }
 ;
 
@@ -859,7 +859,6 @@ SYMBOL WHEN predicate {
     ss.state_name = $1;
     current_machineclass->stable_states.push_back(ss);
     current_machineclass->addState($1);// add to states to permit changes to this state
-    current_machineclass->state_names.insert($1);
 }
 | stable_state_definition COMMA state_subcondition {
     StableState ss = current_machineclass->stable_states.back();
@@ -878,7 +877,7 @@ SYMBOL WHEN predicate {
 	ss.subcondition_handlers->push_back(ch);
 	delete $3;
 	current_machineclass->stable_states.pop_back();
-    current_machineclass->stable_states.push_back(ss);
+	current_machineclass->stable_states.push_back(ss);
 }
 ;
 
@@ -1840,7 +1839,7 @@ SYMBOL SYMBOL parameters
     ss.condition.predicate = $4;
     ss.state_name = "true";
     current_machine->stable_states.push_back(ss);
-    current_machineclass->state_names.insert("true");
+    current_machineclass->addState("true");
     properties.clear();
 }
 | SYMBOL CONDITION parameters WHEN expression
@@ -1855,7 +1854,7 @@ SYMBOL SYMBOL parameters
 	ss.condition.predicate = $5;
 	ss.state_name = "true";
 	current_machine->stable_states.push_back(ss);
-	current_machineclass->state_names.insert("true");
+	current_machineclass->addState("true");
 	properties.clear();
 }
 ;
@@ -2108,7 +2107,6 @@ SYMBOL MODULE parameters ';'
     ss.state_name = "true";
     current_machineclass->stable_states.push_back(ss);
     current_machineclass->addState("true");// add to states to permit changes to this state
-    current_machineclass->state_names.insert("true");
     properties.clear();
 }
 | SYMBOL CONDITION WHEN expression ';'
@@ -2125,7 +2123,6 @@ SYMBOL MODULE parameters ';'
 	ss.state_name = "true";
 	current_machineclass->stable_states.push_back(ss);
 	current_machineclass->addState("true");// add to states to permit changes to this state
-	current_machineclass->state_names.insert("true");
 	properties.clear();
 }
 ;

@@ -8,3 +8,11 @@ Follow MACHINE input, output {
 in FLAG;
 out FLAG;
 follow Follow in, out;
+
+Pulse MACHINE {
+  idle WHEN 1==1,
+	TAG flag WHEN flag IS off;
+
+  flag FLAG;
+}
+pulse Pulse;

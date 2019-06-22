@@ -593,7 +593,6 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	needs_check(0),
 	uses_timer(false),
 	my_instance_type(instance_type),
-	state_change(0),
 	state_machine(0),
 	current_state("undefined"),
 	is_enabled(false),
@@ -639,7 +638,6 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	needs_check(0),
 	uses_timer(false),
 	my_instance_type(instance_type),
-	state_change(0),
 	state_machine(0),
 	current_state("undefined"),
 	is_enabled(false),
@@ -829,7 +827,8 @@ void MachineInstance::describe(std::ostream &out) {
 			out << "stable state evaluation not run\n";
 		}
 		for (unsigned int i=0; i<stable_states.size(); ++i) {
-			out << "  " << stable_states[i].state_name << ": " << stable_states[i].condition.last_evaluation << "\n";
+			out << "  ";
+			stable_states[i].displayName(out) << ": " << stable_states[i].condition.last_evaluation << "\n";
 			if (stable_states[i].condition.last_result == true) {
 				if (stable_states[i].subcondition_handlers && !stable_states[i].subcondition_handlers->empty()) {
 					std::list<ConditionHandler>::iterator iter = stable_states[i].subcondition_handlers->begin();
@@ -1428,11 +1427,8 @@ std::ostream &MachineInstance::operator<<(std::ostream &out)const  {
 bool MachineInstance::stateExists(State &seek) {
 	//return (state_machine->state_names.count(seek.getName()) != 0);
 
-	std::list<State *>::const_iterator iter = state_machine->states.begin();
-	while (iter != state_machine->states.end()) {
-		if ( *(*iter) == seek) return true;
-		iter++;
-	}
+	if (state_machine->findState(seek)) return true;
+
 	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 		if (stable_states[ss_idx].state_name == seek.getName()) return true;
 	}
@@ -3479,15 +3475,11 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 const Value *MachineInstance::lookupState(const std::string &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
-		std::list<State*>::iterator iter = state_machine->states.begin();
-		while (iter != state_machine->states.end()) {
-			State *s = *iter++;
-			if (s->getName() == state_name) {
-				return s->getNameValue();
-			}
-		}
+		const State *s = state_machine->findState(state_name);
+		if (s) return s->getNameValue();
+
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-			if (stable_states[ss_idx].state_name == state_name) return &stable_states[ss_idx].name;
+			if (stable_states[ss_idx].state_name == state_name) return &stable_states[ss_idx].name();
 		}
 	}
 	return &SymbolTable::Null;
@@ -3496,15 +3488,11 @@ const Value *MachineInstance::lookupState(const std::string &state_name) {
 const Value *MachineInstance::lookupState(const Value &state_name) {
 	//is state_name a valid state?
 	if (state_machine) {
-		std::list<State*>::iterator iter = state_machine->states.begin();
-		while (iter != state_machine->states.end()) {
-			State *s = *iter++;
-			if (s->getId() == state_name.token_id) {
-				return s->getNameValue();
-			}
-		}
+		const State *s = state_machine->findState(state_name.asString());
+		if (s) return s->getNameValue();
+
 		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-			if (stable_states[ss_idx].name == state_name) return &stable_states[ss_idx].name;
+			if (stable_states[ss_idx].name() == state_name) return &stable_states[ss_idx].name();
 		}
 	}
 	return &SymbolTable::Null;

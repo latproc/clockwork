@@ -65,6 +65,7 @@
 #include "MessagingInterface.h"
 #include "Channel.h"
 #include "ProcessingThread.h"
+#include "MachineClass.h"
 #include <libgen.h>
 
 bool program_done = false;
@@ -285,9 +286,9 @@ int main (int argc, char const *argv[])
     ExportState::add_state("stable");
     while (iter != MachineClass::all_machine_classes.end()) {
       MachineClass *mc = *iter++;
-      std::set<std::string>::iterator iter = mc->state_names.begin();
-      while (iter != mc->state_names.end()) {
-        ExportState::add_state(*iter++);
+			MachineClass::StateMap::iterator iter = mc->states.begin();
+      while (iter != mc->states.end()) {
+        ExportState::add_state((*iter++).first);
       }
     }
     // setup standard message ids

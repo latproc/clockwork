@@ -49,7 +49,7 @@ Thumbs.db
 ._*
 *.lyx?
 .~*
-.vscode/
+.vscode
 
 #project build files
 iod/build/

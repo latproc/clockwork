@@ -1,27 +1,37 @@
 #include <iostream>
 #include "Win32Helper.h"
-#ifndef WIN32
-#include <sys/time.h>
+//#include <sys/time.h>
 #include "rate.h"
+#include <ctime>
+#include <chrono>
 
-static uint64_t microsecs() {
-    struct timeval now;
-    gettimeofday(&now, 0);
-    return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
+RateLimiter::RateLimiter() : back_off(boaGeometric),
+  delay(std::chrono::microseconds(100000)),
+  start_delay(std::chrono::microseconds(100000)),
+  last(std::chrono::system_clock::now()),
+  step(std::chrono::microseconds(20000)),
+  max_delay(std::chrono::microseconds(4000000)),
+  scale(1.05)  {
 }
 
-RateLimiter::RateLimiter() : back_off(boaGeometric), delay(100000), start_delay(100000),
-last(0), step(20000), max_delay(4000000), scale(1.05)  {
+RateLimiter::RateLimiter(int msec, BackOffAlgorithm boa) : back_off(boa), delay(std::chrono::microseconds(msec*1000)),
+    start_delay(std::chrono::microseconds(msec*1000)),
+	last(std::chrono::system_clock::now()),
+    step(std::chrono::microseconds(20000)),
+    max_delay(std::chrono::microseconds(4000000)),
+    scale(1.0)  {
 }
 
-RateLimiter::RateLimiter(int msec, BackOffAlgorithm boa) : back_off(boa), delay(msec*1000), start_delay(msec*1000),
-	last(0), step(20000), max_delay(4000000)  {
-}
+void RateLimiter::setStep(uint64_t msecs) { step = std::chrono::microseconds(msecs * 1000); }
+void RateLimiter::setScale(double s) { scale = s; }
+void RateLimiter::setMaxDelay( uint64_t maxd_msecs) { max_delay = std::chrono::microseconds(maxd_msecs*1000); }
+
 
 bool RateLimiter::ready() {
-	uint64_t now = microsecs();
+	std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    std::chrono::microseconds delta_t = std::chrono::duration_cast<std::chrono::microseconds>(now - last);
 	if (now >= last + delay) {
-		last = now; 
+		last = now;
 		if (back_off == boaStep)
 			delay += step;
 		else if (back_off == boaGeometric)
@@ -32,7 +42,6 @@ bool RateLimiter::ready() {
 	}
 	return false;
 }
-#endif
 
 #ifdef TESTING
 

@@ -23,31 +23,45 @@
 #include "State.h"
 #include "symboltable.h"
 
-State::State(const char *msg) :text(msg), val(0), name(msg, Value::t_string), enter_proc(0) {
+State::State(const std::string &msg) :text(msg), val(0), name(msg, Value::t_string),
+		enter_proc(0), is_private(false), is_transitional(false) {
     token_id = Tokeniser::instance()->getTokenId(text.c_str());
 }
 
-//State::State(int v) :text("INTEGER"), val(v), name("INTEGER", Value::t_string) {
-//
-//}
+State::State(const char *msg) :text(msg), val(0), name(msg, Value::t_string),
+enter_proc(0), is_private(false), is_transitional(false) {
+	token_id = Tokeniser::instance()->getTokenId(text.c_str());
+}
+
 
 State::State(const State &orig){
-    text = orig.text;
-    val = orig.val;
-    name = Value(orig.name);
-    token_id = Tokeniser::instance()->getTokenId(text.c_str());
+	text = orig.text;
+	val = orig.val;
+	name = Value(orig.name);
+	token_id = Tokeniser::instance()->getTokenId(text.c_str());
+	is_private = orig.is_private;
+	is_transitional = orig.is_transitional;
 }
 
 State &State::operator=(const State &other) {
-    text = other.text;
-    val = other.val;
-    name = other.name;
-    token_id = Tokeniser::instance()->getTokenId(text.c_str());
-    return *this;
+	text = other.text;
+	val = other.val;
+	name = other.name;
+	token_id = Tokeniser::instance()->getTokenId(text.c_str());
+	is_private = other.is_private;
+	is_transitional = other.is_transitional;
+	return *this;
 }
 
+// strictly a state cannot output its name  if it is private,
+// instead, the previous state of the owning machine should be
+// displayed.
 std::ostream &State::operator<<(std::ostream &out) const  {
-    out << text;
+	if (is_private)
+		out << "|" << text << ((is_transitional)?"*":"") << "|";
+	else
+    out << text << ((is_transitional)?"*":"");
+
     return out;
 }
 
@@ -56,11 +70,13 @@ std::ostream &operator<<(std::ostream &out, const State &m) {
 }
 
 bool State::operator==(const State &other) const {
-    return token_id == other.token_id && val == other.val;
+    return token_id == other.token_id && val == other.val
+			&& is_private == other.is_private && is_transitional == other.is_transitional;
 }
 
 bool State::operator!=(const State &other) const {
-    return token_id != other.token_id || val != other.val;
+    return token_id != other.token_id || val != other.val
+			|| is_transitional != other.is_transitional || is_private != other.is_private;
 }
 
 void State::enter(void *data) const {
@@ -73,4 +89,13 @@ void State::enter(void *data) const {
 void State::setEnterFunction( void (*f)(void *) ) {
 	enter_proc = f;
 }
+
+
+bool State::isPrivate() const { return is_private; }
+void State::setPrivate(bool which) { is_private = which; }
+
+bool State::isTransitional() const { return is_transitional; }
+void State::setTransitional(bool which) { is_transitional = which; }
+
+
 

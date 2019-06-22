@@ -10,6 +10,7 @@
 #include "ModbusInterface.h"
 #include "ExportState.h"
 #include "PredicateAction.h"
+#include "MessageLog.h"
 
 std::list<MachineClass*> MachineClass::all_machine_classes;
 std::map<std::string, MachineClass> MachineClass::machine_classes;
@@ -49,42 +50,51 @@ bool MachineClass::isStableState(State &state) {
 	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
 }
 
+void MachineClass::addState(const State &state) {
+	StateMap::iterator found = states.find(state.getName());
+	if (found == states.end())
+		states[state.getName()] = new State(state);
+	else {
+		*((*found).second) = state;
+    MessageLog::instance()->add("Machine ", name, "already has state ", state.getName());
+  }
+}
 void MachineClass::addState(const char *name) {
-	states.push_back(new State(name));
+	if (states.find(name) == states.end())
+		states[name] = new State(name);
 }
 
 State *MachineClass::findMutableState(const char *seek) {
+	StateMap::iterator found = states.find(seek);
+	if (found != states.end())
+		return (*found).second;
+
+	/*
 	std::list<State *>::const_iterator iter = states.begin();
 	while (iter != states.end()) {
 		State *s = *iter++;
 		if (s->getName() == seek) return s;
 	}
+	 */
 	return 0;
 }
 
 const State *MachineClass::findState(const char *seek) const {
-	std::list<State *>::const_iterator iter = states.begin();
-	while (iter != states.end()) {
-		const State *s = *iter++;
-		if (s->getName() == seek) return s;
-	}
+	StateMap::const_iterator found = states.find(seek);
+	if (found != states.end())
+		return (*found).second;
 	return 0;
 }
 
 const State *MachineClass::findState(const State &seek) const {
-	std::list<State*>::const_iterator iter = states.begin();
-	while (iter != states.end()) {
-		const State *s = *iter++;
-		if (*s == seek) {
-			return s;
-		}
-	}
+	StateMap::const_iterator found = states.find(seek.getName());
+	if (found != states.end())
+		return (*found).second;
 	return 0;
 }
 
-
-MachineClass *MachineClass::find(const char *name) {
-	int token = Tokeniser::instance()->getTokenId(name);
+MachineClass *MachineClass::find(const char *seek) {
+	int token = Tokeniser::instance()->getTokenId(seek);
 	std::list<MachineClass *>::iterator iter = all_machine_classes.begin();
 	while (iter != all_machine_classes.end()) {
 		MachineClass *mc = *iter++;
@@ -94,24 +104,20 @@ MachineClass *MachineClass::find(const char *name) {
 }
 
 void MachineClass::addProperty(const char *p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p);
 }
 
 void MachineClass::addPrivateProperty(const char *p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p);
 	local_properties.insert(p); //
 }
 
 void MachineClass::addPrivateProperty(const std::string &p) {
-	//NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
 	property_names.insert(p.c_str());
 	local_properties.insert(p); //
 }
 
 void MachineClass::addCommand(const char *p) {
-	//NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
 	command_names.insert(p);
 }
 
@@ -537,9 +543,10 @@ bool MachineClass::cExport(const std::string &filename) {
 		}
 
     // prepare variables for symbols
-    std::list<State*>::iterator iter = states.begin();
+		StateMap::iterator iter = states.begin();
     while (iter != states.end()) {
-      const State *s = *iter++;
+      const StateMap::value_type item = *iter++;
+			State *s = item.second;
       symbols[s->getName()] = PredicateSymbolDetails(s->getName(), "state", s->getName());
     }
     for (unsigned int i=0; i<stable_states.size(); ++i) {
@@ -645,9 +652,10 @@ bool MachineClass::cExport(const std::string &filename) {
 
     // export statenumbers
     {
-      std::list<State*>::iterator iter = states.begin();
+      StateMap::iterator iter = states.begin();
       while (iter != states.end()) {
-        const State *s = *iter++;
+				StateMap::value_type item = *iter++;
+        const State *s = item.second;
         used_states.insert(s->getName());
       }
       std::set<std::string>::iterator us_iter = used_states.begin();
