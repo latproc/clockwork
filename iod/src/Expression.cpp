@@ -489,7 +489,7 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
       }
       else if (v->sValue == "SELF") {
         //v = m->getCurrent().getName();
-        p->cached_entry = m->getCurrentStateVal();
+        p->cached_entry = m->getCurrentStateVal(m);
         return p->cached_entry;
       }
       else if (v->sValue == "TRUE") {
@@ -514,7 +514,7 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
     // if we found a reference to a machine but that machine is a variable or constant, we
     // are actually interested in its 'VALUE' property
     if (found) {
-      Value *res = found->getCurrentValue();
+      Value *res = found->getCurrentValue(m);
       if (*res == SymbolTable::Null)
         p->cached_entry = 0;
       else

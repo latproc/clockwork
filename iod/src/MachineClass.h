@@ -41,7 +41,7 @@ public:
   std::vector<Parameter> parameters;
   std::vector<Parameter> locals;
 	StateMap states;
-  std::multimap<std::string, StableState> stable_state_xref;
+//  std::multimap<std::string, StableState> stable_state_xref;
   std::vector<StableState> stable_states;
   std::list<Predicate *> timer_clauses;
   std::multimap<std::string, MachineCommandTemplate*> commands;
@@ -56,7 +56,7 @@ public:
   std::vector<std::string> command_exports;
   static std::map<std::string, MachineClass> machine_classes;
   void defaultState(State state);
-  bool isStableState(State &state);
+//  bool isStableState(State &state);
   void addState(const char *name);
 	void addState(const State &state);
   const State *findState(const char *name) const;

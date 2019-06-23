@@ -327,6 +327,13 @@ void MachineInstance::resetTemporaryStringStream() {
 	ss.str("");
 }
 
+State &MachineInstance::getCurrent(MachineInstance *scope) {
+	return (scope == this) ? current_state : visible_state;
+}
+const char *MachineInstance::getCurrentStateString(MachineInstance *scope) const {
+	return (scope == this) ? current_state.getName().c_str() : visible_state.getName().c_str();
+}
+
 MachineInstance *MachineInstance::lookup(Parameter &param) {
 	if (param.val.kind == Value::t_symbol) {
 		if (!param.machine) {
@@ -526,7 +533,7 @@ class VariableValue : public DynamicValue {
 				return last_result;
 			}
 			else {
-				last_result = *machine_instance->getCurrentStateVal();
+				last_result = *machine_instance->getCurrentStateVal(machine_instance);
 				return last_result;
 			}
 		}
@@ -592,9 +599,12 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	owner(0),
 	needs_check(0),
 	uses_timer(false),
+	stable_states_stats("StableState processing"),
+	message_handling_stats("Message handling"),
 	my_instance_type(instance_type),
 	state_machine(0),
 	current_state("undefined"),
+  visible_state(current_state),
 	is_enabled(false),
 	state_timer(0),
 	locked(0),
@@ -604,8 +614,6 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	is_active(false),
 	current_value_holder(0),
 	last_state_evaluation_time(0),
-	stable_states_stats("StableState processing"),
-	message_handling_stats("Message handling"),
 	data(0),
 	idle_time(0),
 	next_poll(0),
@@ -640,6 +648,7 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	my_instance_type(instance_type),
 	state_machine(0),
 	current_state("undefined"),
+  visible_state(current_state),
 	is_enabled(false),
 	state_timer(0),
 	locked(0),
@@ -685,7 +694,11 @@ void MachineInstance::describe(std::ostream &out) {
 		<< " Class: " << _type
 		<< (enabled() ? "" : " DISABLED")
 		<< (isShadow() ? " SHADOW " : " ")
-		<< (isActive() ? "" : " PASSIVE") <<  "\n"
+	  << (isActive() ? "" : " PASSIVE");
+		if (current_state != visible_state) {
+			out << " (visible: " << visible_state << ")";
+		}
+	  out <<  "\n"
 		<< " instantiated at: " << definition_file
 		<< " line:" << definition_line << "\n";
 	if (expected_authority) out << "authority " << expected_authority << "\n";
@@ -699,7 +712,7 @@ void MachineInstance::describe(std::ostream &out) {
 			if (p_i.kind == Value::t_symbol) {
 				out << "  parameter " << (i+1) << " " << p_i.sValue << " (" << parameters[i].real_name
 					<< "), state: "
-					<< (parameters[i].machine ? parameters[i].machine->getCurrent().getName(): "")
+					<< (parameters[i].machine ? parameters[i].machine->getCurrent(this).getName(): "")
 					<< (parameters[i].machine && !parameters[i].machine->enabled() ? " DISABLED" : "")
 					<<  "\n";
 			}
@@ -714,7 +727,7 @@ void MachineInstance::describe(std::ostream &out) {
 		out << "Locals:\n";
 		for (unsigned int i = 0; i<locals.size(); ++i) {
 			if (locals[i].machine)
-				out << "  " <<locals[i].val << " (" << locals[i].machine->getName()  << "):   " << locals[i].machine->getCurrent().getName() << "\n";
+				out << "  " <<locals[i].val << " (" << locals[i].machine->getName()  << "):   " << locals[i].machine->getCurrent(this).getName() << "\n";
 			else
 				out << locals[i].val <<"  Missing machine\n";
 		}
@@ -736,7 +749,7 @@ void MachineInstance::describe(std::ostream &out) {
 			Transmitter *t = *iter++;
 			MachineInstance *machine = dynamic_cast<MachineInstance*>(t);
 			if (machine) {
-				out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   " << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
+				out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   " << (machine->enabled() ? machine->getCurrent(this).getName() : "DISABLED");
 				if (machine->owner) out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
 				out << "\n";
 			}
@@ -752,7 +765,7 @@ void MachineInstance::describe(std::ostream &out) {
 		while (iter != depends.end()) {
 			MachineInstance *machine = *iter++;
 			if (machine) {
-				out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   " << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
+				out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   " << (machine->enabled() ? machine->getCurrent(this).getName() : "DISABLED");
 				if (machine->owner) out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
 				out << "\n";
 			}
@@ -1586,7 +1599,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 				Action *act = dep->executingCommand();
 				if (act) {
 					if (act->getStatus() == Action::Suspended) act->resume();
-					DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
+					DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent(this).getName() << "]" << " is executing " << *act << "\n";
 				}
 
 				// execute the message on the dependant machine
@@ -1627,21 +1640,28 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		gettimeofday(&start_time,0);
 		disabled_time = start_time;
 		DBG_STATECHANGES << fullName() << " changing from " << current_state << " to " << new_state << "\n";
+		const State *next_state = state_machine->findState(new_state.getName());
+		// moving from a public state to public state should notify
+		// moving from a private state to a public state only notifies if the new state is different from the last public state
+		bool should_notify = !next_state->isPrivate() && (!current_state.isPrivate() || current_state.isPrivate() && visible_state != *next_state);
 		std::string last = current_state.getName();
-		current_state = new_state;
+		current_state = *(next_state);
+		//current_state = new_state;
 		current_state_val = new_state.getName();
+		if (!current_state.isPrivate())
+			visible_state = current_state;
 
 		// call the internal enter function for the machine if available
 		if (machine_class_state) machine_class_state->enter(0);
 
 		properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
 		// publish the state change if we are a publisher
-		if (mq_interface) {
+		if (mq_interface && should_notify) {
 			if (_type == "POINT" && properties.lookup("type") == "Output") {
 				mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(), this);
 			}
 		}
-		if (published && !modbus_exports.empty()) {
+		if (published && !modbus_exports.empty() && should_notify) {
 			// update the Modbus interface for the state
 			if (modbus_exports.count(_name + "." + last)){
 				ModbusAddress ma = modbus_exports[_name + "." + last];
@@ -1692,7 +1712,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 			}
 		}
 
-		if (published) {
+		if (published && should_notify) {
 			/*{
 				FileLogger fl(program_name);
 				fl.f() << "Sending state change for " << _name << " to " << new_state.getName() << "\n";
@@ -1705,7 +1725,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		std::string txt = _name + "." + new_state.getName() + "_enter";
 		Message msg(txt.c_str(), Message::ENTERMSG);
 		stat = execute(msg, this);
-		notifyDependents(msg);
+		if (should_notify) notifyDependents(msg);
 	}
 	return stat;
 }
@@ -1721,7 +1741,7 @@ void MachineInstance::notifyDependents(){
 		Action *act = dep->executingCommand();
 		if (act) {
 			if (act->getStatus() == Action::Suspended) act->resume();
-			DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]" << " is executing " << *act << "\n";
+			DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent(this).getName() << "]" << " is executing " << *act << "\n";
 		}
 		dep->setNeedsCheck();
 //		if (dep->state_machine->token_id == ClockworkToken::LIST ) dep->notifyDependents();
@@ -2158,7 +2178,7 @@ Action::Status MachineInstance::execute(const Message&m, Transmitter *from, Acti
 void MachineInstance::handle(const Message&m, Transmitter *from, bool send_receipt) {
 	if (!enabled()) {
 		DBG_M_MESSAGING << _name << ":" << id
-			<< " dropped: " << m << " in " << getCurrent() << " from " << from->getName() << " while disabled\n";
+			<< " dropped: " << m << " in " << getCurrent(this) << " from " << from->getName() << " while disabled\n";
 		if (send_receipt) {
 			NB_MSG << _name << " Error: message '" << m.getText() << "' requiring a receipt arrived while disabled\n";
 		}
@@ -2166,7 +2186,7 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	}
 	if (_type != "POINT") {
 		DBG_M_MESSAGING << _name << ":" << id
-			<< " received: " << m << " in " << getCurrent() << " from " << from->getName()
+			<< " received: " << m << " in " << getCurrent(this) << " from " << from->getName()
 			<< " will send receipt: " << send_receipt << "\n";
 	}
 	HandleMessageActionTemplate hmat(Package(from, this, m, send_receipt));
@@ -2831,7 +2851,7 @@ bool MachineInstance::setStableState() {
 						MachineInstance *flag = lookup(ch.flag_name);
 						if (flag) {
 							const State *off = flag->state_machine->findState("off");
-							if (strcmp("off", flag->getCurrentStateString())) {
+							if (strcmp("off", flag->getCurrentStateString(this))) {
 								DBG_AUTOSTATES << "turning flag off since the state " << s.state_name << " is not active\n";
 								flag->setState(*off);
 							}
@@ -3197,7 +3217,7 @@ const Value *MachineInstance::resolve(std::string property) {
 					return &m->properties.lookup("VALUE");
 				}
 				else if (m->getStateMachine()->token_id == ClockworkToken::LIST || m->getStateMachine()->token_id == ClockworkToken::REFERENCE) {
-					return m->getCurrent().getNameValue();
+					return m->getCurrent(this).getNameValue();
 				}
 			}
 			//return new Value(new MachineValue(m, property));

@@ -164,7 +164,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-    {FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
+	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
 #endif
 	*response_len = 0;
 	if (block && timeout == 0) timeout = 500;

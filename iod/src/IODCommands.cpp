@@ -81,7 +81,7 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
 			MachineInstance *machine = MachineInstance::find(params[1].asString().c_str());
 			if (machine) {
 				ok = true;
-				result_str = machine->getCurrentStateString();
+				result_str = machine->getCurrentStateString(0); // iosh shows the public state
 			}
 			else
 				error_str = "Not Found";
@@ -231,51 +231,51 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 	}
 
 
-    bool IODCommandDescribe::run(std::vector<Value> &params) {
-        std::cout << "received iod command Describe " << params[1] << "\n";
-        bool use_json = false;
-        if (params.size() == 3 && params[2] != "JSON") {
-            error_str = "Usage: DESCRIBE machine [JSON]";
-            return false;
-        }
-        if (params.size() == 2 || params.size() == 3) {
-            MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
-            cJSON *root;
-            if (use_json)
-                root = cJSON_CreateArray();
-            std::stringstream ss;
-            if (m)
-                    m->describe(ss);
-            else
-                ss << "Failed to describe unknown machine " << params[1];
-            if (use_json) {
-                std::istringstream iss(ss.str());
-                char buf[500];
-                while (iss.getline(buf, 500, '\n')) {
-                    cJSON_AddItemToArray(root, cJSON_CreateString(buf));
-                }
-                char *res = cJSON_Print(root);
-                cJSON_Delete(root);
-                result_str = res;
-                free(res);
-            }
-            else
-                result_str = ss.str();
-            return true;
-        }
-        error_str = "Failed to find machine";
-        return false;
-    }
+	bool IODCommandDescribe::run(std::vector<Value> &params) {
+			std::cout << "received iod command Describe " << params[1] << "\n";
+			bool use_json = false;
+			if (params.size() == 3 && params[2] != "JSON") {
+					error_str = "Usage: DESCRIBE machine [JSON]";
+					return false;
+			}
+			if (params.size() == 2 || params.size() == 3) {
+					MachineInstance *m = MachineInstance::find(params[1].asString().c_str());
+					cJSON *root;
+					if (use_json)
+							root = cJSON_CreateArray();
+					std::stringstream ss;
+					if (m)
+									m->describe(ss);
+					else
+							ss << "Failed to describe unknown machine " << params[1];
+					if (use_json) {
+							std::istringstream iss(ss.str());
+							char buf[500];
+							while (iss.getline(buf, 500, '\n')) {
+									cJSON_AddItemToArray(root, cJSON_CreateString(buf));
+							}
+							char *res = cJSON_Print(root);
+							cJSON_Delete(root);
+							result_str = res;
+							free(res);
+					}
+					else
+							result_str = ss.str();
+					return true;
+			}
+			error_str = "Failed to find machine";
+			return false;
+	}
 
 
-    bool IODCommandToggle::run(std::vector<Value> &params) {
-        if (params.size() == 2) {
+	bool IODCommandToggle::run(std::vector<Value> &params) {
+		if (params.size() == 2) {
 			DBG_MSG << "toggling " << params[1] << "\n";
 			size_t pos = params[1].asString().find('-');
 			std::string machine_name = params[1].asString();
 			if (pos != std::string::npos) machine_name.erase(pos);
-            MachineInstance *m = MachineInstance::find(machine_name.c_str());
-		    if (m) {
+			MachineInstance *m = MachineInstance::find(machine_name.c_str());
+			if (m) {
 				if (pos != std::string::npos) {
 					machine_name = params[1].asString().substr(pos+1);
 					m = m->lookup(machine_name);
@@ -288,15 +288,15 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 					error_str = "Device is disabled";
 					return false;
 				}
-		  	 	if (m->_type != "POINT") {
-				     Message *msg;
-                    if (m->getCurrent().is(ClockworkToken::on)) {
-                        if (m->receives(Message("turnOff"), 0)) {
-                            msg = new Message("turnOff");
-                            m->sendMessageToReceiver(msg, m);
-                        }
-                        else {
-                            const State *s = m->getStateMachine()->findState("off");
+				if (m->_type != "POINT") {
+					Message *msg;
+					if (m->getCurrent(0).is(ClockworkToken::on)) {
+						if (m->receives(Message("turnOff"), 0)) {
+							msg = new Message("turnOff");
+							m->sendMessageToReceiver(msg, m);
+						}
+						else {
+							const State *s = m->getStateMachine()->findState("off");
 							if (s) {
 								if (!m->isActive()) m->setState(*s);
 								else {
@@ -305,15 +305,15 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 									m->enqueueAction(ssat.factory(m));
 								}
 							}
-                        }
-                    }
-                    else if (m->getCurrent().is(ClockworkToken::off) ) {
-                        if (m->receives(Message("turnOn"), 0)) {
-                            msg = new Message("turnOn");
-                            m->sendMessageToReceiver(msg, m);
-                        }
-                        else{
-                            const State *s = m->getStateMachine()->findState("on");
+						}
+					}
+					else if (m->getCurrent(0).is(ClockworkToken::off) ) {
+						if (m->receives(Message("turnOn"), 0)) {
+							msg = new Message("turnOn");
+							m->sendMessageToReceiver(msg, m);
+						}
+						else{
+							const State *s = m->getStateMachine()->findState("on");
 							if (s) {
 								if (!m->isActive()) m->setState(*s);
 								else {
@@ -322,47 +322,47 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 									m->enqueueAction(ssat.factory(m));
 								}
 							}
-                        }
-                    }
-                    result_str = "OK";
-                    return true;
+						}
+					}
+					result_str = "OK";
+					return true;
 				}
 			}
 			else {
 				error_str = "Usage: toggle device_name";
 				return false;
-		    }
+			}
 
-            Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(params[1].asString()));
-            if (device) {
-                if (device->isOn()) device->turnOff();
-                else if (device->isOff()) device->turnOn();
+			Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(params[1].asString()));
+			if (device) {
+				if (device->isOn()) device->turnOff();
+				else if (device->isOff()) device->turnOn();
 				else {
 					error_str = "device is neither on nor off\n";
 					return false;
 				}
-                result_str = "OK";
-                return true;
-            }
-            else {
-                // MQTT
-                if (m->getCurrent().getName() == "on" || m->getCurrent().getName() == "off") {
-                    std::string msg_str = m->getCurrent().getName();
-                    if (msg_str == "off")
-                        msg_str = "on_enter";
-                    else
-                        msg_str = "off_enter";
-                    //m->mq_interface->send(new Message(msg_str.c_str()), m);
+				result_str = "OK";
+				return true;
+			}
+			else {
+				// MQTT
+				if (m->getCurrent(0).getName() == "on" || m->getCurrent(0).getName() == "off") {
+					std::string msg_str = m->getCurrent(0).getName();
+					if (msg_str == "off")
+						msg_str = "on_enter";
+					else
+						msg_str = "off_enter";
+					//m->mq_interface->send(new Message(msg_str.c_str()), m);
 					m->execute(new Message(msg_str.c_str(), Message::ENTERMSG), m->mq_interface);
-                    result_str = "OK";
-                    return true;
-                }
-                else {
-                    error_str = "Unknown message for a POINT";
-                    return false;
-                }
-            }
-        }
+					result_str = "OK";
+					return true;
+				}
+				else {
+					error_str = "Unknown message for a POINT";
+					return false;
+				}
+			}
+		}
 		else {
 			error_str = "Unknown device";
 			return false;
@@ -482,7 +482,7 @@ bool IODCommandShow::run(std::vector<Value> &params) {
 		if (val != SymbolTable::Null)
 			ss << m->getName() << " " << m->_type << " " << val <<  ((m->enabled())?"":" [DISABLED]") << "\n";
 		else
-			ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+			ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString(0) <<  ((m->enabled())?"":" [DISABLED]") << "\n";
 		result_str = ss.str();
 		return true;
 	}
@@ -504,10 +504,10 @@ bool IODCommandFind::run(std::vector<Value> &params) {
 			if (val != SymbolTable::Null)
 				ss << m->getName() << " " << m->_type << " " << val <<  ((m->enabled())?"":" [DISABLED]") << "\n";
 			else
-				ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+				ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString(0) <<  ((m->enabled())?"":" [DISABLED]") << "\n";
 		}
 		else if (params.size() == 1 || (m->getStateMachine() && m->getStateMachine()->name.find(params[1].asString()) != std::string::npos )) {
-			ss << (m->getName()) << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") <<"\n";
+			ss << (m->getName()) << " " << m->_type << " " << m->getCurrentStateString(0) <<  ((m->enabled())?"":" [DISABLED]") <<"\n";
 		}
 		iter++;
 	}
@@ -534,7 +534,7 @@ bool IODCommandBusy::run(std::vector<Value> &params) {
 		if (!m->active_actions.empty() || m->executingCommand()) {
 			ss << m->getName()
 				<< " " << m->_type << ":"
-				<< m->getCurrentStateString() << " "
+				<< m->getCurrentStateString(0) << " "
 				<<  ((m->isActive())?"":"[INACTIVE] ")
 				<<  ((m->enabled())?"":"[DISABLED] ");
 			simple_deltat(ss, now - m->lastStateEvaluationTime());
@@ -591,9 +591,9 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 	else
 		cJSON_AddFalseToObject(node, "enabled");
     if (!m->io_interface) {
-			size_t len = m->getCurrent().getName().length()+1;
+			size_t len = m->getCurrent(0).getName().length()+1;
 			char *cs = (char*)malloc(len);
-			memcpy(cs, m->getCurrentStateString(), len);
+			memcpy(cs, m->getCurrentStateString(0), len);
 			cJSON_AddStringToObject(node, "state", cs);
 			free(cs);
     }
@@ -1197,7 +1197,7 @@ bool IODCommandChannels::run(std::vector<Value> &params) {
 	std::string result;
 	std::map<std::string, Channel*>::iterator iter = channels->begin();
 	while (iter != channels->end()) {
-		result += (*iter).first + " " + (*iter).second->getCurrentStateString()
+		result += (*iter).first + " " + (*iter).second->getCurrentStateString(0)
 //			+ " " + ((*iter).second->doesMonitor() ? "M" : "")
 //			+ " " + ((*iter).second->doesShare() ? "S" : "")
 //			+ " " + ((*iter).second->doesUpdate() ? "U" : "")

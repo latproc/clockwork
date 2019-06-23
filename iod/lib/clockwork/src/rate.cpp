@@ -29,7 +29,7 @@ void RateLimiter::setMaxDelay( uint64_t maxd_msecs) { max_delay = std::chrono::m
 
 bool RateLimiter::ready() {
 	std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-    std::chrono::microseconds delta_t = std::chrono::duration_cast<std::chrono::microseconds>(now - last);
+	//std::chrono::microseconds delta_t = std::chrono::duration_cast<std::chrono::microseconds>(now - last);
 	if (now >= last + delay) {
 		last = now;
 		if (back_off == boaStep)

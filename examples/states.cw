@@ -18,3 +18,15 @@ StateMemoryTest MACHINE {
 	COMMAND restore { SET SELF TO saved; }
 }
 state_memory_test StateMemoryTest;
+
+PrivateStateTest MACHINE {
+	a INITIAL;
+	x PRIVATE STATE;
+	b STATE;
+}
+PrivateStateTestMonitor MACHINE pst {
+  idle INITIAL;
+}
+private_test PrivateStateTest;
+pstmon PrivateStateTestMonitor private_test;
+

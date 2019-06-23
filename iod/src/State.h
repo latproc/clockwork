@@ -25,7 +25,24 @@
 #include <string>
 #include "value.h"
 
-class State {
+class StateBase {
+public:
+	StateBase(bool priv = false, bool trans = false) {}
+	virtual ~StateBase() {}
+
+	bool isPrivate() const;
+	void setPrivate(bool which);
+
+	bool isTransitional() const;
+	void setTransitional(bool which);
+
+protected:
+	bool is_private;
+	bool is_transitional; // is a leaving or entering transitional state
+
+};
+
+class State : public StateBase {
 public:
 	State(const std::string &name);
 	State(const char *name);
@@ -45,20 +62,12 @@ public:
 	void enter(void *data) const;
 	void setEnterFunction( void (*f)(void *) );
 
-	bool isPrivate() const;
-	void setPrivate(bool which);
-
-	bool isTransitional() const;
-	void setTransitional(bool which);
-
 private:
 	std::string text;
 	int val;
 	Value name;
 	int token_id;
 	void (*enter_proc)(void *);
-	bool is_private;
-	bool is_transitional; // is a leaving or entering transitional state
 };
 
 std::ostream &operator<<(std::ostream &out, const State &m);

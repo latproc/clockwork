@@ -1,43 +1,125 @@
 # test changing into static states from an action on a stable state change
 
-AutoOff MACHINE Power, Reset, out {
+/*
+  The BasicAutoOff machine will only be 'on' for a limited time, given
+  by the `offDelay' value. The output will be turned on and off
+  when this machine turns on or off.
+  The device may be turned on directly or by pressing the
+  turning on the 'reset' machine. Usually the 'reset' will
+  be the input from a sensor or button.
+*/
+
+BasicAutoOff MACHINE reset, out {
   OPTION offDelay 8000;
 
-  reset STATE;
-  interlocked WHEN out DISABLED;
   on WHEN SELF IS on && TIMER <= offDelay;
   off DEFAULT;
 
-  ENTER reset { SET SELF TO on; }
+  RECEIVE Reset.on_enter { SET SELF TO on }
 
-  RECEIVE Reset.on_enter { SET SELF TO reset; }
-  RECEIVE Power.on_enter { SET SELF TO reset; }
+  ENTER on { SET out TO on }
+  ENTER off { SET out TO off }
+}
 
-  ENTER on { SET out TO on; }
-  ENTER off { SET out TO off; }
+/*
+The BasicAutoOff machine doesn't reset the timer if 
+the reset button is pressed while the device is already on
+The following, resettable version shows how to add this functionality.
+
+The only addition is a transitory state called 'resetting', this
+state is entered when the machine receives a 'reset' command. 
+The only action performed is to set the state back to on again.
+Since this process causes the machine to leave 'on' and reenter
+it, the TIMER resets.
+*/
+
+ResettableAutoOff MACHINE reset, out {
+  OPTION offDelay 8000;
+
+  on WHEN SELF IS on && TIMER <= offDelay;
+  off DEFAULT;
+  resetting DURING reset { SET SELF TO on } # drop out of the on state temporarily
+
+  RECEIVE Reset.on_enter { SEND reset TO SELF }
+
+  ENTER on { SET out TO on }
+  ENTER off { SET out TO off }
+}
+
+/*
+  The following AutoOff machine requires that Power be on 
+  and outputs be enabled in order to work. If the
+  output is disabled, the machine is regarded as 
+  interlocked, since it cannot function correctly.
+
+  Since this machine has to account for the output being disabled
+  it cannot simple set the output to on when the reset button
+  is pressed. Instead it records that fact that a request has been
+  made to start and when the conditions are right, it turns on 
+  and sets the output.
+*/
+
+AutoOff MACHINE Power, Reset, out {
+  OPTION offDelay 8000;
+
+  on_requested FLAG;
+
+  interlocked WHEN out DISABLED;
+  off WHEN Power IS off; # wait for power to be available
+
+  on WHEN on_requested IS on || SELF IS on && TIMER <= offDelay;
+  off DEFAULT;
+
+  RECEIVE Reset.on_enter { SET on_requested TO on; }
+  RECEIVE Power.on_enter { SET on_requested TO off; } # forget requests when power comes on
+  ENTER on {
+    SET on_requested TO off;
+    SET out TO on;
+  }
+  ENTER off {
+    SET out TO off;
+  }
 
   CATCH TurningOn { LOG "caught turning on" }
 
 }
 
+/*
+The following swith responds to commands turnOn and turnOff
+but it doesn't turn on immediately, like the AutoOff machine,
+DelayedSwitch records a request to start and starts after
+a suitable delay.
+*/
+
 DelayedSwitch MACHINE {
-    on WHEN SELF IS on || SELF IS on_requested AND TIMER>100;
+    on WHEN SELF IS on || on_requested IS on AND TIMER>100;
     off DEFAULT;
     on_requested STATE;
     
-	ENTER on { 
-		LOG "Throwing event 'TurningOn'";
+	ENTER on {
+    LOG "Throwing event 'TurningOn'";
 		THROW TurningOn; 
 		SET SELF TO x; 
 	}
-    on_requested DURING turnOn {  }
-    COMMAND turnOff { 
+
+  ENTER off {
+		LOG "turned off"
+  }
+
+  on_requested DURING turnOn {
+    LOG "on requested: ";
+  } # when turnOff is received state becomes on_requested
+
+  COMMAND turnOff { 
 		NewState := "off";
 		SET SELF TO NewState; 
-		LOG "turned off";
 		RETURN;
 		LOG "Should not see this";
 	}
+
+  CATCH TurningOn { 
+    LOG "caught turning on"
+  }
 }
  
 power_switch FLAG;

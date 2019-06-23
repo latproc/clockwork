@@ -279,7 +279,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 			while (iter != channel_machines.end()) {
 				MachineInstance *m = *iter++;
 				if (!m->isShadow()) {
-					std::string state(m->getCurrentStateString());
+					std::string state(m->getCurrentStateString(this));
 					DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state << "\n";
 					char *msg = MessageEncoding::encodeState(m->getName(), state, authority);
 					//std::string response;
@@ -307,7 +307,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 			while (iter != channel_machines.end()) {
 				MachineInstance *m = *iter++;
 				if (!m->isShadow()) {
-					const char *state = m->getCurrentStateString();
+					const char *state = m->getCurrentStateString(this);
 					char buf[200];
 					if (cmd_client) {
 						char *msg = MessageEncoding::encodeState(m->getName(), state, definition()->authority);
@@ -2344,7 +2344,7 @@ void Channel::setupShadows() {
 			DBG_CHANNELS << "Channel " << name << " adding shadow machine " << m->getName() << "\n";
 			channel_machines.insert(m);
 			modified();
-			m->owner_channel = this;
+			m->setOwnerChannel(this);
         }
     }
 

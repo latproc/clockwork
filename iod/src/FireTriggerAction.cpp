@@ -75,6 +75,6 @@ std::ostream& FireTriggerAction::operator<<(std::ostream &out) const {
 		<< " enabled: " << ((t) ? t->enabled() : false)  << ","
 		<< " status: " << status  << ","
         << " owner: " << owner->getName()  << ","
-		<< " owner state: " << owner->getCurrent().getName();
+		<< " owner state: " << owner->getCurrent(owner).getName();
 	return out;
 }

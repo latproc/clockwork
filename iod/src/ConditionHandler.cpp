@@ -37,10 +37,10 @@ bool ConditionHandler::check(MachineInstance *machine) {
 			std::cerr << machine->getName() << " error: flag " << flag_name << " not found\n";
 		else {
 			if (condition(machine)) {
-				if (strcmp("on", flag->getCurrentStateString())) {
+				if (strcmp("on", flag->getCurrentStateString(machine))) {
 					if (tracing() && machine->isTraceable()) {
 						machine->resetTemporaryStringStream();
-						machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
+						machine->ss << machine->getCurrentStateString(machine) << " " << *condition.predicate;
             machine->setValue("TRACE", Value(machine->ss.str(), Value::t_string));
 					}
 					const State *on = flag->state_machine->findState("on");
@@ -54,10 +54,10 @@ bool ConditionHandler::check(MachineInstance *machine) {
 					}
 				}
 			}
-			else if (strcmp("off", flag->getCurrentStateString())) {
+			else if (strcmp("off", flag->getCurrentStateString(machine))) {
 				if (tracing() && machine->isTraceable()) {
 					machine->resetTemporaryStringStream();
-					machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
+					machine->ss << machine->getCurrentStateString(machine) << " " << *condition.predicate;
           machine->setValue("TRACE", Value(machine->ss.str(), Value::t_string));
 				}
 				const State *off = flag->state_machine->findState("off");

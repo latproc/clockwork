@@ -161,8 +161,8 @@ public:
   Action *findHandler(Message&msg, Transmitter *t, bool response_required = false);
   void enqueueAction(Action *a);
   void enqueue(const Package &package);
-  State &getCurrent() { return current_state; }
-  const char *getCurrentStateString() const { return current_state.getName().c_str(); }
+	State &getCurrent(MachineInstance *scope);
+	const char *getCurrentStateString(MachineInstance *scope) const;
 
   void addDependancy(MachineInstance *m);
   void removeDependancy(MachineInstance *m);
@@ -208,8 +208,8 @@ public:
 	void setInitialState( bool resume = false);
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
-	Value *getCurrentStateVal() { return &current_state_val; }
-  Value *getCurrentValue() { return &current_value_holder; }
+	Value *getCurrentStateVal(MachineInstance *scope) { return &current_state_val; }
+  Value *getCurrentValue(MachineInstance *scope) { return &current_value_holder; }
 
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;
@@ -298,15 +298,23 @@ public:
   static std::list<Package*>& pendingEvents();
   static std::set<MachineInstance*>& pluginMachines();
 
+	void setOwnerChannel(Channel *c) { owner_channel = c; }
+	void *getData() const { return data; }
+	void setData(void *d) { data = d; }
+
 protected:
 	int needs_check;
 public:
+	static Value *polling_delay;
 	bool uses_timer;
+	Statistic stable_states_stats;
+	Statistic message_handling_stats;
 
 protected:
   InstanceType my_instance_type;
   MachineClass *state_machine;
   State current_state;
+	State visible_state;
   uint64_t setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer);
   Action *findReceiveHandler(Transmitter *from, const Message &m, const std::string short_name, bool response_required);
   virtual Action::Status setState(const State &new_state, uint64_t authority = 0, bool resume = false);
@@ -317,7 +325,6 @@ protected:
   ModbusAddress modbus_address;
   std::vector<std::string>command_names; // used for mapping modbus offsets to states
   ModbusExport::Type modbus_exported;
-
   int error_state; // error number of the current error if any
   State saved_state; // save state before error
   Value current_state_val;
@@ -325,14 +332,10 @@ protected:
   Value current_value_holder;
   std::stringstream ss; // saves recreating string stream for temporary use
   uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
-public:
-	Statistic stable_states_stats;
-	Statistic message_handling_stats;
 	void * data; // plugin data
 	uint64_t idle_time; // amount of time to be idle between state polls (microsec)
 	uint64_t next_poll;
 
-	static Value *polling_delay;
 	Value is_traceable;
 	int published;
 	static SharedCache *shared;
@@ -394,7 +397,7 @@ public:
             return last_result;
         }
         else {
-            last_result = *machine_instance->getCurrentStateVal();
+            last_result = *machine_instance->getCurrentStateVal(machine_instance);
             return last_result;
         }
     }

@@ -23,13 +23,20 @@
 #include "State.h"
 #include "symboltable.h"
 
+
+bool StateBase::isPrivate() const { return is_private; }
+void StateBase::setPrivate(bool which) { is_private = which; }
+
+bool StateBase::isTransitional() const { return is_transitional; }
+void StateBase::setTransitional(bool which) { is_transitional = which; }
+
 State::State(const std::string &msg) :text(msg), val(0), name(msg, Value::t_string),
-		enter_proc(0), is_private(false), is_transitional(false) {
+		enter_proc(0)  {
     token_id = Tokeniser::instance()->getTokenId(text.c_str());
 }
 
 State::State(const char *msg) :text(msg), val(0), name(msg, Value::t_string),
-enter_proc(0), is_private(false), is_transitional(false) {
+enter_proc(0) {
 	token_id = Tokeniser::instance()->getTokenId(text.c_str());
 }
 
@@ -89,13 +96,6 @@ void State::enter(void *data) const {
 void State::setEnterFunction( void (*f)(void *) ) {
 	enter_proc = f;
 }
-
-
-bool State::isPrivate() const { return is_private; }
-void State::setPrivate(bool which) { is_private = which; }
-
-bool State::isTransitional() const { return is_transitional; }
-void State::setTransitional(bool which) { is_transitional = which; }
 
 
 

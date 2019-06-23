@@ -74,7 +74,7 @@ char *getState(cwpi_Scope s) {
         return 0;
     }
 
-    std::string state(scope->getCurrentStateString());
+    std::string state(scope->getCurrentStateString(scope));
     return strdup(state.c_str());
 }
 
@@ -96,7 +96,7 @@ void *getInstanceData(cwpi_Scope s) {
         MessageLog::instance()->add("getInstanceData was passed a null instance from a plugin");
         return 0;
     }
-    return scope->data;
+    return scope->getData();
 }
 
 void setInstanceData(cwpi_Scope s, void *block) {
@@ -105,7 +105,7 @@ void setInstanceData(cwpi_Scope s, void *block) {
         MessageLog::instance()->add("setInstanceData was passed a null instance from a plugin");
         return;
     }
-    scope->data = block;
+    scope->setData(block);
 }
 
 
@@ -163,7 +163,7 @@ std::string PluginScope::getState() {
     MachineInstance *mi = dynamic_cast<MachineInstance*>(this);
     if (!mi) return "";
     
-    return mi->getCurrentStateString();
+    return mi->getCurrentStateString(mi);
 }
 
 */

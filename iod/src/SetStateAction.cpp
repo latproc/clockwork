@@ -158,7 +158,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 //				|| machine->stateExists(value)
 //			) 
 		{
-			if (machine->getCurrent() == value) {
+			if (machine->getCurrent(owner) == value) {
 				DBG_M_ACTIONS << machine->getName() << " is already " << value << " skipping " << *this << "\n";
 				status = Complete;
 				cleanupTrigger();
@@ -172,7 +172,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 					std::list<Transition>::iterator iter = machine->transitions.begin();
 					while (iter != machine->transitions.end()) {
 						const Transition &t = *iter++;
-						if ( (t.source == machine->getCurrent() || t.source.getName() == "ANY")
+						if ( (t.source == machine->getCurrent(owner) || t.source.getName() == "ANY")
 								&& (t.dest == value || t.dest.getName() == "ANY") ) {
 							if (!t.condition || (*t.condition)(owner)) {
 								if (t.trigger.getText() == "NOTRIGGER")  break; // no trigger command for this transition
@@ -325,7 +325,7 @@ Action::Status SetStateAction::checkComplete() {
 			}
 		}
 		else {
-			if (machine->getCurrent().getName() == value.getName()) {
+			if (machine->getCurrent(owner).getName() == value.getName()) {
 				status = Complete;
 				if (trigger) {
 					if (trigger->enabled() && !trigger->fired()) trigger->fire();
@@ -341,7 +341,7 @@ Action::Status SetStateAction::checkComplete() {
 		}
 	}
 
-	DBG_M_ACTIONS << machine->getName() << " (" << machine->getCurrent() << ") waiting for " << value << "\n";
+	DBG_M_ACTIONS << machine->getName() << " (" << machine->getCurrent(owner) << ") waiting for " << value << "\n";
 	return status; 
 	// NOTE:  this may never finish
 }

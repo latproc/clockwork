@@ -46,9 +46,9 @@ void MachineClass::enableAutomaticStateChanges() {
 	allow_auto_states = true;
 }
 
-bool MachineClass::isStableState(State &state) {
-	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
-}
+//bool MachineClass::isStableState(State &state) {
+//	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
+//}
 
 void MachineClass::addState(const State &state) {
 	StateMap::iterator found = states.find(state.getName());

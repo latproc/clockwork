@@ -834,6 +834,9 @@ SYMBOL STATE {
 }
 |SYMBOL PRIVATE STATE {
 	State s($1); s.setPrivate(true);
+	assert(s.isPrivate());
+	State x = s;
+	assert(x.isPrivate());
 	current_machineclass->addState(s); // add to states to permit changes to this state
 }
 | SYMBOL DEFAULT {

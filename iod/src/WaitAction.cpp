@@ -165,7 +165,7 @@ Action::Status WaitForAction::run() {
 
 Action::Status WaitForAction::checkComplete() {
   if (status == Complete || status == Failed) return status;
-  if ( machine->getCurrent().getName() == state.getName()) {
+  if ( machine->getCurrent(owner).getName() == state.getName()) {
     status = Complete;
     owner->stop(this);
   }

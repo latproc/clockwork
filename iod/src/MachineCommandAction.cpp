@@ -176,7 +176,7 @@ Action::Status MachineCommand::run() {
     current_step = 0;
 	const char *state_name_str = state_name.get();
     if (state_name_str && *state_name_str &&
-        owner->getCurrent().getName() != state_name_str && !switch_state) {
+        owner->getCurrent(owner).getName() != state_name_str && !switch_state) {
 		/*
         std::stringstream ss;
         ss << "Command " << (*this) << " was ignored due to a mismatch of current state (" << owner->getCurrent().getName()

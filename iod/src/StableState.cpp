@@ -1,8 +1,26 @@
 
 #include <algorithm>
 #include "StableState.h"
+#include "State.h"
 #include "MachineInstance.h"
 
+StableState::StableState() : state_name(""),
+uses_timer(false), timer_val(0), trigger(0), subcondition_handlers(0),
+owner(0) { }
+
+StableState::StableState(const char *s, Predicate *p, MachineInstance *o) : state_name(s),
+condition(p), uses_timer(false), timer_val(0),
+trigger(0), subcondition_handlers(0), owner(0)
+{
+	uses_timer = p->usesTimer(timer_val);
+}
+
+StableState::StableState(const char *s, Predicate *p, Predicate *q, MachineInstance *o)
+: state_name(s),
+condition(p), uses_timer(false), timer_val(0), trigger(0),
+subcondition_handlers(0), owner(o){
+	uses_timer = p->usesTimer(timer_val);
+}
 
 std::ostream &operator<<(std::ostream &out, const StableState &ss) {
 	return ss.operator<<(out);
@@ -17,7 +35,8 @@ StableState::~StableState() {
 
 StableState::StableState (const StableState &other)
 : state_name(other.state_name), condition(other.condition),
-	uses_timer(other.uses_timer), timer_val(0), trigger(0), subcondition_handlers(0), owner(other.owner)
+	uses_timer(other.uses_timer), timer_val(0), trigger(0), subcondition_handlers(0), owner(other.owner),
+	_name(other.state_name)
 {
 	if (other.subcondition_handlers) {
 		subcondition_handlers = new std::list<ConditionHandler>;
@@ -37,33 +56,34 @@ StableState& StableState::operator=(const StableState* other) {
 	return *this;
 }
 
-bool StableState::isSpecial() const{
-	const State *s = owner->getStateMachine()->findState(_name.asString().c_str());
-	assert(s);
 
-	return s->isPrivate() || s->isTransitional();
-}
-bool StableState::isPrivate() const{
-	const State *s = owner->getStateMachine()->findState(_name.asString().c_str());
-	return s->isPrivate();
-}
-bool StableState::isTransitional() const{
-	const State *s = owner->getStateMachine()->findState(_name.asString().c_str());
-	return s->isTransitional();
-}
+//bool StableState::isSpecial() const{
+//	const State *s = owner->getStateMachine()->findState(state_name.c_str());
+//	assert(s);
+//
+//	return s->isPrivate() || s->isTransitional();
+//}
+//bool StableState::isPrivate() const{
+//	const State *s = owner->getStateMachine()->findState(state_name.c_str());
+//	return s->isPrivate();
+//}
+//bool StableState::isTransitional() const{
+//	const State *s = owner->getStateMachine()->findState(state_name.c_str());
+//	return s->isTransitional();
+//}
 
 std::ostream &StableState::displayName (std::ostream &out)const {
-	if (isPrivate())
-		return out << "|" << _name << ((isTransitional())?"*":"") << "|";
-	else
-		return out << _name << ((isTransitional())?"*":"");
+//	if (isPrivate())
+//		return out << "|" << state_name << ((isTransitional())?"*":"") << "|";
+//	else
+	return out << state_name; // << ((isTransitional())?"*":"");
 }
 
 std::ostream &StableState::operator<< (std::ostream &out) const {
-	if (isPrivate())
-		return out << "|" << _name << ((isTransitional())?"*":"") << "|";
-	else
-		return out << _name << ((isTransitional())?"*":"");
+//	if (isPrivate())
+//		return out << "|" << state_name << ((isTransitional())?"*":"") << "|";
+//	else
+	return out << state_name; // << ((isTransitional())?"*":"");
 }
 
 void StableState::triggerFired(Trigger *trig) {

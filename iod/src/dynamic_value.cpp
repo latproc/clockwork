@@ -224,7 +224,7 @@ const Value &AnyInValue::operator()() {
         //std::cout << mi->getName() << " machine " << machine_list->parameters[i].machine->getName()
         //<< " is  "<< machine_list->parameters[i].machine->getCurrent().getName() <<" want " << state_val << "\n";
         
-        if (state_val == machine_list->parameters[i].machine->getCurrent().getName()) {
+        if (state_val == machine_list->parameters[i].machine->getCurrent(scope).getName()) {
             last_result = true; return last_result;
         }
     }
@@ -268,7 +268,7 @@ const Value &AllInValue::operator()() {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
         
-        if (state_val != machine_list->parameters[i].machine->getCurrent().getName()) {
+        if (state_val != machine_list->parameters[i].machine->getCurrent(scope).getName()) {
             last_result = false; return last_result;
         }
     }
@@ -377,7 +377,7 @@ const Value &CountValue::operator()() {
         if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
         if (!machine_list->parameters[i].machine) continue;
         
-        if (state_val == machine_list->parameters[i].machine->getCurrent().getName()) ++result;
+        if (state_val == machine_list->parameters[i].machine->getCurrent(scope).getName()) ++result;
     }
     last_result = result;
     return last_result;
@@ -874,7 +874,7 @@ const Value &BitsetValue::operator()() {
         MachineInstance *entry = machine_list->parameters[i].machine;
         val *= 2;
         if (entry) {
-            if (state == entry->getCurrentStateString())  {
+            if (state == entry->getCurrentStateString(scope))  {
                 val += 1;
             }
         }
@@ -1009,7 +1009,7 @@ const Value &ChangingStateValue::operator()() {
 	while (iter != machine->active_actions.end()) {
 		Action *a = *iter++;
 		MoveStateAction *msa = dynamic_cast<MoveStateAction*>(a);
-		if (msa && msa->value == machine->getCurrent()) {
+		if (msa && msa->value == machine->getCurrent(scope)) {
 			last_result = true;
 			return last_result;
 		}

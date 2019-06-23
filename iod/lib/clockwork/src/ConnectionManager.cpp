@@ -562,9 +562,6 @@ void MessageRouter::addRemoteSocket(int type, const std::string address) {
 }
 void MessageRouter::operator()() {
 	boost::unique_lock<boost::mutex> lock(internals->data_mutex);
-	int *destinations = 0;
-	size_t saved_num_items = 0;
-	zmq::pollitem_t *items;
 	while (!internals->done) {
 		poll();
 		usleep(20);
@@ -656,7 +653,6 @@ void MessageRouter::poll() {
 
 	char *buf = 0;
 	size_t len = 0;
-	int source = 0;
 	MessageHeader mh;
 
 	// receiving from remote socket
