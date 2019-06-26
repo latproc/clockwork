@@ -208,8 +208,8 @@ public:
 	void setInitialState( bool resume = false);
 	Trigger *setupTrigger(const std::string &machine_name, const std::string &message, const char *suffix);
 	const Value *getTimerVal();
-	Value *getCurrentStateVal(MachineInstance *scope) { return &current_state_val; }
-  Value *getCurrentValue(MachineInstance *scope) { return &current_value_holder; }
+	Value *getCurrentStateVal(MachineInstance *scope);
+	Value *getCurrentValue(MachineInstance *scope);
 
 	bool uses(MachineInstance *other);
 	std::set<MachineInstance*>depends;
@@ -328,6 +328,7 @@ protected:
   int error_state; // error number of the current error if any
   State saved_state; // save state before error
   Value current_state_val;
+	Value visible_state_val;
   bool is_active; // is this machine active or passive?
   Value current_value_holder;
   std::stringstream ss; // saves recreating string stream for temporary use
@@ -397,7 +398,7 @@ public:
             return last_result;
         }
         else {
-            last_result = *machine_instance->getCurrentStateVal(machine_instance);
+            last_result = *machine_instance->getCurrentStateVal(m);
             return last_result;
         }
     }

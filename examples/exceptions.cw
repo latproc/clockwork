@@ -125,42 +125,41 @@ DisabledReceiverTestScript MACHINE test {
 
 }
 
-
 AbortTest MACHINE {
 	OPTION count 0;
 
 	tick WHEN SELF IS idle AND TIMER >= 1000;
 	idle DEFAULT;
 
-ENTER tick {
-	count := count + 1;
-	LOG "This message before an IF should be displayed" + count + "/3";
-	IF (count >= 3) { 
-		LOG "This tick message before a THROW should be displayed";
-		THROW overrun ;
-		LOG "This tick-after-overrun message should not be displayed";
-	};
-	LOG "This message after an IF should only be displayed if the tick-after-overrun message has not been displayed"
-}
+	ENTER tick {
+		count := count + 1;
+		LOG "This message before an IF should be displayed" + count + "/3";
+		IF (count >= 3) { 
+			LOG "This tick message before a THROW should be displayed";
+			THROW overrun ;
+			LOG "This tick-after-overrun message should not be displayed";
+		};
+		LOG "This message after an IF should only be displayed if the tick-after-overrun message has not been displayed"
+	}
 
-ENTER INIT {
-	count := 0;
-	LOG "This message should be displayed";
-	SEND abort_test TO SELF;
-	RETURN;
-	LOG "This message should not be displayed";
-}
+	ENTER INIT {
+		count := 0;
+		LOG "This message should be displayed";
+		SEND abort_test TO SELF;
+		RETURN;
+		LOG "This message should not be displayed";
+	}
 
-RECEIVE abort_test {
-	LOG "Beginning test of abort";
-	ABORT;
-	LOG "This idle message should not be displayed";
-}
+	RECEIVE abort_test {
+		LOG "Beginning test of abort";
+		ABORT;
+		LOG "This idle message should not be displayed";
+	}
 
-CATCH overrun {
-	LOG "Overrun detected. Disabling SELF";
-	DISABLE SELF;
-}
+	CATCH overrun {
+		LOG "Overrun detected. Disabling SELF";
+		DISABLE SELF;
+	}
 
 }
 

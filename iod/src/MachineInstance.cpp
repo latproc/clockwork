@@ -330,9 +330,18 @@ void MachineInstance::resetTemporaryStringStream() {
 State &MachineInstance::getCurrent(MachineInstance *scope) {
 	return (scope == this) ? current_state : visible_state;
 }
+
 const char *MachineInstance::getCurrentStateString(MachineInstance *scope) const {
 	return (scope == this) ? current_state.getName().c_str() : visible_state.getName().c_str();
 }
+
+Value *MachineInstance::getCurrentStateVal(MachineInstance *scope) {
+	return (scope == this) ? &current_state_val : &visible_state_val;
+}
+Value *MachineInstance::getCurrentValue(MachineInstance *scope) {
+	return &current_value_holder;
+}
+
 
 MachineInstance *MachineInstance::lookup(Parameter &param) {
 	if (param.val.kind == Value::t_symbol) {
@@ -1648,8 +1657,10 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		current_state = *(next_state);
 		//current_state = new_state;
 		current_state_val = new_state.getName();
-		if (!current_state.isPrivate())
+		if (!current_state.isPrivate()) {
 			visible_state = current_state;
+			visible_state_val = current_state_val;
+		}
 
 		// call the internal enter function for the machine if available
 		if (machine_class_state) machine_class_state->enter(0);

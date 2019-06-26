@@ -26,7 +26,9 @@ PrivateStateTest MACHINE {
 }
 PrivateStateTestMonitor MACHINE pst {
   idle INITIAL;
+  error WHEN pst IS x OR SELF IS error;
 }
 private_test PrivateStateTest;
 pstmon PrivateStateTestMonitor private_test;
+
 
