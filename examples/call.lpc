@@ -1,17 +1,4 @@
-# A basic one-shot timer with reset
-# 
-# use start to start the timer and the timer will start running.
-# after running for timeout ms it becomes expired
-
-TIMER MACHINE {
-	OPTION timeout 100;
-	expired WHEN SELF IS expired || (SELF IS running && TIMER >= timeout);
-	running STATE;
-	stopped INITIAL;
-
-	TRANSITION expired,stopped TO running ON start;
-	TRANSITION running,expired,stopped TO stopped ON reset;
-}
+# Various tests relating to the use of CALL
 
 # A cyclic set machine that goes from one state to the next everytime 
 # next command is received
