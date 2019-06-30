@@ -1652,7 +1652,8 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 		const State *next_state = state_machine->findState(new_state.getName());
 		// moving from a public state to public state should notify
 		// moving from a private state to a public state only notifies if the new state is different from the last public state
-		bool should_notify = !next_state->isPrivate() && (!current_state.isPrivate() || current_state.isPrivate() && visible_state != *next_state);
+		bool should_notify = !next_state->isPrivate()
+		  && (!current_state.isPrivate() || (current_state.isPrivate() && visible_state != *next_state));
 		std::string last = current_state.getName();
 		current_state = *(next_state);
 		//current_state = new_state;
