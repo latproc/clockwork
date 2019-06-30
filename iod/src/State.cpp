@@ -23,6 +23,8 @@
 #include "State.h"
 #include "symboltable.h"
 
+StateBase::StateBase(bool priv, bool trans) : is_private(priv), is_transitional(trans) {
+}
 
 bool StateBase::isPrivate() const { return is_private; }
 void StateBase::setPrivate(bool which) { is_private = which; }

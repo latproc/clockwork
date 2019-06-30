@@ -27,7 +27,7 @@
 
 class StateBase {
 public:
-	StateBase(bool priv = false, bool trans = false) {}
+	StateBase(bool priv = false, bool trans = false);
 	virtual ~StateBase() {}
 
 	bool isPrivate() const;
