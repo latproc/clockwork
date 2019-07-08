@@ -1076,8 +1076,8 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
 			file_name = params[2].asString().c_str();
 		}
 		const char *backup_file_name = "modbus_mappings.bak";
-		if (rename(file_name, backup_file_name)) {
-			std::cerr << "file rename error: " << strerror(errno) << "\n";
+		if (rename(file_name, backup_file_name) && errno != ENOENT) {
+			std::cerr << "file rename error: " << strerror(errno) << " (" <<errno << ")" << "\n";
 		}
 		std::list<MachineInstance*>::iterator m_iter = MachineInstance::begin();
 		std::ofstream out(file_name);

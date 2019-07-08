@@ -87,8 +87,14 @@ Martin Leadbeater
 \end_layout
 
 \begin_layout Abstract
-This paper describes various language features that will be added to Clockwork
- in the future
+Clockwork has been a work in progress since 2010, it was published in github
+ around 2012.
+ It has been able to be used to reliably control machinery since 2013 and
+ has has demonstrated quite good code reuse and has been able to implement
+ complex behaviours with small code components.
+ This paper describes various language features that are being considered
+ for future versions of Clockwork, based on our experiences with this type
+ of programming.
 \end_layout
 
 \begin_layout Standard
@@ -102,6 +108,11 @@ LatexCommand tableofcontents
 
 \begin_layout Section
 Introduction
+\end_layout
+
+\begin_layout Standard
+Clockwork is not strictly types but once a value is assigned to a variable
+ a type is inferred and used to affect the type of the result.
 \end_layout
 
 \begin_layout Subsection
@@ -138,6 +149,10 @@ References
 
 \begin_layout Itemize
 Type conversions (x AS type)
+\end_layout
+
+\begin_layout Itemize
+Key-value access to redis has been implemented via a plugin
 \end_layout
 
 \begin_layout Subsubsection
@@ -189,12 +204,17 @@ Copying properties en mass via variants of COPY PROPERTIES
 Features
 \end_layout
 
+\begin_layout Standard
+Not all of these are implemented directly, some of these can be implemented
+ in library code or plugins and do not need to be language features per-se.
+\end_layout
+
 \begin_layout Itemize
 Substates (implemented via nesting of machines)
 \end_layout
 
 \begin_layout Itemize
-Exceptions (THROW, CATCH)
+Exceptions [prerelease] (THROW, CATCH), no global CATCH at present
 \end_layout
 
 \begin_layout Itemize
@@ -206,7 +226,7 @@ Processing priorities - low priority/slow scan inputs
 \end_layout
 
 \begin_layout Itemize
-Functions
+Functions (passing parameters and getting a return result)
 \end_layout
 
 \begin_layout Itemize
@@ -226,7 +246,8 @@ Modular/dynamic components
 \end_layout
 
 \begin_layout Itemize
-Support of parallel execution
+Support of parallel execution (calculation of stable states and execution
+ of actions)
 \end_layout
 
 \begin_layout Itemize
@@ -235,16 +256,8 @@ Controlling safe access to data - stable and changing property states, dynamic
 \end_layout
 
 \begin_layout Itemize
-Method extensions
-\end_layout
-
-\begin_layout Itemize
 Sequences and Cycles - shortcuts for transition tables? Transitions are
  limited to be within a list or a cycle of states.
-\end_layout
-
-\begin_layout Itemize
-Threaded implementation
 \end_layout
 
 \begin_layout Itemize
@@ -252,7 +265,7 @@ Executing a subexpression on the default state
 \end_layout
 
 \begin_layout Itemize
-Persistence via persistd
+Persistence (via persistd)
 \end_layout
 
 \begin_layout Itemize
@@ -260,15 +273,7 @@ Property type and state enforcement via STRICT
 \end_layout
 
 \begin_layout Itemize
-WAITing for a machine to enter a state currently only checks that the state
- name has changed.
- It should also wait for the enter_function to have been processed.
- A complex solution to this problems is discussed later; utilising CHANGING
- STATE operators but perhaps there is a simpler method also.
-\end_layout
-
-\begin_layout Subsubsection
-Not implemented
+namespace scopes
 \end_layout
 
 \begin_layout Itemize
@@ -277,6 +282,22 @@ Macros
 
 \begin_layout Itemize
 State validation during handlers
+\end_layout
+
+\begin_layout Subsubsection
+Potential other features
+\end_layout
+
+\begin_layout Itemize
+Method extensions
+\end_layout
+
+\begin_layout Itemize
+WAITing for a machine to enter a state currently only checks that the state
+ name has changed.
+ It should also wait for the enter_function to have been processed.
+ A complex solution to this problems is discussed later; utilising CHANGING
+ STATE operators but perhaps there is a simpler method also.
 \end_layout
 
 \begin_layout Subsection
@@ -715,20 +736,22 @@ Sets should send messages on state change between empty, nonempty and full.
 \end_layout
 
 \begin_layout Subsubsection
-Property Sets
+Structs
 \end_layout
 
 \begin_layout Standard
-Property Sets are a wat to structure or group property names that can be
- used to initialise machines or used to change the value of several properties
+Structs are a way to structure or group property names that can be used
+ to initialise machines or used to change the value of several properties
  at the same time.
 \end_layout
 
 \begin_layout Standard
-Initialising a machine will look somthing like:
+Initialising a machine will look something like:
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 Sample MACHINE WITH (a:1, b:
 \begin_inset Quotes erd
 \end_inset
@@ -746,7 +769,9 @@ or
 \end_layout
 
 \begin_layout LyX-Code
-my_properties PROPERTY_SET {
+
+\size small
+my_properties STRUCT {
 \begin_inset Separator latexpar
 \end_inset
 
@@ -755,10 +780,14 @@ my_properties PROPERTY_SET {
 
 \begin_deeper
 \begin_layout LyX-Code
+
+\size small
 OPTION a 1;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 OPTION b 
 \begin_inset Quotes eld
 \end_inset
@@ -770,17 +799,16 @@ test
 ;
 \end_layout
 
-\begin_layout LyX-Code
-OPTION c REFER TO a.b; ## when update is used the target machine will read
- its c value from its local/param a.b
-\end_layout
-
 \end_deeper
 \begin_layout LyX-Code
+
+\size small
 }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 Sample MACHINE WITH my_properties { ...
  }
 \end_layout
@@ -790,14 +818,20 @@ Property sets can be updated from a database:
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 COLLECT record FROM data_source INTO my_properties ON ENDOFDATA done;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 UPDATE my_machine WITH my_properties [EXCLUDING name_list];
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 UPDATE my_machine WITH [name_list FROM] my_properties
 \end_layout
 
@@ -1164,35 +1198,51 @@ The implementation of a reference is similar to
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 REFERENCE MACHINE {
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
     ITEM ANY_MACHINE;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
     ASSIGNED WHEN ITEM != NULL;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
     EMPTY DEFAULT;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
     
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
     COMMAND clear { } # clear the current ITEM 
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
     COMMAND assign WITH new_item {  } # clear the current item then set
  it to new_item
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 }
 \end_layout
 
@@ -1205,6 +1255,52 @@ Calling clear on the reference will unassign the object that was previously
 \begin_layout Standard
 Note: Initially, the language does not provide a way to return an object
  from a function.
+\end_layout
+
+\begin_layout Subsubsection
+Properties that refer to other properties
+\end_layout
+
+\begin_layout Standard
+This feature is only partially implemented
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+PropertyReferenceExample MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+
+\size small
+# The VALUE property is linked to the 'answer' property of 
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+# the local machine 'calculator'
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+OPTION VALUE REFER TO calculator.answer;
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+LOCAL calculator;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+
+\size small
+}
 \end_layout
 
 \begin_layout Subsection
@@ -1220,22 +1316,32 @@ An ITERATOR is like a REFERENCE except that it is linked to an item within
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 iter ITERATOR list; # automatically assigns FIRST OF LIST to iter
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 working WHEN iter IS ASSIGNED;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 idle DEFAULT;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER working { LOG iter.ITEM.NAME; SEND next TO iter; }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER idle { LOG 
 \begin_inset Quotes eld
 \end_inset
@@ -1263,40 +1369,58 @@ ITERATORs may be assigned to REFERENCEs so the following code is ok except
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ref REFERENCE;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 iter ITERATOR;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 a OBJECT(val:1); b OBJECT(val:3);
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 list LIST a, b;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 COMMAND example {
 \end_layout
 
 \begin_deeper
 \begin_layout LyX-Code
+
+\size small
 x := FIND ITEM.val == 3 IN list;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ASSIGN x TO iter; IF iter ASSIGNED { SEND prev TO iter; }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ASSIGN x TO ref; # ref still works as a REFERENCE 
 \end_layout
 
 \end_deeper
 \begin_layout LyX-Code
+
+\size small
 }
 \end_layout
 
@@ -1322,6 +1446,8 @@ A Stream is an ordered collection of data that can be grouped into fixed
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 s READER 
 \begin_inset Quotes eld
 \end_inset
@@ -1334,26 +1460,38 @@ example.dat
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 done WHEN s IS invalid; # terminating condition
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 start WHEN s IS closed;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 one WHEN s.curr == 1;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 zero WHEN s.curr == 0;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER start { SEND open TO s }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER one { LOG 
 \begin_inset Quotes eld
 \end_inset
@@ -1366,6 +1504,8 @@ ENTER one { LOG
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER zero { LOG 
 \begin_inset Quotes eld
 \end_inset
@@ -1390,10 +1530,14 @@ Machines currently have an unstructured set of properties as the only method
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 COPY PROPERTIES FROM machine1 TO machine2
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 COPY PROPERTIES property_name,...
  FROM machine1 TO machine2
 \end_layout
@@ -1433,10 +1577,14 @@ The state of list entries can be converted to a bitset and back using statements
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 my_flags := BITSET FROM ENTRIES OF list WITH STATES off,on
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 SET ENTRIES OF list FROM BITSET my_flags WITH STATES [on=1,off=0]
 \end_layout
 
@@ -1445,10 +1593,14 @@ Equivalent forms exist that can map a set or properties rather than states
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 val := BITSET FROM ENTRIES OF list WITH PROPERTY a;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 SET PROPERTIES OF ENTRIES OF list FROM BITSET val WITH PROPERTY [a:1];
 \end_layout
 
@@ -1458,10 +1610,14 @@ Both the state and property forms of these statements can be abbreviated
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 my_flags := BITSET FROM list WITH STATES off,on
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 SET list FROM BITSET my_flags WITH STATES [on=1,off=0]
 \end_layout
 
@@ -1471,10 +1627,14 @@ In both cases, the WITH STATES clauses can also be removed if the specification
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 my_flags := BITSET FROM list;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 SET list FROM BITSET my_flags;
 \end_layout
 
@@ -1490,10 +1650,14 @@ The programmer can control how states or properties are mapped into a bitmap;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 specification = specifier | '[' specifier [ ',' specifier ] ']'
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 specifier = name [ '=' value ] [ ':' size ]
 \end_layout
 
@@ -1537,10 +1701,14 @@ Often several control signals or status signals share a single 8- or 16-bit
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 Control: xxxEMMMR
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 Bits:    76543210
 \end_layout
 
@@ -1551,22 +1719,32 @@ where x bits aren't used, E is the 'Enable' control bit and R is a 'Reset'
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 # access the 1st component (an 8 bit value) of module1:
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 control DIGITALOUTPUT(size:8) module1, 0; 
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 enable FLAG OVERLAPS control.VALUE(offset:4);
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 reset FLAG OVERLAPS control.VALUE(offset:0);
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 mode DIGITALOUTPUT(size:3) OVERLAPS control.VALUE(offset:1);
 \end_layout
 
@@ -1583,23 +1761,33 @@ Structured Data
 TBD add details about structures, JSON and XML and transactions/atomic changes.
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
+
+\size small
 OPTION value { x:0, y:0 }
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
+
+\size small
 LOCK value;
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
+
+\size small
 value.x := 3;
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
+
+\size small
 value.y := 4;
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
+
+\size small
 RELEASE value or perhaps COMMIT value (either would release the lock)
 \end_layout
 
@@ -1607,7 +1795,9 @@ RELEASE value or perhaps COMMIT value (either would release the lock)
 Should we use the 'WITHIN' syntax:
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
+
+\size small
 WITHIN value x := 3, y:= 7;
 \end_layout
 
@@ -1620,8 +1810,11 @@ See LET.
 \end_layout
 
 \begin_layout Standard
-CONSTRAIN x,y : y := x+ 5; # this would iteratively attempt to solve for
- x.
+
+\size small
+CONSTRAIN x,y : y := x+ 5;
+\size default
+ # this would iteratively attempt to solve for x.
  
 \end_layout
 
@@ -1630,6 +1823,8 @@ Should we add EQUIVALENT (better name?) clauses:
 \end_layout
 
 \begin_layout Standard
+
+\size small
 CONSTRAIN x,y : y := x + 5 EQUIVALENT x := y - 5;
 \end_layout
 
@@ -1663,7 +1858,7 @@ VOLATILE means that the given property is not included in the persistent
 \end_layout
 
 \begin_layout Description
-PRIVATE means that the named option is not visible outside of the machine
+PRIVATE means that the named state is not visible outside of the machine
  (even to sub-machines) and it is not published on any channel unless the
  channel includes a specific option to include private objects (persistence,
  samplers and debuggers may include private properties for example)
@@ -1694,7 +1889,9 @@ Data hiding
 Add: check PRIVATE STATE WITHIN visible_alias or perhaps just PRIVATE STATE
  that simply doesn't update the external view of what state the machine
  is in.
- Considr perhaps SHOW state_name FOR state_name.
+ Also consder aliasing perhaps 
+\size small
+SHOW state_name1 FOR state_name2.
 \end_layout
 
 \begin_layout Subsection
@@ -1736,6 +1933,8 @@ Conditions are not currently implemented but they are intended to operate
  of expressions on WHEN clauses.
  Effectively, a CONDITION is a machine that is true when the expression
  is true and false otherwise.
+ Conditions are evaluated before stable state tests and are guaranteed to
+ be valid throughout the test process.
 \end_layout
 
 \begin_layout Subsection
@@ -1747,6 +1946,8 @@ Clockwork 1.0 introduces exception and error handling
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 TRY {
 \begin_inset Separator latexpar
 \end_inset
@@ -1756,15 +1957,21 @@ TRY {
 
 \begin_deeper
 \begin_layout LyX-Code
+
+\size small
 statement-list
 \end_layout
 
 \end_deeper
 \begin_layout LyX-Code
+
+\size small
 }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 WHEN TIMER >= timeout {
 \begin_inset Separator latexpar
 \end_inset
@@ -1774,19 +1981,27 @@ WHEN TIMER >= timeout {
 
 \begin_deeper
 \begin_layout LyX-Code
+
+\size small
 ABORT; # unsuccessful completion
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 RETURN; # successful completion 
 \end_layout
 
 \end_deeper
 \begin_layout LyX-Code
+
+\size small
 }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 CATCH message {
 \begin_inset Separator latexpar
 \end_inset
@@ -1796,6 +2011,8 @@ CATCH message {
 
 \begin_deeper
 \begin_layout LyX-Code
+
+\size small
 LOG 
 \begin_inset Quotes eld
 \end_inset
@@ -1817,6 +2034,8 @@ Error:
 
 \end_deeper
 \begin_layout LyX-Code
+
+\size small
 }
 \end_layout
 
@@ -1830,21 +2049,29 @@ In addition, certain statements add ON ERROR and ON TIMEOUT clauses that
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 SET machine TO state ON ERROR { ...
  }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 CALL handler ON machine ON ERROR { ...
  }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 SET machine TO state ON TIMEOUT n { ...
  }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 CALL handler ON machine ON TIMEOUT n { ...
  }
 \end_layout
@@ -1859,6 +2086,8 @@ Errors may be generic, as above, where the one error handler will handle
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 COMMAND handler { IF ...
  ERROR error1; ...
  ELSE...
@@ -1867,7 +2096,15 @@ COMMAND handler { IF ...
 \end_layout
 
 \begin_layout LyX-Code
-CALL handler ON machine ON ERROR error1 { ....
+
+\size small
+CALL handler 
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+ON machine ON ERROR error1 { ....
  } ON ERROR error2 { ...
  }
 \end_layout
@@ -1878,15 +2115,21 @@ If necessary a handler can THROW a message and another part of the machine
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 COMMAND handler { ...; THROW error_name; ...
  }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ...
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 CATCH error_name { ...
  }
 \end_layout
@@ -1897,10 +2140,14 @@ Rather than having a single CATCH within the machine, an error handler may
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 CALL handler ON machine ON error1 {...} ON error2 {...}
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 COMMAND handler { ...
  THROW error1; ...
  }
@@ -1915,6 +2162,8 @@ Note that statements after a THROW are not executed and the handler is deemed
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 CATCH ALL { num_errors := num_errors + 1 }
 \end_layout
 
@@ -1972,14 +2221,20 @@ PRIVATE states can be used to simplify the external interface of a machine.
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 turning_on PRIVATE STATE;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 on STATE;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 PRIVATE STATES a,b,c;
 \end_layout
 
@@ -2006,6 +2261,8 @@ n of USING.
 \end_layout
 
 \begin_layout Standard
+
+\size small
 TRANSITION a TO b USING next;
 \end_layout
 
@@ -2018,25 +2275,32 @@ will provide a command called 'next' that causes a transition from 'a' to
 \end_layout
 
 \begin_layout Standard
-TRANSITION a TO b USING next; # retains the legacy behaviour
+
+\size small
+TRANSITION a TO b USING next;
+\size default
+ # retains the legacy behaviour
 \end_layout
 
 \begin_layout Standard
-TRANSITION a TO b AFTER next; # the 'next' command causes the transition
- once it completes
+
+\size small
+TRANSITION a TO b AFTER next; 
+\size default
+# the 'next' command causes the transition once the 'next' method completes
 \end_layout
 
 \begin_layout Standard
-TRANSITION a TO b INVOKES starting; # the 'starting' handler is invoked
- after the machine transitions from a to b
+
+\size small
+TRANSITION a TO b INVOKES starting;
+\size default
+ # the 'starting' handler is invoked after the machine transitions from
+ a to b
 \end_layout
 
 \begin_layout Standard
 The two clauses can be combined.
-\end_layout
-
-\begin_layout LyX-Code
-
 \end_layout
 
 \begin_layout Subsection
@@ -2066,11 +2330,15 @@ Type extensions provide for adding parameters, statements to the handlers
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 A MACHINE { \SpecialChar ldots
  };
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 B MACHINE EXTENDS A <additional parameters> {
 \begin_inset Separator latexpar
 \end_inset
@@ -2080,19 +2348,27 @@ B MACHINE EXTENDS A <additional parameters> {
 
 \begin_deeper
 \begin_layout LyX-Code
+
+\size small
 <event handler extensions>
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 <additional fields>
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 <state extensions>
 \end_layout
 
 \end_deeper
 \begin_layout LyX-Code
+
+\size small
 }
 \end_layout
 
@@ -2122,10 +2398,14 @@ Protocols can be used to ensure that machines passed as parameters actually
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 switch PROTOCOL { STATES { on, off; } COMMANDS {turnOn, turnOff} }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 controller MACHINE on_off<switch> { ...
  }
 \end_layout
@@ -2142,6 +2422,8 @@ If the switch is to be also allowed to have other states or commands we
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 switch PROTOCOL { STATES { on, off, ...; } COMMANDS {turnOn, turnOff, ...} }
 \end_layout
 
@@ -2208,19 +2490,27 @@ Retriggering of subcondition; syntax:
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 state WHEN condition,
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 EXECUTE method WHENEVER condition, 
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 TAG machine WHENEVER condition,
 \end_layout
 
 \begin_layout LyX-Code
-EXECUTE (DO) method EVERY duration;
+
+\size small
+EXECUTE/DO method EVERY duration;
 \end_layout
 
 \begin_layout Subsection
@@ -2295,8 +2585,16 @@ A subcondition can be used to repeat an action only while a machine is in
  a particular state:
 \end_layout
 
-\begin_layout Standard
+\begin_layout LyX-Code
 EXECUTE / DO command EVERY time_period;
+\end_layout
+
+\begin_layout Standard
+Consider adding this with a standalone syntax also: 
+\end_layout
+
+\begin_layout LyX-Code
+EXECUTE / DO command EVERY time_period [WITHIN state];
 \end_layout
 
 \begin_layout Subsection
@@ -2428,10 +2726,14 @@ Clockwork already has facilities to enable and disable parts of the executing
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 points LIST FROM SELECT MACHINES OF TYPE POINT;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 outputs LIST FROM SELECT MACHINES WITH NAME MATCHING `^O_`;
 \end_layout
 
@@ -2440,10 +2742,14 @@ or
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 points LIST;
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 SELECT MACHINES OF TYPE POINT INTO points;
 \end_layout
 
@@ -2465,6 +2771,8 @@ A macro has the form:
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 DEFINE name [ '(' name1 [ ',' name1 ]...
  ')' ] '{' text '}'
 \end_layout
@@ -2479,6 +2787,8 @@ To introduce a macro use:
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 DEFINE sum(a,b) { a + b }
 \end_layout
 
@@ -2487,6 +2797,8 @@ To expand the macro, use the name and parameters part of the above:
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 three := sum(1,2);
 \end_layout
 
@@ -2498,14 +2810,20 @@ A macro name may include spaces and if desired, the expansion may include
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 DEFINE initialise the variables { x := 0; }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ...
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER INIT { @<initialise the variables@> }
 \end_layout
 
@@ -2514,14 +2832,20 @@ Note that it is perfectly fine to write the following
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 DEFINE initialise the variables { x := 0; }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ...
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER INIT { initialise the variables }
 \end_layout
 
@@ -2535,22 +2859,32 @@ Unlike other macro systems, in clockwork a macro can be reintroduced and
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 DEFINE initialise the variables { x := 0; }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ...
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 DEFINE initialise the variables { y := 0; }
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ...
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER INIT { @<initialise the variables@> }
 \end_layout
 
@@ -2559,6 +2893,8 @@ In which case, the INIT method would have expanded to
 \end_layout
 
 \begin_layout LyX-Code
+
+\size small
 ENTER INIT { x:=0;  y:=0; }
 \end_layout
 

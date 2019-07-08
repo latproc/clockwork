@@ -82,6 +82,12 @@
 Clockwork Language Reference (draft)
 \end_layout
 
+\begin_layout Standard
+This paper is intended to describe the Clockwork language as completely
+ as possible.
+ Language usage can be (should be) found in the User Manual.
+\end_layout
+
 \begin_layout Author
 Martin Leadbeater
 \end_layout
@@ -1268,7 +1274,13 @@ param1, param2, ...
 ;.
  There can be any number of instances for a given machine definition.
  The trick is mostly to do with what goes between the braces.
- 
+\end_layout
+
+\begin_layout Standard
+A Machine is similar to a Class in other languages in that it encapsulates
+ state and provides methods that implement procedural logic.
+ Machines are different in that they execute as independent entities, continuous
+ly evaluating the state of their environment and reacting to it.
 \end_layout
 
 \begin_layout Subsection
@@ -1326,9 +1338,9 @@ Stable States
 \begin_layout Standard
 The definition of machines with a set of states and actions is a common
  approach and works well for describing event driven processes.
- In clockwork, machines are repeatedly monitoring their inputs to ensure
- that the machine's state is consistent with the definition of that state.
- When the machine's input change to a configuration that implies the external
+ In clockwork, each machine repeatedly monitors its environment, updating
+ its state to be consistent with its list of rules.
+ When a machine's inputs change to a configuration that implies the external
  system has changed, clockwork machines automatically shift to the first
  state they can find that matches the measured conditions.
 \end_layout
