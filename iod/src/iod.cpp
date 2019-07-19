@@ -515,7 +515,7 @@ std::string thread_name("iod_main");
 		ethercat.stop();
 		delete context;
 	}
-	catch (zmq::error_t) { // expected error when we remove the zmq context
+	catch (const zmq::error_t &error) { // expected error when we remove the zmq context
 	}
 	//monitor.join();
 	return 0;
