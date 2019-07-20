@@ -783,7 +783,7 @@ int main (int argc, char const *argv[])
     monitor.join();
         delete context;
     }
-    catch (zmq::error_t) {
+    catch (const zmq::error_t &error) {
         
     }
 	return 0;

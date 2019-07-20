@@ -329,7 +329,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 			}
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (const zmq::error_t &error) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name);
@@ -370,7 +370,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 			sock.send(msg);
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (const zmq::error_t &error) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name); 

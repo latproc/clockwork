@@ -52,6 +52,7 @@ Thumbs.db
 .vscode
 
 #project build files
+build
 iod/build/
 iod/xcode/
 modbus/build/
