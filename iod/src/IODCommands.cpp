@@ -1341,7 +1341,7 @@ bool IODCommandChannel::run(std::vector<Value> &params) {
             chn->enable();
             break;
           }
-          catch (zmq::error_t err) {
+          catch (const zmq::error_t &err) {
             if (zmq_errno() == EADDRINUSE) {
               NB_MSG << "address is in use\n";
             }

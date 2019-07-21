@@ -632,7 +632,7 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
             break;
         }
-        catch (zmq::error_t err) {
+        catch (const zmq::error_t &err) {
             if (zmq_errno() != EADDRINUSE) {
                 break;
             }

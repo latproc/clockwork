@@ -200,7 +200,7 @@ void Dispatcher::idle()
 	            int rc = zmq::poll( &items[0], 2, 500);
 				if (rc == 0) { usleep(50); continue; }
 			}
-			catch (zmq::error_t err) {
+			catch (const zmq::error_t &err) {
 				if ( errno == EAGAIN) continue;
 				if ( errno == EINTR) continue;
 				char msgbuf[200];

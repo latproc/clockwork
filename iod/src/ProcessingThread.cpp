@@ -1003,7 +1003,7 @@ void ProcessingThread::operator()()
 					update_state = s_update_sent;
 					break;
 				}
-				catch (zmq::error_t err) {
+				catch (const zmq::error_t &err) {
 					if (zmq_errno() == EINTR) {
 						std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 						continue;
@@ -1083,7 +1083,7 @@ void ProcessingThread::operator()()
 							}
 							break;
 						}
-						catch (zmq::error_t err) {
+						catch (const zmq::error_t &err) {
 							if (zmq_errno() == EINTR) {
 								std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 								//usleep(50); 
@@ -1131,7 +1131,7 @@ void ProcessingThread::operator()()
 				avg_update_time.update();
 #endif
 			}
-			catch (zmq::error_t err) {
+			catch (const zmq::error_t &err) {
 				if (zmq_errno() != EINTR) {
 					NB_MSG << "Exception: " << err.what() << " (" << zmq_strerror(errno) << ")\n";
 				}

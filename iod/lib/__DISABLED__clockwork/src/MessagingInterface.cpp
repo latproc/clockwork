@@ -557,7 +557,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
             DBG_CHANNELS << "found available port " << res << "\n";
             break;
         }
-        catch (zmq::error_t err) {
+        catch (const zmq::error_t &err) {
             if (zmq_errno() != EADDRINUSE) {
                 res = 0;
                 break;
