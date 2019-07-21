@@ -12,10 +12,10 @@ if (RUN_TESTS)
 endif()
 
 install(TARGETS cw_interpreter iosh device_connector modbusd persistd
-        RUNTIME DESTINATION
-        ${PROJECT_SOURCE_DIR}
-        LIBRARY DESTINATION
-        ${PROJECT_SOURCE_DIR}
-        ARCHIVE DESTINATION
-        ${PROJECT_SOURCE_DIR}
+    RUNTIME DESTINATION
+    ${PROJECT_SOURCE_DIR}
+    LIBRARY DESTINATION
+    ${PROJECT_SOURCE_DIR}
+    ARCHIVE DESTINATION
+    ${PROJECT_SOURCE_DIR}
 )
