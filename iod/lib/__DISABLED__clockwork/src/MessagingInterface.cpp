@@ -670,7 +670,7 @@ char *MessagingInterface::send(const char *txt) {
 			    continue;
 		    }
 	    }
-	    catch (std::exception e) {
+	    catch (const std::exception &e) {
 		    if (errno == EINTR || errno == EAGAIN) {
 			    std::cerr << "MessagingInterface::send " << strerror(errno);
 			    if (--retries <= 0) {
@@ -729,7 +729,7 @@ char *MessagingInterface::send(const char *txt) {
                 }
                 break;
             }
-            catch (std::exception e) {
+            catch (const std::exception &e) {
                 if (zmq_errno())
                     std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
                 else

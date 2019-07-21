@@ -601,7 +601,7 @@ void IODCommandThread::operator()() {
 			}
 
 		}
-		catch (std::exception e) {
+		catch (const std::exception &e) {
 			// when processing is stopped, we expect to get an exception on this interface
 			// otherwise, we fail since something strange has happened
 			if (!done) {

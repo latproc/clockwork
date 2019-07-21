@@ -769,7 +769,7 @@ struct ConnectionThread {
 			std::cout << "Connection Thread Done\n";
 			is_shutdown = true;
 			
-        }catch (std::exception e) {
+        }catch (const std::exception &e) {
             if (zmq_errno())
                 std::cerr << zmq_strerror(zmq_errno()) << "\n";
             else
@@ -981,7 +981,7 @@ public:
 				if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(500); continue;}
 				error_count = 0;
 			}
-			catch (std::exception e) {
+			catch (const std::exception &e) {
                 std::cerr << e.what() << "\n";
 				++error_count;
 				if (zmq_errno()) {
@@ -1209,7 +1209,7 @@ int main(int argc, const char * argv[])
 		processing.join();
 		std::cout << "done\n" << std::flush;
     }
-    catch (std::exception e) {
+    catch (const std::exception &e) {
         if (zmq_errno()) 
             std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
         else

@@ -337,7 +337,7 @@ struct CommandThread {
 
 	            free(data);
             }
-            catch (std::exception e) {
+            catch (const std::exception &e) {
 				if (data) { free(data); data = 0; }
                 //std::cout << e.what() << "\n";
 				//usleep(200000);

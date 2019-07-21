@@ -797,7 +797,7 @@ void ProcessingThread::operator()()
 									ok  = (*command)();
 									//NB_MSG << "execution result " << command->result() << "\n";
 								}
-								catch (std::exception e) {
+								catch (const std::exception &e) {
 									FileLogger fl(program_name);
 									fl.f() << "command execution threw an exception " << e.what() << "\n";
 								}
