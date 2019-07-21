@@ -54,8 +54,8 @@ add_subdirectory(lib)
 
 INCLUDE_DIRECTORIES(${ZeroMQ_INCLUDE_DIR})
 
-get_property(Clockwork_INCLUDE_DIRS GLOBAL PROPERTY Clockwork_INCLUDE_DIRS)
-INCLUDE_DIRECTORIES(${Clockwork_INCLUDE_DIRS})
+get_property(clockwork_client_INCLUDE_DIRS GLOBAL PROPERTY clockwork_client_INCLUDE_DIRS)
+INCLUDE_DIRECTORIES(${clockwork_client_INCLUDE_DIRS})
 
 include_directories("/usr/local/include")
 include_directories("/opt/local/include")
@@ -117,7 +117,7 @@ INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
 set (Clockwork_Headers
 	src/Action.h			src/AbortAction.h	src/Expression.h	src/Transition.h	src/ConditionHandler.h
   src/MachineInstance.h		src/SetListEntriesAction.h	src/StableState.h
-	src/CallMethodAction.h		src/ExpressionAction.h		
+	src/CallMethodAction.h		src/ExpressionAction.h
   src/MachineShadowInstance.h src/CounterRateInstance.h src/CounterRateFilterSettings.h
   src/SetOperationAction.h	src/clockwork.h src/Parameter.h src/MachineClass.h
   src/SharedWorkSet.h src/MachineInterface.h src/MachineDetails.h src/ActionList.h
@@ -133,7 +133,7 @@ set (Clockwork_Headers
 	src/DisableAction.h		src/LogAction.h			src/PopListAction.h		src/Statistics.h
 	src/Dispatcher.h		src/PredicateAction.h		src/UnlockAction.h
 	src/ECInterface.h		src/MQTTDCommand.h		src/ProcessingThread.h		src/WaitAction.h
-	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h	
+	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h
 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
@@ -168,7 +168,7 @@ set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULAT
 
 add_executable(cw src/cw.cpp )
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-target_link_libraries(cw cw_interpreter Clockwork dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
+target_link_libraries(cw cw_interpreter clockwork_client dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
@@ -228,13 +228,13 @@ set_target_properties (iod_sdo_interpreter PROPERTIES COMPILE_DEFINITIONS "USE_E
 add_executable(iod src/iod.cpp )
 
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
-target_link_libraries(iod iod_interpreter Clockwork ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
+target_link_libraries(iod iod_interpreter clockwork_client ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
 add_executable(iod_sdo src/iod.cpp )
 
 set_target_properties (iod_sdo PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT=1;USE_SDO=1" )
-target_link_libraries(iod_sdo iod_sdo_interpreter Clockwork ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
+target_link_libraries(iod_sdo iod_sdo_interpreter clockwork_client ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
 install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
@@ -262,16 +262,16 @@ SET_SOURCE_FILES_PROPERTIES(${iosh_lex_output} GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
 
 add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
-target_link_libraries(iosh Clockwork "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(iosh clockwork_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(device_connector src/device_connector.cpp src/options.cpp )
-target_link_libraries(device_connector Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(device_connector clockwork_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
-target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(persistd clockwork_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(modbusd src/modbusd.cpp )
-target_link_libraries(modbusd Clockwork modbus ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(modbusd clockwork_client modbus ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 if (RUN_TESTS)
 enable_testing()

@@ -1044,7 +1044,7 @@ public:
 						if (params) delete params;
 					}
 				}
-				catch (zmq::error_t e) {
+				catch (const zmq::error_t &e) {
                 	std::cerr << e.what() << "\n";
 					if (errno == EINTR) continue;
 

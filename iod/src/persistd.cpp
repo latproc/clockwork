@@ -271,7 +271,7 @@ int main(int argc, const char * argv[]) {
             len = subscription_manager.subscriber().recv(data, 1000, ZMQ_DONTWAIT);
             if (!len) continue;
         }
-        catch (zmq::error_t e) {
+        catch (const zmq::error_t &e) {
             if (errno == EINTR) continue;
             
         }
@@ -306,7 +306,7 @@ int main(int argc, const char * argv[]) {
             }
 						if (param_list) { delete param_list; param_list = 0; }
         }
-        catch(std::exception e) {
+        catch(const std::exception &e) {
             std::cerr << "exception " <<e.what() << " processing: " << data << "\n";
         }
     }

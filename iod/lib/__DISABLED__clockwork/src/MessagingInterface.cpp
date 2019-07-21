@@ -142,7 +142,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			}
 			return (*response_len == 0) ? false : true;
 		}
-		catch (zmq::error_t e) {
+		catch (const zmq::error_t &e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
@@ -221,7 +221,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			}
 			else return false;
 		}
-		catch (zmq::error_t e) {
+		catch (const zmq::error_t &e) {
 			std::cerr << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
@@ -277,7 +277,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			}
 			return (response_len == 0) ? false : true;
 		}
-		catch (zmq::error_t e) {
+		catch (const zmq::error_t &e) {
 			{
 				FileLogger fl(program_name); 
 				fl.f() << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
