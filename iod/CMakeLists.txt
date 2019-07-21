@@ -7,8 +7,8 @@ add_subdirectory(app)
 
 
 if (RUN_TESTS)
-enable_testing()
-add_subdirectory(tests)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
 
 install(TARGETS cw_interpreter iosh device_connector modbusd persistd
