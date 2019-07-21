@@ -4,7 +4,7 @@
 
 #include "library_globals.c"
 
-#include <buffering.c>
+#include <buffering.h>
 
 namespace {
 
@@ -51,7 +51,7 @@ namespace {
 		EXPECT_EQ(5, bufferLength(buf)) << "returns the capacity of the buffer after lots are added";
 		destroyBuffer(buf);
 	}
-	
+
 	TEST_F(BufferTest, bufferAverage) {
 		// double bufferAverage(struct CircularBuffer *buf, int n);
 		struct CircularBuffer *buf = createBuffer(3);
@@ -79,7 +79,7 @@ namespace {
 	}
 
 	TEST_F(BufferTest, findMovement) {
-		/* seek back along the buffer to find the number of samples 
+		/* seek back along the buffer to find the number of samples
 			before a total movement of amount occurred, ignoring direction */
 		// int findMovement(struct CircularBuffer *buf, double amount, int max_len);
 	}

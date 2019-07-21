@@ -553,7 +553,7 @@ int main (int argc, char const *argv[])
 				size_t len = ecat_sync.recv(buf, 10);
 				if (len) break;
 			}
-			catch (std::exception ex) {
+			catch (const std::exception &ex) {
 				continue; // TBD watch for infinite loop here
 			}
 		}

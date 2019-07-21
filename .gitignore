@@ -52,6 +52,7 @@ Thumbs.db
 .vscode
 
 #project build files
+*.a
 build
 iod/build/
 iod/xcode/

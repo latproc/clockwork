@@ -1,1 +1,2 @@
 add_subdirectory(clockwork_client.git)
+add_subdirectory(cw_interpreter)
