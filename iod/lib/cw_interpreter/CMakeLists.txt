@@ -22,6 +22,12 @@ set(LIBRARY
     clockwork_client
 )
 
+if (MINGW_BUILD)
+    list(APPEND INCLUDE
+        "/usr/x86_64-w64-mingw32/include/mosquito/"
+    )
+endif()
+
 ##################################
 #       generate config file     #
 ##################################

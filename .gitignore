@@ -1,103 +1,61 @@
-# Compiled source #
-###################
-*.com
-*.class
-*.dll
-*.exe
-*.o
-*.so
-*.so.*
-*.dSYM
-a.out
-*.tab.cpp
-*.tab.hpp
-*.yy.cpp
-latprocc.output
-nohup.out
+## my project
+iod/cw
+iod/device_connector
+iod/iosh
+iod/modbusd
+iod/persistd
 
-# Packages #
-############
-# it's better to unpack these files and commit the raw source
-# git has its own built in compression methods
-*.7z
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
-*.zip
-*.tgz
+## generic
+._*
 
-# Logs and databases #
-######################
-*.log
-*.sql
+## sqlite
 *.sqlite
 
-# local configuration
-iod.conf
+## c++
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles
+*.app
+build
+mingw_build
+*.[oa]
+*.so
 
-# OS generated files #
-######################
-.DS_Store*
-ehthumbs.db
-Icon?
-Thumbs.db
+#node.js
+node_modules
 
-# Temporary editor files
-._*
-*.lyx?
-.~*
+#build files
+*.out
+
+#visual studio
 .vscode
 
-#project build files
-*.a
-build
-iod/build/
-iod/xcode/
-modbus/build/
-modbus/xcode/
-etc/
-bin/
+# xcode
+xcode
+*.mode1
+*.mode1v3
+*.mode2v3
+*.perspective
+*.perspectivev3
+*.pbxuser
 
-# compiled or generated files
-ec_tool/
-iod/cw
-iod/device_connector
-iod/iod
-iod/iod_nosdo
-iod/iod_sdo
-iod/iosh
-iod/modbusd
-iod/persistd
+# codeblocks
+gmon.out
+
+### - mac - ###
+.DS_Store
 
 
-#project runtime scraps
-modbus_mappings.bak
-persist.dat
-webio.db
-devices.dat
-states.dat
-persist_scratch_*
+# repositories
+.hg
+.svn
+CVS
 
-libs/
-demo/
-iot/
-doxygen/
-hmi/
-libclockwork/
-private_tests/
-iod/old/
-modbus/
-plugins/
-LocalCMakeLists.txt
-
-# built apps
-iod/cw
-iod/device_connector
-iod/iosh
-iod/modbusd
-iod/persistd
-# documentation is in LyX, ignore temporary files
-*.tex
+# automatic backup files
+*~.nib
+*.swp
+*~
+*(Autosaved).rtfd/
+Backup[ ]of[ ]*.pages/
+Backup[ ]of[ ]*.key/
+Backup[ ]of[ ]*.numbers/
