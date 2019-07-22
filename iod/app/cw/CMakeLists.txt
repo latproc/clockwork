@@ -26,7 +26,7 @@ set(LIBRARY
     clockwork_client
     cw_interpreter
     dl
-    mosquitto
+    Mosquitto-Dep
 )
 
 ##################################

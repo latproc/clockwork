@@ -7,7 +7,8 @@ if (MINGW_BUILD)
     add_definitions(${CW_MINGW_DEFINITIONS})
 endif()
 
-add_subdirectory(ext)
+include("cmake_modules/FindPackageHandleStandardArgs.cmake")
+
 add_subdirectory(lib)
 add_subdirectory(app)
 
