@@ -17,11 +17,11 @@ if (RUN_TESTS)
     add_subdirectory(tests)
 endif()
 
-install(TARGETS cw_interpreter iosh device_connector modbusd persistd
-    RUNTIME DESTINATION
-    ${PROJECT_SOURCE_DIR}
-    LIBRARY DESTINATION
-    ${PROJECT_SOURCE_DIR}
-    ARCHIVE DESTINATION
-    ${PROJECT_SOURCE_DIR}
-)
+# install(TARGETS cw_interpreter iosh device_connector modbusd persistd
+#     RUNTIME DESTINATION
+#     ${PROJECT_SOURCE_DIR}
+#     LIBRARY DESTINATION
+#     ${PROJECT_SOURCE_DIR}
+#     ARCHIVE DESTINATION
+#     ${PROJECT_SOURCE_DIR}
+# )
