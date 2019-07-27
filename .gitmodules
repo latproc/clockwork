@@ -1,0 +1,3 @@
+[submodule "iod/lib/clockwork_client.git"]
+	path = iod/lib/clockwork_client.git
+	url = git@github.com:latproc/lib_clockwork_client.git
