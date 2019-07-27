@@ -1,19 +1,20 @@
+JOBS = # -j 2
 all:	
 	[ -d "build" ] || mkdir build
-	cd build && cmake .. && make -j install
+	cd build && cmake .. && make $(JOBS) install
 
 test:
-	cd build && make test
+	cd build && make $(JOBS) test
 
 release:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make -j 3
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make $(JOBS)
 
 release-install:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make -j 5 install
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make $(JOBS) install
 
 release-test:
 	cd build/Release && make test
@@ -21,7 +22,7 @@ release-test:
 debug:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Debug" ] || mkdir build/Debug
-	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make -j 2
+	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make $(JOBS)
 
 debug-test:
 	cd build/Debug && make test
