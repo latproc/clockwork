@@ -103,3 +103,22 @@ void StableState::collectTimerPredicates() {
     std::cout << "subcondition on " << state_name << " timer clause: " << *(*ti++) << "\n";
   }
 }
+
+Value StableState::checkSubconditionTimes(const Value &schedule_time, bool include_trace) {
+	Value earliest(schedule_time);
+	std::list<ConditionHandler>::iterator iter = subcondition_handlers->begin();
+	while (iter != subcondition_handlers->end()) {
+		ConditionHandler *ch = &(*iter++);
+		if (timer_predicates.size()) {
+			earliest = std::min(earliest, owner->earliestScheduleTime(timer_predicates));
+		}
+		if (include_trace) {
+			std::stringstream ss;
+			ss << owner->getCurrentStateString(owner) <<"->" << state_name << " " << *ch->condition.predicate;
+			owner->setValue("TRACE", Value(ss.str(), Value::t_string));
+		}
+	}
+	return earliest;
+}
+
+
