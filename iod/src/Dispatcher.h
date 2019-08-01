@@ -73,6 +73,7 @@ private:
 	} status;
 	zmq::socket_t *dispatch_socket;
 	pthread_t owner_thread;
+	std::list<Package> pending;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);

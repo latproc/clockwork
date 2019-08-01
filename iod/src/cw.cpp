@@ -299,7 +299,6 @@ int main (int argc, char const *argv[])
                             std::cerr << "Machine " << name << " does not specify a position\n";
                             continue; 
                         }
-                        std::cerr << module_mi->properties.lookup("position").kind << "\n";
                         int module_position = (int)module_mi->properties.lookup("position").iValue;
                         if (module_position == -1)  { // module position unmapped
                             std::cerr << "Machine " << name << " position not mapped\n";
