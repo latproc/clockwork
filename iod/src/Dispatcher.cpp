@@ -130,17 +130,21 @@ void Dispatcher::deliver(Package *p)
 	}
 #endif
 	//		owner_thread = pthread_self();
+	Package *lp = new Package(*p);
+	delete p;
 	boost::lock_guard<boost::mutex> lock(dispatch_mutex);
 	if (status != e_running) {
-		pending.push_back(*p);
+		pending.push_back(*lp);
 	}
-	try {
-		zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_PUSH);
-		sock.connect("inproc://dispatcher");
-		sock.send(&p, sizeof(Package*));
-	}
-	catch (zmq::error_t) {
-		std::cout << "error setting up socket to send " << *p << "\n";
+	else {
+		try {
+			zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_PUSH);
+			sock.connect("inproc://dispatcher");
+			sock.send(&lp, sizeof(Package*));
+		}
+		catch (zmq::error_t) {
+			std::cout << "error setting up socket to send " << *lp << "\n";
+		}
 	}
 }
 
@@ -201,8 +205,8 @@ void Dispatcher::idle()
 
     status = e_waiting;
     zmq::pollitem_t items[] = {
-		{ (void*) *socket, 0, ZMQ_POLLIN, 0 },
-		{  (void*)command, 0, ZMQ_POLLIN, 0 }
+		{ (void*)*socket, 0, ZMQ_POLLIN, 0 },
+		{ (void*)command, 0, ZMQ_POLLIN, 0 }
 	};
     while (status != e_aborted)
     {
@@ -224,14 +228,14 @@ void Dispatcher::idle()
 		}
         if (status == e_waiting_cw)
         {
-						sync.send("dispatch",8);
-            safeRecv(sync, buf, 10, true, response_len, 0);
-            status = e_running;
+					sync.send("dispatch",8);
+					safeRecv(sync, buf, 10, true, response_len, 0);
+					status = e_running;
 					std::list<Package>::iterator iter = pending.begin();
 					while (iter != pending.end()) {
-						Package *p = new Package(*iter);
-						deliver(p);
-						iter = pending.erase(iter);
+								 Package *p = new Package(*iter);
+								 deliver(p);
+								 iter = pending.erase(iter);
 					}
         }
         else if (status == e_running)
