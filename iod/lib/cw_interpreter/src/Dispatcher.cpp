@@ -37,7 +37,8 @@
 #include "SharedWorkSet.h"
 
 Dispatcher *Dispatcher::instance_ = NULL;
-//boost::mutex Dispatcher::delivery_mutex;
+static boost::mutex dispatcher_mutex;
+static boost::condition_variable package_available;
 
 void DispatchThread::operator()()
 {
@@ -106,60 +107,19 @@ void Dispatcher::removeReceiver(Receiver*r)
 
 void Dispatcher::deliver(Package *p)
 {
-//		owner_thread = pthread_self();
-		zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_PUSH);
-    	sock.connect("inproc://dispatcher");
-#if 0
-	if (owner_thread != pthread_self()) {
-		char tnam1[100], tnam2[100];
-		int pgn_rc = pthread_getname_np(pthread_self(),tnam1, 100);
-		assert(pgn_rc == 0);
-		pgn_rc = pthread_getname_np(owner_thread,tnam2, 100);
-		assert(pgn_rc == 0);
-
-		std::stringstream ss;
-		ss << "dispatcher error: message send package ("
-		<< *p <<") from a different thread:"
-		<< " owner: " << std::hex << " '" << owner_thread
-		<< " '" << tnam2
-		<< "' current: " << std::hex << " " << pthread_self()
-		<< " '" << tnam1 << "'"
-		<< std::dec;
-		char buf[1000];
-		snprintf(buf, 1000, "%s", ss.str().c_str());
-		MessageLog::instance()->add(buf);
-		std::cerr << buf << "\n";
-	}
-#endif
-    sock.send(&p, sizeof(Package*));
+    {
+        boost::lock_guard<boost::mutex> lock(dispatcher_mutex);
+        DBG_DISPATCHER << "Dispatcher accepted package " << *p << "\n";
+        to_deliver.push_back(p);
+    }
+    package_available.notify_one();
 }
-
-/*
-void Dispatcher::deliverZ(Package *p)
-{
-    DBG_DISPATCHER << "Dispatcher accepted package " << *p << "\n";
-    to_deliver.push_back(p);
-}
-*/
 
 void Dispatcher::idle()
 {
-    socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PULL);
-
-	try {
-    socket->bind("inproc://dispatcher");
-	}
-	catch(const zmq::error_t &err) {
-		std::cerr << "error binding to dispatcher socket " << zmq_strerror(errno) << "\n";
-	}
-
 	// this sync socket is used to request access to shared resources from
 	// the driver
     sync.bind("inproc://dispatcher_sync");
-
-    // TBD this is being converted to use zmq the local delivery queue is no longer necessary
-    zmq::socket_t command(*MessagingInterface::getContext(), ZMQ_REP);
-    command.bind("inproc://dispatcher_cmd");
 
 	// the clockwork driver calls our start() method and that blocks until
 	// we get to this point. Note that this thread will then
@@ -171,16 +131,6 @@ void Dispatcher::idle()
 	safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
 	buf[response_len]= 0;
 
-    /*
-    { // wait for a start command
-    char cmd[10];
-    size_t cmdlen = command.recv(cmd, 10);
-    while (cmdlen == 0) {
-        cmdlen = command.recv(cmd, 10);
-    }
-     */
-
-
 	/* this module waits for a start from clockwork and then starts looking for input on its
 		command socket and its message socket (e_waiting). When either a command or message is detected
 		it requests time from clockwork (e_waiting_cw). Clockwork in responds and the module
@@ -188,26 +138,12 @@ void Dispatcher::idle()
 	 */
 
     status = e_waiting;
-    zmq::pollitem_t items[] = {
-		{ (void*) *socket, 0, ZMQ_POLLIN, 0 },
-		{  (void*)command, 0, ZMQ_POLLIN, 0 }
-	};
     while (status != e_aborted)
     {
 		if (status == e_waiting) {
-			try {
-            	// check for messages to be sent or commands to be processed (TBD)
-	            int rc = zmq::poll( &items[0], 2, 500);
-				if (rc == 0) { usleep(50); continue; }
-			}
-			catch (const zmq::error_t &err) {
-				if ( errno == EAGAIN) continue;
-				if ( errno == EINTR) continue;
-				char msgbuf[200];
-				snprintf(msgbuf,200, "Dispatcher poll error: %s", strerror(errno));
-				MessageLog::instance()->add(msgbuf);
-				continue;
-			}
+            boost::unique_lock<boost::mutex> lock(dispatcher_mutex);
+            if (to_deliver.empty()) 
+                package_available.wait(lock);
 			status = e_waiting_cw;
 		}
         if (status == e_waiting_cw)
@@ -218,17 +154,14 @@ void Dispatcher::idle()
         }
         else if (status == e_running)
         {
-            while (items[0].revents & ZMQ_POLLIN)
+            boost::lock_guard<boost::mutex> lock(dispatcher_mutex);
+            while (!to_deliver.empty())
             {
                 zmq::message_t reply;
 
-                Package *p = 0;
-                size_t len = socket->recv(&p, sizeof(Package*), ZMQ_DONTWAIT);
-                if (len)
+                Package *p = to_deliver.front();
+                to_deliver.pop_front();
                 {
-                    //MachineInstance::forceStableStateCheck();
-                    //MachineInstance::forceIdleCheck();
-
                     DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
                     Receiver *to = p->receiver;
                     Transmitter *from = p->transmitter;
@@ -256,7 +189,7 @@ void Dispatcher::idle()
                                     char buf[100];
                                     snprintf(buf, 100, "Error dispatching message,  EXTERNAL configuration: %s not found", mi->parameters[0].val.sValue.c_str());
                                     MessageLog::instance()->add(buf);
-																		NB_MSG << buf << "\n";
+                                    NB_MSG << buf << "\n";
                                 }
                                 Value host = remote->properties.lookup("HOST");
                                 Value port_val = remote->properties.lookup("PORT");
@@ -281,7 +214,7 @@ void Dispatcher::idle()
                                         else
                                         {
                                             MessagingInterface *mif = MessagingInterface::create(host.asString(), (int) port, eZMQ);
-											mif->start();
+																					  mif->start();
                                             mif->send(m.getText().c_str());
                                         }
                                     }
@@ -320,8 +253,8 @@ void Dispatcher::idle()
                             MachineInstance *mi = dynamic_cast<MachineInstance*>(to);
                             if (mi)
                             {
-								SharedWorkSet::instance()->add(mi);
-								ProcessingThread::activate(mi);
+                                SharedWorkSet::instance()->add(mi);
+                                ProcessingThread::activate(mi);
                                 Action *curr = mi->executingCommand();
                                 if (curr)
                                 {
@@ -343,13 +276,6 @@ void Dispatcher::idle()
                     }
                     delete p;
                 }
-                zmq::pollitem_t skt_poll = {(void*) *socket, 0, ZMQ_POLLIN, 0 };
-                items[0] = skt_poll;
-                zmq::poll( &items[0], 1, 0); // check for more incoming messages
-            }
-            if (items[1].revents & ZMQ_POLLIN)
-            {
-                DBG_DISPATCHER << "dispatcher command\n";
             }
             sync.send("done", 4);
 			safeRecv(sync, buf, 10, true, response_len, 0); // wait for ack from cw
