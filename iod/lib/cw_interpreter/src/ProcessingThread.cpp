@@ -74,7 +74,7 @@ uint64_t clockwork_watchdog_timer = 0;
 
 extern void handle_io_sampling(uint64_t clock);
 
-//#define KEEPSTATS
+#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
 #define MEMCHECK()
@@ -213,7 +213,6 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 		try
 		{
 			long len = 0;
-			char buf[10];
 			res = zmq::poll(&items[0], num_items, poll_wait);
 			if (!res) return res;
 #if 0
@@ -368,8 +367,6 @@ bool ProcessingThread::is_pending(MachineInstance *m) {
 void ProcessingThread::HandleIncomingEtherCatData( std::set<IOComponent *> &io_work_queue,
 		uint64_t curr_t, uint64_t last_sample_poll, AutoStatStorage &avg_io_time) {
 	IOLockHelper io_lock;
-	static unsigned long total_mp_time = 0;
-	static unsigned long mp_count = 0;
 	uint8_t *mask_p = incoming_process_mask;
 	int n = incoming_data_size;
 	while (n && *mask_p == 0) { ++mask_p; --n; }
@@ -395,6 +392,68 @@ void ProcessingThread::HandleIncomingEtherCatData( std::set<IOComponent *> &io_w
 	}
 }
 
+struct ProcessingStats{
+public:
+	ProcessingStats() : avg_poll_time("AVG_POLL_TIME", 0),
+		avg_iowork_time("AVG_IOWORK_TIME", 0),
+		avg_plugin_time("AVG_PLUGIN_TIME", 0),avg_cmd_processing("AVG_PROCESSING_TIME", 0),
+		avg_command_time("AVG_COMMAND_TIME", 0),
+		avg_channel_time("AVG_CHANNEL_TIME", 0),
+		avg_dispatch_time("AVG_DISPATCH_TIME", 0),
+		avg_scheduler_time("AVG_SCHEDULER_TIME", 0),
+		avg_clockwork_time("AVG_CLOCKWORK_TIME", 0),
+		avg_update_time("AVG_UPDATE_TIME", 0),
+		scheduler_delay("SCHEDULER_POLL_SEPARATION", 0)
+	{}
+
+	AutoStatStorage avg_poll_time;
+	AutoStatStorage avg_iowork_time;
+	AutoStatStorage avg_plugin_time;
+	AutoStatStorage avg_cmd_processing;
+	AutoStatStorage avg_command_time;
+	AutoStatStorage avg_channel_time;
+	AutoStatStorage avg_dispatch_time;
+	AutoStatStorage avg_scheduler_time;
+	AutoStatStorage avg_clockwork_time;
+	AutoStatStorage avg_update_time;
+	AutoStatStorage scheduler_delay;
+};
+
+void ProcessingThread::initialiseHardware() {
+	IOLockHelper io_lock;
+	// attempt to initialise the hardware interface. If this
+	// works we move the IOComponent module's state along
+	// so that IOComponents can be linked
+	if (incoming_process_data) { delete incoming_process_data; incoming_process_data = 0; }
+	if (incoming_process_mask) { delete incoming_process_mask; incoming_process_mask = 0; }
+	if (activate_hardware.initialiseHardware()) {
+		IOComponent::setHardwareState(IOComponent::s_hardware_init);
+		//std::cout << "Activating hardware\n";
+		//activate_hardware();
+	}
+}
+
+void ProcessingThread::pollMachine() {
+	machine.idle();
+
+	// only process io components if the machine is operational
+	if (machine.c_operational()) {
+		if (!machine_is_ready) {
+			std::cout << "machine is becoming ready\n";
+			machine_is_ready = true;
+		}
+	}
+	else {
+		if (machine_is_ready) {
+			std::cout << "machine is no longer ready\n";
+			machine_is_ready = false;
+			// TODO: force the hardware to its startup state
+		}
+	}
+}
+
+
+
 void ProcessingThread::operator()()
 {
 
@@ -411,17 +470,7 @@ void ProcessingThread::operator()()
 
 	AutoStatStorage avg_io_time("AVG_IO_TIME", 0);
 #ifdef KEEPSTATS
-	AutoStatStorage avg_poll_time("AVG_POLL_TIME", 0);
-	AutoStatStorage avg_iowork_time("AVG_IOWORK_TIME", 0);
-	AutoStatStorage avg_plugin_time("AVG_PLUGIN_TIME", 0);
-	AutoStatStorage avg_cmd_processing("AVG_PROCESSING_TIME", 0);
-	AutoStatStorage avg_command_time("AVG_COMMAND_TIME", 0);
-	AutoStatStorage avg_channel_time("AVG_CHANNEL_TIME", 0);
-	AutoStatStorage avg_dispatch_time("AVG_DISPATCH_TIME", 0);
-	AutoStatStorage avg_scheduler_time("AVG_SCHEDULER_TIME", 0);
-	AutoStatStorage avg_clockwork_time("AVG_CLOCKWORK_TIME", 0);
-	AutoStatStorage avg_update_time("AVG_UPDATE_TIME", 0);
-	AutoStatStorage scheduler_delay("SCHEDULER_POLL_SEPARATION", 0);
+  ProcessingStats stats;
 #endif
 
 	zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
@@ -462,70 +511,29 @@ void ProcessingThread::operator()()
 
 	checkAndUpdateCycleDelay();
 
-	uint64_t last_checked_cycle_time = 0;
 	uint64_t last_checked_plugins = 0;
 	uint64_t last_checked_machines = 0;
-
-	unsigned long total_cmd_time = 0;
-	unsigned long cmd_count = 0;
-	unsigned long total_sched_time = 0;
-	unsigned long sched_count = 0;
-
-	uint64_t start_cmd = 0;
 	uint64_t last_machine_change = 0;
 
 	MachineInstance *system = MachineInstance::find("SYSTEM");
 	assert(system);
 
 	enum { s_update_idle, s_update_sent } update_state = s_update_idle;
-		
-	bool commands_started = false;
-
 	enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
 	std::set<IOComponent *>io_work_queue;
 
-	//  we need to stop polling io (ie exit) if the control threads do not seem
-	// to be responding.
-	const int MAX_UNCONTROLLED_POLLS = 5;
-	int io_unsafe_polls_remaining = MAX_UNCONTROLLED_POLLS;
+	unsigned int machine_check_delay;
 	while (!program_done)
 	{
 		MEMCHECK();
 		if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit) {
-			IOLockHelper io_lock;
-			// attempt to initialise the hardware interface. If this
-			// works we move the IOComponent module's state along
-			// so that IOComponents can be linked
-			if (incoming_process_data) { delete incoming_process_data; incoming_process_data = 0; }
-			if (incoming_process_mask) { delete incoming_process_mask; incoming_process_mask = 0; }
-			if (activate_hardware.initialiseHardware()) {
-				IOComponent::setHardwareState(IOComponent::s_hardware_init);
-				//std::cout << "Activating hardware\n";
-				//activate_hardware();
-			}
+			initialiseHardware();
 		}
-
-		unsigned int machine_check_delay;
-		machine.idle();
+		pollMachine();
 		last_machine_change = machine.lastUpdated();
 
-		// only process io components if the machine is operational
-		if (machine.c_operational()) {
-			if (!machine_is_ready) {
-				std::cout << "machine is becoming ready\n";
-				machine_is_ready = true;
-			}
-		}
-		else {
-			if (machine_is_ready) {
-				std::cout << "machine is no longer ready\n";
-				machine_is_ready = false;
-			}
-		}
-
-
 #ifdef KEEPSTATS
-		avg_poll_time.start();
+		stats.avg_poll_time.start();
 #endif
 
 		zmq::pollitem_t fixed_items[] =
@@ -603,36 +611,14 @@ void ProcessingThread::operator()()
 			if ( curr_t - last_machine_change >10000) { last_machine_change = curr_t; machine.idle(); }
 			if ( last_machine_change < machine.lastUpdated() ) break;
 #ifdef KEEPSTATS
-			avg_poll_time.update();
+			stats.avg_poll_time.update();
 			usleep(1);
-			avg_poll_time.start();
+			stats.avg_poll_time.start();
 #endif
 		}
 
 #ifdef KEEPSTATS
-		avg_poll_time.update();
-#endif
-
-#if 0
-		// debug code to work out what machines or systems tend to need processing
-		{
-			if (systems_waiting > 0 || !io_work_queue.empty() || (machines_have_work || processing_state != eIdle || status != e_waiting) ) {
-				DBG_MSG << "handling activity. zmq: " << systems_waiting << " state: " << processing_state << " substate: " << status
-					<< ( (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
-					<< ( (IOComponent::updatesWaiting()) ? " io components" : "")
-					<< ( (!io_work_queue.empty()) ? " io work" : "")
-					<< ( (machines_have_work) ? " machines" : "")
-					<< ( (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
-					<< "\n";
-			}
-			if (IOComponent::updatesWaiting()) {
-				extern std::set<IOComponent*> updatedComponentsOut;
-				std::set<IOComponent*>::iterator iter = updatedComponentsOut.begin();
-				std::cout << updatedComponentsOut.size() << " entries in updatedComponentsOut:\n";
-				while (iter != updatedComponentsOut.end()) std::cout << " " << (*iter++)->io_name;
-				std::cout << " \n";
-			}
-		}
+		stats.avg_poll_time.update();
 #endif
 
 		/* this loop prioritises ethercat processing but if a certain
@@ -650,7 +636,7 @@ void ProcessingThread::operator()()
 		if  (machine_is_ready && processing_state != eStableStates &&  !io_work_queue.empty()) {
 			//DBG_MSG << " processing io changes\n";
 #ifdef KEEPSTATS
-			AutoStat stats(avg_iowork_time);
+			AutoStat iotime(stats.avg_iowork_time);
 #endif
 			std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
 			while (io_work != io_work_queue.end()) {
@@ -664,7 +650,7 @@ void ProcessingThread::operator()()
 		if (!MachineInstance::pluginMachines().empty()) {
 			if (processing_state == eIdle  && curr_t - last_checked_plugins >= 1000) {
 #ifdef KEEPSTATS
-				AutoStat stats(avg_plugin_time);
+				AutoStat plugin_time(stats.avg_plugin_time);
 #endif
 				MachineInstance::checkPluginStates();
 				last_checked_plugins = curr_t;
@@ -674,7 +660,7 @@ void ProcessingThread::operator()()
 
 		if (status == e_waiting) {
 #ifdef KEEPSTATS
-			AutoStat stats(avg_channel_time);
+			AutoStat channel_time(stats.avg_channel_time);
 #endif
 			// poll channels
 			Channel::handleChannels();
@@ -684,7 +670,7 @@ void ProcessingThread::operator()()
 		if (status == e_waiting)  {
 			if (items[internals->CMD_ITEM].revents & ZMQ_POLLIN) {
 #ifdef KEEPSTATS
-				AutoStat stats(avg_cmd_processing);
+				AutoStat cmd_time(stats.avg_cmd_processing);
 #endif
 				size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
 				if (len) {
@@ -714,7 +700,7 @@ void ProcessingThread::operator()()
 			}
 			else {
 #ifdef KEEPSTATS
-				AutoStat stats(avg_dispatch_time);
+				AutoStat dispatch_time(stats.avg_dispatch_time);
 #endif
 				size_t len = 0;
 				safeSend(dispatch_sync,"continue",3);
@@ -743,7 +729,7 @@ void ProcessingThread::operator()()
 				uint64_t start_time = microsecs();
 				uint64_t now = start_time;
 #ifdef KEEPSTATS
-				AutoStat stats(avg_cmd_processing);
+				AutoStat cmd_time(stats.avg_cmd_processing);
 #endif
 				int count = 0;
 				while (have_command && (long)(now - start_time) < internals->cycle_delay/2) {
@@ -847,21 +833,20 @@ void ProcessingThread::operator()()
 					usleep(0);
 					now = microsecs();
 				}
-				//NB_MSG << " @@@@@@@@@@@ " << count << " Processed\n";
 			}
 		}
 
 		if (items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
 #ifdef KEEPSTATS
-			if (!scheduler_delay.running()) scheduler_delay.start();
+			if (!stats.scheduler_delay.running()) stats.scheduler_delay.start();
 #endif
 			if (status == e_waiting && processing_state == eIdle) {
 				size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
 				if (len) {
 					status = e_handling_sched;
 #ifdef KEEPSTATS
-					scheduler_delay.stop();
-					avg_scheduler_time.start();
+					stats.scheduler_delay.stop();
+					stats.avg_scheduler_time.start();
 #endif
 				}
 				else {
@@ -876,7 +861,7 @@ void ProcessingThread::operator()()
 					safeSend(sched_sync,"bye",3);
 					status = e_waiting;
 #ifdef KEEPSTATS
-					avg_scheduler_time.update();
+					stats.avg_scheduler_time.update();
 #endif
 				}
 				else {
@@ -887,7 +872,6 @@ void ProcessingThread::operator()()
 			}
 		}
 		if (status == e_handling_sched) {
-			size_t len = 0;
 			safeSend(sched_sync,"continue",8);
 			status = e_waiting_sched;
 		}
@@ -903,7 +887,7 @@ void ProcessingThread::operator()()
 				if (processing_state == ePollingMachines)
 				{
 	#ifdef KEEPSTATS
-					avg_clockwork_time.start();
+					stats.avg_clockwork_time.start();
 	#endif
 					std::set<MachineInstance *> to_process;
 					{
@@ -965,7 +949,7 @@ void ProcessingThread::operator()()
 						processing_state = eIdle;
 						last_checked_machines = curr_t; // check complete
 #ifdef KEEPSTATS
-						avg_clockwork_time.update();
+						stats.avg_clockwork_time.update();
 #endif
 					}
 				}
@@ -1022,7 +1006,7 @@ void ProcessingThread::operator()()
 				)
 			 ) {
 #ifdef KEEPSTATS
-			avg_update_time.start();
+			stats.avg_update_time.start();
 #endif
 //			if (IOComponent::updatesWaiting() && IOComponent::updatesToSend()) 
 //				std::cout << "ProcessingThread has new updates to send\n";
@@ -1128,7 +1112,7 @@ void ProcessingThread::operator()()
 					}
 				}
 #ifdef KEEPSTATS
-				avg_update_time.update();
+				stats.avg_update_time.update();
 #endif
 			}
 			catch (const zmq::error_t &err) {

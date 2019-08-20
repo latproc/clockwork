@@ -67,6 +67,9 @@ private:
 	ProcessingThread(const ProcessingThread &other);
 	ProcessingThread &operator=(const ProcessingThread &other);
 
+	void initialiseHardware();
+	void pollMachine();
+
 	void HandleIncomingEtherCatData( std::set<IOComponent *> &io_work_queue,
 		uint64_t curr_t, uint64_t last_sample_poll, AutoStatStorage &avg_io_time);
 
