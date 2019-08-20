@@ -1,4 +1,5 @@
-JOBS = # -j 2
+# for parallel compile, use JOBS=-jN make ..
+# where N is the number of parallel jobs to use
 all:	
 	[ -d "build" ] || mkdir build
 	cd build && cmake .. && make $(JOBS) install
