@@ -44,10 +44,10 @@
 //
 // #include "cJSON.h"
 // #ifndef EC_SIMULATOR
-// #include "tool/MasterDevice.h"
+// #include <tool/MasterDevice.h>
 // #endif
-//
-// #define __MAIN__
+
+#define __MAIN__
 // #include "cwlang.h"
 // #include "Logger.h"
 // #include "IODCommand.h"

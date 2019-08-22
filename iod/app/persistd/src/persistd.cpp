@@ -34,6 +34,8 @@
 #include <sys/time.h>
 #include <lib_clockwork_interpreter/includes.hpp>
 #include <lib_clockwork_client/includes.hpp>
+
+#define __MAIN__
 // #include "Logger.h"
 // #include "symboltable.h"
 // #include "cJSON.h"

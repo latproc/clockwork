@@ -48,6 +48,12 @@
 
 #include <lib_clockwork_client/includes.hpp>
 #include <lib_clockwork_interpreter/includes.hpp>
+
+// #ifndef EC_SIMULATOR
+// #include <tool/MasterDevice.h>
+// #endif
+
+// #define __MAIN__
 // #include <helpers/anet/anet.h>
 // #include <options.h>
 //
@@ -927,7 +933,7 @@ public:
 
 };
 
-class ProcessingThread {
+class DCProcessingThread {
 public:
 	Options &options;
 	zmq::socket_t &cmd;
@@ -941,7 +947,7 @@ public:
 	}
 	bool stopped() { return is_shutdown; }
 
-	ProcessingThread(Options &opt, zmq::socket_t &command_sock,
+	DCProcessingThread(Options &opt, zmq::socket_t &command_sock,
 					 ConnectionManager *connection_mgr)
 	: options(opt), cmd(command_sock), connection_manager(connection_mgr), done(false), is_shutdown(false) {
 
@@ -1180,7 +1186,7 @@ int main(int argc, const char * argv[])
 		connection_thread = new ConnectionThread;
 		boost::thread monitor(boost::ref(*connection_thread));
 
-		ProcessingThread processing_thread(options, cmd, connection_manager);
+		DCProcessingThread processing_thread(options, cmd, connection_manager);
 		boost::thread processing(boost::ref(processing_thread));
 
 		// main processing loop: just wait for a TERM signal

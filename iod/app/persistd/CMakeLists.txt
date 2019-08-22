@@ -48,7 +48,7 @@ FILE(GLOB_RECURSE header_files RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
 add_executable(${exe_name} ${source_files} ${header_files})
 # add_test(${exe_name} ${exe_name})
 # set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT")
-set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT=1")
+# set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT=1")
 install(TARGETS ${exe_name} RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
 
