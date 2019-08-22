@@ -25,7 +25,7 @@ unset(INCLUDE)
 set(LIBRARY
     Modbus-Dep
     clockwork_client
-    cw_interpreter
+    clockwork_interpreter
 )
 
 ##################################

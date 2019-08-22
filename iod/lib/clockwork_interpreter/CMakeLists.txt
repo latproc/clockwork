@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.80)
 
-set(exe_name "cw_interpreter")
+set(exe_name "clockwork_interpreter")
 
 set(Latproc_VERSION_MAJOR 0)
 set(Latproc_VERSION_MINOR 9.6)

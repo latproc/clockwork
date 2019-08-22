@@ -18,7 +18,7 @@ if (RUN_TESTS)
     add_subdirectory(tests)
 endif()
 
-# install(TARGETS cw_interpreter iosh device_connector modbusd persistd
+# install(TARGETS clockwork_interpreter iosh device_connector modbusd persistd
 #     RUNTIME DESTINATION
 #     ${PROJECT_SOURCE_DIR}
 #     LIBRARY DESTINATION

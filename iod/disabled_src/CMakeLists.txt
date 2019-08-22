@@ -11,7 +11,7 @@ enable_testing()
 add_subdirectory(tests)
 endif()
 
-install(TARGETS cw_interpreter device_connector modbusd persistd
+install(TARGETS clockwork_interpreter device_connector modbusd persistd
         RUNTIME DESTINATION
         ${PROJECT_SOURCE_DIR}
         LIBRARY DESTINATION
@@ -22,7 +22,7 @@ install(TARGETS cw_interpreter device_connector modbusd persistd
 
 
 
-# install(TARGETS cw_interpreter iosh device_connector modbusd persistd
+# install(TARGETS clockwork_interpreter iosh device_connector modbusd persistd
 #         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
 
@@ -198,8 +198,8 @@ install(TARGETS cw_interpreter device_connector modbusd persistd
 # 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
 # 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp src/ExportState.cpp
 # 	)
-# add_library(cw_interpreter ${Clockwork_SRCS})
-# set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+# add_library(clockwork_interpreter ${Clockwork_SRCS})
+# set_target_properties (clockwork_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 #
 # add_executable(cw src/cw.cpp)
 # target_include_directories(cw
@@ -208,7 +208,7 @@ install(TARGETS cw_interpreter device_connector modbusd persistd
 # )
 #
 # set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-# target_link_libraries(cw cw_interpreter clockwork_client dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
+# target_link_libraries(cw clockwork_interpreter clockwork_client dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
 #
 # if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 # set(ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)

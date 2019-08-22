@@ -24,13 +24,7 @@ unset(INCLUDE)
 
 set(LIBRARY
     clockwork_client
-    cw_interpreter
-)
-
-set (INCLUDE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/clockwork_client.git/clockwork/src/lib_clockwork_client/
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/clockwork_client.git/clockwork/src/lib_clockwork_client/helpers/anet
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/clockwork_client.git/clockwork/src/lib_clockwork_client/helpers/cjson
+    clockwork_interpreter
 )
 
 ##################################

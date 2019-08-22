@@ -39,17 +39,17 @@ include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_value COMMAND test_value)
 
 add_executable(test_disable_action test_disable_action.cpp )
-target_link_libraries(test_disable_action gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
+target_link_libraries(test_disable_action gmock_main clockwork_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_disable_action COMMAND test_disable_action)
 
 add_executable(test_buffering test_buffering.cpp )
-target_link_libraries(test_buffering gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
+target_link_libraries(test_buffering gmock_main clockwork_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_buffering COMMAND test_buffering)
 
 add_executable(test_bit_ops test_bit_ops.cpp )
-target_link_libraries(test_bit_ops gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
+target_link_libraries(test_bit_ops gmock_main clockwork_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
 

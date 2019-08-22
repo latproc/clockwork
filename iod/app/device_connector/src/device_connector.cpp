@@ -23,22 +23,19 @@
     to its device and that device is responding.
     ... and the rest..
  */
+ // #include <boost/thread.hpp>
+ // #include <boost/thread/condition.hpp>
+ // #include <boost/thread/mutex.hpp>
+ // #include <zmq.hpp>
 #include <iostream>
-#include "anet.h"
-#include <boost/thread.hpp>
 #include <sys/time.h>
 #include <signal.h>
 #include <errno.h>
 #include <cassert>
-#include <boost/thread/condition.hpp>
-#include <boost/thread/mutex.hpp>
 #include <sys/socket.h>
-#include <zmq.hpp>
-#include "regular_expressions.h"
 #include <functional>
 #include <exception>
 #include <boost/bind.hpp>
-
 #include <stdio.h>
 #include <sys/select.h>
 #include <termios.h>
@@ -46,17 +43,26 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
-#include "value.h"
-#include "cJSON.h"
+
+#include "regular_expressions.h"
+
+
+#include <lib_clockwork_client/includes.hpp>
+#include <lib_clockwork_interpreter/includes.hpp>
+#include <helpers/anet/anet.h>
 #include <options.h>
-#include "MessageEncoding.h"
-#include "MessagingInterface.h"
-//#include "SocketMonitor.h"
-#include "ConnectionManager.h"
-#include "CommandManager.h"
-#include "Logger.h"
-#include "DebugExtra.h"
-#include <pthread.h>
+//
+// #include "value.h"
+// #include "cJSON.h"
+// #include <options.h>
+// #include "MessageEncoding.h"
+// #include "MessagingInterface.h"
+// //#include "SocketMonitor.h"
+// #include "ConnectionManager.h"
+// #include "CommandManager.h"
+// #include "Logger.h"
+// #include "DebugExtra.h"
+// #include <pthread.h>
 
 volatile bool debug = false;
 

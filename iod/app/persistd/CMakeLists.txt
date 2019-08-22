@@ -24,7 +24,7 @@ unset(INCLUDE)
 
 set(LIBRARY
     clockwork_client
-    cw_interpreter
+    clockwork_interpreter
 )
 
 ##################################
