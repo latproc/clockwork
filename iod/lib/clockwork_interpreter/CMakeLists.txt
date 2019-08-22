@@ -16,8 +16,6 @@ endif()
 #################################
 
 set(INCLUDE
-				${CMAKE_CURRENT_SOURCE_DIR}/../clockwork_client.git/clockwork/src/lib_clockwork_client/
-				${CMAKE_CURRENT_SOURCE_DIR}/../clockwork_client.git/clockwork/src/lib_clockwork_client/helpers/cjson
     ${CMAKE_CURRENT_BINARY_DIR}/generated_includes
 )
 set(LIBRARY
@@ -33,6 +31,7 @@ endif()
 ##################################
 #       generate config file     #
 ##################################
+
 set(latproc_config_output "${CMAKE_CURRENT_BINARY_DIR}/generated_includes/LatprocConfig.h")
 
 configure_file(

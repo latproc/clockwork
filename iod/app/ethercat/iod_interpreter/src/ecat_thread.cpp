@@ -44,7 +44,7 @@
 #include "options.h"
 #include "Statistic.h"
 #include "ecat_thread.h"
-#include "DebugExtra.h"
+// #include "DebugExtra.h"
 #include "MachineInstance.h"
 #include "IOComponent.h"
 //#include "SetStateAction.h"

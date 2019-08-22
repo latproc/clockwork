@@ -9,43 +9,11 @@
 #include <string>
 #include <sstream>
 #include <boost/foreach.hpp>
-#include "symboltable.h"
-#include "Logger.h"
-#include "MachineInstance.h"
-#include "Message.h"
-#include "IfCommandAction.h"
-#include "EnableAction.h"
-#include "ResumeAction.h"
-#include "DisableAction.h"
-#include "ExpressionAction.h"
-#include "LogAction.h"
-#include "PredicateAction.h"
-#include "DebugExtra.h"
-#include "LockAction.h"
-#include "UnlockAction.h"
-#include "ShutdownAction.h"
-#include "WaitAction.h"
-#include "SendMessageAction.h"
-#include "CallMethodAction.h"
-#include "MachineCommandAction.h"
-#include "PatternAction.h"
-#include "IODCommands.h"
-#include "IncludeAction.h"
-#include "dynamic_value.h"
-#include "CopyPropertiesAction.h"
-#include "SetListEntriesAction.h"
-#include "SortListAction.h"
-#include "ClearListAction.h"
-#include "SetOperationAction.h"
-#include "Plugin.h"
-#include "MessageLog.h"
-#include "Channel.h"
-#include "AbortAction.h"
-#include "SDOEntry.h"
-#include "MachineInterface.h"
+
+#include <lib_clockwork_client/includes.hpp>
+#include <lib_clockwork_interpreter/includes.hpp>
 
 #define COMPILER_MAIN
-#include "cwlang.h"
 
 int yylex(void);
 

@@ -24,39 +24,41 @@
    changes to items that are exported to modbus.
    */
 
-#include <iostream>
+// #include <iostream>
 #include <iterator>
 #include <stdio.h>
-#include <boost/program_options.hpp>
-#include <zmq.hpp>
-#include <sstream>
-#include <string.h>
-#include "Logger.h"
-#include "DebugExtra.h"
+// #include <boost/program_options.hpp>
+#include <lib_clockwork_client/includes.hpp>
+#include <lib_clockwork_interpreter/includes.hpp>
+// #include <zmq.hpp>
+// #include <sstream>
+// #include <string.h>
+// #include "Logger.h"
+// #include "DebugExtra.h"
 #include <inttypes.h>
 #include <fstream>
-#include "symboltable.h"
-#include "value.h"
+// #include "symboltable.h"
+// #include "value.h"
 #include <list>
 #include <utility>
 #include <boost/foreach.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
-#include "IODCommand.h"
+// #include "IODCommand.h"
 #include <modbus/modbus.h>
 #include <bitset>
-#include "cJSON.h"
+// #include "cJSON.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <signal.h>
-#include "MessageEncoding.h"
-#include "MessagingInterface.h"
-#include "SocketMonitor.h"
-#include "ConnectionManager.h"
+// #include "MessageEncoding.h"
+// #include "MessagingInterface.h"
+// #include "SocketMonitor.h"
+// #include "ConnectionManager.h"
 
 namespace po = boost::program_options;
 

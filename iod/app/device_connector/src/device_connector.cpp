@@ -44,13 +44,12 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "regular_expressions.h"
-
+// #include "regular_expressions.h"
 
 #include <lib_clockwork_client/includes.hpp>
 #include <lib_clockwork_interpreter/includes.hpp>
-#include <helpers/anet/anet.h>
-#include <options.h>
+// #include <helpers/anet/anet.h>
+// #include <options.h>
 //
 // #include "value.h"
 // #include "cJSON.h"
@@ -61,7 +60,7 @@
 // #include "ConnectionManager.h"
 // #include "CommandManager.h"
 // #include "Logger.h"
-// #include "DebugExtra.h"
+// // #include "DebugExtra.h"
 // #include <pthread.h>
 
 volatile bool debug = false;

@@ -1,12 +1,12 @@
 /**
- * 
+ *
  * I grub it from linux kernel source code and fix it for user space
  * program. Of course, this is a GPL licensed header file.
  *
  * Here is a recipe to cook list.h for user space program
  *
  * 1. copy list.h from linux/include/list.h
- * 2. remove 
+ * 2. remove
  *     - #ifdef __KERNE__ and its #endif
  *     - all #include line
  *     - prefetch() and rcu related functions
