@@ -9,18 +9,21 @@ set(exe_name "iod")
 
 
 add_definitions(-std=c++11)
+add_definitions(-pthread)
 
 
 ##################################
 #       Gather Dependencies      #
 ##################################
 
+FIND_PACKAGE(LibXml2 REQUIRED)
 
 unset(LIBRARY)
 unset(INCLUDE)
 
 set(LIBRARY
     clockwork_client
+    clockwork_interpreter
     iod_interpreter
     ec_tool
     "ethercat"
@@ -30,6 +33,13 @@ set(LIBRARY
     pthread
 )
 
+set(INCLUDE 
+  /usr/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../../ethercat/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/clockwork_interpreter/src/lib_clockwork_interpreter/
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/clockwork_client.git/clockwork/src/lib_clockwork_client
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/clockwork_client.git/clockwork/src/lib_clockwork_client/helpers/cjson
+)
 
 ##################################
 #          Build Binary          #

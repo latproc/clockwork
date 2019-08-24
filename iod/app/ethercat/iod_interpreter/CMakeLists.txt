@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 
-set(exe_name "iod_sdo_interpreter")
+set(exe_name "iod_interpreter")
 
 
 ##################################
@@ -19,8 +19,21 @@ add_definitions(-std=c++11)
 unset(LIBRARY)
 unset(INCLUDE)
 
+FIND_PACKAGE(LibXml2 REQUIRED)
+
 set(LIBRARY
     clockwork_client
+    clockwork_interpreter
+)
+
+INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
+LINK_DIRECTORIES(${LIBXML2_LIBRARIES})
+
+set(INCLUDE 
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../../ethercat/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/clockwork_interpreter/src/lib_clockwork_interpreter
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/clockwork_client.git/clockwork/src/lib_clockwork_client
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/clockwork_client.git/clockwork/src/lib_clockwork_client/helpers/cjson
 )
 
 

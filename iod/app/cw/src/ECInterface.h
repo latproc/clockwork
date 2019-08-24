@@ -39,7 +39,8 @@ public:
 };
 
 #ifndef EC_SIMULATOR
-// #include <ecrt.h>
+#include <ecrt.h>
+
 #include <map>
 // #include "value.h"
 
@@ -50,13 +51,13 @@ class SlaveInfo {
 	SlaveInfo(const SlaveInfo &other) : position(other.position), product_code(other.product_code),
 		vendor_id(other.vendor_id), revision(other.revision)
 	{
-#ifndef EC_SIMULATOR
+//#ifndef EC_SIMULATOR
 		if (other.ec_info) {
 			ec_info = new ec_slave_info_t;
 			*ec_info = *other.ec_info;
 		}
 		else ec_info = 0;
-#endif
+//#endif
 	}
 	~SlaveInfo() { delete ec_info; }
 
@@ -65,7 +66,7 @@ class SlaveInfo {
 	uint32_t vendor_id;
 	uint32_t revision;
 	std::string name;
-#ifndef EC_SIMULATOR
+//#ifndef EC_SIMULATOR
 	void set_slave_info(ec_slave_info_t &info) {
 		ec_info = new ec_slave_info_t;
 		memcpy(ec_info, &info, sizeof(ec_slave_info_t));
@@ -76,7 +77,7 @@ class SlaveInfo {
 		name = ec_info->name;
 	}
 	ec_slave_info_t *ec_info;
-#endif
+//#endif
 };
 
 #ifdef USE_SDO
@@ -151,6 +152,7 @@ const int EC_DIR_INPUT = 0;
 const int EC_DIR_OUTPUT = 1;
 const int EC_WD_DEFAULT = 0;
 #endif
+
 #include <time.h>
 #include <vector>
 #include <string>

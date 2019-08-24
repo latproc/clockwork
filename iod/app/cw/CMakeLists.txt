@@ -9,6 +9,7 @@ set(exe_name "cw")
 
 
 add_definitions(-std=c++11)
+add_definitions(-DEC_SIMULATOR=1)
 
 ##################################
 #      generate source files     #
@@ -28,6 +29,7 @@ set(LIBRARY
     dl
     Mosquitto-Dep
 )
+set(INCLUDE ../../lib/clockwork_interpreter/src/lib_clockwork_interpreter)
 
 ##################################
 #          Build Binary          #

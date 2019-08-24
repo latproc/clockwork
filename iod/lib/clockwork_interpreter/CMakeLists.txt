@@ -121,7 +121,7 @@ target_include_directories(${exe_name}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${INCLUDE}
 )
-set_target_properties (${exe_name} PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+#set_target_properties (${exe_name} PROPERTIES COMPILE_DEFINITIONS )
 
 if (MINGW_BUILD)
 else()

@@ -8,9 +8,9 @@
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #include <tool/MasterDevice.h>
+#include <ECInterface.h>
 #endif
 #include <errno.h>
-#include <ECInterface.h>
 #include <Statistics.h>
 #include <libxml/xmlreader.h>
 #include "ethercat_xml_parser.h"

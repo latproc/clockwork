@@ -24,15 +24,7 @@
 #include "cwlang.h"
 #include "DisableAction.h"
 #include "Dispatcher.h"
-#include "domain.h"
 #include "dynamic_value.h"
-// #if USE_ETHERCAT
-//     #include "ecat_thread.h"
-//     #include "ECInterface.h"
-// #elif EC_SIMULATOR
-//     #include "ecat_thread.h"
-//     #include "ECInterface.h"
-// #endif
 #include "EnableAction.h"
 #include "EtherCATSetup.h"
 #include "ExecuteMessageAction.h"
@@ -43,7 +35,6 @@
 #include "FireTriggerAction.h"
 #include "HandleMessageAction.h"
 #include "HandleRequestAction.h"
-#include "hw_config.h"
 #include "IfCommandAction.h"
 #include "IncludeAction.h"
 #include "IOComponent.h"
@@ -74,7 +65,6 @@
 #include "RateEstimatorInstance.h"
 #include "ResumeAction.h"
 #include "Scheduler.h"
-#include "SDOEntry.h"
 #include "SendMessageAction.h"
 #include "SetListEntriesAction.h"
 #include "SetOperationAction.h"

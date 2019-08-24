@@ -19,7 +19,6 @@
 */
 
 #include <iostream>
-#include "ECInterface.h"
 #include "IOComponent.h"
 
 class ControlSystemMachine : IOComponent {

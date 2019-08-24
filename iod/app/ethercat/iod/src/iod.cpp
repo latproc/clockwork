@@ -75,6 +75,7 @@
 bool program_done = false;
 bool machine_is_ready = false;
 bool machine_was_ready = false;
+const char *program_name = 0;
 
 void usage(int argc, char *argv[]);
 void displaySymbolTable();

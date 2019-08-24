@@ -29,8 +29,6 @@
 #include "State.h"
 #include <lib_clockwork_client/includes.hpp>
 #include <boost/thread/mutex.hpp>
-//#include "ECInterface.h"
-// // #include "Message.h"
 #include "MQTTInterface.h"
 #include "filtering.h"
 
