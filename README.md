@@ -116,7 +116,7 @@ for that. Please watch this space for more precise instructions.
 * configure and build etherlabs ethercat component
 
   cd ethercat
-  ./configure --enable-generic --enable-e1000e=no --enable-8139too=no
+  ./configure --enable-generic --enable-e1000e=no --enable-8139too=no --enable-hrtimer
   make
 
   (your configure options may be different from ours)
