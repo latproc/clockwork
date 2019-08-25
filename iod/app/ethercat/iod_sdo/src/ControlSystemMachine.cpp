@@ -153,7 +153,7 @@ void ControlSystemMachine::sync_slaves() {
 					else if (state == 3) module_state = "BOOT";
 					else if (state == 4) module_state = "SAFEOP";
 					else if (state == 8) module_state = "OP";
-					if (module_state && m->getCurrent().getName() != module_state) {
+					if (module_state && m->getCurrent(m).getName() != module_state) {
 						SetStateActionTemplate ssat = SetStateActionTemplate("SELF", module_state);
 						SetStateAction *ssa = dynamic_cast<SetStateAction*>(ssat.factory(m));
 						m->enqueueAction(ssa);

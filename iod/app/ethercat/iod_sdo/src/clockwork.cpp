@@ -458,7 +458,7 @@ void predefine_special_machines() {
     State *init = mcec->findMutableState("INIT");
     if (!init) {
       init = new State("INIT");
-      mcec->states.push_back(init);
+      mcec->states["INIT"] = init;
     }
     init->setEnterFunction(ECInterface::setup);
   }

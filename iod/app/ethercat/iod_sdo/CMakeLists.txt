@@ -9,6 +9,7 @@ set(exe_name "iod_sdo")
 
 
 add_definitions(-std=c++11)
+#add_definitions(-DUSE_SDO) # not working atm
 
 
 ##################################

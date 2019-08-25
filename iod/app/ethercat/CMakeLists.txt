@@ -16,8 +16,8 @@ LINK_DIRECTORIES(${LIBXML2_LIBRARIES})
 add_subdirectory(ethercat_tool)
 add_subdirectory(iod_interpreter)
 add_subdirectory(iod)
-#
-#add_subdirectory(iod_sdo_interpreter)
-#add_subdirectory(iod_sdo)
+
+add_subdirectory(iod_sdo_interpreter)
+add_subdirectory(iod_sdo)
 
 endif()
