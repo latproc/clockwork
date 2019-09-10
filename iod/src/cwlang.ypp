@@ -149,6 +149,7 @@ struct Subcondition {
 %token FLOAT32 SUM ABS MIN MAX MEAN
 %token CHANGING FAILURE ADD AFTER BEFORE
 %token ASCENDING ASC DESCENDING DESC INDEX
+%token FORMAT
 
 %union {
 	bool bVal;
@@ -992,6 +993,9 @@ INTEGERVAL   {
 }
 | FIRST OF SYMBOL {
     $$ = new Value(new PopListFrontValue($3, false));
+}
+| FORMAT SYMBOL WITH STRINGVAL {
+    $$ = new Value(new AsFormattedStringValue($2, $4));
 }
 
 command:
