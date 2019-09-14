@@ -99,6 +99,7 @@ FIND                return FIND;
 FIRST               return FIRST;
 FLOAT32			return FLOAT32;
 FLOAT				return FLOAT;
+FORMAT				return FORMAT;
 FROM				return FROM;
 GLOBAL              return GLOBAL;
 GROUP               return GROUP;

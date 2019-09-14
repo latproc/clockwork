@@ -111,8 +111,12 @@ Introduction
 \end_layout
 
 \begin_layout Standard
-Clockwork is not strictly types but once a value is assigned to a variable
+Clockwork is not strictly typed but once a value is assigned to a variable
  a type is inferred and used to affect the type of the result.
+ Program control within clockwork is done by defining actions that take
+ effect on state changes; within those actions, calculations can be performed
+ and other entities can be affected in various ways.
+ 
 \end_layout
 
 \begin_layout Subsection
@@ -169,7 +173,7 @@ Replace the current symbol table and Value system with a more efficient
 \end_layout
 
 \begin_layout Itemize
-Type extensions (ecept for channels)
+Type extensions (except for channels)
 \end_layout
 
 \begin_layout Itemize
@@ -282,6 +286,10 @@ Macros
 
 \begin_layout Itemize
 State validation during handlers
+\end_layout
+
+\begin_layout Itemize
+Syncronisation of read via shared clock
 \end_layout
 
 \begin_layout Subsubsection
@@ -969,8 +977,13 @@ The conditional assignment operator provides a way to make an assignment
 \end_layout
 
 \begin_layout LyX-Code
-property =: expression1 WHEN condition1 =: expression2 WHEN condition2 ...
+property =: expression1 WHEN condition1 [, expression2 WHEN condition2]
+ ...
  [ expressionN OTHERWISE]
+\end_layout
+
+\begin_layout LyX-Code
+
 \end_layout
 
 \begin_layout Standard
@@ -1446,9 +1459,7 @@ A Stream is an ordered collection of data that can be grouped into fixed
 \end_layout
 
 \begin_layout LyX-Code
-
-\size small
-s READER 
+s FILESTREAM 
 \begin_inset Quotes eld
 \end_inset
 
@@ -1456,37 +1467,60 @@ example.dat
 \begin_inset Quotes erd
 \end_inset
 
-:1; # read one bit at a time
+;
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-done WHEN s IS invalid; # terminating condition
+r READER s(block_size:1); # read one char at a time
+\end_layout
+
+\begin_layout LyX-Code
+demo Demo r;
+\end_layout
+
+\begin_layout LyX-Code
+Demo MACHINE r {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+
+\size small
+done WHEN SELF IS done OR r IS invalid; # terminating condition
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-start WHEN s IS closed;
+start WHEN r IS closed;
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-one WHEN s.curr == 1;
+one WHEN r.curr == '1';
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-zero WHEN s.curr == 0;
+zero WHEN r.curr == '0';
+\end_layout
+
+\begin_layout LyX-Code
+other DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+ENTER done { SEND close TO r }
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-ENTER start { SEND open TO s }
+ENTER start { SEND open TO r }
 \end_layout
 
 \begin_layout LyX-Code
@@ -1500,7 +1534,7 @@ ENTER one { LOG
 \begin_inset Quotes erd
 \end_inset
 
-; SEND forward TO s }
+; SEND forward TO r }
 \end_layout
 
 \begin_layout LyX-Code
@@ -1514,7 +1548,40 @@ ENTER zero { LOG
 \begin_inset Quotes erd
 \end_inset
 
-; SEND forward TO s }
+; SEND forward TO r }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER other { SEND forward TO r }
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND run WITHIN done { SET SELF TO start; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+FILESTREAM options
+\end_layout
+
+\begin_layout Itemize
+mode: (read, write, readwrite, append)
+\end_layout
+
+\begin_layout Standard
+READER options
+\end_layout
+
+\begin_layout Itemize
+block_size: (positive integer)
+\end_layout
+
+\begin_layout Itemize
+block_terminated: (character)
 \end_layout
 
 \begin_layout Subsection
@@ -1868,6 +1935,147 @@ PRIVATE means that the named state is not visible outside of the machine
 LOCAL means that the named option is not published on any channel unless
  the channel includes a specific option to include local properties.
  Local properties are still accessible to other machines.
+\end_layout
+
+\begin_layout Subsection
+Clocking
+\end_layout
+
+\begin_layout Standard
+Sometimes it is useful to perform actions are regular intervals and for
+ several actions to be synchronised.
+ To provide this facility, clockwork uses the notion of a CLOCK that triggers
+ a timer event at regular intervals.
+\end_layout
+
+\begin_layout LyX-Code
+CLOCK MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION rate 1000; # milliseconds
+\end_layout
+
+\begin_layout LyX-Code
+started FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+tick WHEN SELF IS wait && TIMER = rate;
+\end_layout
+
+\begin_layout LyX-Code
+wait WHEN started IS on;
+\end_layout
+
+\begin_layout LyX-Code
+idle DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND start { SET started TO on; }
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND stop { SET started TO off; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Machines that are synchronised to a clock receive tick events:
+\end_layout
+
+\begin_layout LyX-Code
+Reader MACHINE input, clock {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION value 0.0;
+\end_layout
+
+\begin_layout LyX-Code
+RECEIVE clock.tick_enter { value = input.VALUE; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Should we add syntactic sugar:
+\end_layout
+
+\begin_layout LyX-Code
+read_clock CLICK(rate: 100);
+\end_layout
+
+\begin_layout LyX-Code
+Reader MACHINE input, clock {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION value 0;
+\end_layout
+
+\begin_layout LyX-Code
+ON clock.tick { valuie := input.VALUE; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Define an interface for CLOCK and link it to an analogue input
+\end_layout
+
+\begin_layout LyX-Code
+ClockInterface INTERFACE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+STATES { idle, tick, wait }
+\end_layout
+
+\begin_layout LyX-Code
+COMMANDS {start, stop }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+ain ANALOGUEINPUT (clock: read_clock = SYSTEM.READ_CLOCK) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+clock IMPLEMENTS ClockInterface;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout Subsection
@@ -2653,6 +2861,10 @@ New machine types can be defined by loadable modules.
  It may be possible to provide loadable objects using a messaging or rpc
  interface.
  (TBD)
+\end_layout
+
+\begin_layout Subsubsection
+Defining PDOs
 \end_layout
 
 \begin_layout Subsubsection

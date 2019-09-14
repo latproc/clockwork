@@ -108,62 +108,15 @@ still
 Introduction
 \end_layout
 
-\begin_layout Standard
-Clockwork is a language intended to be used to describe systems of interacting
- components using state machines.
- The purpose of the language is to provide a platform for monitoring and
- control and it has currently been implemented as a control system using
- Beckhoff EtherCAT® and The Internet of Things (MQTT).
-\end_layout
-
-\begin_layout Standard
-The language provides the programmer with a means to:
-\end_layout
-
-\begin_layout Itemize
-define the states of a machine in terms of conditions
-\end_layout
-
-\begin_layout Itemize
-define commands that can be invoked on the machine
-\end_layout
-
-\begin_layout Itemize
-define transition rules that determine what actions can be performed and
- what state transtions are allowable
-\end_layout
-
-\begin_layout Itemize
-define state entry functions that execute when a machine enters a state
-\end_layout
-
-\begin_layout Itemize
-monitor the operation of a machine by sampling events as they occur and
- interactively inspecting the state and properties of internal components
-\end_layout
-
-\begin_layout Itemize
-view the state and properties of the machine in a web browser
-\end_layout
-
-\begin_layout Itemize
-view the operation of a machine in a 3D view
-\end_layout
-
-\begin_layout Itemize
-interface to serial devices, network devices and modbus devices
-\end_layout
-
-\begin_layout Itemize
-program embedded devices and microcontrollers (not yet available)
-\end_layout
-
 \begin_layout Subsection
 Machines
 \end_layout
 
 \begin_layout Standard
-The main components in a Clockwork program are called Machines.
+A Machine is similar to a Class in other languages in that it encapsulates
+ state and provides methods that implement procedural logic.
+ Machines are different in that they execute as independent entities, continuous
+ly evaluating the state of their environment and reacting to it.
  Machines are models of processing components or real-world devices that
  can be interconnected.
  Each Machine has a current state and (normally) several other states that
@@ -172,20 +125,13 @@ The main components in a Clockwork program are called Machines.
 \end_layout
 
 \begin_layout Standard
-The key difference between Clockwork and other state machine systems is
- that in Clockwork the software components automatically move between states
- by monitoring a set of conditions that define the states.
- As with other systems, it is also possible to define transition tables
- that describe how a system moves between states based on events.
- Conditions on a machine are defined in terms of the state and properties
- of itself and other machines, Machines continuously evaluate these conditions
- and automatically switch to the first state found that matches the condition,
- executing its state entry function as it does so.
- When a state includes a condition, we tend to refer to that as a 
+Machines often include rules, which are monitored continuously; when a rule
+ becomes true, a Machine switches to the state named in the rule.
+ States with rules are called 
 \emph on
 stable 
 \emph default
-state but these could also be called 
+states but these could also be called 
 \emph on
 automatic
 \emph default
@@ -193,11 +139,95 @@ automatic
 \end_layout
 
 \begin_layout Standard
-Each type of machine is defined by a block of code that provides the name,
- parameters, properties, conditions and processing of the machine.
- For example, here is a definition for a Machine that behaves like an and
- gate in an electronic circuit.
- 
+Each type of machine is defined by a block of code that defines the states
+ and rules
+\end_layout
+
+\begin_layout LyX-Code
+<machine-class-name> 
+\begin_inset Quotes eld
+\end_inset
+
+MACHINE
+\begin_inset Quotes erd
+\end_inset
+
+ <parameter> [, parameter] ...
+\end_layout
+
+\begin_layout LyX-Code
+\begin_inset Quotes eld
+\end_inset
+
+{
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+<state-name> 
+\begin_inset Quotes eld
+\end_inset
+
+WHEN
+\begin_inset Quotes erd
+\end_inset
+
+ <rule> 
+\begin_inset Quotes eld
+\end_inset
+
+;
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\begin_layout LyX-Code
+[...]
+\end_layout
+
+\begin_layout LyX-Code
+[ <state-name> DEFAULT 
+\begin_inset Quotes eld
+\end_inset
+
+;
+\begin_inset Quotes erd
+\end_inset
+
+ ]
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+\begin_inset Quotes eld
+\end_inset
+
+}
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+A rule is simply a predicate expression that compares various properties
+ and values; it evaluates to eithe 
+\emph on
+true
+\emph default
+ or 
+\emph on
+false
+\emph default
+ For example, here is a definition for a Machine that behaves like an AND
+ gate in an electronic circuit; an AND gate is on only when both inputs
+ are on:
 \end_layout
 
 \begin_layout LyX-Code
@@ -223,9 +253,16 @@ off DEFAULT
 \end_layout
 
 \begin_layout Standard
-The machine definition for this AndGate requires two parameters for the
- two inputs and defines a condition on state `on' that will activate when
- both inputs are on.
+The above machine 
+\emph on
+definition
+\emph default
+ for this AndGate requires two 
+\emph on
+parameters
+\emph default
+ for the two inputs and defines a rule on state `on' that will activate
+ when both inputs are on.
  The statement 
 \noun on
 '
@@ -249,10 +286,27 @@ off
 
 \begin_layout Standard
 A machine definition can be instantiated by providing a name, the name of
- the machine definition, also called the machine `class', and a list or
- parameters that are required by the definition.
- For example, following is a machine that monitors two inputs and turns
- on when both inputs are on:
+ the machine definition, also called the machine `machine class', and a
+ list or parameters that are required by the definition.
+ 
+\end_layout
+
+\begin_layout LyX-Code
+<instantiated-name> <machine-class-name> [ <parameter> [ , <parameter> ...
+ ] ] 
+\begin_inset Quotes eld
+\end_inset
+
+;
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+For example, following is a machine that monitors two inputs and turns on
+ when both inputs are on:
 \end_layout
 
 \begin_layout LyX-Code
@@ -268,8 +322,8 @@ b FLAG;
 \end_layout
 
 \begin_layout Standard
-Note that the FLAG machine type is defined internally in the language but
- it is equivalent to a machine defined like this:
+Note that the FLAG machine type is defined internally in the language and
+ at this stage it can be regarded as a machine defined like this:
 \end_layout
 
 \begin_layout LyX-Code
@@ -299,136 +353,6 @@ Thus a FLAG can be either on or off and is initially off.
  There are no rules to define how the machine might automatically move between
  those states so it is left to other parts of the program to change the
  state of the FLAG as required.
-\end_layout
-
-\begin_layout Subsection
-Controlling outputs
-\end_layout
-
-\begin_layout Standard
-The above AndGate machine does not directly control any other part of the
- system, it simply sets its own state based on its inputs.
- After detecting the condition where both of the inputs are on, we may want
- to do something about it.
- The AndGate can be adjusted to, for example, turn on a light when the two
- inputs are on, to do this, we add an ENTER method for the on state:
-\end_layout
-
-\begin_layout LyX-Code
-AndGateSwitch MACHINE input1, input2, output
-\end_layout
-
-\begin_layout LyX-Code
-{
-\end_layout
-
-\begin_deeper
-\begin_layout LyX-Code
-on WHEN input1 IS on AND input2 IS on;
-\end_layout
-
-\begin_layout LyX-Code
-off DEFAULT;
-\end_layout
-
-\begin_layout LyX-Code
-ENTER on { SET output TO on; }
-\end_layout
-
-\begin_layout LyX-Code
-ENTER off { SET output TO off; }
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-}
-\end_layout
-
-\begin_layout LyX-Code
-
-\end_layout
-
-\begin_layout LyX-Code
-light FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-a FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-b FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-and_gate AndGateSwitch a, b, light;
-\end_layout
-
-\begin_layout Standard
-This approach, where we pass the object to be controlled makes the linkage
- explicit but there is alternative, where another machine monitors the state
- of the AndGate and then performs the control function:
-\end_layout
-
-\begin_layout LyX-Code
-LightController MACHINE input, output {
-\end_layout
-
-\begin_deeper
-\begin_layout LyX-Code
-  active WHEN 1==1, TAG output WHEN input IS on;
-\begin_inset Foot
-status open
-
-\begin_layout Plain Layout
-Note the test 1==1 is a functional placeholder; the intention is to define
- the value TRUE for this kind of situation.
-\end_layout
-
-\end_inset
-
-
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-}
-\end_layout
-
-\begin_layout LyX-Code
-light FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-a FLAG; b FLAG;
-\end_layout
-
-\begin_layout LyX-Code
-and_gate AndGate a, b;
-\end_layout
-
-\begin_layout LyX-Code
-lc LightController and_gate, light
-\end_layout
-
-\begin_layout Standard
-in this case, AndGate does not manipulate or even know about the output.
-\end_layout
-
-\begin_layout Standard
-It is not clear yet whether this approach is better or worse in general
- however, if multiple machines need to be driven by the AndGate, the separate
- controller pattern is much more reusable.
-\end_layout
-
-\begin_layout Standard
-So far we have been using FLAG machines as placeholders for machines that
- have an interface to hardware.
- For the sake of describing the language, this is sufficient and has the
- advantage that a command interface or web page can be used to alter the
- flags for test purposes.
- Please refer to the user manual for information about the command interface
- and the web interface.
 \end_layout
 
 \begin_layout Subsection
@@ -468,17 +392,13 @@ export declarations
 \end_layout
 
 \begin_layout Standard
-These sections are only for conceptual convenience; declarations and definitions
- can be freely intermixed but the order that stable states are declared
- is important.
- Please refer to section 
-\begin_inset CommandInset ref
-LatexCommand ref
-reference "sec:Machines"
-
-\end_inset
-
- for more information about the definition of machines.
+These sections are not explicitly named within the program text; declarations
+ and definitions can be freely intermixed but the 
+\emph on
+order
+\emph default
+ that stable states are declared is important.
+ 
 \end_layout
 
 \begin_layout Subsection
@@ -487,8 +407,8 @@ Expressions
 
 \begin_layout Standard
 There are two uses of expressions within Clockwork: definition of states
- and calculation of values; conditions are boolean expressions whereas calculati
-ons may produce any kind of result that a property can hold.
+ and calculation of values; rules are boolean expressions whereas calculations
+ may produce any kind of result that a property can hold.
  Expressions are modelled on expressions in the C language; the operators
  and precedence can be found in Table 
 \begin_inset CommandInset ref
@@ -1241,46 +1161,6 @@ Machines are the core of clockwork programming; they define a virtual representa
 tion of the operation of real machines or processes and in so doing provide
  a correspondence between the state of the program and the state of the
  machinery in the real world.
-\end_layout
-
-\begin_layout Standard
-To define a machine use:
-\emph on
- class_name 
-\emph default
-MACHINE 
-\emph on
-parameter1, parameter2, ...
- 
-\emph default
-{ } and place the definition between the braces.
- 
-\end_layout
-
-\begin_layout Standard
-To create an instance of a machine, use: 
-\emph on
-name
-\emph default
- 
-\emph on
-class_name
-\emph default
- 
-\emph on
-param1, param2, ...
- 
-\emph default
-;.
- There can be any number of instances for a given machine definition.
- The trick is mostly to do with what goes between the braces.
-\end_layout
-
-\begin_layout Standard
-A Machine is similar to a Class in other languages in that it encapsulates
- state and provides methods that implement procedural logic.
- Machines are different in that they execute as independent entities, continuous
-ly evaluating the state of their environment and reacting to it.
 \end_layout
 
 \begin_layout Subsection
