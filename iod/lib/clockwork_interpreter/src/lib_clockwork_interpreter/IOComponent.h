@@ -27,29 +27,11 @@
 #include <string>
 #include <ostream>
 #include "State.h"
+#include "ioaddress.h"
 #include <lib_clockwork_client/includes.hpp>
 #include <boost/thread/mutex.hpp>
 #include "MQTTInterface.h"
 #include "filtering.h"
-
-struct IOAddress {
-	unsigned int module_position;
-    unsigned int io_offset;
-    int io_bitpos;
-	int32_t value;
-	unsigned int bitlen;
-	unsigned int entry_position;
-	bool is_signed;
-	IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos, unsigned int len=1, bool signed_value = false)
-		: module_position(module_pos), io_offset(offs), io_bitpos(bitp), value(0),
-			bitlen(len),entry_position(entry_pos), is_signed(signed_value) { }
-	IOAddress(const IOAddress &other)
-		: module_position(other.module_position), io_offset(other.io_offset), io_bitpos(other.io_bitpos), value(other.value),
-		bitlen(other.bitlen), entry_position(other.entry_position),
- 		is_signed(other.is_signed), description(other.description) { }
-	IOAddress() : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0), is_signed(false) {}
-	std::string description;
-};
 
 struct MQTTTopic {
     std::string topic;

@@ -29,7 +29,7 @@ set(LIBRARY
     dl
     Mosquitto-Dep
 )
-set(INCLUDE ../../lib/clockwork_interpreter/src/lib_clockwork_interpreter)
+# set(INCLUDE ../../lib/clockwork_interpreter/src/lib_clockwork_interpreter)
 
 ##################################
 #          Build Binary          #
@@ -37,22 +37,15 @@ set(INCLUDE ../../lib/clockwork_interpreter/src/lib_clockwork_interpreter)
 
 FILE(GLOB_RECURSE source_files RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c*
-    ${iosh_yacc_output}
-    ${iosh_lex_output}
+    # ${iosh_yacc_output}
+    # ${iosh_lex_output}
 )
 FILE(GLOB_RECURSE header_files RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h*
 )
 
-# add_library(${exe_name}
-#     STATIC
-#     ${source_files}
-#     ${header_files}
-# )
 add_executable(${exe_name} ${source_files} ${header_files})
-# add_test(${exe_name} ${exe_name})
 set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
-
 
 install(TARGETS ${exe_name} RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 

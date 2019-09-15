@@ -2145,6 +2145,16 @@ Conditions are not currently implemented but they are intended to operate
  be valid throughout the test process.
 \end_layout
 
+\begin_layout Standard
+A condition is instantiated just like a machine except that the final parameter
+ is a boolean expression within braces.
+ For example:
+\end_layout
+
+\begin_layout LyX-Code
+door_open CONDITION prox { prox IS on }
+\end_layout
+
 \begin_layout Subsection
 Error handling
 \end_layout

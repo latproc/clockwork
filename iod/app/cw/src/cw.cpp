@@ -20,8 +20,9 @@
 
 #include <unistd.h>
 
-#include <lib_clockwork_client/includes.hpp>
+// #include <lib_clockwork_client/includes.hpp>
 #include <lib_clockwork_interpreter/includes.hpp>
+#include "includes.hpp"
 //#include "ECInterface.h"
 // #include "ControlSystemMachine.h"
 // #include "IOComponent.h"

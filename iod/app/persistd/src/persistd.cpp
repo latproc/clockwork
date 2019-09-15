@@ -32,21 +32,7 @@
 #include <boost/foreach.hpp>
 #include <signal.h>
 #include <sys/time.h>
-#include <lib_clockwork_interpreter/includes.hpp>
 #include <lib_clockwork_client/includes.hpp>
-
-#define __MAIN__
-// #include "Logger.h"
-// #include "symboltable.h"
-// #include "cJSON.h"
-// #include "value.h"
-// #include "symboltable.h"
-// #include "MessageEncoding.h"
-// #include "PersistentStore.h"
-// #include "MessagingInterface.h"
-// #include "SocketMonitor.h"
-// #include "ConnectionManager.h"
-
 
 namespace po = boost::program_options;
 

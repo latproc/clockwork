@@ -5,7 +5,8 @@ all:
 	cd build && cmake .. && make $(JOBS) install
 
 test:
-	cd build && make $(JOBS) test
+	cd build/lib/clockwork_client.git && ctest
+	cd build && ctest
 
 release:
 	[ -d "build" ] || mkdir build

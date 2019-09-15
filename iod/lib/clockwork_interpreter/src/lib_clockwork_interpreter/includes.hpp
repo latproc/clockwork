@@ -5,6 +5,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <LatprocConfig.h>
+
 #include "AbortAction.h"
 #include "Action.h"
 #include "ActionList.h"
@@ -25,6 +27,7 @@
 #include "DisableAction.h"
 #include "Dispatcher.h"
 #include "dynamic_value.h"
+#include "ECInterface.h"
 #include "EnableAction.h"
 #include "EtherCATSetup.h"
 #include "ExecuteMessageAction.h"
@@ -56,7 +59,6 @@
 #include "options.h"
 #include "Parameter.h"
 #include "PatternAction.h"
-#include "PersistentStore.h"
 #include "Plugin.h"
 #include "PolledMessageHandler.h"
 #include "PopListAction.h"
@@ -80,3 +82,4 @@
 #include "Transition.h"
 #include "UnlockAction.h"
 #include "WaitAction.h"
+#include "startup.h"

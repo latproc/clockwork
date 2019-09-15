@@ -18,8 +18,9 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __ResumeACTION_H__
-#define __RESUMEACTION_H__ 1
+#pragma once
+// #ifndef __ResumeACTION_H__
+// #define __RESUMEACTION_H__ 1
 
 #include <lib_clockwork_client/includes.hpp>
 #include "Action.h"
@@ -55,4 +56,4 @@ struct ResumeAction : public Action {
     const char *property_value;
 };
 
-#endif
+// #endif

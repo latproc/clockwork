@@ -25,7 +25,6 @@ unset(INCLUDE)
 set(LIBRARY
     Modbus-Dep
     clockwork_client
-    clockwork_interpreter
 )
 
 ##################################
@@ -47,6 +46,8 @@ FILE(GLOB_RECURSE header_files RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
 #     ${header_files}
 # )
 add_executable(${exe_name} ${source_files} ${header_files})
+set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+
 # add_test(${exe_name} ${exe_name})
 # set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT")
 set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT=1")

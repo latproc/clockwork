@@ -1,6 +1,11 @@
 
 cmake_minimum_required (VERSION 2.8)
 
+if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.cmake")
+	message("Including local CMake settings")
+	include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.cmake")
+endif()
+
 if (MINGW_BUILD)
     include("lib/clockwork_client.git/cmake_modules/mingw_defines.cmake")
     get_property(CW_MINGW_DEFINITIONS GLOBAL PROPERTY CW_MINGW_DEFINITIONS)
@@ -80,4 +85,3 @@ LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
 
 
 endif()
-

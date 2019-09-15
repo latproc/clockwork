@@ -11,6 +11,7 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LocalCMakeLists.txt")
     include("${CMAKE_CURRENT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
+
 #################################
 ##        find library         ##
 #################################
@@ -110,6 +111,8 @@ add_library(${exe_name}
     ${source_files}
     ${header_files}
 )
+set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+
 # add_executable(${exe_name} ${source_files} ${header_files})
 # add_test(${exe_name} ${exe_name})
 

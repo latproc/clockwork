@@ -38,19 +38,21 @@
 #include <sys/dir.h>
 #endif
 
-#include "options.h"
-#include "ModbusInterface.h"
-// #include "Logger.h"
-// #include "DebugExtra.h"
-#include "MachineInstance.h"
-#include "clockwork.h"
-#include "PersistentStore.h"
-// #include "MessageLog.h"
-// #include "symboltable.h"
-#include "Channel.h"
-// #include "Message.h"
-#include "MachineCommandAction.h"
-#include "startup.h"
+#include "lib_clockwork_client/includes.hpp"
+#include "includes.hpp"
+// #include "options.h"
+// #include "ModbusInterface.h"
+// // #include "Logger.h"
+// // #include "DebugExtra.h"
+// #include "MachineInstance.h"
+// #include "clockwork.h"
+// #include "PersistentStore.h"
+// // #include "MessageLog.h"
+// // #include "symboltable.h"
+// #include "Channel.h"
+// // #include "Message.h"
+// #include "MachineCommandAction.h"
+// #include "startup.h"
 
 extern int yylineno;
 extern int yycharno;
