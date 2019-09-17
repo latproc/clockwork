@@ -101,6 +101,10 @@ Statistic recv_to_update("Receive to update");
 Statistic update_to_recv("Update to receive");
 #endif
 
+IOModule::IOModule() {
+	
+}
+
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_details(0) {
 	offsets = new unsigned int[64];
 	bit_positions = new unsigned int[64];
@@ -238,7 +242,7 @@ void SDOEntry::resolveSDOModules() {
 			int module_position = mi->properties.lookup("position").iValue;
 			ECModule *module = 0;
 			if (module_position >= 0)
-				module = ECInterface::findModule(module_position);
+				module = dynamic_cast<ECModule*>(ECInterface::findModule(module_position));
 			if (module && entry->prepareRequest(module) ) {
 				std::cout << "Prepared SDO entry: " << entry->getName() << "\n";
 				iter = new_sdo_entries.erase(iter);
@@ -599,7 +603,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 }
 #endif //USE_SDO
 
-ECModule *ECInterface::findModule(unsigned int pos) {
+IOModule *ECInterface::findModule(unsigned int pos) {
 	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	if (pos < 0 || (unsigned int)pos >= modules.size()) return 0;
 	for (unsigned int i = 0; i<modules.size(); ++i) {
@@ -622,7 +626,7 @@ void ECInterface::registerModules() {
 	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	for (unsigned int mi = 0; mi < modules.size(); ++mi)
 	{
-		ECModule *m = findModule(mi);
+		ECModule *m = dynamic_cast<ECModule*>(findModule(mi));
 		assert(m);
 		if (!m->ecrtMasterSlaveConfig(master)) {
 			std::cerr << "Failed to get slave configuration.\n";
@@ -677,7 +681,7 @@ void ECInterface::configureModules() {
 	boost::recursive_mutex::scoped_lock lock(modules_mutex);
 	for (unsigned int mi = 0; mi < modules.size(); ++mi)
 	{
-		ECModule *m = findModule(mi);
+		ECModule *m = dynamic_cast<ECModule*>(findModule(mi));
 		assert(m);
 
 		if (!m->ecrtMasterSlaveConfig(master)) {
@@ -958,7 +962,7 @@ bool ECInterface::activate() {
 	std::cout << "Activating master with configured slaves : \n";
 	res = ecrt_master(ECInterface::master, &master_info);
 	while ( res >=0 && pos < master_info.slave_count ) {
-		ECModule *module = ECInterface::findModule(pos);
+		ECModule *module = dynamic_cast<ECModule*>(ECInterface::findModule(pos));
 		if (module)
 			std::cout << pos << " " << module->name << "\n";
 		else
@@ -1025,6 +1029,10 @@ bool ECInterface::operational() {
 	return true;
 }
 
+#else
+IOModule *ECInterface::findModule(unsigned int pos) {
+	return 0;
+}
 #endif
 
 
@@ -1952,7 +1960,7 @@ char *collectSlaveConfig(bool reconfigure)
 	ec_master_info_t master_info;
 	res = ecrt_master(ECInterface::master, &master_info);
 	while ( res >=0 && pos < master_info.slave_count ) {
-		ECModule *module = ECInterface::findModule(pos);
+		ECModule *module = dynamic_cast<ECModule*>(ECInterface::findModule(pos));
 		if (!module) {
 			ec_slave_info_t slave_info;
 			memset(&slave_info, 0, sizeof(ec_slave_info_t));
@@ -1978,7 +1986,7 @@ char *collectSlaveConfig(bool reconfigure)
 	m.getMaster(&master);
 
 	for (unsigned int i=0; i<master.slave_count; i++) {
-		ECModule *module = ECInterface::findModule(i);
+		ECModule *module = dynamic_cast<ECModule*>(ECInterface::findModule(i));
 		if (!module) {
 			m.getSlave(&slave, i);
 			cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave, true));

@@ -199,7 +199,7 @@ void generateIOComponentModules( std::map<unsigned int, DeviceInfo*> slave_confi
 				// multiple syncmasters, we number
 				// the points from 1..n but the device numbers them 1.n,1.m,..., resetting
 				// the index for each sync master.
-				ECModule *module = ECInterface::findModule(module_position);
+				ECModule *module = dynamic_cast<ECModule*>(ECInterface::findModule(module_position));
 				if (!module)
 				{
 					snprintf(error_buf, error_buf_size, "No module found at position %d for %s", 

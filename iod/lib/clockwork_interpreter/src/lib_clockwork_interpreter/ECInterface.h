@@ -23,6 +23,7 @@
 
 #include <iostream>
 #include <sys/types.h>
+#include <inttypes.h>
 
 #include <lib_clockwork_interpreter/includes.hpp>
 // #include "IODCommand.h"
@@ -37,6 +38,15 @@ public:
     unsigned int entry_index;
     unsigned int sm_index;
     unsigned int pdo_index;
+};
+
+class IOModule {
+  public:
+    virtual ~IOModule();
+	std::string &getName() { return name; }
+	const std::string &getName() const { return name; }
+  protected:
+    std::string name;
 };
 
 #ifndef EC_SIMULATOR
@@ -84,7 +94,7 @@ class SlaveInfo {
 #ifdef USE_SDO
 class SDOEntry;
 #endif //USE_SDO
-class ECModule {
+class ECModule : public IOModule {
 public:
 	ECModule();
 	~ECModule();
@@ -110,13 +120,11 @@ public:
 	ec_pdo_entry_info_t *pdo_entries;
 	ec_pdo_info_t *pdos;
 	ec_sync_info_t *syncs;
-	std::string name;
 	unsigned int num_entries;
 	EntryDetails *entry_details;
 };
 
 #else
-typedef unsigned char uint8_t;
 typedef struct ECMaster{
     unsigned int reserved;
     unsigned int config_changed;
@@ -200,6 +208,8 @@ public:
 	void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
 	const ec_master_t *getMaster() { return master; }
 	const ec_master_state_t *getMasterState() { return &master_state; }
+	static IOModule *findModule(unsigned int position);
+
 #ifndef EC_SIMULATOR
 	void listSlaves( std::list<ec_slave_info_t> &slaves );
 	bool prepare();
@@ -211,7 +221,6 @@ public:
 	bool online();
 	bool operational();
 	//bool configurePDOs();
-	static ECModule *findModule(unsigned int position);
 
 	void setProcessData (uint8_t *pd);
 	uint8_t *getProcessData() { return process_data; }

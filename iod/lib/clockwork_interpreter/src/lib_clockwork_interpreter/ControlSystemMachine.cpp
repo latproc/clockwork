@@ -147,7 +147,7 @@ void ControlSystemMachine::sync_slaves() {
 			const Value &pos = m->getValue("position");
 			if (pos != SymbolTable::Null) {
 				int position = (int) pos.iValue;
-				ECModule *module = ECInterface::findModule(position);
+				ECModule *module = dynamic_cast<ECModule*>(ECInterface::findModule(position));
 				if (module) {
 					const char *module_state = 0;
 					int state = module->slave_config_state.al_state & 0x0f; // mask off error bit

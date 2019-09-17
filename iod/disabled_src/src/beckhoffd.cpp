@@ -164,7 +164,7 @@ struct BeckhoffdListJSON : public IODCommand {
 			cJSON_AddStringToObject(node, "class", ioc->type());
 			cJSON_AddNumberToObject(node, "value", ioc->value());
 			cJSON_AddNumberToObject(node, "module", ioc->address.module_position);
-			ECModule *mod = ECInterface::findModule(ioc->address.module_position);
+			ECModule *mod = dynamic_cast<ECModule*>(ECInterface::findModule(ioc->address.module_position));
 			if (mod) {
 				cJSON_AddStringToObject(node, "module_name", mod->name.c_str());
 			}
@@ -362,7 +362,7 @@ void generateIOComponentMappings() {
 				// multiple syncmasters, we number 
 				// the points from 1..n but the device numbers them 1.n,1.m,..., resetting
 				// the index for each sync master.
-				ECModule *module = ECInterface::findModule(position);
+				ECModule *module = dynamic_cast<ECModule*>(ECInterface::findModule(position));
 				if (!module) {
 					break;
 				}

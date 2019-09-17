@@ -40,7 +40,7 @@ extern bool program_done;
 bool MQTTDCommandGetStatus::run(std::vector<std::string> &params) {
     bool done = false;
     if (params.size() == 3) {
-        MQTTModule *machine = MQTTInterface::findModule(params[1].c_str());
+        MQTTModule *machine = dynamic_cast<ECModule*>(MQTTInterface::findModule(params[1].c_str()));
         if (machine) {
             if (machine->publishes(params[2])) {
                 done = true;
@@ -56,7 +56,7 @@ bool MQTTDCommandGetStatus::run(std::vector<std::string> &params) {
 bool MQTTDCommandSetStatus::run(std::vector<std::string> &params) {
     if (params.size() == 4) {
         std::string ds = params[1];
-        MQTTModule *device = MQTTInterface::instance()->findModule(ds);
+        MQTTModule *device = dynamic_cast<ECModule*>(MQTTInterface::instance()->findModule(ds));
         if (device) {
             if (device->publishes(params[2])) {
                 device->publish(params[2], params[3]);
@@ -85,7 +85,7 @@ bool MQTTDCommandSetStatus::run(std::vector<std::string> &params) {
             return false;
         }
         if (params.size() == 2 || params.size() == 3) {
-            MQTTModule *m = MQTTInterface::instance()->findModule(params[1]);
+            MQTTModule *m = dynamic_cast<ECModule*>(MQTTInterface::instance()->findModule(params[1]));
             cJSON *root;
             if (use_json)
                 root = cJSON_CreateArray();
@@ -116,7 +116,7 @@ bool MQTTDCommandSetStatus::run(std::vector<std::string> &params) {
 
     bool MQTTDCommandProperty::run(std::vector<std::string> &params) {
         if (params.size() == 4) {
-            MQTTModule *m = MQTTInterface::instance()->findModule(params[1]);
+            MQTTModule *m = dynamic_cast<ECModule*>(MQTTInterface::instance()->findModule(params[1]));
 		    if (m) {
 				m->publish(params[2], params[3].c_str());
 

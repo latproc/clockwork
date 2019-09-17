@@ -561,16 +561,16 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
     cJSON_AddStringToObject(node, "name", name_str.c_str());
     cJSON_AddStringToObject(node, "class", m->_type.c_str());
- #ifndef EC_SIMULATOR
+// #ifndef EC_SIMULATOR
     if (m->io_interface) {
 		IOComponent *ioc = m->io_interface;
 		cJSON_AddNumberToObject(node, "module", ioc->address.module_position);
-		ECModule *mod = ECInterface::findModule(ioc->address.module_position);
+		IOModule *mod = ECInterface::findModule(ioc->address.module_position);
 		if (mod) {
-			cJSON_AddStringToObject(node, "module_name", mod->name.c_str());
+			cJSON_AddStringToObject(node, "module_name", mod->getName().c_str());
 		}
 	}
- #endif
+// #endif
 
     SymbolTableConstIterator st_iter = m->properties.begin();
     while (st_iter != m->properties.end()) {
