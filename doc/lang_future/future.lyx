@@ -1869,6 +1869,271 @@ WITHIN value x := 3, y:= 7;
 \end_layout
 
 \begin_layout Subsubsection
+RECORDS
+\end_layout
+
+\begin_layout Standard
+RECORDs in clockwork define ways to interpret blocks of memory and group
+ properties togetherFor example, clockwork can load an XML file describing
+ EtherCAT hardware into a structure that includes named elements and has
+ a contiguous block of memory that maps to hardware I/O.
+\end_layout
+
+\begin_layout Standard
+Records:
+\end_layout
+
+\begin_layout Itemize
+have an offset
+\end_layout
+
+\begin_layout Itemize
+have a size
+\end_layout
+
+\begin_layout Itemize
+can contain metadata (properties)
+\end_layout
+
+\begin_layout Itemize
+can contain other records
+\end_layout
+
+\begin_layout Itemize
+fully contain child records (it is an error to declare a child that extends
+ past the bounds of the parent) 
+\end_layout
+
+\begin_layout Itemize
+may contain named or anonymous chunks of BIT, BYTE, WORD16, WORD32, WORD64
+\end_layout
+
+\begin_layout LyX-Code
+Colour RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+r BYTE;
+\end_layout
+
+\begin_layout LyX-Code
+g BYTE;
+\end_layout
+
+\begin_layout LyX-Code
+b BYTE;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+Inputs RECORD (size: 8) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+BIT[4]; # skip 4 bits
+\end_layout
+
+\begin_layout LyX-Code
+in1 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+in2 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+in3 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+in4 BIT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+Outputs RECORD (size: 8) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+out1 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+out2 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+out3 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+out4 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[4]; # skip four bits
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+When records include other records it is possible to have them start at
+ the same place using the '|' operator
+\end_layout
+
+\begin_layout LyX-Code
+IO RECORD (size: 8) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+Inputs | Outputs; # Inputs and Outputs start at the same location
+\end_layout
+
+\begin_layout LyX-Code
+data BYTE[10]; # a 10 byte block following the above bits 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Records may overlap the same piece of memory.
+ The name of a field may be unique across all records mapped over a memory
+ location.
+ In this case, it may be reasonable to allow use of the field name without
+ qualification by record id.
+ When a record is loaded, a symbol table that provides direct access to
+ the offset and size of each field is built, for example the above might
+ be initially loaded as:
+\end_layout
+
+\begin_layout LyX-Code
+{IO: {Inputs: {in1:{offset:4,size:1},in2:{offset:5,size:1},...},Outputs:{out1:{offs
+et:0,size:1},{offset:1,size:1},...},data:{offset:8,size:80}}}
+\end_layout
+
+\begin_layout Standard
+This may then be converted to:
+\end_layout
+
+\begin_layout LyX-Code
+{IO.Inputs.in1:{offset:4,size:1},in1:{offset:4,size:1},...
+\end_layout
+
+\begin_layout Standard
+Thus, the bit at offset 4 can be found using 'IO.Inputs.in1' or simply 'in1'.
+ Note that IO.Inputs doesn't really need to resolve since it isn't a single
+ field.
+ 
+\end_layout
+
+\begin_layout Standard
+In the case of EtherCAT, we can use the RECORD syntax to define the structures
+ we need.
+\end_layout
+
+\begin_layout LyX-Code
+Module RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION position 1;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION alias 0;
+\end_layout
+
+\begin_layout LyX-Code
+pdo1 RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION SM 3;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION index 0x1a00;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION name “Inputs”;
+\end_layout
+
+\begin_layout LyX-Code
+RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+INITIAL 0; # this can also be done via a prepare statement
+\end_layout
+
+\begin_layout LyX-Code
+RECORD { # unnamed map, this is the default interpretation for this region
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+BIT[3];
+\end_layout
+
+\begin_layout LyX-Code
+valve BIT;
+\end_layout
+
+\begin_layout LyX-Code
+motor BIT;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[3]; # avoid warnings by labelling all 8 bits
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+byte BYTE; // a named map, pdo1.byte interprets the region as a single byte
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsubsection
 Constrained Data
 \end_layout
 

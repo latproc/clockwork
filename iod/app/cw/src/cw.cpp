@@ -20,56 +20,10 @@
 
 #include <unistd.h>
 
-// #include <lib_clockwork_client/includes.hpp>
 #include <lib_clockwork_interpreter/includes.hpp>
-#include "includes.hpp"
-//#include "ECInterface.h"
-// #include "ControlSystemMachine.h"
-// #include "IOComponent.h"
-// #include <sstream>
-// #include <stdio.h>
-// #include <zmq.hpp>
-//
-// #include <boost/thread.hpp>
-// #include <boost/thread/condition.hpp>
-// #include <boost/thread/mutex.hpp>
-// #include <list>
-// #include <map>
-// #include <utility>
-// #include <fstream>
-// #include <sys/stat.h>
-// #include "boost/filesystem/operations.hpp"
-// #include "boost/filesystem/path.hpp"
-// #include <signal.h>
-// #include <sys/stat.h>
-//
-// #include "cJSON.h"
 // #ifndef EC_SIMULATOR
 // #include <tool/MasterDevice.h>
 // #endif
-
-#define __MAIN__
-// #include "cwlang.h"
-// #include "Logger.h"
-// #include "IODCommand.h"
-// #include "Dispatcher.h"
-// #include "Statistic.h"
-// #include "symboltable.h"
-// // #include "DebugExtra.h"
-// #include "Scheduler.h"
-// #include "PredicateAction.h"
-// #include "ModbusInterface.h"
-// #include "IODCommands.h"
-// #include "Statistics.h"
-// #include "clockwork.h"
-// #include "ClientInterface.h"
-// #include "MQTTInterface.h"
-// #include "MessageLog.h"
-// #include "MessagingInterface.h"
-// #include "Channel.h"
-// #include "ProcessingThread.h"
-// #include "MachineClass.h"
-// #include <libgen.h>
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -83,7 +37,6 @@ Statistics *statistics = NULL;
 std::list<Statistic *> Statistic::stats;
 
 
-//static boost::mutex io_mutex;
 boost::condition_variable_any ecat_polltime;
 
 
