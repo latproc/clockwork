@@ -37,21 +37,21 @@ SPI return SPI;
 SDIO return SDIO;
 JTAG return JTAG;
 UART return UART;
-ABORT								return ABORT;
-ABS									return ABS;
-ADD									return ADD;
-AFTER								return AFTER;
+ABORT				return ABORT;
+ABS					return ABS;
+ADD					return ADD;
+AFTER				return AFTER;
 ALL                 return ALL;
 AND                 return AND;
 ANY                 return ANY;
 ARE                 return ARE;
 ASSIGN              return ASSIGN;
 AT                  return AT;
-AS									return AS;
-ASCENDING						return ASCENDING;
-ASC									return ASC;
+AS					return AS;
+ASCENDING			return ASCENDING;
+ASC					return ASC;
 BECOMES             return BECOMES;
-BEFORE							return BEFORE;
+BEFORE				return BEFORE;
 BETWEEN             return BETWEEN;
 BIT                 return BIT;
 BITSET              return BITSET;
@@ -60,7 +60,7 @@ BY                  return BY;
 BYTE                return BYTE;
 CALL				return CALL;
 CATCH				return CATCH;
-CHANGING		return CHANGING;
+CHANGING		    return CHANGING;
 CHANNEL             return CHANNEL;
 CLASS				return CLASS;
 CLEAR               return CLEAR;
@@ -72,13 +72,13 @@ CONDITION           return CONDITION;
 CONSTRAINT			return CONSTRAINT;
 COPY                return COPY;
 COUNT               return COUNT;
-CPU           return CPU;
+CPU                 return CPU;
 CREATE              return CREATE;
 DEC                 return DEC;
 DEFAULT             return DEFAULT;
 DEFAULTS            return DEFAULTS;
-DESCENDING					return DESCENDING;
-DESC								return DESC;
+DESCENDING			return DESCENDING;
+DESC				return DESC;
 DIFFERENCE          return DIFFERENCE;
 DISABLE             return DISABLE;
 DISABLED            return DISABLED;
@@ -96,10 +96,10 @@ EXPORT              return EXPORT;
 EXPORTS             return EXPORTS;
 EXTENDS             return EXTENDS;
 EXTRACT             return EXTRACT;
-FAILURE							return FAILURE;
+FAILURE				return FAILURE;
 FIND                return FIND;
 FIRST               return FIRST;
-FLOAT32			return FLOAT32;
+FLOAT32			    return FLOAT32;
 FLOAT				return FLOAT;
 FORMAT				return FORMAT;
 FROM				return FROM;
@@ -110,7 +110,7 @@ IGNORES				return IGNORES;
 INC                 return INC;
 INCLUDE             return INCLUDE;
 INCLUDES            return INCLUDES;
-INDEX								return INDEX;
+INDEX				return INDEX;
 INTERFACE           return INTERFACE;
 INTEGER				return INTEGER;
 INT16               return INT16;
@@ -157,19 +157,20 @@ PUBLISHER			return tokPUBLISHER;
 PUSH				return PUSH;
 READONLY            return READONLY;
 READWRITE           return READWRITE;
-REFERS          return REFERS;
+REFERS              return REFERS;
 REPLACE             return REPLACE;
-REPORTS	        return REPORTS;
-SEEK            return SEEK;
+REPORTS	            return REPORTS;
+SEEK                return SEEK;
 STATE_CHANGES		return STATE_CHANGES;
-SUM									return SUM;
-PRIVATE							return PRIVATE;
-PROPERTY_CHANGES		return PROPERTY_CHANGES;
+SUM					return SUM;
+PRIVATE				return PRIVATE;
+PROPERTY_CHANGES	return PROPERTY_CHANGES;
 RO                  return READONLY;
 ROUTE               return ROUTE;
 RW                  return READWRITE;
 RECEIVE             return RECEIVE;
 RECEIVES            return RECEIVES;
+RECORD              return RECORD;
 REQUIRES            return REQUIRES;
 RETURN				return RETURN;
 RESUME              return RESUME;
@@ -212,45 +213,45 @@ WITHIN              return WITHIN;
 }
 
 "0x"[0-9a-fA-F][0-9a-fA-F]*	{
-	long val;
-	char *p;
-	val = strtol(yytext, &p, 16);
+    long val;
+    char *p;
+    val = strtol(yytext, &p, 16);
     yylval.iVal = val;
     return INTEGERVAL;
 }
 
 0\.0 {
-	yylval.fVal = atof(yytext);
-	return FLOATVAL;
+    yylval.fVal = atof(yytext);
+    return FLOATVAL;
 }
 
 0\. {
-	yylval.fVal = atof(yytext);
-	return FLOATVAL;
+    yylval.fVal = atof(yytext);
+    return FLOATVAL;
 }
 
 [-]{0,1}[0-9][0-9]*[.][0-9]* {
-	yylval.fVal = atof(yytext);
-	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
-	return FLOATVAL;
+    yylval.fVal = atof(yytext);
+    //std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+    return FLOATVAL;
 }
 
 [-]{0,1}[0-9][0-9]*[.][0-9]*E[0-9]{1,3} {
-	yylval.fVal = atof(yytext);
-	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
-	return FLOATVAL;
+    yylval.fVal = atof(yytext);
+    //std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+    return FLOATVAL;
 }
 
 0           {
-	yylval.iVal = 0;
-	return INTEGERVAL;
+    yylval.iVal = 0;
+    return INTEGERVAL;
 }
 
 
 [-]{0,1}[0-9][0-9]* {
-	char *rest = 0;
-	yylval.iVal = strtol(yytext, &rest, 10);
-	return INTEGERVAL;
+    char *rest = 0;
+    yylval.iVal = strtol(yytext, &rest, 10);
+    return INTEGERVAL;
 }
 
 "%BEGIN_PLUGIN"			BEGIN PLUGIN_CODE;
@@ -269,13 +270,13 @@ WITHIN              return WITHIN;
 
 `               {
                     BEGIN PATTERNSTR;
-					if (!buf)
-					{
-					     buf = (char *)malloc(20);
-					     buflen = 20;
-					}
-					bufp = buf;
-					*bufp = 0;
+                    if (!buf)
+                    {
+                         buf = (char *)malloc(20);
+                         buflen = 20;
+                    }
+                    bufp = buf;
+                    *bufp = 0;
                 }
 <PATTERNSTR>\\`    { append_char('`'); }
 <PATTERNSTR>`      { BEGIN 0; yylval.sVal = buf; buf = NULL; return PATTERN; }
@@ -287,14 +288,14 @@ WITHIN              return WITHIN;
 
 \"			    {  /*"*/
                     BEGIN STRING;
-					if (!buf)
-					{
-					     buf = (char *)malloc(20);
-					     buflen = 20;
-					}
-					bufp = buf;
-					*bufp = 0;
- 				}
+                    if (!buf)
+                    {
+                         buf = (char *)malloc(20);
+                         buflen = 20;
+                    }
+                    bufp = buf;
+                    *bufp = 0;
+                 }
 <STRING>\\n		{ append_char('\n'); }
 <STRING>\\r		{ append_char('\r'); }
 <STRING>\\t		{ append_char('\t'); }
@@ -339,11 +340,11 @@ int yywrap(void) {
 
 void append_char(int ch)
 {
-	if (bufp - buf == buflen-1) {
-		buf = (char *)realloc(buf, buflen + 20);
-		bufp = buf + buflen-1;
-		buflen += 20;
-	}
-	*bufp++ = ch;
-	*bufp = 0;
+    if (bufp - buf == buflen-1) {
+        buf = (char *)realloc(buf, buflen + 20);
+        bufp = buf + buflen-1;
+        buflen += 20;
+    }
+    *bufp++ = ch;
+    *bufp = 0;
 }

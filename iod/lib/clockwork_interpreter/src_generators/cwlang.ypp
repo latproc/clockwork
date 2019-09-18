@@ -118,7 +118,7 @@ struct Subcondition {
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
 %token FORMAT
-%token BIT BYTE INT16 INT32 INT64 UINT16 UINT32 UINT64
+%token BIT BYTE INT16 INT32 INT64 UINT16 UINT32 UINT64 RECORD
 
 %union {
 	bool bVal;
@@ -181,6 +181,7 @@ program_section:
 | route_declaration
 | channel_definition
 | interface_definition
+| record_definition
 | error ';'
 | error '}'
 ;
@@ -461,6 +462,42 @@ chn_definition_section:
 | THROTTLE INTEGERVAL ';' { current_channelclass->setThrottleTime($2 * 1000); }
 | tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
 | MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
+;
+
+record_definition:
+record_definition_header record_definition_block {
+}
+;
+
+record_definition_block:
+'{' record_definition_body '}'
+| '{' record_definition_body ';' '}'
+;
+
+
+record_definition_header:
+SYMBOL RECORD { }
+;
+
+record_definition_body:
+record_definition_section
+| record_definition_body ';' record_definition_section {
+
+}
+
+record_definition_section:
+record_definition_section '|' record_definition_section
+| SYMBOL BIT { }
+| SYMBOL BYTE { }
+| SYMBOL INT16 { }
+| SYMBOL UINT16 { }
+| SYMBOL INT32 { }
+| SYMBOL UINT32 { }
+| SYMBOL INT64 { }
+| SYMBOL UINT64 { }
+| SYMBOL record_definition_block
+| record_definition_block
+| SYMBOL
 ;
 
 machine_list:
