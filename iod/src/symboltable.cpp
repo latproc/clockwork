@@ -29,6 +29,7 @@
 #include <boost/foreach.hpp>
 #include <utility>
 #include "DebugExtra.h"
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 const Value SymbolTable::Null;
 const Value SymbolTable::True(true);
@@ -128,6 +129,8 @@ SymbolTable::SymbolTable() {
 				keywords->add("TIMESEQ", Value("",Value::t_string));
         keywords->add("TIMEZONE", Value("",Value::t_string));
         keywords->add("TIMESTAMP", Value("",Value::t_string));
+        keywords->add("UTCTIMESTAMP", Value("",Value::t_string));
+        keywords->add("ISOTIMESTAMP", Value("",Value::t_string));
         keywords->add("RANDOM", 0L);
         reserved = new std::set<std::string>;
         reserved->insert("NAME");
@@ -231,27 +234,52 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             res = lt.tm_zone;
             return res;
         }
-				if (strcmp("TIMESEQ", name) == 0) {
-					struct timeval t;
-					gettimeofday(&t,0);
-					uint64_t msecs = (microsecs() / 1000) % 1000;
-					char buf[40];
-					const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
-					if (sizeof(long long) == sizeof(uint64_t))
-							fmt = "%02d%02d%02d%02d%02d%02d%03llu";
-					snprintf(buf, 40, fmt,
-									 lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
-					res = buf;
-					return res;
-				}
-        if (strcmp("TIMESTAMP", name) == 0) {
+        if (strcmp("TIMESEQ", name) == 0) {
+            //struct timeval t;
+            //gettimeofday(&t,0);
+            uint64_t msecs = (microsecs() / 1000) % 1000;
             char buf[40];
-            ctime_r(&now, buf);
-            size_t n = strlen(buf);
-            if (n>1 && buf[n-1] == '\n') buf[n-1] = 0;
+            const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
+            if (sizeof(long long) == sizeof(uint64_t))
+                fmt = "%02d%02d%02d%02d%02d%02d%03llu";
+            snprintf(buf, 40, fmt,
+                lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
             res = buf;
             return res;
         }
+        if (strcmp("TIMESTAMP", name) == 0) {
+            char buf[40];
+	        struct tm lt;
+            localtime_r(&now, &lt);
+            asctime_r(&lt, buf);
+            size_t n = strlen(buf);
+            if (n>1 && buf[n-1] == '\n') { --n; buf[n] = 0; }
+            if (n + strlen(lt.tm_zone) < 39) snprintf(buf+n,39-n," %s", lt.tm_zone);
+            res = buf;
+            return res;
+        }
+        if (strcmp("UTCTIMESTAMP", name) == 0) {
+            char buf[40];
+	        struct tm lt;
+            gmtime_r(&now, &lt);
+            asctime_r(&lt, buf);
+            size_t n = strlen(buf);
+            if (n>1 && buf[n-1] == '\n') { --n; buf[n] = 0; }
+            if (n + strlen(lt.tm_zone) < 39) snprintf(buf+n,39-n," %s", lt.tm_zone);
+            res = buf;
+            return res;
+        }
+        if (strcmp("ISOTIMESTAMP", name) == 0) {
+            using namespace boost::posix_time;
+            char buf[40];
+            ptime t = microsec_clock::universal_time();
+            std::stringstream ss;
+            ss << to_iso_string(t) << "Z" << std::flush;
+            snprintf(buf, 40, "%s", ss.str().c_str());
+            res = buf;
+            return res;
+        }
+
         return res;
     }
     return Null;
