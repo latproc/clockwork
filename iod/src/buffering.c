@@ -164,6 +164,30 @@ double slope(struct CircularBuffer *buf) {
     return m;
 }
 
+double savitsky_golay_filter(struct CircularBuffer *buf, int filter_len, double *coefficients, float normal )
+{
+	if (length(buf) < buf->bufsize || filter_len > buf->bufsize)
+		return getBufferValue(buf, 0);
+	double sum = 0;
+	for (unsigned int i=0; i<filter_len; i++)
+	{
+		sum += getBufferValue(buf, i) * coefficients[filter_len - i - 1];
+	}
+	return sum / normal;
+}
+
+double moving_average(struct CircularBuffer *buf, unsigned int n) {
+	if (n == 0) return 0.0;
+	if (length(buf) < n)
+		n = length(buf);
+	double sum = 0;
+	for (unsigned int i=0; i<n; i++)
+	{
+		sum += getBufferValue(buf, i);
+	}
+	return sum / n;
+}
+
 #ifdef TEST
 
 int failures = 0;

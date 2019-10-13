@@ -17,7 +17,7 @@ Buffer::Buffer(int buf_size): BUFSIZE(buf_size) {
     back = -1;
 }
 
-int Buffer::length()
+int Buffer::length() const
 {
     if (front == -1) return 0;
     return (front - back + BUFSIZE) % BUFSIZE + 1;
@@ -48,7 +48,7 @@ double Buffer::distance(int idx_a, int idx_b) const
 
 double Buffer::average(int n)
 {
-	boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
+  boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
   double res = 0.0f;
   if (front == -1) return 0.0; // empty buffer
   if (n == 0) return 0.0;
@@ -113,6 +113,36 @@ double FloatBuffer::getFloatAtIndex(int idx) const
     return buf[idx];
 }
 
+int findMovement(FloatBuffer *buf, double amount, int max_len) {
+	/* reading the buffer without entering data is a non-recoverable error */
+	int l = buf->length();
+	if (l == 0) { assert(0); abort(); }
+	int n = 0;
+	int idx = buf->front;
+	double current = buf->buf[idx];
+	
+	while (idx != buf->back && n<max_len) {
+		idx--; if (idx == -1) idx = buf->BUFSIZE-1;
+		++n;
+		if ( fabs(current - buf->buf[idx]) >= amount) return n;
+	}
+	return  n;
+}
+
+double FloatBuffer::inner_product(double *coefficients, unsigned int num_coeff ) const
+{
+	float sum = 0;
+	int l = length();
+	const char *sep = "";
+	for (unsigned int i=0; i<num_coeff; i++)
+	{
+		float x = (i<length()) ? get(i) : 0;
+		sep = " + ";
+		sum += x * coefficients[i];
+	}
+	return sum;
+}
+
 void FloatBuffer::append( double val)
 {
 	boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
@@ -159,6 +189,28 @@ double FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
   return m;
 }
 
+
+double FloatBuffer::movingAverage(unsigned int n) const {
+	if (n == 0) return 0.0;
+	if (length() < n)
+		n = length();
+	double sum = 0;
+	for (unsigned int i=0; i<n; i++)
+	{
+		sum += get(i);
+	}
+	return sum / n;
+}
+
+float ButterWorthFilter::filter(float x) {
+	signal_buf.append(x);
+	double s2 = signal_buf.inner_product(c_coefficients, num_c_coefficients); // convolved input
+	double s1 = filtered_buf.inner_product(d_coefficients+1, num_d_coefficients-1); // convolved output
+
+	float filtered = (float)(s2 - s1);
+	filtered_buf.append(filtered);
+	return filtered;
+}
 
 double SampleBuffer::getFloatAtOffset(int offset) const {
     return values[ (front + BUFSIZE - offset) % BUFSIZE];
