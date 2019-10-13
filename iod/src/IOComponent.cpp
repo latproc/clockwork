@@ -469,6 +469,7 @@ void IOComponent::add_subscriber(const char *name, const char *topic) {
 }
 
 void IOComponent::setupProperties(MachineInstance *m) {
+std::cout << "IOComponent::setupProperties\n";
 }
 
 
@@ -508,7 +509,6 @@ int32_t IOComponent::filter(int32_t val) {
     return val;
 }
 
-
 class InputFilterSettings {
 public:
     bool property_changed;
@@ -518,13 +518,15 @@ public:
 	uint64_t last_time;			// the last time we calculated speed;_
     uint16_t buffer_len;		// the maximum length of the circular buffer
 	const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
-	double *filter_coeff;		// the Butterworth filter uses these coefficients
+	double *filter_c_coeff;		// the Butterworth filter uses these coefficients
+	double *filter_d_coeff;		// the Butterworth filter uses these coefficients
 	const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
 	const long *filter_type;	// the user can select the filter using a "filter" property
 	const long *position_history; // the amount of position history to use in determining movement
 	const long *speed_tolerance; // the tolerance used in determining movement
 	unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
-	long speed;					// the current estimated speed
+	double speed;					// the current estimated speed
+	double accel;
 	static long default_tolerance;	// a default value for filter_len
 	static long default_filter_len;	// a default value for filter_len
 	static long default_speed_filter_len;	// a default value for speed_filter_len
@@ -532,22 +534,38 @@ public:
 	static long default_speed_tolerance;	// a default value for speed_tolerance
 	FloatBuffer speeds;
 	int rate_len;
-    
+	ButterWorthFilter *input_bwf;
+	ButterWorthFilter *accel_bwf;
+
     InputFilterSettings() :property_changed(true), positions(0), 
 			last_sent(0), prev_sent(0), last_time(0),
-			buffer_len(200), tolerance(&default_tolerance), filter_coeff(0),filter_len(&default_filter_len), 
+			buffer_len(200), tolerance(&default_tolerance), filter_c_coeff(0), filter_d_coeff(0),filter_len(&default_filter_len), 
 			filter_type(0),
 			position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-			speed(0), speeds(4), rate_len(4) {
+			speed(0), accel(0.0), speeds(4), rate_len(4), input_bwf(0), accel_bwf(0) {
 
-		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
-		butterworth_len = sizeof(c) / sizeof(double);
-		filter_coeff = new double[butterworth_len];
-		memmove(filter_coeff, c, sizeof(c));
+		double bw_c[] = { 0.000003756838020,0.000011270514059,0.000011270514059,0.000003756838020 };
+		double bw_d[] = { 1.000000000000,-2.937170728450,2.876299723479,-0.939098940325 };
+		//double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
+		butterworth_len = sizeof(bw_c) / sizeof(double);
+		filter_c_coeff = new double[butterworth_len];
+		memmove(filter_c_coeff, bw_c, sizeof(bw_c));
+		filter_d_coeff = new double[butterworth_len];
+		memmove(filter_d_coeff, bw_c, sizeof(bw_d));
+		input_bwf = new ButterWorthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
+		accel_bwf = new ButterWorthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
 		positions = createBuffer(buffer_len);
 	}
 
 	void update(uint64_t read_time) {
+		double smoothing_coeff[] = { -7, 8, 8, 0, -9, -12, -2, 28, 85 };
+		double first_derivative_coeff[] = { -2086,1862,2441,918,-1440,-3366,-3593,-854,6118 };
+		double second_derivative_coeff[] = { -308,217,340,201,-60,-303,-388,-175,476 };
+		int smoothing_len = sizeof(smoothing_coeff) / sizeof(double);
+		#define SMOOTHING_NORM 99.0f
+		#define FIRST_DERIV_NORM 8316.0f
+		#define SECOND_DERIV_NORM 1386.0f
+
 		if (prev_sent == 0) prev_sent = last_sent;
 		if (last_time == 0) {
 			last_time = read_time;
@@ -556,17 +574,20 @@ public:
 			speeds.append(speed);
 		}
 		else if (read_time - last_time >= 10000) {
-	/*
-			double dt = (double)(read_time - last_time);
-			double dv = (double)(last_sent - prev_sent);
-			speed = (long)( dv / dt * 1000000.0 );
-	*/
-			rate_len = findMovement(positions, 20, *position_history);
-			if (rate_len < *position_history) {
-				speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
-			}
-			else speed = 0.0;
+			double dt = (double)(read_time - last_time) / 100000.0;
+			//rate_len = findMovement(positions, 20, *position_history);
+			// if there has been movement in the last N (N=20) readings, calculate speed
+			//if (rate_len < *position_history) {
+				speed = savitsky_golay_filter( positions, 9, first_derivative_coeff, FIRST_DERIV_NORM ) ;
+				speed = speed / dt;
+				//speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
+				//std::cout << "computed speed " << speed << " at " << getBufferValueAt(positions, 0) << "\n";
+			//}
+			//else speed = 0.0;
 			speeds.append(speed);
+			accel = savitsky_golay_filter( positions, 9, second_derivative_coeff, SECOND_DERIV_NORM );
+			accel = accel_bwf->filter(accel) / dt;
+
 			last_time = read_time;
 			prev_sent = last_sent;
 		}
@@ -601,6 +622,37 @@ AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
 }
 
 void AnalogueInput::setupProperties(MachineInstance *m) {
+	MachineInstance *settings = m->lookup("filter_settings");
+	if (settings) {
+		MachineInstance *c_coeff = settings->lookup("C");
+		MachineInstance *d_coeff = settings->lookup("D");
+		if (c_coeff && d_coeff) {
+			int num_c = c_coeff->parameters.size();
+			int num_d = d_coeff->parameters.size();
+			if (num_c > 0 && num_c == num_d) {
+				config->butterworth_len = num_c;
+				delete[] config->filter_c_coeff;
+				delete[] config->filter_d_coeff;
+				config->filter_c_coeff = new double[num_c];
+				config->filter_d_coeff = new double[num_d];
+				std::cout << "C: " << (int)num_c;
+				for (unsigned int i=0; i<num_c; ++i) {
+					double val;
+					config->filter_c_coeff[i] = c_coeff->parameters[i].val.asFloat(val) ? val : 1.0;
+					std::cout << " " << config->filter_c_coeff[i];
+				}
+				std::cout << "\nD: " << (int)num_d;
+				for (unsigned int i=0; i<num_d; ++i) {
+					double val;
+					config->filter_d_coeff[i] = d_coeff->parameters[i].val.asFloat(val) ? val : 1.0;
+					std::cout << " " << config->filter_d_coeff[i];
+				}
+				std::cout << "\n";
+			}
+		}
+	} else {
+		std::cout << "Warning: analog input " << m->getName() << " has no filter settings\n";
+	}
 	const Value &v = m->getValue("tolerance");
 	if (v.kind == Value::t_integer) {
 		config->tolerance = &v.iValue;
@@ -608,6 +660,9 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 	const Value &v2 = m->getValue("filter");
 	if (v2.kind == Value::t_integer) {
 		config->filter_type = &v2.iValue;
+		if (*config->filter_type == 2) {
+			std::cout << "butterworth filter order " <<config->butterworth_len << "\n";
+		}
 	}
 	const Value &v3 = m->getValue("filter_len");
 	if (v3.kind == Value::t_integer) {
@@ -640,13 +695,18 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		}
 	}
 	else if (config->filter_type && *config->filter_type == 2) {
-		long res = (long)config->filter();
-		config->last_sent = (int32_t)(res / config->butterworth_len *2);
+		if (config->input_bwf) {
+			float res = config->input_bwf->filter((float)raw);
+			config->last_sent = (int32_t)res;
+		}
+		else {
+			long res = (long)config->filter();
+			config->last_sent = (int32_t)(res / config->butterworth_len *2);
+		}
 	}
 	
 	config->update(read_time);
 	
-#if 1
 	/* most machines reading sensor values will be prompted when teh
 		sensor value changes, depending on whether this filter yields a
 		changed value. Some systems such as plugins that operate on 
@@ -655,8 +715,6 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		values do not cause notifications when they change
 	*/
 
-	
-
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
@@ -664,11 +722,11 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
 		o->properties.add("VALUE", (long)raw, SymbolTable::ST_REPLACE);
 		o->properties.add("Position", (long)config->last_sent, SymbolTable::ST_REPLACE);
-		double v = config->speeds.average(config->speeds.length());
-		if (fabs(v)<1.0) v = 0.0;
-		o->properties.add("Velocity", (long)v, SymbolTable::ST_REPLACE);
+		//double v = config->speeds.average(config->speeds.length());
+		//if (fabs(v)<1.0) v = 0.0;
+		o->properties.add("Velocity", config->speeds.get(0), SymbolTable::ST_REPLACE);
+		o->properties.add("Acceleration", config->accel, SymbolTable::ST_REPLACE);
 	}
-#endif
 	return config->last_sent;
 }
 
@@ -826,8 +884,6 @@ int32_t Counter::filter(int32_t val) {
 		values do not cause notifications when they change
 	*/
 
-	
-
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
@@ -951,9 +1007,8 @@ void PIDController::handleChange(std::list<Package*>&work_queue) {
 
 /* ---------- */
 
-
 const char *IOComponent::getStateString() {
-	if (last_event == e_change) return "unstable";
+	if (last_event == e_change && address.bitlen > 1) return "unstable";
 	else if (address.bitlen > 1) return "stable";
 	else if (last_event == e_on) return "turning_on";
 	else if (last_event == e_off) return "turning_off";

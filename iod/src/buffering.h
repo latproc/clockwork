@@ -30,6 +30,12 @@ int findMovement(struct CircularBuffer *buf, double amount, int max_len);
 
 double getBufferValueAt(struct CircularBuffer *buf, unsigned long t); /* return an estimate of the value at time t */
 
+/* return the current head of buffer, smoothed using the given coefficients */
+double savitsky_golay_filter(struct CircularBuffer *buf, int filter_len, double *coefficients, float normal );
+
+/* return the n-point moving average */
+double moving_average(struct CircularBuffer *buf, unsigned int n);
+
 /* calculate the rate of change by a direct method */
 double rate(struct CircularBuffer *buf, int n);
 
