@@ -165,6 +165,18 @@ double slope(struct CircularBuffer *buf) {
     return m;
 }
 
+double savitsky_golay_filter(struct CircularBuffer *buf, int filter_len, double *coefficients, float normal )
+{
+	if (bufferLength(buf) < buf->bufsize || filter_len > buf->bufsize)
+		return getBufferValue(buf, 0);
+	double sum = 0;
+	for (unsigned int i=0; i<filter_len; i++)
+	{
+		sum += getBufferValue(buf, i) * coefficients[filter_len - i - 1];
+	}
+	return sum / normal;
+}
+
 #ifdef TESTING
 
 int failures = 0;
