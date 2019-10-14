@@ -515,27 +515,27 @@ public:
     CircularBuffer *positions;
     int32_t last_sent;			// this is the value to send unless the read value moves away from the mean
     int32_t prev_sent;			// this is previous value of last_sent
-	uint64_t last_time;			// the last time we calculated speed;_
+    uint64_t last_time;			// the last time we calculated speed;_
     uint16_t buffer_len;		// the maximum length of the circular buffer
-	const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
-	double *filter_c_coeff;		// the Butterworth filter uses these coefficients
-	double *filter_d_coeff;		// the Butterworth filter uses these coefficients
-	const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
-	const long *filter_type;	// the user can select the filter using a "filter" property
-	const long *position_history; // the amount of position history to use in determining movement
-	const long *speed_tolerance; // the tolerance used in determining movement
-	unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
-	double speed;					// the current estimated speed
-	double accel;
-	static long default_tolerance;	// a default value for filter_len
-	static long default_filter_len;	// a default value for filter_len
-	static long default_speed_filter_len;	// a default value for speed_filter_len
-	static long default_position_history;	// a default value for position_history
-	static long default_speed_tolerance;	// a default value for speed_tolerance
-	FloatBuffer speeds;
-	int rate_len;
-	ButterWorthFilter *input_bwf;
-	ButterWorthFilter *accel_bwf;
+    const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
+    double *filter_c_coeff;		// the Butterworth filter uses these coefficients
+    double *filter_d_coeff;		// the Butterworth filter uses these coefficients
+    const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
+    const long *filter_type;	// the user can select the filter using a "filter" property
+    const long *position_history; // the amount of position history to use in determining movement
+    const long *speed_tolerance; // the tolerance used in determining movement
+    unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
+    double speed;					// the current estimated speed
+    double accel;
+    static long default_tolerance;	// a default value for filter_len
+    static long default_filter_len;	// a default value for filter_len
+    static long default_speed_filter_len;	// a default value for speed_filter_len
+    static long default_position_history;	// a default value for position_history
+    static long default_speed_tolerance;	// a default value for speed_tolerance
+    FloatBuffer speeds;
+    int rate_len;
+    ButterWorthFilter *input_bwf;
+    ButterWorthFilter *accel_bwf;
 
     InputFilterSettings() :property_changed(true), positions(0), 
 			last_sent(0), prev_sent(0), last_time(0),
@@ -566,6 +566,9 @@ public:
 		#define FIRST_DERIV_NORM 8316.0f
 		#define SECOND_DERIV_NORM 1386.0f
 
+		// replace the raw value the positions buffer with the filtered value
+		setBufferValue(positions, last_sent);
+
 		if (prev_sent == 0) prev_sent = last_sent;
 		if (last_time == 0) {
 			last_time = read_time;
@@ -574,19 +577,21 @@ public:
 			speeds.append(speed);
 		}
 		else if (read_time - last_time >= 10000) {
-			double dt = (double)(read_time - last_time) / 100000.0;
+			double dt = (double)(read_time - last_time) / 1000000.0;
 			//rate_len = findMovement(positions, 20, *position_history);
 			// if there has been movement in the last N (N=20) readings, calculate speed
 			//if (rate_len < *position_history) {
-				speed = savitsky_golay_filter( positions, 9, first_derivative_coeff, FIRST_DERIV_NORM ) ;
+				speed = savitsky_golay_filter(positions, 9, first_derivative_coeff, FIRST_DERIV_NORM ) ;
 				speed = speed / dt;
 				//speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
 				//std::cout << "computed speed " << speed << " at " << getBufferValueAt(positions, 0) << "\n";
 			//}
 			//else speed = 0.0;
 			speeds.append(speed);
-			accel = savitsky_golay_filter( positions, 9, second_derivative_coeff, SECOND_DERIV_NORM );
-			accel = accel_bwf->filter(accel) / dt;
+assert(smoothing_len == 9);
+			accel = savitsky_golay_filter(positions, smoothing_len, second_derivative_coeff, SECOND_DERIV_NORM );
+			accel = accel / dt;
+			//accel = accel_bwf->filter(accel) / dt;
 
 			last_time = read_time;
 			prev_sent = last_sent;
@@ -679,11 +684,12 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 }
 
 int32_t AnalogueInput::filter(int32_t raw) {
-    if (config->property_changed) {
-        config->property_changed = false;
-    }
-	addSample(config->positions, (long)read_time, (double)raw);
+	if (config->property_changed) {
+		config->property_changed = false;
+	}
 
+	// prepare config->last_sent by filtering the input value
+	addSample(config->positions, (long)read_time, (double)raw);
 	if (config->filter_type && *config->filter_type == 0 ) {
 		config->last_sent = raw;
 	}
@@ -696,7 +702,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
 	}
 	else if (config->filter_type && *config->filter_type == 2) {
 		if (config->input_bwf) {
-			float res = config->input_bwf->filter((float)raw);
+			double res = config->input_bwf->filter((float)raw);
 			config->last_sent = (int32_t)res;
 		}
 		else {
@@ -724,7 +730,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		o->properties.add("Position", (long)config->last_sent, SymbolTable::ST_REPLACE);
 		//double v = config->speeds.average(config->speeds.length());
 		//if (fabs(v)<1.0) v = 0.0;
-		o->properties.add("Velocity", config->speeds.get(0), SymbolTable::ST_REPLACE);
+		o->properties.add("Velocity", config->speed, SymbolTable::ST_REPLACE);
 		o->properties.add("Acceleration", config->accel, SymbolTable::ST_REPLACE);
 	}
 	return config->last_sent;
