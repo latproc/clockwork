@@ -1,6 +1,6 @@
 all:	
 	[ -d "build" ] || mkdir build
-	cd build && cmake .. && make -j6 install
+	cd build && cmake .. && make $(JOBS) install
 
 
 release:
