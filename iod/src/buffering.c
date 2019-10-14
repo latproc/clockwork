@@ -44,6 +44,10 @@ void addSample(struct CircularBuffer *buf, long time, double val) {
   buf->times[buf->front] = time;
 }
 
+void setBufferValue(struct CircularBuffer *buf, double val) {
+  buf->values[buf->front] = val;
+}
+
 void addSampleDebug(struct CircularBuffer *buf, long time, double val) {
 	addSample(buf, val, time);
 	printf("buffer added: %5.2f, %ld at %d\n", val, time, buf->front);

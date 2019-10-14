@@ -23,6 +23,8 @@ double bufferAverage(struct CircularBuffer *buf, int n);
 double bufferSum(struct CircularBuffer *buf, int n);
 double getBufferValue(struct CircularBuffer *buf, int n);
 void addSample(struct CircularBuffer *buf, long time, double val);
+/* overwrite the last sample value */
+void setBufferValue(struct CircularBuffer *buf, double val);
 
 /* seek back along the buffer to find the number of samples 
     before a total movement of amount occurred, ignoring direction */

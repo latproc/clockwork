@@ -83,7 +83,7 @@ pos Value;
 vel Value;
 acc Value;
 
-Update MACHINE raw_input, smoothed_input, vel_input {
+Update MACHINE raw_input, smoothed_input, vel_input, acc_input {
   LOCAL OPTION delay 100;
   update WHEN SELF IS idle AND TIMER >= delay;
   idle DEFAULT;
@@ -95,4 +95,4 @@ Update MACHINE raw_input, smoothed_input, vel_input {
     acc_input.VALUE := ain.Acceleration; 
   }
 }
-update Update raw, pos, vel;
+update Update raw, pos, vel, acc;
