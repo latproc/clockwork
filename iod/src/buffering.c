@@ -139,7 +139,7 @@ int size(struct CircularBuffer *buf) {
     return buf->bufsize;
 }
 
-int length(struct CircularBuffer *buf) {
+unsigned int length(struct CircularBuffer *buf) {
     if (buf->front == -1) return 0;
     return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
 }
@@ -168,7 +168,7 @@ double slope(struct CircularBuffer *buf) {
     return m;
 }
 
-double savitsky_golay_filter(struct CircularBuffer *buf, int filter_len, double *coefficients, float normal )
+double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len, double *coefficients, float normal )
 {
 	if (length(buf) < buf->bufsize || filter_len > buf->bufsize)
 		return getBufferValue(buf, 0);

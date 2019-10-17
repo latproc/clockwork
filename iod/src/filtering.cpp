@@ -17,7 +17,7 @@ Buffer::Buffer(int buf_size): BUFSIZE(buf_size) {
     back = -1;
 }
 
-int Buffer::length() const
+unsigned int Buffer::length() const
 {
     if (front == -1) return 0;
     return (front - back + BUFSIZE) % BUFSIZE + 1;
@@ -132,12 +132,10 @@ int findMovement(FloatBuffer *buf, double amount, int max_len) {
 double FloatBuffer::inner_product(double *coefficients, unsigned int num_coeff ) const
 {
 	float sum = 0;
-	int l = length();
-	const char *sep = "";
+	unsigned int l = length();
 	for (unsigned int i=0; i<num_coeff; i++)
 	{
 		float x = (i<length()) ? get(i) : 0;
-		sep = " + ";
 		sum += x * coefficients[i];
 	}
 	return sum;
@@ -202,7 +200,7 @@ double FloatBuffer::movingAverage(unsigned int n) const {
 	return sum / n;
 }
 
-float ButterWorthFilter::filter(float x) {
+float ButterworthFilter::filter(float x) {
 	signal_buf.append(x);
 	double s2 = signal_buf.inner_product(c_coefficients, num_c_coefficients); // convolved input
 	double s1 = filtered_buf.inner_product(d_coefficients+1, num_d_coefficients-1); // convolved output

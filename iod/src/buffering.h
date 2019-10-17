@@ -7,7 +7,7 @@ extern "C" {
 
 #include <inttypes.h>
 struct CircularBuffer {
-    int bufsize;
+    unsigned int bufsize;
     int front;
     int back;
     double total;
@@ -18,7 +18,7 @@ struct CircularBuffer {
 struct CircularBuffer *createBuffer(int size);
 void destroyBuffer(struct CircularBuffer *buf);
 int size(struct CircularBuffer *buf);
-int length(struct CircularBuffer *buf);
+unsigned int length(struct CircularBuffer *buf);
 double bufferAverage(struct CircularBuffer *buf, int n);
 double bufferSum(struct CircularBuffer *buf, int n);
 double getBufferValue(struct CircularBuffer *buf, int n);
@@ -33,7 +33,7 @@ int findMovement(struct CircularBuffer *buf, double amount, int max_len);
 double getBufferValueAt(struct CircularBuffer *buf, unsigned long t); /* return an estimate of the value at time t */
 
 /* return the current head of buffer, smoothed using the given coefficients */
-double savitsky_golay_filter(struct CircularBuffer *buf, int filter_len, double *coefficients, float normal );
+double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len, double *coefficients, float normal );
 
 /* return the n-point moving average */
 double moving_average(struct CircularBuffer *buf, unsigned int n);

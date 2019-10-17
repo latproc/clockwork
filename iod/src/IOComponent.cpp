@@ -513,8 +513,8 @@ class InputFilterSettings {
 public:
     bool property_changed;
     CircularBuffer *positions;
-    int32_t last_sent;			// this is the value to send unless the read value moves away from the mean
-    int32_t prev_sent;			// this is previous value of last_sent
+    double last_sent;			// this is the value to send unless the read value moves away from the mean
+    double prev_sent;			// this is previous value of last_sent
     uint64_t last_time;			// the last time we calculated speed;_
     uint16_t buffer_len;		// the maximum length of the circular buffer
     const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
@@ -526,7 +526,9 @@ public:
     const long *speed_tolerance; // the tolerance used in determining movement
     unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
     double speed;					// the current estimated speed
+    double speed_scale;					// the current estimated speed
     double accel;
+    double accel_scale;
     static long default_tolerance;	// a default value for filter_len
     static long default_filter_len;	// a default value for filter_len
     static long default_speed_filter_len;	// a default value for speed_filter_len
@@ -534,15 +536,15 @@ public:
     static long default_speed_tolerance;	// a default value for speed_tolerance
     FloatBuffer speeds;
     int rate_len;
-    ButterWorthFilter *input_bwf;
-    ButterWorthFilter *accel_bwf;
+    ButterworthFilter *input_bwf;
+    ButterworthFilter *accel_bwf;
 
     InputFilterSettings() :property_changed(true), positions(0), 
-			last_sent(0), prev_sent(0), last_time(0),
+			last_sent(0.0), prev_sent(0.0), last_time(0),
 			buffer_len(200), tolerance(&default_tolerance), filter_c_coeff(0), filter_d_coeff(0),filter_len(&default_filter_len), 
 			filter_type(0),
 			position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-			speed(0), accel(0.0), speeds(4), rate_len(4), input_bwf(0), accel_bwf(0) {
+			speed(0.0),speed_scale(1.0), accel(0.0), accel_scale(1.0), speeds(4), rate_len(4), input_bwf(0), accel_bwf(0) {
 
 		double bw_c[] = { 0.000003756838020,0.000011270514059,0.000011270514059,0.000003756838020 };
 		double bw_d[] = { 1.000000000000,-2.937170728450,2.876299723479,-0.939098940325 };
@@ -552,8 +554,8 @@ public:
 		memmove(filter_c_coeff, bw_c, sizeof(bw_c));
 		filter_d_coeff = new double[butterworth_len];
 		memmove(filter_d_coeff, bw_c, sizeof(bw_d));
-		input_bwf = new ButterWorthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
-		accel_bwf = new ButterWorthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
+		input_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
+		accel_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
 		positions = createBuffer(buffer_len);
 	}
 
@@ -568,7 +570,7 @@ public:
 
 		// replace the raw value the positions buffer with the filtered value
 		setBufferValue(positions, last_sent);
-		if (prev_sent == 0) prev_sent = last_sent;
+		//if (prev_sent == 0.0) prev_sent = last_sent; TBD wrong?
 		if (last_time == 0) {
 			last_time = read_time;
 			prev_sent = last_sent;
@@ -624,14 +626,36 @@ AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
 	regular_polls.insert(this);
 }
 
+static bool getFloatValue(MachineInstance *scope, const char *name, double &result) {
+  const Value &v = scope->getValue(name);
+  if (v.kind == Value::t_integer || v.kind == Value::t_float) {
+    double res;
+    if (v.asFloat(res)) {
+      result = res;
+      return true;
+    }
+  }
+  return false;
+}
+
 void AnalogueInput::setupProperties(MachineInstance *m) {
 	MachineInstance *settings = m->lookup("filter_settings");
 	if (settings) {
+		double speed_scale = 1.0, accel_scale = 1.0;
+		if (getFloatValue(settings, "velocity_scale", speed_scale)) {
+			config->speed_scale = speed_scale;
+			std::cout << m->getName() << " set velocity scale to: " << config->speed_scale << "\n";
+		}
+		const Value &v = m->getValue("acceleration_scale");
+		if (getFloatValue(settings, "acceleration_scale", accel_scale)) {
+			config->accel_scale = accel_scale;
+			std::cout << m->getName() << " set accel scale to: " << config->accel_scale << "\n";
+		}
 		MachineInstance *c_coeff = settings->lookup("C");
 		MachineInstance *d_coeff = settings->lookup("D");
 		if (c_coeff && d_coeff) {
-			int num_c = c_coeff->parameters.size();
-			int num_d = d_coeff->parameters.size();
+			unsigned int num_c = c_coeff->parameters.size();
+			unsigned int num_d = d_coeff->parameters.size();
 			if (num_c > 0 && num_c == num_d) {
 				config->butterworth_len = num_c;
 				delete[] config->filter_c_coeff;
@@ -651,6 +675,14 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 					std::cout << " " << config->filter_d_coeff[i];
 				}
 				std::cout << "\n";
+				// swap the filter, TBD copy current values from old filter?
+				ButterworthFilter *input_bwf = new ButterworthFilter(num_c, config->filter_c_coeff, num_d, config->filter_d_coeff);
+				delete config->input_bwf;
+				config->input_bwf = input_bwf;
+
+			}
+			else {
+				std::cout << "filter parameters are incorrect: \n";
 			}
 		}
 	} else {
@@ -688,7 +720,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
 
 	// prepare config->last_sent by filtering the input value
 	addSample(config->positions, (long)read_time, (double)raw);
-	if (config->filter_type && *config->filter_type == 0 ) {
+	if (config->filter_type && *config->filter_type == 0 ) { //TBD wrong?
 		config->last_sent = raw;
 	}
 	else if ( !config->filter_type || (config->filter_type && *config->filter_type == 1))  {
@@ -701,11 +733,12 @@ int32_t AnalogueInput::filter(int32_t raw) {
 	else if (config->filter_type && *config->filter_type == 2) {
 		if (config->input_bwf) {
 			double res = config->input_bwf->filter((float)raw);
-			config->last_sent = (int32_t)res;
+			config->last_sent = res;
 		}
 		else {
+			// TBD can't happen?
 			long res = (long)config->filter();
-			config->last_sent = (int32_t)(res / config->butterworth_len *2);
+			config->last_sent = res / config->butterworth_len * 2.0;
 		}
 	}
 	
@@ -728,8 +761,8 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		o->properties.add("Position", (long)config->last_sent, SymbolTable::ST_REPLACE);
 		//double v = config->speeds.average(config->speeds.length());
 		//if (fabs(v)<1.0) v = 0.0;
-		o->properties.add("Velocity", config->speed, SymbolTable::ST_REPLACE);
-		o->properties.add("Acceleration", config->accel, SymbolTable::ST_REPLACE);
+		o->properties.add("Velocity", config->speed * config->speed_scale, SymbolTable::ST_REPLACE);
+		o->properties.add("Acceleration", config->accel * config->accel_scale, SymbolTable::ST_REPLACE);
 	}
 	return config->last_sent;
 }
