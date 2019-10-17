@@ -9,7 +9,7 @@ L_Modules LIST Beckhoff_EK1814, Beckhoff_EL2535, Beckhoff_EL3164;
 L_Points LIST EK1814_OUT_0, EK1814_OUT_1, EK1814_OUT_2, EK1814_OUT_3, 
   EK1814_IN_0, EK1814_IN_1, EK1814_IN_2, EK1814_IN_3,
   ain, ain_error, ain_overrange, ain_settings, ain_underrange,
-  raw, pos, update;
+  raw, pos, vel, acc, update, helper;
 
 
 EK1814_OUT_0	POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EK1814, 0;
