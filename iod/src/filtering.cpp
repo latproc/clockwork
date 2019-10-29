@@ -70,8 +70,28 @@ double Buffer::average(int n)
   std::cout << i << ":" <<getFloatAtIndex(i) << "\n";
 #endif
   res += getFloatAtIndex(i);
+assert(total_ == res);
   return res / (double)n;
 #endif
+}
+
+double Buffer::stddev(int n)
+{
+  boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
+  double avg = average(n);
+  double res = 0.0;
+  if (front == -1) return 0.0; // empty buffer
+  if (n == 0) return 0.0;
+  int len = length();
+  if (len <= 1) return 0.0;
+  if (len < n) n = len;
+  int i = (front + BUFSIZE - n + 1) % BUFSIZE;
+  do {
+    double val = getFloatAtIndex(i) - avg;
+    res += val * val;
+    i = (i+1) % BUFSIZE;
+  } while (i != front);
+  return sqrt(res / (double)(n-1));
 }
 
 void LongBuffer::append(long val)

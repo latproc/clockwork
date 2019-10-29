@@ -78,21 +78,25 @@ Value MACHINE {
   EXPORT READONLY 16BIT VALUE;
   OPTION VALUE 0;
 }
+time Value;
 raw Value;
 pos Value;
 vel Value;
 acc Value;
+stddev Value;
 
-Update MACHINE raw_input, smoothed_input, vel_input, acc_input {
+Update MACHINE raw_input, smoothed_input, vel_input, acc_input, stddev_input {
   LOCAL OPTION delay 100;
   update WHEN SELF IS idle AND TIMER >= delay;
   idle DEFAULT;
 
   ENTER update { 
-    raw_input.VALUE := ain.VALUE; 
-    smoothed_input.VALUE := 0.9 * ain.Position; 
+    time_input.VALUE := ain.IOTIME; 
+    raw_input.VALUE := ain.raw; 
+    smoothed_input.VALUE := 0.9 * ain.VALUE; 
     vel_input.VALUE := ain.Velocity; 
     acc_input.VALUE := ain.Acceleration; 
+    stddev_input.VALUE := ain.stddev; 
   }
 }
-update Update raw, pos, vel, acc;
+update Update raw, pos, vel, acc, stddev;
