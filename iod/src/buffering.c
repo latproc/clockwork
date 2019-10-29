@@ -100,6 +100,25 @@ double bufferAverage(struct CircularBuffer *buf, int n) {
 	return (n==0) ? n : bufferSum(buf, n) / n;
 }
 
+double bufferStddev(struct CircularBuffer *buf, int n)
+{
+  double res = 0.0;
+  int i = length(buf);
+  if (i>n) i = n;
+  if (n>i) n = i;
+  if (n <= 1) return 0.0;
+  {
+    double avg = bufferAverage(buf, n);
+    do {
+      double val;
+      i--;
+      val = getBufferValue(buf, i) - avg;
+      res = res + val * val;
+    } while (i>0);
+  }
+  return sqrt(res / (double)(n-1));
+}
+
 double getBufferValue(struct CircularBuffer *buf, int n) {
 	int idx = bufferIndexFor(buf, n);
 	return buf->values[ idx ];

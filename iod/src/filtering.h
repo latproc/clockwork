@@ -15,6 +15,7 @@ public:
     double difference(int idx_a, int idx_b) const;
     double distance(int idx_a, int idx_b) const;
     double average(int n);
+    double stddev(int n);
     unsigned int length() const;
     void reset();
     Buffer(int buf_size);

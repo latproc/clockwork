@@ -20,6 +20,7 @@ void destroyBuffer(struct CircularBuffer *buf);
 int size(struct CircularBuffer *buf);
 unsigned int length(struct CircularBuffer *buf);
 double bufferAverage(struct CircularBuffer *buf, int n);
+double bufferStddev(struct CircularBuffer *buf, int n);
 double bufferSum(struct CircularBuffer *buf, int n);
 double getBufferValue(struct CircularBuffer *buf, int n);
 void addSample(struct CircularBuffer *buf, long time, double val);
