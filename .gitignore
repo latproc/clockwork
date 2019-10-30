@@ -6,6 +6,8 @@ iod/modbusd
 iod/persistd
 states.dat
 devices.dat
+persist.dat
+scope.dat
 iod/tests/bin
 stage/
 
