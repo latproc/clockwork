@@ -25,7 +25,7 @@
 		destroyBuffer(buf);
 		buf = createBuffer(0);
 		EXPECT_EQ(nullptr, buf) << "does nothing when the size is invalid";
-		destroyBuffer(buf);
+		if (buf) destroyBuffer(buf);
 	}
 
 	TEST_F(BufferTest, destroyBuffer) {
@@ -53,6 +53,20 @@
 		destroyBuffer(buf);
 	}
 
+	TEST_F(BufferTest, bufferSum) {
+		// double bufferSum(struct CircularBuffer *buf, int n);
+		struct CircularBuffer *buf = createBuffer(3);
+		EXPECT_EQ(0, bufferSum(buf,3)) << "returns zero when there are no samples";
+		addSample(buf, 1, 10.0);
+		addSample(buf, 1, 1.0);
+		addSample(buf, 1, 2.0);
+		addSample(buf, 1, 3.0);
+		EXPECT_EQ(5.0, bufferSum(buf,2)) << "returns the sum of the buffer samples when the count is less than the length";
+		EXPECT_EQ(6.0, bufferSum(buf,5)) << "returns the average when the sample count greater than the buffer size";
+		EXPECT_EQ(0, bufferSum(buf,-1)) << "returns 0 when the sample count is invalid";
+		destroyBuffer(buf);
+	}
+
 	TEST_F(BufferTest, bufferAverage) {
 		// double bufferAverage(struct CircularBuffer *buf, int n);
 		struct CircularBuffer *buf = createBuffer(3);
@@ -67,12 +81,16 @@
 		destroyBuffer(buf);
 	}
 
-	TEST_F(BufferTest, bufferSum) {
-		// double bufferSum(struct CircularBuffer *buf, int n);
-	}
-
 	TEST_F(BufferTest, getBufferValue) {
 		// double getBufferValue(struct CircularBuffer *buf, int n);
+		struct CircularBuffer *buf = createBuffer(3);
+		addSample(buf, 1, 3.0);
+		EXPECT_EQ(1, bufferLength(buf)) << "extends the buffer if it is not full";
+		addSample(buf, 1, 4.0);
+		addSample(buf, 1, 5.0);
+		addSample(buf, 1, 6.0);
+		EXPECT_EQ(6.0, getBufferValue(buf, 0)) << "adds the sample when the buffer is full";
+		EXPECT_EQ(3, bufferLength(buf)) << "does not extend the buffer when full";
 	}
 
 	TEST_F(BufferTest, addSample) {
@@ -94,7 +112,7 @@
 		addSample(buf, 6, 3.0);
 		EXPECT_EQ(1.0, getBufferValueAt(buf,1)) << "returns the buffer value when known";
 		EXPECT_EQ(1.0, getBufferValueAt(buf,0)) << "returns the earliest entry when the time is earlier than the earliest sample";
-		EXPECT_EQ(1.5, getBufferValueAt(buf,3)) << "returns an estimate when the time is earlier than the earliest sample";
+		EXPECT_EQ(1.5, getBufferValueAt(buf,3)) << "returns an estimate when the time is within the time range of the samples";
 		EXPECT_EQ(3.0, getBufferValueAt(buf,8)) << "returns the latest entry when the time is later than the latest sample";
 		destroyBuffer(buf);
 	}
@@ -118,10 +136,9 @@
 		addSample(buf, 2, 1.0);
 		addSample(buf, 4, 2.0);
 		addSample(buf, 6, 3.0);
-		EXPECT_EQ(0.5, rate(buf,3)) << "returns and estimate of slope";
+		EXPECT_EQ(0.5, slope(buf)) << "returns an estimate of slope";
 		destroyBuffer(buf);
 	}
-
 
 	int main(int argc, char* argv[])
 	{

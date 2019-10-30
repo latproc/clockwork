@@ -1,7 +1,7 @@
 if (RUN_TESTS)
     add_subdirectory(test_value)
     add_subdirectory(test_bit_ops)
-		#    add_subdirectory(buffering_test)
+		add_subdirectory(buffering_test)
 endif()
 # if (RUN_TESTS)
 #

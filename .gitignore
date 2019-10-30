@@ -55,6 +55,9 @@ gmon.out
 .svn
 CVS
 
+# local cmake customisations
+LocalCMakeLists.cmake
+
 # automatic backup files
 *~.nib
 *.swp

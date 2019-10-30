@@ -7,19 +7,19 @@
 
 struct CircularBuffer *createBuffer(int size)
 {
-	  if (size <= 0) return 0;
-    struct CircularBuffer *buf = (struct CircularBuffer *)malloc(sizeof(struct CircularBuffer));
+    struct CircularBuffer *buf;
+	if (size <= 0) return 0;
+	buf = (struct CircularBuffer *)malloc(sizeof(struct CircularBuffer));
     buf->bufsize = size;
     buf->front = -1;
     buf->back = -1;
     buf->values = (double*)malloc( sizeof(double) * size);
     buf->times = (uint64_t*)malloc( sizeof(uint64_t) * size);
-	  buf->total = 0;
+	buf->total = 0;
     return buf;
 }
 
 void destroyBuffer(struct CircularBuffer *buf) {
-	  if (!buf) return;
     free(buf->values);
     free(buf->times);
     free(buf);
@@ -42,6 +42,10 @@ void addSample(struct CircularBuffer *buf, long time, double val) {
   buf->total += val;
   buf->values[buf->front] = val;
   buf->times[buf->front] = time;
+}
+
+void setBufferValue(struct CircularBuffer *buf, double val) {
+  buf->values[buf->front] = val;
 }
 
 void addSampleDebug(struct CircularBuffer *buf, long time, double val) {
@@ -91,10 +95,28 @@ double rateDebug(struct CircularBuffer *buf) {
 }
 
 double bufferAverage(struct CircularBuffer *buf, int n) {
-	if (n<0) return 0;
 	int l = bufferLength(buf);
 	if (n>l) n = l;
 	return (n==0) ? n : bufferSum(buf, n) / n;
+}
+
+double bufferStddev(struct CircularBuffer *buf, int n)
+{
+  double res = 0.0;
+  int i = bufferLength(buf);
+  if (i>n) i = n;
+  if (n>i) n = i;
+  if (n <= 1) return 0.0;
+  {
+    double avg = bufferAverage(buf, n);
+    do {
+      double val;
+      i--;
+      val = getBufferValue(buf, i) - avg;
+      res = res + val * val;
+    } while (i>0);
+  }
+  return sqrt(res / (double)(n-1));
 }
 
 double getBufferValue(struct CircularBuffer *buf, int n) {
@@ -124,6 +146,7 @@ double bufferSum(struct CircularBuffer *buf, int n) {
 	//return buf->total;
 	int i = bufferLength(buf);
 	if (i>n) i = n;
+	if (i<=0) return 0;
 	double tot = 0.0;
 	while (i) {
 		i--;
@@ -136,7 +159,7 @@ int size(struct CircularBuffer *buf) {
     return buf->bufsize;
 }
 
-int bufferLength(struct CircularBuffer *buf) {
+unsigned int bufferLength(struct CircularBuffer *buf) {
     if (buf->front == -1) return 0;
     return (buf->front - buf->back + buf->bufsize) % buf->bufsize + 1;
 }
@@ -165,7 +188,7 @@ double slope(struct CircularBuffer *buf) {
     return m;
 }
 
-double savitsky_golay_filter(struct CircularBuffer *buf, int filter_len, double *coefficients, float normal )
+double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len, double *coefficients, float normal )
 {
 	if (bufferLength(buf) < buf->bufsize || filter_len > buf->bufsize)
 		return getBufferValue(buf, 0);
@@ -177,7 +200,7 @@ double savitsky_golay_filter(struct CircularBuffer *buf, int filter_len, double 
 	return sum / normal;
 }
 
-#ifdef TESTING
+#ifdef TEST
 
 int failures = 0;
 
@@ -212,7 +235,7 @@ int main(int argc, const char *argv[]) {
 	++tests; if (bufferLength(mybuf) != test_buffer_size) { fail(tests); }
 	++tests; if (sum(mybuf, size(mybuf)) / test_buffer_size != average(mybuf,size(mybuf))) 
 				{ fail(tests); }
-	if (test_buffer_size == 4) { /* this test only works if the buffer is of length 4 */
+	if (test_buffer_size == 4) { /* this test only works if the buffer is of bufferLength 4 */
 		++tests; if (sum(mybuf, size(mybuf)) != (6 + 7 + 8 + 9)*1.5) { fail(tests); }
 	}
 

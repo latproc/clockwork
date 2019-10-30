@@ -17,7 +17,7 @@ Buffer::Buffer(int buf_size): BUFSIZE(buf_size) {
     back = -1;
 }
 
-int Buffer::length() const
+unsigned int Buffer::length() const
 {
     if (front == -1) return 0;
     return (front - back + BUFSIZE) % BUFSIZE + 1;
@@ -56,6 +56,7 @@ double Buffer::average(int n)
   if (len <= 0) return 0.0;
   if (len < n) n = len;
 //  return total_ / (double)n;
+#if 1
   int i = (front + BUFSIZE - n + 1) % BUFSIZE;
   while (i != front)
   {
@@ -69,7 +70,28 @@ double Buffer::average(int n)
   std::cout << i << ":" <<getFloatAtIndex(i) << "\n";
 #endif
   res += getFloatAtIndex(i);
+assert(total_ == res);
   return res / (double)n;
+#endif
+}
+
+double Buffer::stddev(int n)
+{
+  boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);;
+  double avg = average(n);
+  double res = 0.0;
+  if (front == -1) return 0.0; // empty buffer
+  if (n == 0) return 0.0;
+  int len = length();
+  if (len <= 1) return 0.0;
+  if (len < n) n = len;
+  int i = (front + BUFSIZE - n + 1) % BUFSIZE;
+  do {
+    double val = getFloatAtIndex(i) - avg;
+    res += val * val;
+    i = (i+1) % BUFSIZE;
+  } while (i != front);
+  return sqrt(res / (double)(n-1));
 }
 
 void LongBuffer::append(long val)
@@ -130,12 +152,10 @@ int findMovement(FloatBuffer *buf, double amount, int max_len) {
 double FloatBuffer::inner_product(double *coefficients, unsigned int num_coeff ) const
 {
 	float sum = 0;
-	int l = length();
-	const char *sep = "";
+	unsigned int l = length();
 	for (unsigned int i=0; i<num_coeff; i++)
 	{
 		float x = (i<length()) ? get(i) : 0;
-		sep = " + ";
 		sum += x * coefficients[i];
 	}
 	return sum;
@@ -187,7 +207,20 @@ double FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf)
   return m;
 }
 
-float ButterWorthFilter::filter(float x) {
+
+double FloatBuffer::movingAverage(unsigned int n) const {
+	if (n == 0) return 0.0;
+	if (length() < n)
+		n = length();
+	double sum = 0;
+	for (unsigned int i=0; i<n; i++)
+	{
+		sum += get(i);
+	}
+	return sum / n;
+}
+
+float ButterworthFilter::filter(float x) {
 	signal_buf.append(x);
 	double s2 = signal_buf.inner_product(c_coefficients, num_c_coefficients); // convolved input
 	double s1 = filtered_buf.inner_product(d_coefficients+1, num_d_coefficients-1); // convolved output
