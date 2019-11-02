@@ -738,32 +738,32 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 				std::cout << "filter parameters are incorrect: \n";
 			}
 		}
-	} else {
-		std::cout << "Warning: analog input " << m->getName() << " has no filter settings\n";
-	}
-	const Value &v = m->getValue("tolerance");
-	if (v.kind == Value::t_integer) {
-		config->tolerance = &v.iValue;
-	}
-	const Value &v2 = m->getValue("filter");
-	if (v2.kind == Value::t_integer) {
-		config->filter_type = &v2.iValue;
-		if (*config->filter_type == 2) {
-			std::cout << "butterworth filter order " <<config->butterworth_len << "\n";
+		const Value &v1= settings->getValue("tolerance");
+		if (v1.kind == Value::t_integer) {
+			config->tolerance = &v1.iValue;
 		}
-	}
-	const Value &v3 = m->getValue("filter_len");
-	if (v3.kind == Value::t_integer) {
-		config->filter_len = &v3.iValue;
-	}
-	const Value &v4 = m->getValue("speed_tolerance");
-	if (v4.kind == Value::t_integer) {
-		config->speed_tolerance= &v4.iValue;
-	}
-	const Value &v5 = m->getValue("position_history");
-	if (v5.kind == Value::t_integer) {
-		config->position_history = &v5.iValue;
-	}
+		const Value &v2 = settings->getValue("filter");
+		if (v2.kind == Value::t_integer) {
+			config->filter_type = &v2.iValue;
+			if (*config->filter_type == 2) {
+				std::cout << "butterworth filter order " <<config->butterworth_len << "\n";
+			}
+		}
+		const Value &v3 = settings->getValue("filter_len");
+		if (v3.kind == Value::t_integer) {
+			config->filter_len = &v3.iValue;
+		}
+		const Value &v4 = settings->getValue("speed_tolerance");
+		if (v4.kind == Value::t_integer) {
+			config->speed_tolerance= &v4.iValue;
+		}
+		const Value &v5 = settings->getValue("position_history");
+		if (v5.kind == Value::t_integer) {
+			config->position_history = &v5.iValue;
+		}
+		} else {
+			std::cout << "Warning: analog input " << m->getName() << " has no filter settings\n";
+		}
 }
 
 int32_t AnalogueInput::filter(int32_t raw) {
@@ -1029,8 +1029,8 @@ public:
     uint32_t set_point;
     
 	float estimated_speed;
-	float Pe; 		// used for process error: SetPoint - EstimatedSpeed;
-	float current; 	// current power level this is our PV (control variable)
+	float Pe;			// used for process error: SetPoint - EstimatedSpeed;
+	float current;		// current power level this is our PV (control variable)
 	float last_pos;
 	uint64_t position;
 	uint64_t measure_time;
@@ -1186,8 +1186,8 @@ void IOComponent::setDefaultData(uint8_t *data){
 	display(data, process_data_size);
 	std::cout << "\n";
 #endif
-	if (!default_data) 	
-		default_data = new uint8_t[process_data_size];
+  if (!default_data)
+    default_data = new uint8_t[process_data_size];
 	memcpy(default_data, data, process_data_size);
 }
 
