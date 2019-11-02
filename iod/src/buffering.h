@@ -19,6 +19,8 @@ struct CircularBuffer *createBuffer(int size);
 void destroyBuffer(struct CircularBuffer *buf);
 int size(struct CircularBuffer *buf);
 unsigned int bufferLength(struct CircularBuffer *buf);
+
+/* return the n-point moving average */
 double bufferAverage(struct CircularBuffer *buf, int n);
 double bufferStddev(struct CircularBuffer *buf, int n);
 double bufferSum(struct CircularBuffer *buf, int n);
@@ -35,9 +37,6 @@ double getBufferValueAt(struct CircularBuffer *buf, unsigned long t); /* return 
 
 /* return the current head of buffer, smoothed using the given coefficients */
 double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len, double *coefficients, float normal );
-
-/* return the n-point moving average */
-double moving_average(struct CircularBuffer *buf, unsigned int n);
 
 /* calculate the rate of change by a direct method */
 double rate(struct CircularBuffer *buf, int n);

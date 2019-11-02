@@ -199,18 +199,6 @@ double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len
 	return sum / normal;
 }
 
-double moving_average(struct CircularBuffer *buf, unsigned int n) {
-	if (n == 0) return 0.0;
-	if (bufferLength(buf) < n)
-		n = bufferLength(buf);
-	double sum = 0;
-	for (unsigned int i=0; i<n; i++)
-	{
-		sum += getBufferValue(buf, i);
-	}
-	return sum / n;
-}
-
 #ifdef TEST
 
 int failures = 0;
