@@ -20,3 +20,8 @@ debug:
 
 debug-install:	debug
 	cd build/Debug && make install
+
+xcode:
+	[ -d "xcode" ] || mkdir xcode
+	cd xcode && cmake -G Xcode .. && xcodebuild -parallelizeTargets -jobs 6
+
