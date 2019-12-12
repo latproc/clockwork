@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 echo deadline > /sys/block/sda/queue/scheduler
 echo 1 > /sys/block/sda/queue/iosched/fifo_batch
