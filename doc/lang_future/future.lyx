@@ -456,6 +456,28 @@ The way property values are stored in machines desparately needs an overhaul;
 \end_layout
 
 \begin_layout Subsubsection
+Properties
+\end_layout
+
+\begin_layout Standard
+Properties of a machine can be declared using the OPTION keyword:
+\end_layout
+
+\begin_layout Standard
+[data-type] OPTION (property-name [value]) | (property-name [ ',' property-name
+ ...
+ ]_
+\end_layout
+
+\begin_layout Standard
+the word 'PROPERTY' can be used as an alternative to 'OPTION'
+\end_layout
+
+\begin_layout Standard
+If a value is not given to a property, a value must be provided at instantiation
+\end_layout
+
+\begin_layout Subsubsection
 Floating point values
 \end_layout
 
@@ -501,6 +523,10 @@ a := a + x AS INTEGER;
 
 \begin_layout LyX-Code
 a := (a + x) AS INTEGER;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION x; /* (new) no default value, must be given on instantiation */
 \end_layout
 
 \begin_layout Standard
@@ -582,6 +608,37 @@ when a floating point value is used in an subexpression, the subexpression
 \begin_layout Itemize
 floating point values will be displayed in fixed-point notation from clockwork
  (hard-coded at 3 decimal places at present
+\end_layout
+
+\begin_layout Subsection
+State Rules
+\end_layout
+
+\begin_layout Standard
+The primary state rule is the 'WHEN' clause.
+ Expressions linked to the WHEN clause define the rule for entering the
+ state.
+\end_layout
+
+\begin_layout Subsection
+Predicates
+\end_layout
+
+\begin_layout Standard
+Predicates are expressions that return boolean values.
+ Common operators are:
+\end_layout
+
+\begin_layout Itemize
+IS (state test)
+\end_layout
+
+\begin_layout Itemize
+numeric comparison operators
+\end_layout
+
+\begin_layout Itemize
+consider also adding ENTERS or LEAVES tests/triggers
 \end_layout
 
 \begin_layout Subsection
@@ -1023,10 +1080,33 @@ Strict
 \end_layout
 
 \begin_layout Standard
-When applied to a machine, STRICT causes the machine to refuse to change
- the type of a property once set and causes a system exit if a machine is
- asked to transition to an unknown state.
+When applied to a machine, STRICT causes the machine to:
+\end_layout
+
+\begin_layout Itemize
+refuse to change the type of a property once set
+\end_layout
+
+\begin_layout Itemize
+mark its properties as STRICT
+\end_layout
+
+\begin_layout Itemize
+cause a system FAIL if a machine is asked to transition to an unknown state
+\end_layout
+
+\begin_layout Itemize
+fail to start if a STRICT property of an incorrect type is used on instantiation
+\end_layout
+
+\begin_layout Standard
+STRICT can be included outside of a machine in which case all machines in
+ the current file are regarded as strict.
  
+\end_layout
+
+\begin_layout Standard
+Quoted strings and numeric values are regarded as 'STRICT' properties.tea
 \end_layout
 
 \begin_layout Subsubsection
@@ -1037,6 +1117,7 @@ Failsafe Mode
 A program may be configured with a failsafe mode that includes a set of
  states and properties that can be activated whenever the program detects
  a non-recoverable error.
+ In the case of EtherCAT there needs to be a way to move to SAFEOP.
  Failsafe mode can be activated by:
 \end_layout
 
@@ -1052,8 +1133,9 @@ causing an invariant to evaluate to false
 executing a FAIL statement.
 \end_layout
 
-\begin_layout Standard
-The syntax for this feature has not been decided yet.
+\begin_layout Itemize
+fail-safe mode can be entered by executing FAIL SAFE.
+ This mode will set EtherCAT into SAFEOP mode
 \end_layout
 
 \begin_layout Subsubsection
@@ -1101,13 +1183,54 @@ NEXT # attempt to get a record from the external source and update linked
 }
 \end_layout
 
+\begin_layout LyX-Code
+STATES { idle, connected, error, invalid, ready }
+\end_layout
+
+\begin_layout LyX-Code
+PROVIDES (custid, custname)
+\end_layout
+
+\begin_layout LyX-Code
+USING SQL { select id as custid,name as custname from customer; }
+\end_layout
+
+\begin_layout LyX-Code
+# or FROM JSON { [{
+\begin_inset Quotes erd
+\end_inset
+
+custid
+\begin_inset Quotes erd
+\end_inset
+
+: 1, 
+\begin_inset Quotes eld
+\end_inset
+
+custname
+\begin_inset Quotes erd
+\end_inset
+
+: 
+\begin_inset Quotes eld
+\end_inset
+
+fred
+\begin_inset Quotes erd
+\end_inset
+
+}] }
+\end_layout
+
 \end_deeper
 \begin_layout LyX-Code
 }
 \end_layout
 
 \begin_layout Standard
-They can be linked to a property set:
+They can be linked to a property set; this prepares a mapping from the 'current'
+ row in the data source to the properties of a clockwork object:
 \end_layout
 
 \begin_layout LyX-Code
@@ -1116,6 +1239,31 @@ LINK my_data TO my_properties;
 
 \begin_layout LyX-Code
 LINK my_properties TO my_machine, ...;
+\end_layout
+
+\begin_layout Standard
+The problem with this model is knowing when the data is valid; after SEND
+ NEXT to my_data, for example.
+\end_layout
+
+\begin_layout Standard
+Data forms can be SQL, XML or JSON.
+ Data is explicitly copied into a clockwork object via a 'COLLECT' statement:
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+COLLECT [NEXT] record FROM data_source INTO my_properties ON ENDOFDATA done;
+\end_layout
+
+\begin_layout Standard
+Exceptions possible from COLLECT are ENDOFDATA or ERROR.
+\end_layout
+
+\begin_layout Standard
+There is an implication that data has multiple records and that iterators
+ on that data can step through it.
 \end_layout
 
 \begin_layout Subsection
@@ -2231,7 +2379,7 @@ started FLAG;
 \end_layout
 
 \begin_layout LyX-Code
-tick WHEN SELF IS wait && TIMER = rate;
+tick WHEN SELF IS wait && TIMER >= rate;
 \end_layout
 
 \begin_layout LyX-Code
@@ -3385,8 +3533,16 @@ In which case, the INIT method would have expanded to
 ENTER INIT { x:=0;  y:=0; }
 \end_layout
 
-\begin_layout LyX-Code
+\begin_layout Section
+For consideration
+\end_layout
 
+\begin_layout Itemize
+gecode for constraints (see LET)
+\end_layout
+
+\begin_layout Itemize
+graphql for application state
 \end_layout
 
 \end_body
