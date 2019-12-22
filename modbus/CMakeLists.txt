@@ -4,7 +4,12 @@ project (MBM)
 set (MBM_VERSION_MAJOR 0)
 set (MBM_VERSION_MINOR 1)
 
-set (CMAKE_CXX_FLAGS "-g -Wall --std=gnu++0x")
+if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+endif()
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake_modules/")
+
+set (CMAKE_CXX_FLAGS "-g -Wall --std=gnu++0x -Wno-deprecated-declarations")
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/../iod/src)
@@ -54,6 +59,8 @@ add_library (Clockwork
 
 FIND_PACKAGE(Boost COMPONENTS system thread REQUIRED )
 FIND_PACKAGE(MODBUS REQUIRED)
+FIND_PACKAGE(ZMQ 4.2 REQUIRED)
+
 
 include_directories("/usr/local/include")
 include_directories("/usr/local/include/modbus")
@@ -61,6 +68,7 @@ include_directories("/opt/local/include")
 include_directories("${PROJECT_SOURCE_DIR}/")
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${CLOCKWORK_DIR}")
+include_directories("${ZMQ_INCLUDE_DIR}")
 
 
 LINK_DIRECTORIES("/usr/local/lib")
@@ -74,7 +82,7 @@ TARGET_LINK_LIBRARIES(address ${CMAKE_DL_LIBS})
 
 add_executable (mbmon src/mbmon.cpp src/plc_interface.cpp src/monitor.cpp)
 target_link_libraries(mbmon ${Boost_LIBRARIES})
-TARGET_LINK_LIBRARIES(mbmon "zmq")
+TARGET_LINK_LIBRARIES(mbmon ${ZMQ_LIBRARY})
 TARGET_LINK_LIBRARIES(mbmon Clockwork)
 TARGET_LINK_LIBRARIES(mbmon ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(mbmon ${CMAKE_DL_LIBS})
