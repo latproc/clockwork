@@ -381,15 +381,20 @@ public:
     ctx = modbus_new_tcp(host.c_str(), port);
 
 	/* Save original timeout */
-	unsigned int sec, usec;
-	int rc = modbus_get_byte_timeout(ctx, &sec, &usec);
+	struct timeval old_response_timeout;
+	int rc = modbus_get_byte_timeout(ctx, &old_response_timeout);
+	size_t sec = old_response_timeout.tv_sec;
+	suseconds_t usec = old_response_timeout.tv_usec;
 	if (rc == -1) perror("modbus_get_byte_timeout");
 	else {
 		if (options.verbose) std::cout << "original timeout: " << sec << "." << std::setw(3) << std::setfill('0') << (usec/1000) << "\n";
 		sec *=2;
 		usec *= 8; 
 		while (usec >= 1000000) { usec -= 1000000; sec++; }
-		rc = modbus_set_byte_timeout(ctx, sec, usec);
+		struct timeval new_response_timeout;
+		new_response_timeout.tv_sec = sec;
+		new_response_timeout.tv_usec = usec;
+		rc = modbus_set_byte_timeout(ctx, &new_response_timeout);
 		if (rc == -1) perror("modbus_set_byte_timeout");
 		else 
 			if (options.verbose) 
