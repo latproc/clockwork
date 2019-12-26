@@ -16,7 +16,7 @@ cmake_policy(SET CMP0015 NEW)
 
 set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++11-extensions -Wno-unused-variable -Wno-deprecated-register")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable -Wno-misleading-indentation")
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEEPSTATS")
 #set (CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
 set (CMAKE_CXX_FLAGS_DEBUG "-g ")
@@ -166,7 +166,7 @@ set (Clockwork_Headers
 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
-	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h src/Configuration.h
+	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
 )
 
 set (Clockwork_SRCS
@@ -191,7 +191,6 @@ set (Clockwork_SRCS
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
-	src/Configuration.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
@@ -213,7 +212,8 @@ ${ETHERCAT_DIR}/tool/CommandEoe.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
-#${ETHERCAT_DIR}/tool/CommandIp.cpp
+${ETHERCAT_DIR}/tool/CommandIp.cpp
+${ETHERCAT_DIR}/tool/CommandCrc.cpp
 ${ETHERCAT_DIR}/tool/CommandMaster.cpp
 ${ETHERCAT_DIR}/tool/CommandPdos.cpp
 ${ETHERCAT_DIR}/tool/CommandRegRead.cpp
@@ -235,6 +235,7 @@ ${ETHERCAT_DIR}/tool/MasterDevice.cpp
 ${ETHERCAT_DIR}/tool/NumberListParser.cpp
 ${ETHERCAT_DIR}/tool/SdoCommand.cpp
 ${ETHERCAT_DIR}/tool/sii_crc.cpp
+${ExtraECToolFiles}
 ../ec_tool/SoeCommand.cpp
 ../ec_tool/tool_main.cpp
 )
