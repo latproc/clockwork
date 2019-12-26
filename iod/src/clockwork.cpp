@@ -50,6 +50,7 @@
 #include "Channel.h"
 #include "Message.h"
 #include "MachineCommandAction.h"
+#include "Configuration.h"
 
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
@@ -948,11 +949,18 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 		else if (strcmp(argv[i], "--stats") == 0 ) { // command port
 			enable_statistics(true);
 		}
-		else if (strcmp(argv[i], "--nostats") == 0 ) { // command port
+		else if (strcmp(argv[i], "--nostats") == 0 ) { // do not keep stats
 			enable_statistics(false);
 		}
-		else if (strcmp(argv[i], "--export_c") == 0 ) { // command port
+		else if (strcmp(argv[i], "--export_c") == 0 ) { // generate c code
 			set_export_to_c(true);
+		}
+		else if (strcmp(argv[i], "--config") == 0 ) { // use a config file
+			Configuration conf(argv[++i]);
+			int ecat_cpu = conf.asInt("ethercat_thread_cpu_affinty");
+			if (ecat_cpu) set_cpu_affinity("ethercat_thread", ecat_cpu);
+			int proc_cpu = conf.asInt("processing_thread_cpu_affinty");
+			if (proc_cpu) set_cpu_affinity("processing_thread", proc_cpu);
 		}
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {
