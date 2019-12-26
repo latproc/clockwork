@@ -47,7 +47,8 @@ static std::map<std::string, int> thread_cpu_affinities;
 
 const char *device_name() { return dev_name; }
 void set_device_name(const char *new_name) {
-    if (dev_name) free(dev_name); dev_name = strdup(new_name);
+    if (dev_name) free(dev_name);
+    dev_name = strdup(new_name);
 }
 
 
@@ -171,7 +172,7 @@ void set_export_to_c(bool which) {
 
 int cpu_affinity(const char *thread_name) {
 	std::string property_name = thread_name;
-	property_name += "_thread_cpu_affinty";
+	property_name += "_thread_cpu_affinity";
 	std::map<std::string, int>::iterator found = thread_cpu_affinities.find(property_name);
 	if (found != thread_cpu_affinities.end()) {
 		return (*found).second;
@@ -181,7 +182,7 @@ int cpu_affinity(const char *thread_name) {
 
 void set_cpu_affinity(const char*thread_name, int cpu) {
 	std::string property_name = thread_name;
-	property_name += "_thread_cpu_affinty";
+	property_name += "_thread_cpu_affinity";
 	thread_cpu_affinities[property_name] = cpu;
 }
 
