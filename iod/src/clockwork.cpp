@@ -957,10 +957,10 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 		}
 		else if (strcmp(argv[i], "--config") == 0 ) { // use a config file
 			Configuration conf(argv[++i]);
-			int ecat_cpu = conf.asInt("ethercat_thread_cpu_affinty");
-			if (ecat_cpu) set_cpu_affinity("ethercat_thread", ecat_cpu);
-			int proc_cpu = conf.asInt("processing_thread_cpu_affinty");
-			if (proc_cpu) set_cpu_affinity("processing_thread", proc_cpu);
+			int ecat_cpu = conf.asInt("ethercat_thread_cpu_affinity");
+			if (ecat_cpu) set_cpu_affinity("ethercat", ecat_cpu);
+			int proc_cpu = conf.asInt("processing_thread_cpu_affinity");
+			if (proc_cpu) set_cpu_affinity("processing", proc_cpu);
 		}
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
         {

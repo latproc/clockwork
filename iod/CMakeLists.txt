@@ -167,6 +167,7 @@ set (Clockwork_Headers
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
 	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
+  src/Configuration.h
 )
 
 set (Clockwork_SRCS
@@ -191,6 +192,7 @@ set (Clockwork_SRCS
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
+  src/Configuration.h
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
