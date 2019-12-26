@@ -22,6 +22,8 @@
 #include <string.h>
 #include "options.h"
 #include <iostream>
+#include <map>
+#include <string>
 
 static int opt_verbose = 0;
 static int opt_test_only = 0;
@@ -40,6 +42,8 @@ static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
 static unsigned long cycle_time_ = 1000;
 static bool c_export = false;
+
+static std::map<std::string, int> thread_cpu_affinities;
 
 const char *device_name() { return dev_name; }
 void set_device_name(const char *new_name) {
@@ -165,4 +169,19 @@ void set_export_to_c(bool which) {
 	c_export = which;
 }
 
+int cpu_affinity(const char *thread_name) {
+	std::string property_name = thread_name;
+	property_name += "_thread_cpu_affinty";
+	std::map<std::string, int>::iterator found = thread_cpu_affinities.find(property_name);
+	if (found != thread_cpu_affinities.end()) {
+		return (*found).second;
+	}
+	return 0;
+}
+
+void set_cpu_affinity(const char*thread_name, int cpu) {
+	std::string property_name = thread_name;
+	property_name += "_thread_cpu_affinty";
+	thread_cpu_affinities[property_name] = cpu;
+}
 
