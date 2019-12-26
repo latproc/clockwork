@@ -179,7 +179,7 @@ public:
 
 template <class T>void BufferMonitor<T>::setMaskBits(int start, int num) {
 	if (!dbg_mask) return;
-	//std::cout << "masking: " << start << " to " << (start+num-1) << "\n";
+	std::cout << "masking: " << start << " to " << (start+num-1) << "\n";
 	int i = start;
 	while (i<start+num && i+start < buflen) {
 		dbg_mask[i] = 0xff;
@@ -279,6 +279,7 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
 
 void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint8_t *buffer_addr) {
 	if (changes.size()) {
+		std::cout << "found changes\n";
 		if (options.verbose) std::cout << changes.size() << " changes\n";
 		std::set<ModbusMonitor*>::iterator iter = changes.begin();
 		while (iter != changes.end()) {
@@ -401,7 +402,7 @@ public:
 				std::cout << "new timeout: " << sec << "." << std::setw(3) << std::setfill('0') << (usec/1000) << "\n";
 
 	}
-    modbus_set_debug(ctx, FALSE);
+    modbus_set_debug(ctx, TRUE);
 
     if (modbus_connect(ctx) == -1) {
 			fprintf(stderr, "Connection to %s:%d failed: %s (%d)\n",
@@ -492,7 +493,7 @@ bool setBit(int addr, bool which) {
 	}
 	return true;
 }
-
+#if 0
 template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest, 
 		std::map<int, UserData *> active,
 		const char *fn_name,
@@ -509,7 +510,10 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 			if (item.first > max) max = item.first;
 		}
 	}
-	if (min>max) return true; // nothing active in this group
+	if (min>max) {
+		std::cout << "nothing active in " << grp << "\n";
+		return true; // nothing active in this group
+	}
 	max += 2;
 	int rc = -1;
 	int retry = 5;
@@ -551,6 +555,7 @@ template<class T>bool collect_updates(BufferMonitor<T> &bm, int grp, T *dest,
 	displayChanges(cmd_interface, changes, dest);
 	return true;
 }
+#endif
 
 template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, int grp, T *dest, 
 	std::map<std::string, ModbusMonitor>&entries,
@@ -642,9 +647,9 @@ void operator()() {
 				std::cout << "modbus_read_input_registers failed\n";
 				//goto modbus_loop_end;
 			}
-			/*if (!collect_selected_updates(holdings_monitor, 4, tab_rw_rq_registers, mc.monitors, "modbus_read_registers", modbus_read_registers)) {
-				goto modbus_loop_end;
-			}*/
+			if (!collect_selected_updates(holdings_monitor, 4, tab_rw_rq_registers, mc.monitors, "modbus_read_registers", modbus_read_registers)) {
+				//goto modbus_loop_end;
+			}
 #endif
 			if ( update_status)  {
 				sendStatus("active");

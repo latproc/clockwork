@@ -5,7 +5,9 @@ find_path(MODBUS_INCLUDE_DIR
     PATHS
         "/usr"
         "/opt"
-        "~/homebrew"
+        if (APPLE)
+				  "$ENV{HOME}/homebrew"
+        endif()
     PATH_SUFFIXES
         "local"
         "include"
@@ -20,7 +22,9 @@ find_library(MODBUS_LIBRARY
     PATHS
         "/usr"
         "/opt"
-        "~/homebrew"
+        if (APPLE)
+				  "$ENV{HOME}/homebrew"
+        endif()
     PATH_SUFFIXES
         "local"
         "lib"
