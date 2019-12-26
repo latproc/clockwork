@@ -966,7 +966,11 @@ void Channel::operator()() {
 
 	zmq::socket_t remote_sock(*MessagingInterface::getContext(), ZMQ_PAIR);
 	char sock_crtl_name[20];
+#ifdef __linux__
+	snprintf(sock_crtl_name, 20, "inproc://s_%ld", microsecs());
+#else
 	snprintf(sock_crtl_name, 20, "inproc://s_%lld", microsecs());
+#endif
 	remote_sock.bind(sock_crtl_name);
 	usleep(50);
 
@@ -1139,7 +1143,11 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 std::string ChannelInternals::getCommandSocketName(bool client_endpoint) {
 	if (command_sock_name.empty()) {
 		char cmd_socket_name[100];
+#ifdef __linux__
+		snprintf(cmd_socket_name, 100, "inproc://s_%ld_cmd", microsecs());
+#else
 		snprintf(cmd_socket_name, 100, "inproc://s_%lld_cmd", microsecs());
+#endif
 		const char *end = (client_endpoint) ? "client" : "server";
 		DBG_CHANNELS << "using " << cmd_socket_name << " for the " << end << " command socket\n";
 		char *pos = strchr(cmd_socket_name, ':')+1;
