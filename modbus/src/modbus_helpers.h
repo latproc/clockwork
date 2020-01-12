@@ -1,14 +1,21 @@
 #ifndef __modbus_helpers_h__
 #define __modbus_helpers_h__
 
-struct SerialSettings {
+class SerialSettings {
+public:
 	unsigned int baud;
+	unsigned int bits;
 	char parity;
-	char bits;
-	char stop_bits;
+	unsigned int stop_bits;
+    SerialSettings(){}
+    SerialSettings(unsigned int rate, unsigned int width, char p, unsigned int stop)
+      : baud(rate), bits(width), parity(p), stop_bits(stop) {}
+private:
+    SerialSettings(const SerialSettings &);
+    SerialSettings &operator=(const SerialSettings &);
 };
 
-enum ModbusType {mt_TCP, mt_RTU, mt_ASCII};
+enum ModbusType {mt_unknown, mt_TCP, mt_RTU, mt_ASCII};
 
 struct ModbusSettings {
 	ModbusType mt;
@@ -16,6 +23,8 @@ struct ModbusSettings {
 	std::string settings;
 	SerialSettings serial;
 };
+
+int getSettings(const char *str, SerialSettings &settings);
 
 #if 0
 class ModbusService {

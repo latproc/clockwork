@@ -57,7 +57,7 @@ public:
 	BufferMonitor<uint16_t> holdings_monitor; //("holding registers", options);
 
 	MonitorConfiguration &mc;
-	ModbusSettings settings;
+	ModbusSettings &settings;
 
 	zmq::socket_t *cmd_interface;
 	const char *iod_cmd_socket_name;
@@ -102,10 +102,10 @@ public:
 			robits_monitor("discrete", options),
 			regs_monitor("registers", options),
 			holdings_monitor("holdings", options), mc(modbus_config),
+			settings(modbus_settings),
 			cmd_interface(0), iod_cmd_socket_name(sock_name)
 	{
 		boost::mutex::scoped_lock(update_mutex);
-		settings = modbus_settings;
 
 		ctx = openConnection();
 

@@ -12,13 +12,17 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake_modules/")
 set (CMAKE_CXX_FLAGS "-g -Wall --std=gnu++0x -Wno-deprecated-declarations")
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 
+if (RUN_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/../iod/src)
 
 configure_file (
   "${PROJECT_SOURCE_DIR}/src/MBMConfig.h.in"
   "${PROJECT_BINARY_DIR}/MBMConfig.h"
 )
-
 
 set(HEADER_FILES
 	${CLOCKWORK_DIR}/MessagingInterface.h
@@ -79,7 +83,7 @@ TARGET_LINK_LIBRARIES(address ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(address ${CMAKE_DL_LIBS})
 
 
-add_executable (mbmon src/mbmon.cpp src/plc_interface.cpp src/monitor.cpp)
+add_executable (mbmon src/mbmon.cpp src/plc_interface.cpp src/monitor.cpp src/modbus_helpers.cpp)
 TARGET_LINK_LIBRARIES(mbmon ${ZMQ_LIBRARY})
 TARGET_LINK_LIBRARIES(mbmon Clockwork)
 TARGET_LINK_LIBRARIES(mbmon ${MODBUS_LIBRARIES})
