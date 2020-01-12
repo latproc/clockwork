@@ -48,58 +48,7 @@ struct UserData {
 
 Options options;
 
-int getSettings(const char *str, SerialSettings &settings) {
-	int err;
-	char *buf = strdup(str);
-	char *fld, *p = buf;
-	enum SettingsStates { cs_baud, cs_bits, cs_parity, cs_stop, cs_end } state = cs_baud;
-	
-	while (state != cs_end) {
-		fld = strsep(&p, ":");
-		if (!fld) goto done_getSettings; // no more fields
-        
-		char *tmp = 0;
-		// most fields are numbers so we usually attempt to convert the field to a number
-		long val = 8;
-		if (state != cs_parity) val = strtol(fld, &tmp, 10);
-		if ( (tmp && *tmp == 0) || ( (state == cs_parity ) && *fld != ':') ) { // config included the field
-			switch(state) {
-				case cs_baud:
-					settings.baud = val;
-					state = cs_bits;
-					break;
-				case cs_bits:
-					if (val == 8)
-						settings.bits = 8;
-					else if (val == 7)
-						settings.bits = 7;
-					state = cs_parity;
-					break;
-				case cs_parity:
-					settings.parity = toupper(*fld);
-					state = cs_stop;
-					break;
-				case cs_stop:
-					if (val == 2)
-						settings.stop_bits = 2;
-					else
-						settings.stop_bits = 1;
-					break;
-					state = cs_end;
-				case cs_end:
-				default: ;
-			}
-		}
-		else {
-			if (*tmp && *tmp != ':') {
-				fprintf(stderr, "skipping unrecognised setting: %s\n", fld);
-			}
-		}
-	}
-done_getSettings:
-	free(buf);
-	return 0;
-}
+
 
 
 /* Clockwork interface */
@@ -471,7 +420,7 @@ int main(int argc, char *argv[]) {
 	SerialSettings serial;
 	ModbusSettings *ms = &modbus_tcp;
 
-	int res = getSettings(modbus_rtu.settings.c_str(), serial);
+	getSettings(modbus_rtu.settings.c_str(), serial);
 
 	std::cout << "Modbus version (compile time): " << LIBMODBUS_VERSION_STRING << " ";
 	std::cout << "(linked): " 
@@ -523,7 +472,14 @@ int main(int argc, char *argv[]) {
 			modbus_rtu.settings = argv[++arg];
 			ms = &modbus_rtu;
 			int res = getSettings(modbus_rtu.settings.c_str(), modbus_rtu.serial);
-			std::cout << "tty settings: baud: " << modbus_rtu.serial.baud << " bits: " << modbus_rtu.serial.bits << "\n";
+			if (res) {
+				std::cout << "tty settings: baud: " << modbus_rtu.serial.baud 
+				  << " bits: " << modbus_rtu.serial.bits << "\n";
+			}
+			else {
+				std::cerr << "failed to parse settings: " << modbus_rtu.settings.c_str() << "\n";
+				exit(1);
+			}
 		}
 		else if ( strcmp(argv[arg], "--rtu") == 0) {
 			ms = &modbus_rtu;
@@ -620,7 +576,6 @@ int main(int argc, char *argv[]) {
 	subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
 	subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
 	subscription_manager.setupConnections();
-	ModbusType modbus_type = mt_TCP;
 
 	ModbusClientThread modbus_interface(*ms, mc, local_commands);
 	mb = &modbus_interface;
