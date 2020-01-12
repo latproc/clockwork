@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8)
 project (MBM)
 
 set (MBM_VERSION_MAJOR 0)
@@ -57,18 +57,17 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/Message.cpp )
 
 
-FIND_PACKAGE(Boost COMPONENTS system thread REQUIRED )
+FIND_PACKAGE(Boost COMPONENTS system thread date_time REQUIRED )
 FIND_PACKAGE(MODBUS REQUIRED)
 FIND_PACKAGE(ZMQ 4.2 REQUIRED)
-
 
 include_directories("/usr/local/include")
 include_directories("/usr/local/include/modbus")
 include_directories("/opt/local/include")
+include_directories("${Boost_INCLUDE_DIRS}")
 include_directories("${PROJECT_SOURCE_DIR}/")
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${CLOCKWORK_DIR}")
-include_directories("${ZMQ_INCLUDE_DIR}")
 
 
 LINK_DIRECTORIES("/usr/local/lib")
@@ -81,8 +80,8 @@ TARGET_LINK_LIBRARIES(address ${CMAKE_DL_LIBS})
 
 
 add_executable (mbmon src/mbmon.cpp src/plc_interface.cpp src/monitor.cpp)
-target_link_libraries(mbmon ${Boost_LIBRARIES})
 TARGET_LINK_LIBRARIES(mbmon ${ZMQ_LIBRARY})
 TARGET_LINK_LIBRARIES(mbmon Clockwork)
 TARGET_LINK_LIBRARIES(mbmon ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(mbmon ${CMAKE_DL_LIBS})
+TARGET_LINK_LIBRARIES(mbmon ${Boost_LIBRARIES})
