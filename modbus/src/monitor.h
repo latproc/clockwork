@@ -34,6 +34,12 @@ public:
 	
 };
 */
+struct Options {
+	bool verbose;
+	std::string status_machine;
+	std::string status_property;
+	Options() : verbose(false) {}
+};
 
 template<class T>void display(T *p, size_t len) {
 	size_t min = 0;
