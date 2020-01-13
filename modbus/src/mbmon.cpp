@@ -84,15 +84,14 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
-	{FileLogger fl(program_name); fl.f() << "sending: " << msg << "\n"; }
+	//{FileLogger fl(program_name); fl.f() << "sending: " << msg << "\n"; }
 	if (options.verbose) std::cout << " sending: " << msg << "\n";
 	sendMessage(sock, msg);
 	size_t size = strlen(msg);
 	free(msg);
-	{FileLogger fl(program_name); fl.f() << "getting reply:\n"; }
 	zmq::message_t reply;
 	if (sock.recv(&reply)) {
-		{FileLogger fl(program_name); fl.f() << "got reply:\n"; }
+		//{FileLogger fl(program_name); fl.f() << "got reply:\n"; }
 		size = reply.size();
 		char *data = (char *)malloc(size+1);
 		memcpy(data, reply.data(), size);
@@ -106,7 +105,7 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 void process_command(zmq::socket_t &sock, std::list<Value> &params) {
 	char * data = send_command(sock, params);
 	if (data) {
-		{FileLogger fl(program_name); fl.f() << "response " << data << "\n"; }
+		//{FileLogger fl(program_name); fl.f() << "response " << data << "\n"; }
 		if (options.verbose) std::cout << data << "\n";
 		free(data);
 	}
@@ -188,8 +187,21 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
 	// note: the monitor address is in the global range grp<<16 + offset
 	// this method is only using the addresses in the local range
 	//mm->set(buffer_addr + ( (mm->address() & 0xffff)) );
-	if (mm->length() == 1) {
+	if (mm->length() == 1 && mm->format() == "SignedInt") {
+		value = *( (int16_t*)mm->value->getWordData() );
+		cmd.push_back( value );
+	}
+	else if (mm->length() == 1) {
 		value = *( (uint16_t*)mm->value->getWordData() );
+		cmd.push_back( value );
+	}
+	else if (mm->length() == 2 && mm->format() == "Float") {
+		uint16_t *xx = (uint16_t*)mm->value->getWordData();
+		Value vv(*((float*)xx));
+		cmd.push_back( *( (float*)xx ));
+	}
+	else if (mm->length() == 2 && mm->format() == "SignedInt") {
+		value = *( (int32_t*)mm->value->getWordData() );
 		cmd.push_back( value );
 	}
 	else if (mm->length() == 2) {
@@ -212,7 +224,7 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 			// note: the monitor address is in the global range grp<<16 + offset
 			// this method is only using the addresses in the local range
 			uint8_t *val = buffer_addr + ( (mm->address() & 0xffff));
-			std::cout << mm->name() << " "; mm->set( val );
+			if (options.verbose) std::cout << mm->name() << " "; mm->set( val, options.verbose );
 			
 			if (sock &&  (mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
 				sendStateUpdate(sock, mm, (bool)*val);
@@ -228,7 +240,7 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 		while (iter != changes.end()) {
 			ModbusMonitor *mm = *iter++;
 			uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
-			std::cout << mm->name() << " "; mm->set( val );
+			if (options.verbose) std::cout << mm->name() << " "; mm->set( val, options.verbose );
 			if (sock) {
 				sendPropertyUpdate(sock, mm);
 			}
@@ -240,11 +252,16 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 ModbusClientThread *mb = 0;
 
 void usage(const char *prog) {
-	std::cout << prog << " [-h hostname] [ -p port] [ -c modbus_config ] [ --channel channel_name ] \n\n"
-		<< "defaults to -h localhost -p 1502 --channel PLC_MONITOR\n"; 
-	std::cout << "\n";
-	std::cout << "only one of the modbus_config or the channel_name should be supplied.\n";
-	std::cout << "\nother optional parameters:\n\n\t-s\tsimfile\t to create a clockwork configuration for simulation\n";
+	std::cout << prog << " [-h hostname] [ -p port] [ -c modbus_config ] [ --channel channel_name ] "
+		<< "[ --monitor clockwork_machine.property ] "
+	    << "[ --tty tty_device ] [ --tty_settings settings ] [ --rtu ] [ --device_id device_address ]\n\n"
+		<< "  defaults to -h localhost -p 1502 --channel PLC_MONITOR\n"
+		<< "  modbus rtu options: settings is a colon-separated specification, eg: 19200:8:N:1\n"
+		<< "   -rtu if specified simply sets rtu mode with hard-coded defaults "
+	    << "\n\n";
+	std::cout << "  only one of the modbus_config or the channel_name should be supplied.\n";
+	std::cout << "  setting hostname or port activates tcp mode, setting an rtu setting avtivates rtu mode\n";
+	std::cout << "\n  other optional parameters:\n\n\t-s\tsimfile\t to create a clockwork configuration for simulation\n";
 }
 
 
@@ -462,18 +479,18 @@ int main(int argc, char *argv[]) {
 				options.status_machine.erase(pos);;
 			}
 			else options.status_property = "status";
-			std::cout << "reporting status to property " << options.status_property << " of " << options.status_machine << "\n";
+			if (options.verbose) std::cout << "reporting status to property " << options.status_property << " of " << options.status_machine << "\n";
 		}
 		else if ( strcmp(argv[arg], "--tty") == 0 && arg+1 < argc) {
 			modbus_rtu.device_name = argv[++arg];
 			ms = &modbus_rtu;
 		}
-		else if ( strcmp(argv[arg], "--tty-settings") == 0 && arg+1 < argc) {
+		else if ( strcmp(argv[arg], "--tty_settings") == 0 && arg+1 < argc) {
 			modbus_rtu.settings = argv[++arg];
 			ms = &modbus_rtu;
 			int res = getSettings(modbus_rtu.settings.c_str(), modbus_rtu.serial);
-			if (res) {
-				std::cout << "tty settings: baud: " << modbus_rtu.serial.baud 
+			if (res == 0) {
+				if (options.verbose) std::cout << "tty settings: baud: " << modbus_rtu.serial.baud 
 				  << " bits: " << modbus_rtu.serial.bits << "\n";
 			}
 			else {
@@ -484,7 +501,7 @@ int main(int argc, char *argv[]) {
 		else if ( strcmp(argv[arg], "--rtu") == 0) {
 			ms = &modbus_rtu;
 		}
-		else if ( strcmp(argv[arg], "--device-id") == 0 && arg+1 < argc) {
+		else if ( strcmp(argv[arg], "--device_id") == 0 && arg+1 < argc) {
 			int device_id;
 			if (strToInt(argv[++arg], device_id)) {
 				modbus_rtu.devices.insert(device_id);
@@ -492,14 +509,17 @@ int main(int argc, char *argv[]) {
 			}
 		}
 
-		else if (argv[arg][0] == '-'){ usage(argv[0]); exit(0); }
+		else if (argv[arg][0] == '-'){
+			std::cerr << "unknown option " << argv[arg] << "\n";
+			usage(argv[0]); exit(0); 
+		}
 		else break;
 		++arg;
 	}
 
 
 	PLCInterface plc;
-	if (!plc.load("koyo.conf")) {
+	if (!plc.load("modbus_addressing.conf")) {
 		std::cerr << "Failed to load plc mapping configuration\n";
 		exit(1);
 	}
@@ -528,8 +548,8 @@ int main(int argc, char *argv[]) {
 		{FileLogger fl(program_name); fl.f() << "null response to channel request. exiting\n"; sleep(2); exit(1);}
 		else if (!*response)
 		{FileLogger fl(program_name); fl.f() << "empty response to channel request. exiting\n"; sleep(2); exit(2);}
-		else
-		{FileLogger fl(program_name); fl.f() << "got channel name " << response << "\n"; }
+		//else
+		//{FileLogger fl(program_name); fl.f() << "got channel name " << response << "\n"; }
 		if (options.verbose) std::cout << response << "\n";
 		cJSON *obj = cJSON_Parse(response);
 
@@ -543,7 +563,7 @@ int main(int argc, char *argv[]) {
 		}
 		else {
 		}
-		std::cout << chn_instance_name << "\n";
+		if (options.verbose) std::cout << chn_instance_name << "\n";
 
 		sendStatus("initialising");
 		update_status = true;
@@ -617,8 +637,8 @@ int main(int argc, char *argv[]) {
 			exception_count = 0;
 		}
 		catch (std::exception ex) {
-			std::cout << "polling connections: " << ex.what() << "\n";
-			{FileLogger fl(program_name); fl.f() << "polling connections " << ex.what()<< "\n"; }
+			std::cerr << "polling connections: " << ex.what() << "\n";
+			{FileLogger fl(program_name); fl.f() << "exception when polling connections " << ex.what()<< "\n"; }
 			if (++exception_count <= 5 && program_state != s_finished) { usleep(400000); continue; }
 			exit(0);
 		}

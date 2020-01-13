@@ -82,6 +82,23 @@ static long fromBCD(uint16_t *data, int length) {
 }
 
 
+typedef union Converter {
+	struct {
+		uint16_t a;
+		uint16_t b;
+	} s;
+	uint32_t i;
+	float f;
+} Converter;
+
+float toFloat(uint16_t *data) {
+	Converter conv;
+	conv.s.a = *data++;
+	conv.s.b = *data;
+	return conv.f;
+}
+
+
 void ModbusValueWord::set(uint16_t *data) {
 	uint32_t res = 0;
 	if (format() == "BCD" && (length == 1 || length == 2) ) {
@@ -114,7 +131,7 @@ std::ostream &operator<<(std::ostream &out, const ModbusMonitor &m) {
 
 
 ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format, bool readonly)
-: name_(name), group_(group),address_(address), len_(len), value(0), read_only(readonly)
+: name_(name), group_(group),address_(address), len_(len), format_(format), value(0), read_only(readonly)
 {
 	if (group_==0 || group_==1)
 		value = new ModbusValueBit(len_);
