@@ -179,8 +179,10 @@ modbus_t *openConnection() {
 		if (ctx == NULL) {
 			std::cerr << "Unable to create the libmodbus context\n";
 		}
-		if (modbus_set_slave(ctx, 1) == -1) {
-			std::cerr << "modbus_set_slave: " << modbus_strerror(errno) << "\n";
+		if (settings.devices.size() > 0) {
+			if (modbus_set_slave(ctx, *settings.devices.begin()) == -1) {
+				std::cerr << "modbus_set_slave: " << modbus_strerror(errno) << "\n";
+			}
 		}
 		// TODO: verify slave is responding and set connected status
 	}

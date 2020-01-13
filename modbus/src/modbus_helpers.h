@@ -1,6 +1,8 @@
 #ifndef __modbus_helpers_h__
 #define __modbus_helpers_h__
 
+#include <set>
+
 class SerialSettings {
 public:
 	unsigned int baud;
@@ -19,9 +21,10 @@ enum ModbusType {mt_unknown, mt_TCP, mt_RTU, mt_ASCII};
 
 struct ModbusSettings {
 	ModbusType mt;
-	std::string device_name;
-	std::string settings;
-	SerialSettings serial;
+	std::string device_name; // name of the serial bus or tcp host name
+	std::string settings; // serial port settings string or port name
+	SerialSettings serial; // decoded version of serial port settings
+    std::set<int> devices; // there can be several devices on one serial bus
 };
 
 int getSettings(const char *str, SerialSettings &settings);
