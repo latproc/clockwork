@@ -484,6 +484,14 @@ int main(int argc, char *argv[]) {
 		else if ( strcmp(argv[arg], "--rtu") == 0) {
 			ms = &modbus_rtu;
 		}
+		else if ( strcmp(argv[arg], "--device-id") == 0 && arg+1 < argc) {
+			int device_id;
+			if (strToInt(argv[++arg], device_id)) {
+				modbus_rtu.devices.insert(device_id);
+				ms = &modbus_rtu;
+			}
+		}
+
 		else if (argv[arg][0] == '-'){ usage(argv[0]); exit(0); }
 		else break;
 		++arg;
