@@ -7,7 +7,7 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 	PLCInterface plc;
-	if (!plc.load("koyo.conf")) {
+	if (!plc.load("modbus_addressing.conf")) {
 		cerr << "Failed to load configuration\n";
 		exit(1);
 	}

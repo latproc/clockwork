@@ -108,31 +108,33 @@ public:
 		boost::mutex::scoped_lock(update_mutex);
 
 		ctx = openConnection();
+		if (!ctx) {
+			std::cerr << "failed to create modbus context\n";
+			exit(1);
+		}
 
 		/* Save original timeout */
-		timeval orig_timeout;
-
-		int rc = modbus_get_byte_timeout(ctx, &orig_timeout);
+		uint32_t secs, usecs;
+		int rc = modbus_get_byte_timeout(ctx, &secs, &usecs);
 		if (rc == -1) {
 			perror("modbus_get_byte_timeout");
 			sendStatus("disconnected");
 		}
 		else {
-			if (options.verbose) std::cout << "original timeout: " << orig_timeout.tv_sec 
-			  << "." << std::setw(3) << std::setfill('0') << (orig_timeout.tv_usec/1000) << "\n";
-			timeval new_timeout;
-			new_timeout.tv_sec = orig_timeout.tv_sec * 2;
-			new_timeout.tv_usec = orig_timeout.tv_usec * 2;
-			while (new_timeout.tv_usec >= 1000000) { new_timeout.tv_usec -= 1000000; new_timeout.tv_sec++; }
-			rc = modbus_set_byte_timeout(ctx, &new_timeout);
+			if (options.verbose) std::cout << "original timeout: " << secs 
+			  << "." << std::setw(3) << std::setfill('0') << (usecs/1000) << "\n";
+			uint32_t new_secs = secs *2;
+			uint32_t new_usecs = usecs * 2;
+			while (new_usecs >= 1000000) { new_usecs -= 1000000; new_secs++; }
+			rc = modbus_set_byte_timeout(ctx, new_secs, new_usecs);
 			if (rc == -1) {
 				perror("modbus_set_byte_timeout");
 				sendStatus("disconnected");
 			}
 			else {
 				if (options.verbose) {
-					std::cout << "new timeout: " << new_timeout.tv_sec << "." 
-					  << std::setw(3) << std::setfill('0') << (new_timeout.tv_usec/1000) << "\n";
+					std::cout << "new timeout: " << new_secs << "." 
+					  << std::setw(3) << std::setfill('0') << (new_usecs/1000) << "\n";
 				}
 			}
 		}
@@ -159,6 +161,7 @@ public:
 
 modbus_t *openConnection() {
 	if (settings.mt == mt_TCP) {
+		std::cerr << "opening tcp connection to " << settings.device_name << "\n";
 		int port = 1502;
 		if (strToInt(settings.settings.c_str(), port)) {
     		ctx = modbus_new_tcp(settings.device_name.c_str(), port);
@@ -174,17 +177,26 @@ modbus_t *openConnection() {
 		}
 	}
 	else if (settings.mt == mt_RTU) {
+		int device_id = *settings.devices.begin();
+		std::cerr << "opening rtu connection to " << settings.device_name << ", device " << device_id << "\n";
 		ctx = modbus_new_rtu(settings.device_name.c_str(), settings.serial.baud, 
 			settings.serial.parity, settings.serial.bits, settings.serial.stop_bits);
 		if (ctx == NULL) {
 			std::cerr << "Unable to create the libmodbus context\n";
+			exit(1);
 		}
 		if (settings.devices.size() > 0) {
-			if (modbus_set_slave(ctx, *settings.devices.begin()) == -1) {
+			if (modbus_set_slave(ctx, device_id) == -1) {
 				std::cerr << "modbus_set_slave: " << modbus_strerror(errno) << "\n";
+				exit(1);
 			}
 		}
 		// TODO: verify slave is responding and set connected status
+	}
+	if (modbus_connect(ctx) == -1) {
+		std::cerr << "Connection failed: " <<  modbus_strerror(errno) << "\n";
+		modbus_free(ctx);
+		return 0;
 	}
 	return ctx;
 }
@@ -267,6 +279,8 @@ template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, unsigned in
 			if (offset<min) min = offset; if (end>max) max = end;
 			int retry = 2;
 			while ( (rc = read_fn(ctx, offset, item.second.length(), dest+offset)) == -1 ) {
+			    std::cerr << "called: read_fn(ctx, " << offset << ", " 
+					<< item.second.length() << ", " << dest+offset << "))\n";
 				check_error(fn_name, offset, &retry); 
 				if (!connected) return false;
 				if (--retry>0) continue; else break;
@@ -288,7 +302,6 @@ void operator()() {
 		cmd_interface->connect(iod_cmd_socket_name);
 	}
 
-	int error_count = 0;
 	while (!finished) {
 		if (!connected) {
 			boost::mutex::scoped_lock(update_mutex);
@@ -299,7 +312,6 @@ void operator()() {
 				connected = true;
 				update_status = true;
 			}
-			error_count = 0;
 		}
 		else {
 			performUpdates();
