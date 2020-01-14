@@ -431,10 +431,14 @@ int main(int argc, char *argv[]) {
 	modbus_tcp.mt = mt_TCP;
 	modbus_tcp.device_name = "localhost";
 	modbus_tcp.settings = "1502";
+	modbus_tcp.support_single_register_write = true;
+	modbus_tcp.support_multi_register_write = true;
 	ModbusSettings modbus_rtu;
 	modbus_rtu.mt = mt_RTU;
 	modbus_rtu.device_name = "/dev/ttyUSB0";
 	modbus_rtu.settings = "19200:8:N:1";
+	modbus_rtu.support_single_register_write = true;
+	modbus_rtu.support_multi_register_write = true;
 	SerialSettings serial;
 	ModbusSettings *ms = &modbus_tcp;
 
@@ -467,6 +471,12 @@ int main(int argc, char *argv[]) {
 		}
 		else if ( strcmp(argv[arg], "-s") == 0 && arg+1 < argc) {
 			sim_name = argv[++arg];
+		}
+		else if ( strcmp(argv[arg], "--no-multireg-write") == 0) {
+			options.multireg_write = false;
+		}
+		else if ( strcmp(argv[arg], "--no-singlereg-write") == 0) {
+			options.singlereg_write = false;
 		}
 		else if ( strcmp(argv[arg], "-v") == 0) {
 			options.verbose = true;
@@ -517,6 +527,9 @@ int main(int argc, char *argv[]) {
 		else break;
 		++arg;
 	}
+	ms->support_single_register_write = options.singlereg_write;
+	ms->support_multi_register_write = options.multireg_write;
+	modbus_tcp.support_multi_register_write = true;
 
 
 	PLCInterface plc;
