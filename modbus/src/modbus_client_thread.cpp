@@ -290,11 +290,21 @@ bool setRegister(int addr, uint16_t val) {
 	boost::mutex::scoped_lock lock(update_mutex);
 	int rc = 0;
 	int retries = 3;
+	if (settings.support_single_register_write)
+		rc = modbus_write_register(ctx, addr, val);
+	else
+		rc = modbus_write_registers(ctx, addr, 1, &val);
 	while ( (rc = modbus_write_registers(ctx, addr, 1, &val) ) == -1) {
 		perror("modbus_write_register");
 		check_error("modbus_write_register", addr, &retries);
 		if (!connected) return false;
-		if (--retries > 0) continue;
+		if (--retries > 0) {
+			if (settings.support_single_register_write)
+				rc = modbus_write_register(ctx, addr, val);
+			else
+				rc = modbus_write_registers(ctx, addr, 1, &val);
+			continue;
+		}
 		return false;
 	}
 	return true;

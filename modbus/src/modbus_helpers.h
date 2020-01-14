@@ -21,6 +21,8 @@ enum ModbusType {mt_unknown, mt_TCP, mt_RTU, mt_ASCII};
 
 struct ModbusSettings {
 	ModbusType mt;
+	bool support_single_register_write;
+	bool support_multi_register_write;
 	std::string device_name; // name of the serial bus or tcp host name
 	std::string settings; // serial port settings string or port name
 	SerialSettings serial; // decoded version of serial port settings
