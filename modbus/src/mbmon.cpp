@@ -411,6 +411,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
 		std::istringstream iss(data);
 		while (iss >> ds)
 		{
+			std::cout << ds << "\n";
 			parts.push_back(ds.c_str());
 			++count;
 		}
@@ -663,14 +664,21 @@ int main(int argc, char *argv[]) {
 		char *data = (char *)malloc(len+1);
 		memcpy(data, update.data(), len);
 		data[len] = 0;
-		std::cout << "received: "<<data<<" from clockwork\n";
+		std::cout << "received: " << data << " (len == " <<len << " from clockwork\n";
 
 		std::vector<Value> params(0);
 		parseIncomingMessage(data, params);
-		std::string cmd(params[0].asString());
 		free(data);
+		data = 0;
+		std::string cmd = "Unknown";
+		if (params.size() > 0) {
+			cmd = params[0].asString();
+		}
+		else {
+			std::cerr << "unexpected data received\n";
+		}
 
-		if (params[0] == "STATE") {
+		if (cmd == "STATE") {
 			try {
 				ModbusMonitor &m = mc.monitors.at(params[1].asString());
 				std::cout << m.name() << " " << ( (m.readOnly()) ? "READONLY" : "" ) << "\n";
@@ -683,29 +691,37 @@ int main(int argc, char *argv[]) {
 				//sendStateUpdate(&iosh_cmd, &m, *(m.value->getWordData()) );
 			}
 			catch (std::exception ex) {
-				std::cout << ex.what() << "\n";
+				std::cout << "Exception when processing STATE command: " << ex.what() << "\n";
 			}
 		}
-		else if (params[0] == "PROPERTY") {
+		else if (cmd == "PROPERTY" && params.size() >= 4) {
 			try {
-				ModbusMonitor &m = mc.monitors.at(params[0].asString());
+				std::map<std::string, ModbusMonitor>::iterator found = mc.monitors.find(params[1].asString());
+				if (found == mc.monitors.end()) {
+					std::cerr << "Error: not monitoring property " << params[1] << "\n";
+					continue;
+				}
+				ModbusMonitor &m = (*found).second; //mc.monitors.at(params[0].asString());
 				std::cout << m.name() << " " << ( (m.readOnly()) ? "READONLY" : "" ) << "\n";
-				if (!m.readOnly()) {
+				if (!m.readOnly() && m.group() == 4) {
 					long value;
-					if (params[3].asString() == "VALUE" && params[3].asInteger(value)) {
-						if (m.length() == 1) m.setRaw( (uint16_t) value);
-						else if (m.length() == 2) m.setRaw( (uint32_t)value );
+					if (params[2].asString() == "VALUE" && params[3].asInteger(value)) {
+						if (m.length() == 1) {
+							m.setRaw( (uint16_t) value);
+							mb->requestRegisterUpdate(m.address(), (uint16_t)value);
+						}
+						else if (m.length() == 2) {
+							m.setRaw( (uint32_t)value );
+							mb->requestRegisterUpdates(m.address(), (uint16_t*)&value, 2);
+						}
 					}
 				}
 				//sendPropertyUpdate(&iosh_cmd, &m);  // dont' send the property value back
 			}
 			catch (std::exception ex) {
-				std::cout << ex.what() << "\n";
+				std::cout << "Exception when processing PROPERTY command: " << ex.what() << "\n";
 			}
 		}
-
-		data = 0;
-
 	}
 
 }
