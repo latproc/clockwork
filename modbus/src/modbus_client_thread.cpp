@@ -64,8 +64,21 @@ public:
 
 	std::list< std::pair<int, bool> >bit_changes;
 	void requestUpdate(int addr, bool which) {
-		boost::mutex::scoped_lock(work_mutex);
+		boost::mutex::scoped_lock lock(work_mutex);
 		bit_changes.push_back(std::make_pair(addr, which));
+	}
+
+	std::list< std::pair<int, uint16_t> >register_changes;
+	void requestRegisterUpdate(int addr, uint16_t val) {
+		boost::mutex::scoped_lock lock(work_mutex);
+		register_changes.push_back(std::make_pair(addr, val));
+	}
+
+	void requestRegisterUpdates(int addr, uint16_t *vals, size_t count) {
+		boost::mutex::scoped_lock lock(work_mutex);
+		for (size_t i = 0; i<count; ++i) {
+			register_changes.push_back(std::make_pair(addr, *vals++));
+		}
 	}
 
 	modbus_t *getContext() {
@@ -77,12 +90,22 @@ public:
 	}
 
 	void performUpdates() {
-		boost::mutex::scoped_lock(work_mutex);
-		std::list< std::pair<int, bool> >::iterator iter = bit_changes.begin();
-		while (iter != bit_changes.end()) {
-			std::pair<int, bool>item = *iter;
-			setBit(item.first, item.second);
-			iter = bit_changes.erase(iter);
+		boost::mutex::scoped_lock lock(work_mutex);
+		{
+			std::list< std::pair<int, bool> >::iterator iter = bit_changes.begin();
+			while (iter != bit_changes.end()) {
+				std::pair<int, bool>item = *iter;
+				setBit(item.first, item.second);
+				iter = bit_changes.erase(iter);
+			}
+		}
+		{
+			std::list< std::pair<int, uint16_t> >::iterator iter = register_changes.begin();
+			while (iter != register_changes.end()) {
+				std::pair<int, uint16_t>item = *iter;
+				setRegister(item.first, item.second);
+				iter = register_changes.erase(iter);
+			}
 		}
 	}
 	
@@ -105,7 +128,7 @@ public:
 			settings(modbus_settings),
 			cmd_interface(0), iod_cmd_socket_name(sock_name)
 	{
-		boost::mutex::scoped_lock(update_mutex);
+		boost::mutex::scoped_lock lock(update_mutex);
 
 		ctx = openConnection();
 		if (!ctx) {
@@ -218,7 +241,7 @@ void close_connection() {
 	sendStatus("disconnected");
 	update_status = true;
 
-	boost::mutex::scoped_lock(update_mutex);
+	boost::mutex::scoped_lock lock(update_mutex);
 	assert(ctx);
 	modbus_flush(ctx);
 	modbus_close(ctx);
@@ -248,12 +271,28 @@ bool check_error(const char *msg, int entry, int *retry) {
 
 bool setBit(int addr, bool which) {
 	std::cout << "set bit " << addr << " to " << which << "\n";
-	boost::mutex::scoped_lock(update_mutex);
+	boost::mutex::scoped_lock lock(update_mutex);
 	int rc = 0;
 	int retries = 3;
 	while ( (rc = modbus_write_bit(ctx, addr, (which) ? 1 : 0) ) == -1) {
 		perror("modbus_write_bit");
 		check_error("modbus_write_bit", addr, &retries);
+		if (!connected) return false;
+		if (--retries > 0) continue;
+		return false;
+	}
+	return true;
+}
+
+bool setRegister(int addr, uint16_t val) {
+	if (!connected) return false;
+	std::cout << "set register " << addr << " to " << val << "\n";
+	boost::mutex::scoped_lock lock(update_mutex);
+	int rc = 0;
+	int retries = 3;
+	while ( (rc = modbus_write_registers(ctx, addr, 1, &val) ) == -1) {
+		perror("modbus_write_register");
+		check_error("modbus_write_register", addr, &retries);
 		if (!connected) return false;
 		if (--retries > 0) continue;
 		return false;
@@ -305,6 +344,11 @@ void operator()() {
 	while (!finished) {
 		if (!connected) {
 			boost::mutex::scoped_lock(update_mutex);
+			if (ctx) { 
+	    		modbus_close(ctx);
+	    		modbus_free(ctx);
+				ctx = 0;
+			}
 			if (!ctx) {
 				ctx = openConnection();
 			}
