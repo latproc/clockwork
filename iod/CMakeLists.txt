@@ -24,6 +24,7 @@ endif()
 #set (CMAKE_EXE_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
 #set (CMAKE_CXX_FLAGS_DEBUG "-g ")
 #set (CMAKE_CXX_FLAGS_RELEASE "-O2")
+set (CMAKE_CXX_FLAGS_RELEASE "-O")
 
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/src/)
 set (BUILD_DIR ${PROJECT_SOURCE_DIR}/build)

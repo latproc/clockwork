@@ -70,7 +70,7 @@ double Buffer::average(int n)
   std::cout << i << ":" <<getFloatAtIndex(i) << "\n";
 #endif
   res += getFloatAtIndex(i);
-assert(total_ == res);
+//assert(total_ == res);
   return res / (double)n;
 #endif
 }
