@@ -332,11 +332,13 @@ template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, unsigned in
 		if (item.second.group() == grp) {
 			int offset = item.second.address();
 			int end = offset + item.second.length() - 1;
-			if (offset<min) min = offset; if (end>max) max = end;
+			if (offset < min) min = offset;
+			if (end > max) max = end;
 			int retry = 2;
 			while ( (rc = read_fn(ctx, offset, item.second.length(), dest+offset)) == -1 ) {
-			    std::cerr << "called: read_fn(ctx, " << offset << ", " 
-					<< item.second.length() << ", " << dest+offset << "))\n";
+			    if (options.verbose)
+					std::cerr << "called: read_fn(ctx, " << offset << ", " 
+						<< item.second.length() << ", " << dest+offset << "))\n";
 				check_error(fn_name, offset, &retry); 
 				if (!connected) return false;
 				if (--retry>0) continue; else break;
