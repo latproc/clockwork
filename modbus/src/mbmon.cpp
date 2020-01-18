@@ -429,7 +429,7 @@ int main(int argc, char *argv[]) {
 
 	ModbusSettings modbus_tcp;
 	modbus_tcp.mt = mt_TCP;
-	modbus_tcp.device_name = "localhost";
+	modbus_tcp.device_name = "127.0.0.1";
 	modbus_tcp.settings = "1502";
 	modbus_tcp.support_single_register_write = true;
 	modbus_tcp.support_multi_register_write = true;
@@ -457,11 +457,11 @@ int main(int argc, char *argv[]) {
 	while (arg<argc) {
 		if ( strcmp(argv[arg], "-h") == 0 && arg+1 < argc) {
 			modbus_tcp.device_name = argv[++arg];
-			ms = &modbus_rtu;
+			ms = &modbus_tcp;
 		}
 		else if ( strcmp(argv[arg], "-p") == 0 && arg+1 < argc) {
 			modbus_tcp.settings = argv[++arg];
-			ms = &modbus_rtu;
+			ms = &modbus_tcp;
 		}
 		else if ( strcmp(argv[arg], "-c") == 0 && arg+1 < argc) {
 			config_filename = argv[++arg];

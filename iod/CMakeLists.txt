@@ -304,7 +304,7 @@ add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
 target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(modbusd src/modbusd.cpp )
-target_link_libraries(modbusd Clockwork modbus ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(modbusd Clockwork ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 install(TARGETS cw iosh device_connector modbusd persistd
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
