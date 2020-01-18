@@ -184,20 +184,27 @@ public:
 
 modbus_t *openConnection() {
 	if (settings.mt == mt_TCP) {
-		std::cerr << "opening tcp connection to " << settings.device_name << "\n";
+		if (options.verbose) 
+			std::cerr << "opening tcp connection to " << settings.device_name 
+				<< ":" << settings.settings << "\n";
 		int port = 1502;
-		if (strToInt(settings.settings.c_str(), port)) {
+		if (!ctx && strToInt(settings.settings.c_str(), port)) {
     		ctx = modbus_new_tcp(settings.device_name.c_str(), port);
 		}
 		if (!ctx || modbus_connect(ctx) == -1) {
 			std::cerr << "Connection to " << settings.device_name
 				<< ":" << settings.settings 
-				<< " failed: " << modbus_strerror(errno) << ":" << errno;
+				<< " failed: " << modbus_strerror(errno) << ":" << errno << "\n";
+			if (!ctx)
+				std::cerr << "failed to create context\n";
 			if (ctx) modbus_free(ctx);
 			ctx = 0;
 			sendStatus("disconnected");
 			connected = false;
+			return 0;
 		}
+		else
+			return ctx;	
 	}
 	else if (settings.mt == mt_RTU) {
 		int device_id = *settings.devices.begin();
