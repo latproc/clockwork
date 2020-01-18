@@ -571,9 +571,19 @@ int main(int argc, char *argv[]) {
 		
 		if (obj) {
 			cJSON *name_js = cJSON_GetObjectItem(obj, "name");
-			chn_instance_name = name_js->valuestring;
+			if (name_js) {
+				chn_instance_name = name_js->valuestring;
+			}
+			else {
+				char *resp_str = cJSON_PrintUnformatted(obj);
+				std::cerr << "configuration error, expected to find a field 'name' in " << resp_str << "\n";
+				free(resp_str);
+			}
 			cJSON_Delete(obj);
 			obj = 0;
+			if (!name_js) {
+				exit(3);
+			}
 		}
 		else {
 		}

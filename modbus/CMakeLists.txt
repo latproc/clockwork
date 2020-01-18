@@ -55,9 +55,9 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/value.cpp
     ${CLOCKWORK_DIR}/symboltable.cpp
     ${CLOCKWORK_DIR}/options.cpp
-	${CLOCKWORK_DIR}/SocketMonitor.cpp
-	${CLOCKWORK_DIR}/ConnectionManager.cpp
-	${CLOCKWORK_DIR}/rate.cpp
+    ${CLOCKWORK_DIR}/SocketMonitor.cpp
+    ${CLOCKWORK_DIR}/ConnectionManager.cpp
+    ${CLOCKWORK_DIR}/rate.cpp
     ${CLOCKWORK_DIR}/Message.cpp )
 
 
@@ -66,8 +66,8 @@ FIND_PACKAGE(MODBUS REQUIRED)
 FIND_PACKAGE(ZMQ 4.2 REQUIRED)
 
 include_directories("/usr/local/include")
-include_directories("/usr/local/include/modbus")
 include_directories("/opt/local/include")
+include_directories("${MODBUS_INCLUDE_DIR}")
 include_directories("${Boost_INCLUDE_DIRS}")
 include_directories("${PROJECT_SOURCE_DIR}/")
 include_directories("${PROJECT_BINARY_DIR}")
