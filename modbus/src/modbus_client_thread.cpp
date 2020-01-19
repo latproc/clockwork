@@ -25,16 +25,6 @@
 #include <Logger.h>
 #endif
 
-bool strToInt(const char *str, int &val) {
-	char *q;
-	long p = strtol(str, &q,10);
-	if (q != str) {
-		val = (int)p;
-		return true;
-	}
-	return false;
-}
-
 class ModbusClientThread{
 private:
     modbus_t *ctx;
@@ -57,7 +47,7 @@ public:
 	BufferMonitor<uint16_t> holdings_monitor; //("holding registers", options);
 
 	MonitorConfiguration &mc;
-	ModbusSettings &settings;
+	const ModbusSettings &settings;
 
 	zmq::socket_t *cmd_interface;
 	const char *iod_cmd_socket_name;
@@ -116,7 +106,7 @@ public:
 		holdings_monitor.refresh();
 	}
 
-	ModbusClientThread(ModbusSettings &modbus_settings, MonitorConfiguration &modbus_config,
+	ModbusClientThread(const ModbusSettings &modbus_settings, MonitorConfiguration &modbus_config,
 					   const char *sock_name = 0) :
 			ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
 			tab_rq_registers(0), tab_rw_rq_registers(0), 

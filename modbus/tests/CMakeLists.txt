@@ -36,14 +36,17 @@ endif()
 
 # Add test executables
 
-add_executable(test_options src/test_options.cpp )
+add_executable(test_options src/test_options.cpp 
+  ${PROJECT_SOURCE_DIR}/src/options.cpp ${PROJECT_SOURCE_DIR}/src/modbus_helpers.cpp
+  )
 target_link_libraries(test_options gmock_main ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 include_directories("${PROJECT_SOURCE_DIR}/src")
 add_test(NAME test_options COMMAND test_options)
 
 
-add_executable(test_modbus_helpers src/test_modbus_helpers.cpp ${PROJECT_SOURCE_DIR}/src/modbus_helpers.cpp)
+add_executable(test_modbus_helpers src/test_modbus_helpers.cpp 
+  ${PROJECT_SOURCE_DIR}/src/modbus_helpers.cpp)
 target_link_libraries(test_modbus_helpers gmock_main ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 include_directories("${PROJECT_SOURCE_DIR}/src")

@@ -83,7 +83,7 @@ TARGET_LINK_LIBRARIES(address ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(address ${CMAKE_DL_LIBS})
 
 
-add_executable (mbmon src/mbmon.cpp src/plc_interface.cpp src/monitor.cpp src/modbus_helpers.cpp)
+add_executable (mbmon src/mbmon.cpp src/plc_interface.cpp src/monitor.cpp src/modbus_helpers.cpp src/options.cpp)
 TARGET_LINK_LIBRARIES(mbmon ${ZMQ_LIBRARY})
 TARGET_LINK_LIBRARIES(mbmon Clockwork)
 TARGET_LINK_LIBRARIES(mbmon ${MODBUS_LIBRARIES})
