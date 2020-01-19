@@ -15,10 +15,22 @@ bool strToInt(const char *str, int &val) {
 	return false;
 }
 
+bool strToLong(const char *str, long &val) {
+	char *q;
+	long p = strtol(str, &q,10);
+	if (q != str) {
+		val = p;
+		return true;
+	}
+	return false;
+}
+
+
 void Options::usage(const char *prog) {
 	std::cout << prog << " [-h hostname] [ -p port] [ -c modbus_config ] [ --channel channel_name ] "
 		<< "[ --monitor clockwork_machine.property ] "
-	    << "[ --tty tty_device ] [ --tty_settings settings ] [ --rtu ] [ --device_id device_address ]\n\n"
+	    << "[ --tty tty_device ] [ --tty_settings settings ] [ --rtu ] "
+        << "[ --device_id device_address ] [ --timeout timout-usecs ]\n\n"
 		<< "  defaults to -h localhost -p 1502 --channel PLC_MONITOR\n"
 		<< "  modbus rtu options: settings is a colon-separated specification, eg: 19200:8:N:1\n"
 		<< "   -rtu if specified simply sets rtu mode with hard-coded defaults "
@@ -48,6 +60,7 @@ Options::Options() : verbose(false), multireg_write(true), singlereg_write(true)
 
     serial_ = new SerialSettings;
 	getSettings(settings_rtu->settings.c_str(), *serial_);
+
 }
 
 Options::~Options() {
@@ -79,6 +92,17 @@ const char *Options::configFileName() {
 
 const char *Options::simulatorName() {
     return sim_name;
+}
+
+uint64_t Options::getTimeout() {
+    return timeout_secs * 1000000 + timeout_usecs;
+}
+
+uint64_t Options::setTimeout(uint64_t timeout) {
+    uint64_t res = getTimeout();
+    timeout_secs = timeout / 1000000;
+    timeout_usecs = timeout % 1000000;
+    return res;
 }
 
 bool Options::parseArgs(int argc, const char *argv[]) {
@@ -150,6 +174,12 @@ bool Options::parseArgs(int argc, const char *argv[]) {
 			if (strToInt(argv[++arg], device_id)) {
 				settings_rtu->devices.insert(device_id);
 				mt = mt_RTU;
+			}
+		}
+		else if ( strcmp(argv[arg], "--timeout") == 0 && arg+1 < argc) {
+			long timeout;
+			if (strToLong(argv[++arg], timeout)) {
+				setTimeout(timeout);
 			}
 		}
 
