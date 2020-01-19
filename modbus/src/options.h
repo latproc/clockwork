@@ -25,6 +25,8 @@ public:
 	const char *channelName();
     const char *configFileName();
     const char *simulatorName();
+    uint64_t getTimeout();
+    uint64_t setTimeout(uint64_t timeout_usec);
 
 private:
     ModbusType mt;
@@ -35,6 +37,8 @@ private:
     const char *config_filename;
 	bool valid_options;
     const char *sim_name;
+    uint32_t timeout_secs;
+    uint32_t timeout_usecs;
 };
 
 #endif

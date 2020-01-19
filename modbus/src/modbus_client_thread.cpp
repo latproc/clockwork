@@ -125,32 +125,6 @@ public:
 			std::cerr << "failed to create modbus context\n";
 			exit(1);
 		}
-
-		/* Save original timeout */
-		uint32_t secs, usecs;
-		int rc = modbus_get_byte_timeout(ctx, &secs, &usecs);
-		if (rc == -1) {
-			perror("modbus_get_byte_timeout");
-			sendStatus("disconnected");
-		}
-		else {
-			if (options.verbose) std::cout << "original timeout: " << secs 
-			  << "." << std::setw(3) << std::setfill('0') << (usecs/1000) << "\n";
-			uint32_t new_secs = secs *2;
-			uint32_t new_usecs = usecs * 2;
-			while (new_usecs >= 1000000) { new_usecs -= 1000000; new_secs++; }
-			rc = modbus_set_byte_timeout(ctx, new_secs, new_usecs);
-			if (rc == -1) {
-				perror("modbus_set_byte_timeout");
-				sendStatus("disconnected");
-			}
-			else {
-				if (options.verbose) {
-					std::cout << "new timeout: " << new_secs << "." 
-					  << std::setw(3) << std::setfill('0') << (new_usecs/1000) << "\n";
-				}
-			}
-		}
 		modbus_set_debug(ctx, FALSE);
 
     /* Allocate and initialize the different memory spaces */
@@ -181,20 +155,16 @@ modbus_t *openConnection() {
 		if (!ctx && strToInt(settings.settings.c_str(), port)) {
     		ctx = modbus_new_tcp(settings.device_name.c_str(), port);
 		}
-		if (!ctx || modbus_connect(ctx) == -1) {
+		if (ctx == NULL) {
+			std::cerr << "Unable to create the libmodbus context\n";
+		}
+		else if (modbus_connect(ctx) == -1) {
 			std::cerr << "Connection to " << settings.device_name
 				<< ":" << settings.settings 
 				<< " failed: " << modbus_strerror(errno) << ":" << errno << "\n";
-			if (!ctx)
-				std::cerr << "failed to create context\n";
-			if (ctx) modbus_free(ctx);
+			modbus_free(ctx);
 			ctx = 0;
-			sendStatus("disconnected");
-			connected = false;
-			return 0;
 		}
-		else
-			return ctx;	
 	}
 	else if (settings.mt == mt_RTU) {
 		int device_id = *settings.devices.begin();
@@ -203,20 +173,52 @@ modbus_t *openConnection() {
 			settings.serial.parity, settings.serial.bits, settings.serial.stop_bits);
 		if (ctx == NULL) {
 			std::cerr << "Unable to create the libmodbus context\n";
-			exit(1);
 		}
-		if (settings.devices.size() > 0) {
-			if (modbus_set_slave(ctx, device_id) == -1) {
-				std::cerr << "modbus_set_slave: " << modbus_strerror(errno) << "\n";
-				exit(1);
+		else {
+			if (settings.devices.size() > 0) {
+				if (modbus_set_slave(ctx, device_id) == -1) {
+					std::cerr << "modbus_set_slave: " << modbus_strerror(errno) << "\n";
+					modbus_free(ctx);
+					ctx = 0;
+				}
+			}
+			if (modbus_connect(ctx) == -1) {
+				std::cerr << "Connection failed: " <<  modbus_strerror(errno) << "\n";
+				modbus_free(ctx);
+				ctx = 0;
+
 			}
 		}
-		// TODO: verify slave is responding and set connected status
 	}
-	if (modbus_connect(ctx) == -1) {
-		std::cerr << "Connection failed: " <<  modbus_strerror(errno) << "\n";
-		modbus_free(ctx);
+	if (!ctx) {
+		sendStatus("disconnected");
 		return 0;
+	}
+	/* Save original timeout */
+	uint32_t secs, usecs;
+	int rc = modbus_get_byte_timeout(ctx, &secs, &usecs);
+	if (rc == -1) {
+		perror("modbus_get_byte_timeout");
+		sendStatus("disconnected");
+	}
+	else {
+		if (options.verbose) std::cout << "original timeout: " << secs 
+			<< "." << std::setw(3) << std::setfill('0') << (usecs/1000) << "\n";
+		uint64_t new_timeout = options.getTimeout();
+		uint32_t new_secs = (new_timeout) ? new_timeout / 1000000 : secs * 2;
+		uint32_t new_usecs = (new_timeout) ? new_timeout % 1000000 : usecs * 2;
+		while (new_usecs >= 1000000) { new_usecs -= 1000000; new_secs++; }
+		rc = modbus_set_byte_timeout(ctx, new_secs, new_usecs);
+		if (rc == -1) {
+			perror("modbus_set_byte_timeout");
+			sendStatus("disconnected");
+		}
+		else {
+			if (options.verbose) {
+				std::cout << "new timeout: " << new_secs << "." 
+					<< std::setw(3) << std::setfill('0') << (new_usecs/1000) << "\n";
+			}
+		}
 	}
 	return ctx;
 }
