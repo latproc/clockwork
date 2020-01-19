@@ -35,15 +35,6 @@ public:
 };
 */
 
-struct Options {
-	bool verbose;
-	bool multireg_write; // some devices do not support the multiple register write function
-	bool singlereg_write; // some devices do not support writing single registers at a time 
-	std::string status_machine;
-	std::string status_property;
-	Options() : verbose(false), multireg_write(true), singlereg_write(true) {}
-};
-
 template<class T>void display(T *p, size_t len) {
 	size_t min = 0;
 	if (len>120) len=120;

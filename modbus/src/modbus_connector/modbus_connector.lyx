@@ -1,7 +1,9 @@
-#LyX 2.1 created this file. For more info see http://www.lyx.org/
-\lyxformat 474
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
 \begin_document
 \begin_header
+\save_transient_properties true
+\origin unavailable
 \textclass article
 \use_default_options true
 \maintain_unincluded_children false
@@ -9,16 +11,16 @@
 \language_package default
 \inputencoding auto
 \fontencoding global
-\font_roman default
-\font_sans default
-\font_typewriter default
-\font_math auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
-\font_sf_scale 100
-\font_tt_scale 100
+\font_sf_scale 100 100
+\font_tt_scale 100 100
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -178,6 +180,10 @@ A Clockwork CHANNEL is used to link the modbus connector to clockwork.
 
 \begin_layout LyX-Code
 PLCChannel CHANNEL {
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -215,7 +221,7 @@ status open
 \align center
 \begin_inset Tabular
 <lyxtabular version="3" rows="6" columns="6">
-<features rotate="0" tabularvalignment="middle">
+<features tabularvalignment="middle">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
@@ -600,7 +606,7 @@ status open
 \align center
 \begin_inset Tabular
 <lyxtabular version="3" rows="12" columns="5">
-<features rotate="0" tabularvalignment="middle">
+<features tabularvalignment="middle">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
@@ -1195,6 +1201,116 @@ Example PLC Mapping - Koyo PLC
 
 \end_inset
 
+
+\end_layout
+
+\begin_layout Subsection
+Example setup using clockwork for master and slave
+\end_layout
+
+\begin_layout Subsubsection
+Slave (PLC device)
+\end_layout
+
+\begin_layout LyX-Code
+/cw ../tests/stdchannels.cw slave.cw -cp 5556 &
+\end_layout
+
+\begin_layout Standard
+slave.cw defines a value that is exported to modbus as a holding register
+\end_layout
+
+\begin_layout LyX-Code
+MyValue VARIABLE(export:rw_reg) 1234;
+\end_layout
+
+\begin_layout Standard
+The modbus daemon provides the modbus api interface for the exported clockwork
+ items
+\end_layout
+
+\begin_layout LyX-Code
+modbusd --cwout 5556 &
+\end_layout
+
+\begin_layout Subsubsection
+Master (User interface device)
+\end_layout
+
+\begin_layout LyX-Code
+cw ../tests/modbus_master.cw master_tcp.cw &
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout Standard
+master_tcp.cw defines an interface to the modbus devices 
+\end_layout
+
+\begin_layout LyX-Code
+CWPLC MODBUSMODULE(host:"127.0.0.1", port:1502);
+\end_layout
+
+\begin_layout LyX-Code
+INT0 INPUTREGISTER(format: "SignedInt") CWPLC, "M0", 1;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+# connection_status indicates whether modbus is connected to the slave
+\end_layout
+
+\begin_layout LyX-Code
+connection_status PLCSTATUS; PLCSTATUS MACHINE { OPTION status ""; }
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+# A channel is defined to monitor devices on the PLC
+\end_layout
+
+\begin_layout LyX-Code
+CWPLC_MONITOR CHANNEL {
+\end_layout
+
+\begin_layout LyX-Code
+    OPTION host "localhost";
+\end_layout
+
+\begin_layout LyX-Code
+    OPTION port 7701;
+\end_layout
+
+\begin_layout LyX-Code
+    MONITORS MACHINES LINKED TO CWPLC;
+\end_layout
+
+\begin_layout LyX-Code
+    PUBLISHER;
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+The modbus monitor connects the clockwork master to the modbus slave:
+\end_layout
+
+\begin_layout LyX-Code
+mbmon --channel CWPLC_MONITOR --monitor connection_status.status -p 1502
+ &
+\end_layout
+
+\begin_layout LyX-Code
 
 \end_layout
 

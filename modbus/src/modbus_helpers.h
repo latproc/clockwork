@@ -1,6 +1,7 @@
 #ifndef __modbus_helpers_h__
 #define __modbus_helpers_h__
 
+#include "options.h"
 #include <set>
 
 class SerialSettings {
@@ -16,8 +17,6 @@ private:
     SerialSettings(const SerialSettings &);
     SerialSettings &operator=(const SerialSettings &);
 };
-
-enum ModbusType {mt_unknown, mt_TCP, mt_RTU, mt_ASCII};
 
 struct ModbusSettings {
 	ModbusType mt;

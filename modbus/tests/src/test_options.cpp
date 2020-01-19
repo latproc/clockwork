@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
-#include "monitor.h"
+#include "options.h"
 
 TEST( Options, Constructor) {
     Options options;
-    EXPECT_EQ(options.verbose, false);
+    EXPECT_FALSE(options.verbose);
+    EXPECT_TRUE(options.multireg_write);
+    EXPECT_TRUE(options.singlereg_write);
 }
 
 // int main(int argc, char* argv[])

@@ -24,6 +24,7 @@
 #include <libgen.h>
 #include <sys/time.h>
 #include <Logger.h>
+#include "options.h"
 
 bool iod_connected = false;
 bool update_status = true;
@@ -47,9 +48,6 @@ struct UserData {
 };
 
 Options options;
-
-
-
 
 /* Clockwork interface */
 
@@ -253,20 +251,6 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 #include "modbus_client_thread.cpp"
 ModbusClientThread *mb = 0;
 
-void usage(const char *prog) {
-	std::cout << prog << " [-h hostname] [ -p port] [ -c modbus_config ] [ --channel channel_name ] "
-		<< "[ --monitor clockwork_machine.property ] "
-	    << "[ --tty tty_device ] [ --tty_settings settings ] [ --rtu ] [ --device_id device_address ]\n\n"
-		<< "  defaults to -h localhost -p 1502 --channel PLC_MONITOR\n"
-		<< "  modbus rtu options: settings is a colon-separated specification, eg: 19200:8:N:1\n"
-		<< "   -rtu if specified simply sets rtu mode with hard-coded defaults "
-	    << "\n\n";
-	std::cout << "  only one of the modbus_config or the channel_name should be supplied.\n";
-	std::cout << "  setting hostname or port activates tcp mode, setting an rtu setting avtivates rtu mode\n";
-	std::cout << "\n  other optional parameters:\n\n\t-s\tsimfile\t to create a clockwork configuration for simulation\n";
-}
-
-
 class SetupDisconnectMonitor : public EventResponder {
 public:
 	void operator()(const zmq_event_t &event_, const char* addr_) {
@@ -424,115 +408,20 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
 
 
 using namespace std;
-int main(int argc, char *argv[]) {
-	program_name = strdup(basename(argv[0]));
+int main(int argc, const char *argv[]) {
+	program_name = strdup(basename((char*)argv[0]));
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
-
-	ModbusSettings modbus_tcp;
-	modbus_tcp.mt = mt_TCP;
-	modbus_tcp.device_name = "127.0.0.1";
-	modbus_tcp.settings = "1502";
-	modbus_tcp.support_single_register_write = true;
-	modbus_tcp.support_multi_register_write = true;
-	ModbusSettings modbus_rtu;
-	modbus_rtu.mt = mt_RTU;
-	modbus_rtu.device_name = "/dev/ttyUSB0";
-	modbus_rtu.settings = "19200:8:N:1";
-	modbus_rtu.support_single_register_write = true;
-	modbus_rtu.support_multi_register_write = true;
-	SerialSettings serial;
-	ModbusSettings *ms = &modbus_tcp;
-
-	getSettings(modbus_rtu.settings.c_str(), serial);
 
 	std::cout << "Modbus version (compile time): " << LIBMODBUS_VERSION_STRING << " ";
 	std::cout << "(linked): " 
 			<< libmodbus_version_major << "." 
 			<< libmodbus_version_minor << "." << libmodbus_version_micro << "\n";
 
-	const char *config_filename = 0;
-	const char *channel_name = "PLC_MONITOR";
-	const char *sim_name = 0;
-
-	int arg = 1;
-	while (arg<argc) {
-		if ( strcmp(argv[arg], "-h") == 0 && arg+1 < argc) {
-			modbus_tcp.device_name = argv[++arg];
-			ms = &modbus_tcp;
-		}
-		else if ( strcmp(argv[arg], "-p") == 0 && arg+1 < argc) {
-			modbus_tcp.settings = argv[++arg];
-			ms = &modbus_tcp;
-		}
-		else if ( strcmp(argv[arg], "-c") == 0 && arg+1 < argc) {
-			config_filename = argv[++arg];
-		}
-		else if ( strcmp(argv[arg], "--channel") == 0 && arg+1 < argc) {
-			channel_name = argv[++arg];
-		}
-		else if ( strcmp(argv[arg], "-s") == 0 && arg+1 < argc) {
-			sim_name = argv[++arg];
-		}
-		else if ( strcmp(argv[arg], "--no-multireg-write") == 0) {
-			options.multireg_write = false;
-		}
-		else if ( strcmp(argv[arg], "--no-singlereg-write") == 0) {
-			options.singlereg_write = false;
-		}
-		else if ( strcmp(argv[arg], "-v") == 0) {
-			options.verbose = true;
-		}
-		else if ( strcmp(argv[arg], "--monitor") == 0 && arg+1 < argc) {
-			std::string mon = argv[++arg];
-			options.status_machine = mon;
-			size_t pos = mon.find_last_of(".");
-			if (pos) {
-				options.status_property=mon.substr(pos+1);
-				options.status_machine.erase(pos);;
-			}
-			else options.status_property = "status";
-			if (options.verbose) std::cout << "reporting status to property " << options.status_property << " of " << options.status_machine << "\n";
-		}
-		else if ( strcmp(argv[arg], "--tty") == 0 && arg+1 < argc) {
-			modbus_rtu.device_name = argv[++arg];
-			ms = &modbus_rtu;
-		}
-		else if ( strcmp(argv[arg], "--tty_settings") == 0 && arg+1 < argc) {
-			modbus_rtu.settings = argv[++arg];
-			ms = &modbus_rtu;
-			int res = getSettings(modbus_rtu.settings.c_str(), modbus_rtu.serial);
-			if (res == 0) {
-				if (options.verbose) std::cout << "tty settings: baud: " << modbus_rtu.serial.baud 
-				  << " bits: " << modbus_rtu.serial.bits << "\n";
-			}
-			else {
-				std::cerr << "failed to parse settings: " << modbus_rtu.settings.c_str() << "\n";
-				exit(1);
-			}
-		}
-		else if ( strcmp(argv[arg], "--rtu") == 0) {
-			ms = &modbus_rtu;
-		}
-		else if ( strcmp(argv[arg], "--device_id") == 0 && arg+1 < argc) {
-			int device_id;
-			if (strToInt(argv[++arg], device_id)) {
-				modbus_rtu.devices.insert(device_id);
-				ms = &modbus_rtu;
-			}
-		}
-
-		else if (argv[arg][0] == '-'){
-			std::cerr << "unknown option " << argv[arg] << "\n";
-			usage(argv[0]); exit(0); 
-		}
-		else break;
-		++arg;
+	if (!options.parseArgs(argc, argv)) {
+		options.usage(program_name);
 	}
-	ms->support_single_register_write = options.singlereg_write;
-	ms->support_multi_register_write = options.multireg_write;
-	modbus_tcp.support_multi_register_write = true;
-
+	const ModbusSettings *ms = options.settings();
 
 	PLCInterface plc;
 	if (!plc.load("modbus_addressing.conf")) {
@@ -543,8 +432,8 @@ int main(int argc, char *argv[]) {
 	{FileLogger fl(program_name); fl.f() << "----- starting -----\n"; }
 	std::string chn_instance_name;
 	MonitorConfiguration mc;
-	if (config_filename) {
-		if (!mc.load(config_filename)) {
+	if (options.configFileName()) {
+		if (!mc.load(options.configFileName())) {
 			cerr << "Failed to load modbus mappings to be monitored\n";
 			exit(1);
 		}
@@ -558,7 +447,7 @@ int main(int argc, char *argv[]) {
 
 		std::list<Value>cmd;
 		cmd.push_back("CHANNEL");
-		cmd.push_back(channel_name);
+		cmd.push_back(options.channelName());
 		char *response = send_command(iod, cmd);
 		if ( !response )
 		{FileLogger fl(program_name); fl.f() << "null response to channel request. exiting\n"; sleep(2); exit(1);}
@@ -596,14 +485,14 @@ int main(int argc, char *argv[]) {
 		loadRemoteConfiguration(iod, chn_instance_name, plc, mc);
 	}
 
-	if (sim_name) {
-		mc.createSimulator(sim_name);
+	if (options.simulatorName()) {
+		mc.createSimulator(options.simulatorName());
 		exit(0);
 	}
 
 	setupMonitoring(mc);
 
-	if (config_filename) {
+	if (options.configFileName()) {
 		// standalone execution
 
 		ModbusClientThread modbus_interface(*ms, mc);
