@@ -241,7 +241,7 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 			uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
 			if (options.verbose) std::cout << mm->name() << " ";
 			mm->set( val, options.verbose );
-			if (sock) {
+			if (mm->readOnly() && sock) { // INPUTREGISTER
 				sendPropertyUpdate(sock, mm);
 			}
 		}
@@ -618,15 +618,41 @@ int main(int argc, const char *argv[]) {
 				ModbusMonitor &m = (*found).second; //mc.monitors.at(params[0].asString());
 				std::cout << m.name() << " " << ( (m.readOnly()) ? "READONLY" : "" ) << "\n";
 				if (!m.readOnly() && m.group() == 4) {
-					long value;
-					if (params[2].asString() == "VALUE" && params[3].asInteger(value)) {
-						if (m.length() == 1) {
-							m.setRaw( (uint16_t) value);
-							mb->requestRegisterUpdate(m.address(), (uint16_t)value);
+					std::cout << "setting " << m.name() << " (" << m.format() << ")\n";
+					if (params[2].asString() == "VALUE") {
+						if (m.format() == "Float") {
+							double dval;
+							if (params[3].asFloat(dval)) {
+								uint16_t value[2];
+								float fval = dval;
+								if (options.verbose)
+									std::cerr << "setting float value " << fval << " for address"
+										<< std::hex << "0x" << m.address() << std::dec << "\n";
+								modbus_set_float_badc(fval, value);
+								if (m.length() == 2) {
+									m.setRaw(value, 2);
+									mb->requestRegisterUpdates(m.address(), value, 2);
+								}
+								else {
+									std::cerr << "Error: cannot set float value for " << params[1] << " into a field of length " << m.length() << "\n";
+								}
+							}
+							else {
+								std::cerr << "Error: could not convert '" << params[3] << "' to a float\n";
+							}
 						}
-						else if (m.length() == 2) {
-							m.setRaw( (uint32_t)value );
-							mb->requestRegisterUpdates(m.address(), (uint16_t*)&value, 2);
+						else {
+							long value;
+							if (params[2].asString() == "VALUE" && params[3].asInteger(value)) {
+								if (m.length() == 1) {
+									m.setRaw( (uint16_t) value);
+									mb->requestRegisterUpdate(m.address(), (uint16_t)value);
+								}
+								else if (m.length() == 2) {
+									m.setRaw( (uint32_t)(value & 0xffffffff) );
+									mb->requestRegisterUpdates(m.address(), (uint16_t*)&value, 2);
+								}
+							}
 						}
 					}
 				}

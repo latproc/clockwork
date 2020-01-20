@@ -67,7 +67,7 @@ public:
 	void requestRegisterUpdates(int addr, uint16_t *vals, size_t count) {
 		boost::mutex::scoped_lock lock(work_mutex);
 		for (size_t i = 0; i<count; ++i) {
-			register_changes.push_back(std::make_pair(addr, *vals++));
+			register_changes.push_back(std::make_pair(addr + i, *vals++));
 		}
 	}
 
@@ -306,7 +306,7 @@ bool setRegister(int addr, uint16_t val) {
 		rc = modbus_write_register(ctx, addr, val);
 	else
 		rc = modbus_write_registers(ctx, addr, 1, &val);
-	while ( (rc = modbus_write_registers(ctx, addr, 1, &val) ) == -1) {
+	while ( rc == -1) {
 		perror("modbus_write_register");
 		check_error("modbus_write_register", addr, &retries);
 		if (!connected) return false;
