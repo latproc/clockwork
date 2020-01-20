@@ -155,9 +155,8 @@ class ModbusMonitor {
 		void set(uint8_t *new_value, bool display = false);
 		void set(uint16_t *new_value, bool display = false);	
 		void setRaw(uint16_t new_value, bool display = false);
-		void setRaw(uint32_t new_value, bool display = false);	
-		
-			
+		void setRaw(uint16_t *new_value, unsigned int n, bool display = false);	
+		void setRaw(uint32_t new_value, bool display = false);
 		
 		static ModbusMonitor *lookupAddress(unsigned int adr);
 		static ModbusMonitor *lookup(unsigned int group, unsigned int adr);
