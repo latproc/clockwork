@@ -91,11 +91,36 @@ public:
 		}
 		{
 			std::list< std::pair<int, uint16_t> >::iterator iter = register_changes.begin();
+			if (iter == register_changes.end())
+				return;
+			unsigned int space=10;
+			uint16_t *vals = (uint16_t*)malloc(space * sizeof(uint16_t));
+			unsigned int n = 0;
+			int start = 0;
+			int last = 0;
 			while (iter != register_changes.end()) {
 				std::pair<int, uint16_t>item = *iter;
-				setRegister(item.first, item.second);
+				if (n==0) {
+					start = item.first;
+				}
+				else if (item.first != last+1) {
+					//flush
+					setRegisters(start, vals, n);
+					start = item.first;
+					n = 0;
+				}
+				last = item.first;
+				vals[n++] = item.second;
+				if (n == space) {
+					space += 10;
+					vals = (uint16_t*)realloc(vals, space * sizeof(uint16_t));
+				}
 				iter = register_changes.erase(iter);
 			}
+			if (n) {
+				setRegisters(start, vals, n);
+			}
+			free(vals);
 		}
 	}
 	
@@ -315,6 +340,29 @@ bool setRegister(int addr, uint16_t val) {
 				rc = modbus_write_register(ctx, addr, val);
 			else
 				rc = modbus_write_registers(ctx, addr, 1, &val);
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+bool setRegisters(int addr, uint16_t *val, unsigned int n) {
+	if (!connected) return false;
+	std::cout << "set register " << addr << " to ";
+	for (unsigned int i=0; i<n; ++i) std::cout << val[i] << " "; 
+	std::cout << "\n";
+	boost::mutex::scoped_lock lock(update_mutex);
+	int rc = 0;
+	int retries = 3;
+	rc = modbus_write_registers(ctx, addr, n, val);
+	while ( rc == -1) {
+		perror("modbus_write_registers");
+		check_error("modbus_write_registers", addr, &retries);
+		if (!connected) return false;
+		if (--retries > 0) {
+			usleep(5000);
+			rc = modbus_write_registers(ctx, addr, n, val);
 			continue;
 		}
 		return false;
