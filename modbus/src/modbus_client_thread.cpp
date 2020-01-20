@@ -165,6 +165,15 @@ modbus_t *openConnection() {
 			modbus_free(ctx);
 			ctx = 0;
 		}
+		if (modbus_rtu_get_serial_mode(ctx) != MODBUS_RTU_RS485) {
+			std::cerr << "setting RTU 485 mode\n";
+			if (modbus_rtu_set_serial_mode(ctx, MODBUS_RTU_RS485) == -1) {
+				std::cerr << "modbus_rtu_set_serial_mode: " << modbus_strerror(errno) << "\n";
+			}
+		}
+		else {
+			std::cerr << "defaulting to RTU 485 mode\n";
+		}
 	}
 	else if (settings.mt == mt_RTU) {
 		int device_id = *settings.devices.begin();
@@ -196,22 +205,26 @@ modbus_t *openConnection() {
 	}
 	/* Save original timeout */
 	uint32_t secs, usecs;
-	int rc = modbus_get_byte_timeout(ctx, &secs, &usecs);
+	int rc = modbus_get_response_timeout(ctx, &secs, &usecs);
 	if (rc == -1) {
-		perror("modbus_get_byte_timeout");
+		perror("modbus_get_response_timeout");
+		modbus_free(ctx);
+		ctx = 0;
 		sendStatus("disconnected");
 	}
 	else {
-		if (options.verbose) std::cout << "original timeout: " << secs 
+		if (options.verbose) std::cout << "original response timeout: " << secs 
 			<< "." << std::setw(3) << std::setfill('0') << (usecs/1000) << "\n";
 		uint64_t new_timeout = options.getTimeout();
 		uint32_t new_secs = (new_timeout) ? new_timeout / 1000000 : secs * 2;
 		uint32_t new_usecs = (new_timeout) ? new_timeout % 1000000 : usecs * 2;
 		while (new_usecs >= 1000000) { new_usecs -= 1000000; new_secs++; }
-		rc = modbus_set_byte_timeout(ctx, new_secs, new_usecs);
+		rc = modbus_set_response_timeout(ctx, new_secs, new_usecs);
 		if (rc == -1) {
 			perror("modbus_set_byte_timeout");
 			sendStatus("disconnected");
+			modbus_free(ctx);
+			ctx = 0;
 		}
 		else {
 			if (options.verbose) {
@@ -327,7 +340,7 @@ template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, unsigned in
 			if (offset < min) min = offset;
 			if (end > max) max = end;
 			int retry = 2;
-			while ( (rc = read_fn(ctx, offset, item.second.length(), dest+offset)) == -1 ) {
+			while ( (usleep(5000), rc = read_fn(ctx, offset, item.second.length(), dest+offset)) == -1 ) {
 			    if (options.verbose)
 					std::cerr << "called: read_fn(ctx, " << offset << ", " 
 						<< item.second.length() << ", " << dest+offset << "))\n";
