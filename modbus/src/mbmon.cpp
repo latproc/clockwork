@@ -83,7 +83,7 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
 	//{FileLogger fl(program_name); fl.f() << "sending: " << msg << "\n"; }
-	if (options.verbose) std::cout << " sending: " << msg << "\n";
+	if (options.verbose) std::cerr << " sending: " << msg << "\n";
 	sendMessage(sock, msg);
 	size_t size = strlen(msg);
 	free(msg);
@@ -104,7 +104,7 @@ void process_command(zmq::socket_t &sock, std::list<Value> &params) {
 	char * data = send_command(sock, params);
 	if (data) {
 		//{FileLogger fl(program_name); fl.f() << "response " << data << "\n"; }
-		if (options.verbose) std::cout << data << "\n";
+		if (options.verbose) std::cerr << data << "\n";
 		free(data);
 	}
 }
@@ -215,14 +215,14 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
 
 void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint8_t *buffer_addr) {
 	if (changes.size()) {
-		if (options.verbose) std::cout << changes.size() << " changes\n";
+		if (options.verbose) std::cerr << changes.size() << " changes\n";
 		std::set<ModbusMonitor*>::iterator iter = changes.begin();
 		while (iter != changes.end()) {
 			ModbusMonitor *mm = *iter++;
 			// note: the monitor address is in the global range grp<<16 + offset
 			// this method is only using the addresses in the local range
 			uint8_t *val = buffer_addr + ( (mm->address() & 0xffff));
-			if (options.verbose) std::cout << mm->name() << " ";
+			if (options.verbose) std::cerr << mm->name() << " ";
 			mm->set( val, options.verbose );
 			
 			if (sock &&  (mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
@@ -234,12 +234,12 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 
 void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr) {
 	if (changes.size()) {
-		if (options.verbose) std::cout << changes.size() << " changes\n";
+		if (options.verbose) std::cerr << changes.size() << " changes\n";
 		std::set<ModbusMonitor*>::iterator iter = changes.begin();
 		while (iter != changes.end()) {
 			ModbusMonitor *mm = *iter++;
 			uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
-			if (options.verbose) std::cout << mm->name() << " ";
+			if (options.verbose) std::cerr << mm->name() << " ";
 			mm->set( val, options.verbose );
 			if (mm->readOnly() && sock) { // INPUTREGISTER
 				sendPropertyUpdate(sock, mm);
@@ -277,15 +277,15 @@ void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name,
 	cmd.push_back("REFRESH");
 	cmd.push_back(chn_instance_name.c_str());
 	response = send_command(iod, cmd);
-	if (options.verbose) std::cout << response << "\n";
+	if (options.verbose) std::cerr << response << "\n";
 	cJSON *obj = cJSON_Parse(response);
 
 	if (obj) {
 		iod_connected = true;
 		if (obj->type != cJSON_Array) {
-			std::cout << "error. clock response is not an array";
+			std::cerr << "error. clock response is not an array";
 			char *item = cJSON_Print(obj);
-			std::cout << item << "\n";
+			std::cerr << item << "\n";
 		}
 		cJSON *item = obj->child;
 		while (item) {
@@ -345,7 +345,7 @@ void setupMonitoring(MonitorConfiguration &mc) {
 		if (item.second.group() == 0) {
 			for (unsigned int i=0; i<item.second.length(); ++i) {
 				if (options.verbose)
-					std::cout << "monitoring: " << item.second.group() << ":"
+					std::cerr << "monitoring: " << item.second.group() << ":"
 					<< (item.second.address()+i) <<" " << item.second.name() << "\n";
 				active_addresses[item.second.address()+i] = 0;
 			}
@@ -353,7 +353,7 @@ void setupMonitoring(MonitorConfiguration &mc) {
 		else if (item.second.group() == 1) {
 			for (unsigned int i=0; i<item.second.length(); ++i) {
 				if (options.verbose)
-					std::cout << "monitoring: " << item.second.group()
+					std::cerr << "monitoring: " << item.second.group()
 					<< ":" << (item.second.address()+i) <<" " << item.second.name() << "\n";
 				ro_bits[item.second.address()+i] = 0;
 			}
@@ -361,7 +361,7 @@ void setupMonitoring(MonitorConfiguration &mc) {
 		else if (item.second.group() >= 3) {
 			for (unsigned int i=0; i<item.second.length(); ++i) {
 				if (options.verbose)
-					std::cout << "monitoring: " << item.second.group() << ":"
+					std::cerr << "monitoring: " << item.second.group() << ":"
 					<< (item.second.address()+i) <<" " << item.second.name() << "\n";
 				inputs[item.second.address()+i] = 0;
 			}
@@ -397,7 +397,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
 		std::istringstream iss(data);
 		while (iss >> ds)
 		{
-			std::cout << ds << "\n";
+			if (options.verbose) std::cerr << ds << "\n";
 			parts.push_back(ds.c_str());
 			++count;
 		}
@@ -413,8 +413,8 @@ int main(int argc, const char *argv[]) {
 	zmq::context_t context;
 	MessagingInterface::setContext(&context);
 
-	std::cout << "Modbus version (compile time): " << LIBMODBUS_VERSION_STRING << " ";
-	std::cout << "(linked): " 
+	std::cerr << "Modbus version (compile time): " << LIBMODBUS_VERSION_STRING << " ";
+	std::cerr << "(linked): " 
 			<< libmodbus_version_major << "." 
 			<< libmodbus_version_minor << "." << libmodbus_version_micro << "\n";
 
@@ -455,7 +455,7 @@ int main(int argc, const char *argv[]) {
 		{FileLogger fl(program_name); fl.f() << "empty response to channel request. exiting\n"; sleep(2); exit(2);}
 		//else
 		//{FileLogger fl(program_name); fl.f() << "got channel name " << response << "\n"; }
-		if (options.verbose) std::cout << response << "\n";
+		if (options.verbose) std::cerr << response << "\n";
 		cJSON *obj = cJSON_Parse(response);
 
 		free(response);
@@ -478,7 +478,7 @@ int main(int argc, const char *argv[]) {
 		}
 		else {
 		}
-		if (options.verbose) std::cout << chn_instance_name << "\n";
+		if (options.verbose) std::cerr << chn_instance_name << "\n";
 
 		sendStatus("initialising");
 		update_status = true;
@@ -543,7 +543,7 @@ int main(int argc, const char *argv[]) {
 		};
 		try {
 			if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
-				if (options.verbose) std::cout << "no connection to iod\n";
+				if (options.verbose) std::cerr << "no connection to iod\n";
 				usleep(1000000);
 				exception_count = 0;
 				continue;
@@ -578,7 +578,7 @@ int main(int argc, const char *argv[]) {
 		char *data = (char *)malloc(len+1);
 		memcpy(data, update.data(), len);
 		data[len] = 0;
-		std::cout << "received: " << data << " (len == " <<len << " from clockwork\n";
+		std::cerr << "received: " << data << " (len == " <<len << " from clockwork\n";
 
 		std::vector<Value> params(0);
 		parseIncomingMessage(data, params);
@@ -595,7 +595,7 @@ int main(int argc, const char *argv[]) {
 		if (cmd == "STATE") {
 			try {
 				ModbusMonitor &m = mc.monitors.at(params[1].asString());
-				std::cout << m.name() << " " << ( (m.readOnly()) ? "READONLY" : "" ) << "\n";
+				if (options.verbose) std::cerr << m.name() << " " << ( (m.readOnly()) ? "READONLY" : "" ) << "\n";
 				if (!m.readOnly()) {
 					if (params[2].asString() == "on")
 						mb->requestUpdate(m.address(), true);
@@ -605,7 +605,7 @@ int main(int argc, const char *argv[]) {
 				//sendStateUpdate(&iosh_cmd, &m, *(m.value->getWordData()) );
 			}
 			catch (std::exception ex) {
-				std::cout << "Exception when processing STATE command: " << ex.what() << "\n";
+				std::cerr << "Exception when processing STATE command: " << ex.what() << "\n";
 			}
 		}
 		else if (cmd == "PROPERTY" && params.size() >= 4) {
@@ -616,9 +616,9 @@ int main(int argc, const char *argv[]) {
 					continue;
 				}
 				ModbusMonitor &m = (*found).second; //mc.monitors.at(params[0].asString());
-				std::cout << m.name() << " " << ( (m.readOnly()) ? "READONLY" : "" ) << "\n";
+				if (options.verbose) std::cerr << m.name() << " " << ( (m.readOnly()) ? "READONLY" : "" ) << "\n";
 				if (!m.readOnly() && m.group() == 4) {
-					std::cout << "setting " << m.name() << " (" << m.format() << ")\n";
+					if (options.verbose) std::cerr << "setting " << m.name() << " (" << m.format() << ")\n";
 					if (params[2].asString() == "VALUE") {
 						if (m.format() == "Float") {
 							double dval;
@@ -659,7 +659,7 @@ int main(int argc, const char *argv[]) {
 				//sendPropertyUpdate(&iosh_cmd, &m);  // dont' send the property value back
 			}
 			catch (std::exception ex) {
-				std::cout << "Exception when processing PROPERTY command: " << ex.what() << "\n";
+				std::cerr << "Exception when processing PROPERTY command: " << ex.what() << "\n";
 			}
 		}
 	}
