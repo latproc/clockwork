@@ -42,6 +42,7 @@ static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
 static unsigned long cycle_time_ = 1000;
 static bool c_export = false;
+static bool throw_exceptions = false;
 
 static std::map<std::string, int> thread_cpu_affinities;
 
@@ -184,5 +185,13 @@ void set_cpu_affinity(const char*thread_name, int cpu) {
 	std::string property_name = thread_name;
 	property_name += "_thread_cpu_affinity";
 	thread_cpu_affinities[property_name] = cpu;
+}
+
+bool exceptions_enabled() {
+	return throw_exceptions;
+}
+
+void enable_exceptions(bool which) {
+	throw_exceptions = which;
 }
 

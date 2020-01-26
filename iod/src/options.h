@@ -73,6 +73,9 @@ void set_export_to_c(bool c_export);
 int cpu_affinity(const char *thread_name);
 void set_cpu_affinity(const char*thread_name, int cpu);
 
+bool exceptions_enabled();
+void enable_exceptions(bool which);
+
 #ifdef __cplusplus
 }
 #endif

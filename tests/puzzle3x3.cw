@@ -44,6 +44,8 @@ Cell MACHINE row, col {
 	LOCAL OPTION c 0;
 	related LIST; # the set of all cells that this cell shares row or columns with
 
+	unknown WHEN ANY related ARE INIT;
+
     one WHEN SELF IS one OR (SELF IS tentative_one && NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
     two WHEN SELF IS two OR (SELF IS tentative_two && NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
     three WHEN SELF IS three OR (SELF IS tentative_three && NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
@@ -60,7 +62,7 @@ Cell MACHINE row, col {
 			AND	( SELF IS unknown AND COUNT tentative_three FROM related == 0 AND COUNT three FROM related == 0
 	            OR SELF IS tentative_three AND COUNT tentative_three FROM related == 1);
 
-	blocked WHEN TIMER < 40; # yuk. we need to sit in blocked long enough for the other machines to stabilise 
+	blocked WHEN SELF IS unknown AND TIMER > 40; # reset if this machine settles in unknown
 	unknown DEFAULT;
 
 	ENTER INIT {

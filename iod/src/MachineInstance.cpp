@@ -259,17 +259,6 @@ void MachineInstance::enqueue(const Package &package) {
 	setNeedsCheck();
 }
 
-bool MachineInstance::workToDo() {
-	if (!pending_events.empty()) { DBG_MSG << "!pending_events.empty()\n"; }
-	if (!SharedWorkSet::instance()->empty()) { DBG_MSG << "!SharedWorkSet::instance()->empty()\n"; }
-	if (!pending_state_change.empty()) { DBG_MSG << "!pending_state_change.empty()\n"; }
-	if (num_machines_with_work + total_machines_needing_check > 0) {
-		DBG_MSG << "num_machines_with_work + total_machines_needing_check > 0 ("
-			<< num_machines_with_work <<"," <<  total_machines_needing_check << ") > 0\n";
-	}
-	return !pending_events.empty() || !SharedWorkSet::instance()->empty() || !pending_state_change.empty()
-				|| num_machines_with_work + total_machines_needing_check > 0;
-}
 std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
 std::set<MachineInstance*>& MachineInstance::pluginMachines() { return plugin_machines; }
 
@@ -1064,8 +1053,6 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 			// is it possible for a non active machine to be executing a command?
 			if (mi->isActive() || mi->executingCommand() || !mi->mail_queue.empty()) {
 				mi->idle();
-//				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
-//					++num_machines_with_work;
 			}
 			if (mi->state_machine && mi->state_machine->plugin)
 				mi->state_machine->plugin->poll_actions(mi);
@@ -1084,7 +1071,6 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 						busy_it++;
 			}
 			else if (mi->executingCommand() && !mi->executingCommand()->getTrigger()) {
-				Action *a = mi->executingCommand();
 				ProcessingThread::activate(mi);
 				busy_it++;
 			}
@@ -2754,6 +2740,26 @@ void MachineInstance::updateLastEvaluationTime() {
 		else
 			next_poll = last_state_evaluation_time + MachineInstance::polling_delay->iValue;
 	}
+}
+
+bool MachineInstance::isStableState(const std::string state_name) {
+	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+		StableState &s = stable_states[ss_idx];
+		if (s.state_name == state_name) return true;
+	}
+	return false;
+}
+
+bool MachineInstance::stableStateValid(const std::string state_name) {
+	std::string found;
+	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+		StableState &s = stable_states[ss_idx];
+		if (s.condition(this)) {
+			found = s.state_name;
+			break;
+		}
+	}
+	return found == state_name;
 }
 
 bool MachineInstance::setStableState() {

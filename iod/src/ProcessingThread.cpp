@@ -574,7 +574,6 @@ void ProcessingThread::operator()()
 				num_channels = idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
 			}
 
-			//machines_have_work = MachineInstance::workToDo();
 			{
 				static size_t last_runnable_count = 0;
 				boost::mutex::scoped_lock(runnable_mutex);

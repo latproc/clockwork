@@ -722,9 +722,8 @@ void semantic_analysis() {
 		DBG_PARSER << "fixing parameter references for locals in " << mi->getName() << "\n";
 		for (unsigned int i=0; i<mi->locals.size(); ++i) {
 			DBG_PARSER << "   " << i << ": " << mi->locals[i].val << "\n";
-            
-            MachineInstance *m = mi->locals[i].machine;
-            // fixup real names of parameters that are passed as parameters to our locals
+			MachineInstance *m = mi->locals[i].machine;
+			// fixup real names of parameters that are passed as parameters to our locals
 			for (unsigned int j=0; j<m->parameters.size(); ++j) {
 				Parameter &p = m->parameters[j];
                 if (p.val.kind == Value::t_symbol) {
@@ -952,6 +951,9 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 		}
 		else if (strcmp(argv[i], "--nostats") == 0 ) { // do not keep stats
 			enable_statistics(false);
+		}
+		else if (strcmp(argv[i], "--exceptions") == 0 ) { // enable exceptions on action failues
+			enable_exceptions(true);
 		}
 		else if (strcmp(argv[i], "--export_c") == 0 ) { // generate c code
 			set_export_to_c(true);

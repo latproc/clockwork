@@ -281,7 +281,7 @@ Action::Status Action::operator()() {
 	start_time = microsecs();
 	status = Running; // important because run() checks the current state
 	status = run();
-	if (status == Failed) {
+	if (status == Failed && exceptions_enabled()) {
 		if (error_msg) {
 			AbortActionTemplate aat(true, error_msg->get());
 			AbortAction *aa = (AbortAction*)aat.factory(owner);
