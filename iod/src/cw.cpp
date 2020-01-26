@@ -162,7 +162,7 @@ int main (int argc, char const *argv[])
 
 	set_debug_config("iod.conf");
 	Logger::instance()->setLevel(Logger::Debug);
-	LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
+	//LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
 
 	std::list<std::string> source_files;
 	int load_result = loadOptions(argc, argv, source_files);
