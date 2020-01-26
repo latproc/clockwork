@@ -801,139 +801,6 @@ Sets should send messages on state change between empty, nonempty and full.
 \end_layout
 
 \begin_layout Subsubsection
-Structs
-\end_layout
-
-\begin_layout Standard
-Structs are a way to structure or group property names that can be used
- to initialise machines or used to change the value of several properties
- at the same time.
-\end_layout
-
-\begin_layout Standard
-Initialising a machine will look something like:
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-Sample MACHINE WITH (a:1, b:
-\begin_inset Quotes erd
-\end_inset
-
-test
-\begin_inset Quotes erd
-\end_inset
-
-) { ...
- }
-\end_layout
-
-\begin_layout Standard
-or 
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-my_properties STRUCT {
-\begin_inset Separator latexpar
-\end_inset
-
-
-\end_layout
-
-\begin_deeper
-\begin_layout LyX-Code
-
-\size small
-OPTION a 1;
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-OPTION b 
-\begin_inset Quotes eld
-\end_inset
-
-test
-\begin_inset Quotes erd
-\end_inset
-
-;
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-
-\size small
-}
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-Sample MACHINE WITH my_properties { ...
- }
-\end_layout
-
-\begin_layout Standard
-Property sets can be updated from a database:
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-COLLECT record FROM data_source INTO my_properties ON ENDOFDATA done;
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-UPDATE my_machine WITH my_properties [EXCLUDING name_list];
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-UPDATE my_machine WITH [name_list FROM] my_properties
-\end_layout
-
-\begin_layout Standard
-When a Property Set is being applied it is the changes are made to an invisible
- data structure linked to the property set.
- Once all of the invisible data values are updated the values are applied
- into the machine and a property_change event is triggered.
-\end_layout
-
-\begin_layout Standard
-A normal property change that is executed while a property set is being
- update will be handled as normal.
- If that change updates a property that is changing within the Property
- Set the changed value will be lost on completion of the change.
- The effect is that the property assignments might occur out of order.
-\end_layout
-
-\begin_layout Standard
-Property Set changes may be performed against shadowed data and the update
- will not occur until all properties are synchronised at both ends of the
- channel.
-\end_layout
-
-\begin_layout Standard
-Partial updates from Property Sets should also be possible
-\end_layout
-
-\begin_layout LyX-Code
-COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
-\end_layout
-
-\begin_layout Standard
-See also comments about structured data, below.
-\end_layout
-
-\begin_layout Subsubsection
 Dynamic values
 \end_layout
 
@@ -1139,6 +1006,139 @@ fail-safe mode can be entered by executing FAIL SAFE.
 \end_layout
 
 \begin_layout Subsubsection
+Structs
+\end_layout
+
+\begin_layout Standard
+Structs are a way to structure or group property names that can be used
+ to initialise machines or used to change the value of several properties
+ at the same time.
+\end_layout
+
+\begin_layout Standard
+Initialising a machine will look something like:
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+Sample MACHINE WITH (a:1, b:
+\begin_inset Quotes erd
+\end_inset
+
+test
+\begin_inset Quotes erd
+\end_inset
+
+) { ...
+ }
+\end_layout
+
+\begin_layout Standard
+or 
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+my_properties STRUCT {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+
+\size small
+OPTION a 1;
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+OPTION b 
+\begin_inset Quotes eld
+\end_inset
+
+test
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+
+\size small
+}
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+Sample MACHINE WITH my_properties { ...
+ }
+\end_layout
+
+\begin_layout Standard
+Property sets can be updated from a database:
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+COLLECT record FROM data_source INTO my_properties ON ENDOFDATA done;
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+UPDATE my_machine WITH my_properties [EXCLUDING name_list];
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+UPDATE my_machine WITH [name_list FROM] my_properties
+\end_layout
+
+\begin_layout Standard
+When a Property Set is being applied it is the changes are made to an invisible
+ data structure linked to the property set.
+ Once all of the invisible data values are updated the values are applied
+ into the machine and a property_change event is triggered.
+\end_layout
+
+\begin_layout Standard
+A normal property change that is executed while a property set is being
+ update will be handled as normal.
+ If that change updates a property that is changing within the Property
+ Set the changed value will be lost on completion of the change.
+ The effect is that the property assignments might occur out of order.
+\end_layout
+
+\begin_layout Standard
+Property Set changes may be performed against shadowed data and the update
+ will not occur until all properties are synchronised at both ends of the
+ channel.
+\end_layout
+
+\begin_layout Standard
+Partial updates from Property Sets should also be possible
+\end_layout
+
+\begin_layout LyX-Code
+COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
+\end_layout
+
+\begin_layout Standard
+See also comments about structured data, below.
+\end_layout
+
+\begin_layout Subsubsection
 Data Sources
 \end_layout
 
@@ -1184,7 +1184,31 @@ NEXT # attempt to get a record from the external source and update linked
 \end_layout
 
 \begin_layout LyX-Code
-STATES { idle, connected, error, invalid, ready }
+STATES { 
+\end_layout
+
+\begin_layout LyX-Code
+  idle,
+\end_layout
+
+\begin_layout LyX-Code
+  connected, 
+\end_layout
+
+\begin_layout LyX-Code
+  error, 
+\end_layout
+
+\begin_layout LyX-Code
+  invalid, 
+\end_layout
+
+\begin_layout LyX-Code
+  ready
+\end_layout
+
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout LyX-Code
@@ -1229,24 +1253,6 @@ fred
 \end_layout
 
 \begin_layout Standard
-They can be linked to a property set; this prepares a mapping from the 'current'
- row in the data source to the properties of a clockwork object:
-\end_layout
-
-\begin_layout LyX-Code
-LINK my_data TO my_properties;
-\end_layout
-
-\begin_layout LyX-Code
-LINK my_properties TO my_machine, ...;
-\end_layout
-
-\begin_layout Standard
-The problem with this model is knowing when the data is valid; after SEND
- NEXT to my_data, for example.
-\end_layout
-
-\begin_layout Standard
 Data forms can be SQL, XML or JSON.
  Data is explicitly copied into a clockwork object via a 'COLLECT' statement:
 \end_layout
@@ -1254,7 +1260,7 @@ Data forms can be SQL, XML or JSON.
 \begin_layout LyX-Code
 
 \size small
-COLLECT [NEXT] record FROM data_source INTO my_properties ON ENDOFDATA done;
+COLLECT [NEXT] my_properties FROM data_source USING my_iterator; # 
 \end_layout
 
 \begin_layout Standard
@@ -1264,6 +1270,313 @@ Exceptions possible from COLLECT are ENDOFDATA or ERROR.
 \begin_layout Standard
 There is an implication that data has multiple records and that iterators
  on that data can step through it.
+\end_layout
+
+\begin_layout Subsubsection
+Records
+\end_layout
+
+\begin_layout Standard
+Records provide the data fields that map to database records.
+\end_layout
+
+\begin_layout Standard
+Given a data source and customer record.
+\end_layout
+
+\begin_layout LyX-Code
+sample_db DATASOURCE {
+\end_layout
+
+\begin_layout LyX-Code
+  OPTION database 
+\begin_inset Quotes eld
+\end_inset
+
+sample.db
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+Customer RECORD sample_db {
+\end_layout
+
+\begin_layout LyX-Code
+  TYPE customer;
+\end_layout
+
+\begin_layout LyX-Code
+  OPTION name;
+\end_layout
+
+\begin_layout LyX-Code
+  OPTION age;
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Records have states:
+\end_layout
+
+\begin_layout Description
+empty no fields have been set
+\end_layout
+
+\begin_layout Description
+new some fields have been set but the record hasn't been collected (i.e.,
+ doesn't have a link to a database record)
+\end_layout
+
+\begin_layout Description
+ready fields have been collected and no changes have been made to the db
+ record or the cw record
+\end_layout
+
+\begin_layout Description
+modified field hav been changed since the record was collected
+\end_layout
+
+\begin_layout Standard
+Records will always have an 'id' field that is a unique identified in the
+ database, they can be bound to a clockwork object; this prepares a mapping
+ from the 'current' row in the data source to the properties of a clockwork
+ object and enables the use of a state indicator in the database for a clockwork
+ object state.
+\end_layout
+
+\begin_layout LyX-Code
+BIND my_data TO my_machine WITH STATE [PROPERTY/FIELD] status;
+\end_layout
+
+\begin_layout Standard
+Thus, my_machine can have states determined by the status field within my_data.
+ Also my_machine has properties sharing the fields in my_data.
+\end_layout
+
+\begin_layout Standard
+# example 1: get details for a customer
+\end_layout
+
+\begin_layout LyX-Code
+fred MACHINE ds {
+\end_layout
+
+\begin_layout LyX-Code
+  cust Customer ds; # cust is invalid (could be 'empty')
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+  done WHEN cust IS ready;
+\end_layout
+
+\begin_layout LyX-Code
+  waiting default; 
+\end_layout
+
+\begin_layout LyX-Code
+  COMMAND a {
+\end_layout
+
+\begin_layout LyX-Code
+    cust.name := 
+\begin_inset Quotes eld
+\end_inset
+
+fred
+\begin_inset Quotes erd
+\end_inset
+
+; # cust becomes new (could be invalid since not all fields are set)
+\end_layout
+
+\begin_layout LyX-Code
+    COLLECT cust FROM ds WHERE name = 'fred'; 
+\end_layout
+
+\begin_layout LyX-Code
+    # cust becomes invalid and eventually becomes ready
+\end_layout
+
+\begin_layout LyX-Code
+    # request: { type: customer, action: request, keys: { name: 'fred' },
+ fields: [name, age ] }
+\end_layout
+
+\begin_layout LyX-Code
+    # or request: { type: customer, action: request, keys: { name: 'fred'
+ } }   # (all fields)
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER done { LOG 
+\begin_inset Quotes eld
+\end_inset
+
+fred is 
+\begin_inset Quotes eld
+\end_inset
+
+ + cust.age; }
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+# example 2: get all customers
+\end_layout
+
+\begin_layout LyX-Code
+all MACHINE ds {
+\end_layout
+
+\begin_layout LyX-Code
+  curr Customer ds;
+\end_layout
+
+\begin_layout LyX-Code
+  cust_i ITERATOR(order: 
+\begin_inset Quotes eld
+\end_inset
+
+name desc
+\begin_inset Quotes erd
+\end_inset
+
+); # iterators sequencing of data
+\end_layout
+
+\begin_layout LyX-Code
+  done WHEN cust_i IS done;
+\end_layout
+
+\begin_layout LyX-Code
+  ready WHEN curr IS ready;
+\end_layout
+
+\begin_layout LyX-Code
+  waiting WHEN cust_i IS busy;
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER INIT {
+\end_layout
+
+\begin_layout LyX-Code
+    COLLECT curr FROM ds USING cust_i; # cust_i becomes busy
+\end_layout
+
+\begin_layout LyX-Code
+    # request: { type: customer, action: request, fields: [name, age ],
+ order: [{name: desc}] } 
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER ready {
+\end_layout
+
+\begin_layout LyX-Code
+    LOG 
+\begin_inset Quotes eld
+\end_inset
+
+customer: 
+\begin_inset Quotes eld
+\end_inset
+
+ + curr.name + 
+\begin_inset Quotes eld
+\end_inset
+
+, 
+\begin_inset Quotes eld
+\end_inset
+
+ + curr.age;
+\end_layout
+
+\begin_layout LyX-Code
+    SEND next TO cust_i; # cust_i becomes busy
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+# example 3: create a customer
+\end_layout
+
+\begin_layout LyX-Code
+new_cust MACHINE ds, cust {
+\end_layout
+
+\begin_layout LyX-Code
+  COMMAND save REQUIRES cust IS invalid OR cust IS new { STORE cust TO ds;
+ }
+\end_layout
+
+\begin_layout LyX-Code
+  CATCH InvalidRecord {
+\end_layout
+
+\begin_layout LyX-Code
+    LOG 
+\begin_inset Quotes eld
+\end_inset
+
+customer could not be saved
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+#example 4: remove a customer
+\end_layout
+
+\begin_layout LyX-Code
+del_cust MACHINE ds, cust {
+\end_layout
+
+\begin_layout LyX-Code
+  COMMAND delete { REMOVE cust FROM ds; }
 \end_layout
 
 \begin_layout Subsection
@@ -1416,6 +1729,48 @@ Calling clear on the reference will unassign the object that was previously
 \begin_layout Standard
 Note: Initially, the language does not provide a way to return an object
  from a function.
+\end_layout
+
+\begin_layout Standard
+A reference can be bound to an internal object:
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+Sample MACHINE customers {
+\end_layout
+
+\begin_layout LyX-Code
+  current REFERENCE;
+\end_layout
+
+\begin_layout LyX-Code
+  wf MyWorkflow; # a user defined machine
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER INIT { BIND wf TO current; }
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+When a machine is bound to a reference, the fields in the referenced item
+ appear within the bound machine.
+ If the reference is not assigned, it cannot know what fields are to be
+ provided to the bound machine and thus no fields are bound.
+ To simplify handling of this case, a bound machine returns the special
+ value NULL to all property requests except those that are defined within
+ the machine.
+ TBD, should the state of the machine be a set value when it is bound to
+ an unassigned reference?
 \end_layout
 
 \begin_layout Subsubsection
@@ -3542,7 +3897,7 @@ gecode for constraints (see LET)
 \end_layout
 
 \begin_layout Itemize
-graphql for application state
+graphql for application state and api access
 \end_layout
 
 \end_body
