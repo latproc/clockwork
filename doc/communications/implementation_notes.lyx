@@ -82,7 +82,7 @@
 Implementation Notes
 \end_layout
 
-\begin_layout Subsection*
+\begin_layout Subsection
 Threads
 \end_layout
 
@@ -90,6 +90,16 @@ Threads
 Processing
 \end_layout
 
+\begin_deeper
+\begin_layout Itemize
+watches for messages from other threads
+\end_layout
+
+\begin_layout Itemize
+processes machines
+\end_layout
+
+\end_deeper
 \begin_layout Itemize
 Scheduler
 \end_layout
@@ -161,6 +171,10 @@ create a channel dynamically
 
 \begin_layout Itemize
 send to MachineInstance should queue messages until next state process
+\end_layout
+
+\begin_layout Section
+Miscellaneous
 \end_layout
 
 \begin_layout Subsection*

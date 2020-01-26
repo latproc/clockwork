@@ -62,9 +62,14 @@ static MachineInstance *addMachine(const char *name, const char *type,
         machines[name] = machine;
     else {
 				MachineInstance *orig = (*found).second;
-        NB_MSG << yyfilename << ":" << std::setw(5) << yylineno << " "
-					<< "Error: machine " << name << " already defined "
-					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+				if (machine != orig) {
+					std::stringstream ss;
+					ss << yyfilename << ":" << std::setw(5) << yylineno << " "
+						<< "Error: machine " << name << " already defined "
+						<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+					error_messages.push_back(ss.str());
+					NB_MSG << ss.str() << "\n";
+				}
     }
 
     return machine;
@@ -688,9 +693,14 @@ instantiation ';'
         machines[current_machine->getName()] = current_machine;
     else {
 				MachineInstance *orig = (*found).second;
-        NB_MSG << yyfilename << ":" << yylineno
-					<< " " << "Error: machine " << current_machine->getName() << " already defined "
-					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+				if (current_machine != orig) {
+					std::stringstream ss;
+					ss << yyfilename << ":" << yylineno
+						<< " " << "Error: machine " << current_machine->getName() << " already defined "
+						<< " at " << orig->definition_file << ":" << orig->definition_line;
+					error_messages.push_back(ss.str());
+					NB_MSG << ss.str() << "\n";
+				}
     }
     current_machine = NULL;
 }
@@ -2047,10 +2057,7 @@ SYMBOL MODULE parameters ';'
 		properties = property_stack.back();
 		property_stack.pop_back();
 		m->setProperties(properties);
-		std::cout << "Properties: " << properties << "\n";
 		properties.clear();
-		std::cout << "Entry default: " << m->properties.lookup("default") << "\n";
-
 
 		std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
 		current_parameters.clear();
@@ -2066,7 +2073,7 @@ SYMBOL MODULE parameters ';'
 | SYMBOL SDO parameters ';'
 {
 #ifdef USE_SDO
-    DBG_MSG << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+    DBG_PARSER << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
 	// the following will be added to a list of new entitites and the module will be resolved later
 	std::vector<Parameter> params;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
@@ -2086,7 +2093,7 @@ SYMBOL MODULE parameters ';'
 }
 | SYMBOL FLAG ';'
 {
-    DBG_MSG << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
+    DBG_PARSER << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
     MachineInstance *m = addMachine($1, "FLAG");
     m->properties = properties;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));

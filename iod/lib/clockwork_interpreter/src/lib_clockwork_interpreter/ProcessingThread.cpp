@@ -545,7 +545,7 @@ void ProcessingThread::operator()()
 			{ (void*)ecat_out, 0, ZMQ_POLLIN, 0 },
 			{ (void*)command_sync, 0, ZMQ_POLLIN, 0 }
 		};
-		const int max_poll_sockets = 15;
+		const int max_poll_sockets = 25;
 		zmq::pollitem_t items[max_poll_sockets];
 		memset((void*)items, 0, max_poll_sockets * sizeof(zmq::pollitem_t));
 		int dynamic_poll_start_idx = 6;

@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-
+  
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -27,11 +27,11 @@
 #include <string>
 #include <ostream>
 #include "State.h"
-#include "ioaddress.h"
-#include <lib_clockwork_client/includes.hpp>
-#include <boost/thread/mutex.hpp>
+#include "Message.h"
 #include "MQTTInterface.h"
 #include "filtering.h"
+#include "ioaddress.h"
+#include <boost/thread/mutex.hpp>
 
 struct MQTTTopic {
     std::string topic;
@@ -68,11 +68,11 @@ public:
 	static Iterator begin() { return processing_queue.begin(); }
 	static Iterator end() { return processing_queue.end(); }
 	static void reset();
-	static IOAddress add_io_entry(const char *name, unsigned int module_pos,
+	static IOAddress add_io_entry(const char *name, unsigned int module_pos, 
 		unsigned int io_offset, unsigned int bit_offset, unsigned int entry_offs, unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-	static void processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data,
+	static void processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data, 
 	std::set<IOComponent *> &updatedMachines);
 	static void setupIOMap();
 	static int getMinIOOffset();
@@ -106,7 +106,7 @@ protected:
 	struct timeval last;
 public:
 
-    IOComponent(IOAddress addr);
+    IOComponent(IOAddress addr); 
     IOComponent();
 	virtual ~IOComponent() { processing_queue.remove(this); }
 	virtual void setInitialState();
@@ -126,7 +126,7 @@ public:
 	uint32_t pending_value;
     uint64_t read_time; // the last read time
 	static uint64_t ioClock() { return io_clock; }
-
+	
 	void addDependent(MachineInstance *m) {
 		depends.push_back(m);
 	}
@@ -134,9 +134,9 @@ public:
 
 	void addOwner(MachineInstance *m) { owners.push_back(m); }
 	bool ownersEnabled()const;
-
+	
 	virtual void setupProperties(MachineInstance *m); // link properties in the component to the MachineInstance properties
-
+    
     virtual int32_t filter(int32_t);
 
 
@@ -150,7 +150,7 @@ public:
 	int index() { return io_index; } // this component's index into the io array
 	void setIndex(int idx) { io_index=idx; }
 
-  static int updatesWaiting();
+	static int updatesWaiting() { return outputs_waiting; }
 	Direction direction() { return direction_; }
 
 	enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };
@@ -162,7 +162,7 @@ public:
 protected:
 	static boost::recursive_mutex io_names_mutex;
 	static uint64_t io_clock;
-	int getStatus();
+	int getStatus(); 
 	int io_index; // the index of the first bit in this component's address space
 	uint32_t raw_value;
 	static int outputs_waiting; // this many outputs are waiting to change

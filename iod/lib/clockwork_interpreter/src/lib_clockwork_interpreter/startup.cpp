@@ -89,7 +89,8 @@ void predefine_special_machines() {
   ain_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
-  ain_class->properties.add("Velocity", Value(0), SymbolTable::ST_REPLACE);
+  ain_class->properties.add("Velocity", Value(0.0), SymbolTable::ST_REPLACE);
+  ain_class->properties.add("Acceleration", Value(0.0), SymbolTable::ST_REPLACE);
 
 	MachineClass *din_class = new MachineClass("DIGITALINPUT");
 	din_class->parameters.push_back(Parameter("module"));

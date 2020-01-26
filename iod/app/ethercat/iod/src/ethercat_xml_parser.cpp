@@ -237,7 +237,8 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 			{
 				if (kind == XML_READER_TYPE_ELEMENT && (deviceKey == name || moduleKey == name)) {
 					enter(in_device);
-					if (current_alt_sm) delete current_alt_sm; current_alt_sm = 0;
+					if (current_alt_sm) delete current_alt_sm;
+					current_alt_sm = 0;
 					num_device_entries = 0;
 				}
 			}

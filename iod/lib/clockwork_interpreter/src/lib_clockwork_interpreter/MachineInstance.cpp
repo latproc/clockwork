@@ -261,20 +261,6 @@ void MachineInstance::enqueue(const Package &package) {
 	setNeedsCheck();
 }
 
-bool MachineInstance::workToDo() {
-	if (!pending_events.empty()) { DBG_MSG << "!pending_events.empty()\n"; }
-	if (!SharedWorkSet::instance()->empty()) { DBG_MSG << "!SharedWorkSet::instance()->empty()\n"; }
-	if (!pending_state_change.empty()) { DBG_MSG << "!pending_state_change.empty()\n"; }
-	if (num_machines_with_work + total_machines_needing_check > 0) {
-		DBG_MSG << "num_machines_with_work + total_machines_needing_check > 0 ("
-			<< num_machines_with_work <<"," <<  total_machines_needing_check << ") > 0\n";
-	}
-	return !pending_events.empty() || !SharedWorkSet::instance()->empty() || !pending_state_change.empty()
-				|| num_machines_with_work + total_machines_needing_check > 0;
-}
-std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
-std::set<MachineInstance*>& MachineInstance::pluginMachines() { return plugin_machines; }
-
 void MachineInstance::forceIdleCheck() {
 	num_machines_with_work++;
 	DBG_AUTOSTATES  << " forced an idle check " << num_machines_with_work << "\n";
@@ -1100,8 +1086,6 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 			// is it possible for a non active machine to be executing a command?
 			if (mi->isActive() || mi->executingCommand() || !mi->mail_queue.empty()) {
 				mi->idle();
-//				if (mi->enabled() && !mi->executingCommand() && mi->mail_queue.empty())
-//					++num_machines_with_work;
 			}
 			if (mi->state_machine && mi->state_machine->plugin && mi->state_machine->plugin->poll_actions)
 				mi->state_machine->plugin->poll_actions(mi);
@@ -1120,7 +1104,6 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 						busy_it++;
 			}
 			else if (mi->executingCommand() && !mi->executingCommand()->getTrigger()) {
-				Action *a = mi->executingCommand();
 				ProcessingThread::activate(mi);
 				busy_it++;
 			}
@@ -2707,6 +2690,26 @@ Value MachineInstance::earliestScheduleTime(const std::list<Predicate*> &predica
 	return schedule_time;
 }
 
+bool MachineInstance::isStableState(const std::string state_name) {
+	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+		StableState &s = stable_states[ss_idx];
+		if (s.state_name == state_name) return true;
+	}
+	return false;
+}
+
+bool MachineInstance::stableStateValid(const std::string state_name) {
+	std::string found;
+	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+		StableState &s = stable_states[ss_idx];
+		if (s.condition(this)) {
+			found = s.state_name;
+			break;
+		}
+	}
+	return found == state_name;
+}
+
 bool MachineInstance::setStableState() {
 	bool changed_state = false;
 	ProcessingThread::suspend(this); // assume this machine will not have anything else to do after checking states
@@ -3716,13 +3719,14 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
 			}
 		}
 
-		if (new_value.kind == Value::t_integer && state_machine && state_machine->plugin && state_machine->plugin->filter) {
+		if ( (new_value.kind == Value::t_integer || new_value.kind != Value::t_float)
+				&& state_machine && state_machine->plugin && state_machine->plugin->filter) {
 			int filtered_value = state_machine->plugin->filter(this, new_value.iValue);
 			was_changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 			if (was_changed) properties.add(property, filtered_value, SymbolTable::ST_REPLACE);
 		}
 		else {
-			was_changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
+			was_changed = (prev_value != new_value || prev_value.kind != new_value.kind || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 			if (was_changed) properties.add(property, new_value, SymbolTable::ST_REPLACE);
 		}
 		if (!was_changed) return true; // value was ok but was already the same

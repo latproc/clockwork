@@ -96,7 +96,7 @@ MachineInstance *ClockworkInterpreter::settings() { return _settings; }
 
 void usage(int argc, char const *argv[])
 {
-  std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store]\n"
+  std::cerr << "Usage: " << argv[0] << " [-v] [-t] [-l logfilename] [-i persistent_store]\n"
   << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
   << "[-mp modbus_port] [-ps persistent_store_port]"
   << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics"
@@ -432,8 +432,7 @@ void semantic_analysis() {
     // parameters
     DBG_PARSER << "fixing parameter references for locals in " << mi->getName() << "\n";
     for (unsigned int i=0; i<mi->locals.size(); ++i) {
-      DBG_MSG << "   " << i << ": " << mi->locals[i].val << "\n";
-
+      DBG_PARSER << "   " << i << ": " << mi->locals[i].val << "\n";
       MachineInstance *m = mi->locals[i].machine;
       // fixup real names of parameters that are passed as parameters to our locals
       for (unsigned int j=0; j<m->parameters.size(); ++j) {
@@ -460,7 +459,7 @@ void semantic_analysis() {
       for (unsigned int j=0; j<m->parameters.size(); ++j) {
         Parameter &p = m->parameters[j];
         if (p.val.kind == Value::t_symbol) {
-          DBG_MSG << "      " << j << ": " << p.val << "\n";
+          DBG_PARSER << "      " << j << ": " << p.val << "\n";
           if (p.real_name.length() == 0) {
             p.machine = mi->lookup(p.val);
             if (p.machine) p.real_name = p.machine->getName();
@@ -470,7 +469,7 @@ void semantic_analysis() {
           if (p.machine) {
             p.machine->addDependancy(m);
             m->listenTo(p.machine);
-            DBG_MSG << " linked parameter " << j << " of local " << m->getName()
+            DBG_PARSER << " linked parameter " << j << " of local " << m->getName()
             << " (" << m->parameters[j].val << ") to " << p.machine->getName() << "\n";
           }
           else {
@@ -664,11 +663,21 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
      else if (strcmp(argv[i], "--stats") == 0 ) { // command port
        enable_statistics(true);
      }
-     else if (strcmp(argv[i], "--nostats") == 0 ) { // command port
+     else if (strcmp(argv[i], "--nostats") == 0 ) { // do not keep stats
        enable_statistics(false);
      }
-     else if (strcmp(argv[i], "--export_c") == 0 ) { // command port
+     else if (strcmp(argv[i], "--exceptions") == 0 ) { // enable exceptions on action failues
+      enable_exceptions(true);
+     }
+     else if (strcmp(argv[i], "--export_c") == 0 ) { // generate c code
        set_export_to_c(true);
+     }
+     else if (strcmp(argv[i], "--config") == 0 ) { // use a config file
+       Configuration conf(argv[++i]);
+       int ecat_cpu = conf.asInt("ethercat_thread_cpu_affinity");
+       if (ecat_cpu) set_cpu_affinity("ethercat", ecat_cpu);
+       int proc_cpu = conf.asInt("processing_thread_cpu_affinity");
+       if (proc_cpu) set_cpu_affinity("processing", proc_cpu);
      }
      else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
      {

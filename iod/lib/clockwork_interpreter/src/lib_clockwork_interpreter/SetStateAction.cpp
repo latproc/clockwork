@@ -60,6 +60,18 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 	value = saved_state.sValue.c_str();
 	owner->start(this);
 
+  if (owner->getStateMachine()->default_state.getName() != new_state.asString()
+      && owner->isStableState(new_state.asString()) && !owner->stableStateValid(new_state.asString())) {
+    std::stringstream ss;
+    ss << owner->getName() << " aborting invalid stable state change" << std::flush;
+    std::string str = ss.str();
+    error_str = strdup(str.c_str());
+    error_msg = new CStringHolder("InvalidStableStateException");
+    status = Failed;
+    owner->stop(this);
+    return status;
+  }
+
 	if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
 		std::stringstream ss;
 		ss << *this << " failed. " << owner->fullName() << " " << new_state << " must be a symbol or string" << std::flush;

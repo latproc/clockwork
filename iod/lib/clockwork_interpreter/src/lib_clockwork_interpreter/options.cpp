@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-
+  
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -22,6 +22,8 @@
 #include <string.h>
 #include "options.h"
 #include <iostream>
+#include <map>
+#include <string>
 
 static int opt_verbose = 0;
 static int opt_test_only = 0;
@@ -29,7 +31,6 @@ const char *persistent_store_name  = 0;
 const char *modbus_map_name = 0;
 const char *debug_config_name = 0;
 const char *dependency_graph_name = 0;
-const char *dependency_graph_root = 0;
 static int publisher_port_num = 5556;
 static bool publisher_port_num_required = false;
 static int persistent_port_num = 5557;
@@ -41,15 +42,16 @@ static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
 static unsigned long cycle_time_ = 1000;
 static bool c_export = false;
+static bool throw_exceptions = false;
+
+static std::map<std::string, int> thread_cpu_affinities;
 
 const char *device_name() { return dev_name; }
 void set_device_name(const char *new_name) {
-    if (dev_name)
-    {
-        free(dev_name);
-    }
+    if (dev_name) free(dev_name);
     dev_name = strdup(new_name);
 }
+
 
 void set_verbose(int trueOrFalse)
 {
@@ -69,12 +71,12 @@ int test_only() {
 	return opt_test_only;
 }
 
-void set_persistent_store(const char *name) {
-	persistent_store_name = name;
+void set_persistent_store(const char *name) { 
+	persistent_store_name = name; 
 }
 
-const char *persistent_store() {
-	return persistent_store_name;
+const char *persistent_store() { 
+	return persistent_store_name; 
 }
 
 void set_modbus_map(const char *name) {
@@ -86,7 +88,7 @@ const char *modbus_map() {
 }
 
 void set_debug_config(const char *name) {
-	debug_config_name = name;
+	debug_config_name = name; 
 }
 
 const char *debug_config() {
@@ -99,14 +101,6 @@ void set_dependency_graph(const char *name) {
 
 const char *dependency_graph() {
     return dependency_graph_name;
-}
-
-const char *graph_root() {
-  return dependency_graph_root;
-}
-
-void set_graph_root(const char *root) {
-  dependency_graph_root = root;
 }
 
 void set_publisher_port(int port, bool required) {
@@ -164,9 +158,9 @@ void enable_tracing(bool which) { is_tracing = which; }
 
 bool tracing() { return is_tracing; }
 
-void set_cycle_time(unsigned long new_time) {
+void set_cycle_time(unsigned long new_time) { 
 	std::cout << "cycle time changed to " << new_time << "\n";
-	cycle_time_ = new_time;
+	cycle_time_ = new_time; 
 }
 unsigned long get_cycle_time() { return cycle_time_; }
 
@@ -176,3 +170,28 @@ bool export_to_c() {
 void set_export_to_c(bool which) {
 	c_export = which;
 }
+
+int cpu_affinity(const char *thread_name) {
+	std::string property_name = thread_name;
+	property_name += "_thread_cpu_affinity";
+	std::map<std::string, int>::iterator found = thread_cpu_affinities.find(property_name);
+	if (found != thread_cpu_affinities.end()) {
+		return (*found).second;
+	}
+	return 0;
+}
+
+void set_cpu_affinity(const char*thread_name, int cpu) {
+	std::string property_name = thread_name;
+	property_name += "_thread_cpu_affinity";
+	thread_cpu_affinities[property_name] = cpu;
+}
+
+bool exceptions_enabled() {
+	return throw_exceptions;
+}
+
+void enable_exceptions(bool which) {
+	throw_exceptions = which;
+}
+

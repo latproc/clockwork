@@ -40,10 +40,7 @@ const char *debug_config();
     
 void set_dependency_graph(const char *name);
 const char *dependency_graph();
-
-void set_graph_root(const char *root);
-const char *graph_root();
-
+    
 void set_publisher_port(int port, bool required = false);
 int publisher_port();
 bool publisher_port_fixed();
@@ -73,7 +70,12 @@ void set_cycle_time(unsigned long ct);
 bool export_to_c();
 void set_export_to_c(bool c_export);
 
-    
+int cpu_affinity(const char *thread_name);
+void set_cpu_affinity(const char*thread_name, int cpu);
+
+bool exceptions_enabled();
+void enable_exceptions(bool which);
+
 #ifdef __cplusplus
 }
 #endif

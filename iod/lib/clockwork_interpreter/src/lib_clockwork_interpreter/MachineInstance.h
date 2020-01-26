@@ -140,6 +140,8 @@ public:
   const Value *lookupState(const Value &);
   void listenTo(MachineInstance *m);
   void stopListening(MachineInstance *m);
+  bool isStableState(const std::string state_name);
+  bool stableStateValid(const std::string state_name);
   bool setStableState(); // returns true if a state change was made
 	void resetStableStateFlags(bool changed_state, StableState *active_state); // clear subcondition flags ready for state change
   virtual bool isShadow(); // is this machine a shadow instance?
@@ -300,7 +302,6 @@ public:
 
   static void forceStableStateCheck();
   static void forceIdleCheck();
-  static bool workToDo();
   static std::list<Package*>& pendingEvents();
   static std::set<MachineInstance*>& pluginMachines();
 

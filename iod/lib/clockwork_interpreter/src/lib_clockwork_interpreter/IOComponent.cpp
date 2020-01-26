@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-
+  
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -18,29 +18,22 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <lib_clockwork_interpreter/includes.hpp>
-#include "includes.hpp"
-// #include <string>
-// #include <iostream>
-// #include <iomanip>
-// #include <string.h>
-// #include <algorithm>
-// #include <lib_clockwork_client/includes.hpp>
-// #include <boost/thread/mutex.hpp>
-// #include <lib_clockwork_client/includes.hpp>
-//
-// #include "MachineInstance.h"
-// // // #include "MessagingInterface.h"
-// #include <netinet/in.h>
-// // // #include "Logger.h"
-//
-// #include "IOComponent.h"
-
+#include "IOComponent.h"
+#include <string>
+#include <iostream>
+#include <iomanip>
+#include <boost/thread/mutex.hpp>
+#include "MachineInstance.h"
+#include "MessagingInterface.h"
+#include <netinet/in.h>
+#include "Logger.h"
+#include <string.h>
+#include <algorithm>
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #endif
-// #include "buffering.h"
-// #include "ProcessingThread.h"
+#include "buffering.c"
+#include "ProcessingThread.h"
 
 #define VERBOSE_DEBUG 0
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
@@ -123,7 +116,7 @@ static uint64_t last_sample = 0; // retains a timestamp for the last sample
 
 void handle_io_sampling(uint64_t io_clock) {
 	uint64_t now = microsecs();
-	if (now - last_sample < 10000) return;
+	if (now - last_sample < 1000) return;
 	last_sample = now;
 	std::set <IOComponent*>::iterator iter = regular_polls.begin();
 	while (iter != regular_polls.end() ) {
@@ -138,7 +131,6 @@ static void display(uint8_t *p, unsigned int count = 0);
 #endif
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
-    if (bitpos >= 8) return;
 	uint8_t bitmask = 1<<bitpos;
 	if (val) *q |= bitmask; else *q &= (uint8_t)(0xff - bitmask);
 }
@@ -146,7 +138,7 @@ void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 void copyMaskedBits(uint8_t *dest, uint8_t*src, uint8_t *mask, size_t len) {
 
 	uint8_t*result = dest;
-#if VERBOSE_DEBUG
+#if VERBOSE_DEBUG 
 	std::cout << "copying masked bits: \n";
 	display(dest, len); std::cout << "\n";
 	display(src, len); std::cout << "\n";
@@ -182,33 +174,33 @@ std::set<IOComponent*> updatedComponentsOut;
 bool IOComponent::updates_sent = false;
 
 IOComponent::HardwareState IOComponent::getHardwareState() { return hardware_state; }
-void IOComponent::setHardwareState(IOComponent::HardwareState state) {
+void IOComponent::setHardwareState(IOComponent::HardwareState state) { 
 	const char *hw_state_str = "Hardware preinitialisatio";
 	if (state == s_hardware_init)
 		hw_state_str = "Hardware Initialisation";
 	else if (state == s_operational)
 		hw_state_str = "Operational";
 	NB_MSG << "Hardware state  set to " << hw_state_str << "\n";
-	hardware_state = state;
+	hardware_state = state; 
 }
 
 IOComponent::DeviceList IOComponent::devices;
 
-uint8_t *IOComponent::getProcessData() {
+uint8_t *IOComponent::getProcessData() { 
 	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-  return io_process_data;
+  return io_process_data; 
 }
-uint8_t *IOComponent::getProcessMask() {
+uint8_t *IOComponent::getProcessMask() { 
 	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-  return io_process_mask;
+  return io_process_mask; 
 }
-uint8_t *IOComponent::getDefaultData() {
+uint8_t *IOComponent::getDefaultData() { 
 	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-  return default_data;
+  return default_data; 
 }
-uint8_t *IOComponent::getDefaultMask() {
+uint8_t *IOComponent::getDefaultMask() { 
 	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-  return default_mask;
+  return default_mask; 
 }
 
 void IOComponent::reset() {
@@ -228,28 +220,24 @@ void IOComponent::reset() {
 	if (last_process_data) delete[] last_process_data; last_process_data = 0;
 }
 
-IOComponent::IOComponent(IOAddress addr)
-		: last_event(e_none), address(addr), io_index(-1), raw_value(0) {
+IOComponent::IOComponent(IOAddress addr) 
+		: last_event(e_none), address(addr), io_index(-1), raw_value(0) { 
 	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-	processing_queue.push_back(this);
+	processing_queue.push_back(this); 
 	// the io_index is the bit offset of the first bit in this objects address space
 	io_index = addr.io_offset*8 + addr.io_bitpos;
 }
 
-IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0), direction_(DirBidirectional) {
+IOComponent::IOComponent() : last_event(e_none), io_index(-1), raw_value(0), direction_(DirBidirectional) { 
 	boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-	processing_queue.push_back(this);
+	processing_queue.push_back(this); 
 	// use the same io-updated index as the processing queue position
 }
 
-// most io devices set their initial state to reflect the
+// most io devices set their initial state to reflect the 
 // current hardware state
 // output devices reset to an 'off' state
 void IOComponent::setInitialState() {
-}
-
-int IOComponent::updatesWaiting() {
-  return updatedComponentsOut.size();
 }
 
 void IOComponent::updatesSent(bool which){
@@ -271,10 +259,10 @@ static void display(uint8_t *p, unsigned int count) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
 	if (count == 0)
-		for (int i=min; i<=max; ++i)
+		for (int i=min; i<=max; ++i) 
 			std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 	else
-		for (unsigned int i=0; i<count; ++i)
+		for (unsigned int i=0; i<count; ++i) 
 			std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
 	std::cout << std::dec;
 }
@@ -282,14 +270,14 @@ static void display(uint8_t *p, unsigned int count) {
 
 uint8_t* IOComponent::getUpdateData() {
 	assert(io_process_data);
-	if (!update_data){
+	if (!update_data){ 
 		update_data = new uint8_t[process_data_size];
 		memcpy(update_data, io_process_data, process_data_size);
 	}
 	return update_data;
 }
 
-void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data,
+void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data, 
 			std::set<IOComponent *> &updated_machines) {
 	io_clock = clock;
 	// receive process data updates and mask to yield updated components
@@ -337,7 +325,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 			int j = 0;
 			// check each bit against the mask and if the mask if
 			// set, check if the bit has changed. If the bit has
-			// changed, notify components that use this bit and
+			// changed, notify components that use this bit and 
 			// update the bit
 			while (bitmask) {
 				if ( *m & bitmask) {
@@ -345,10 +333,10 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 					IOComponent *ioc = (*indexed_components)[ i*8+j ];
 					if (ioc && ioc != just_added) {
 						just_added = ioc;
-						//if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n";
+						//if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n"; 
 						//else std::cout << "found " << ioc->io_name << "\n";
 #if 0
-						if (ioc && ioc->last_event != e_none) {
+						if (ioc && ioc->last_event != e_none) { 
 							// pending locally sourced change on this io
 							std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
 							updatedComponentsIn.insert(ioc);
@@ -362,17 +350,17 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 								updatedComponentsIn.insert(ioc);
 							}
 
-							if (*p & bitmask) *q |= bitmask;
+							if (*p & bitmask) *q |= bitmask; 
 							else *q &= (uint8_t)(0xff - bitmask);
 						}
-						//else {
-						//	std::cout << "no change " << (unsigned int)*p << " vs " <<
+						//else { 
+						//	std::cout << "no change " << (unsigned int)*p << " vs " << 
 						//		(unsigned int)*q << "\n";}
 					}
 					else {
 						if (!ioc) std::cout << "IOComponent::processAll(): no io component at " << i <<":" <<j <<" but mask bit is set\n";
 						if ( (*p & bitmask) != (*q & bitmask) ) {
-							if (*p & bitmask) *q |= bitmask;
+							if (*p & bitmask) *q |= bitmask; 
 							else *q &= (uint8_t)(0xff - bitmask);
 						}
 					}
@@ -383,7 +371,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		}
 		++p; ++q; ++m;
 	}
-
+	
 	if (hardware_state == s_operational) {
 		// save the domain data for the next check
 		if (!last_process_data) {
@@ -391,20 +379,21 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 		}
 		memcpy(last_process_data, io_process_data, process_data_size);
 	}
-
+    
 	{
 		boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
 	if (!updatedComponentsIn.size())
 		return;
 //	std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
-	// look at the components that changed and remove them from the outgoing queue as long as the
+#ifdef USE_EXPERIMENTAL_IDLE_LOOP
+	// look at the components that changed and remove them from the outgoing queue as long as the 
 	// outputs have been sent to the hardware
 	std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
 	while (iter != updatedComponentsIn.end()) {
 		IOComponent *ioc = *iter++;
 		ioc->read_time = io_clock;
 		//std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
-		updatedComponentsIn.erase(ioc);
+		updatedComponentsIn.erase(ioc); 
 		if (updates_sent && updatedComponentsOut.count(ioc)) {
 			//std::cout << "output request for " << ioc->io_name << " resolved\n";
 			updatedComponentsOut.erase(ioc);
@@ -425,12 +414,20 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 			}
 		}
 	}
+#else
+	std::list<IOComponent *>::iterator iter = processing_queue.begin();
+	while (iter != processing_queue.end()) {
+		IOComponent *ioc = *iter++;
+		ioc->read_time = io_clock;
+		ioc->idle();
+	}
+#endif
 	}
 	outputs_waiting = updatedComponentsOut.size();
 }
 
-IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
-		unsigned int io_offset, unsigned int bit_offset,
+IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos, 
+		unsigned int io_offset, unsigned int bit_offset, 
 		unsigned int entry_pos, unsigned int bit_len, bool signed_value){
 	IOAddress addr(module_pos, io_offset, bit_offset, entry_pos, bit_len);
 	addr.module_position = module_pos;
@@ -445,7 +442,7 @@ IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
 	{
 	boost::recursive_mutex::scoped_lock lock(io_names_mutex);
 	if (io_names.find(std::string(buf)) != io_names.end())  {
-		std::cerr << "IOComponent::add_io_entry: warning - an IO component named "
+		std::cerr << "IOComponent::add_io_entry: warning - an IO component named " 
 			<< name << " already existed on module " << module_pos << "\n";
 	}
 	io_names[buf] = addr;
@@ -478,9 +475,9 @@ void IOComponent::setupProperties(MachineInstance *m) {
 std::ostream &IOComponent::operator<<(std::ostream &out) const{
 	out << "readtime: " << (io_clock-read_time) << " [" << address.description<<", "
 		<<address.module_position << " "
-		<< address.io_offset << ':'
-		<< address.io_bitpos << "."
-		<< address.bitlen << "]="
+		<< address.io_offset << ':' 
+		<< address.io_bitpos << "." 
+		<< address.bitlen << "]=" 
 		<< address.value;
   if (address.bitlen == 1 && io_process_data)  {
     out << " (" << (bool)(io_process_data[address.io_offset] & (1<<address.io_bitpos)) << ")";
@@ -511,65 +508,124 @@ int32_t IOComponent::filter(int32_t val) {
     return val;
 }
 
-
 class InputFilterSettings {
 public:
     bool property_changed;
     CircularBuffer *positions;
-    int32_t last_sent;			// this is the value to send unless the read value moves away from the mean
-    int32_t prev_sent;			// this is previous value of last_sent
-	uint64_t last_time;			// the last time we calculated speed;_
+    double last_sent;			// this is the value to send unless the read value moves away from the mean
+    double prev_sent;			// this is previous value of last_sent
+    uint64_t last_time;			// the last time we calculated speed;_
     uint16_t buffer_len;		// the maximum length of the circular buffer
-	const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
-	double *filter_coeff;		// the Butterworth filter uses these coefficients
-	const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
-	const long *filter_type;	// the user can select the filter using a "filter" property
-	const long *position_history; // the amount of position history to use in determining movement
-	const long *speed_tolerance; // the tolerance used in determining movement
-	unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
-	long speed;					// the current estimated speed
-	static long default_tolerance;	// a default value for filter_len
-	static long default_filter_len;	// a default value for filter_len
-	static long default_speed_filter_len;	// a default value for speed_filter_len
-	static long default_position_history;	// a default value for position_history
-	static long default_speed_tolerance;	// a default value for speed_tolerance
-	FloatBuffer speeds;
-	int rate_len;
+    const long *tolerance;		// some filters use a tolerance settable by the user in the "tolerance" property
+    double *filter_c_coeff;		// the Butterworth filter uses these coefficients
+    double *filter_d_coeff;		// the Butterworth filter uses these coefficients
+    const long *filter_len;		// the user can adjust the filter length of some filters via a "filter_len" property
+    const long *filter_type;	// the user can select the filter using a "filter" property
+    const long *calc_dt;
+    const long *calc_d2t;
+    const long *calc_stddev;
+    const long *position_history; // the amount of position history to use in determining movement
+    const long *speed_tolerance; // the tolerance used in determining movement
+    unsigned int butterworth_len;	// the number of coefficients in the Butterworth filter
+    double speed;					// the current estimated speed
+    double speed_scale;					// the current estimated speed
+    double accel;
+    double accel_scale;
+    static long default_tolerance;	// a default value for filter_len
+    static long default_filter_len;	// a default value for filter_len
+    static long default_speed_filter_len;	// a default value for speed_filter_len
+    static long default_calc_dt;
+    static long default_calc_d2t;
+    static long default_calc_stddev;
+    static long default_position_history;	// a default value for position_history
+    static long default_speed_tolerance;	// a default value for speed_tolerance
+    FloatBuffer speeds;
+    int rate_len;
+    ButterworthFilter *input_bwf;
+    ButterworthFilter *vel_bwf;
+    ButterworthFilter *accel_bwf;
+    const long *throttle;
 
-    InputFilterSettings() :property_changed(true), positions(0),
-			last_sent(0), prev_sent(0), last_time(0),
-			buffer_len(200), tolerance(&default_tolerance), filter_coeff(0),filter_len(&default_filter_len),
-			filter_type(0),
+    InputFilterSettings() :property_changed(true), positions(0), 
+			last_sent(0.0), prev_sent(0.0), last_time(0),
+			buffer_len(200), tolerance(&default_tolerance), 
+			filter_c_coeff(0), filter_d_coeff(0),filter_len(&default_filter_len), 
+			filter_type(0), calc_dt(&default_calc_dt), calc_d2t(&default_calc_d2t),
+			calc_stddev(&default_calc_stddev),
 			position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-			speed(0), speeds(4), rate_len(4) {
+			speed(0.0),speed_scale(1.0), accel(0.0), accel_scale(1.0), speeds(4), rate_len(4), input_bwf(0), vel_bwf(0), accel_bwf(0), throttle(0) {
 
-		double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
-		butterworth_len = sizeof(c) / sizeof(double);
-		filter_coeff = new double[butterworth_len];
-		memmove(filter_coeff, c, sizeof(c));
+		//double bw_c[] = { 0.000003756838020,0.000011270514059,0.000011270514059,0.000003756838020 };
+		//double bw_d[] = { 1.000000000000,-2.937170728450,2.876299723479,-0.939098940325 };
+		double bw_c[] = { 0.002898194633721,0.008694583901164,0.008694583901164,0.002898194633721 };
+		double bw_d[] = { 1.000000000000,-2.374094743709,1.929355669091,-0.532075368312 };
+		//double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
+		butterworth_len = sizeof(bw_c) / sizeof(double);
+		filter_c_coeff = new double[butterworth_len];
+		memmove(filter_c_coeff, bw_c, sizeof(bw_c));
+		filter_d_coeff = new double[butterworth_len];
+		memmove(filter_d_coeff, bw_c, sizeof(bw_d));
+		input_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
+		vel_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
+		accel_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
 		positions = createBuffer(buffer_len);
 	}
 
 	void update(uint64_t read_time) {
-		if (prev_sent == 0) prev_sent = last_sent;
+#if 0
+		double smoothing_coeff[] = { -7, 8, 8, 0, -9, -12, -2, 28, 85 };
+		double first_derivative_coeff[] = { -2086,1862,2441,918,-1440,-3366,-3593,-854,6118 };
+		double second_derivative_coeff[] = { -308,217,340,201,-60,-303,-388,-175,476 };
+		#define SMOOTHING_NORM 99.0f
+		#define FIRST_DERIV_NORM 8316.0f
+		#define SECOND_DERIV_NORM 1386.0f
+		int smoothing_len = sizeof(smoothing_coeff) / sizeof(double);
+#else
+		double smoothing_coeff[] = { -2, 4, 1, -4, -4, 8, 39 };
+		double first_derivative_coeff[] = { -77, 122, 77, -72, -185, -122, 257 };
+		double second_derivative_coeff[] = { -16, 21, 18, -4, -24, -21, 26 };
+		#define SMOOTHING_NORM 42.0
+		#define FIRST_DERIV_NORM 252.0
+		#define SECOND_DERIV_NORM 42.0
+		int smoothing_len = sizeof(smoothing_coeff) / sizeof(double);
+		assert(smoothing_len==7);
+#endif
+
+
+		// replace the raw value the positions buffer with the filtered value
+//std::cout << read_time << " replacing pos: " << getBufferValue(positions, 0) << " with " << last_sent << "\n";
+		setBufferValue(positions, last_sent);
+		//if (prev_sent == 0.0) prev_sent = last_sent; TBD wrong?
 		if (last_time == 0) {
 			last_time = read_time;
 			prev_sent = last_sent;
 			speed = 0.0;
 			speeds.append(speed);
 		}
-		else if (read_time - last_time >= 10000) {
-	/*
-			double dt = (double)(read_time - last_time);
-			double dv = (double)(last_sent - prev_sent);
-			speed = (long)( dv / dt * 1000000.0 );
-	*/
-			rate_len = findMovement(positions, 20, *position_history);
-			if (rate_len < *position_history) {
-				speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
+		else if ( (long)(read_time - last_time) >= ((throttle) ? (*throttle * 1000L) : 10000L)) {
+			double dt = ((double)(read_time - last_time)) / 1000000.0;
+			//speed = (getBufferValue(positions,0) - getBufferValue(positions,1)) / dt;
+			//rate_len = findMovement(positions, 20, *position_history);
+			// if there has been movement in the last N (N=20) readings, calculate speed
+			//if (rate_len < *position_history) {
+			if (*calc_dt) {
+				speed = savitsky_golay_filter(positions, smoothing_len, first_derivative_coeff, FIRST_DERIV_NORM ) ;
+				speed = speed / dt;
+				//speed = vel_bwf->filter(speed);
+				//speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
+				//std::cout << "computed speed " << speed << " at " << getBufferValueAt(positions, 0) << "\n";
+				//}
+				//else speed = 0.0;
+				speeds.append(speed);
 			}
-			else speed = 0.0;
-			speeds.append(speed);
+			if (*calc_d2t) {
+				//accel = 0.0;
+				//accel = (speeds.get(0) - speeds.get(1)) / dt;
+				accel = savitsky_golay_filter(positions, smoothing_len, second_derivative_coeff, SECOND_DERIV_NORM );
+				accel = accel / dt;
+				//accel = accel_bwf->filter(accel / dt);
+			}
+
 			last_time = read_time;
 			prev_sent = last_sent;
 		}
@@ -582,10 +638,10 @@ public:
 		double res = 0;
 		for (unsigned int i=0; i < filter_length; ++i) {
 			double f = (double)getBufferValue(positions, i);
-			//printf(" %.3f,%.3f ",f, f*c[i]);
+			//printf(" %.3f,%.3f ",f, f*c[i]); 
 			res += f * c[i];
 		}
-		//printf(" %.3f\n",res);
+		//printf(" %.3f\n",res); 
 
 		return res;
 	}
@@ -596,43 +652,130 @@ long InputFilterSettings::default_filter_len = 12;	// a default value for filter
 long InputFilterSettings::default_speed_filter_len = 4;	// a default value for speed_filter_len
 long InputFilterSettings::default_position_history = 20;	// a default value for position_history
 long InputFilterSettings::default_speed_tolerance = 20;	// a default value for speed_tolerance
+long InputFilterSettings::default_calc_dt = 0; // calculate first deriv
+long InputFilterSettings::default_calc_d2t = 0; // calculate second deriv
+long InputFilterSettings::default_calc_stddev = 0; // don't calculate stddev
 
-AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
+AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) { 
 	config = new InputFilterSettings();
 	direction_ = DirInput;
 	regular_polls.insert(this);
 }
 
+static bool getFloatValue(MachineInstance *scope, const char *name, double &result) {
+  const Value &v = scope->getValue(name);
+  if (v.kind == Value::t_integer || v.kind == Value::t_float) {
+    double res;
+    if (v.asFloat(res)) {
+      result = res;
+      return true;
+    }
+  }
+  return false;
+}
+
 void AnalogueInput::setupProperties(MachineInstance *m) {
-	const Value &v = m->getValue("tolerance");
-	if (v.kind == Value::t_integer) {
-		config->tolerance = &v.iValue;
-	}
-	const Value &v2 = m->getValue("filter");
-	if (v2.kind == Value::t_integer) {
-		config->filter_type = &v2.iValue;
-	}
-	const Value &v3 = m->getValue("filter_len");
-	if (v3.kind == Value::t_integer) {
-		config->filter_len = &v3.iValue;
-	}
-	const Value &v4 = m->getValue("speed_tolerance");
-	if (v4.kind == Value::t_integer) {
-		config->speed_tolerance= &v4.iValue;
-	}
-	const Value &v5 = m->getValue("position_history");
-	if (v5.kind == Value::t_integer) {
-		config->position_history = &v5.iValue;
-	}
+	MachineInstance *settings = m->lookup("filter_settings");
+	if (settings) {
+		double speed_scale = 1.0, accel_scale = 1.0;
+		if (getFloatValue(settings, "velocity_scale", speed_scale)) {
+			config->speed_scale = speed_scale;
+			std::cout << m->getName() << " set velocity scale to: " << config->speed_scale << "\n";
+		}
+		const Value &v = m->getValue("acceleration_scale");
+		if (getFloatValue(settings, "acceleration_scale", accel_scale)) {
+			config->accel_scale = accel_scale;
+			std::cout << m->getName() << " set accel scale to: " << config->accel_scale << "\n";
+		}
+		const Value &throttle_v = settings->getValue("throttle");
+		if (throttle_v.kind == Value::t_integer) {
+			config->throttle = &throttle_v.iValue;
+			std::cout << m->getName() << " set throtle rate to: " << *config->throttle << "ms\n";
+		}
+		const Value &conf_dt = settings->getValue("enable_velocity");
+		if (conf_dt.kind == Value::t_integer) {
+		  config->calc_dt = &conf_dt.iValue;
+		}
+		const Value &conf_d2t = settings->getValue("enable_acceleration");
+		if (conf_d2t.kind == Value::t_integer) {
+		  config->calc_d2t = &conf_d2t.iValue;
+		}
+		const Value &conf_stddev = settings->getValue("enable_stddev");
+		if (conf_stddev.kind == Value::t_integer) {
+		  config->calc_stddev = &conf_stddev.iValue;
+		}
+		MachineInstance *c_coeff = settings->lookup("C");
+		MachineInstance *d_coeff = settings->lookup("D");
+		if (c_coeff && d_coeff) {
+			unsigned int num_c = c_coeff->parameters.size();
+			unsigned int num_d = d_coeff->parameters.size();
+			if (num_c > 0 && num_c == num_d) {
+				config->butterworth_len = num_c;
+				delete[] config->filter_c_coeff;
+				delete[] config->filter_d_coeff;
+				config->filter_c_coeff = new double[num_c];
+				config->filter_d_coeff = new double[num_d];
+				std::cout << "C: " << (int)num_c;
+				for (unsigned int i=0; i<num_c; ++i) {
+					double val;
+					config->filter_c_coeff[i] = c_coeff->parameters[i].val.asFloat(val) ? val : 1.0;
+					std::cout << " " << config->filter_c_coeff[i];
+				}
+				std::cout << "\nD: " << (int)num_d;
+				for (unsigned int i=0; i<num_d; ++i) {
+					double val;
+					config->filter_d_coeff[i] = d_coeff->parameters[i].val.asFloat(val) ? val : 1.0;
+					std::cout << " " << config->filter_d_coeff[i];
+				}
+				std::cout << "\n";
+				// swap the filter, TBD copy current values from old filter?
+				ButterworthFilter *input_bwf = new ButterworthFilter(num_c, config->filter_c_coeff, num_d, config->filter_d_coeff);
+				delete config->input_bwf;
+				config->input_bwf = input_bwf;
+
+			}
+			else {
+				std::cout << "filter parameters are incorrect: \n";
+			}
+		}
+		const Value &v1= settings->getValue("tolerance");
+		if (v1.kind == Value::t_integer) {
+			config->tolerance = &v1.iValue;
+		}
+		const Value &v2 = settings->getValue("filter");
+		if (v2.kind == Value::t_integer) {
+			config->filter_type = &v2.iValue;
+			if (*config->filter_type == 2) {
+				std::cout << "butterworth filter order " <<config->butterworth_len << "\n";
+			}
+		}
+		const Value &v3 = settings->getValue("filter_len");
+		if (v3.kind == Value::t_integer) {
+			config->filter_len = &v3.iValue;
+		}
+		const Value &v4 = settings->getValue("speed_tolerance");
+		if (v4.kind == Value::t_integer) {
+			config->speed_tolerance= &v4.iValue;
+		}
+		const Value &v5 = settings->getValue("position_history");
+		if (v5.kind == Value::t_integer) {
+			config->position_history = &v5.iValue;
+		}
+		} else {
+			std::cout << "Warning: analog input " << m->getName() << " has no filter settings\n";
+		}
 }
 
 int32_t AnalogueInput::filter(int32_t raw) {
-    if (config->property_changed) {
-        config->property_changed = false;
-    }
-	addSample(config->positions, (long)read_time, (double)raw);
+	if ( (long)(read_time - config->last_time) < ((config->throttle) ? (*config->throttle * 1000L) : 10000L)) 
+		return raw;
+	if (config->property_changed) {
+		config->property_changed = false;
+	}
 
-	if (config->filter_type && *config->filter_type == 0 ) {
+	// prepare config->last_sent by filtering the input value
+	addSample(config->positions, (long)read_time, (double)raw);
+	if (config->filter_type && *config->filter_type == 0 ) { //TBD wrong?
 		config->last_sent = raw;
 	}
 	else if ( !config->filter_type || (config->filter_type && *config->filter_type == 1))  {
@@ -643,35 +786,41 @@ int32_t AnalogueInput::filter(int32_t raw) {
 		}
 	}
 	else if (config->filter_type && *config->filter_type == 2) {
-		long res = (long)config->filter();
-		config->last_sent = (int32_t)(res / config->butterworth_len *2);
+		if (config->input_bwf) {
+			double res = config->input_bwf->filter((float)raw);
+			config->last_sent = res;
+		}
+		else {
+			assert(false);
+		}
 	}
-
+	
 	config->update(read_time);
-
-#if 1
+	
 	/* most machines reading sensor values will be prompted when teh
 		sensor value changes, depending on whether this filter yields a
-		changed value. Some systems such as plugins that operate on
-		their own clock may wish to ignore the filtered value and
-		access the raw io value and read time but note that these
+		changed value. Some systems such as plugins that operate on 
+		their own clock may wish to ignore the filtered value and 
+		access the raw io value and read time but note that these 
 		values do not cause notifications when they change
 	*/
-
-
 
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-		o->properties.add("VALUE", (long)raw, SymbolTable::ST_REPLACE);
-		o->properties.add("Position", (long)config->last_sent, SymbolTable::ST_REPLACE);
-		double v = config->speeds.average(config->speeds.length());
-		if (fabs(v)<1.0) v = 0.0;
-		o->properties.add("Velocity", (long)v, SymbolTable::ST_REPLACE);
+		o->properties.add("raw", (long)raw, SymbolTable::ST_REPLACE);
+		o->properties.add("VALUE", (long)config->last_sent, SymbolTable::ST_REPLACE);
+		//double v = config->speeds.average(config->speeds.length());
+		//if (fabs(v)<1.0) v = 0.0;
+		if (*config->calc_stddev)
+			o->properties.add("stddev", bufferStddev(config->positions, 5), SymbolTable::ST_REPLACE);
+		if (*config->calc_dt)
+			o->properties.add("Velocity", config->speed * config->speed_scale, SymbolTable::ST_REPLACE);
+		if (*config->calc_d2t)
+			o->properties.add("Acceleration", config->accel * config->accel_scale, SymbolTable::ST_REPLACE);
 	}
-#endif
 	return config->last_sent;
 }
 
@@ -700,12 +849,12 @@ public:
 	FloatBuffer speeds;
 	int rate_len;
 
-	CounterInternals() : positions(0),
-	tolerance(&default_tolerance), filter_len(&default_filter_len),
-	position_history(&default_position_history),
+	CounterInternals() : positions(0), 
+	tolerance(&default_tolerance), filter_len(&default_filter_len), 
+	position_history(&default_position_history), 
 	speed_tolerance(&default_speed_tolerance),
 	input_scale(&default_input_scale),
-	last_sent(0),
+	last_sent(0), 
 	prev_sent(0), last_time(0), speed(0), buffer_len(200),speeds(4), rate_len(4) {
 		positions = createBuffer(buffer_len);
 	}
@@ -734,17 +883,17 @@ void update(uint64_t read_time) {
 		prev_sent = last_sent;
 	}
 }
-
+	
 double filter() {
 	if ((unsigned int)bufferLength(positions) < 9) return getBufferValue(positions,0);
 	double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
 	double res = 0;
 	for (unsigned int i=0; i<9; ++i) {
 		double f = (double)getBufferValue(positions, i);
-		//printf(" %.3f,%.3f ",f, f*c[i]);
+		//printf(" %.3f,%.3f ",f, f*c[i]); 
 		res += f * c[i];
 	}
-	//printf(" %.3f\n",res);
+	//printf(" %.3f\n",res); 
 
 	return res;
 }
@@ -756,7 +905,7 @@ long CounterInternals::default_position_history = 20;
 long CounterInternals::default_speed_tolerance = 10;
 long CounterInternals::default_input_scale = 1;
 
-Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) {
+Counter::Counter(IOAddress addr) : IOComponent(addr),internals(0) { 
 	internals = new CounterInternals;
 	regular_polls.insert(this);
 }
@@ -823,13 +972,11 @@ int32_t Counter::filter(int32_t val) {
 #if 1
 	/* most machines reading sensor values will be prompted when teh
 		sensor value changes, depending on whether this filter yields a
-		changed value. Some systems such as plugins that operate on
-		their own clock may wish to ignore the filtered value and
-		access the raw io value and read time but note that these
+		changed value. Some systems such as plugins that operate on 
+		their own clock may wish to ignore the filtered value and 
+		access the raw io value and read time but note that these 
 		values do not cause notifications when they change
 	*/
-
-
 
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
 	while (owners_iter != owners.end()) {
@@ -850,11 +997,11 @@ CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positio
 
 int32_t CounterRate::filter(int32_t val) {
 #if 0
-	/* as for the AnalogueInput, note that these 'IO' properties do not
-		cause value change notifications throughout clockwork
+	/* as for the AnalogueInput, note that these 'IO' properties do not 
+		cause value change notifications throughout clockwork 
 	*/
 	std::list<MachineInstance*>::iterator owners_iter = owners.begin();
-	while (owners_iter != owners.end()) {
+	while (owrars_iter != owners.end()) {
 		MachineInstance *o = *owners_iter++;
 		o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
 		o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
@@ -880,10 +1027,10 @@ public:
     uint32_t max_reverse;
     float Kp;
     uint32_t set_point;
-
+    
 	float estimated_speed;
-	float Pe; 		// used for process error: SetPoint - EstimatedSpeed;
-	float current; 	// current power level this is our PV (control variable)
+	float Pe;			// used for process error: SetPoint - EstimatedSpeed;
+	float current;		// current power level this is our PV (control variable)
 	float last_pos;
 	uint64_t position;
 	uint64_t measure_time;
@@ -940,23 +1087,22 @@ void PIDController::update() {
 
 void PIDController::handleChange(std::list<Package*>&work_queue) {
     //calculate..
-
+    
     if (config->property_changed) {
         config->property_changed = false;
     }
-
+    
     if (last_event == e_change) {
         //config->
     }
-
+    
     IOComponent::handleChange(work_queue);
 }
 
 /* ---------- */
 
-
 const char *IOComponent::getStateString() {
-	if (last_event == e_change) return "unstable";
+	if (last_event == e_change && address.bitlen > 1) return "unstable";
 	else if (address.bitlen > 1) return "stable";
 	else if (last_event == e_on) return "turning_on";
 	else if (last_event == e_off) return "turning_off";
@@ -1040,8 +1186,8 @@ void IOComponent::setDefaultData(uint8_t *data){
 	display(data, process_data_size);
 	std::cout << "\n";
 #endif
-	if (!default_data)
-		default_data = new uint8_t[process_data_size];
+  if (!default_data)
+    default_data = new uint8_t[process_data_size];
 	memcpy(default_data, data, process_data_size);
 }
 
@@ -1052,7 +1198,7 @@ void IOComponent::setDefaultMask(uint8_t *mask){
 	display(mask, process_data_size);
 	std::cout << "\n";
 #endif
-	if (!default_mask)
+	if (!default_mask) 
 		default_mask = new uint8_t[process_data_size];
 	memcpy(default_mask, mask, process_data_size);
 }
@@ -1114,7 +1260,7 @@ static uint8_t *generateUpdateMask() {
 		IOComponent *ioc = *iter; //TBD this can be null
 		if (ioc->ownersEnabled()) iter++; else iter = updatedComponentsOut.erase(iter);
 
-		if (ioc->direction() != IOComponent::DirOutput && ioc->direction() != IOComponent::DirBidirectional)
+		if (ioc->direction() != IOComponent::DirOutput && ioc->direction() != IOComponent::DirBidirectional) 
 			continue;
 		unsigned int offset = ioc->address.io_offset;
 		unsigned int bitpos = ioc->address.io_bitpos;
@@ -1149,10 +1295,10 @@ IOUpdate *IOComponent::getUpdates() {
 	res->setMask(mask);
 	//MEMCHECK();
 #if VERBOSE_DEBUG
-	std::cout << std::flush
-		<< "IOComponent::getUpdates preparing to send " << res->size() << " d:";
-	display(res->data(), process_data_size);
-	std::cout << " m:";
+	std::cout << std::flush 
+		<< "IOComponent::getUpdates preparing to send " << res->size() << " d:"; 
+	display(res->data(), process_data_size); 
+	std::cout << " m:"; 
 	display(res->mask(), process_data_size);
 	std::cout << "\n" << std::flush;
 #endif
@@ -1174,8 +1320,8 @@ IOUpdate *IOComponent::getDefaults() {
 	res->setMask(default_mask);
 
 #if VERBOSE_DEBUG
-	std::cout << "preparing to send defaults " << res->size() << " bytes\n";
-	display(res->data(), res->size()); std::cout << "\n";
+	std::cout << "preparing to send defaults " << res->size() << " bytes\n"; 
+	display(res->data(), res->size()); std::cout << "\n"; 
 	display(res->mask(), res->size()); std::cout << "\n";
 #endif
 	return res;
@@ -1226,7 +1372,7 @@ void IOComponent::setupIOMap() {
 		unsigned int bitpos = ioc->address.io_bitpos;
 		offset += bitpos/8;
 		int bytes = 1;
-		for (unsigned int i=0; i<ioc->address.bitlen; ++i)
+		for (unsigned int i=0; i<ioc->address.bitlen; ++i) 
 			(*indexed_components)[offset*8 + bitpos + i] = ioc;
 		for (int i=0; i<bytes; ++i) {
 			std::list<IOComponent *> *cl = io_map[offset+i];
@@ -1251,15 +1397,15 @@ void IOComponent::markChange() {
 	if (address.bitlen == 1) {
 		int32_t value = (*offset & (1<< bitpos)) ? 1 : 0;
 
-		// only outputs will have an e_on or e_off event queued,
+		// only outputs will have an e_on or e_off event queued, 
 		// if they do, set the bit accordingly, ignoring the previous value
 		if (!value && last_event == e_on) {
 /*
-			std::cout << "IOComponent::markChange setting bit "
-				<< (offset - update_data) << ":" << bitpos
+			std::cout << "IOComponent::markChange setting bit " 
+				<< (offset - update_data) << ":" << bitpos 
 				<< " for " << io_name << "\n";
 */
-			set_bit(offset, bitpos, 1);
+			set_bit(offset, bitpos, 1);			
 			updatesSent(false);
 		}
 		else if (value &&last_event == e_off) {
@@ -1271,7 +1417,7 @@ void IOComponent::markChange() {
 	else {
 		if (last_event == e_change) {
 /*
-			std::cerr << " marking change to " << pending_value
+			std::cerr << " marking change to " << pending_value 
 				<< " at offset " << (unsigned long)(offset - update_data)
 			    << " for " << io_name << "\n";
 */
@@ -1283,7 +1429,7 @@ void IOComponent::markChange() {
 				toU16(offset, x);
 			}
 			else if (address.bitlen == 32) {
-				toU32(offset, pending_value);
+				toU32(offset, pending_value); 
 			}
 			last_event = e_none;
 #if VERBOSE_DEBUG
@@ -1345,19 +1491,20 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 					// check for objects traversing byte boundaries
 					if (count< address.bitlen && !bitmask) { bitmask = 0x80; ++offset; }
 				}
-
+				
 				while (bitmask) { val = val >> 1; bitmask = bitmask >> 1; }
 				//std::cout << " value: " << val << "\n";
 			}
-			else if (address.bitlen == 8)
+			else if (address.bitlen == 8) 
 				val = *(int8_t*)(offset);
 			else if (address.bitlen == 16) {
 				val = fromU16(offset);
 				//std::cout << " 16bit value: " << val << " " << std::hex << val << std::dec << "\n";
 			}
-			else if (address.bitlen == 32)
+			else if (address.bitlen == 32) 
 				val = fromU32(offset);
 			else {
+				std::cout << " unsupported bitlen: " << address.bitlen << "\n";
 				val = 0;
 			}
 			if ( regular_polls.count(this) ) {
@@ -1365,7 +1512,7 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 				raw_value = val;
 				address.value = val;
 			}
-			else if (hardware_state == s_hardware_init
+			else if (hardware_state == s_hardware_init 
 				|| (hardware_state == s_operational &&  raw_value != (uint32_t)val ) ) {
 				//std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
 				raw_value = val;
@@ -1377,12 +1524,12 @@ void IOComponent::handleChange(std::list<Package*> &work_queue) {
 	}
 }
 
-void IOComponent::turnOn() {
+void IOComponent::turnOn() { 
 }
-void IOComponent::turnOff() {
+void IOComponent::turnOff() { 
 }
 
-void Output::turnOn() {
+void Output::turnOn() { 
 	gettimeofday(&last, 0);
 	last_event = e_on;
 	updatedComponentsOut.insert(this);
@@ -1391,7 +1538,7 @@ void Output::turnOn() {
 	markChange();
 }
 
-void Output::turnOff() {
+void Output::turnOff() { 
 	gettimeofday(&last, 0);
 	last_event = e_off;
 	updatedComponentsOut.insert(this);

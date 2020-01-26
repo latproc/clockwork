@@ -55,7 +55,6 @@ double Buffer::average(int n)
   int len = length();
   if (len <= 0) return 0.0;
   if (len < n) n = len;
-//  return total_ / (double)n;
 #if 1
   int i = (front + BUFSIZE - n + 1) % BUFSIZE;
   while (i != front)
@@ -70,7 +69,6 @@ double Buffer::average(int n)
   std::cout << i << ":" <<getFloatAtIndex(i) << "\n";
 #endif
   res += getFloatAtIndex(i);
-assert(total_ == res);
   return res / (double)n;
 #endif
 }

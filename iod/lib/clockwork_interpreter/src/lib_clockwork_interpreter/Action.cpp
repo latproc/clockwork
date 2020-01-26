@@ -284,7 +284,7 @@ Action::Status Action::operator()() {
 	start_time = microsecs();
 	status = Running; // important because run() checks the current state
 	status = run();
-	if (status == Failed) reportError();
+	if (status == Failed && exceptions_enabled()) reportError();
 	return status;
 }
 
