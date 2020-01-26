@@ -1238,11 +1238,8 @@ void ChannelDefinition::instantiateInterfaces() {
 					MachineInstance::MACHINE_SHADOW);
 					m->setDefinitionLocation("dynamic", 0);
 					m->requireAuthority(item.second->authority);
-					{
-						FileLogger fl(program_name);
-						fl.f() << "shadow " << instance_name.first
-							<< " requires authority " << item.second->authority << "\n";
-					}
+					DBG_CHANNELS << "shadow " << instance_name.first
+						<< " requires authority " << item.second->authority << "\n";
 					MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
 					m->setProperties(mc->properties);
 					m->setStateMachine(mc);
@@ -1270,11 +1267,8 @@ void ChannelDefinition::instantiateInterfaces() {
 																		MachineInstance::MACHINE_SHADOW);
 					m->setDefinitionLocation("dynamic", 0);
 					m->requireAuthority(item.second->authority);
-					{
-						FileLogger fl(program_name);
-						fl.f() << "shadow " << instance_name.first
+					DBG_CHANNELS << "shadow " << instance_name.first
 						<< " requires authority " << item.second->authority << "\n";
-					}
 					MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
 					m->setProperties(mc->properties);
 					m->setStateMachine(mc);
