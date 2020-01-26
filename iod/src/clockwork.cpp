@@ -101,7 +101,7 @@ MachineInstance *ClockworkInterpreter::settings() { return _settings; }
 
 void usage(int argc, char const *argv[])
 {
-    std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store]\n"
+    std::cerr << "Usage: " << argv[0] << " [-v] [-t] [-l logfilename] [-i persistent_store]\n"
 		<< "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
 		<< "[-mp modbus_port] [-ps persistent_store_port]"
 		<< "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics"
@@ -721,7 +721,7 @@ void semantic_analysis() {
 		// parameters
 		DBG_PARSER << "fixing parameter references for locals in " << mi->getName() << "\n";
 		for (unsigned int i=0; i<mi->locals.size(); ++i) {
-			DBG_MSG << "   " << i << ": " << mi->locals[i].val << "\n";
+			DBG_PARSER << "   " << i << ": " << mi->locals[i].val << "\n";
             
             MachineInstance *m = mi->locals[i].machine;
             // fixup real names of parameters that are passed as parameters to our locals
@@ -749,7 +749,7 @@ void semantic_analysis() {
 			for (unsigned int j=0; j<m->parameters.size(); ++j) {
 				Parameter &p = m->parameters[j];
 				if (p.val.kind == Value::t_symbol) {
-					DBG_MSG << "      " << j << ": " << p.val << "\n";
+					DBG_PARSER << "      " << j << ": " << p.val << "\n";
                     if (p.real_name.length() == 0) {
                         p.machine = mi->lookup(p.val);
                         if (p.machine) p.real_name = p.machine->getName();
@@ -759,7 +759,7 @@ void semantic_analysis() {
 					if (p.machine) {
 						p.machine->addDependancy(m);
 						m->listenTo(p.machine);
-						DBG_MSG << " linked parameter " << j << " of local " << m->getName()
+						DBG_PARSER << " linked parameter " << j << " of local " << m->getName()
                             << " (" << m->parameters[j].val << ") to " << p.machine->getName() << "\n";
 					}
 					else {
