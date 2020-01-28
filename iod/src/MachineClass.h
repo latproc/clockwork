@@ -56,9 +56,11 @@ public:
   static std::map<std::string, MachineClass> machine_classes;
   void defaultState(State state);
   bool isStableState(State &state);
-  void addState(const char *name);
+	void addState(const char *name, bool is_static = false);
   const State *findState(const char *name) const;
   const State *findState(const State &seek) const;
+	bool isStaticState(const char *name);
+	bool isStaticState(const std::string &);
   State *findMutableState(const char *name);
   virtual ~MachineClass() { all_machine_classes.remove(this); }
   void disableAutomaticStateChanges();
@@ -91,6 +93,8 @@ public:
 	bool cExport(const std::string &filename);
 
 private:
+	std::set<std::string> static_state_names;
+
     MachineClass();
     MachineClass(const MachineClass &other);
 };

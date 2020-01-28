@@ -53,9 +53,13 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 	new_state = saved_state;
 	value = saved_state.sValue.c_str();
 	owner->start(this);
+	MachineClass *owner_state_machine = owner->getStateMachine();
+	const std::string &new_state_str(new_state.asString());
 
-	if (owner->getStateMachine()->default_state.getName() != new_state.asString()
-			&& owner->isStableState(new_state.asString()) && !owner->stableStateValid(new_state.asString())) {
+	if (owner_state_machine->default_state.getName() != new_state_str
+			&& !owner_state_machine->isStaticState(new_state_str)
+			&&  owner->isStableState(new_state_str)
+			&& !owner->stableStateValid(new_state_str)) {
 		std::stringstream ss;
 		ss << owner->getName() << " aborting invalid stable state change" << std::flush;
 		std::string str = ss.str();

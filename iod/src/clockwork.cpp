@@ -280,8 +280,8 @@ void predefine_special_machines() {
 	point_class->parameters.push_back(Parameter("module"));
 	point_class->parameters.push_back(Parameter("offset"));
 	point_class->parameters.push_back(Parameter("entry"));
-	point_class->addState("on");
-	point_class->addState("off");
+	point_class->addState("on", true);
+	point_class->addState("off", true);
 	point_class->default_state = State("off");
 	point_class->initial_state = State("off");
 	point_class->disableAutomaticStateChanges();
@@ -411,8 +411,8 @@ void predefine_special_machines() {
 	cond->default_state = State("false");
 
 	MachineClass *flag = new MachineClass("FLAG");
-	flag->addState("on");
-	flag->addState("off");
+	flag->addState("on", true);
+	flag->addState("off", true);
 	flag->default_state = State("off");
 	flag->initial_state = State("off");
 	flag->disableAutomaticStateChanges();

@@ -17,7 +17,7 @@ MachineClass::MachineClass(const char *class_name) : default_state("unknown"), i
 	name(class_name), allow_auto_states(true), token_id(0), plugin(0),
 	polling_delay(0)
 {
-	addState("INIT");
+	addState("INIT", true);
 	token_id = Tokeniser::instance()->getTokenId(class_name);
 	all_machine_classes.push_back(this);
 }
@@ -38,8 +38,19 @@ bool MachineClass::isStableState(State &state) {
 	return stable_state_xref.find(state.getName()) != stable_state_xref.end();
 }
 
-void MachineClass::addState(const char *name) {
-	states.push_back(new State(name));
+bool MachineClass::isStaticState(const char *name) {
+	return static_state_names.count(name) != 0;
+}
+
+bool MachineClass::isStaticState(const std::string &name) {
+	return static_state_names.count(name) != 0;
+}
+
+void MachineClass::addState(const char *state_name, bool manual_state) {
+	states.push_back(new State(state_name));
+	if (manual_state) {
+		static_state_names.insert(state_name);
+	}
 }
 
 State *MachineClass::findMutableState(const char *seek) {
