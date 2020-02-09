@@ -1,6 +1,6 @@
 all:	
 	[ -d "build" ] || mkdir build
-	cd build && cmake .. && make -j6 install
+	cd build && cmake .. && make $(JOBS) install
 
 
 release:
@@ -20,3 +20,8 @@ debug:
 
 debug-install:	debug
 	cd build/Debug && make install
+
+xcode:
+	[ -d "xcode" ] || mkdir xcode
+	cd xcode && cmake -G Xcode .. && xcodebuild -parallelizeTargets -jobs 6
+

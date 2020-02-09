@@ -103,7 +103,8 @@ std::string constructAlphaNumericString(const char *prefix, const char *val, con
 	if (prefix) { strcpy(buf, prefix); q+= strlen(prefix); }
 	const char *p = val;
 	while (*p && len--) {
-		if (isalnum(*p)) *q++ = *p; ++p;
+		if (isalnum(*p)) *q++ = *p;
+    ++p;
 	}
 	*q = 0;
 	if (q == buf) // no alpha/num found in the input string

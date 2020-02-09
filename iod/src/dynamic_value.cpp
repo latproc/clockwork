@@ -1035,7 +1035,7 @@ const Value &AsFormattedStringValue::operator()() {
 		MessageLog::instance()->add(ss.str().c_str());
 		last_result = 0; return last_result;
 	}
-	last_result = v.asString(format.c_str());
+	last_result = Value(v.asString(format.c_str()), Value::t_string);
 	return last_result;
 }
 std::ostream &AsFormattedStringValue::operator<<(std::ostream &out ) const {

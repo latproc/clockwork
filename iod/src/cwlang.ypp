@@ -89,14 +89,19 @@ static MachineInstance *addMachine(const char *name, const char *type,
 	MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
 	machine->setDefinitionLocation(yyfilename, yylineno);
 
-		std::map<std::string, MachineInstance *>::iterator found = machines.find(name);
+	std::map<std::string, MachineInstance *>::iterator found = machines.find(name);
     if (found == machines.end())
         machines[name] = machine;
     else {
-				MachineInstance *orig = (*found).second;
-        NB_MSG << yyfilename << ":" << std::setw(5) << yylineno << " "
-					<< "Error: machine " << name << " already defined "
-					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+			MachineInstance *orig = (*found).second;
+			if (machine != orig) {
+				std::stringstream ss;
+				ss << yyfilename << ":" << std::setw(5) << yylineno << " "
+						<< "Error: machine " << name << " already defined "
+						<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+				error_messages.push_back(ss.str());
+				NB_MSG << ss.str() << "\n";
+			}
     }
 
     return machine;
@@ -314,7 +319,7 @@ SYMBOL INTERFACE {
 		NB_MSG << ss.str() << "\n";
 		++num_errors;
 	}
-    current_machineclass = new MachineInterface($1);
+	current_machineclass = new MachineInterface($1);
 }
 ;
 
@@ -675,15 +680,20 @@ WORD { $$ = WORD; }
 machine_instantiation:
 instantiation ';'
 {
-    DBG_PARSER << std::setw(5) << yylineno << " " << "Instance of a machine:" << *current_machine << "\n";
+    DBG_PARSER << std::setw(5) << yylineno << " " << "machine_instantiation Instance of a machine:" << *current_machine << "\n";
 		std::map<std::string, MachineInstance *>::iterator found = machines.find(current_machine->getName());
     if (found == machines.end())
         machines[current_machine->getName()] = current_machine;
     else {
-				MachineInstance *orig = (*found).second;
-        NB_MSG << yyfilename << ":" << yylineno
+			MachineInstance *orig = (*found).second;
+			if (current_machine != orig) {
+				std::stringstream ss;
+				ss << yyfilename << ":" << yylineno
 					<< " " << "Error: machine " << current_machine->getName() << " already defined "
-					<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
+					<< " at " << orig->definition_file << ":" << orig->definition_line;
+				error_messages.push_back(ss.str());
+					NB_MSG << ss.str() << "\n";
+			}
     }
     current_machine = NULL;
 }
@@ -696,24 +706,24 @@ local_instantiation ';'
     bool found = false;
     // check for duplicate names in local variables
     BOOST_FOREACH(Parameter &p, current_locals) {
-        if (p.val.kind == Value::t_symbol && p.val.sValue == current_machine->getName()) {
-            std::stringstream ss;
-            ss << "## - Error: " << yyfilename << ":" << yylineno
-                << " local machine " << current_machine->getName() << " already defined";
-            error_messages.push_back(ss.str());
-            NB_MSG << ss.str() << "\n";
-            ++num_errors;
-            found = true;
-            break;
-        }
+			if (p.val.kind == Value::t_symbol && p.val.sValue == current_machine->getName()) {
+				std::stringstream ss;
+				ss << "## - Error: " << yyfilename << ":" << yylineno
+					<< " local machine " << current_machine->getName() << " already defined";
+				error_messages.push_back(ss.str());
+				NB_MSG << ss.str() << "\n";
+				++num_errors;
+				found = true;
+				break;
+			}
     }
     if (!found) {
-        DBG_PARSER << "pushing local machine " << current_machine->getName() << " num_properties:"
-            << current_machine->properties.size() << " num params: " << current_machine->parameters.size() << "\n";
+			DBG_PARSER << "pushing local machine " << current_machine->getName() << " num_properties:"
+					<< current_machine->properties.size() << " num params: " << current_machine->parameters.size() << "\n";
 	    char *name = strdup(current_machine->getName().c_str());
-        Parameter p(name);
-        p.machine = current_machine;
-        current_locals.push_back(p);
+			Parameter p(name);
+			p.machine = current_machine;
+			current_locals.push_back(p);
     }
 }
 ;
@@ -2041,10 +2051,7 @@ SYMBOL MODULE parameters ';'
 		properties = property_stack.back();
 		property_stack.pop_back();
 		m->setProperties(properties);
-		std::cout << "Properties: " << properties << "\n";
 		properties.clear();
-		std::cout << "Entry default: " << m->properties.lookup("default") << "\n";
-
 
 		std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
 		current_parameters.clear();
@@ -2060,7 +2067,7 @@ SYMBOL MODULE parameters ';'
 | SYMBOL SDO parameters ';'
 {
 #ifdef USE_SDO
-    DBG_MSG << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
+    DBG_PARSER << std::setw(5) << yylineno << " SDO entry " << $1 << "\n";
 	// the following will be added to a list of new entitites and the module will be resolved later
 	std::vector<Parameter> params;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(params));
@@ -2080,7 +2087,7 @@ SYMBOL MODULE parameters ';'
 }
 | SYMBOL FLAG ';'
 {
-    DBG_MSG << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
+    DBG_PARSER << std::setw(5) << yylineno << " flag (standalone) " << $1 << "\n";
     MachineInstance *m = addMachine($1, "FLAG");
     m->properties = properties;
     std::copy(current_parameters.begin(), current_parameters.end(), back_inserter(m->parameters));
