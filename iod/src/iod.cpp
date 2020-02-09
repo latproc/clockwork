@@ -44,6 +44,8 @@
 #include "SDOEntry.h"
 #endif //USE_SDO
 #endif
+#ifdef __linux__
+#endif
 
 #define __MAIN__
 //#include "latprocc.h"
@@ -459,7 +461,23 @@ std::string thread_name("iod_main");
 	std::cout << "-------- Starting EtherCAT Interface ---------\n";
 	EtherCATThread ethercat;
 	boost::thread ecat_thread(boost::ref(ethercat));
-
+#ifdef __linux__
+  {
+  int ecat_cpu = cpu_affinity("ethercat");
+  if (ecat_cpu) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(ecat_cpu, &cpuset);
+    int rc = pthread_setaffinity_np(ecat_thread.native_handle(), sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+      std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+    }
+		else {
+			std::cout << "Set ethercat thread cpu affinity to " << ecat_cpu << "\n";
+		}
+  }
+  }
+#endif
 	std::cout << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
 	Scheduler::instance()->setThreadRef(scheduler_thread);
@@ -474,6 +492,23 @@ std::string thread_name("iod_main");
 
 	processMonitor.setProcessingThreadInstance(&processMonitor);
 	boost::thread process(boost::ref(processMonitor));
+#ifdef __linux__
+  {
+  int processing_cpu = cpu_affinity("processing");
+  if (processing_cpu) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(processing_cpu, &cpuset);
+    int rc = pthread_setaffinity_np(process.native_handle(), sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+      std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+    }
+		else {
+			std::cout << "Set processing thread cpu affinity to " << processing_cpu << "\n";
+		}
+  }
+  }
+#endif
 
 	// let channels start processing messages
 	Channel::startChannels();
