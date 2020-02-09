@@ -463,5 +463,21 @@ private:
 	MachineInstance *machine;
 };
 
+class AsFormattedStringValue : public DynamicValue {
+public:
+	AsFormattedStringValue(const char *property, const char *fmt) : property_name(property), format(fmt) { }
+	virtual ~AsFormattedStringValue() { }
+	virtual const Value &operator()();
+	virtual DynamicValue *clone() const;
+	virtual std::ostream &operator<<(std::ostream &) const;
+	AsFormattedStringValue(const AsFormattedStringValue &);
+
+private:
+	AsFormattedStringValue(const DynamicValue &);
+	std::string property_name;
+	std::string format;
+};
+
+
 
 #endif

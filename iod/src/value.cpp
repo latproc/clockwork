@@ -1043,7 +1043,7 @@ void Value::addItem(std::string key, Value val) {
 }
 #endif
 
-std::string Value::asString() const {
+std::string Value::asString(const char *fmt) const {
     switch (kind) {
         case t_bool:
             return (bValue) ? "true" : "false";
@@ -1051,13 +1051,19 @@ std::string Value::asString() const {
         case t_integer:
         {
             char buf[25];
-            snprintf(buf, 25, "%ld", iValue);
+						if (fmt)
+ 	            snprintf(buf, 25, fmt, iValue);
+						else
+ 	            snprintf(buf, 25, "%ld", iValue);
             return buf;
         }
 				case t_float:
 				{
 					char buf[25];
-					snprintf(buf, 25, "%6.6lf", fValue);
+					if (fmt)
+  					snprintf(buf, 25, fmt, fValue);
+					else
+					  snprintf(buf, 25, "%6.6lf", fValue);
 					return buf;
 				}
         case t_empty: return "null";

@@ -1022,3 +1022,24 @@ std::ostream &ChangingStateValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const ChangingStateValue &val) { return val.operator<<(out); }
 
+AsFormattedStringValue::AsFormattedStringValue(const AsFormattedStringValue &other) {
+    property_name = other.property_name;
+    format = other.format;
+}
+DynamicValue *AsFormattedStringValue::clone() const { return new AsFormattedStringValue(*this); }
+const Value &AsFormattedStringValue::operator()() {
+	MachineInstance *mi = scope;
+	const Value &v = mi->getValue(property_name);
+	if (v == SymbolTable::Null)  {
+		std::stringstream ss; ss << mi->getName() << " cannot find  " << property_name << " for AS STRING\n";
+		MessageLog::instance()->add(ss.str().c_str());
+		last_result = 0; return last_result;
+	}
+	last_result = v.asString(format.c_str());
+	return last_result;
+}
+std::ostream &AsFormattedStringValue::operator<<(std::ostream &out ) const {
+	return out << "AS STRING WITH FORMAT \"" << format << "\" (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const AsFormattedStringValue &val) { return val.operator<<(out); }
+
