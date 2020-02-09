@@ -16,7 +16,7 @@ release-install:
 debug:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Debug" ] || mkdir build/Debug
-	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make -j 2
+	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make -j 6
 
 debug-install:	debug
 	cd build/Debug && make install
