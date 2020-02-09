@@ -41,9 +41,9 @@ bool CounterRateInstance::setValue(const std::string &property, const Value &upd
 
     if ( (settings->update_t - settings->last_update_t)/1000 == 0 )
         return false;
-        settings->last_update_t = settings->update_t;
+    settings->last_update_t = settings->update_t;
 		uint64_t delta_t = settings->update_t - settings->start_t;
-        settings->readings.append( val, delta_t);
+    settings->readings.append( val, delta_t);
 
 		int32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
 		if ( (uint32_t)abs(mean - settings->last_sent) > settings->noise_tolerance ) {

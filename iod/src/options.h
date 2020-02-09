@@ -73,7 +73,9 @@ void set_cycle_time(unsigned long ct);
 bool export_to_c();
 void set_export_to_c(bool c_export);
 
-    
+int cpu_affinity(const char *thread_name);
+void set_cpu_affinity(const char*thread_name, int cpu);
+
 #ifdef __cplusplus
 }
 #endif

@@ -100,6 +100,9 @@ for that. Please watch this space for more precise instructions.
 
   tar/hg/... etc
 
+  There is also an unofficial set of patches maintained by Gavin Lambert:
+   https://sourceforge.net/u/uecasm/etherlab-patches/ci/default/tree/
+
   Note: The following instructions assume your extract was placed into 
         a directory called 'ethercat' next to the latproc directory.
   

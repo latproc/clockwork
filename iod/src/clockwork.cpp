@@ -16,7 +16,7 @@
  You should have received a copy of the GNU General Public License
  along with Latproc; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
- */
+*/
 
 #include <iostream>
 #include <fstream>
@@ -50,6 +50,7 @@
 #include "Channel.h"
 #include "Message.h"
 #include "MachineCommandAction.h"
+#include "Configuration.h"
 
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
@@ -100,7 +101,7 @@ MachineInstance *ClockworkInterpreter::settings() { return _settings; }
 
 void usage(int argc, char const *argv[])
 {
-  std::cerr << "Usage: " << argv[0] << " [-v] [-l logfilename] [-i persistent_store]\n"
+  std::cerr << "Usage: " << argv[0] << " [-v] [-t] [-l logfilename] [-i persistent_store]\n"
   << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
   << "[-mp modbus_port] [-ps persistent_store_port]"
   << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics"
@@ -298,7 +299,8 @@ void predefine_special_machines() {
   ain_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
   ain_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
-  ain_class->properties.add("Velocity", Value(0), SymbolTable::ST_REPLACE);
+  ain_class->properties.add("Velocity", Value(0.0), SymbolTable::ST_REPLACE);
+  ain_class->properties.add("Acceleration", Value(0.0), SymbolTable::ST_REPLACE);
 
   MachineClass *cnt_class = new MachineClass("COUNTER");
   cnt_class->parameters.push_back(Parameter("module"));
@@ -718,7 +720,7 @@ void semantic_analysis() {
     // parameters
     DBG_PARSER << "fixing parameter references for locals in " << mi->getName() << "\n";
     for (unsigned int i=0; i<mi->locals.size(); ++i) {
-      DBG_MSG << "   " << i << ": " << mi->locals[i].val << "\n";
+      DBG_PARSER << "   " << i << ": " << mi->locals[i].val << "\n";
 
       MachineInstance *m = mi->locals[i].machine;
       // fixup real names of parameters that are passed as parameters to our locals
@@ -746,7 +748,7 @@ void semantic_analysis() {
       for (unsigned int j=0; j<m->parameters.size(); ++j) {
         Parameter &p = m->parameters[j];
         if (p.val.kind == Value::t_symbol) {
-          DBG_MSG << "      " << j << ": " << p.val << "\n";
+          DBG_PARSER << "      " << j << ": " << p.val << "\n";
           if (p.real_name.length() == 0) {
             p.machine = mi->lookup(p.val);
             if (p.machine) p.real_name = p.machine->getName();
@@ -756,7 +758,7 @@ void semantic_analysis() {
           if (p.machine) {
             p.machine->addDependancy(m);
             m->listenTo(p.machine);
-            DBG_MSG << " linked parameter " << j << " of local " << m->getName()
+            DBG_PARSER << " linked parameter " << j << " of local " << m->getName()
             << " (" << m->parameters[j].val << ") to " << p.machine->getName() << "\n";
           }
           else {
@@ -905,7 +907,8 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
       logfilename = argv[++i];
     /*        else if (strcmp(argv[i], "-s") == 0 && i < argc-1)
      maxlogsize = strtol(argv[++i], NULL, 10);
-     */		else if (strcmp(argv[i], "-i") == 0 && i < argc-1) { // initialise from persistent store
+     */
+    else if (strcmp(argv[i], "-i") == 0 && i < argc-1) { // initialise from persistent store
        char buf[200];
        //if (getFilePath(argv[++i], buf, 200))
        set_persistent_store(argv[++i] /*strdup(buf)*/);
@@ -944,19 +947,26 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
      else if (strcmp(argv[i], "-cp") == 0 && i < argc-1) { // command port
        set_command_port((int)strtol(argv[++i], 0, 10), true);
      }
-     else if (strcmp(argv[i], "--name") == 0 && i < argc-1) { // command port
+     else if (strcmp(argv[i], "--name") == 0 && i < argc-1) { // set the system name
        set_device_name(argv[++i]);
      }
-     else if (strcmp(argv[i], "--stats") == 0 ) { // command port
+     else if (strcmp(argv[i], "--stats") == 0 ) { // do not keep stats
        enable_statistics(true);
      }
-     else if (strcmp(argv[i], "--nostats") == 0 ) { // command port
+     else if (strcmp(argv[i], "--nostats") == 0 ) { // do keep stats
        enable_statistics(false);
      }
-     else if (strcmp(argv[i], "--export_c") == 0 ) { // command port
+     else if (strcmp(argv[i], "--export_c") == 0 ) { // generate c code
        set_export_to_c(true);
      }
-     else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
+		 else if (strcmp(argv[i], "--config") == 0 ) { // use a config file
+			Configuration conf(argv[++i]);
+			int ecat_cpu = conf.asInt("ethercat_thread_cpu_affinity");
+			if (ecat_cpu) set_cpu_affinity("ethercat", ecat_cpu);
+			int proc_cpu = conf.asInt("processing_thread_cpu_affinity");
+			if (proc_cpu) set_cpu_affinity("processing", proc_cpu);
+     }
+		 else if (*(argv[i]) == '-' && strlen(argv[i]) > 1)
      {
        usage(argc, argv);
        return 2;

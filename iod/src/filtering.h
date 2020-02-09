@@ -15,7 +15,8 @@ public:
     double difference(int idx_a, int idx_b) const;
     double distance(int idx_a, int idx_b) const;
     double average(int n);
-    int length();
+    double stddev(int n);
+    unsigned int length() const;
     void reset();
     Buffer(int buf_size);
 	virtual ~Buffer() { }
@@ -53,6 +54,8 @@ public:
     double get(unsigned int n) const;
     void set(unsigned int n, double value);
     double slopeFromLeastSquaresFit(const LongBuffer &time_buf);
+    double inner_product(double *coefficients, unsigned int num_coeff ) const;
+    double movingAverage(unsigned int n) const;
     FloatBuffer(int buf_size) : Buffer(buf_size) { buf = new double[BUFSIZE]; }
 	~FloatBuffer() { delete[] buf; }
 private:
@@ -78,6 +81,22 @@ public:
 private:
     SampleBuffer(const SampleBuffer &);
     SampleBuffer &operator=(const SampleBuffer&);
+};
+
+class ButterworthFilter {
+	public:
+		ButterworthFilter(int num_c, double *c_coeff, int num_d, double *d_coeff) 
+			: num_c_coefficients(num_c), c_coefficients(c_coeff), signal_buf(num_c+1), 
+			  num_d_coefficients(num_d), d_coefficients(d_coeff), filtered_buf(num_d+1) {
+		}
+		float filter(float value);
+	protected:
+		int num_c_coefficients;
+		double *c_coefficients;
+		FloatBuffer signal_buf;
+		int num_d_coefficients;
+		double *d_coefficients;
+		FloatBuffer filtered_buf;
 };
 
 #endif
