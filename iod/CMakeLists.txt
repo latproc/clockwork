@@ -15,9 +15,10 @@ cmake_policy(SET CMP0015 NEW)
 #set (CMAKE_VERBOSE_MAKEFILE false)
 
 set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
-#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
-if (LINUX)
+IF("${CMAKE_SYSTEM}" MATCHES "Linux")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-misleading-indentation")
 endif()
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEEPSTATS")
@@ -202,6 +203,16 @@ target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mo
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
+set (ectool_extras "")
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
+set (ectool_extras "${ETHERCAT_DIR}/tool/CommandDiag.cpp" "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp"
+		"${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp" "${ETHERCAT_DIR}/tool/CommandPcap.cpp"
+		"${ETHERCAT_DIR}/tool/CommandRegReadWrite.cpp" "${ETHERCAT_DIR}/tool/CommandReboot.cpp"
+	)
+endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
+LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
+endif()
 add_library (ec_tool
 ${ETHERCAT_DIR}/tool/CommandAlias.cpp
 ${ETHERCAT_DIR}/tool/CommandConfig.cpp
@@ -216,7 +227,7 @@ ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
 ${ETHERCAT_DIR}/tool/CommandIp.cpp
-${ETHERCAT_DIR}/tool/CommandCrc.cpp
+${ectool_extras}
 ${ETHERCAT_DIR}/tool/CommandMaster.cpp
 ${ETHERCAT_DIR}/tool/CommandPdos.cpp
 ${ETHERCAT_DIR}/tool/CommandRegRead.cpp
