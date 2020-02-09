@@ -122,7 +122,8 @@ ECModule::~ECModule() {
 		}
 	}
 	if (syncs) { delete[] syncs; syncs = 0; }
-	if (entry_details && num_entries) delete[] entry_details; entry_details = 0;
+	if (entry_details && num_entries) delete[] entry_details;
+  entry_details = 0;
 }
 
 bool ECModule::online() {
