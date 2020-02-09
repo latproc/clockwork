@@ -87,6 +87,7 @@ public:
 	virtual void set(uint16_t *data);
 	virtual uint8_t *getBitData();
 	virtual uint16_t *getWordData();
+	virtual float *getFloatData() { return 0; }
 	
 private:
 	ModbusValueBit(const ModbusValueBit &other);
@@ -103,12 +104,31 @@ public:
 	virtual void set(uint16_t *data);
 	virtual uint8_t *getBitData() { return 0; };
 	virtual uint16_t *getWordData() { return val; }
+	virtual float *getFloatData() { return 0; }
 
 	private:
 		ModbusValueWord(const ModbusValueWord &other);
 		ModbusValueWord &operator=(const ModbusValueWord &other);
 };
 
+#if 0
+class ModbusValueFloat : public ModbusValue{
+public:
+	float *val;
+	ModbusValueFloat(unsigned int len);
+	ModbusValueFloat(unsigned int len, const std::string &form);
+	~ModbusValueFloat() { delete[] val; }
+	virtual void set(uint8_t *data);
+	virtual void set(uint16_t *data);
+	virtual uint8_t *getBitData() { return 0; };
+	virtual uint16_t *getWordData() { return 0; }
+	virtual float *getFloatData() { return val; }
+
+	private:
+		ModbusValueFloat(const ModbusValueFloat &other);
+		ModbusValueFloat &operator=(const ModbusValueFloat &other);
+};
+#endif
 
 class ModbusMonitor {
 	public:
@@ -129,13 +149,14 @@ class ModbusMonitor {
 		//void address(int a) { address_ = a; }
 		unsigned int &length() { return len_; }
 		const unsigned int &length() const { return len_; }
+
+		const std::string &format() const { return format_; }
 		
-		void set(uint8_t *new_value, bool display = true);
-		void set(uint16_t *new_value, bool display = true);	
-		void setRaw(uint16_t new_value, bool display = true);
-		void setRaw(uint32_t new_value, bool display = true);	
-		
-			
+		void set(uint8_t *new_value, bool display = false);
+		void set(uint16_t *new_value, bool display = false);	
+		void setRaw(uint16_t new_value, bool display = false);
+		void setRaw(uint16_t *new_value, unsigned int n, bool display = false);	
+		void setRaw(uint32_t new_value, bool display = false);
 		
 		static ModbusMonitor *lookupAddress(unsigned int adr);
 		static ModbusMonitor *lookup(unsigned int group, unsigned int adr);
@@ -148,6 +169,7 @@ class ModbusMonitor {
 		unsigned int group_;
 		unsigned int address_;
 		unsigned int len_;
+		std::string format_;
 	public:
 		ModbusValue *value;
 	private:

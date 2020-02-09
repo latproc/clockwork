@@ -70,8 +70,18 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
 			}
 		}
 		int addr;
+		int base = 10;
+		size_t addr_len = strlen(addr_str);
+		if (addr_len>2 && addr_str[0] == '0' && addr_str[1] == 'x') {
+			base = 16;
+			addr_str += 2;
+		}
+		else if (addr_len>1 && addr_str[0] == '0') {
+			base = 8;
+			addr_str += 2;
+		}
 		char *rest = 0;
-		addr = strtol(addr_str, &rest, 8);
+		addr = strtol(addr_str, &rest, base);
 		if (errno == -1) {std::cerr << "argument error: " << address << " is invalid\n"; }
 		else {
 			PLCMapping mapping = mappings.at(code);

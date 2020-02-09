@@ -77,7 +77,6 @@ hmi/
 libclockwork/
 private_tests/
 iod/old/
-modbus/
 plugins/
 
 #build tools

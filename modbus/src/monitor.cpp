@@ -52,6 +52,13 @@ void ModbusMonitor::setRaw(uint32_t new_value, bool display){
 	}
 }
 
+void ModbusMonitor::setRaw(uint16_t *new_value, unsigned int n, bool display){
+	uint16_t *val = value->getWordData();
+	for (unsigned int i=0; i<n; ++i) {
+		*val++ = *new_value++;
+	}
+
+}
 
 
 uint8_t *ModbusValueBit::getBitData() { return val; }
@@ -79,6 +86,23 @@ static long fromBCD(uint16_t *data, int length) {
 		res = res * 10000 + tmp;
 	}
 	return res;	
+}
+
+
+typedef union Converter {
+	struct {
+		uint16_t a;
+		uint16_t b;
+	} s;
+	uint32_t i;
+	float f;
+} Converter;
+
+float toFloat(uint16_t *data) {
+	Converter conv;
+	conv.s.a = *data++;
+	conv.s.b = *data;
+	return conv.f;
 }
 
 
@@ -114,7 +138,7 @@ std::ostream &operator<<(std::ostream &out, const ModbusMonitor &m) {
 
 
 ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format, bool readonly)
-: name_(name), group_(group),address_(address), len_(len), value(0), read_only(readonly)
+: name_(name), group_(group),address_(address), len_(len), format_(format), value(0), read_only(readonly)
 {
 	if (group_==0 || group_==1)
 		value = new ModbusValueBit(len_);
@@ -125,7 +149,8 @@ ModbusMonitor::ModbusMonitor(std::string name, unsigned int group, unsigned int 
 }
 
 ModbusMonitor::ModbusMonitor(const ModbusMonitor &other)
-: name_(other.name_), group_(other.group_),address_(other.address_), len_(other.len_), value(0), read_only(other.read_only)
+: name_(other.name_), group_(other.group_),address_(other.address_), 
+  len_(other.len_), format_(other.format_), value(0), read_only(other.read_only)
 {
 	if (group_==0 || group_==1) {
 		value = new ModbusValueBit(len_);
