@@ -15,7 +15,10 @@ Test MACHINE {
 		LOG "now: " +YR +MONTH+" "+ (((HOUR*60)+MINUTE)*60 + SECONDS);
 		LOG "timezone: " + TIMEZONE;
 		LOG "random: " + RANDOM;
-		LOG TIMESTAMP + " test"; 
+		LOG TIMESTAMP + " test"; # make sure timestamp can be the prefix of the line
+		LOG "timestamp: " + TIMESTAMP + " test"; 
+		LOG "utc: " + UTCTIMESTAMP;
+		LOG "iso: " + ISOTIMESTAMP;
 
 		a := "12";
 		b := "3";
@@ -28,6 +31,7 @@ Test MACHINE {
 		LOG S1 + NOW;
 		LOG S2 + NOW;
 		LOG S3 + NOW;
+    ts := TIMESEQ;
 	}
 }
 logger Test(tab:tests);
