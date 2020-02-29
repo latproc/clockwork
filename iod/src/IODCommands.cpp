@@ -418,7 +418,7 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
 			}
 			if (use_authority && authority && !m->isShadow()) {
 				error_str = "Refusing to change property due to authorisation conflict";
-				NB_MSG << error() << "\n";
+				//NB_MSG << error() << "\n";
 				return false;
 			}
 			if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
@@ -480,9 +480,9 @@ bool IODCommandShow::run(std::vector<Value> &params) {
 		MachineInstance *m = (*found).second;
 		const Value &val = m->properties.lookup("VALUE");
 		if (val != SymbolTable::Null)
-			ss << m->getName() << " " << m->_type << " " << val <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+			ss << m->getName() << " " << m->_type << " " << val <<  ((m->enabled())?"":" [DISABLED]");
 		else
-			ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]") << "\n";
+			ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString() <<  ((m->enabled())?"":" [DISABLED]");
 		result_str = ss.str();
 		return true;
 	}

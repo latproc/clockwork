@@ -37,23 +37,7 @@ void append_char(int ch);
 	return INTEGER;
 }
 
-0\.0 {
-	yylval.fVal = atof(yytext);
-	return FLOAT;
-}
-
-0\. {
-	yylval.fVal = atof(yytext);
-	return FLOAT;
-}
-
-[-]{0,1}[0-9][0-9]*[.][0-9]* {
-	yylval.fVal = atof(yytext);
-	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
-	return FLOAT;
-}
-
-[-]{0,1}[0-9][0-9]*[.][0-9]*E[0-9]{1,3} {
+[-]{0,1}([0-9][0-9]*){0,1}[.][0-9]*([eE][-]{0,1}[0-9]{1,3}){0,1} {
 	yylval.fVal = atof(yytext);
 	//std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
 	return FLOAT;
@@ -64,7 +48,7 @@ void append_char(int ch);
 	return INTEGER;
 }
 
-[-]{0,1}[1-9][0-9]* {
+[-]{0,1}[0-9][0-9]* {
 	long val;
 	char *p;
 	val = strtol(yytext, &p, 10);
@@ -95,7 +79,7 @@ void append_char(int ch);
 
 \'              /*' ignore single quotes */
 
-['-()=+*/;{}.%] {
+['()=+*/;{}.%] {
     return *yytext;
 }
 

@@ -976,7 +976,16 @@ std::ostream &Value::operator<<(std::ostream &out) const {
     switch(kind) {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
-		case t_float: out << std::setprecision(6) << std::fixed << fValue; break;
+        case t_float: {
+          if (fValue != 0.0 && (fValue <= 1.0e-4 && fValue >= -1.0e-4)) {
+            out << fValue;
+          }
+          else {
+            int prec = (fValue == 0.0) ? 1 : 6;
+            out << std::setprecision(prec) << std::fixed << fValue;
+          }
+          break;
+        }
         case t_symbol: out << sValue; break;
         case t_string: out <<'"'<< sValue << '"'; break;
 #if 0
