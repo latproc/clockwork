@@ -44,7 +44,7 @@ uint64_t microsecs() {
     return (uint64_t)now.tv_sec * 1000000L + now.tv_usec;
 }
 
-static const double ZERO_DISTANCE = 1.0E-5;
+static const double ZERO_DISTANCE = 1.0E-8;
 
 void simple_deltat(std::ostream &out, uint64_t dt) {
 	if (dt > 60000000) out << std::setprecision(3) << (float)dt/60000000.0f << "m";
@@ -245,6 +245,20 @@ double Value::toFloat() const {
 	//TBD assert(false);
 	return 0.0;
 }
+
+bool Value::numeric() const {
+  return kind == t_integer || kind == t_float;
+}
+
+bool Value::identical(const Value &other) const {
+  if (kind != t_float || other.kind != t_float) {
+    return *this == other;
+  }
+  else {
+    return fValue == other.fValue;
+  }
+}
+
 
 
 std::string Value::name() const {
@@ -977,8 +991,8 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         case t_empty: out << "(empty)"; break;
         case t_integer: out << iValue; break;
         case t_float: {
-          if (fValue != 0.0 && (fValue <= 1.0e-4 && fValue >= -1.0e-4)) {
-            out << fValue;
+          if (fValue != 0.0 && fValue <= 1.0e-4 && fValue >= -1.0e-4) {
+            out << std::scientific << fValue;
           }
           else {
             int prec = (fValue == 0.0) ? 1 : 6;

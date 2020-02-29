@@ -69,7 +69,7 @@ void PersistentStore::load() {
 			}
 			else {
 				insert(name, property, Value(value_str.c_str(), kind).asString());
-				std::cout << name << "." << property << ":" << value_str << "\n";
+				//std::cout << name << "." << property << ":" << value_str << "\n";
 			}
 		}
 	}
