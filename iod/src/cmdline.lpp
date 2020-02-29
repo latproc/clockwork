@@ -60,25 +60,28 @@ void append_char(int ch);
 }
 
 0           {
-    yylval.iVal = atoi(yytext);
-    return INTEGER;
+	yylval.iVal = atoi(yytext);
+	return INTEGER;
 }
 
 [-]{0,1}[1-9][0-9]* {
-    yylval.iVal = atoi(yytext);
-    return INTEGER;
+	long val;
+	char *p;
+	val = strtol(yytext, &p, 10);
+	yylval.iVal = val;
+	return INTEGER;
 }
 
-\"			    {  /*"*/	
-                    BEGIN STRING; 
-					if (!buf) 
-					{ 
-					     buf = (char *)malloc(20); 
-					     buflen = 20; 
-					}
-					bufp = buf;
-					*bufp = 0;
- 				}
+\"  {  /*"*/	
+	BEGIN STRING; 
+		if (!buf) 
+		{ 
+			buf = (char *)malloc(20); 
+			buflen = 20; 
+		}
+		bufp = buf;
+		*bufp = 0;
+ 		}
 <STRING>\\n		{ append_char('\n'); }
 <STRING>\\r		{ append_char('\r'); }
 <STRING>\\t		{ append_char('\t'); }
