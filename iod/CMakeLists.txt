@@ -9,7 +9,7 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
 
-cmake_policy(SET CMP0008 OLD)
+cmake_policy(SET CMP0008 NEW)
 cmake_policy(SET CMP0015 NEW)
 
 #set (CMAKE_VERBOSE_MAKEFILE false)
@@ -205,13 +205,25 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
 set (ectool_extras "")
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
-set (ectool_extras "${ETHERCAT_DIR}/tool/CommandDiag.cpp" "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp"
-		"${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp" "${ETHERCAT_DIR}/tool/CommandPcap.cpp"
-		"${ETHERCAT_DIR}/tool/CommandRegReadWrite.cpp" "${ETHERCAT_DIR}/tool/CommandReboot.cpp"
-	)
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
+endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
+endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
+endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandPcap.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandPcap.cpp")
+endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandRegReadWrite.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandRegReadWrite.cpp")
+endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandReboot.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandReboot.cpp")
 endif()
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
-LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
 endif()
 add_library (ec_tool
 ${ETHERCAT_DIR}/tool/CommandAlias.cpp
