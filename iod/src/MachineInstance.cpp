@@ -3885,7 +3885,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 		Value value(0);
 		switch(info.getSource()) {
 			case ModbusAddress::machine:
-				if (_type == "VARIABLE" || _type=="CONSTANT") {
+				if (_type == "VARIABLE" || _type=="CONSTANT" || (properties.exists("VALUE") && (group == 3 || group == 4)) ) {
 					value = properties.lookup("VALUE");
 				}
 				else if (current_state.getName() == "on")
@@ -3904,7 +3904,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 					value = properties.lookup( short_name.c_str() );
 				else {
 					MachineInstance *mi = lookup( (*iter).second );
-					if (mi && (mi->_type == "VARIABLE" || mi->_type == "CONSTANT") ) {
+					if (mi && (mi->_type == "VARIABLE" || mi->_type == "CONSTANT" || (mi->properties.exists("VALUE") && (group == 3 || group == 4))) ) {
 						value = mi->getValue("VALUE");
 					}
 					else {
