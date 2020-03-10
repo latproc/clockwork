@@ -79,6 +79,9 @@ public:
     DynamicValue *dyn_value;
     Value *cached_value;
     int token_id;
+
+  	bool numeric() const;
+    bool identical(const Value &other) const; // bypasses default == for floats
     
     DynamicValue *dynamicValue() const { return dyn_value; }
     void setDynamicValue(DynamicValue *dv);

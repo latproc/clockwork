@@ -325,4 +325,22 @@ StringList LIST "a,b,c", "one two three", "house rabbit tree";
 
 pop_and_push_strings PopAndPushTest StringList;
 
+Other MACHINE a,b {
+  list LIST a,b;
+}
+
+CopyFromOther MACHINE other {
+  local LIST;
+  
+  ENTER INIT {
+    WAIT 2000;
+    COPY ALL FROM other.list TO local;
+    LOG "local list size: " + (SIZE OF local);
+  }
+}
+ff1 FLAG;
+ff2 FLAG;
+other Other ff1,ff2;
+copy_from_other CopyFromOther other;
+
 

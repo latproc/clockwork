@@ -3795,11 +3795,11 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
 		if ( (new_value.kind == Value::t_integer || new_value.kind != Value::t_float)
 				&& state_machine && state_machine->plugin && state_machine->plugin->filter) {
 			int filtered_value = state_machine->plugin->filter(this, new_value.iValue);
-			was_changed = (prev_value != new_value || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
+			was_changed = (!prev_value.identical(filtered_value) || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 			if (was_changed) properties.add(property, filtered_value, SymbolTable::ST_REPLACE);
 		}
 		else {
-		  was_changed = (prev_value != new_value || prev_value.kind != new_value.kind || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
+		  was_changed = (!prev_value.identical(new_value) || prev_value.kind != new_value.kind || (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
 			if (was_changed) properties.add(property, new_value, SymbolTable::ST_REPLACE);
 		}
 		if (!was_changed) return true; // value was ok but was already the same
@@ -3891,7 +3891,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 		Value value(0);
 		switch(info.getSource()) {
 			case ModbusAddress::machine:
-				if (_type == "VARIABLE" || _type=="CONSTANT") {
+				if (_type == "VARIABLE" || _type=="CONSTANT" || (properties.exists("VALUE") && (group == 3 || group == 4)) ) {
 					value = properties.lookup("VALUE");
 				}
 				else if (current_state.getName() == "on")
@@ -3910,7 +3910,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
 					value = properties.lookup( short_name.c_str() );
 				else {
 					MachineInstance *mi = lookup( (*iter).second );
-					if (mi && (mi->_type == "VARIABLE" || mi->_type == "CONSTANT") ) {
+					if (mi && (mi->_type == "VARIABLE" || mi->_type == "CONSTANT" || (mi->properties.exists("VALUE") && (group == 3 || group == 4))) ) {
 						value = mi->getValue("VALUE");
 					}
 					else {
