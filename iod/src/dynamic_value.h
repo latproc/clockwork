@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -30,17 +30,19 @@
 
 class MachineInstance;
 
-class DynamicValue {
+class DynamicValue : public DynamicValueBase {
 public:
     DynamicValue() :scope(0), refs(0), last_process_time(0){ }
     virtual ~DynamicValue()  {}
     virtual const Value &operator()(MachineInstance *scope); // uses the provided machine's scope
     virtual const Value &operator()(); // uses the current scope for evaluation
+		static DynamicValue *promote(DynamicValueBase *val) { return dynamic_cast<DynamicValue*>(val); }
+		static const DynamicValue *promote(const DynamicValueBase *val) { return dynamic_cast<const DynamicValue*>(val); }
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
-    const Value *lastResult() { return &last_result; }
+    virtual const Value *lastResult() const { return &last_result; }
     void setScope(MachineInstance *m) { scope = m; }
-    MachineInstance *getScope() { return scope; }
+    MachineInstance *getScope() const { return scope; }
     static DynamicValue *ref(DynamicValue*dv) { if (!dv) return 0; else dv->refs++; return dv; }
     DynamicValue *deref() { --refs; if (!refs) delete this; return 0; }
     virtual void flushCache();
@@ -64,7 +66,7 @@ public:
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     AssignmentValue(const AssignmentValue &);
-    
+
 private:
     AssignmentValue(const DynamicValue &);
     Value src;
@@ -80,7 +82,7 @@ public:
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
     AnyInValue(const AnyInValue &);
-    
+
 private:
     AnyInValue(const DynamicValue &);
     std::string state;
@@ -477,7 +479,6 @@ private:
 	std::string property_name;
 	std::string format;
 };
-
 
 
 #endif
