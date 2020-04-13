@@ -3,9 +3,7 @@
 #include <stdlib.h>
 #include "buffering.h"
 #include <assert.h>
-#ifdef TEST
 #include <math.h>
-#endif
 
 struct CircularBuffer *createBuffer(int size)
 {
@@ -15,7 +13,7 @@ struct CircularBuffer *createBuffer(int size)
     buf->back = -1;
     buf->values = (double*)malloc( sizeof(double) * size);
     buf->times = (uint64_t*)malloc( sizeof(uint64_t) * size);
-	buf->total = 0;
+    buf->total = 0;
     return buf;
 }
 
@@ -199,7 +197,7 @@ double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len
 	return sum / normal;
 }
 
-#ifdef TEST
+#ifdef TESTING
 
 int failures = 0;
 
