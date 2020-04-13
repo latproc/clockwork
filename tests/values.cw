@@ -22,10 +22,14 @@ Test MACHINE {
 
 		a := "12";
 		b := "3";
+    LOG "a: " + a;
 		c := a + b;
+    LOG "a: " + a;
 		d := 0 + a + b;
-		LOG c;
-		LOG d;
+		LOG "c: " + c;
+		LOG "d: " + d;
+    e := d + 1;
+    LOG "e: " + e + " d: " + d;
 
 		LOG "1X" + 2;
 		LOG S1 + NOW;
