@@ -163,7 +163,7 @@ public:
   Action *findHandler(Message&msg, Transmitter *t, bool response_required = false);
   void enqueueAction(Action *a);
   void enqueue(const Package &package);
-  State &getCurrent() { return current_state; }
+  State &getCurrent();
   const char *getCurrentStateString() { return current_state.getName().c_str(); }
 
   void addDependancy(MachineInstance *m);

@@ -7,7 +7,8 @@ cmake_policy(SET CMP0048 NEW)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
-set (Latproc_VERSION_MINOR 9.5)
+set (Latproc_VERSION_MINOR 9.6)
+#set (RUN_TESTS OFF)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
@@ -171,7 +172,7 @@ set (Clockwork_Headers
 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
 	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
-  src/Configuration.h
+  src/Configuration.h src/bit_ops.h
 )
 
 set (Clockwork_SRCS
@@ -196,7 +197,7 @@ set (Clockwork_SRCS
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
-  src/Configuration.cpp
+  src/Configuration.cpp src/bit_ops.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
@@ -330,6 +331,11 @@ target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 
 add_executable(modbusd src/modbusd.cpp )
 target_link_libraries(modbusd Clockwork ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+
+if (RUN_TESTS)
+enable_testing()
+add_subdirectory(tests)
+endif()
 
 install(TARGETS cw iosh device_connector modbusd persistd
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})

@@ -3,19 +3,18 @@
 #include <stdlib.h>
 #include "buffering.h"
 #include <assert.h>
-#ifdef TEST
 #include <math.h>
-#endif
 
 struct CircularBuffer *createBuffer(int size)
 {
+    if (size <= 0) return 0;
     struct CircularBuffer *buf = (struct CircularBuffer *)malloc(sizeof(struct CircularBuffer));
     buf->bufsize = size;
     buf->front = -1;
     buf->back = -1;
     buf->values = (double*)malloc( sizeof(double) * size);
     buf->times = (uint64_t*)malloc( sizeof(uint64_t) * size);
-	buf->total = 0;
+    buf->total = 0;
     return buf;
 }
 
@@ -75,7 +74,7 @@ int findMovement(struct CircularBuffer *buf, double amount, int max_len) {
 	while (idx != buf->back && n<max_len) {
 		idx--; if (idx == -1) idx = buf->bufsize-1;
 		++n;
-		if ( fabs(current - buf->values[idx]) >= amount) return n;
+		if ( fabs(current - buf->values[idx]) > amount) return n;
 	}
 	return  n;
 }
@@ -96,8 +95,8 @@ double rateDebug(struct CircularBuffer *buf) {
 
 double bufferAverage(struct CircularBuffer *buf, int n) {
 	int l = bufferLength(buf);
-	if (n>l) n = l;
-	return (n==0) ? n : bufferSum(buf, n) / n;
+	if (l<n) n = l;
+	return (n==0) ? 0.0 : bufferSum(buf, n) / (double)n;
 }
 
 double bufferStddev(struct CircularBuffer *buf, int n)
@@ -147,8 +146,7 @@ double bufferSum(struct CircularBuffer *buf, int n) {
 	int i = bufferLength(buf);
 	if (i>n) i = n;
 	double tot = 0.0;
-	while (i) {
-		i--;
+	while (i-- > 0) {
 		tot = tot + getBufferValue(buf, i);
 	}
 	return tot;
@@ -199,7 +197,7 @@ double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len
 	return sum / normal;
 }
 
-#ifdef TEST
+#ifdef TESTING
 
 int failures = 0;
 
@@ -269,11 +267,12 @@ int main(int argc, const char *argv[]) {
 	for (i=2; i<10; ++i) addSample(mybuf, i, 2000);
 	for (; i<20; ++i) addSample(mybuf, i, 2020);
 	{ int n;
-	if ( ( n=findMovement(mybuf, 10)) != 10 ) {
+	if ( ( n=findMovement(mybuf, 0.0f, 10)) != 10 ) {
 		fail(tests); printf("findMovement(..,10) expected 10, got %d\n", n);
 	}
 	++tests;
-	if ( ( n=findMovement(mybuf, 100)) != 18 ) {
+	for (; i<28; ++i) addSample(mybuf, i, 2020);
+	if ( ( n=findMovement(mybuf, 0.0f, 100)) != 18 ) {
 		/*2200,2200,2000,2000,2000,2000,2000,2000,2000,2000,
 		2020,2020,2020,2020,2020,2020,2020,2020,2020,2020 */
 		fail(tests); printf("findMovement(..,100) expected 18, got %d\n", n);
