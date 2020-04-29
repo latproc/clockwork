@@ -33,11 +33,8 @@
 #include <boost/thread.hpp>
 #include <zmq.hpp>
 
-struct ScheduledItem {
-	Package *package;
-	Action *action;
-	Trigger *trigger;
-	uint64_t delivery_time;
+class ScheduledItem {
+public:
 	// this operator produces a reverse ordering because the standard priority queue is a max value queue.
 	bool operator<(const ScheduledItem& other) const;
 	bool operator>=(const ScheduledItem& other) const;
@@ -49,10 +46,17 @@ struct ScheduledItem {
 	~ScheduledItem();
     std::ostream &operator <<(std::ostream &out) const;
 
+protected:
+  Package *package;
+  Action *action;
+  Trigger *trigger;
+  uint64_t delivery_time;
 private:
 	bool operator<=(const ScheduledItem& other) const;
 	bool operator>(const ScheduledItem& other) const;
 	bool operator==(const ScheduledItem& other) const;
+
+  friend class Scheduler;
 };
 
 std::ostream &operator <<(std::ostream &out, const ScheduledItem &item);
