@@ -2837,10 +2837,8 @@ bool MachineInstance::setStableState() {
 						}
 						DBG_AUTOSTATES << _name << ":" << id << " (" << current_state << ") should be in state " << s.state_name
 							<< " due to condition: " << *s.condition.predicate << "\n";
-						char *sn = strdup(s.state_name.c_str());
 						SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name );
 						enqueueAction(ssat.factory(this)); // execute this state change next time actions are processed
-						free(sn);
 					}
 					else {
 						DBG_AUTOSTATES << _name << " is already in " << s.state_name << " checking subconditions\n";

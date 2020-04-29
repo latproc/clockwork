@@ -44,15 +44,6 @@ public:
 	boost::thread *thread_ptr;
 };
 
-#if 0
-class scheduler_queue_scoped_lock {
-public:
-	scheduler_queue_scoped_lock( boost::recursive_mutex &mut) : mutex(mut) { mutex.lock(); }
-	~scheduler_queue_scoped_lock() { mutex.unlock(); }
-	boost::recursive_mutex &mutex;
-};
-#endif
-
 static uint64_t calcDeliveryTime(long delay) {
 	uint64_t res = microsecs() + delay;
 	if (delay<0) {
@@ -96,7 +87,7 @@ bool ScheduledItem::operator>=(const ScheduledItem& other) const {
 	return delivery_time >= other.delivery_time;
 }
 
-ScheduledItem *Scheduler::next() const { 
+ScheduledItem *Scheduler::next() const {
 	boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
 	if (items.empty()) return 0; else return items.top(); 
 }
