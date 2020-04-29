@@ -850,7 +850,7 @@ Value Predicate::evaluate(MachineInstance *m) {
     //Stack work(stack);
     std::list<ExprNode>::const_iterator work = stack.stack.begin();
 	ExprNode evaluated(eval_stack(m, work));
-    Value res = *(evaluated.val);
+    Value res = *(evaluated.getValue());
     long t = microsecs();
     last_evaluation_time = t;
     return res;
@@ -877,7 +877,7 @@ bool Condition::operator()(MachineInstance *m) {
         //Stack work(predicate->stack);
         std::list<ExprNode>::const_iterator work = predicate->stack.stack.begin();
 	    ExprNode res(eval_stack(m, work));
-        last_result = *res.val;
+        last_result = *res.getValue();
         std::stringstream ss;
         ss << last_result << " " << *predicate;
         long t = microsecs();

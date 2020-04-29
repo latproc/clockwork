@@ -35,7 +35,8 @@ enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
-struct ExprNode {
+class ExprNode {
+public:
 	ExprNode(const Value *a, const Value *name = NULL);
 	ExprNode(const Value &a, const Value *name = NULL);
 	ExprNode(Value *a, const Value *name = NULL);
@@ -46,7 +47,10 @@ struct ExprNode {
 	ExprNode(bool a, const Value *name = NULL);
 	ExprNode(PredicateOperator o);
 	ExprNode(const ExprNode &other);
-    ~ExprNode();
+  ~ExprNode();
+
+  const Value *getValue() const { return val; }
+protected:
     Value tmpval;
     const Value *val;
     const Value *node;
@@ -54,9 +58,13 @@ struct ExprNode {
     enum { t_int, t_op } kind;
 private:
     ExprNode &operator=(const ExprNode &other);
+
+  friend class Stack;
+  friend ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter);
 };
 
-struct Stack {
+class Stack {
+public:
     ExprNode pop() { ExprNode v = stack.front(); stack.pop_front(); return v; }
     void push(ExprNode v) { stack.push_front(v); }
     void clear();
@@ -65,8 +73,8 @@ struct Stack {
     std::ostream &traverse(std::ostream &out, std::list<ExprNode>::const_iterator &iter, std::list<ExprNode>::const_iterator &end) const;
     Stack(const Stack&other) { std::copy(other.stack.begin(), other.stack.end(), std::back_inserter(stack)); }
     Stack() { }
-    private:
-        Stack &operator=(const Stack&other);
+private:
+    Stack &operator=(const Stack&other);
 };
 
 struct PredicateTimerDetails {
