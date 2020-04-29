@@ -1,4 +1,9 @@
 cmake_minimum_required (VERSION 2.6)
+
+cmake_policy(SET CMP0008 NEW)
+cmake_policy(SET CMP0015 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
@@ -8,13 +13,9 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
-
-cmake_policy(SET CMP0008 NEW)
-cmake_policy(SET CMP0015 NEW)
-
 #set (CMAKE_VERBOSE_MAKEFILE false)
 
-set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
+set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 IF("${CMAKE_SYSTEM}" MATCHES "Linux")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
@@ -37,13 +38,14 @@ configure_file (
 
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
-FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono REQUIRED)
-FIND_PACKAGE(Mosquitto)
+FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono date_time REQUIRED)
+FIND_PACKAGE(MOSQUITTO)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
 
 INCLUDE_DIRECTORIES(${ZeroMQ_INCLUDE_DIR})
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 
 set(HEADER_FILES
 	${CLOCKWORK_DIR}/MessagingInterface.h
@@ -328,6 +330,11 @@ target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 
 add_executable(modbusd src/modbusd.cpp )
 target_link_libraries(modbusd Clockwork ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+
+if (RUN_TESTS)
+enable_testing()
+add_subdirectory(tests)
+endif()
 
 install(TARGETS cw iosh device_connector modbusd persistd
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
