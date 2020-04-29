@@ -199,15 +199,19 @@ double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len
 
 #ifdef TESTING
 
-int failures = 0;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+int failures = 0;
 
 void fail(int test) {
 	++failures;
 	printf("test %d failed\n", test);
 }
 
-int main(int argc, const char *argv[]) {
+
+int run_buffer_tests(int argc, const char *argv[]) {
 	double (*sum)(struct CircularBuffer *buf, int n) = bufferSum;
 	double (*average)(struct CircularBuffer *buf, int n) = bufferAverage;
 	
@@ -279,7 +283,7 @@ int main(int argc, const char *argv[]) {
 	}
 	}
 	destroyBuffer(mybuf);
-	
+
 	printf("tests:\t%d\nfailures:\t%d\n", tests, failures );
 
 	/* 
@@ -300,6 +304,10 @@ int main(int argc, const char *argv[]) {
   mybuf = createBuffer(6);
   for (i=0; i<6; ++i) { double x = i*22+10; double y = i*20 + 30; addSample(mybuf, x, y); }
   for (i=10; i<300; i+=10) { printf ("%4ld\t%8.3f\n", (long)i, getBufferValueAt(mybuf, i)); }
-   return 0;
+  return failures;
 }
+#ifdef __cplusplus
+}
+#endif
+
 #endif
