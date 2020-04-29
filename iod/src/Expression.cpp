@@ -359,11 +359,11 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
     if (other.entry.dyn_value) {
-        entry.dyn_value = DynamicValue::ref(other.entry.dyn_value->clone());
-        //dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
+        entry.dyn_value = DynamicValueBase::ref(other.entry.dyn_value->clone());
+        //dyn_value = DynamicValueBase::ref(other.dyn_value); // note shared copy, should be a shared pointer
     }
     if (other.dyn_value)
-        dyn_value = new Value(DynamicValue::ref(other.dyn_value->dyn_value));
+        dyn_value = new Value(DynamicValueBase::ref(other.dyn_value->dyn_value));
     else
         dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached values in this clone
@@ -381,11 +381,11 @@ Predicate &Predicate::operator=(const Predicate &other) {
 	if (other.right_p) right_p = new Predicate( *(other.right_p) );
 	entry = other.entry;
     if (other.entry.dyn_value) {
-        entry.dyn_value = DynamicValue::ref(other.entry.dyn_value->clone());
-        //dyn_value = DynamicValue::ref(other.dyn_value); // note shared copy, should be a shared pointer
+        entry.dyn_value = DynamicValueBase::ref(other.entry.dyn_value->clone());
+        //dyn_value = DynamicValueBase::ref(other.dyn_value); // note shared copy, should be a shared pointer
     }
     if (other.dyn_value)
-        dyn_value = new Value(DynamicValue::ref(other.dyn_value->dyn_value));
+        dyn_value = new Value(DynamicValueBase::ref(other.dyn_value->dyn_value));
     else
         dyn_value = 0;
 	entry.cached_machine = 0; // do not preserve any cached machine pointers in this clone

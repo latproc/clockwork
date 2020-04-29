@@ -32,7 +32,6 @@
 #include <boost/foreach.hpp>
 #include <utility>
 #include "DebugExtra.h"
-#include "dynamic_value.h"
 #include "MessageLog.h"
 
 static bool stringToLong(const std::string &s, long &x);
@@ -41,7 +40,7 @@ static bool stringToFloat(const std::string &s, double &x);
 uint64_t microsecs() {
     struct timeval now;
     gettimeofday(&now, 0);
-    return (uint64_t)now.tv_sec * 1000000L + now.tv_usec;
+    return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
 }
 
 static const double ZERO_DISTANCE = 1.0E-8;
@@ -52,6 +51,8 @@ void simple_deltat(std::ostream &out, uint64_t dt) {
 	else if (dt>1000) out << std::setprecision(3) << (float)dt/1000.0f << "ms";
 	else out << dt << "us";
 }
+
+DynamicValueBase::~DynamicValueBase() {}
 
 Value::Value() : kind(t_empty), cached_machine(0),
         dyn_value(0),cached_value(0), token_id(0) { }
@@ -94,16 +95,16 @@ Value::Value(std::string str, Kind k)
 }
 
 
-void Value::setDynamicValue(DynamicValue *dv) {
+void Value::setDynamicValue(DynamicValueBase *dv) {
     if (kind == t_dynamic && dyn_value) { dyn_value = dyn_value->deref(); }
     kind = t_dynamic;
-    dyn_value = DynamicValue::ref(dv);
+    dyn_value = DynamicValueBase::ref(dv);
 }
 
-void Value::setDynamicValue(DynamicValue &dv) {
+void Value::setDynamicValue(DynamicValueBase &dv) {
     if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
     kind = t_dynamic;
-    dyn_value = DynamicValue::ref(&dv);
+    dyn_value = DynamicValueBase::ref(&dv);
 }
 
 Value::~Value() {
@@ -111,7 +112,7 @@ Value::~Value() {
 }
 
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),fValue(other.fValue),
-    sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValue::ref(other.dyn_value)),
+    sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValueBase::ref(other.dyn_value)),
     cached_value(0), token_id(other.token_id) {
 //    if (kind == t_list) {
 //        std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
@@ -124,13 +125,21 @@ Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(
 //    }
 }
 
-Value::Value(DynamicValue &dv) : kind(t_dynamic),cached_value(0) {
-    dyn_value = DynamicValue::ref(&dv);
+Value::Value(DynamicValueBase &dv) : kind(t_dynamic),cached_value(0) {
+    dyn_value = DynamicValueBase::ref(&dv);
 }
 
 // this form takes ownership of the passed DynamiValue rather than makes a clone
-Value::Value(DynamicValue *dv) : kind(t_dynamic),cached_value(0) {
-    dyn_value = DynamicValue::ref(dv);
+Value::Value(DynamicValueBase *dv) : kind(t_dynamic),cached_value(0) {
+    dyn_value = DynamicValueBase::ref(dv);
+}
+
+void Value::toString() {
+  if (kind == t_symbol) kind = t_string;
+}
+
+void Value::toSymbol() {
+  if (kind == t_string) kind = t_symbol;
 }
 
 Value &Value::operator=(const Value &orig){
@@ -155,7 +164,7 @@ Value &Value::operator=(const Value &orig){
             token_id = orig.token_id;
             break;
         case t_dynamic:
-            dyn_value = DynamicValue::ref(orig.dyn_value);
+            dyn_value = DynamicValueBase::ref(orig.dyn_value);
             kind=orig.kind;
             break;
 #if 0
@@ -259,8 +268,6 @@ bool Value::identical(const Value &other) const {
   }
 }
 
-
-
 std::string Value::name() const {
     switch(kind) {
         case t_symbol:
@@ -279,7 +286,7 @@ std::string Value::name() const {
 
 #if 0
 Value Value::operator[](int index) {
-	if (kind != t_list) 
+	if (kind != t_list)
 		if (index == 0) return *this;
 	else
 		return 0;
@@ -315,9 +322,9 @@ bool Value::operator>=(const Value &other) const {
 
 		if (a == t_integer || b == t_integer ) {
 			long x,y;
-			if (asInteger(x) && other.asInteger(y)) 
+			if (asInteger(x) && other.asInteger(y))
 				return x >= y;
-			else 
+			else
 				return false;
 		}
 	}
@@ -326,7 +333,7 @@ bool Value::operator>=(const Value &other) const {
     switch (kind) {
         case t_empty: return false;
             break;
-        case t_integer: 
+        case t_integer:
 			return iValue >= other.iValue;
 			break;
 		case t_float:
@@ -334,7 +341,7 @@ bool Value::operator>=(const Value &other) const {
 			break;
         case t_symbol:
         case t_string: return sValue >= other.sValue;
-            break;            
+            break;
         default:
             break;
     }
@@ -359,9 +366,9 @@ bool Value::operator<=(const Value &other) const {
 
 		if (a == t_integer || b == t_integer) {
 			long x,y;
-			if (asInteger(x) && other.asInteger(y)) 
+			if (asInteger(x) && other.asInteger(y))
 				return x <= y;
-			else 
+			else
 				return false;
 		}
 	}
@@ -370,7 +377,7 @@ bool Value::operator<=(const Value &other) const {
     switch (kind) {
         case t_empty: return false;
             break;
-        case t_integer: 
+        case t_integer:
 			return iValue <= other.iValue;
 			break;
 		case t_float:
@@ -378,7 +385,7 @@ bool Value::operator<=(const Value &other) const {
 			break;
 		case t_symbol:
         case t_string: return sValue <= other.sValue;
-            break;            
+            break;
         default:
             break;
     }
@@ -406,9 +413,9 @@ bool Value::operator==(const Value &other) const {
 
 		if (a == t_integer || b == t_integer) {
 			long x,y;
-			if (asInteger(x) && other.asInteger(y)) 
+			if (asInteger(x) && other.asInteger(y))
 				return x == y;
-			else 
+			else
 				return false;
 		}
 	}
@@ -423,12 +430,12 @@ bool Value::operator==(const Value &other) const {
         case t_integer:
 			return iValue == other.iValue;
 			break;
-		case t_symbol: //TBD assert(false); 
+		case t_symbol: //TBD assert(false);
 					return token_id == other.token_id;
         case t_string: return sValue == other.sValue;
-            break;            
+            break;
         case t_bool: return bValue == other.bValue;
-            break;            
+            break;
         default:
             break;
     }
@@ -454,9 +461,9 @@ bool Value::operator!=(const Value &other) const {
 		}
 		if (a == t_integer || b == t_integer  ) {
 			long x,y;
-			if (asInteger(x) && other.asInteger(y)) 
+			if (asInteger(x) && other.asInteger(y))
 				return x != y;
-			else 
+			else
 				return true;
 		}
 	}
@@ -465,7 +472,7 @@ bool Value::operator!=(const Value &other) const {
     switch (a) {
         case t_empty: return b != t_empty;
             break;
-        case t_integer: 
+        case t_integer:
 			return iValue != other.iValue;
 			break;
 		case t_float:
@@ -476,9 +483,9 @@ bool Value::operator!=(const Value &other) const {
             return token_id != other.token_id;
         case t_string:
             return sValue != other.sValue;
-            break;            
+            break;
         case t_bool: return bValue != other.bValue;
-            break;            
+            break;
         default:
             break;
     }
@@ -492,7 +499,7 @@ bool Value::operator&&(const Value &other) const {
         case t_integer: return iValue && other.iValue;
             break;
         case t_bool: return bValue && other.bValue;
-            break;            
+            break;
         default:
             break;
     }
@@ -506,7 +513,7 @@ bool Value::operator||(const Value &other) const {
         case t_integer: return iValue || other.iValue;
             break;
         case t_bool: return bValue || other.bValue;
-            break;            
+            break;
         default:
             break;
     }
@@ -520,7 +527,7 @@ bool Value::operator!() const {
         case t_integer: return !iValue;
             break;
         case t_bool: return !bValue;
-            break; 
+            break;
 		case t_symbol:
 		case t_string: return false;
 			break;
@@ -565,8 +572,8 @@ static bool stringToFloat(const std::string &s, double &x) {
 
 namespace ValueOperations {
 	struct ValueOperation {
-		virtual Value operator()(const Value &a, const Value &b) const { 
-			return 0; 
+		virtual Value operator()(const Value &a, const Value &b) const {
+			return 0;
 		}
 		virtual std::ostream& operator<<(std::ostream&out) const { return out; }
 		virtual std::string toString() const { return ""; }
@@ -594,6 +601,10 @@ namespace ValueOperations {
 				return b.iValue;
 			else if (b.kind == Value::t_float)
 				return b.fValue;
+			else if (a.kind == Value::t_string)
+				return Value(a.sValue + b.asString(), Value::t_string);
+			else if (a.kind == Value::t_symbol)
+				return Value(a.sValue + b.asString());
 			return 0;
 		}
 		std::ostream& operator<<(std::ostream&out) const { out << "add"; return out; }
@@ -601,7 +612,7 @@ namespace ValueOperations {
 	};
 
 	struct Minus : public ValueOperation {
-		Value operator()(const Value &a, const Value &b) const { 
+		Value operator()(const Value &a, const Value &b) const {
 			if (a.kind == Value::t_integer) {
 				if (b.kind == Value::t_integer)
 					return a.iValue - b.iValue;
@@ -621,6 +632,10 @@ namespace ValueOperations {
 				return -b.iValue;
 			else if (b.kind == Value::t_float)
 				return -b.fValue;
+			else if (a.kind == Value::t_string)
+				return a;
+			else if (a.kind == Value::t_symbol)
+				return a;
 			return 0;
 		}
 		std::ostream& operator<<(std::ostream&out) const { out << "subtract"; return out; }
@@ -628,7 +643,7 @@ namespace ValueOperations {
 	};
 
 	struct Multiply : public ValueOperation {
-		Value operator()(const Value &a, const Value &b) const { 
+		Value operator()(const Value &a, const Value &b) const {
 			if (a.kind == Value::t_integer) {
 				if (b.kind == Value::t_integer)
 					return a.iValue * b.iValue;
@@ -651,9 +666,9 @@ namespace ValueOperations {
 	};
 
 	struct Divide : public ValueOperation {
-		Value operator()(const Value &a, const Value &b) const { 
+		Value operator()(const Value &a, const Value &b) const {
 			if (a.kind == Value::t_integer) {
-				if (a.iValue == 0) return 0;
+				if (a.iValue == 0) return a;
 				if (b.kind == Value::t_integer) {
 					if (b.iValue == 0) {
 						if (a.iValue < 0) return INT_MIN; else return INT_MAX;
@@ -667,7 +682,9 @@ namespace ValueOperations {
 					}
 					else
 						return (double)a.iValue / b.fValue;
-				else return 0;
+				else {
+					return a;
+				}
 			}
 			else if (a.kind == Value::t_float) {
 				if (a.fValue == 0) return 0.0;
@@ -687,7 +704,7 @@ namespace ValueOperations {
 				else
 					return 0;
 			}
-			return 0;
+			return a;
 		}
 		std::ostream& operator<<(std::ostream&out) const { out << "divide"; return out; }
 		virtual std::string toString() const { return "divide"; }
@@ -743,7 +760,7 @@ struct TypeFix {
 		if (a.kind != b.kind) {
 			long x;
 			double x_float;
-			if ( (a.kind == Value::t_integer || a.kind == Value::t_float) 
+			if ( (a.kind == Value::t_integer || a.kind == Value::t_float)
 					&& (b.kind == Value::t_string || b.kind == Value::t_symbol) ) {
 				if (stringToLong(b.sValue, x))  {
 					v_ = x;
@@ -763,7 +780,7 @@ struct TypeFix {
 				}
 			}
 			else if (a.kind == Value::t_string || a.kind == Value::t_symbol) {
-				return a.sValue + b.asString();
+				return (*op)(a, b.asString());
 			}
 			/*
 			else if (b.kind == Value::t_integer && (a.kind == Value::t_string || a.kind == Value::t_symbol) ){
@@ -795,7 +812,12 @@ private:
 	Value v_;
 };
 
-Value &Value::operator+(const Value &other) {
+Value Value::operator+(const Value &other) {
+	Value res(*this);
+	return res += other;
+}
+
+Value &Value::operator+=(const Value &other) {
 	if ( kind != other.kind) {
 		Sum op;
 		TypeFix tf;
@@ -830,7 +852,12 @@ Value Value::operator-(void) const {
 	return *this;
 }
 
-Value &Value::operator-(const Value &other) {
+Value Value::operator-(const Value &other) {
+	Value res(*this);
+	return res -= other;
+}
+
+Value &Value::operator-=(const Value &other) {
 	if (kind != other.kind) {
 		Minus op;
 		TypeFix tf;
@@ -845,13 +872,18 @@ Value &Value::operator-(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator*(const Value &other) {
+Value Value::operator*(const Value &other) {
+	Value res(*this);
+	return res *= other;
+}
+
+Value &Value::operator*=(const Value &other) {
 	if (kind != other.kind) {
 		if (kind == t_string || kind == t_symbol) {
 			char buf[200];
-			snprintf(buf, 200, "Warning: multiplying %s(string) by %s%s", 
-				this->asString().c_str(), 
-				other.asString().c_str(), 
+			snprintf(buf, 200, "Warning: multiplying %s(string) by %s%s",
+				this->asString().c_str(),
+				other.asString().c_str(),
 				(other.kind==t_string||other.kind==t_symbol)?"(string)":"");
 			MessageLog::instance()->add(buf);
 			NB_MSG << buf << "\n";
@@ -870,7 +902,12 @@ Value &Value::operator*(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator/(const Value &other) {
+Value Value::operator/(const Value &other) {
+	Value res(*this);
+	return res /= other;
+}
+
+Value &Value::operator/=(const Value &other) {
 	if (kind != other.kind) {
 		Divide op;
 		TypeFix tf;
@@ -898,8 +935,12 @@ Value &Value::operator/(const Value &other) {
 	}
 	return *this;
 }
+Value Value::operator%(const Value &other) {
+	Value res(*this);
+	return res %= other;
+}
 
-Value &Value::operator%(const Value &other) {
+Value &Value::operator%=(const Value &other) {
 	if (kind != other.kind) {
 		Modulus op;
 		TypeFix tf;
@@ -907,8 +948,8 @@ Value &Value::operator%(const Value &other) {
 	}
 	switch(kind) {
 		case t_integer: if (other.iValue == 0) iValue = 0; else iValue = iValue % other.iValue; break;
-		case t_float: 
-			if (other.fValue == 0.0) iValue = 0; else iValue = ( (long)fValue) % other.iValue; 
+		case t_float:
+			if (other.fValue == 0.0) iValue = 0; else iValue = ( (long)fValue) % other.iValue;
 			kind = t_integer; // modulus returns an integer result
 			break;
 		case t_bool: bValue ^= other.bValue;
@@ -917,13 +958,16 @@ Value &Value::operator%(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator &(const Value &other) {
+Value Value::operator &(const Value &other) {
+	Value res(*this);
+	return res &= other;
+}
+
+Value &Value::operator &=(const Value &other) {
 	if (kind != other.kind) {
 		BitAnd op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue = iValue & other.iValue; break;
@@ -933,13 +977,16 @@ Value &Value::operator &(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator |(const Value &other) {
+Value Value::operator |(const Value &other) {
+	Value res(*this);
+	return res |= other;
+}
+
+Value &Value::operator |=(const Value &other) {
 	if (kind != other.kind) {
 		BitOr op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue = iValue | other.iValue; break;
@@ -949,13 +996,16 @@ Value &Value::operator |(const Value &other) {
 	return *this;
 }
 
-Value &Value::operator ^(const Value &other) {
+Value Value::operator ^(const Value &other) {
+	Value res(*this);
+	return res ^= other;
+}
+
+Value &Value::operator ^=(const Value &other) {
 	if (kind != other.kind) {
 		BitXOr op;
 		TypeFix tf;
-		iValue = tf(*this, &op, other).iValue;
-        kind = t_integer;
-		return *this;
+		return operator=(tf(*this, &op, other));
 	}
 	switch(kind) {
 		case t_integer: iValue = iValue ^ other.iValue; break;
@@ -978,7 +1028,7 @@ Value &Value::operator ~() {
 
 #if 0
 Value Value::operator[](std::string key) {
-	if (kind != t_map) 
+	if (kind != t_map)
         return 0;
     Map::iterator iter = mapValue.find(key);
     if (iter == mapValue.end()) return 0;
@@ -1003,10 +1053,10 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         case t_symbol: out << sValue; break;
         case t_string: out <<'"'<< sValue << '"'; break;
 #if 0
-        case t_list:   { 
-            std::ostream_iterator<Value> o_iter(out, ","); 
+        case t_list:   {
+            std::ostream_iterator<Value> o_iter(out, ",");
             std::copy(listValue.begin(), listValue.end(), o_iter);
-            out << "(" << listValue.size() << " values)"; 
+            out << "(" << listValue.size() << " values)";
         }
             break;
         case t_map: {
@@ -1066,19 +1116,19 @@ std::string Value::asString(const char *fmt) const {
         case t_integer:
         {
             char buf[25];
-						if (fmt)
- 	            snprintf(buf, 25, fmt, iValue);
-						else
- 	            snprintf(buf, 25, "%ld", iValue);
+			if (fmt)
+				snprintf(buf, 25, fmt, iValue);
+			else
+				snprintf(buf, 25, "%ld", iValue);
             return buf;
         }
 				case t_float:
 				{
 					char buf[25];
 					if (fmt)
-  					snprintf(buf, 25, fmt, fValue);
+						snprintf(buf, 25, fmt, fValue);
 					else
-					  snprintf(buf, 25, "%6.6lf", fValue);
+						snprintf(buf, 25, "%6.6lf", fValue);
 					return buf;
 				}
         case t_empty: return "null";
@@ -1188,4 +1238,3 @@ bool Value::asFloat(double &x) const {
 	}
 	return false;
 }
-

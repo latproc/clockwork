@@ -244,6 +244,10 @@ bool MachineInstance::needsThrottle() {
 	return cache->needs_throttle;
 }
 
+State &MachineInstance::getCurrent() {
+	return current_state;
+}
+
 void MachineInstance::enqueueAction(Action *a){
 	assert(a);
 	active_actions.push_front(a);
