@@ -31,7 +31,7 @@ add_subdirectory(${CMAKE_BINARY_DIR}/googletest-src
 if (CMAKE_VERSION VERSION_LESS 2.8.11)
   include_directories("${gtest_SOURCE_DIR}/include")
 endif()
- 
+
 # Now simply link against gtest or gtest_main as needed. Eg
 add_executable(test_value test_value.cpp )
 target_link_libraries(test_value gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
@@ -39,7 +39,7 @@ include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_value COMMAND test_value)
 
 #add_executable(test_disable_action test_disable_action.cpp )
-#target_link_libraries(test_disable_action gmock_main Clockwork cw_interpreter 
+#target_link_libraries(test_disable_action gmock_main Clockwork cw_interpreter
 #  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
 #include_directories("${PROJECT_SOURCE_DIR}/tests")
 #add_test(NAME test_disable_action COMMAND test_disable_action)
@@ -49,13 +49,22 @@ target_link_libraries(test_buffering gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Bo
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_buffering COMMAND test_buffering)
 
-add_executable(test_bit_ops test_bit_ops.cpp 
-   ${PROJECT_SOURCE_DIR}/src/bit_ops.cpp 
+add_executable(test_bit_ops test_bit_ops.cpp
+   ${PROJECT_SOURCE_DIR}/src/bit_ops.cpp
 )
 set_target_properties (test_bit_ops PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_bit_ops gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
+
+add_executable(test_expressions test_expressions.cpp
+   ${PROJECT_SOURCE_DIR}/src/Expression.cpp
+   ${PROJECT_SOURCE_DIR}/src/dynamic_value.cpp
+)
+#set_target_properties (test_expressions PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+#target_link_libraries(test_expressions gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
+#include_directories("${PROJECT_SOURCE_DIR}/tests")
+#add_test(NAME test_expressions COMMAND test_expressions)
 
 #add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp )
 #set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
