@@ -97,7 +97,6 @@ bool Predicate::usesTimer(Value &timer_val) const {
 			if (left_p->entry.kind == Value::t_symbol 
                 && (left_p->entry.token_id == ClockworkToken::TIMER
                     || stringEndsWith(left_p->entry.sValue,".TIMER"))) {
-				//DBG_MSG << "Copying timer value " << right_p->entry << "\n";
                 timer_val = right_p->entry;
 				return true;
 			}
@@ -171,7 +170,6 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 		&& left_p->entry.kind == Value::t_symbol
 		&& left_p->entry.token_id == ClockworkToken::TIMER
 		&& right_p) {
-		//std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
         if ( (right_p->entry.kind == Value::t_symbol
 			&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
             || right_p->entry.asInteger(scheduled_time)) {
@@ -191,7 +189,6 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
     else if (left_p
 			 && left_p->entry.kind == Value::t_symbol
 			 && stringEndsWith(left_p->entry.sValue,".TIMER")) {
-		//std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
         if ( (right_p->entry.kind == Value::t_symbol
 				&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
 				|| right_p->entry.asInteger(scheduled_time)) {
@@ -221,7 +218,6 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 			&& right_p->entry.kind == Value::t_symbol
 			&& right_p->entry.token_id == ClockworkToken::TIMER
 			&& left_p) {
-		//std::cout << "checking timers on " << left_p->entry << "\n";
         if ( (left_p->entry.kind == Value::t_symbol
 				&& target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
 				|| left_p->entry.asInteger(scheduled_time)) {
@@ -245,7 +241,6 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 			&& left_p
 			&& right_p->entry.kind == Value::t_symbol
 			&& stringEndsWith(right_p->entry.sValue,".TIMER")) {
-		//std::cout << "checking timers on " << left_p->entry << " " << right_p->entry << "\n";
         if ( (left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
             || left_p->entry.asInteger(scheduled_time)
 			) {
@@ -751,16 +746,20 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
             return false; //result = &p->entry;
         }
         p->last_calculation = result;
-		p->cached_entry = result;
+        p->cached_entry = result;
         //std::cout << "pushing result: " << *result << "\n";
         if (p->dyn_value) {
             stack.push(ExprNode(result, p->dyn_value));
         }
         else if (p->entry.kind == Value::t_dynamic) {
-            stack.push(ExprNode(result, &p->entry));
+
+          stack.push(ExprNode(result, &p->entry));
+
         }
         else
-            stack.push(ExprNode(result, &p->entry));
+        {
+          stack.push(ExprNode(result, &p->entry));
+        }
     }
     return true;
 }
@@ -847,7 +846,6 @@ Value Predicate::evaluate(MachineInstance *m) {
             MessageLog::instance()->add(ss.str().c_str());
             return false;
         }
-    //Stack work(stack);
     std::list<ExprNode>::const_iterator work = stack.stack.begin();
 	ExprNode evaluated(eval_stack(m, work));
     Value res = *(evaluated.getValue());

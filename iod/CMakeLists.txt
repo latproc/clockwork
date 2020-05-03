@@ -196,7 +196,7 @@ set (Clockwork_SRCS
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
-	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
+	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
   src/Configuration.cpp src/bit_ops.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
