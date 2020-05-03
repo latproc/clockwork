@@ -4,6 +4,7 @@
 # machine powers-up in the (hidden) INIT state.
 
 Blinker MACHINE {
+  EXPORT STATES off, on;
   OPTION delay 10;
   on STATE;
   off STATE;
