@@ -159,7 +159,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 	// in the first case, the predicate is initially false and eventually becomes true
 	// in the second case, the reverse is true and in this case, we need to keep testing
 	// until the predicate finally becomes false
-	bool rescheduleWhenTrue = false; // the predicate is false initially
+	bool rescheduleWhenTrue = false; // assume the predicate is false initially
 
 	// below, we check the clauses of this predicate and if we find a timer test
 	// we set the above variables. At the end of the method, we actually set the timer
@@ -171,17 +171,19 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 		&& left_p->entry.kind == Value::t_symbol
 		&& left_p->entry.token_id == ClockworkToken::TIMER
 		&& right_p) {
-		if ( (right_p->entry.kind == Value::t_symbol
-			&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
-			|| right_p->entry.asInteger(scheduled_time)) {
+		if ((right_p->entry.kind == Value::t_symbol && target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
+				|| right_p->entry.asInteger(scheduled_time)) {
 			current_time = target->getTimerVal()->iValue;
-			if (op == opGT) ++scheduled_time;
-			else if (op == opLE) {
+			if (op == opGT)
 				++scheduled_time;
-				rescheduleWhenTrue = true;
-			}
-			else if (op == opLT) {
-				rescheduleWhenTrue = true;
+			else {
+				if (op == opLE) {
+					++scheduled_time;
+					rescheduleWhenTrue = true;
+				}
+				else if (op == opLT) {
+					rescheduleWhenTrue = true;
+				}
 			}
 		}
 		else
@@ -200,13 +202,16 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 			timed_machine = target->lookup(machine_name);
 			if (timed_machine) {
 				current_time = timed_machine->getTimerVal()->iValue;
-				if (op == opGT) ++scheduled_time;
-				else if (op == opLE) {
+				if (op == opGT)
 					++scheduled_time;
-					rescheduleWhenTrue = true;
-				}
-				else if (op == opLT) {
-					rescheduleWhenTrue = true;
+				else {
+					if (op == opLE) {
+						++scheduled_time;
+						rescheduleWhenTrue = true;
+					}
+					else if (op == opLT) {
+						rescheduleWhenTrue = true;
+					}
 				}
 			}
 		}
@@ -227,12 +232,13 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 				++scheduled_time;
 				rescheduleWhenTrue = true;
 			}
-			else if (op == opLE) {
-				++scheduled_time;
-			}
-			else if (op == opGE) {
-				rescheduleWhenTrue = true;
-			}
+			else
+				if (op == opLE) {
+					++scheduled_time;
+				}
+				else if (op == opGE) {
+					rescheduleWhenTrue = true;
+				}
 		}
 		else
 			DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
@@ -241,7 +247,8 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 	else if (right_p
 			&& left_p
 			&& right_p->entry.kind == Value::t_symbol
-			&& stringEndsWith(right_p->entry.sValue,".TIMER")) {
+			&& stringEndsWith(right_p->entry.sValue,".TIMER")
+			&& left_p) {
 		if ( (left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
 			|| left_p->entry.asInteger(scheduled_time)
 			) {
