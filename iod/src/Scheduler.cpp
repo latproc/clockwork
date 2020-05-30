@@ -98,24 +98,24 @@ void Scheduler::pop() {
 	items.pop(); 
 }
 
-ScheduledItem* PriorityQueue::top() const { 
+ScheduledItem* SchedulerQueue::top() const { 
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return queue.front();
 }
-bool PriorityQueue::empty() const { 
+bool SchedulerQueue::empty() const { 
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return queue.empty();
 }
-void PriorityQueue::pop() { 
+void SchedulerQueue::pop() { 
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	queue.pop_front();
 }
-size_t PriorityQueue::size() const { 
+size_t SchedulerQueue::size() const { 
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return queue.size(); 
 }
 
-void PriorityQueue::push(ScheduledItem *item) {
+void SchedulerQueue::push(ScheduledItem *item) {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	std::list<ScheduledItem*>::iterator iter = queue.begin();
 	while (iter!= queue.end()) {
@@ -130,7 +130,7 @@ void PriorityQueue::push(ScheduledItem *item) {
 	queue.push_back(item);
 }
 
-bool PriorityQueue::check() const {
+bool SchedulerQueue::check() const {
 	ScheduledItem *prev = 0;
 	std::list<ScheduledItem*>::const_iterator iter = queue.begin();
 	while (iter!= queue.end()) {

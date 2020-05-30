@@ -62,9 +62,9 @@ private:
 std::ostream &operator <<(std::ostream &out, const ScheduledItem &item);
 
 
-class PriorityQueue {
+class SchedulerQueue {
 public:
-	PriorityQueue() {}
+	SchedulerQueue() {}
 	void push(ScheduledItem *item);
 	ScheduledItem* top() const;
 	bool empty() const;
@@ -75,8 +75,8 @@ public:
 	std::list<ScheduledItem*> queue;
 
 protected:	
-	PriorityQueue(const PriorityQueue& other);
-	PriorityQueue &operator=(const PriorityQueue& other);
+	SchedulerQueue(const SchedulerQueue& other);
+	SchedulerQueue &operator=(const SchedulerQueue& other);
 };
 
 
@@ -89,7 +89,6 @@ class SchedulerInternals;
 class Scheduler {
 public:
 	static Scheduler *instance() { if (!instance_) instance_ = new Scheduler(); return instance_; }
-    //std::ostream &operator<<(std::ostream &out) const;
 	void add(ScheduledItem*);
 	ScheduledItem *next() const;
 	void pop();
@@ -107,11 +106,11 @@ public:
 
 protected:
 	SchedulerInternals *internals;
-    Scheduler();
+	Scheduler();
 	~Scheduler() {}
 	static Scheduler *instance_;
-    //std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
-    PriorityQueue items;
+
+	SchedulerQueue items;
 	uint64_t next_time;
 	enum State { 
 		e_waiting,  // waiting for something to do
@@ -125,7 +124,7 @@ protected:
 	long next_delay_time;
 	uint64_t notification_sent; // the scheduler has been notified that an item is scheduled
 
-	friend class PriorityQueue;
+	friend class SchedulerQueue;
 };
 
 //std::ostream &operator<<(std::ostream &out, const Scheduler &m);
