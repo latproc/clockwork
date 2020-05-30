@@ -8,15 +8,15 @@ project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.6)
+
 #set (RUN_TESTS OFF)
+#set (CMAKE_VERBOSE_MAKEFILE false)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
-#set (CMAKE_VERBOSE_MAKEFILE false)
-
-set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 IF("${CMAKE_SYSTEM}" MATCHES "Linux")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
@@ -25,8 +25,6 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-misleading-indentation")
 endif()
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEEPSTATS")
 #set (CMAKE_EXE_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
-#set (CMAKE_CXX_FLAGS_DEBUG "-g ")
-#set (CMAKE_CXX_FLAGS_RELEASE "-O2")
 set (CMAKE_CXX_FLAGS_RELEASE "-O")
 
 set (CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/src/)
@@ -97,23 +95,15 @@ include_directories("${CLOCKWORK_DIR}")
 LINK_DIRECTORIES("/usr/local/lib")
 LINK_DIRECTORIES("/opt/local/lib")
 
-#	src/iosh.cpp
-#	src/modbusd.cpp
-#	src/mqttd.cpp
-#	src/iod.cpp
-#	src/beckhoffd.cpp
-#	src/MQTTDCommands.cpp
-#	src/ecat_thread.cpp
-#	src/schedule.cpp
-#	src/test_client.cpp
-#	src/zmq_ecat_monitor.cpp
-#	src/device_connector.cpp
-#	src/persistd.cpp
+# based on yacc instructions from Andy Cedilnik 2002.
 
-# yacc instructions from Andy Cedilnik 2002.
+if ("${FLEX_EXECUTABLE}" STREQUAL "")
+  set (FLEX_EXECUTABLE flx)
+endif()
 
-set (FLEX_EXECUTABLE flex)
-set (BISON_EXECUTABLE bison)
+if ("${BISON_EXECUTABLE}" STREQUAL "")
+  set (BISON_EXECUTABLE bson)
+endif()
 
 set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
 set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)

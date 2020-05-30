@@ -1,16 +1,17 @@
 if (RUN_TESTS)
 # Download and unpack googletest at configure time
-configure_file(CMakeLists.txt.in ${CMAKE_BINARY_DIR}/googletest-download/CMakeLists.txt)
+# Download and unpack googletest at configure time
+configure_file(CMakeLists.txt.in googletest-download/CMakeLists.txt)
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
   RESULT_VARIABLE result
-	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
-	message(${CMAKE_BINARY_DIR}/googletest-download )
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
 if(result)
   message(FATAL_ERROR "CMake step for googletest failed: ${result}")
 endif()
 execute_process(COMMAND ${CMAKE_COMMAND} --build .
   RESULT_VARIABLE result
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
 if(result)
   message(FATAL_ERROR "Build step for googletest failed: ${result}")
 endif()
@@ -21,8 +22,8 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 # Add googletest directly to our build. This defines
 # the gtest and gtest_main targets.
-add_subdirectory(${CMAKE_BINARY_DIR}/googletest-src
-                 ${CMAKE_BINARY_DIR}/googletest-build
+add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/googletest-src
+                 ${CMAKE_CURRENT_BINARY_DIR}/googletest-build
                  EXCLUDE_FROM_ALL)
 
 # The gtest/gtest_main targets carry header search path
@@ -37,6 +38,11 @@ add_executable(test_value test_value.cpp )
 target_link_libraries(test_value gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_value COMMAND test_value)
+
+add_executable(test_dyn_value test_dyn_value.cpp )
+target_link_libraries(test_dyn_value gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_dyn_value COMMAND test_dyn_value)
 
 #add_executable(test_disable_action test_disable_action.cpp )
 #target_link_libraries(test_disable_action gmock_main Clockwork cw_interpreter
@@ -57,10 +63,10 @@ target_link_libraries(test_bit_ops gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boos
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
 
-add_executable(test_expressions test_expressions.cpp
-   ${PROJECT_SOURCE_DIR}/src/Expression.cpp
-   ${PROJECT_SOURCE_DIR}/src/dynamic_value.cpp
-)
+#add_executable(test_expressions test_expressions.cpp
+#   ${PROJECT_SOURCE_DIR}/src/Expression.cpp
+#   ${PROJECT_SOURCE_DIR}/src/dynamic_value.cpp
+#)
 #set_target_properties (test_expressions PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 #target_link_libraries(test_expressions gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
 #include_directories("${PROJECT_SOURCE_DIR}/tests")
