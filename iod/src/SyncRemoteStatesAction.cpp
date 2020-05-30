@@ -67,6 +67,10 @@ SyncRemoteStatesAction::SyncRemoteStatesAction(MachineInstance *mi, SyncRemoteSt
 	internals->chn = t.chn;
 }
 
+SyncRemoteStatesAction::~SyncRemoteStatesAction() {
+  delete internals;
+}
+
 Action::Status SyncRemoteStatesAction::execute()
 {
 	char buf[200];

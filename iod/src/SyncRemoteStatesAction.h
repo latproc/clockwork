@@ -50,6 +50,7 @@ public:
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
+  ~SyncRemoteStatesAction();
 
 protected:
 	Status execute();
