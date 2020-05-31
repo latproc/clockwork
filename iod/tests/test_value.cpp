@@ -66,5 +66,17 @@ namespace {
 		EXPECT_EQ(Value(X_VALUE / Y_VALUE), x / y) << "An integer divided by a string is an integer";
 		EXPECT_EQ(Value::t_integer, (x / y).kind) << "An integer divided by a string is an integer";
 	}
+	TEST_F(ValueTest, AddAssignInteger) {
+    auto saved_x = x;
+    x += 3;
+		EXPECT_EQ(Value(X_VALUE + 3), x);
+		EXPECT_NE(Value(saved_x), x) << "A value is changed when +=() is called";
+	}
+	TEST_F(ValueTest, XorAssignInteger) {
+    auto saved_x = x;
+    x ^= 3;
+		EXPECT_EQ(Value(X_VALUE ^ 3), x);
+		EXPECT_NE(Value(saved_x), x) << "A value is changed when ^=() is called";
+	}
 
 }

@@ -7,6 +7,7 @@
 FlagInterface INTERFACE {
 #	OPTION x , y;
 #	OPTION z 100;
+  OPTION delay;
 
   on STATE;
   off STATE;
@@ -18,6 +19,27 @@ FlagInterface INTERFACE {
   COMMAND toggle;
 }
 
+FlasherMonitor MACHINE target {
+  ok DEFAULT;
+  OPTION delay 0;
+  OPTION margin 20;
+  waiting WHEN target IS NOT on AND target IS NOT off;
+  update WHEN delay != target.delay + margin;
+  error WHEN (target IS on OR target IS off) AND target.TIMER > delay;
+  ENTER update { delay := target.delay + margin; }
+  ENTER error {
+    LOG target.NAME + " stopped changing";
+  }
+  ENTER ok {
+    LOG target.NAME + " ok";
+  }
+}
+
+mon0 FlasherMonitor flasher0;
+mon1 FlasherMonitor flasher1;
+mon2 FlasherMonitor flasher2;
+mon3 FlasherMonitor flasher3;
+mon4 FlasherMonitor flasher4;
 /*
  here we define a channel that communicates between the two clockwork
  drivers. The channel refers to a machine that is may be instantiated at one
@@ -30,6 +52,11 @@ FlasherChannel CHANNEL {
 	OPTION host "127.0.0.1";
 	OPTION port 7720;
   UPDATES flasher FlagInterface;
+  UPDATES flasher0 FlagInterface;
+  UPDATES flasher1 FlagInterface;
+  UPDATES flasher2 FlagInterface;
+  UPDATES flasher3 FlagInterface;
+  UPDATES flasher4 FlagInterface;
   UPDATES flag FlagInterface;
 	UPDATES client_flag FlagInterface;
   UPDATES item1 ItemInterface;
