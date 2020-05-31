@@ -796,9 +796,7 @@ void ProcessingThread::operator()()
 							if (command) {
 								bool ok = false;
 								try {
-									//NB_MSG << "processing thread executing " << buf << "\n";
 									ok  = (*command)();
-									//NB_MSG << "execution result " << command->result() << "\n";
 								}
 								catch (std::exception e) {
 									FileLogger fl(program_name);
@@ -850,7 +848,6 @@ void ProcessingThread::operator()()
 					usleep(0);
 					now = microsecs();
 				}
-				//NB_MSG << " @@@@@@@@@@@ " << count << " Processed\n";
 			}
 		}
 

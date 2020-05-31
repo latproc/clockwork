@@ -52,6 +52,7 @@ Thumbs.db
 # Temporary editor files
 ._*
 *.lyx?
+*-lyxformat-*.lyx
 .~*
 
 #project build files
