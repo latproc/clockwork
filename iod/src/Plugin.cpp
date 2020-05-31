@@ -46,6 +46,26 @@ void setIntValue(cwpi_Scope s, const char *property_name, long new_value) {
     scope->setValue(name, new_value);
 }
 
+double getFloatValue(cwpi_Scope s, const char *property_name, const double **res) {
+    MachineInstance *scope = static_cast<MachineInstance*>(s);
+    if (!scope) {
+        MessageLog::instance()->add("getFloatValue was passed a null instance from a plugin");
+        return 0;
+    }
+    const Value &value = scope->getValue(property_name);
+    if (value.kind != Value::t_float)
+        return 0;
+    *res = &value.fValue;
+    return 1;
+}
+
+void setFloatValue(cwpi_Scope s, const char *property_name, double new_value) {
+    MachineInstance *scope = static_cast<MachineInstance*>(s);
+    if (!scope) return;
+    std::string name(property_name);
+    scope->setValue(name, new_value);
+}
+
 void setStringValue(cwpi_Scope s, const char *property_name, const char *new_value) {
     MachineInstance *scope = static_cast<MachineInstance*>(s);
     if (!scope) return;

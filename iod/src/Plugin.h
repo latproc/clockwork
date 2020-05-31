@@ -22,6 +22,9 @@ int getIntValue(cwpi_Scope, const char *property_name, const long **val);
 char *getStringValue(cwpi_Scope, const char *property_name);
 void setIntValue(cwpi_Scope, const char *property_name, long new_value);
 void setStringValue(cwpi_Scope, const char *property_name, const char *new_value);
+double getFloatValue(cwpi_Scope, const char *property_name, const double **val);
+void setFloatValue(cwpi_Scope, const char *property_name, double new_value);
+
 int changeState(cwpi_Scope, const char *new_state);
 char *getState(cwpi_Scope);
 void log_message(cwpi_Scope, const char *);
