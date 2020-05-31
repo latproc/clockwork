@@ -34,12 +34,9 @@ class Value;
 uint64_t microsecs();
 void simple_deltat(std::ostream &out, uint64_t dt);
 
-class DynamicValueBase {
+class DynamicValueInterface {
 public:
-  virtual ~DynamicValueBase();
-  static DynamicValueBase *ref(DynamicValueBase*dv) { if (!dv) return 0; else dv->refs++; return dv; }
-  DynamicValueBase *deref() { --refs; if (!refs) delete this; return 0; }
-	virtual DynamicValueBase *clone() const = 0;
+  virtual ~DynamicValueInterface() = default;
 	virtual const Value *lastResult() const = 0;
   virtual void setScope(MachineInstance *m) = 0;
   virtual MachineInstance *getScope() const = 0;
@@ -47,7 +44,17 @@ public:
   virtual std::ostream &operator<<(std::ostream &) const = 0;
   virtual const Value &operator()(MachineInstance *scope) = 0; // uses the provided machine's scope
   virtual const Value &operator()() = 0; // uses the current scope for evaluation
+};
+
+class DynamicValueBase : public DynamicValueInterface {
+public:
+  DynamicValueBase() : refs(0) {}
+  virtual DynamicValueBase *clone() const = 0;
+  virtual ~DynamicValueBase() = default;
+  static DynamicValueBase *ref(DynamicValueBase*dv) { if (!dv) return 0; else dv->refs++; return dv; }
+  DynamicValueBase *deref() { --refs; if (!refs) delete this; return 0; }
 protected:
+  DynamicValueBase(const DynamicValueBase &other) : refs(0) {}
   int refs;
 };
 std::ostream &operator<<(std::ostream &, const DynamicValue &);
@@ -98,9 +105,6 @@ public:
   double fValue;
   std::string sValue; // used for strings and for symbols
   MachineInstance *cached_machine;
-  DynamicValueBase *dyn_value;
-  Value *cached_value;
-  int token_id;
 
   bool numeric() const;
   bool identical(const Value &other) const; // bypasses default == for floats
@@ -148,6 +152,11 @@ public:
   Value &operator ~();
 
   std::ostream &operator<<(std::ostream &out) const;
+protected:
+  DynamicValueBase *dyn_value;
+public:
+  Value *cached_value;
+  int token_id;
 private:
   std::string name() const;
 };
