@@ -191,9 +191,9 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 	}
 	else if (left_p
 			&& left_p->entry.kind == Value::t_symbol
-			&& stringEndsWith(left_p->entry.sValue,".TIMER")) {
-		if ( (right_p->entry.kind == Value::t_symbol
-				&& target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
+			&& stringEndsWith(left_p->entry.sValue,".TIMER")
+			&& right_p) {
+		if ( (right_p->entry.kind == Value::t_symbol && target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
 				|| right_p->entry.asInteger(scheduled_time)) {
 			// lookup the machine
 			size_t pos = left_p->entry.sValue.find('.');
@@ -305,7 +305,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
 			//trigger = trigger->release();
 		}
 		// to allow for the above processing delays we keep the target runnable
-		else if (t >= -2000) {
+		else if (t >= (last_evaluation_time - microsecs())/1000) {
 			target->setNeedsCheck();
 		}
 	}

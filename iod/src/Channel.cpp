@@ -956,9 +956,7 @@ void Channel::operator()() {
 	//SetStateActionTemplate ssat(CStringHolder("SELF"), "CONNECTED" );
 	//enqueueAction(ssat.factory(this)); // execute this state change once all other actions are
 
-	SubscriptionManager *sm = dynamic_cast<SubscriptionManager*>(communications_manager);
 	int cmd_server_idx = 0;
-
 
 	NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
 	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
@@ -2329,6 +2327,7 @@ CommandSocketInfo::~CommandSocketInfo() { delete sock; }
 void Channel::setupCommandSockets() {
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+	assert(pgn_rc == 0);
 	NB_MSG << tnam << " setting up command sockets\n";
 	std::map<std::string, Channel*>::iterator iter = all->begin();
 	while (iter != all->end()) {
@@ -2607,7 +2606,8 @@ void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_i
 			std::list<MachineInstance*>::iterator machines = MachineInstance::begin();
 			while (machines != MachineInstance::end()) {
 				MachineInstance *machine = *machines++;
-				if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
+				if (!machine) continue;
+				if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
 					if (chn->channel_machines.count(machine)) {
 						DBG_CHANNELS << "unpublished " << machine->getName() << "\n";
 						machine->unpublish();
