@@ -37,28 +37,7 @@
 class Channel;
 class MachineInterface;
 class SubscriptionManager;
-
-struct MachineRef {
-public:
-    static MachineRef *create(const std::string name, MachineInstance *machine, MachineInterface *iface);
-    MachineRef *ref() { ++refs; return this; }
-    void release() { --refs; if (!refs)  delete this; }
-    std::ostream &operator<<(std::ostream &out) const;
-    bool operator==(const MachineRef &other);
-
-private:
-    std::string key;
-    std::string name;
-    std::string interface_name;
-    MachineInstance *item;
-    MachineInterface *interface;
-    int refs;
-    MachineRef();
-    MachineRef(const MachineRef &orig);
-    MachineRef &operator=(const MachineRef &other);
-};
-
-std::ostream &operator<<(std::ostream &out, const MachineRef &m);
+class MachineRef;
 
 class ChannelImplementation {
 public:

@@ -37,6 +37,28 @@ State ChannelImplementation::UPLOADING("UPLOADING");
 State ChannelImplementation::CONNECTED("CONNECTED");
 State ChannelImplementation::ACTIVE("ACTIVE");
 
+struct MachineRef {
+public:
+	static MachineRef *create(const std::string name, MachineInstance *machine, MachineInterface *iface);
+	MachineRef *ref() { ++refs; return this; }
+	void release() { --refs; if (!refs)  delete this; }
+	std::ostream &operator<<(std::ostream &out) const;
+	bool operator==(const MachineRef &other);
+
+private:
+	std::string key;
+	std::string name;
+	std::string interface_name;
+	MachineInstance *item;
+	MachineInterface *interface;
+	int refs;
+	MachineRef();
+	MachineRef(const MachineRef &orig);
+	MachineRef &operator=(const MachineRef &other);
+};
+
+std::ostream &operator<<(std::ostream &out, const MachineRef &m);
+
 class chn_scoped_lock {
 public:
 	chn_scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) {
