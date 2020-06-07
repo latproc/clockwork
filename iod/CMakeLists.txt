@@ -146,7 +146,8 @@ set (Clockwork_Headers
   src/SetOperationAction.h	src/clockwork.h src/Parameter.h src/MachineClass.h
   src/SharedWorkSet.h src/MachineInterface.h src/MachineDetails.h src/ActionList.h
   src/RateEstimatorInstance.h
-	src/Channel.h			src/FireTriggerAction.h		src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
+  src/Channel.h	src/ChannelImplementation.h	src/ChannelDefinition.h
+  src/FireTriggerAction.h		src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
 	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h		src/ShutdownAction.h		src/cwlang.h
 	src/ClientInterface.h		src/IOComponent.h		src/MessagingInterface.h	src/SimulatedRawInput.h		src/domain.h
 	src/CommandManager.h		src/IODCommand.h		src/ModbusInterface.h		src/SimulatedRawOutput.h	src/dynamic_value.h
@@ -163,6 +164,7 @@ set (Clockwork_Headers
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
 	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
   src/Configuration.h src/bit_ops.h
+	src/MessageFilter.h src/MessageRouter.h
 )
 
 set (Clockwork_SRCS
@@ -172,7 +174,8 @@ set (Clockwork_SRCS
   src/Action.cpp src/AbortAction.cpp src/CounterRateInstance.cpp
   src/ConditionHandler.cpp src/StableState.cpp src/Parameter.cpp src/MachineClass.cpp
 	src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp src/cmdline.lpp src/CallMethodAction.cpp
-	src/Channel.cpp src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
+  src/Channel.cpp src/ChannelImplementation.cpp src/ChannelDefinition.cpp
+  src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
 	src/DisableAction.cpp src/Dispatcher.cpp src/ECInterface.cpp src/EnableAction.cpp
 	src/ExecuteMessageAction.cpp src/Expression.cpp src/ExpressionAction.cpp
   src/ActionList.cpp src/RateEstimatorInstance.cpp
@@ -188,6 +191,7 @@ set (Clockwork_SRCS
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
   src/Configuration.cpp src/bit_ops.cpp
+	src/MessageFilter.cpp src/MessageRouter.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )

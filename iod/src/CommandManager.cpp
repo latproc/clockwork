@@ -37,6 +37,7 @@
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
 #include "Channel.h"
+#include "ChannelDefinition.h"
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
 #include "ConnectionManager.h"

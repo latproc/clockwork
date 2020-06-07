@@ -38,6 +38,7 @@
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
 #include "Channel.h"
+#include "ChannelImplementation.h"
 #include "SocketMonitor.h"
 
 static std::string constructSocketName() {

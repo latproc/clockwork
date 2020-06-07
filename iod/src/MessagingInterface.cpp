@@ -38,6 +38,7 @@
 #include "Dispatcher.h"
 #include "MessageEncoding.h"
 #include "Channel.h"
+#include "ChannelDefinition.h"
 #include "string.h"
 
 const char *program_name;
