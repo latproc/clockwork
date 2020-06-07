@@ -63,6 +63,13 @@ target_link_libraries(test_bit_ops gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boos
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
 
+add_executable(test_alphanum_str test_alphanum_str.cpp
+	${PROJECT_SOURCE_DIR}/src/ConnectionManager.cpp
+)
+set_target_properties (test_alphanum_str PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_alphanum_str gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_alphanum_str COMMAND test_bit_ops)
 #add_executable(test_expressions test_expressions.cpp
 #   ${PROJECT_SOURCE_DIR}/src/Expression.cpp
 #   ${PROJECT_SOURCE_DIR}/src/dynamic_value.cpp

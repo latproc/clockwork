@@ -92,21 +92,26 @@ void ConnectionManager::abort() { aborted = true; }
 std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix, const char *default_name) {
 	if (!val)
 		return default_name;
-	int len = strlen(val);
-	if (prefix) len += strlen(prefix);
+	size_t len = strlen(val);
+	size_t prefix_len = (prefix) ? strlen(prefix) : 0;
+	if (prefix) len += prefix_len;
 	if (suffix) len += strlen(suffix);
-	char buf[len+1];
+	size_t avail = len+1;
+	char buf[avail];
 	char *q = buf;
-	if (prefix) { strcpy(buf, prefix); q+= strlen(prefix); }
-	const char *p = val;
-	while (*p && len--) {
-		if (isalnum(*p)) *q++ = *p;
-    ++p;
+	const char *p = prefix;
+	while (p && *p && avail--) *q++ = *p++;
+	p = val;
+	while (p && *p) {
+		if (isalnum(*p) && avail--) *q++ = *p;
+		++p;
 	}
-	*q = 0;
-	if (q == buf) // no alpha/num found in the input string
+	if (q == buf + prefix_len) // no alpha/num found in the input string
 		return default_name;
-	if (suffix) strcpy(q, suffix);
+	p = suffix;
+	while (p && *p && avail--) *q++ = *p++;
+	assert(avail > 0);
+	*q = 0;
 	return buf;
 }
 
