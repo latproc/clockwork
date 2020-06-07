@@ -87,26 +87,19 @@ MessageRouter::MessageRouter()
 void MessageRouter::finish() {
 	internals->done = true;
 }
+
 class scoped_lock {
 public:
-	scoped_lock( const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) {
-		//		DBG_CHANNELS << location << " LOCKING...\n";
+	scoped_lock(const char *loc, boost::mutex &mut) : location(loc), mutex(mut), lock(mutex, boost::defer_lock) {
 		lock.lock();
-		//		DBG_CHANNELS << location << " LOCKED...\n";
 	}
 	~scoped_lock() {
 		lock.unlock();
-		//		DBG_CHANNELS << location << " UNLOCKED\n";
 	}
 	std::string location;
 	boost::mutex &mutex;
 	boost::unique_lock<boost::mutex> lock;
 };
-
-
-void addRoute(int route_id, zmq::socket_t *dest);
-void addDefaultRoute(zmq::socket_t *def);
-void setRemoteSocket(zmq::socket_t *remote_sock);
 
 void MessageRouter::addRoute(int route_id, zmq::socket_t *dest) {
 	scoped_lock lock("addRoute", internals->data_mutex);
@@ -142,6 +135,7 @@ void MessageRouter::addDefaultRoute(int type, const std::string address) {
 	def->connect(address.c_str());
 	internals->default_dest = def;
 }
+
 void MessageRouter::addRemoteSocket(int type, const std::string address) {
 	scoped_lock lock("setRemoteSocket", internals->data_mutex);
 	zmq::socket_t *remote_sock = new zmq::socket_t(*MessagingInterface::getContext(), type);
@@ -149,14 +143,11 @@ void MessageRouter::addRemoteSocket(int type, const std::string address) {
 	remote_sock->connect(address.c_str());
 	internals->remote = remote_sock;
 }
+
 void MessageRouter::operator()() {
-	boost::unique_lock<boost::mutex> lock(internals->data_mutex);
-	int *destinations = 0;
-	size_t saved_num_items = 0;
-	zmq::pollitem_t *items;
 	while (!internals->done) {
 		poll();
-		usleep(20);
+		usleep(100);
 	}
 }
 
@@ -183,7 +174,6 @@ void MessageRouter::removeFilter(int route_id, MessageFilter *filter) {
 void MessageRouter::poll() {
 	boost::unique_lock<boost::mutex> lock(internals->data_mutex);
 	if (!internals->remote) {
-		usleep(10);
 		return;
 	}
 	unsigned int num_socks = internals->routes.size()+1;
@@ -191,7 +181,7 @@ void MessageRouter::poll() {
 	if (internals->saved_num_items != num_socks) {
 		if (internals->destinations) delete[] internals->destinations;
 		internals->destinations = new int[num_socks];
-		if (internals->items) delete internals->items;
+		if (internals->items) delete[] internals->items;
 		internals->items = new zmq::pollitem_t[num_socks];
 	}
 	zmq::pollitem_t *items = internals->items;
@@ -317,5 +307,4 @@ void MessageRouter::poll() {
 		}
 	}
 	delete[] buf;
-	usleep(10);
 }

@@ -25,10 +25,6 @@
 #include <sstream>
 #include <map>
 #include <zmq.hpp>
-#include "Message.h"
-
-#include "SocketMonitor.h"
-
 
 class MessageRouterInternals;
 class MessageRouter {
