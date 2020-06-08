@@ -272,7 +272,11 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//if (buflen>10) {FileLogger fl(program_name); fl.f() << tnam << " Sending\n"; }
+	{ FileLogger fl(program_name); fl.f() << tnam << " Sending\n"; }
+
+	if (strncmp(buf, "status", buflen) == 0) {
+		int x = 1;
+	}
 
 	enum send_stage {e_sending_dest, e_sending_source, e_sending_data} stage = e_sending_data;
 	if (header.dest || header.source) {
@@ -282,7 +286,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			//if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
+			{FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );

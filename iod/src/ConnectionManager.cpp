@@ -85,6 +85,7 @@ public:
 };
 
 ConnectionManager::ConnectionManager() : internals(0),owner_thread(pthread_self()), aborted(false) {
+  rate_limiter.enable(false);
 }
 
 void ConnectionManager::abort() { aborted = true; }

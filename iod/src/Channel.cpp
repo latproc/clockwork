@@ -77,20 +77,16 @@ public:
 };
 
 bool CommandLogFilter::filter(char **buf, size_t &len, MessageHeader &mh) {
-	//char *data = *buf;
-	//NB_MSG << header << mh << " " << data << "\n";
+	char *data = *buf;
+	NB_MSG << header << mh << " " << data << "\n";
 	return true;
 }
 
 bool CommandLogFilter::filter(char **buf, size_t &len) {
-	//char *data = *buf;
-	//NB_MSG << header << data << "\n";
+	char *data = *buf;
+	NB_MSG << header << data << "\n";
 	return true;
 }
-
-class RemoteClockworkCommandFilterInternals : public MessageFilterInternals {
-
-};
 
 class RemoteClockworkCommandFilter : public MessageFilter {
 public:
@@ -214,6 +210,7 @@ void Channel::addSocket(int route_id, const char *addr) {
 }
 
 void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &messages) {
+	DBG_CHANNELS << "Channel " << name << " syncInterfaceProperties\n";
 	if (!definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) return;
 	if (m->isShadow()) return;
 	if ( definition()->updates_names.count(m->getName())
@@ -265,7 +262,9 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 	DBG_CHANNELS << "Channel " << name << " syncRemoteStates " << current_state << "\n";
 	// publishers do not initially send the state of all machines
 	if (definition()->isPublisher()) return false;
-	if (current_state == ChannelImplementation::DISCONNECTED) return false;
+	if (current_state == ChannelImplementation::DISCONNECTED) {
+		return false;
+	}
 
 	if (isClient()) {
 		if (definition()->hasFeature(ChannelDefinition::ReportStateChanges)) {
@@ -340,6 +339,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 }
 
 Action::Status Channel::setState(const State &new_state, uint64_t authority, bool resume) {
+	DBG_CHANNELS << "Channel " << name << " setState " << new_state << " " << authority << "\n";
 	setNeedsCheck(); // conservative: likely to need attention after a setstate
 	if (new_state != ChannelImplementation::DISCONNECTED && connections == 0) {
 		// can only change state if the channel is actually connected
@@ -394,6 +394,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 		MessageLog::instance()->add(buf);
 		DBG_CHANNELS << buf << "\n";
 		enableShadows();
+		setNeedsCheck();
 	}
 	else if (new_state == ChannelImplementation::UPLOADING) {
 		snprintf(buf, 100, "Channel %s: (%s) setting state to UPLOADING", name.c_str(), (isClient()) ? "client" : "server");
@@ -447,6 +448,7 @@ Action::Status Channel::setState(const char *new_state_cstr, uint64_t authority,
 }
 
 void Channel::start() {
+	DBG_CHANNELS << "Channel " << name << "start\n";
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
@@ -466,6 +468,7 @@ void Channel::start() {
 }
 
 void Channel::stop() {
+	DBG_CHANNELS << "Channel " << name << "stop\n";
 	//TBD fix machines that publish to this channel
     disableShadows();
 	if (isClient()) {
@@ -480,6 +483,7 @@ void Channel::stop() {
 }
 
 void Channel::startChannels() {
+	DBG_CHANNELS << "Channel startChannels\n";
 	if (!all || all->size() == 0) {
 		DBG_CHANNELS << "No channels to start\n";
 		return;
@@ -499,7 +503,8 @@ void Channel::startChannels() {
 
 //NOTE: currently this method is not used
 void Channel::stopChannels() {
-    std::map<std::string, Channel*>::iterator iter = all->begin();
+	DBG_CHANNELS << "Channel stopChannels\n";
+	std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
 		if (!chn->started()) chn->stop();
@@ -568,23 +573,16 @@ void Channel::dropConnection() {
 	DBG_CHANNELS << buf << "\n";
 
 	--connections;
-
+	assert(connections>=0);
 	if(!connections) {
 		SetStateActionTemplate ssat(CStringHolder("SELF"), "DISCONNECTED" );
 		enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 	}
-	assert(connections>=0);
 	if (connections == 0) {
-		//DBG_CHANNELS << "last connection dropped, stopping channel " << _name << "\n";
+		DBG_CHANNELS << "last connection dropped\n"; //, stopping channel " << _name << "\n";
 		//stopServer();
 		//delete this;
 	}
-}
-
-
-Channel &Channel::operator=(const Channel &other) {
-    assert(false);
-    return *this;
 }
 
 std::ostream &Channel::operator<<(std::ostream &out) const  {
@@ -595,11 +593,6 @@ std::ostream &Channel::operator<<(std::ostream &out) const  {
 std::ostream &operator<<(std::ostream &out, const Channel &m) {
     return m.operator<<(out);
 }
-
-bool Channel::operator==(const Channel &other) {
-    return false;
-}
-
 
 void Channel::setPort(unsigned int new_port) {
     assert(port == 0);
@@ -655,7 +648,7 @@ public:
 };
 
 void Channel::startServer(ProtocolType proto) {
-	//DBG_CHANNELS << name << " startServer\n";
+	DBG_CHANNELS << name << " startServer\n";
 	if (mif) {
 		DBG_CHANNELS << "Channel::startServer() called when mif is already allocated\n";
 		return;
@@ -708,8 +701,8 @@ void Channel::startClient() {
 // connection is deleted but we no longer delete connections
 //
 void Channel::stopServer() {
+	DBG_CHANNELS << "Channel " << name << " stopServer (skipping)\n";
 	return;
-
 	if (monitor_thread) {
 		monit_subs->abort();
 		delete monitor_thread;
@@ -806,6 +799,7 @@ void Channel::operator()() {
 	pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
 
+	DBG_CHANNELS << "Channel " << name << " starting thread\n";
 	/* Clients need to use a Subscription Manager to connect to the remote end
 	 	and need to setup a host and port for that purpose.
 	 	Servers need to monitor a subscriber socket
@@ -883,7 +877,7 @@ void Channel::operator()() {
 
 	int cmd_server_idx = 0;
 
-	NB_MSG << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
+	DBG_CHANNELS << name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
 	internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
 	internals->command_sock->connect( internals->cmd_sock_info->address.c_str() );
 
@@ -895,25 +889,23 @@ void Channel::operator()() {
 	snprintf(sock_crtl_name, 20, "inproc://s_%lld", microsecs());
 #endif
 	remote_sock.bind(sock_crtl_name);
-	usleep(50);
+	DBG_CHANNELS << name << " control socket name: " << sock_crtl_name << "\n";
 
+	DBG_CHANNELS << "Channel " << name << " setting up routing\n";
 	// start routine messages through the subscriber socket
 	internals->router.setRemoteSocket(&communications_manager->subscriber());
 	internals->router.addRoute(MessageHeader::SOCK_CW, internals->command_sock);
-	//usleep(50);
 	DBG_CHANNELS << "Clockwork command processor on other end of " << internals->cmd_sock_info->address << "\n";
 	internals->router.addRoute(MessageHeader::SOCK_CHAN, cmd_server);
-	//usleep(50);
 	internals->router.addRoute(MessageHeader::SOCK_CTRL, ZMQ_PAIR, sock_crtl_name);
-	//usleep(50);
 
-	//internals->router.addFilter(MessageHeader::SOCK_CW, new CommandLogFilter(this, "****** "));
-	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new CommandLogFilter(this, "------ "));
-	//internals->router.addFilter(MessageHeader::SOCK_CTRL, new CommandLogFilter(this, "###### "));
+	internals->router.addFilter(MessageHeader::SOCK_CW, new CommandLogFilter(this, "****** "));
+	internals->router.addFilter(MessageHeader::SOCK_CHAN, new CommandLogFilter(this, "------ "));
+	internals->router.addFilter(MessageHeader::SOCK_CTRL, new CommandLogFilter(this, "###### "));
 
-	//internals->router.addFilter(MessageHeader::SOCK_REMOTE, new CommandLogFilter(this, "%%%%% "));
+	internals->router.addFilter(MessageHeader::SOCK_REMOTE, new CommandLogFilter(this, "%%%%% "));
 
-	//internals->router.addFilter(MessageHeader::SOCK_CHAN, new RemoteClockworkCommandFilter(this));
+	internals->router.addFilter(MessageHeader::SOCK_CHAN, new RemoteClockworkCommandFilter(this));
 	//internals->router_thread = new boost::thread(boost::ref(internals->router));
 
 	//NB_MSG << name << " setup message router\n";
@@ -923,7 +915,7 @@ void Channel::operator()() {
 		try {
 
 			if (!communications_manager->checkConnections()) {
-				usleep(50000); continue;
+				usleep(100); continue;
 			}
 
 			internals->router.poll();
@@ -975,7 +967,7 @@ void Channel::operator()() {
 				char *data;
 				size_t len;
 				MessageHeader mh;
-				//NB_MSG << "CTRL checking for command\n";
+				NB_MSG << "CTRL checking for command\n";
 				if ( safeRecv(remote_sock, &data, &len, false, 0, mh) ) {
 					NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
           char buf[100];
@@ -1082,6 +1074,7 @@ std::string ChannelInternals::getCommandSocketName(bool client_endpoint) {
 }
 
 zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
+	DBG_CHANNELS << "Channel " << name << " createCommandSocker\n";
 	std::string cmd_socket_name = internals->getCommandSocketName( client_endpoint );
 	if (client_endpoint) {
 		zmq::socket_t *sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
@@ -1108,6 +1101,7 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 }
 
 void Channel::startSubscriber() {
+	DBG_CHANNELS << "Channel " << name << " startSubscriber\n";
 	assert(!communications_manager);
 	assert(!definition()->isPublisher()); // publishers use startServer()
 
@@ -1296,30 +1290,30 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
     if (!all) return;
     std::string name = machine->fullName();
 	if (machine->getStateMachine() && machine->getStateMachine()->propertyIsLocal(key)) return;
-    std::map<std::string, Channel*>::iterator iter = all->begin();
-    while (iter != all->end()) {
-        Channel *chn = (*iter).second; iter++;
+		std::map<std::string, Channel*>::iterator iter = all->begin();
+		while (iter != all->end()) {
+			Channel *chn = (*iter).second; iter++;
 			if (!chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) continue;
 			if (chn->current_state != ChannelImplementation::ACTIVE) continue;
-		//if (machine->ownerChannel() == chn) continue; // shadows don't forward their properties back on their channel
-        if (!chn->channel_machines.count(machine))
-            continue;
-        if (chn->filtersAllow(machine)) {
-			if (chn->throttle_time && machine->needsThrottle()) {
-				DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
-				if (!chn->throttled_items[machine])
-					chn->throttled_items[machine] = new MachineRecord(machine);
-				chn->throttled_items[machine]->properties[key.asString()] = val;
+			//if (machine->ownerChannel() == chn) continue; // shadows don't forward their properties back on their channel
+			if (!chn->channel_machines.count(machine))
+				continue;
+			if (chn->filtersAllow(machine)) {
+					if (chn->throttle_time && machine->needsThrottle()) {
+					DBG_CHANNELS << chn->getName() << " throttling " << machine->getName() << " " << key << "\n";
+					if (!chn->throttled_items[machine])
+						chn->throttled_items[machine] = new MachineRecord(machine);
+					chn->throttled_items[machine]->properties[key.asString()] = val;
+				}
+				else {
+					if ( chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges)
+							|| (machine->getStateMachine() && !machine->getStateMachine()->propertyIsLocal(key)) )
+						chn->sendPropertyChangeMessage(machine, machine->getName(), key, val, authority);
+				}
 			}
 			else {
-				if ( chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges)
-					|| (machine->getStateMachine() && !machine->getStateMachine()->propertyIsLocal(key)) )
-						chn->sendPropertyChangeMessage(machine, machine->getName(), key, val, authority);
+				DBG_CHANNELS << "filters do not allow " << name << "\n";
 			}
-        }
-		else {
-			DBG_CHANNELS << "filters do not allow " << name << "\n";
-		}
     }
 }
 
@@ -1386,7 +1380,8 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
 			bool do_modbus = chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates);
 			bool do_properties = chn->definition()->hasFeature(ChannelDefinition::ReportPropertyChanges);
 			bool do_local_properties = chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges);
-			if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
+			if (chn->current_state == ChannelImplementation::DISCONNECTED)
+				continue;
 			if (!do_modbus && !do_properties) continue;
 
         if (!chn->channel_machines.count(machine))
@@ -1518,7 +1513,8 @@ void Channel::sendModbusUpdate(MachineInstance *machine, const std::string &prop
 	std::map<std::string, Channel*>::iterator iter = all->begin();
 	while (iter != all->end()) {
 		Channel *chn = (*iter).second; iter++;
-		if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
+		if (chn->current_state == ChannelImplementation::DISCONNECTED)
+			continue;
 		if (!chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates)) continue;
 
 		//TBD change modbus channels to send data using a guaranteed delivery method
@@ -1552,7 +1548,8 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
 	std::map<std::string, Channel*>::iterator iter = all->begin();
     while (iter != all->end()) {
         Channel *chn = (*iter).second; iter++;
-		if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
+		if (chn->current_state == ChannelImplementation::DISCONNECTED)
+			continue;
 		if (!chn->definition()->hasFeature(ChannelDefinition::ReportStateChanges)) continue;
 
 		if (!chn->channel_machines.count(machine))
@@ -1627,7 +1624,8 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
 	char *cmdstr = 0;
 
 	Channel *chn = this;
-	if (current_state == ChannelImplementation::DISCONNECTED) return;
+	if (current_state == ChannelImplementation::DISCONNECTED)
+		return;
 	if (!definition()->hasFeature(ChannelDefinition::ReportStateChanges)) return;
 	if (!channel_machines.count(machine)) return;
 
@@ -1699,7 +1697,8 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 		DBG_CHANNELS << " redirecting " << command << " to " << machine->getName() << " owner channel\n";
 		Channel *chn = machine->ownerChannel();
 		if (!chn) return; // not connected
-		if (chn->current_state == ChannelImplementation::DISCONNECTED) return;
+		if (chn->current_state == ChannelImplementation::DISCONNECTED)
+			return;
 		if (command == "UPDATE") {
 			assert(false);
 			return; // there should be no way for modbus updates to go to shadows
@@ -1729,7 +1728,8 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
 		std::map<std::string, Channel*>::iterator iter = all->begin();
 		while (iter != all->end()) {
 			Channel *chn = (*iter).second; iter++;
-			if (chn->current_state == ChannelImplementation::DISCONNECTED) continue;
+			if (chn->current_state == ChannelImplementation::DISCONNECTED)
+				continue;
 			if (command == "UPDATE" && !chn->definition()->hasFeature(ChannelDefinition::ReportModbusUpdates))
 				continue;
 
@@ -2047,10 +2047,12 @@ void Channel::checkCommunications() {
 	assert(pgn_rc == 0);
 	DBG_CHANNELS << "Channel " << name << " checkCommunications on thread "<< tnam << "\n";
 #endif
-	if (!communications_manager) return;
-	if (!communications_manager->ready()) return;
-    //bool ok = communications_manager->checkConnections();
-    if (communications_manager->monit_setup->disconnected()
+	if (!communications_manager)
+		return;
+	if (!communications_manager->ready())
+		return;
+	//bool ok = communications_manager->checkConnections();
+	if (communications_manager->monit_setup->disconnected()
 		|| communications_manager->monit_subs.disconnected() )
  	{
 		if (isClient()) {
@@ -2064,7 +2066,7 @@ void Channel::checkCommunications() {
 				}
 			}
 		}
-        return;
+		return;
 	}
 	if ( current_state == ChannelImplementation::DISCONNECTED) {
 		setState(ChannelImplementation::CONNECTED);
