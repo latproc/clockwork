@@ -30,10 +30,48 @@ Test MACHINE {
 	OPTION a 2;
 }
 
-Driver MACHINE {
+SendNextAfterDelay MACHINE other {
+  OPTION delay 50;
+  enabled FLAG;
+  idle WHEN enabled IS off;
+  sending DEFAULT;
+  ENTER sending {
+    WAIT delay;
+    SEND next TO other;
+    SET enabled TO off;
+  }
+}
 
-test Test(tab:Tests);
+Driver MACHINE {
+  test Test(tab:Tests);
+  sender SendNextAfterDelay test; # used to send a message to test
+  OPTION test_name "";
+
 	COMMAND go { CALL next ON test }
+  COMMAND go_s2 {
+    test_name := "can WAITFOR a machine that auto transitions";
+    test.a := 1; # let test auto transition to 'one'
+    WAITFOR test IS one;
+    test.a := 2; # let test auto transition to 'two'
+    WAITFOR test IS two;
+    LOG test_name + ": passed";
+
+    test_name := "can WAITFOR a machine to change state using a transition";
+    test.a := 3; # prevent auto transition of test when a is 1 or 2
+    SEND next TO test;
+    WAITFOR test IS s2;
+    LOG test_name + ": passed";
+
+    test_name := "can WAITFOR a machine to change via a transition during the waitfor";
+    test.a := 2; # let test auto transition to 'two'
+    WAITFOR test IS two;
+    test.a := 3; # prevent auto transition of test when a is 1 or 2
+    SET sender.enabled TO on;
+    WAITFOR test IS s2;
+    LOG test_name + ": passed";
+
+    LOG "PASS";
+  }
 }
 driver Driver (tab:Tests);
 
@@ -52,12 +90,11 @@ AutoTransition MACHINE {
 }
 auto AutoTransition;
 
-TransitionToAny MACHINE {
-
+TransitionFromAny MACHINE {
 	off STATE;
-	idle DEFAULT;
+	idle STATE;
 	COMMAND log { LOG "going idle"; }
-	TRANSITION INIT TO off,idle USING log;
+	TRANSITION ANY TO idle USING log;
 
 }
-toany TransitionToAny;
+toany TransitionFromAny;

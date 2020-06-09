@@ -36,30 +36,59 @@ IndirectTest MACHINE items {
 }
 indirect_test IndirectTest l3;
 
-TestScript MACHINE test {
-
+AnyOnOperationsWork MACHINE test {
+    OPTION test_name "";
     ok WHEN SELF IS ok || SELF IS working;
     idle DEFAULT;
     working DURING run {
+        CLEAR test.a; CLEAR test.b;
+        INCLUDE f1 IN test.a; INCLUDE f2 IN test.a;
+        INCLUDE x1 IN test.b; INCLUDE x2 IN test.b;
+        test_name := "ANY ARE on is off when all items are off";
         SET f1 TO off; SET f2 TO off; SET x1 TO off; SET x2 TO off;
         WAITFOR test IS off;
+        test_name := "ANY ARE on is on when one item is on";
         SET f1 TO on;
         WAITFOR test IS on_a;
         SET f1 TO off;
         WAITFOR test IS off;
+        test_name := "can test for two ANY on in the same rule";
         SET f1 TO on;
         SET x1 TO on;
         WAITFOR test IS both;
         SET x1 TO off;
         WAITFOR test IS on_a;
+        test_name := "ANY on test is reevaluated when the list is changed";
         INCLUDE f1 IN l2;
         WAITFOR test IS both;
+        LOG "AnyOnOperationsWork PASSED";
         SET SELF TO ok;
     }
 }
 
+AnyOnWithSubMachineScript MACHINE {
+    OPTION test_name "";
+    test AnyOnTest l1,l2;
+
+    ok WHEN SELF IS ok || SELF IS working;
+    idle DEFAULT;
+    working DURING run {
+        CLEAR test.a; CLEAR test.b;
+        INCLUDE f1 IN test.a; INCLUDE f2 IN test.a;
+        INCLUDE x1 IN test.b; INCLUDE x2 IN test.b;
+        test_name := "A test for ANY on is off WHEN all are off";
+        SET f1 TO off; SET f2 TO off; SET x1 TO off; SET x2 TO off;
+        WAITFOR test IS off;
+        test_name := "WAITFOR works when used to test a sub-machine state";
+        SET f1 TO on;
+        WAITFOR test IS on_a;
+        LOG "AnyOnWithSubMachineScript PASSED";
+        SET self TO ok;
+    }
+}
+
 Driver MACHINE test, test2 {
-    script TestScript test;
+    script AnyOnOperationsWork test;
     error WHEN  SELF IS error || SELF IS waiting && TIMER > 10000;
     ok WHEN script IS ok AND test2 IS ok;
     waiting WHEN script IS working;

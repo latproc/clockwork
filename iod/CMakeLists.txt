@@ -38,11 +38,16 @@ configure_file (
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
 FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono date_time REQUIRED)
+<<<<<<< Updated upstream
 FIND_PACKAGE(MOSQUITTO)
+=======
+FIND_PACKAGE(Mosquitto)
+>>>>>>> Stashed changes
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
 
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${ZeroMQ_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 
