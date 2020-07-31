@@ -1069,6 +1069,11 @@ test
 ;
 \end_layout
 
+\begin_layout LyX-Code
+OPTION c REFER TO a.b; ## the when update is used the target machine will
+ read its c value from its local/param a.b
+\end_layout
+
 \end_deeper
 \begin_layout LyX-Code
 
@@ -3084,13 +3089,7 @@ COMMAND handler { IF ...
 \begin_layout LyX-Code
 
 \size small
-CALL handler 
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-ON machine ON ERROR error1 { ....
+CALL handler ON machine ON ERROR error1 { ....
  } ON ERROR error2 { ...
  }
 \end_layout

@@ -141,6 +141,10 @@ persistd a basic persistence daemon to record state changes from iod
 zmq_monitor a program to monitor zmq messages published by iod 
 \end_layout
 
+\begin_layout Description
+mbmon a modbus master bridge to enable clockwork to control modbus devices
+\end_layout
+
 \begin_layout Standard
 For the remainder of this guide, the above programs are split between those
  that run clockwork (`Language') and those that provide interfaces (`Tools').
@@ -213,6 +217,17 @@ The latproc source includes some PHP code that provides a simple web view
  The program requires PHP version 5.3 and has been tested with apache and
  with minihttpd.
  [further explanation of the setup to be done].
+\end_layout
+
+\begin_layout Subsection
+Repositories and projects
+\end_layout
+
+\begin_layout Standard
+The main latproc repository is at https://github.com/latproc/clockwork.git.
+ Some tools within latproc are in their own repositories, notable the event
+ sampler, filter and terminal-scope (https://github.com/latproc/scope) and
+ the user interface driver, humid (https://github.com/latproc/humid).
 \end_layout
 
 \begin_layout Section
