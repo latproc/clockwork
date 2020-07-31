@@ -17,6 +17,7 @@
 #include "Channel.h"
 #include "ClearListAction.h"
 #include "ClientInterface.h"
+#include "Configuration.h"
 #include "clockwork.h"
 #include "ConditionHandler.h"
 #include "ControlSystemMachine.h"

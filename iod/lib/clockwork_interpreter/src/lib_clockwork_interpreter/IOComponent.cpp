@@ -18,22 +18,25 @@
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "IOComponent.h"
-#include <string>
-#include <iostream>
-#include <iomanip>
-#include <boost/thread/mutex.hpp>
-#include "MachineInstance.h"
-#include "MessagingInterface.h"
-#include <netinet/in.h>
-#include "Logger.h"
-#include <string.h>
-#include <algorithm>
-#ifndef EC_SIMULATOR
-#include <ecrt.h>
-#endif
-#include "buffering.c"
-#include "ProcessingThread.h"
+#include <lib_clockwork_interpreter/includes.hpp>
+#include "includes.hpp"
+
+//#include "IOComponent.h"
+//#include <string>
+//#include <iostream>
+//#include <iomanip>
+//#include <boost/thread/mutex.hpp>
+//#include "MachineInstance.h"
+//#include "MessagingInterface.h"
+//#include <netinet/in.h>
+//#include "Logger.h"
+//#include <string.h>
+//#include <algorithm>
+//#ifndef EC_SIMULATOR
+//#include <ecrt.h>
+//#endif
+//#include "buffering.c"
+//#include "ProcessingThread.h"
 
 #define VERBOSE_DEBUG 0
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
@@ -382,46 +385,38 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
     
 	{
 		boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-	if (!updatedComponentsIn.size())
+		if (!updatedComponentsIn.size())
 		return;
 //	std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
-#ifdef USE_EXPERIMENTAL_IDLE_LOOP
-	// look at the components that changed and remove them from the outgoing queue as long as the 
-	// outputs have been sent to the hardware
-	std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
-	while (iter != updatedComponentsIn.end()) {
-		IOComponent *ioc = *iter++;
-		ioc->read_time = io_clock;
-		//std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
-		updatedComponentsIn.erase(ioc); 
-		if (updates_sent && updatedComponentsOut.count(ioc)) {
-			//std::cout << "output request for " << ioc->io_name << " resolved\n";
-			updatedComponentsOut.erase(ioc);
-		}
-		//else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
-		updated_machines.insert(ioc);
-	}
-	// for machines with updates to send, if these machines already have the same value
-	// as the hardware (and updates have been sent) we also remove them from the
-	// outgoing queue
-	if (updates_sent) {
-		iter = updatedComponentsOut.begin();
-		while (iter != updatedComponentsOut.end()) {
-			IOComponent *ioc = *iter++;
-			if (ioc->pending_value == (uint32_t)ioc->address.value) {
-				//std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
-				updatedComponentsOut.erase(ioc);
-			}
-		}
-	}
-#else
-	std::list<IOComponent *>::iterator iter = processing_queue.begin();
-	while (iter != processing_queue.end()) {
-		IOComponent *ioc = *iter++;
-		ioc->read_time = io_clock;
-		ioc->idle();
-	}
-#endif
+  // look at the components that changed and remove them from the outgoing queue as long as the 
+  // outputs have been sent to the hardware
+  std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
+  while (iter != updatedComponentsIn.end()) {
+    IOComponent *ioc = *iter++;
+    ioc->read_time = io_clock;
+    //std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
+    updatedComponentsIn.erase(ioc);
+    if (updates_sent && updatedComponentsOut.count(ioc)) {
+      //std::cout << "output request for " << ioc->io_name << " resolved\n";
+      updatedComponentsOut.erase(ioc);
+    }
+    //else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
+    updated_machines.insert(ioc);
+  }
+  // for machines with updates to send, if these machines already have the same value
+  // as the hardware (and updates have been sent) we also remove them from the
+  // outgoing queue
+  if (updates_sent) {
+    iter = updatedComponentsOut.begin();
+    while (iter != updatedComponentsOut.end()) {
+      IOComponent *ioc = *iter++;
+      if (ioc->pending_value == (uint32_t)ioc->address.value) {
+        //std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
+        updatedComponentsOut.erase(ioc);
+      }
+    }
+  }
+
 	}
 	outputs_waiting = updatedComponentsOut.size();
 }

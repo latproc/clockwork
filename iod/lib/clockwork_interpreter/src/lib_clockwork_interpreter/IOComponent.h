@@ -26,8 +26,11 @@
 #include <map>
 #include <string>
 #include <ostream>
+#include "ioaddress.h"
+#include <lib_clockwork_client/includes.hpp>
+#include <boost/thread/mutex.hpp>
+
 #include "State.h"
-#include "Message.h"
 #include "MQTTInterface.h"
 #include "filtering.h"
 #include "ioaddress.h"
