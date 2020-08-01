@@ -261,6 +261,9 @@ void MachineInstance::enqueue(const Package &package) {
 	setNeedsCheck();
 }
 
+std::list<Package*>& MachineInstance::pendingEvents() { return pending_events; }
+std::set<MachineInstance*>& MachineInstance::pluginMachines() { return plugin_machines; }
+
 void MachineInstance::forceIdleCheck() {
 	num_machines_with_work++;
 	DBG_AUTOSTATES  << " forced an idle check " << num_machines_with_work << "\n";
