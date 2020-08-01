@@ -136,6 +136,7 @@ public:
   void listenTo(MachineInstance *m);
   void stopListening(MachineInstance *m);
   bool setStableState(); // returns true if a state change was made
+	void resetStableStateFlags(bool changed_state, StableState *active_state); // clear subcondition flags ready for state change
   virtual bool isShadow(); // is this machine a shadow instance?
   virtual Channel* ownerChannel();
 

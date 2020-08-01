@@ -2799,50 +2799,14 @@ bool MachineInstance::setStableState() {
 					else {
 						DBG_AUTOSTATES << _name << " is already in " << s.state_name << " checking subconditions\n";
 						if (s.subcondition_handlers) {
-							std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
-							while (iter != s.subcondition_handlers->end()) {
-								ConditionHandler *ch = &(*iter++);
-								DBG_AUTOSTATES << "checking subcondition: "
-								<< (*ch).condition.last_evaluation
-								<< "\n";
-								if (tracing() && isTraceable()) {
-									resetTemporaryStringStream();
-									ss << current_state.getName() <<"->" << s.state_name << " " << *ch->condition.predicate;
-									setValue("TRACE", Value(ss.str(), Value::t_string));
-								}
-								if (s.timer_predicates.size()) {
-									schedule_time = std::min(schedule_time, earliestScheduleTime(s.timer_predicates));
-								}
-								//if (!ch->check(this)) ptd = ch->condition.predicate->scheduleTimerEvents(ptd, this);
-							}
+							schedule_time = s.checkSubconditionTimes(schedule_time, tracing() && isTraceable());
 						}
-//            if (s.uses_timer) {
-//              DBG_SCHEDULER << _name << "[" << current_state.getName()
-//              << "] checking condition tests for rule #" << ss_idx
-//              << " state: " << s.state_name << "\n";
-//              ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
-//              if (ptd) {
-//                DBG_M_SCHEDULER << "found timer event " << ptd->label << " t: "
-//                  << ptd->delay << " on rule #" << ss_idx << " state: " << s.state_name
-//                  << "\n";
-//              }
-//            }
 					}
 					found_match = true;
 					break; // skip to the end of the stable state loop
 				}
 				else {
 					DBG_PREDICATES << _name << " " << s.state_name << " condition " << *s.condition.predicate << " returned false\n";
-//          if (s.uses_timer) {
-//            DBG_SCHEDULER << _name  << "[" << current_state.getName()
-//              << "] scheduling condition tests for state " << s.state_name << "\n";
-//            ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
-//            if (ptd) {
-//              DBG_M_SCHEDULER << "found timer event " << ptd->label << " t: "
-//              << ptd->delay << " on rule #" << ss_idx << " state: " << s.state_name
-//              << "\n";
-//            }
-//          }
 				}
 
 			}
@@ -2852,28 +2816,7 @@ bool MachineInstance::setStableState() {
 			going to change state we reset subcondition flags (ref TAG keyword) on all states
 			that have them except the newly active state
 		*/
-		for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
-			StableState &s = stable_states[ss_idx];
-			// this state is not active so ensure its subcondition flags are turned off
-			if (s.subcondition_handlers && changed_state && active_state != &s) {
-				std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
-				while (iter != s.subcondition_handlers->end()) {
-					ConditionHandler&ch = *iter++;
-					if (ch.command_name == "FLAG" ) {
-						MachineInstance *flag = lookup(ch.flag_name);
-						if (flag) {
-							const State *off = flag->state_machine->findState("off");
-							if (strcmp("off", flag->getCurrentStateString(this))) {
-								DBG_AUTOSTATES << "turning flag off since the state " << s.state_name << " is not active\n";
-								flag->setState(*off);
-							}
-						}
-						else
-							std::cerr << _name << " error: flag " << ch.flag_name << " not found\n";
-					}
-				}
-			}
-		}
+		resetStableStateFlags(changed_state, active_state);
 		if (schedule_time != SymbolTable::Null) {
 			long t;
 			if (schedule_time.asInteger(t)) {
@@ -2884,6 +2827,31 @@ bool MachineInstance::setStableState() {
 		}
 	}
 	return changed_state;
+}
+
+void MachineInstance::resetStableStateFlags(bool changed_state, StableState *active_state) {
+	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+		StableState &s = stable_states[ss_idx];
+		// this state is not active so ensure its subcondition flags are turned off
+		if (s.subcondition_handlers && changed_state && active_state != &s) {
+			std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
+			while (iter != s.subcondition_handlers->end()) {
+				ConditionHandler&ch = *iter++;
+				if (ch.command_name == "FLAG" ) {
+					MachineInstance *flag = lookup(ch.flag_name);
+					if (flag) {
+						const State *off = flag->state_machine->findState("off");
+						if (strcmp("off", flag->getCurrentStateString(this))) {
+							DBG_AUTOSTATES << "turning flag off since the state " << s.state_name << " is not active\n";
+							flag->setState(*off);
+						}
+					}
+					else
+						std::cerr << _name << " error: flag " << ch.flag_name << " not found\n";
+				}
+			}
+		}
+	}
 }
 
 void MachineInstance::setStateMachine(MachineClass *machine_class) {

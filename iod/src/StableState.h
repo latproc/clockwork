@@ -41,6 +41,8 @@ public:
 
 	const Value &name() const { return _name; }
   void collectTimerPredicates();
+	// check subcontitions for timers that trigger before the given time
+	Value checkSubconditionTimes(const Value &earliest_known, bool include_trace = false);
 
 	std::string state_name;
 	Condition condition;
