@@ -1,5 +1,7 @@
 
 cmake_minimum_required (VERSION 2.8)
+cmake_policy(SET CMP0048 NEW)
+project(latproc VERSION 0.9.6 LANGUAGES CXX C)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.cmake")
 	message("Including local CMake settings")

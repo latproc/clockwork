@@ -7,16 +7,15 @@
 #include <algorithm>
 #include <map>
 #include <assert.h>
-//#include <ecrt.h>
-//#include <tool/MasterDevice.h>
-#include <Statistics.h>
+#include <lib_clockwork_client.hpp>
 #include <libxml/xmlreader.h>
 
-class EntryDetails;
+class EntyDetails;
+struct Entry
 struct ConfigurationDetails {
 	EntryDetails *c_entry_details;
-	ec_pdo_entry_info_t *c_entries;
-	ec_sync_info_t *c_syncs;
+	//ec_pdo_entry_info_t *c_entries;
+	//ec_sync_info_t *c_syncs;
 	unsigned int num_syncs;
 	unsigned int num_entries;
 
@@ -28,13 +27,6 @@ struct ConfigurationDetails {
 	~ConfigurationDetails();
 	void init();
 };
-
-/* The AltSm structure supports collecting the AlternativeSmMapping items from the
-	VendorSpecific/TwinCAT section of the configuration.
-
-  Each AltSm contains several sync manager mappings which have a list of PDO references (indexes)
-*/
-
 
 // SmMapping carries a list of pdo indexes that are included in the mapping
 class SmMapping {
@@ -51,8 +43,13 @@ private:
 	SmMapping &operator=(const SmMapping&);
 };
 
-// An AltSm may be selected by the user or may be selected by default
-// It contains a list of sync manager mappings that each have a list of PDO references
+/*
+  The AltSm structure supports collecting the AlternativeSmMapping items from the
+	VendorSpecific/TwinCAT section of the configuration.
+
+  Each AltSm contains several sync manager mappings which have a list of PDO references (indexes)
+  An AltSm may be selected by the user or may be selected by default
+*/
 struct AltSm {
 	static const int alloc_size = 32;
 	bool is_default;

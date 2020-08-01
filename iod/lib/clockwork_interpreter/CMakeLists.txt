@@ -18,6 +18,7 @@ endif()
 
 set(INCLUDE
     ${CMAKE_CURRENT_BINARY_DIR}/generated_includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/../clockwork_client.git/clockwork/src/lib_clockwork_client
 )
 set(LIBRARY
     clockwork_client
@@ -111,7 +112,7 @@ add_library(${exe_name}
     ${source_files}
     ${header_files}
 )
-set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+set_target_properties(${exe_name} PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR;USE_EXPERIMENTAL_IDLE_LOOP")
 
 # add_executable(${exe_name} ${source_files} ${header_files})
 # add_test(${exe_name} ${exe_name})
