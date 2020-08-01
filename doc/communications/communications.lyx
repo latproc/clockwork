@@ -1274,12 +1274,42 @@ Channel classes
 ConnectionManager
 \end_layout
 
+\begin_layout Standard
+ConnectionManager is an abstract base class that provides an interface method
+ to check connections, to abort a connection and to rate-limit communcation
+ on the connection.
+ 
+\end_layout
+
 \begin_layout Subsubsection
 SubscriptionManager
 \end_layout
 
 \begin_layout Standard
-A subscription manager is a connection manager that ...
+A subscription manager is a connection manager that manages a connection
+ to a remote clockwork instance.
+ A command socket is used to request a channel and a subscriber is created
+ to listen for activity from the server.
+ The main thread can communicate with the server via a request/reply connection
+ to a thread running the subscription manager.
+ Commands arriving from the program's main thread are forwarded remote driver
+ through the command socket.
+ The subscriber may use a publisher/subscriber model (i.e., use a zmq subscriber
+ socket) or it may use a one-to-one connection (via a zmq pair socket).
+\end_layout
+
+\begin_layout Standard
+The command socket uses a request/reply interface and the state of the socket
+ (waiting for request or waiting for reply) is tracked by the subscription
+ manager.
+ The state of the connection to the subscription manager's subscription
+ channel is also tracked.
+ If one end of the channel is a publisher, sending data using a ZMQ PUB
+ socket, the other end is a subscriber and no clockwork channel protocol
+ is used; the status of the ends are set to ss_pub or ss_sub.
+ If the connection is a channel, both ends use a ZMQ PAIR socket and both
+ ends can arbitrarily send messages.
+ 
 \end_layout
 
 \begin_layout Subsubsection
@@ -1838,6 +1868,10 @@ CONSTRAINT motor1.TurnOn REQUIRES MotorValveOff;
 \end_deeper
 \begin_layout LyX-Code
 }
+\end_layout
+
+\begin_layout Subsubsection
+More on BLOCKs
 \end_layout
 
 \begin_layout Subsection

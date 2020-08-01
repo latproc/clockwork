@@ -1,0 +1,350 @@
+%{
+#include <stdlib.h>
+#include <lib_clockwork_interpreter/includes.hpp>
+#include "cwlang.tab.hpp"
+void yyerror(const char *);
+
+static char *buf;
+static int buflen = 0;
+static char *bufp;
+extern YYSTYPE yylval;
+int yycharno;
+
+void append_char(int ch);
+%}
+%x STRING
+%x COMMENT
+%x HASHCOMMENT
+%x PATTERNSTR
+%x PLUGIN_CODE
+
+%%
+
+\n              { yylineno++; yycharno = 1; }
+
+"<<"                return CONCAT;
+"~"                 return MATCHES;
+16BIT               return WORD;
+32BIT               return DOUBLEWORD;
+DIGITALIN return DIGITALIN;
+ADC return ADC;
+TOUCH return TOUCH;
+PIN return PIN;
+ETHERNET return ETHERNET;
+DIGITALIO return DIGITALIO;
+DAC return DAC;
+SPI return SPI;
+SDIO return SDIO;
+JTAG return JTAG;
+UART return UART;
+ABORT				return ABORT;
+ABS					return ABS;
+ADD					return ADD;
+AFTER				return AFTER;
+ALL                 return ALL;
+AND                 return AND;
+ANY                 return ANY;
+ARE                 return ARE;
+ASSIGN              return ASSIGN;
+AT                  return AT;
+AS					return AS;
+ASCENDING			return ASCENDING;
+ASC					return ASC;
+BECOMES             return BECOMES;
+BEFORE				return BEFORE;
+BETWEEN             return BETWEEN;
+BIT                 return BIT;
+BITSET              return BITSET;
+BOARD               return BOARD;
+BY                  return BY;
+BYTE                return BYTE;
+CALL				return CALL;
+CATCH				return CATCH;
+CHANGING		    return CHANGING;
+CHANNEL             return CHANNEL;
+CLASS				return CLASS;
+CLEAR               return CLEAR;
+COMMAND				return COMMAND;
+COMMANDS			return COMMANDS;
+COMBINATION         return COMBINATION;
+COMMON              return COMMON;
+CONDITION           return CONDITION;
+CONSTRAINT			return CONSTRAINT;
+COPY                return COPY;
+COUNT               return COUNT;
+CPU                 return CPU;
+CREATE              return CREATE;
+DEC                 return DEC;
+DEFAULT             return DEFAULT;
+DEFAULTS            return DEFAULTS;
+DESCENDING			return DESCENDING;
+DESC				return DESC;
+DIFFERENCE          return DIFFERENCE;
+DISABLE             return DISABLE;
+DISABLED            return DISABLED;
+DURING              return DURING;
+ELSE				return ELSE;
+ENABLE              return ENABLE;
+ENABLED             return ENABLED;
+ENTER               return ENTER;
+ENTRIES             return ENTRIES;
+ERROR				return ERROR;
+ERRORS				return ERRORS;
+EXECUTE				return EXECUTE;
+EXISTS				return EXISTS;
+EXPORT              return EXPORT;
+EXPORTS             return EXPORTS;
+EXTENDS             return EXTENDS;
+EXTRACT             return EXTRACT;
+FAILURE				return FAILURE;
+FIND                return FIND;
+FIRST               return FIRST;
+FLOAT32			    return FLOAT32;
+FLOAT				return FLOAT;
+FORMAT				return FORMAT;
+FROM				return FROM;
+GLOBAL              return GLOBAL;
+GROUP               return GROUP;
+IGNORE				return IGNORE;
+IGNORES				return IGNORES;
+INC                 return INC;
+INCLUDE             return INCLUDE;
+INCLUDES            return INCLUDES;
+INDEX				return INDEX;
+INTERFACE           return INTERFACE;
+INTEGER				return INTEGER;
+INT16               return INT16;
+INT32               return INT32;
+INT64               return INT64;
+ITEM                return ITEM;
+ITEMS               return ITEMS;
+IDENTIFIER          return IDENTIFIER;
+LEAVE               return LEAVE;
+LINKED				return LINKED;
+IF					return IF_;
+IN                  return IN;
+INITIAL             return INITSTATE;
+IS                  return EQ;
+IS[ ]*NOT           return NE;
+KEY                 return KEY;
+LAST                return LAST;
+LENGTH              return LENGTH;
+LOCK				return LOCK;
+LOG                 return LOG;
+MACHINE             return STATEMACHINE;
+MACHINES            return MACHINES;
+MAX					return tokMAX;
+MATCHES             return MATCHES;
+MATCHING            return MATCHING;
+MEAN				return MEAN;
+MIN					return tokMIN;
+MODBUS				return MODBUS;
+MODULE              return MODULE;
+MODULES             return MODULES;
+MONITORS            return MONITORS;
+MOVE                return MOVE;
+NAME                return NAME;
+NOT                 return NOT;
+OF                  return OF;
+ON					return ON;
+OPTION              return OPTION;
+OR                  return OR;
+PLUGIN              return PLUGIN;
+LOCAL				return LOCAL;
+PROPERTIES          return PROPERTIES;
+PROPERTY			return PROPERTY;
+PUBLISHER			return tokPUBLISHER;
+PUSH				return PUSH;
+READONLY            return READONLY;
+READWRITE           return READWRITE;
+REFERS              return REFERS;
+REPLACE             return REPLACE;
+REPORTS	            return REPORTS;
+SEEK                return SEEK;
+STATE_CHANGES		return STATE_CHANGES;
+SUM					return SUM;
+PRIVATE				return PRIVATE;
+PROPERTY_CHANGES	return PROPERTY_CHANGES;
+RO                  return READONLY;
+ROUTE               return ROUTE;
+RW                  return READWRITE;
+RECEIVE             return RECEIVE;
+RECEIVES            return RECEIVES;
+RECORD              return RECORD;
+REQUIRES            return REQUIRES;
+RETURN				return RETURN;
+RESUME              return RESUME;
+SDO					return SDO;
+SELECT              return SELECT;
+SEND                return SEND;
+SENDS               return SENDS;
+SET                 return SET;
+SIZE                return SIZE;
+SHARES              return SHARES;
+SHUTDOWN			return SHUTDOWN;
+SORT                return SORT;
+STATE               return STATE;
+STATES              return STATES;
+STRING              return STRINGTYPE;
+TAG					return TAG;
+TAKE                return TAKE;
+THROTTLE			return THROTTLE;
+THROW				return THROW;
+TIMEOUT				return TIMEOUT;
+TO                  return TO;
+TRANSITION          return TRANSITION;
+UINT16              return UINT16;
+UINT32              return UINT32;
+UINT64              return UINT64;
+UNLOCK				return UNLOCK;
+UPDATES             return UPDATES;
+VERSION             return VERSION;
+USING               return USING;
+WAIT                return WAIT;
+WAITFOR             return WAITFOR;
+WHEN                return WHEN;
+WHERE               return WHERE;
+WITH                return WITH;
+WITHIN              return WITHIN;
+
+[A-Za-z][A-Za-z0-9_.]*       {
+    yylval.sVal = strdup(yytext);
+    return SYMBOL;
+}
+
+"0x"[0-9a-fA-F][0-9a-fA-F]*	{
+    long val;
+    char *p;
+    val = strtol(yytext, &p, 16);
+    yylval.iVal = val;
+    return INTEGERVAL;
+}
+
+0\.0 {
+    yylval.fVal = atof(yytext);
+    return FLOATVAL;
+}
+
+0\. {
+    yylval.fVal = atof(yytext);
+    return FLOATVAL;
+}
+
+[-]{0,1}[0-9][0-9]*[.][0-9]* {
+    yylval.fVal = atof(yytext);
+    //std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+    return FLOATVAL;
+}
+
+[-]{0,1}[0-9][0-9]*[.][0-9]*E[0-9]{1,3} {
+    yylval.fVal = atof(yytext);
+    //std::cout << "FLOAT: " << yytext << ": " << yylval.fVal << "\n";
+    return FLOATVAL;
+}
+
+0           {
+    yylval.iVal = 0;
+    return INTEGERVAL;
+}
+
+
+[-]{0,1}[0-9][0-9]* {
+    char *rest = 0;
+    yylval.iVal = strtol(yytext, &rest, 10);
+    return INTEGERVAL;
+}
+
+"%BEGIN_PLUGIN"			BEGIN PLUGIN_CODE;
+<PLUGIN_CODE>"%END_PLUGIN"	BEGIN 0;
+<PLUGIN_CODE>\n		{yylineno++; yycharno=1; }
+<PLUGIN_CODE>.		;
+
+"/*"			BEGIN COMMENT;
+<COMMENT>"*/"	BEGIN 0;
+<COMMENT>\n		{yylineno++; yycharno=1; }
+<COMMENT>.		;
+
+"#"             BEGIN HASHCOMMENT;
+<HASHCOMMENT>\n     { yylineno++; yycharno=1; BEGIN 0; }
+<HASHCOMMENT>.		;
+
+`               {
+                    BEGIN PATTERNSTR;
+                    if (!buf)
+                    {
+                         buf = (char *)malloc(20);
+                         buflen = 20;
+                    }
+                    bufp = buf;
+                    *bufp = 0;
+                }
+<PATTERNSTR>\\`    { append_char('`'); }
+<PATTERNSTR>`      { BEGIN 0; yylval.sVal = buf; buf = NULL; return PATTERN; }
+<PATTERNSTR>\\[0-3][0-7][0-7] { unsigned char ch = ((yytext[1]-'0')*8 + yytext[2]-'0')*8+yytext[3]-'0'; append_char(ch);  }
+<PATTERNSTR>\r		{ append_char('\r');  }
+<PATTERNSTR>\t		{ append_char('\t');}
+<PATTERNSTR>\n		{ append_char('\n'); yylineno++; yycharno=1; }
+<PATTERNSTR>.      { append_char( *yytext); }
+
+\"			    {  /*"*/
+                    BEGIN STRING;
+                    if (!buf)
+                    {
+                         buf = (char *)malloc(20);
+                         buflen = 20;
+                    }
+                    bufp = buf;
+                    *bufp = 0;
+                 }
+<STRING>\\n		{ append_char('\n'); }
+<STRING>\\r		{ append_char('\r'); }
+<STRING>\\t		{ append_char('\t'); }
+<STRING>\\[0-3][0-7][0-7] { unsigned char ch = ((yytext[1]-'0')*8 + yytext[2]-'0')*8+yytext[3]-'0'; append_char(ch); }
+<STRING>\\\"	{ /*"*/ append_char('\"'); }
+<STRING>\"		{ /*"*/ BEGIN 0; yylval.sVal = buf; buf = NULL; return STRINGVAL; }
+<STRING>\n		{ append_char('\n'); yylineno++; yycharno=1; }
+<STRING>.		{ append_char(*yytext); }
+
+[-()=+*/;{}.%] {
+    return *yytext;
+}
+
+"["             return BEGINPROP;
+"]"             return ENDPROP;
+":"             return PROPSEP;
+","             return COMMA;
+">="            return GE;
+"<="            return LE;
+"<"             return LT;
+">"             return GT;
+"=="            return EQ;
+"!="            return NE;
+"&&"            return AND;
+"||"            return OR;
+":="            return BECOMES;
+
+"&"             return *yytext;
+"|"             return *yytext;
+"^"             return *yytext;
+"!"             return *yytext;
+
+[ \t]+        ;       /* ignore whitespace */
+
+\'              /*' ignore single quotes */
+.               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); }
+
+%%
+int yywrap(void) {
+    return 1;
+}
+
+void append_char(int ch)
+{
+    if (bufp - buf == buflen-1) {
+        buf = (char *)realloc(buf, buflen + 20);
+        bufp = buf + buflen-1;
+        buflen += 20;
+    }
+    *bufp++ = ch;
+    *bufp = 0;
+}

@@ -1,68 +1,84 @@
 if (RUN_TESTS)
-# Download and unpack googletest at configure time
-configure_file(CMakeLists.txt.in ${CMAKE_BINARY_DIR}/googletest-download/CMakeLists.txt)
-execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
-  RESULT_VARIABLE result
-	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
-	message(${CMAKE_BINARY_DIR}/googletest-download )
-if(result)
-  message(FATAL_ERROR "CMake step for googletest failed: ${result}")
+    add_subdirectory(test_value)
+    add_subdirectory(test_bit_ops)
+		add_subdirectory(buffering_test)
 endif()
-execute_process(COMMAND ${CMAKE_COMMAND} --build .
-  RESULT_VARIABLE result
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
-if(result)
-  message(FATAL_ERROR "Build step for googletest failed: ${result}")
-endif()
-
-# Prevent overriding the parent project's compiler/linker
-# settings on Windows
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
-# Add googletest directly to our build. This defines
-# the gtest and gtest_main targets.
-add_subdirectory(${CMAKE_BINARY_DIR}/googletest-src
-                 ${CMAKE_BINARY_DIR}/googletest-build
-                 EXCLUDE_FROM_ALL)
-
-# The gtest/gtest_main targets carry header search path
-# dependencies automatically when using CMake 2.8.11 or
-# later. Otherwise we have to add them here ourselves.
-if (CMAKE_VERSION VERSION_LESS 2.8.11)
-  include_directories("${gtest_SOURCE_DIR}/include")
-endif()
- 
-# Now simply link against gtest or gtest_main as needed. Eg
-add_executable(test_value test_value.cpp )
-target_link_libraries(test_value gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread dl)
-include_directories("${PROJECT_SOURCE_DIR}/tests")
-add_test(NAME test_value COMMAND test_value)
-
-add_executable(test_disable_action test_disable_action.cpp )
-target_link_libraries(test_disable_action gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
-include_directories("${PROJECT_SOURCE_DIR}/tests")
-add_test(NAME test_disable_action COMMAND test_disable_action)
-
-add_executable(test_buffering test_buffering.cpp )
-target_link_libraries(test_buffering gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
-include_directories("${PROJECT_SOURCE_DIR}/tests")
-add_test(NAME test_buffering COMMAND test_buffering)
-
-add_executable(test_bit_ops test_bit_ops.cpp )
-target_link_libraries(test_bit_ops gmock_main cw_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
-include_directories("${PROJECT_SOURCE_DIR}/tests")
-add_test(NAME test_bit_ops COMMAND test_bit_ops)
-
-add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp)
-set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
-add_custom_command(
-        TARGET test_ecat_xml POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-                ${PROJECT_SOURCE_DIR}/tests/test.xml
-                ${CMAKE_CURRENT_BINARY_DIR}/test.xml)
-
-target_link_libraries(test_ecat_xml gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} xml2 pthread dl)
-include_directories("${PROJECT_SOURCE_DIR}/tests")
-add_test(NAME test_ecat_xml COMMAND test_ecat_xml)
-
-endif()
+# if (RUN_TESTS)
+#
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+# # Download and unpack googletest at configure time
+# configure_file(CMakeLists.txt.in ${CMAKE_BINARY_DIR}/googletest-download/CMakeLists.txt)
+# execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
+#   RESULT_VARIABLE result
+# 	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
+# 	message(${CMAKE_BINARY_DIR}/googletest-download )
+# if(result)
+#   message(FATAL_ERROR "CMake step for googletest failed: ${result}")
+# endif()
+# execute_process(COMMAND ${CMAKE_COMMAND} --build .
+#   RESULT_VARIABLE result
+#   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
+# if(result)
+#   message(FATAL_ERROR "Build step for googletest failed: ${result}")
+# endif()
+#
+# # Prevent overriding the parent project's compiler/linker
+# # settings on Windows
+# set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+#
+# # Add googletest directly to our build. This defines
+# # the gtest and gtest_main targets.
+# add_subdirectory(${CMAKE_BINARY_DIR}/googletest-src
+#                  ${CMAKE_BINARY_DIR}/googletest-build
+#                  EXCLUDE_FROM_ALL)
+#
+# # The gtest/gtest_main targets carry header search path
+# # dependencies automatically when using CMake 2.8.11 or
+# # later. Otherwise we have to add them here ourselves.
+# if (CMAKE_VERSION VERSION_LESS 2.8.11)
+#   include_directories("${gtest_SOURCE_DIR}/include")
+# endif()
+#
+# include_directories(${PROJECT_SOURCE_DIR}/lib/clockwork_client.git/clockwork/src/)
+# include_directories(${PROJECT_SOURCE_DIR}/lib/clockwork_client.git/clockwork/src/lib_clockwork_client)
+# include_directories(${PROJECT_SOURCE_DIR}/lib/clockwork_interpreter/src/lib_clockwork_interpreter)
+# include_directories(${PROJECT_SOURCE_DIR}/lib/clockwork_client.git/ext/boost-dep/src)
+#
+# # Now simply link against gtest or gtest_main as needed. Eg
+# add_executable(test_value test_value.cpp )
+# include_directories("${PROJECT_SOURCE_DIR}/tests")
+# #target_include_directories(test_value PUBLIC ${PROJECT_SOURCE_DIR}/lib/clockwork_client.git/clockwork/src/lib_clockwork_client)
+# #target_include_directories(test_value PUBLIC ${PROJECT_SOURCE_DIR}/lib/clockwork_interpreter/src/lib_clockwork_interpreter)
+# target_link_libraries(test_value gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread dl)
+# add_test(NAME test_value COMMAND test_value)
+#
+# if (false)
+# 	add_executable(test_disable_action test_disable_action.cpp )
+# 	target_link_libraries(test_disable_action gmock_main clockwork_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
+# 	add_test(NAME test_disable_action COMMAND test_disable_action)
+#
+# 	add_executable(test_buffering test_buffering.cpp )
+# 	target_link_libraries(test_buffering gmock_main clockwork_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
+# 	include_directories("${PROJECT_SOURCE_DIR}/tests")
+# 	add_test(NAME test_buffering COMMAND test_buffering)
+#
+# 	add_executable(test_bit_ops test_bit_ops.cpp )
+# 	target_link_libraries(test_bit_ops gmock_main clockwork_interpreter Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread dl)
+# 	include_directories("${PROJECT_SOURCE_DIR}/tests")
+# 	add_test(NAME test_bit_ops COMMAND test_bit_ops)
+#
+# endif()
+#
+# 	add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/app/ethercat/iod/src/ethercat_xml_parser.cpp)
+# 	set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
+# 	add_custom_command(
+#         TARGET test_ecat_xml POST_BUILD
+#         COMMAND ${CMAKE_COMMAND} -E copy
+#                 ${PROJECT_SOURCE_DIR}/tests/test.xml
+#                 ${CMAKE_CURRENT_BINARY_DIR}/test.xml)
+#
+# 	target_link_libraries(test_ecat_xml gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} xml2 pthread dl)
+# 	target_include_directories(test_ecat_xml PUBLIC ${PROJECT_SOURCE_DIR}/app/ethercat/iod_interpreter/src)
+# 	add_test(NAME test_ecat_xml COMMAND test_ecat_xml)
+#
+# endif()

@@ -1,0 +1,324 @@
+
+cmake_minimum_required (VERSION 2.8)
+
+add_subdirectory(ext)
+add_subdirectory(lib)
+add_subdirectory(app)
+
+
+if (RUN_TESTS)
+enable_testing()
+add_subdirectory(tests)
+endif()
+
+install(TARGETS clockwork_interpreter device_connector modbusd persistd
+        RUNTIME DESTINATION
+        ${PROJECT_SOURCE_DIR}
+        LIBRARY DESTINATION
+        ${PROJECT_SOURCE_DIR}
+        ARCHIVE DESTINATION
+        ${PROJECT_SOURCE_DIR}
+)
+
+
+
+# install(TARGETS clockwork_interpreter iosh device_connector modbusd persistd
+#         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+
+
+
+# cmake_minimum_required (VERSION 2.8)
+#
+# cmake_policy(SET CMP0048 NEW)
+# cmake_policy(SET CMP0008 NEW)
+# cmake_policy(SET CMP0015 NEW)
+#
+# project (Latproc VERSION 0.9.6)
+#
+# set(Latproc_VERSION_MAJOR 0)
+# set(Latproc_VERSION_MINOR 9.6)
+# set(RUN_TESTS OFF)
+#
+# if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+#     include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+# endif()
+#
+# #set(CMAKE_VERBOSE_MAKEFILE false)
+#
+# if (RUN_TESTS)
+#     set(CMAKE_CXX_FLAGS "-std=gnu++11 -Wall -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
+# else()
+#     set(CMAKE_CXX_FLAGS "-std=gnu++0x -Wall -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
+# endif()
+# #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++11-extensions -Wno-unused-variable -Wno-deprecated-register")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
+# #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEEPSTATS")
+# #set(CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
+# set(CMAKE_CXX_FLAGS_DEBUG "-g ")
+# set(CMAKE_CXX_FLAGS_RELEASE "-O")
+# #set(CMAKE_EXE_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
+# set(CMAKE_EXE_FLAGS_DEBUG "-g ")
+# set(CMAKE_EXE_FLAGS_RELEASE "-O")
+#
+# set(CLOCKWORK_LIB_DIR ${PROJECT_SOURCE_DIR}/lib/clockwork/src/)
+# set(CLOCKWORK_DIR ${PROJECT_SOURCE_DIR}/src/)
+# set(BUILD_DIR ${PROJECT_SOURCE_DIR}/build)
+#
+#
+# configure_file (
+#   "${PROJECT_SOURCE_DIR}/LatprocConfig.h.in"
+#   "${PROJECT_BINARY_DIR}/LatprocConfig.h"
+# )
+#
+# set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
+# set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
+# FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono REQUIRED)
+# FIND_PACKAGE(Mosquitto)
+# FIND_PACKAGE(MODBUS)
+# FIND_PACKAGE(LibXml2)
+# FIND_PACKAGE(ZeroMQ REQUIRED)
+#
+# add_subdirectory(ext)
+# add_subdirectory(lib)
+#
+# INCLUDE_DIRECTORIES(${ZeroMQ_INCLUDE_DIR})
+#
+# # get_property(clockwork_client_INCLUDE_DIRS GLOBAL PROPERTY clockwork_client_INCLUDE_DIRS)
+# # INCLUDE_DIRECTORIES(${clockwork_client_INCLUDE_DIRS})
+#
+# include_directories("/usr/local/include")
+# include_directories("/opt/local/include")
+# include_directories("${PROJECT_SOURCE_DIR}/include")
+# include_directories("${PROJECT_BINARY_DIR}")
+# include_directories("${CLOCKWORK_LIB_DIR}")
+# include_directories("${CLOCKWORK_DIR}")
+# # include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/clockwork_client/ext/boost-dep/src")
+# # include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/clockwork_client/ext/curl-dep/src")
+# # include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/clockwork_client/ext/zmq-dep/all/src")
+# # include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/clockwork_client/ext/zmq-dep/zmq/src")
+# # include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/clockwork_client/ext/zmq-dep/zmq.hpp/src")
+# include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/clockwork_client/clockwork/src")
+#
+# LINK_DIRECTORIES("/usr/local/lib")
+# LINK_DIRECTORIES("/opt/local/lib")
+#
+# #	src/iosh.cpp
+# #	src/modbusd.cpp
+# #	src/mqttd.cpp
+# #	src/iod.cpp
+# #	src/beckhoffd.cpp
+# #	src/MQTTDCommands.cpp
+# #	src/ecat_thread.cpp
+# #	src/schedule.cpp
+# #	src/test_client.cpp
+# #	src/zmq_ecat_monitor.cpp
+# #	src/device_connector.cpp
+# #	src/persistd.cpp
+#
+# # yacc instructions from Andy Cedilnik 2002.
+#
+# set(FLEX_EXECUTABLE lex)
+# set(BISON_EXECUTABLE bison)
+#
+# set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
+# set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
+# # Create custom command for flex/lex (note the outputs)
+#  ADD_CUSTOM_COMMAND(
+#    COMMAND ${FLEX_EXECUTABLE}
+#    ARGS -o${CMAKE_BINARY_DIR}/cwlang.yy.cpp
+# 		${CLOCKWORK_DIR}/cwlang.lpp
+#    OUTPUT ${cw_lex_output})
+#
+# # Create custom command for bison/yacc (note the DEPENDS)
+#  ADD_CUSTOM_COMMAND(
+#    COMMAND ${BISON_EXECUTABLE}
+#    ARGS -y
+#         -o ${CMAKE_BINARY_DIR}/cwlang.tab.cpp
+# 		-g -v -d ${CLOCKWORK_DIR}/cwlang.ypp
+#    DEPENDS ${CLOCKWORK_DIR}/cwlang.lpp
+#    OUTPUT ${cw_yacc_output})
+#
+# # Add generated source to the list of sources
+#  SET(Clockwork_SRCS ${Clockwork_SRCS} ${cw_yacc_output} ${cw_lex_output})
+#
+# # Since the parser source does not exists yet when cmake is run, mark
+# # it as generated
+# SET_SOURCE_FILES_PROPERTIES(${cw_lex_output} GENERATED)
+# SET_SOURCE_FILES_PROPERTIES(${cw_yacc_output} GENERATED)
+#
+# # Include binary directory to include lexer.c in parser.c
+# INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
+#
+# set(Clockwork_Headers
+# 	src/Action.h			src/AbortAction.h	src/Expression.h	src/Transition.h	src/ConditionHandler.h
+#   src/MachineInstance.h		src/SetListEntriesAction.h	src/StableState.h
+# 	src/CallMethodAction.h		src/ExpressionAction.h
+#   src/MachineShadowInstance.h src/CounterRateInstance.h src/CounterRateFilterSettings.h
+#   src/SetOperationAction.h	src/clockwork.h src/Parameter.h src/MachineClass.h
+#   src/SharedWorkSet.h src/MachineInterface.h src/MachineDetails.h src/ActionList.h
+#   src/RateEstimatorInstance.h
+# 	src/Channel.h			src/FireTriggerAction.h	src/SetStateAction.h		src/cmdline.h
+# 	src/ClearListAction.h		src/HandleMessageAction.h	src/ShutdownAction.h		src/cwlang.h
+# 	src/ClientInterface.h		src/IOComponent.h		src/SimulatedRawInput.h		src/domain.h
+# 	src/IODCommand.h		src/ModbusInterface.h		src/SimulatedRawOutput.h
+# 	src/IODCommands.h		src/PatternAction.h	src/ecat_thread.h
+# 	src/ControlSystemMachine.h	src/IfCommandAction.h		src/PersistentStore.h		src/SortListAction.h		src/filtering.h
+# 	src/CopyPropertiesAction.h	src/IncludeAction.h		src/Plugin.h			src/State.h			src/hw_config.h
+# 	src/LockAction.h		src/PolledMessageHandler.h	src/Statistic.h			src/options.h
+# 	src/DisableAction.h		src/LogAction.h			src/PopListAction.h		src/Statistics.h
+# 	src/Dispatcher.h		src/PredicateAction.h		src/UnlockAction.h
+# 	src/ECInterface.h		src/MQTTDCommand.h		src/ProcessingThread.h		src/WaitAction.h
+# 	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h
+# 	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
+# 	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
+# 	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
+# 	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h src/ExportState.h
+# )
+#
+# set(Clockwork_SRCS
+# 	${Clockwork_Headers}
+# 	${cw_yacc_output} ${cw_lex_output}
+# 	src/MachineShadowInstance.cpp src/Transition.cpp src/MachineInstance.cpp
+#   src/Action.cpp src/AbortAction.cpp src/CounterRateInstance.cpp
+#   src/ConditionHandler.cpp src/StableState.cpp src/Parameter.cpp src/MachineClass.cpp
+# 	src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp src/cmdline.lpp src/CallMethodAction.cpp
+# 	src/Channel.cpp src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
+# 	src/DisableAction.cpp src/Dispatcher.cpp src/ECInterface.cpp src/EnableAction.cpp
+# 	src/ExecuteMessageAction.cpp src/Expression.cpp src/ExpressionAction.cpp
+#   src/ActionList.cpp src/RateEstimatorInstance.cpp
+#   src/SharedWorkSet.cpp src/MachineInterface.cpp src/MachineDetails.cpp
+# 	src/FireTriggerAction.cpp src/HandleMessageAction.cpp src/IOComponent.cpp src/IODCommands.cpp
+# 	src/IfCommandAction.cpp src/IncludeAction.cpp src/LockAction.cpp src/LogAction.cpp
+# 	src/MQTTInterface.cpp src/MachineCommandAction.cpp src/ModbusInterface.cpp
+# 	src/PatternAction.cpp src/PersistentStore.cpp src/Plugin.cpp src/PolledMessageHandler.cpp
+# 	src/PopListAction.cpp src/PredicateAction.cpp src/ProcessingThread.cpp src/ResumeAction.cpp
+# 	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp src/SetOperationAction.cpp
+# 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
+# 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
+# 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
+# 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp src/ExportState.cpp
+# 	)
+# add_library(clockwork_interpreter ${Clockwork_SRCS})
+# set_target_properties (clockwork_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+#
+# add_executable(cw src/cw.cpp)
+# target_include_directories(cw
+#     PUBLIC
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src
+# )
+#
+# set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+# target_link_libraries(cw clockwork_interpreter clockwork_client dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
+#
+# if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
+# set(ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
+# add_library (ec_tool
+# ${ETHERCAT_DIR}/tool/CommandAlias.cpp
+# ${ETHERCAT_DIR}/tool/CommandConfig.cpp
+# ${ETHERCAT_DIR}/tool/Command.cpp
+# ${ETHERCAT_DIR}/tool/CommandIp.cpp
+# ${ETHERCAT_DIR}/tool/CommandCStruct.cpp
+# ${ETHERCAT_DIR}/tool/CommandData.cpp
+# ${ETHERCAT_DIR}/tool/CommandDebug.cpp
+# ${ETHERCAT_DIR}/tool/CommandDomains.cpp
+# ${ETHERCAT_DIR}/tool/CommandDownload.cpp
+# ${ETHERCAT_DIR}/tool/CommandEoe.cpp
+# ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
+# ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
+# ${ETHERCAT_DIR}/tool/CommandGraph.cpp
+# #${ETHERCAT_DIR}/tool/CommandIp.cpp
+# ${ETHERCAT_DIR}/tool/CommandMaster.cpp
+# ${ETHERCAT_DIR}/tool/CommandPdos.cpp
+# ${ETHERCAT_DIR}/tool/CommandRegRead.cpp
+# ${ETHERCAT_DIR}/tool/CommandRegWrite.cpp
+# ${ETHERCAT_DIR}/tool/CommandRescan.cpp
+# ${ETHERCAT_DIR}/tool/CommandSdos.cpp
+# ${ETHERCAT_DIR}/tool/CommandSiiRead.cpp
+# ${ETHERCAT_DIR}/tool/CommandSiiWrite.cpp
+# ${ETHERCAT_DIR}/tool/CommandSlaves.cpp
+# ${ETHERCAT_DIR}/tool/CommandSoeRead.cpp
+# ${ETHERCAT_DIR}/tool/CommandSoeWrite.cpp
+# ${ETHERCAT_DIR}/tool/CommandStates.cpp
+# ${ETHERCAT_DIR}/tool/CommandUpload.cpp
+# ${ETHERCAT_DIR}/tool/CommandVersion.cpp
+# ${ETHERCAT_DIR}/tool/CommandXml.cpp
+# ${ETHERCAT_DIR}/tool/DataTypeHandler.cpp
+# ${ETHERCAT_DIR}/tool/FoeCommand.cpp
+# ${ETHERCAT_DIR}/tool/MasterDevice.cpp
+# ${ETHERCAT_DIR}/tool/NumberListParser.cpp
+# ${ETHERCAT_DIR}/tool/SdoCommand.cpp
+# ${ETHERCAT_DIR}/tool/sii_crc.cpp
+# ../ec_tool/SoeCommand.cpp
+# ../ec_tool/tool_main.cpp
+# )
+# INCLUDE_DIRECTORIES(${ETHERCAT_DIR})
+# INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/tool)
+# INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/include)
+# INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/master)
+# INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
+# LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
+# LINK_DIRECTORIES("LIBXML2_LIBRARIES")
+#
+# add_library(iod_interpreter ${Clockwork_SRCS} src/ecat_thread.cpp src/EtherCATSetup.cpp src/ethercat_xml_parser.cpp)
+# target_link_libraries(iod_interpreter clockwork_client)
+# set_target_properties (iod_interpreter PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT=1" )
+#
+# add_library(iod_sdo_interpreter ${Clockwork_SRCS} src/ecat_thread.cpp src/EtherCATSetup.cpp src/ethercat_xml_parser.cpp)
+# target_link_libraries(iod_sdo_interpreter clockwork_client)
+# set_target_properties (iod_sdo_interpreter PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT=1;USE_SDO=1")
+#
+# add_executable(iod src/iod.cpp )
+#
+# set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
+# target_link_libraries(iod iod_interpreter clockwork_client ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
+# install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+#
+# add_executable(iod_sdo src/iod.cpp)
+#
+# set_target_properties (iod_sdo PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT=1;USE_SDO=1" )
+# target_link_libraries(iod_sdo iod_sdo_interpreter clockwork_client ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
+# install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+# endif()
+#
+# set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)
+# set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
+# # Create custom command for flex/lex (note the outputs)
+#  ADD_CUSTOM_COMMAND(
+#    COMMAND ${FLEX_EXECUTABLE}
+#    ARGS -o${CMAKE_BINARY_DIR}/cmdline.yy.cpp
+# 		${CLOCKWORK_DIR}/cmdline.lpp
+#    OUTPUT ${iosh_lex_output})
+#
+# # Create custom command for bison/yacc (note the DEPENDS)
+#  ADD_CUSTOM_COMMAND(
+#    COMMAND ${BISON_EXECUTABLE}
+#    ARGS -y
+#         -o ${CMAKE_BINARY_DIR}/cmdline.tab.cpp
+# 		-g -v -d ${CLOCKWORK_DIR}/cmdline.ypp
+#    DEPENDS ${CLOCKWORK_DIR}/cmdline.lpp
+#    OUTPUT ${iosh_yacc_output})
+#
+# # Since the parser source does not exists yet when cmake is run, mark
+# # it as generated
+# SET_SOURCE_FILES_PROPERTIES(${iosh_lex_output} GENERATED)
+# SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
+#
+# add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
+# target_link_libraries(iosh clockwork_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+#
+# add_executable(device_connector src/device_connector.cpp src/options.cpp )
+# target_link_libraries(device_connector clockwork_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+#
+# add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
+# target_link_libraries(persistd clockwork_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+#
+# add_executable(modbusd src/modbusd.cpp )
+# target_link_libraries(modbusd clockwork_client modbus ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+#
+# if (RUN_TESTS)
+# enable_testing()
+# add_subdirectory(tests)
+# endif()
+#
+# install(TARGETS cw iosh device_connector modbusd persistd
+#         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})

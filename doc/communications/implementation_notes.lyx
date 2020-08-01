@@ -1,7 +1,9 @@
-#LyX 2.1 created this file. For more info see http://www.lyx.org/
-\lyxformat 474
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
 \begin_document
 \begin_header
+\save_transient_properties true
+\origin unavailable
 \textclass article
 \use_default_options true
 \maintain_unincluded_children false
@@ -9,16 +11,16 @@
 \language_package default
 \inputencoding auto
 \fontencoding global
-\font_roman default
-\font_sans default
-\font_typewriter default
-\font_math auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
 \font_sc false
 \font_osf false
-\font_sf_scale 100
-\font_tt_scale 100
+\font_sf_scale 100 100
+\font_tt_scale 100 100
 \graphics default
 \default_output_format default
 \output_sync 0
@@ -80,17 +82,34 @@
 Implementation Notes
 \end_layout
 
-\begin_layout Standard
-This document is old.
- I'm not sure how much of it is relevant anymore
-\end_layout
-
-\begin_layout Subsection*
-current
+\begin_layout Subsection
+Threads
 \end_layout
 
 \begin_layout Itemize
-upgrade dispatcher or add thread to manage sending of messages
+Processing
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+watches for messages from other threads
+\end_layout
+
+\begin_layout Itemize
+processes machines
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+Scheduler
+\end_layout
+
+\begin_layout Itemize
+Dispatcher
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -113,7 +132,11 @@ send message
 
 \end_deeper
 \begin_layout Itemize
-add a thread for dealing with new connections
+Channels
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -148,6 +171,10 @@ create a channel dynamically
 
 \begin_layout Itemize
 send to MachineInstance should queue messages until next state process
+\end_layout
+
+\begin_layout Section
+Miscellaneous
 \end_layout
 
 \begin_layout Subsection*
@@ -213,6 +240,10 @@ does adding dynamic machine instantiation break anything?
 \begin_layout Itemize
 channels that are created by instantiating a configured machine setup a
  subscription for the remote machine(s)
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper
@@ -312,6 +343,10 @@ upgrade to zmq 4.0:
 
 \begin_layout Itemize
 no code changes are strictly necessary
+\begin_inset Separator latexpar
+\end_inset
+
+
 \end_layout
 
 \begin_deeper

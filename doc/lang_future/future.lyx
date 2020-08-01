@@ -111,8 +111,12 @@ Introduction
 \end_layout
 
 \begin_layout Standard
-Clockwork is not strictly types but once a value is assigned to a variable
+Clockwork is not strictly typed but once a value is assigned to a variable
  a type is inferred and used to affect the type of the result.
+ Program control within clockwork is done by defining actions that take
+ effect on state changes; within those actions, calculations can be performed
+ and other entities can be affected in various ways.
+ 
 \end_layout
 
 \begin_layout Subsection
@@ -169,7 +173,7 @@ Replace the current symbol table and Value system with a more efficient
 \end_layout
 
 \begin_layout Itemize
-Type extensions (ecept for channels)
+Type extensions (except for channels)
 \end_layout
 
 \begin_layout Itemize
@@ -282,6 +286,10 @@ Macros
 
 \begin_layout Itemize
 State validation during handlers
+\end_layout
+
+\begin_layout Itemize
+Syncronisation of read via shared clock
 \end_layout
 
 \begin_layout Subsubsection
@@ -448,6 +456,28 @@ The way property values are stored in machines desparately needs an overhaul;
 \end_layout
 
 \begin_layout Subsubsection
+Properties
+\end_layout
+
+\begin_layout Standard
+Properties of a machine can be declared using the OPTION keyword:
+\end_layout
+
+\begin_layout Standard
+[data-type] OPTION (property-name [value]) | (property-name [ ',' property-name
+ ...
+ ]_
+\end_layout
+
+\begin_layout Standard
+the word 'PROPERTY' can be used as an alternative to 'OPTION'
+\end_layout
+
+\begin_layout Standard
+If a value is not given to a property, a value must be provided at instantiation
+\end_layout
+
+\begin_layout Subsubsection
 Floating point values
 \end_layout
 
@@ -493,6 +523,10 @@ a := a + x AS INTEGER;
 
 \begin_layout LyX-Code
 a := (a + x) AS INTEGER;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION x; /* (new) no default value, must be given on instantiation */
 \end_layout
 
 \begin_layout Standard
@@ -574,6 +608,37 @@ when a floating point value is used in an subexpression, the subexpression
 \begin_layout Itemize
 floating point values will be displayed in fixed-point notation from clockwork
  (hard-coded at 3 decimal places at present
+\end_layout
+
+\begin_layout Subsection
+State Rules
+\end_layout
+
+\begin_layout Standard
+The primary state rule is the 'WHEN' clause.
+ Expressions linked to the WHEN clause define the rule for entering the
+ state.
+\end_layout
+
+\begin_layout Subsection
+Predicates
+\end_layout
+
+\begin_layout Standard
+Predicates are expressions that return boolean values.
+ Common operators are:
+\end_layout
+
+\begin_layout Itemize
+IS (state test)
+\end_layout
+
+\begin_layout Itemize
+numeric comparison operators
+\end_layout
+
+\begin_layout Itemize
+consider also adding ENTERS or LEAVES tests/triggers
 \end_layout
 
 \begin_layout Subsection
@@ -736,139 +801,6 @@ Sets should send messages on state change between empty, nonempty and full.
 \end_layout
 
 \begin_layout Subsubsection
-Structs
-\end_layout
-
-\begin_layout Standard
-Structs are a way to structure or group property names that can be used
- to initialise machines or used to change the value of several properties
- at the same time.
-\end_layout
-
-\begin_layout Standard
-Initialising a machine will look something like:
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-Sample MACHINE WITH (a:1, b:
-\begin_inset Quotes erd
-\end_inset
-
-test
-\begin_inset Quotes erd
-\end_inset
-
-) { ...
- }
-\end_layout
-
-\begin_layout Standard
-or 
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-my_properties STRUCT {
-\begin_inset Separator latexpar
-\end_inset
-
-
-\end_layout
-
-\begin_deeper
-\begin_layout LyX-Code
-
-\size small
-OPTION a 1;
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-OPTION b 
-\begin_inset Quotes eld
-\end_inset
-
-test
-\begin_inset Quotes erd
-\end_inset
-
-;
-\end_layout
-
-\end_deeper
-\begin_layout LyX-Code
-
-\size small
-}
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-Sample MACHINE WITH my_properties { ...
- }
-\end_layout
-
-\begin_layout Standard
-Property sets can be updated from a database:
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-COLLECT record FROM data_source INTO my_properties ON ENDOFDATA done;
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-UPDATE my_machine WITH my_properties [EXCLUDING name_list];
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-UPDATE my_machine WITH [name_list FROM] my_properties
-\end_layout
-
-\begin_layout Standard
-When a Property Set is being applied it is the changes are made to an invisible
- data structure linked to the property set.
- Once all of the invisible data values are updated the values are applied
- into the machine and a property_change event is triggered.
-\end_layout
-
-\begin_layout Standard
-A normal property change that is executed while a property set is being
- update will be handled as normal.
- If that change updates a property that is changing within the Property
- Set the changed value will be lost on completion of the change.
- The effect is that the property assignments might occur out of order.
-\end_layout
-
-\begin_layout Standard
-Property Set changes may be performed against shadowed data and the update
- will not occur until all properties are synchronised at both ends of the
- channel.
-\end_layout
-
-\begin_layout Standard
-Partial updates from Property Sets should also be possible
-\end_layout
-
-\begin_layout LyX-Code
-COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
-\end_layout
-
-\begin_layout Standard
-See also comments about structured data, below.
-\end_layout
-
-\begin_layout Subsubsection
 Dynamic values
 \end_layout
 
@@ -969,8 +901,13 @@ The conditional assignment operator provides a way to make an assignment
 \end_layout
 
 \begin_layout LyX-Code
-property =: expression1 WHEN condition1 =: expression2 WHEN condition2 ...
+property =: expression1 WHEN condition1 [, expression2 WHEN condition2]
+ ...
  [ expressionN OTHERWISE]
+\end_layout
+
+\begin_layout LyX-Code
+
 \end_layout
 
 \begin_layout Standard
@@ -1010,10 +947,33 @@ Strict
 \end_layout
 
 \begin_layout Standard
-When applied to a machine, STRICT causes the machine to refuse to change
- the type of a property once set and causes a system exit if a machine is
- asked to transition to an unknown state.
+When applied to a machine, STRICT causes the machine to:
+\end_layout
+
+\begin_layout Itemize
+refuse to change the type of a property once set
+\end_layout
+
+\begin_layout Itemize
+mark its properties as STRICT
+\end_layout
+
+\begin_layout Itemize
+cause a system FAIL if a machine is asked to transition to an unknown state
+\end_layout
+
+\begin_layout Itemize
+fail to start if a STRICT property of an incorrect type is used on instantiation
+\end_layout
+
+\begin_layout Standard
+STRICT can be included outside of a machine in which case all machines in
+ the current file are regarded as strict.
  
+\end_layout
+
+\begin_layout Standard
+Quoted strings and numeric values are regarded as 'STRICT' properties.tea
 \end_layout
 
 \begin_layout Subsubsection
@@ -1024,6 +984,7 @@ Failsafe Mode
 A program may be configured with a failsafe mode that includes a set of
  states and properties that can be activated whenever the program detects
  a non-recoverable error.
+ In the case of EtherCAT there needs to be a way to move to SAFEOP.
  Failsafe mode can be activated by:
 \end_layout
 
@@ -1039,8 +1000,147 @@ causing an invariant to evaluate to false
 executing a FAIL statement.
 \end_layout
 
+\begin_layout Itemize
+fail-safe mode can be entered by executing FAIL SAFE.
+ This mode will set EtherCAT into SAFEOP mode
+\end_layout
+
+\begin_layout Subsubsection
+Structs
+\end_layout
+
 \begin_layout Standard
-The syntax for this feature has not been decided yet.
+Structs are a way to structure or group property names that can be used
+ to initialise machines or used to change the value of several properties
+ at the same time.
+\end_layout
+
+\begin_layout Standard
+Initialising a machine will look something like:
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+Sample MACHINE WITH (a:1, b:
+\begin_inset Quotes erd
+\end_inset
+
+test
+\begin_inset Quotes erd
+\end_inset
+
+) { ...
+ }
+\end_layout
+
+\begin_layout Standard
+or 
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+my_properties STRUCT {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+
+\size small
+OPTION a 1;
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+OPTION b 
+\begin_inset Quotes eld
+\end_inset
+
+test
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION c REFER TO a.b; ## the when update is used the target machine will
+ read its c value from its local/param a.b
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+
+\size small
+}
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+Sample MACHINE WITH my_properties { ...
+ }
+\end_layout
+
+\begin_layout Standard
+Property sets can be updated from a database:
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+COLLECT record FROM data_source INTO my_properties ON ENDOFDATA done;
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+UPDATE my_machine WITH my_properties [EXCLUDING name_list];
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+UPDATE my_machine WITH [name_list FROM] my_properties
+\end_layout
+
+\begin_layout Standard
+When a Property Set is being applied it is the changes are made to an invisible
+ data structure linked to the property set.
+ Once all of the invisible data values are updated the values are applied
+ into the machine and a property_change event is triggered.
+\end_layout
+
+\begin_layout Standard
+A normal property change that is executed while a property set is being
+ update will be handled as normal.
+ If that change updates a property that is changing within the Property
+ Set the changed value will be lost on completion of the change.
+ The effect is that the property assignments might occur out of order.
+\end_layout
+
+\begin_layout Standard
+Property Set changes may be performed against shadowed data and the update
+ will not occur until all properties are synchronised at both ends of the
+ channel.
+\end_layout
+
+\begin_layout Standard
+Partial updates from Property Sets should also be possible
+\end_layout
+
+\begin_layout LyX-Code
+COPY PROPERTIES a,b,c FROM machine_a TO machine_b;
+\end_layout
+
+\begin_layout Standard
+See also comments about structured data, below.
 \end_layout
 
 \begin_layout Subsubsection
@@ -1088,21 +1188,400 @@ NEXT # attempt to get a record from the external source and update linked
 }
 \end_layout
 
+\begin_layout LyX-Code
+STATES { 
+\end_layout
+
+\begin_layout LyX-Code
+  idle,
+\end_layout
+
+\begin_layout LyX-Code
+  connected, 
+\end_layout
+
+\begin_layout LyX-Code
+  error, 
+\end_layout
+
+\begin_layout LyX-Code
+  invalid, 
+\end_layout
+
+\begin_layout LyX-Code
+  ready
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+PROVIDES (custid, custname)
+\end_layout
+
+\begin_layout LyX-Code
+USING SQL { select id as custid,name as custname from customer; }
+\end_layout
+
+\begin_layout LyX-Code
+# or FROM JSON { [{
+\begin_inset Quotes erd
+\end_inset
+
+custid
+\begin_inset Quotes erd
+\end_inset
+
+: 1, 
+\begin_inset Quotes eld
+\end_inset
+
+custname
+\begin_inset Quotes erd
+\end_inset
+
+: 
+\begin_inset Quotes eld
+\end_inset
+
+fred
+\begin_inset Quotes erd
+\end_inset
+
+}] }
+\end_layout
+
 \end_deeper
 \begin_layout LyX-Code
 }
 \end_layout
 
 \begin_layout Standard
-They can be linked to a property set:
+Data forms can be SQL, XML or JSON.
+ Data is explicitly copied into a clockwork object via a 'COLLECT' statement:
 \end_layout
 
 \begin_layout LyX-Code
-LINK my_data TO my_properties;
+
+\size small
+COLLECT [NEXT] my_properties FROM data_source USING my_iterator; # 
+\end_layout
+
+\begin_layout Standard
+Exceptions possible from COLLECT are ENDOFDATA or ERROR.
+\end_layout
+
+\begin_layout Standard
+There is an implication that data has multiple records and that iterators
+ on that data can step through it.
+\end_layout
+
+\begin_layout Subsubsection
+Records
+\end_layout
+
+\begin_layout Standard
+Records provide the data fields that map to database records.
+\end_layout
+
+\begin_layout Standard
+Given a data source and customer record.
 \end_layout
 
 \begin_layout LyX-Code
-LINK my_properties TO my_machine, ...;
+sample_db DATASOURCE {
+\end_layout
+
+\begin_layout LyX-Code
+  OPTION database 
+\begin_inset Quotes eld
+\end_inset
+
+sample.db
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+Customer RECORD sample_db {
+\end_layout
+
+\begin_layout LyX-Code
+  TYPE customer;
+\end_layout
+
+\begin_layout LyX-Code
+  OPTION name;
+\end_layout
+
+\begin_layout LyX-Code
+  OPTION age;
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Records have states:
+\end_layout
+
+\begin_layout Description
+empty no fields have been set
+\end_layout
+
+\begin_layout Description
+new some fields have been set but the record hasn't been collected (i.e.,
+ doesn't have a link to a database record)
+\end_layout
+
+\begin_layout Description
+ready fields have been collected and no changes have been made to the db
+ record or the cw record
+\end_layout
+
+\begin_layout Description
+modified field hav been changed since the record was collected
+\end_layout
+
+\begin_layout Standard
+Records will always have an 'id' field that is a unique identified in the
+ database, they can be bound to a clockwork object; this prepares a mapping
+ from the 'current' row in the data source to the properties of a clockwork
+ object and enables the use of a state indicator in the database for a clockwork
+ object state.
+\end_layout
+
+\begin_layout LyX-Code
+BIND my_data TO my_machine WITH STATE [PROPERTY/FIELD] status;
+\end_layout
+
+\begin_layout Standard
+Thus, my_machine can have states determined by the status field within my_data.
+ Also my_machine has properties sharing the fields in my_data.
+\end_layout
+
+\begin_layout Standard
+# example 1: get details for a customer
+\end_layout
+
+\begin_layout LyX-Code
+fred MACHINE ds {
+\end_layout
+
+\begin_layout LyX-Code
+  cust Customer ds; # cust is invalid (could be 'empty')
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+  done WHEN cust IS ready;
+\end_layout
+
+\begin_layout LyX-Code
+  waiting default; 
+\end_layout
+
+\begin_layout LyX-Code
+  COMMAND a {
+\end_layout
+
+\begin_layout LyX-Code
+    cust.name := 
+\begin_inset Quotes eld
+\end_inset
+
+fred
+\begin_inset Quotes erd
+\end_inset
+
+; # cust becomes new (could be invalid since not all fields are set)
+\end_layout
+
+\begin_layout LyX-Code
+    COLLECT cust FROM ds WHERE name = 'fred'; 
+\end_layout
+
+\begin_layout LyX-Code
+    # cust becomes invalid and eventually becomes ready
+\end_layout
+
+\begin_layout LyX-Code
+    # request: { type: customer, action: request, keys: { name: 'fred' },
+ fields: [name, age ] }
+\end_layout
+
+\begin_layout LyX-Code
+    # or request: { type: customer, action: request, keys: { name: 'fred'
+ } }   # (all fields)
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER done { LOG 
+\begin_inset Quotes eld
+\end_inset
+
+fred is 
+\begin_inset Quotes eld
+\end_inset
+
+ + cust.age; }
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+# example 2: get all customers
+\end_layout
+
+\begin_layout LyX-Code
+all MACHINE ds {
+\end_layout
+
+\begin_layout LyX-Code
+  curr Customer ds;
+\end_layout
+
+\begin_layout LyX-Code
+  cust_i ITERATOR(order: 
+\begin_inset Quotes eld
+\end_inset
+
+name desc
+\begin_inset Quotes erd
+\end_inset
+
+); # iterators sequencing of data
+\end_layout
+
+\begin_layout LyX-Code
+  done WHEN cust_i IS done;
+\end_layout
+
+\begin_layout LyX-Code
+  ready WHEN curr IS ready;
+\end_layout
+
+\begin_layout LyX-Code
+  waiting WHEN cust_i IS busy;
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER INIT {
+\end_layout
+
+\begin_layout LyX-Code
+    COLLECT curr FROM ds USING cust_i; # cust_i becomes busy
+\end_layout
+
+\begin_layout LyX-Code
+    # request: { type: customer, action: request, fields: [name, age ],
+ order: [{name: desc}] } 
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER ready {
+\end_layout
+
+\begin_layout LyX-Code
+    LOG 
+\begin_inset Quotes eld
+\end_inset
+
+customer: 
+\begin_inset Quotes eld
+\end_inset
+
+ + curr.name + 
+\begin_inset Quotes eld
+\end_inset
+
+, 
+\begin_inset Quotes eld
+\end_inset
+
+ + curr.age;
+\end_layout
+
+\begin_layout LyX-Code
+    SEND next TO cust_i; # cust_i becomes busy
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+# example 3: create a customer
+\end_layout
+
+\begin_layout LyX-Code
+new_cust MACHINE ds, cust {
+\end_layout
+
+\begin_layout LyX-Code
+  COMMAND save REQUIRES cust IS invalid OR cust IS new { STORE cust TO ds;
+ }
+\end_layout
+
+\begin_layout LyX-Code
+  CATCH InvalidRecord {
+\end_layout
+
+\begin_layout LyX-Code
+    LOG 
+\begin_inset Quotes eld
+\end_inset
+
+customer could not be saved
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\begin_layout LyX-Code
+  }
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+#example 4: remove a customer
+\end_layout
+
+\begin_layout LyX-Code
+del_cust MACHINE ds, cust {
+\end_layout
+
+\begin_layout LyX-Code
+  COMMAND delete { REMOVE cust FROM ds; }
 \end_layout
 
 \begin_layout Subsection
@@ -1255,6 +1734,48 @@ Calling clear on the reference will unassign the object that was previously
 \begin_layout Standard
 Note: Initially, the language does not provide a way to return an object
  from a function.
+\end_layout
+
+\begin_layout Standard
+A reference can be bound to an internal object:
+\end_layout
+
+\begin_layout LyX-Code
+
+\size small
+Sample MACHINE customers {
+\end_layout
+
+\begin_layout LyX-Code
+  current REFERENCE;
+\end_layout
+
+\begin_layout LyX-Code
+  wf MyWorkflow; # a user defined machine
+\end_layout
+
+\begin_layout LyX-Code
+  ENTER INIT { BIND wf TO current; }
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+When a machine is bound to a reference, the fields in the referenced item
+ appear within the bound machine.
+ If the reference is not assigned, it cannot know what fields are to be
+ provided to the bound machine and thus no fields are bound.
+ To simplify handling of this case, a bound machine returns the special
+ value NULL to all property requests except those that are defined within
+ the machine.
+ TBD, should the state of the machine be a set value when it is bound to
+ an unassigned reference?
 \end_layout
 
 \begin_layout Subsubsection
@@ -1446,9 +1967,7 @@ A Stream is an ordered collection of data that can be grouped into fixed
 \end_layout
 
 \begin_layout LyX-Code
-
-\size small
-s READER 
+s FILESTREAM 
 \begin_inset Quotes eld
 \end_inset
 
@@ -1456,37 +1975,60 @@ example.dat
 \begin_inset Quotes erd
 \end_inset
 
-:1; # read one bit at a time
+;
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-done WHEN s IS invalid; # terminating condition
+r READER s(block_size:1); # read one char at a time
+\end_layout
+
+\begin_layout LyX-Code
+demo Demo r;
+\end_layout
+
+\begin_layout LyX-Code
+Demo MACHINE r {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+
+\size small
+done WHEN SELF IS done OR r IS invalid; # terminating condition
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-start WHEN s IS closed;
+start WHEN r IS closed;
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-one WHEN s.curr == 1;
+one WHEN r.curr == '1';
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-zero WHEN s.curr == 0;
+zero WHEN r.curr == '0';
+\end_layout
+
+\begin_layout LyX-Code
+other DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+ENTER done { SEND close TO r }
 \end_layout
 
 \begin_layout LyX-Code
 
 \size small
-ENTER start { SEND open TO s }
+ENTER start { SEND open TO r }
 \end_layout
 
 \begin_layout LyX-Code
@@ -1500,7 +2042,7 @@ ENTER one { LOG
 \begin_inset Quotes erd
 \end_inset
 
-; SEND forward TO s }
+; SEND forward TO r }
 \end_layout
 
 \begin_layout LyX-Code
@@ -1514,7 +2056,40 @@ ENTER zero { LOG
 \begin_inset Quotes erd
 \end_inset
 
-; SEND forward TO s }
+; SEND forward TO r }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER other { SEND forward TO r }
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND run WITHIN done { SET SELF TO start; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+FILESTREAM options
+\end_layout
+
+\begin_layout Itemize
+mode: (read, write, readwrite, append)
+\end_layout
+
+\begin_layout Standard
+READER options
+\end_layout
+
+\begin_layout Itemize
+block_size: (positive integer)
+\end_layout
+
+\begin_layout Itemize
+block_terminated: (character)
 \end_layout
 
 \begin_layout Subsection
@@ -1802,6 +2377,271 @@ WITHIN value x := 3, y:= 7;
 \end_layout
 
 \begin_layout Subsubsection
+RECORDS
+\end_layout
+
+\begin_layout Standard
+RECORDs in clockwork define ways to interpret blocks of memory and group
+ properties togetherFor example, clockwork can load an XML file describing
+ EtherCAT hardware into a structure that includes named elements and has
+ a contiguous block of memory that maps to hardware I/O.
+\end_layout
+
+\begin_layout Standard
+Records:
+\end_layout
+
+\begin_layout Itemize
+have an offset
+\end_layout
+
+\begin_layout Itemize
+have a size
+\end_layout
+
+\begin_layout Itemize
+can contain metadata (properties)
+\end_layout
+
+\begin_layout Itemize
+can contain other records
+\end_layout
+
+\begin_layout Itemize
+fully contain child records (it is an error to declare a child that extends
+ past the bounds of the parent) 
+\end_layout
+
+\begin_layout Itemize
+may contain named or anonymous chunks of BIT, BYTE, WORD16, WORD32, WORD64
+\end_layout
+
+\begin_layout LyX-Code
+Colour RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+r BYTE;
+\end_layout
+
+\begin_layout LyX-Code
+g BYTE;
+\end_layout
+
+\begin_layout LyX-Code
+b BYTE;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+Inputs RECORD (size: 8) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+BIT[4]; # skip 4 bits
+\end_layout
+
+\begin_layout LyX-Code
+in1 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+in2 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+in3 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+in4 BIT;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+Outputs RECORD (size: 8) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+out1 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+out2 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+out3 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+out4 BIT;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[4]; # skip four bits
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+When records include other records it is possible to have them start at
+ the same place using the '|' operator
+\end_layout
+
+\begin_layout LyX-Code
+IO RECORD (size: 8) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+Inputs | Outputs; # Inputs and Outputs start at the same location
+\end_layout
+
+\begin_layout LyX-Code
+data BYTE[10]; # a 10 byte block following the above bits 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Records may overlap the same piece of memory.
+ The name of a field may be unique across all records mapped over a memory
+ location.
+ In this case, it may be reasonable to allow use of the field name without
+ qualification by record id.
+ When a record is loaded, a symbol table that provides direct access to
+ the offset and size of each field is built, for example the above might
+ be initially loaded as:
+\end_layout
+
+\begin_layout LyX-Code
+{IO: {Inputs: {in1:{offset:4,size:1},in2:{offset:5,size:1},...},Outputs:{out1:{offs
+et:0,size:1},{offset:1,size:1},...},data:{offset:8,size:80}}}
+\end_layout
+
+\begin_layout Standard
+This may then be converted to:
+\end_layout
+
+\begin_layout LyX-Code
+{IO.Inputs.in1:{offset:4,size:1},in1:{offset:4,size:1},...
+\end_layout
+
+\begin_layout Standard
+Thus, the bit at offset 4 can be found using 'IO.Inputs.in1' or simply 'in1'.
+ Note that IO.Inputs doesn't really need to resolve since it isn't a single
+ field.
+ 
+\end_layout
+
+\begin_layout Standard
+In the case of EtherCAT, we can use the RECORD syntax to define the structures
+ we need.
+\end_layout
+
+\begin_layout LyX-Code
+Module RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION position 1;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION alias 0;
+\end_layout
+
+\begin_layout LyX-Code
+pdo1 RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION SM 3;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION index 0x1a00;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION name “Inputs”;
+\end_layout
+
+\begin_layout LyX-Code
+RECORD {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+INITIAL 0; # this can also be done via a prepare statement
+\end_layout
+
+\begin_layout LyX-Code
+RECORD { # unnamed map, this is the default interpretation for this region
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+BIT[3];
+\end_layout
+
+\begin_layout LyX-Code
+valve BIT;
+\end_layout
+
+\begin_layout LyX-Code
+motor BIT;
+\end_layout
+
+\begin_layout LyX-Code
+BIT[3]; # avoid warnings by labelling all 8 bits
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+byte BYTE; // a named map, pdo1.byte interprets the region as a single byte
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsubsection
 Constrained Data
 \end_layout
 
@@ -1871,6 +2711,147 @@ LOCAL means that the named option is not published on any channel unless
 \end_layout
 
 \begin_layout Subsection
+Clocking
+\end_layout
+
+\begin_layout Standard
+Sometimes it is useful to perform actions are regular intervals and for
+ several actions to be synchronised.
+ To provide this facility, clockwork uses the notion of a CLOCK that triggers
+ a timer event at regular intervals.
+\end_layout
+
+\begin_layout LyX-Code
+CLOCK MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION rate 1000; # milliseconds
+\end_layout
+
+\begin_layout LyX-Code
+started FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+tick WHEN SELF IS wait && TIMER >= rate;
+\end_layout
+
+\begin_layout LyX-Code
+wait WHEN started IS on;
+\end_layout
+
+\begin_layout LyX-Code
+idle DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND start { SET started TO on; }
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND stop { SET started TO off; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Machines that are synchronised to a clock receive tick events:
+\end_layout
+
+\begin_layout LyX-Code
+Reader MACHINE input, clock {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION value 0.0;
+\end_layout
+
+\begin_layout LyX-Code
+RECEIVE clock.tick_enter { value = input.VALUE; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Should we add syntactic sugar:
+\end_layout
+
+\begin_layout LyX-Code
+read_clock CLICK(rate: 100);
+\end_layout
+
+\begin_layout LyX-Code
+Reader MACHINE input, clock {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+OPTION value 0;
+\end_layout
+
+\begin_layout LyX-Code
+ON clock.tick { valuie := input.VALUE; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Define an interface for CLOCK and link it to an analogue input
+\end_layout
+
+\begin_layout LyX-Code
+ClockInterface INTERFACE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+STATES { idle, tick, wait }
+\end_layout
+
+\begin_layout LyX-Code
+COMMANDS {start, stop }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+ain ANALOGUEINPUT (clock: read_clock = SYSTEM.READ_CLOCK) {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+clock IMPLEMENTS ClockInterface;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Subsection
 Lists
 \end_layout
 
@@ -1935,6 +2916,16 @@ Conditions are not currently implemented but they are intended to operate
  is true and false otherwise.
  Conditions are evaluated before stable state tests and are guaranteed to
  be valid throughout the test process.
+\end_layout
+
+\begin_layout Standard
+A condition is instantiated just like a machine except that the final parameter
+ is a boolean expression within braces.
+ For example:
+\end_layout
+
+\begin_layout LyX-Code
+door_open CONDITION prox { prox IS on }
 \end_layout
 
 \begin_layout Subsection
@@ -2098,13 +3089,7 @@ COMMAND handler { IF ...
 \begin_layout LyX-Code
 
 \size small
-CALL handler 
-\end_layout
-
-\begin_layout LyX-Code
-
-\size small
-ON machine ON ERROR error1 { ....
+CALL handler ON machine ON ERROR error1 { ....
  } ON ERROR error2 { ...
  }
 \end_layout
@@ -2656,6 +3641,10 @@ New machine types can be defined by loadable modules.
 \end_layout
 
 \begin_layout Subsubsection
+Defining PDOs
+\end_layout
+
+\begin_layout Subsubsection
 The EtherCAT extension
 \end_layout
 
@@ -2898,8 +3887,16 @@ In which case, the INIT method would have expanded to
 ENTER INIT { x:=0;  y:=0; }
 \end_layout
 
-\begin_layout LyX-Code
+\begin_layout Section
+For consideration
+\end_layout
 
+\begin_layout Itemize
+gecode for constraints (see LET)
+\end_layout
+
+\begin_layout Itemize
+graphql for application state and api access
 \end_layout
 
 \end_body
