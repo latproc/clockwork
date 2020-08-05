@@ -37,9 +37,12 @@ Action::Status ExpressionAction::run() {
 			break;
 		case ExpressionActionTemplate::opSet:
 			if (rhs.kind == Value::t_symbol) {
-				const Value &rhs_v = owner->getValue(rhs.sValue);
+        auto machine = owner->lookup(rhs.sValue);
+				const Value &target_v = (machine) ? machine->getValue("VALUE") : rhs;
+        std::string target = (target_v == SymbolTable::Null) ? rhs.asString() : target_v.asString();
+				const Value &rhs_v = owner->getValue(target);
 				if (rhs_v == SymbolTable::Null) {
-					owner->setValue(lhs.get(), rhs);
+					owner->setValue(lhs.get(), target);
 				}
 				else {
 					DBG_MSG << owner->getName() << " dereferenced property " << rhs << " and found " << rhs_v << "\n";
