@@ -23,27 +23,28 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 
-// attempt to find the value of the property named in v.  v may be the name
-//  of a machine, in which case we need to look for the property named
-//  in the VALUE property of that machine
+// attempt to find the value of the property named in v.	v may be the name
+//	of a machine, in which case we need to look for the property named
+//	in the VALUE property of that machine
 static const Value &resolve(MachineInstance *scope, const Value &v) {
 	if (v == SymbolTable::Null) return v;
-	if (v.kind != Value::t_symbol) return v;
+	if (v.kind != Value::t_symbol && v.kind != Value::t_string) return v;
 	// start by checking if the symbol refers to a machine, in which case
 	// we need the VALUE property of the machine
+	const Value &local_v = scope->getValue(v.sValue);
 	auto machine = scope->lookup(v.sValue);
-	const Value &target_v = (machine) ? machine->getValue("VALUE") : v;
+	const Value &target_v = (local_v != SymbolTable::Null) ? local_v : ((machine) ? machine->getValue("VALUE") : v);
 	// the machine doesn't have a VALUE? v must be refering to a local property
 	if (target_v == SymbolTable::Null) return scope->getValue(v.sValue);
-  // strictly speaking target_t is required to be a symbol here, or at least a string..
-  if (target_v.kind != Value::t_symbol && target_v.kind != Value::t_string) {
+	// strictly speaking target_t is required to be a symbol here, or at least a string..
+	if (target_v.kind != Value::t_symbol && target_v.kind != Value::t_string) {
 		char buf[400];
 		snprintf(buf, 400, "%s: SET x TO PROPERTY... expected a symbol for a property name but found type %d", 
 				scope->getName().c_str(), (int)target_v.kind);
 		MessageLog::instance()->add(buf);
 		DBG_MSG << buf << "\n";
-  }
-	return scope->getValue(target_v.asString());
+	}
+	return target_v;
 }
 
 Action::Status ExpressionAction::run() {
@@ -61,6 +62,7 @@ Action::Status ExpressionAction::run() {
 			break;
 		case ExpressionActionTemplate::opSet:
 			if (rhs.kind == Value::t_symbol) {
+				const Value &lookup_v = resolve(owner, rhs);
 				MachineInstance *scope = owner;
 				if (extra != SymbolTable::Null) {
 					auto machine = owner->lookup(extra.asString());
@@ -78,14 +80,14 @@ Action::Status ExpressionAction::run() {
 						goto finished_run;
 					}
 				}
-				const Value &property_v = resolve(scope, rhs);
+				const Value &property_v = resolve(scope, lookup_v);
 				if (property_v == SymbolTable::Null) {
 					// error no property found using the property name as the value
-          DBG_MSG << owner->getName() << "could not find property " << rhs << " for " << *this << "\n";
+					DBG_MSG << owner->getName() << "could not find property " << lookup_v << " for " << *this << "\n";
 					owner->setValue(lhs.get(), rhs.asString());
 				}
 				else {
-					DBG_MSG << owner->getName() << " dereferenced property " << rhs << " and found " << property_v << "\n";
+					DBG_MSG << owner->getName() << " dereferenced property " << lookup_v << " and found " << property_v << "\n";
 					owner->setValue(lhs.get(), property_v);
 				}
 			}
@@ -125,9 +127,9 @@ Action::Status ExpressionAction::checkComplete() {
 }
 
 std::ostream &ExpressionAction::operator<<(std::ostream &out) const {
-  if (extra == SymbolTable::Null)
+	if (extra == SymbolTable::Null)
 		return out << "ExpressionAction " << lhs.get() << " " << op << " " << rhs << "\n";
-  else
+	else
 		return out << "ExpressionAction " << lhs.get() << " " << op << " " << rhs << " machine " << extra << "\n";
 }
 
