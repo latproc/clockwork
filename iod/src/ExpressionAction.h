@@ -34,6 +34,9 @@ struct ExpressionActionTemplate : public ActionTemplate {
 	ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v) : lhs(var), rhs(v), op(oper) { 
 		if (op == opDec) rhs = -v;
 	}
+	ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v, const Value &e) : lhs(var), rhs(v), op(oper), extra(e) { 
+		if (op == opDec) rhs = -v;
+	}
 	ExpressionActionTemplate(CStringHolder var, opType oper, int a) : lhs(var), rhs(a), op(oper) { 
 		if (op == opDec) rhs = -a; else rhs = a;
 	}
@@ -52,16 +55,18 @@ struct ExpressionActionTemplate : public ActionTemplate {
 	CStringHolder lhs;
 	Value rhs;
 	opType op;
+  Value extra;
 };
 
 struct ExpressionAction : public Action {
-	ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat) : Action(mi), lhs(eat.lhs), rhs(eat.rhs), op(eat.op) { }
+	ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat) : Action(mi), lhs(eat.lhs), rhs(eat.rhs), op(eat.op), extra(eat.extra) { }
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
 	CStringHolder lhs;
 	Value rhs;
 	ExpressionActionTemplate::opType op;
+	Value extra;
 	MachineInstance *machine;
 };
 
