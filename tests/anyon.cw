@@ -1,14 +1,22 @@
 # this script tests various combinations of ANY .. ARE.. situations.
 # It drives the flags on and off and checks that the test machine
 # performs the correct state changes.
-# If the test machine fails to change state it is reset and the 
+# If the test machine fails to change state it is reset and the
 # driver locks itself into an error state.
 #
 # functions tested:
 #
 #  use of ANY .. ARE  using a property for the state being tested
+#  use of two ANY .. ARE clauses in the same rule
 #  continued execution of scripts after a WAITFOR
 #  resetting a machine from a script
+#
+# To run this test:
+#   SEND driver.run;
+#   MESSAGES;
+# at the end, driver will be in the 'error' or 'ok' state
+#
+# can repeat this with driver2
 
 f1 FLAG;
 f2 FLAG;
@@ -98,4 +106,17 @@ Driver MACHINE test, test2 {
     COMMAND abort { DISABLE script; ENABLE script; }
     ENTER error { LOG "error"; CALL abort ON SELF }
 }
+
+Driver2 MACHINE {
+    script AnyOnWithSubMachineScript;
+    error WHEN  SELF IS error || SELF IS waiting && TIMER > 10000;
+    ok WHEN script IS ok;
+    waiting WHEN script IS working;
+    idle DEFAULT;
+
+    COMMAND run { SEND run TO script; WAITFOR script IS working }
+    COMMAND abort { DISABLE script; ENABLE script; }
+    ENTER error { LOG "error"; CALL abort ON SELF }
+}
 driver Driver test_machine, indirect_test;
+driver2 Driver2;
