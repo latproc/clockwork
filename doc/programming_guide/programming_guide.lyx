@@ -1,0 +1,1441 @@
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass extbook
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1cm
+\topmargin 1cm
+\rightmargin 1cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle headings
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Clockwork Programming Guide
+\end_layout
+
+\begin_layout Author
+Martin Leadbeater
+\end_layout
+
+\begin_layout Date
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+today
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset toc
+LatexCommand tableofcontents
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Chapter
+Introduction
+\end_layout
+
+\begin_layout Standard
+The clockwork language simulates the operation of physical or abstract systems
+ by defining small components, called 'machines' and linking them together.
+ The language provides a way to monitor components and to generate events
+ which in turn can affect other components or drive electrical interfaces
+ to physical machines.
+ Clockwork uses ruls and events and is inherently parallel.
+ It can be used to model most systems that can be represented using finite
+ state machines.
+\end_layout
+
+\begin_layout Standard
+From the perspective of an experienced programmer, clockwork is a little
+ unusual in that:
+\end_layout
+
+\begin_layout Itemize
+machines tend to be defined statically and persist for the entire execution
+ of the program,
+\end_layout
+
+\begin_layout Itemize
+machines all execute in parallel,
+\end_layout
+
+\begin_layout Itemize
+program control within clockwork is done by defining actions; within those
+ actions, calculations can be performed and other entities can be affected
+ in various ways.
+ 
+\end_layout
+
+\begin_layout Standard
+Many things will be quite familiar, however:
+\end_layout
+
+\begin_layout Itemize
+when performing calculations, 
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+the assignment operator is used to store a result into a variable (clockwork
+ uses the term 'property' or 'option')
+\end_layout
+
+\begin_layout Itemize
+if/else statements can be used (although they are discouraged)
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+clockwork is not statically typed; once a value is assigned to a variable
+ a type is inferred and affects the type of the result.
+\end_layout
+
+\begin_layout Standard
+Clockwork is intended to be used to describe systems of interacting components
+ using state machines.
+ The purpose of the language is to provide a platform for simulation, monitoring
+ and control and it has currently been implemented as a control system using
+ Beckhoff EtherCAT® and The Internet of Things (MQTT).
+\end_layout
+
+\begin_layout Standard
+The language provides the programmer with a means to:
+\end_layout
+
+\begin_layout Itemize
+define the states of a machine in terms of conditions
+\end_layout
+
+\begin_layout Itemize
+define commands that can be invoked on the machine
+\end_layout
+
+\begin_layout Itemize
+define transition rules that determine what actions can be performed and
+ what state transtions are allowable
+\end_layout
+
+\begin_layout Itemize
+define state entry functions that execute when a machine enters a state
+\end_layout
+
+\begin_layout Itemize
+monitor the operation of a machine by sampling events as they occur and
+ interactively inspecting the state and properties of internal components
+\end_layout
+
+\begin_layout Itemize
+view the state and properties of the machine in a web browser
+\end_layout
+
+\begin_layout Itemize
+view the operation of a machine in a 3D view
+\end_layout
+
+\begin_layout Itemize
+interface to serial devices, network devices and modbus devices
+\end_layout
+
+\begin_layout Itemize
+program embedded devices and microcontrollers (not yet available)
+\end_layout
+
+\begin_layout Section
+Machines
+\end_layout
+
+\begin_layout Standard
+Machines are the main components in a Clockwork program; they are models
+ of processing components or real-world devices that can be interconnected.
+ Each Machine has a current state and (normally) several other states that
+ the machine may automatically move to or that can be manually set by processing
+ steps in the program.
+ Please refer to section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sec:Machines"
+
+\end_inset
+
+ for more information about the definition of machines.
+ 
+\end_layout
+
+\begin_layout Standard
+As with other systems, it is also possible to define transition tables that
+ describe how a machine moves between states when events are received.
+ The key difference between Clockwork and other state machine systems is
+ that in Clockwork the software components automatically move between states
+ by monitoring a set of rules that define the states.
+ Rules are defined in terms of the state and properties of itself and other
+ machines.
+ Rules are monitored continuously and cause each machine to automatically
+ switch to the first state found that matches the condition, executing its
+ state entry function as it does so.
+ When a state includes a condition, we tend to refer to that as a 
+\emph on
+stable 
+\emph default
+state but these could also be called 
+\emph on
+automatic
+\emph default
+ states.
+\end_layout
+
+\begin_layout Standard
+Each type of machine is defined by a block of code that provides the name,
+ parameters, properties, conditions and processing of the machine.
+ For example, here is a definition for a Machine that behaves like an AND
+ gate in an electronic circuit; an AND gate is on only when both inputs
+ are on:
+\end_layout
+
+\begin_layout LyX-Code
+AndGate MACHINE input1, input2            #1
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN input1 IS on AND input2 IS on; #2
+\end_layout
+
+\begin_layout LyX-Code
+off DEFAULT                            #3
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+On line #1, the parameters 'input1' and 'input2' represent two other machines
+ in the system that are connected ot this AndGate machine.
+ Line #2 is an automatic state definition that defines a state named 
+\emph on
+on
+\emph default
+ and a rule: 
+\emph on
+input1 is on and input2 is on
+\emph default
+.
+ When the rule is satisfied, the machine will automatically select the named
+ state.
+\end_layout
+
+\begin_layout Standard
+To understand how this works, it might be helpful to image that this machine
+ will repeatedly check the state of the two machines it is connected to
+ and evaluate each of its rules until one a rule returns a 'true' result.
+ In this case, the machine will select the 'on WHEN...' rule if both inputs
+ are in the 'on' state.
+ Once rule is satisfied, no more rules are evaluated until something happens
+ that means the rule is no longer true or until an earlier rule is satisfied.
+\end_layout
+
+\begin_layout Standard
+On Line #3, the statement 
+\noun on
+'
+\family typewriter
+\noun default
+off DEFAULT
+\family default
+\noun on
+'
+\noun default
+ defines a default rule on the 
+\family typewriter
+off
+\family default
+ state that always returns true so if no other rule is satisfied, this rule
+ will be.
+ There can be only one DEFAULT state in each machine but it is not required;
+ the presence of a default state ensures that machines of this type will
+ be in the on state when the condition is true and only when the condition
+ is true.
+\end_layout
+
+\begin_layout Standard
+As mentioned already, a definition is only a plan or template; it does not
+ execute unless a machine is instantiated using its definition.
+ A machine definition can be instantiated by providing a name, the name
+ of the machine definition (also called the machine `class'), and a list
+ or parameters that are required by the definition.
+ For example, following is a machine, using the above definition, that monitors
+ two inputs and turns on when both inputs are on:
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGate a, b;
+\end_layout
+
+\begin_layout LyX-Code
+a FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+b FLAG;
+\end_layout
+
+\begin_layout Standard
+Note that the FLAG machine type is defined internally in the language and
+ at this stage it can be regarded as a machine defined like this:
+\end_layout
+
+\begin_layout LyX-Code
+FLAG MACHINE
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+off INITIAL;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Thus a FLAG can be either on or off and is initially off.
+ There are no rules to define how the machine might automatically move between
+ those states so it is left to other parts of the program to change the
+ state of the FLAG as required.
+\end_layout
+
+\begin_layout Section
+Getting started
+\end_layout
+
+\begin_layout Standard
+The file: README, that comes with the latproc distribution explains how
+ to build the cw program.
+ The essense of the process is:
+\end_layout
+
+\begin_layout Enumerate
+pull the latproc project from git
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+git clone git://github.com/latproc/clockwork.git
+\end_layout
+
+\end_deeper
+\begin_layout Enumerate
+change to the latproc directory and build the interpreter, this document
+ uses the 'production' branch so check that out first:
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+git checkout production
+\end_layout
+
+\begin_layout LyX-Code
+cd clockwork/iod
+\end_layout
+
+\begin_layout LyX-Code
+make
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+The `make' process should produce a 
+\emph on
+build
+\emph default
+ directory withcommandline programs for cw, iosh, modbusd, device_connector
+ and persistd that can be copied to a convenient location (eg /usr/local/bin).
+ You can also use make install from within the build/Debug directory to
+ copy the files to your clockwork/iod directory that you ran the original
+ make from.
+\end_layout
+
+\begin_layout Standard
+There are two language drivers at present, 
+\emph on
+cw
+\emph default
+ and 
+\emph on
+iod
+\emph default
+.
+ The difference between them is that iod includes facilities to talk to
+ I/O hardware via the IgH EtherCAT(tm) Master for Linux and cw does not.
+ We will discuss the use of cw first and discuss the extensions that iod
+ provides afterwards.
+ Note that both iod and cw are able to communicate with devices over MQTT
+ with some limitations as the MQTT implementation is not complete.
+ Through these hardware interfaces, clockwork can be used to design and
+ build complex control systems that interface to the physical world.
+\end_layout
+
+\begin_layout Subsection
+File structure and soure code conventions
+\end_layout
+
+\begin_layout Standard
+When writing programs for Clockwork, program source can be split between
+ any number of files within a user-nominated directory structure.
+ Files and directories are provided to cw on the commandline and the program
+ scans all files given and all files in the directories given.
+ There is no requirement to list the files in any particular order but it
+ is an error if an attempt is made to instantiate a machine with an unknown
+ definition or if a definition is provided more than once.
+ One way to organise source files is to make a common directory so that
+ pieces of code that you want to share between projects are together:
+\end_layout
+
+\begin_layout Quote
+my-projects
+\end_layout
+
+\begin_deeper
+\begin_layout Quote
+common
+\end_layout
+
+\begin_layout Quote
+project1
+\end_layout
+
+\begin_layout Quote
+project2
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+Using this structure, you can run a project using: 
+\end_layout
+
+\begin_layout Quote
+
+\family typewriter
+\size footnotesize
+cd my-projects
+\end_layout
+
+\begin_layout Quote
+
+\family typewriter
+\size footnotesize
+cw common project1
+\end_layout
+
+\begin_layout Standard
+which will make all of your common machines available to the project.
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+Clockwork currently has no scoping mechanism for machine classes or instances
+ so you have to be careful to name machines so they can be reused without
+ name clashes.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+For the sake of brevity, clockwork refers to finite state machines simply
+ as 'machines'.
+ A machine requires a 
+\emph on
+definition
+\emph default
+, that describes the machine's behaviour, including:
+\end_layout
+
+\begin_layout Itemize
+properties or options used within the machine
+\end_layout
+
+\begin_layout Itemize
+sub-machines or components the machine has
+\end_layout
+
+\begin_layout Itemize
+the states the machine can have
+\end_layout
+
+\begin_layout Itemize
+the actions to take when the event is selected as the 'current' state
+\end_layout
+
+\begin_layout Itemize
+and how the machine moves between those states
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+rules that describe how the machine can select its current state
+\end_layout
+
+\begin_layout Itemize
+a transition table that describes how a machine might use events to change
+ state
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+A definition is like a plan or a template for a machine and has no effect
+ unless there is at least one 
+\emph on
+instantiation
+\emph default
+ that informs clockwork that a machine must be instantiated from the plan
+ and connected to other instantiated machines.
+\end_layout
+
+\begin_layout Standard
+Machines are instantiated in a non-active, 'disabled' state, once all required
+ machines are instantiated, they are enabled in an order determined by the
+ interpreter.
+ When a machine is enabled, it enters its 'initial state', named 'INIT'
+ by default, causing an event handler to be executed.
+ Each time a machine changes state the associated action is executed.
+\end_layout
+
+\begin_layout Standard
+Within a clockwork program:
+\end_layout
+
+\begin_layout Itemize
+Comments can be started with `#' and continue to the end-of-line or can
+ be started by `/*' and ended by `*/'.
+\end_layout
+
+\begin_layout Itemize
+Program text is freeform, where line breaks, tabs and spaces are all treated
+ equally except where they occur within quoted strings or in the case of
+ line breaks where they mark the end of a single-line comment.
+\end_layout
+
+\begin_layout Itemize
+Statements must be separated by semicolon (`;') but the semicolon before
+ the closing brace (`}') that ends a group of statements may still be given.
+\end_layout
+
+\begin_layout Subsection
+Hello World
+\end_layout
+
+\begin_layout Standard
+Here is a program that will display a message on the terminal:
+\end_layout
+
+\begin_layout LyX-Code
+Hello MACHINE { 
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+ENTER INIT { 
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+LOG "Hello World"; 
+\end_layout
+
+\begin_layout LyX-Code
+SHUTDOWN
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+} 
+\end_layout
+
+\begin_layout LyX-Code
+hello Hello;
+\end_layout
+
+\begin_layout Standard
+The above program can be executed by saving it into a file (eg 'hello.cw')
+ and running cw:
+\end_layout
+
+\begin_layout LyX-Code
+cw hello.cw
+\end_layout
+
+\begin_layout Standard
+The output should be displayed as:
+\end_layout
+
+\begin_layout LyX-Code
+------- hello: Hello World -------
+\end_layout
+
+\begin_layout Standard
+Note that case is important in Clockwork and that the clockwork language
+ uses uppercase letters for its reserved words and builtin machine definitions.
+ In Clockwork, instructions can only be executed inside event handlers,
+ so to log a simple message first requires that we define a class of state
+ machine and then an event handler within that state machine.
+ 
+\end_layout
+
+\begin_layout Standard
+The example above defines a class of state machine called 'Hello' and an
+ event handler for entry to INIT; our LOG statment is executed when an instance
+ of the 'Hello' class of machine is started.
+\end_layout
+
+\begin_layout Standard
+Note that after the LOG statement, our program has a SHUTDOWN statement;
+ Clockwork is intended to be used to monitor system states or provide ongoing
+ control functions so it normally does not exit; the SHUTDOWN statement
+ tells the driver to shutdown the virtual environment, stopping all machines.
+\end_layout
+
+\begin_layout Chapter
+Programming
+\end_layout
+
+\begin_layout Section
+Machines
+\begin_inset CommandInset label
+LatexCommand label
+name "sec:Machines"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Machines are the core of clockwork programming; they define a virtual representa
+tion of the operation of real machines or processes and in so doing provide
+ a correspondence between the state of the program and the state of the
+ machinery in the real world.
+\end_layout
+
+\begin_layout Standard
+To define a machine use:
+\emph on
+ class_name 
+\emph default
+MACHINE 
+\emph on
+parameter1, parameter2, ...
+ 
+\emph default
+{ } and place the definition between the braces.
+ 
+\end_layout
+
+\begin_layout Standard
+To create an instance of a machine, use: 
+\emph on
+name
+\emph default
+ 
+\emph on
+class_name
+\emph default
+ 
+\emph on
+param1, param2, ...
+ 
+\emph default
+;.
+ There can be any number of instances for a given machine definition.
+ The trick is mostly to do with what goes between the braces.
+\end_layout
+
+\begin_layout Standard
+A Machine is similar to a Class in other languages in that it encapsulates
+ state and provides methods that implement procedural logic.
+ Machines are different in that they execute as independent entities, continuous
+ly evaluating the state of their environment and reacting to it.
+\end_layout
+
+\begin_layout Section
+Controlling outputs
+\end_layout
+
+\begin_layout Standard
+The above AndGate machine does not directly control any other part of the
+ system, it simply sets its own state based on its inputs.
+ After detecting the condition where both of the inputs are on, we may want
+ to do something about it.
+ The AndGate can be adjusted to, for example, turn on a light when the two
+ inputs are on, to do this, we add an ENTER method for the on state:
+\end_layout
+
+\begin_layout LyX-Code
+AndGateSwitch MACHINE input1, input2, output
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on WHEN input1 IS on AND input2 IS on;
+\end_layout
+
+\begin_layout LyX-Code
+off DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+ENTER on { SET output TO on; }
+\end_layout
+
+\begin_layout LyX-Code
+ENTER off { SET output TO off; }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+light FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+a FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+b FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGateSwitch a, b, light;
+\end_layout
+
+\begin_layout Standard
+This approach, where we pass the object to be controlled makes the linkage
+ explicit but there is alternative, where another machine monitors the state
+ of the AndGate and then performs the control function:
+\end_layout
+
+\begin_layout LyX-Code
+LightController MACHINE input, output {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+  active WHEN 1==1, TAG output WHEN input IS on;
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+Note the test 1==1 is a functional placeholder; the intention is to define
+ the value TRUE for this kind of situation.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+light FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+a FLAG; b FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+and_gate AndGate a, b;
+\end_layout
+
+\begin_layout LyX-Code
+lc LightController and_gate, light
+\end_layout
+
+\begin_layout Standard
+in this case, AndGate does not manipulate or even know about the output.
+\end_layout
+
+\begin_layout Standard
+It is not clear yet whether this approach is better or worse in general
+ however, if multiple machines need to be driven by the AndGate, the separate
+ controller pattern is much more reusable.
+\end_layout
+
+\begin_layout Standard
+So far we have been using FLAG machines as placeholders for machines that
+ have an interface to hardware.
+ For the sake of describing the language, this is sufficient and has the
+ advantage that a command interface or web page can be used to alter the
+ flags for test purposes.
+ Please refer to the user manual for information about the command interface
+ and the web interface.
+\end_layout
+
+\begin_layout Section
+Examples
+\end_layout
+
+\begin_layout Subsection
+Counting how long a machine is in a given state
+\end_layout
+
+\begin_layout Standard
+Just before a machine enters a new state, its TIMER property is reset to
+ zero.
+ It is safe to copy the value every time a machine leaves a state.
+ 
+\end_layout
+
+\begin_layout Chapter
+Examples
+\end_layout
+
+\begin_layout Subsection
+Light Sensor
+\end_layout
+
+\begin_layout Standard
+Here is an example of how Clockwork can be used to define a monitor that
+ turns a light on or off once there is no activity in a room.
+ We start with a sensor and a switch, with the idea that when the sensor
+ comes on there is activity so we turn the light on.
+ When the sensor goes off, we turn off the light.
+ For the time being, we use the builtin statemachine called 'FLAG' to simulate
+ the sensor and the switch.
+ A FLAG has two states, 
+\emph on
+on
+\emph default
+ and 
+\emph on
+off
+\emph default
+.
+\end_layout
+
+\begin_layout Standard
+We can generally define things in any order, so lets define our light controller
+ first.
+\end_layout
+
+\begin_layout LyX-Code
+LightController MACHINE sensor, light_switch {
+\end_layout
+
+\begin_layout LyX-Code
+    active WHEN sensor IS on;
+\end_layout
+
+\begin_layout LyX-Code
+    inactive DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+    ENTER active { SET light_switch TO on }
+\end_layout
+
+\begin_layout LyX-Code
+    ENTER inactive { SET light_switch TO off } 
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+The definition simply says that when the sensor is on, the light controller
+ is active and the light should be turned on.
+ Otherwise, the light controller is inactive and the light should be turned
+ off.
+ The ENTER methods are executed each time the MACHINE enters a given state.
+ Notice that we do not initialise the light, when the program starts, the
+ LightController will determine what to do from the rules we have supplied.
+\end_layout
+
+\begin_layout Standard
+The LightController needs two parameters; a sensor and a light switch.
+ For the time being, we instantiate our Flags and our controller as follows:
+\end_layout
+
+\begin_layout LyX-Code
+sensor FLAG; 
+\end_layout
+
+\begin_layout LyX-Code
+switch FLAG;
+\end_layout
+
+\begin_layout LyX-Code
+controller LightController sensor, switch;
+\end_layout
+
+\begin_layout Standard
+Note that these entries can be given in any order.
+\end_layout
+
+\begin_layout Section
+Patterns
+\end_layout
+
+\begin_layout Standard
+The following demonstrates how to detect a message and extract data from
+ it.
+ In particular, this machine looks for a four character message beginning
+ with `c' and ending with `l'.
+ When a match is detected, it will set a variable called `single' to the
+ first character of the message and the variable all to the first $n$ alphabetic
+ letters.
+\end_layout
+
+\begin_layout Standard
+Note that another machine might send the message using:
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+pattern_test.message := 'curl'
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+PatternTest MACHINE {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+	OPTION message "";
+\end_layout
+
+\begin_layout LyX-Code
+	found WHEN message MATCHES `c..l`;
+\end_layout
+
+\begin_layout LyX-Code
+	not_found DEFAULT; 
+\end_layout
+
+\begin_layout LyX-Code
+	ENTER found {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+		single := COPY `[A-Za-z]` FROM message; 		
+\end_layout
+
+\begin_layout LyX-Code
+		all := COPY ALL `[A-Za-z]` FROM message;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+	}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+pattern_test PatternTest;
+\end_layout
+
+\begin_layout Section
+Using lists
+\end_layout
+
+\begin_layout Standard
+Lists can be treated like sets or lists.
+ Here are some examples.
+\end_layout
+
+\begin_layout Subsection
+Expressions involving lists
+\end_layout
+
+\begin_layout Itemize
+ANY IN set_name ARE | IS state_name # returns true if any of the items in
+ the set are in the state given
+\end_layout
+
+\begin_layout Itemize
+ANY PROPERTY property IN set_name ARE | IS value
+\end_layout
+
+\begin_layout Itemize
+ALL IN set_name ARE | IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+ALL PROPERTY property_name IN set_name ARE | IS state_name/value
+\end_layout
+
+\begin_layout Itemize
+COUNT state_name FROM set_name # counts the number of items in the set that
+ are in the named state
+\end_layout
+
+\begin_layout Itemize
+COUNT WHERE expression FROM set_name # counts the number of items in the
+ set where the expression returns true 
+\end_layout
+
+\begin_layout Itemize
+BITSET FROM set_name state_name # returns a bitset that represents the an
+ on/off value for the given state name.
+ Further examples use variable values..
+\end_layout
+
+\begin_layout Itemize
+COPY n FROM set_name # picks n elements at random from a set
+\end_layout
+
+\begin_layout Itemize
+TAKE n FROM set_name # takes n elements at random from a set
+\end_layout
+
+\begin_layout Subsection
+Statements involving lists
+\end_layout
+
+\begin_layout Itemize
+BITSET FROM set_name WITH STATE state_name # returns a bitset that represents
+ the an on/off value for the given state name.
+ Further examples use variable values..
+\end_layout
+
+\begin_layout Section
+Latched input
+\end_layout
+
+\begin_layout Standard
+Here is an example of how to latch an input; once the input comes on the
+ latched input comes on and stays on until it is reset
+\end_layout
+
+\begin_layout LyX-Code
+GenericLatch MACHINE input {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+off INITIAL;
+\end_layout
+
+\begin_layout LyX-Code
+RECEIVE input.on_enter { SET SELF TO on }
+\end_layout
+
+\begin_layout LyX-Code
+TRANSITION on TO off ON reset;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Section
+Calling functions
+\end_layout
+
+\begin_layout Standard
+Machines can receive messages from other machines.
+ To send a message `start` to a machine called `other', the statement:
+\end_layout
+
+\begin_layout LyX-Code
+SEND start TO other;
+\end_layout
+
+\begin_layout Standard
+would be used.
+ Sometimes, we refer to these messages as `commands' and the two terms can
+ be used interchangeably.
+ The following example demonstrates the `CALL' syntax to send the message.
+ Apart from the name difference, a CALL statement will block until the command
+ handled at the receiving machine.
+\end_layout
+
+\begin_layout LyX-Code
+CommandTest MACHINE other {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+	a DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+	ENTER a { 
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+		LOG "a"; 
+\end_layout
+
+\begin_layout LyX-Code
+		CALL x ON SELF;
+\end_layout
+
+\begin_layout LyX-Code
+		CALL y ON other; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+	}
+\end_layout
+
+\begin_layout LyX-Code
+	COMMAND x { LOG "x on CommandTest called" }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+	}
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+OtherTest MACHINE {
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+	COMMAND y { LOG "y on OtherTest called" }
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+o OtherTest;
+\end_layout
+
+\begin_layout LyX-Code
+test CommandTest o;
+\end_layout
+
+\begin_layout Section
+LED Light chaser
+\end_layout
+
+\begin_layout Standard
+Here is a program that produces a light chaser pattern on a list of lights.
+ For this application, we want to turn a light on for one second and turn
+ on the next light as soon as the one-second timer is up.
+ There are many ways to express this rule but this example uses just two
+ rules, one fairly complicated rule that determines if a light should be
+ on and a default rule to make sure it is off in all other cases.
+\end_layout
+
+\begin_layout Standard
+There is a problem here because there is already a rule that controls whether
+ a light can be on and that rule needs the light to the left to already
+ be on.
+ How should we kick this cycle off? We could try to change the 'on' state
+ rule but it is already fairly complicated or we could use a special definition
+ for the first machine.
+ 
+\end_layout
+
+\begin_layout Standard
+This example takes the approach of momentarily pushing a light into the
+ on state by an external event.
+ The DURING statement is attached to a state and an action, while the action
+ is being processed, the machine should go into the attached state.
+ For example, in our case, 
+\emph on
+on DURING start
+\emph default
+ says that that during processing of the 'start' message the machine should
+ enter the 'on' state.
+ Unfortunately, by itself that isn't enough.
+ The rule for on is still checked and refuses to let the machine enter on
+ if the rule does not apply.
+ One way around this is to declare the state manually as well as with the
+ rule.
+ This is what the statement 
+\emph on
+on STATE
+\emph default
+ does; it says the state called 'on' can be activated without regard to
+ other rules.
+\end_layout
+
+\begin_layout LyX-Code
+Light MACHINE left, right {     
+\end_layout
+
+\begin_layout LyX-Code
+on WHEN right IS off 
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER >= 1000);  
+ 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+off DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+on STATE;
+\end_layout
+
+\begin_layout LyX-Code
+on DURING start { }   
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+led01 Light led06, led02; 
+\end_layout
+
+\begin_layout LyX-Code
+led02 Light led01, led03; 
+\end_layout
+
+\begin_layout LyX-Code
+led03 Light led02, led04; 
+\end_layout
+
+\begin_layout LyX-Code
+led04 Light led03, led05; 
+\end_layout
+
+\begin_layout LyX-Code
+led05 Light led04, led06; 
+\end_layout
+
+\begin_layout LyX-Code
+led06 Light led05, led01;
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename ../user_guide/images/light_chaser.png
+	lyxscale 50
+	scale 25
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+LED Light Chaser demonstration displayed in the web page
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

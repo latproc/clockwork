@@ -4,7 +4,7 @@
 \begin_header
 \save_transient_properties true
 \origin unavailable
-\textclass article
+\textclass extbook
 \use_default_options true
 \maintain_unincluded_children false
 \language english
@@ -54,9 +54,9 @@
 \shortcut idx
 \color #008000
 \end_index
-\leftmargin 1cm
-\topmargin 1cm
-\rightmargin 1cm
+\leftmargin 1in
+\topmargin 1in
+\rightmargin 1in
 \bottommargin 2cm
 \headheight 1cm
 \headsep 1cm
@@ -68,7 +68,7 @@
 \quotes_language english
 \papercolumns 1
 \papersides 1
-\paperpagestyle default
+\paperpagestyle headings
 \tracking_changes false
 \output_changes false
 \html_math_output 0
@@ -79,7 +79,31 @@
 \begin_body
 
 \begin_layout Title
-Latproc Tools User Guide
+Latproc User Guide
+\end_layout
+
+\begin_layout Author
+Martin Leadbeater
+\end_layout
+
+\begin_layout Date
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+today
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Chapter
+Overview
 \end_layout
 
 \begin_layout Section
@@ -87,9 +111,12 @@ Preface
 \end_layout
 
 \begin_layout Standard
-There are several tools in the Latproc family, most of these are centred
- around the language (clockwork) and in monitoring and controlling the operation
- of systems built with it.
+Latproc is a language and tools for process control, the language is called
+ 'Clockwork' and there are several tools in the Latproc family, most of
+ these are centred around the language and in monitoring and controlling
+ the operation of systems built with it.
+ This guide aims to help you get started with using our tools and gives
+ an introductory tutorial on the language.
 \end_layout
 
 \begin_layout Section
@@ -98,18 +125,11 @@ Introduction
 
 \begin_layout Standard
 This guide describes the tools that come with the Latproc project (https://githu
-b.com/latproc); the programs include:
+b.com/latproc); the tools include:
 \end_layout
 
 \begin_layout Description
-beckhoffd a program to provide a zmq interface to an EtherCAT installation.
- 
-\emph on
-Not currently working
-\end_layout
-
-\begin_layout Description
-cw a daemon that runs clockwork programs
+cw a daemon that runs clockwork programs with no EtherCAT capability
 \end_layout
 
 \begin_layout Description
@@ -121,8 +141,8 @@ humid a user interface editor and human-machine interface program
 \end_layout
 
 \begin_layout Description
-iod a daemon that talks to EtherCAT to interact with io hardware using the
- clockwork language
+iod a daemon that talks to EtherCAT™ to interact with io hardware using
+ the clockwork language
 \end_layout
 
 \begin_layout Description
@@ -192,6 +212,78 @@ We developed the software using open source development tools: GNU gcc,
  bison and flex and used Linux and MacOSX workstations.
 \end_layout
 
+\begin_layout Chapter
+Getting started
+\end_layout
+
+\begin_layout Standard
+Install clockwork 
+\end_layout
+
+\begin_layout LyX-Code
+git clone http://github.com/latproc/clockwork 
+\end_layout
+
+\begin_layout LyX-Code
+git checkout production
+\end_layout
+
+\begin_layout LyX-Code
+cd clockwork/iod
+\end_layout
+
+\begin_layout LyX-Code
+make
+\end_layout
+
+\begin_layout Standard
+The above will create hopefully compile various tools and leave them in
+ the current directory.
+ ...
+ (TODO)
+\end_layout
+
+\begin_layout Standard
+Run clockwork:
+\end_layout
+
+\begin_layout LyX-Code
+nano hello.cw
+\end_layout
+
+\begin_layout Standard
+enter the following:
+\end_layout
+
+\begin_layout LyX-Code
+Hello MACHINE { ENTER INIT { LOG "Hello World"; SHUTDOWN } }
+\end_layout
+
+\begin_layout LyX-Code
+hello Hello; 
+\end_layout
+
+\begin_layout Standard
+save the file and execute the 'cw' interpreter:
+\end_layout
+
+\begin_layout LyX-Code
+cw hello.cw
+\end_layout
+
+\begin_layout Standard
+The program will display a hello message: 
+\end_layout
+
+\begin_layout LyX-Code
+2013-09-03 15:39:36.689 ------- hello: Hello World -------
+\end_layout
+
+\begin_layout Standard
+The hello program is a bit unusual for clockwork because normally clockwork
+ will keep running, monitoring and controlling things as instructed.
+\end_layout
+
 \begin_layout Subsection
 Communicating with Clockwork servers
 \end_layout
@@ -199,8 +291,8 @@ Communicating with Clockwork servers
 \begin_layout Standard
 When a Clockwork program is being run, you can interact with it using a
  command interface or via a web page.
- The simplest method got get started with is the command interface, the
- web interface needs some extra configuration for the web server.
+ The simplest method to get started with is the command interface; the web
+ interface needs some extra configuration for the web server.
  Refer to section 
 \begin_inset CommandInset ref
 LatexCommand ref
@@ -214,8 +306,8 @@ reference "subsec:iosh"
 \begin_layout Standard
 The latproc source includes some PHP code that provides a simple web view
  of the state machines in the executing program.
- The program requires PHP version 5.3 and has been tested with apache and
- with minihttpd.
+ The program requires PHP version 5.3 or later and has been tested with apache
+ and with minihttpd.
  [further explanation of the setup to be done].
 \end_layout
 
@@ -225,9 +317,363 @@ Repositories and projects
 
 \begin_layout Standard
 The main latproc repository is at https://github.com/latproc/clockwork.git.
- Some tools within latproc are in their own repositories, notable the event
+ Some tools within latproc are in their own repositories, notably the event
  sampler, filter and terminal-scope (https://github.com/latproc/scope) and
  the user interface driver, humid (https://github.com/latproc/humid).
+\end_layout
+
+\begin_layout Section
+Using the interactive shell
+\end_layout
+
+\begin_layout Standard
+Clockwork programs run continuously and it is possible to interact with
+ them using a number of techniques: 
+\end_layout
+
+\begin_layout Itemize
+the interactive shell (iosh)
+\end_layout
+
+\begin_layout Itemize
+the web user interface (to be covered later in this document)
+\end_layout
+
+\begin_layout Itemize
+using ∅MQ (zeromq)
+\end_layout
+
+\begin_layout Itemize
+using modbus
+\end_layout
+
+\begin_layout Standard
+The simplest of these to start with is iosh.
+\end_layout
+
+\begin_layout Standard
+Starting iosh
+\end_layout
+
+\begin_layout Standard
+execute the steps in section , above to build 'cw' and 'iosh' 
+\end_layout
+
+\begin_layout Standard
+run iod/iosh (if you are still in the clockwork/iod directory, simply type
+ 
+\end_layout
+
+\begin_layout LyX-Code
+./iosh 
+\end_layout
+
+\begin_layout Standard
+You should see a prompt like the following:
+\end_layout
+
+\begin_layout LyX-Code
+Connecting to tcp://127.0.0.1:5555 
+\end_layout
+
+\begin_layout LyX-Code
+Enter HELP; for help.
+ Note that ';' is required at the end of each command use exit; or ctrl-D
+ to exit this program 
+\end_layout
+
+\begin_layout Standard
+Enter HELP; to display a list of available commands and in another terminal,
+ run clockwork against one of the test files in the clockwork/tests directory:
+\end_layout
+
+\begin_layout LyX-Code
+./cw ../tests/blink.cw
+\end_layout
+
+\begin_layout Standard
+Back in iosh, enter LIST; to display a list of machines that the clockwork
+ program is running;
+\end_layout
+
+\begin_layout Standard
+> LIST; type this 
+\end_layout
+
+\begin_layout Standard
+blinker Blinker clockwork responds with this
+\end_layout
+
+\begin_layout Standard
+4.
+ Look at the source for the blink program: 
+\end_layout
+
+\begin_layout LyX-Code
+1 Blinker MACHINE { 
+\end_layout
+
+\begin_layout LyX-Code
+2 on STATE; 
+\end_layout
+
+\begin_layout LyX-Code
+3 off STATE; 
+\end_layout
+
+\begin_layout LyX-Code
+4 ENTER on { WAIT 1000; SET SELF TO off; } 
+\end_layout
+
+\begin_layout LyX-Code
+5 ENTER off { WAIT 1000; SET SELF TO on; } 
+\end_layout
+
+\begin_layout LyX-Code
+6 } 
+\end_layout
+
+\begin_layout LyX-Code
+7 blinker Blinker; 
+\end_layout
+
+\begin_layout Standard
+Note that the machine has two states, 'on' and 'off' the two ENTER functions
+ cause the machine to flip between on and off after a delay of 1000ms.
+ 
+\end_layout
+
+\begin_layout Standard
+You can also describe the internals of the blinker machine:
+\end_layout
+
+\begin_layout LyX-Code
+1	> DESCRIBE blinker; 
+\end_layout
+
+\begin_layout LyX-Code
+2	> --------------- 
+\end_layout
+
+\begin_layout LyX-Code
+3	blinker: INIT 
+\end_layout
+
+\begin_layout LyX-Code
+4	  Class: Blinker instantiated at: blink.cw line:10 
+\end_layout
+
+\begin_layout LyX-Code
+5	properties: 
+\end_layout
+
+\begin_layout LyX-Code
+6	  NAME:blinker,STATE:INIT 
+\end_layout
+
+\begin_layout LyX-Code
+7	
+\end_layout
+
+\begin_layout LyX-Code
+8	Timer: 24503 
+\end_layout
+
+\begin_layout Standard
+From this description you can see that the machine called 'blinker' is in
+ a state 'INIT' (line 3), also, blinker has been in the INIT state for 24.503
+ seconds.
+ When clockwork starts running, all machines enter a state called INIT.
+ Normally they quickly change state automatically but since the 'blinker'
+ has nothing that causes a state change to 'on' or 'off', it will stay in
+ INIT forever.
+ 
+\end_layout
+
+\begin_layout Standard
+Manually set the blinker into the 'on' state using the SET command in iosh:
+ 
+\end_layout
+
+\begin_layout LyX-Code
+> SET blinker TO on; 
+\end_layout
+
+\begin_layout Standard
+You can also get the state of the blinker using the GET command: 
+\end_layout
+
+\begin_layout LyX-Code
+> GET blinker; 
+\end_layout
+
+\begin_layout LyX-Code
+> on 
+\end_layout
+
+\begin_layout LyX-Code
+> GET blinker; 
+\end_layout
+
+\begin_layout LyX-Code
+> off
+\end_layout
+
+\begin_layout Standard
+Note: 
+\end_layout
+
+\begin_layout Standard
+If the iosh command prompt '>' does not come back, iosh is trying to connect
+ to an instance of clockwork but can't; check that you still have cw running
+ on the local host.
+ 
+\end_layout
+
+\begin_layout Subsection
+Monitoring clockwork while it is running
+\end_layout
+
+\begin_layout Standard
+Clockwork uses the MQ messaging library for most of its communication needs,
+ for example, iosh communicates with clockwork via ∅MQ.
+ Whenever machines change state, clockwork sends a message on a ∅MQ channel
+ that other programs can subscribe to.
+ The distribution includes a sample program that monitors this channel and
+ displays state change information on the terminal.
+ This example runs from the top-level of the clockwork distribution.
+ 
+\end_layout
+
+\begin_layout Standard
+1.
+ execute the steps in above to step build 'cw' and 'iosh' 
+\end_layout
+
+\begin_layout Standard
+2.
+ in another terminal, run clockwork against the blink.cw files in the clockwork/t
+ests directory:
+\end_layout
+
+\begin_layout LyX-Code
+iod/cw ../tests/blink.cw 3.
+ 
+\end_layout
+
+\begin_layout Standard
+use iosh to start the blinker working:
+\end_layout
+
+\begin_layout LyX-Code
+echo 'SET blinker TO on;' | iod/iosh
+\end_layout
+
+\begin_layout Standard
+Run the message monitoring program: TODO - fix this to use sampler...
+\end_layout
+
+\begin_layout LyX-Code
+$ iod/zmq_ecat_monitor 
+\end_layout
+
+\begin_layout LyX-Code
+Listening on port 5556 
+\end_layout
+
+\begin_layout LyX-Code
+blinker  STATE on 
+\end_layout
+
+\begin_layout LyX-Code
+blinker  STATE off 
+\end_layout
+
+\begin_layout LyX-Code
+blinker  STATE on 
+\end_layout
+
+\begin_layout LyX-Code
+blinker  STATE off
+\end_layout
+
+\begin_layout Standard
+The monitor can be very useful (and very verbose) when testing clockwork
+ programs but we have also recently started a new project at http://github.com/la
+tproc/scope that aims to make much more sophisticated monitoring tools.
+ 
+\end_layout
+
+\begin_layout Subsection
+Interacting with clockwork using a web client 
+\end_layout
+
+\begin_layout Standard
+The clockwork distribution includes a copy of mini_httpd (http://acme.com/softwar
+e/mini_httpd/) that we have configured to provide a server for web-based
+ interaction.
+ There are a few other things to do to setup the server however and you
+ may be more comfortable using another system.
+ The critical components are: php 5.3 and the zmq library for php (http://zeromq.o
+rg/bindings:php).
+ [TBD more information required]
+\end_layout
+
+\begin_layout Standard
+The web site organizes groups of clockwork machines into tabs and also provides
+ some other tabs relating the Beckhoff EtherCAT(tm) system if it is being
+ used.
+ To keep the web page in sync with clockwork, the client periodically issues
+ a request for a list of all machines, their states and properties.
+ 
+\end_layout
+
+\begin_layout Standard
+For example, here is the LIST JSON output for our blink.cw program 
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_layout LyX-Code
+	"name":	"blinker",
+\end_layout
+
+\begin_layout LyX-Code
+	"class":	"Blinker",
+\end_layout
+
+\begin_layout LyX-Code
+	"NAME":	"blinker",
+\end_layout
+
+\begin_layout LyX-Code
+	"STATE":	"INIT",
+\end_layout
+
+\begin_layout LyX-Code
+	"delay":	10,
+\end_layout
+
+\begin_layout LyX-Code
+	"enabled":	true,
+\end_layout
+
+\begin_layout LyX-Code
+	"state":	"INIT",
+\end_layout
+
+\begin_layout LyX-Code
+	"commands":	"turnOff,turnOn",
+\end_layout
+
+\begin_layout LyX-Code
+	"display":	"delay"
+\end_layout
+
+\begin_layout LyX-Code
+}
 \end_layout
 
 \begin_layout Section
@@ -247,7 +693,7 @@ name "subsec:iosh"
 
 \begin_layout Standard
 Clockwork and iod both provide support for a simple shell, called iosh via
- the Ømq (zeromq) network library.
+ the Ømq (ZeroMQ) network library.
  To connect to the clockwork server, simply run iosh:
 \end_layout
 

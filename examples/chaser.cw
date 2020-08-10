@@ -2,9 +2,10 @@
 # list of lights.
 
 Cell MACHINE left, right {
+    on STATE;
     on WHEN right IS off AND (SELF IS on OR left IS on AND SELF IS off AND left.TIMER >= 1000);
     off DEFAULT;
-    starting DURING start { SET SELF TO on }
+    on DURING start { }
 	ENTER INIT { count := 0; }
 	ENTER on  { count := count + 1; }
 }
