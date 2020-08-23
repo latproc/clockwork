@@ -88,7 +88,7 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 	try { 
 		received = sock.recv(&msg, ZMQ_DONTWAIT);
 	}
-	catch (zmq::error_t err) {
+	catch (zmq::error_t &err) {
 		if (zmq_errno() == EINTR) { 
 			std::cout << "ecat_thread interrupted in recv\n";
 			return false;
@@ -326,7 +326,7 @@ int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clo
 			} // end of switch
 			break;
 		}
-		catch (zmq::error_t err) {
+		catch (zmq::error_t &err) {
 			if (zmq_errno() == EINTR) { 
 				DBG_ETHERCAT << "interrupted when sending update (" << stage << ")\n";
 				usleep(50); 
@@ -393,7 +393,7 @@ bool EtherCATThread::getEtherCatResponse( zmq::socket_t *sync_sock, uint64_t glo
 		}
 		return false;
 	}
-	catch (zmq::error_t ex) {
+	catch (zmq::error_t &ex) {
 		if (zmq_errno() != EINTR) {
 			DBG_ETHERCAT << "EtherCAT error " << zmq_strerror(errno) << "checking for update from clockwork\n";
 		}

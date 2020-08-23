@@ -409,17 +409,20 @@ int main (int argc, char const *argv[])
         then = now;
     }
     try {
-    MQTTInterface::instance()->stop();
-    Dispatcher::instance()->stop();
-    processMonitor.stop();
-    kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
-    process.join();
-    stateMonitor->stop();
-    monitor.join();
+        MQTTInterface::instance()->stop();
+        Dispatcher::instance()->stop();
+        processMonitor.stop();
+        kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
+        process.join();
+        stateMonitor->stop();
+        monitor.join();
         delete context;
     }
-    catch (zmq::error_t) {
-        
+    catch (zmq::error_t&) {
+	std::cerr << "zeromq error occured on exit\n";
     }
-	return 0;
+    catch (...) {
+	std::cerr << "error occured on exit\n";
+    }
+    return 0;
 }

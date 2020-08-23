@@ -111,7 +111,7 @@ struct CommandThread {
 
 	            free(data);
             }
-            catch (std::exception e) {
+            catch (std::exception &e) {
                 std::cout << e.what() << "\n";
 				usleep(200000);
                //exit(1);

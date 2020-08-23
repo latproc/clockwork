@@ -621,7 +621,7 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
             break;
         }
-        catch (zmq::error_t err) {
+        catch (zmq::error_t &err) {
             if (zmq_errno() != EADDRINUSE) {
                 break;
             }
@@ -930,7 +930,7 @@ void Channel::operator()() {
 					usleep(10);
 				}
 			}
-			catch(zmq::error_t err) {
+			catch(zmq::error_t &err) {
 				DBG_CHANNELS << "Channel " << name << " ZMQ error: " << errno << ": " << zmq_strerror(errno)
 					<< " trying to create internal channel command listener socket\n";
 				if (--retry == 0) { assert(false); exit(2); }
@@ -1033,7 +1033,7 @@ void Channel::operator()() {
 				if (rc == 0) {poll_timeout = 20; continue; } else poll_timeout = 1;
 
 			}
-			catch ( zmq::error_t tex) {
+			catch ( zmq::error_t &tex) {
 				{FileLogger fl(program_name);
 					fl.f() << name << "Error polling channel port\n";
 				}
@@ -1084,13 +1084,13 @@ void Channel::operator()() {
 			}
 
 		}
-		catch (zmq::error_t zex) {
+		catch (zmq::error_t &zex) {
 			{
 				FileLogger fl(program_name);
 				fl.f() << "zmq exception in Channel " << name << " " << zmq_strerror(zmq_errno()) << "\n";
 			}
 		}
-		catch (std::exception ex) {
+		catch (std::exception &ex) {
 			NB_MSG << "Channel " << name << " saw exception " << ex.what() << "\n";
 		}
 	}
@@ -1176,7 +1176,7 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 			usleep(100);
 			return sock;
 		}
-		catch(std::exception ex) {
+		catch(std::exception &ex) {
 			assert(false);
 			return 0;
 		}
@@ -2314,7 +2314,7 @@ CommandSocketInfo::CommandSocketInfo(Channel* chn) : sock(0), index(0) {
 		sock->bind(buf);
 		usleep(50);
 	}
-	catch (zmq::error_t zex) {
+	catch (zmq::error_t &zex) {
 		char errmsg[150];
 		snprintf(errmsg, 150, "Exception binding a command socket for %s: %s", chn->getName().c_str(), buf);
 		MessageLog::instance()->add(errmsg);
@@ -2348,7 +2348,7 @@ void Channel::setupCommandSockets() {
 				NB_MSG << tnam << " " << chn->name << " remote end bound to socket " << chn->internals->cmd_sock_info->address << "\n";
 				usleep(50);
 			}
-			catch (std::exception ex) {
+			catch (std::exception &ex) {
 				NB_MSG << "setupCommandSockets " << ex.what() << "\n";
 			}
 		}

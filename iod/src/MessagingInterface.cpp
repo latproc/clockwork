@@ -125,7 +125,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			}
 			return (*response_len == 0) ? false : true;
 		}
-		catch (zmq::error_t e) {
+		catch (zmq::error_t &e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
@@ -200,7 +200,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			}
 			else return false;
 		}
-		catch (zmq::error_t e) {
+		catch (zmq::error_t &e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
@@ -248,7 +248,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			}
 			return (response_len == 0) ? false : true;
 		}
-		catch (zmq::error_t e) {
+		catch (zmq::error_t &e) {
 			{
 				FileLogger fl(program_name); 
 				fl.f() << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
@@ -295,7 +295,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 			}
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (zmq::error_t &ex) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name);
@@ -330,7 +330,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 			sock.send(msg);
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (zmq::error_t &) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name); 
@@ -504,7 +504,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
             DBG_CHANNELS << "found available port " << res << "\n";
             break;
         }
-        catch (zmq::error_t err) {
+        catch (zmq::error_t &err) {
             if (zmq_errno() != EADDRINUSE) {
                 res = 0;
                 break;
@@ -613,7 +613,7 @@ char *MessagingInterface::send(const char *txt) {
 			    continue;
 		    }
 	    }
-	    catch (std::exception e) {
+	    catch (std::exception &e) {
 		    if (errno == EINTR || errno == EAGAIN) {
 			    std::cerr << "MessagingInterface::send " << strerror(errno);
 			    if (--retries <= 0) {
@@ -672,7 +672,7 @@ char *MessagingInterface::send(const char *txt) {
                 }
                 break;
             }
-            catch (std::exception e) {
+            catch (std::exception &e) {
                 if (zmq_errno())
                     std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
                 else

@@ -337,7 +337,7 @@ struct CommandThread {
 
 	            free(data);
             }
-            catch (std::exception e) {
+            catch (std::exception &e) {
 				if (data) { free(data); data = 0; }
                 //std::cout << e.what() << "\n";
 				//usleep(200000);
@@ -553,7 +553,7 @@ int main (int argc, char const *argv[])
 				size_t len = ecat_sync.recv(buf, 10);
 				if (len) break;
 			}
-			catch (std::exception ex) {
+			catch (std::exception &ex) {
 				continue; // TBD watch for infinite loop here
 			}
 		}

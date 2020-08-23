@@ -331,7 +331,7 @@ void Scheduler::idle() {
 			if (delay>10)
 				boost::this_thread::sleep_for(boost::chrono::microseconds(delay));
 			}
-			catch (boost::thread_interrupted ex) {
+			catch (boost::thread_interrupted &ex) {
 				// permit interruption
 			}
 		}
