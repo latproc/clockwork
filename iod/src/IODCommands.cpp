@@ -672,7 +672,6 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         char *res = cJSON_Print(root);
         cJSON_Delete(root);
         bool done;
-		char *p = res; while (*p) { *p &= 0x7f; ++p; }
         if (res) {
             result_str = res;
             free(res);
@@ -1216,7 +1215,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 	try {
 		chn = channels->at(params[1].asString());
 	}
-	catch (std::exception ex){
+	catch (std::exception &ex){
 		error_str = "No such channel";
 		return false;
 	}
@@ -1339,7 +1338,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 							chn->enable();
 							break;
                         }
-                        catch (zmq::error_t err) {
+                        catch (zmq::error_t &err) {
                             if (zmq_errno() == EADDRINUSE) {
                                 NB_MSG << "address is in use\n";
                             }
@@ -1501,7 +1500,7 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
             socket.send (reply);
             //std::cout << "sent: " << message << "\n";
             break;
-        } catch (zmq::error_t e) {
+        } catch (zmq::error_t &e) {
             if (errno == EAGAIN) continue;
             std::cerr << "Error: " << errno << " " << zmq_strerror(errno) << "\n";
         }

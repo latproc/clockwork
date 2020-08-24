@@ -102,7 +102,11 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				zmq::message_t message;
 				while (!done) {
 					{
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+					if ( (sock.recv(message, zmq::recv_flags::dontwait)) ) {
+#else
 					if ( (sock.recv(&message, ZMQ_DONTWAIT)) ) {
+#endif
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							//{ FileLogger fl(program_name); fl.f() << "Error: unexpected message header\n"; }
 							continue;
@@ -125,7 +129,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			}
 			return (*response_len == 0) ? false : true;
 		}
-		catch (zmq::error_t e) {
+		catch (zmq::error_t &e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
@@ -156,7 +160,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
-			bool got_response = false;
+      bool got_response = false;
 #if 0
 			bool got_address = false;
 #endif
@@ -165,7 +169,12 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				bool done = false;
 				zmq::message_t message;
 				while (!done) {
-					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+					auto response = sock.recv(message, zmq::recv_flags::dontwait);
+					if ( response.has_value() ) {
+#else
+          if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+#endif
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							memcpy(&header, message.data(), sizeof(MessageHeader));
 #if 0
@@ -200,7 +209,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			}
 			else return false;
 		}
-		catch (zmq::error_t e) {
+		catch (zmq::error_t &e) {
 			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
@@ -221,8 +230,6 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
-
 	response_len = 0;
 	int retries = 5;
 	if (block && timeout == 0)
@@ -235,11 +242,16 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 				usleep(10); continue;
 			}
 			if (items[0].revents & ZMQ_POLLIN) {
-				//{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
-				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
-				if (response_len > 0 && response_len < (unsigned int)buflen) {
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 7, 0)
+				zmq::mutable_buffer incoming(buf, buflen);
+				auto response = sock.recv(incoming, zmq::recv_flags::dontwait);
+				response_len = (response.has_value()) ? response->size : 0;
+				if (response_len > 0 && !response->truncated()) {
+#else
+        response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
+        if (response_len > 0 && response_len < (unsigned int)buflen) {
+#endif
 					buf[response_len] = 0;
-					//if (response_len>10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n"; }
 				}
 				else {
 					//if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
@@ -248,7 +260,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 			}
 			return (response_len == 0) ? false : true;
 		}
-		catch (zmq::error_t e) {
+		catch (zmq::error_t &e) {
 			{
 				FileLogger fl(program_name); 
 				fl.f() << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
@@ -285,17 +297,25 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );
-				sock.send(msg, ZMQ_SNDMORE);
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+				sock.send(msg, zmq::send_flags::sndmore);
+#else
+        sock.send(msg, ZMQ_SNDMORE);
+#endif
 				stage = e_sending_data;
 			}
 			if (stage == e_sending_data ) {
 				zmq::message_t msg(buflen);
 				memcpy(msg.data(), buf, buflen );
-				sock.send(msg);
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+				sock.send(msg, zmq::send_flags::none);
+#else
+        sock.send(msg);
+#endif
 			}
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (zmq::error_t &ex) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name);
@@ -327,10 +347,14 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 		try {
 			zmq::message_t msg(buflen);
 			memcpy(msg.data(), buf, buflen );
-			sock.send(msg);
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+			sock.send(msg, zmq::send_flags::none);
+#else
+      sock.send(msg);
+#endif
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (zmq::error_t &) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name); 
@@ -498,13 +522,19 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
             checked_ports.insert(res);
             snprintf(address_buf, 40, "tcp://0.0.0.0:%d", res);
             test_bind.bind(address_buf);
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+            // do not wait at socket close time
+	          int linger = 0;
+            test_bind.set(zmq::sockopt::linger, linger);
+#else
             int linger = 0; // do not wait at socket close time
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+#endif
             test_bind.disconnect(address_buf);
             DBG_CHANNELS << "found available port " << res << "\n";
             break;
         }
-        catch (zmq::error_t err) {
+        catch (zmq::error_t &err) {
             if (zmq_errno() != EADDRINUSE) {
                 res = 0;
                 break;
@@ -529,7 +559,11 @@ void MessagingInterface::connect() {
 		DBG_CHANNELS << "calling connect on " << url << "\n";
 		socket->connect(url.c_str());
 		int linger = 0;
-		socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+		socket->set(zmq::sockopt::linger, linger);
+#else
+    socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
+#endif
 	}
 	else {
 		char error[ANET_ERR_LEN];
@@ -603,17 +637,25 @@ char *MessagingInterface::send(const char *txt) {
     while (true) {
 	    try {
 		    if (send_state == e_send) {
-			    socket->send(msg);
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+			    socket->send(msg, zmq::send_flags::none);
+#else
+          socket->send(msg);
+#endif
 			    break;
 		    }
 		    else {
 			    zmq::message_t m;
-			    socket->recv(&m, ZMQ_DONTWAIT);
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+			    socket->recv(m, zmq::recv_flags::dontwait);
+#else
+          socket->recv(&m, ZMQ_DONTWAIT);
+#endif
 			    send_state = e_send;
 			    continue;
 		    }
 	    }
-	    catch (std::exception e) {
+	    catch (std::exception &e) {
 		    if (errno == EINTR || errno == EAGAIN) {
 			    std::cerr << "MessagingInterface::send " << strerror(errno);
 			    if (--retries <= 0) {
@@ -653,7 +695,11 @@ char *MessagingInterface::send(const char *txt) {
 								if (n == 0) continue;
                 if (n == 1 && items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
+#if CPPZMQ_VERSION > ZMQ_MAKE_VERSION(4, 3, 1)
+                    if (socket->recv(reply)) {
+#else
                     if (socket->recv(&reply)) {
+#endif
                         len = reply.size();
                         char *data = (char *)malloc(len+1);
                         memcpy(data, reply.data(), len);
@@ -672,7 +718,7 @@ char *MessagingInterface::send(const char *txt) {
                 }
                 break;
             }
-            catch (std::exception e) {
+            catch (std::exception &e) {
                 if (zmq_errno())
                     std::cerr << "Exception when receiving response " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
                 else

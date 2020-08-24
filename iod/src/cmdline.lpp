@@ -102,7 +102,7 @@ void append_char(int ch)
 	*bufp = 0;
 }
 
-int get_input(char *buf, int size)
+int get_input(char *buf, unsigned int size)
 {
     char *line;
     static char *last_read = (char *)NULL;
@@ -112,7 +112,7 @@ int get_input(char *buf, int size)
 		cmdline_done = true;
     	return YY_NULL;
 	}
-    if (strlen(line) > size - 2) {
+    if ( (strlen(line) + 2) > size) {
         yyerror("input line too long");
         return YY_NULL;
     }

@@ -260,7 +260,7 @@ int main(int argc, const char * argv[]) {
             }
             if (rc == 0) continue;
         }
-        catch(zmq::error_t e) {
+        catch(zmq::error_t &e) {
             if (errno == EINTR || errno == EAGAIN) continue;
         }
         if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
@@ -271,7 +271,7 @@ int main(int argc, const char * argv[]) {
             len = subscription_manager.subscriber().recv(data, 1000, ZMQ_DONTWAIT);
             if (!len) continue;
         }
-        catch (zmq::error_t e) {
+        catch (zmq::error_t &e) {
             if (errno == EINTR) continue;
             
         }
@@ -306,7 +306,7 @@ int main(int argc, const char * argv[]) {
             }
 						if (param_list) { delete param_list; param_list = 0; }
         }
-        catch(std::exception e) {
+        catch(std::exception &e) {
             std::cerr << "exception " <<e.what() << " processing: " << data << "\n";
         }
     }

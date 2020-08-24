@@ -1006,14 +1006,14 @@ int main(int argc, const char * argv[])
 				exception_count = 0;
 				error_count = 0;
 			}
-			catch (zmq::error_t zex) {
+			catch (zmq::error_t &zex) {
 					if (zmq_errno() == EINTR) continue;
 					++error_count;
 					{FileLogger fl(program_name); fl.f() << "zmq exception " << zmq_errno()  << " "
 						<< zmq_strerror(zmq_errno()) << " polling connections\n"; }
 				if (++exception_count <= 5 && program_state != s_finished) { usleep(2000); exit(2);continue; }
 			}
-			catch (std::exception ex) {
+			catch (std::exception &ex) {
 				std::cout << "polling connections: " << ex.what() << "\n";
 				if (errno == EINTR) continue;
 				if (++exception_count <= 5 && program_state != s_finished) { usleep(2000); exit(1); continue; }
@@ -1099,7 +1099,7 @@ int main(int argc, const char * argv[])
 				active_addresses.clear();
 				initialised_address.clear();
 				}
-				catch (std::exception ex) {
+				catch (std::exception &ex) {
 					{FileLogger fl(program_name); fl.f() << "exception during restart " << ex.what() << "\n";  }
 				}
 				exit(0);

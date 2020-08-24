@@ -1343,6 +1343,11 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
 }
+| SET SYMBOL TO PROPERTY SYMBOL OF SYMBOL error_clause /* set the state based on the value of a property */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
+	cleanupErrorClause(true);
+}
 | SET SYMBOL TO PROPERTY SYMBOL error_clause /* set the state based on the value of a property */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5);

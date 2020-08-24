@@ -25,6 +25,7 @@
 #include <math.h>
 #include <zmq.hpp>
 #include <map>
+#include <inttypes.h>
 #include "Logger.h"
 #include "DebugExtra.h"
 #include "cJSON.h"
@@ -43,7 +44,7 @@
 static std::string constructSocketName() {
 	static int sequence = 0;
 	char buf[40];
-	snprintf(buf, 40, "inproc://s_%lld_%d", microsecs(), ++sequence);
+	snprintf(buf, 40, "inproc://s_%" PRId64 "_%d", microsecs(), ++sequence);
 	return buf;
 }
 
@@ -67,7 +68,7 @@ void SocketMonitor::operator()() {
             monitor(sock, monitor_socket_name.c_str());
 			exception_count = 0;
         }
-        catch (zmq::error_t io) {
+        catch (zmq::error_t &io) {
             NB_MSG << "ZMQ error " << errno << ": "<< zmq_strerror(errno) << " in socket monitor\n";
 			if (errno == 88)
 				exit(0);
@@ -79,7 +80,7 @@ void SocketMonitor::operator()() {
 				exit(EXIT_FAILURE);
 			usleep(100);
         }
-        catch (std::exception ex) {
+        catch (std::exception &ex) {
             NB_MSG << "unknown exception: " << ex.what() << " monitoring a socket\n";
 			++exception_count;
 			if (exception_count > 5)
