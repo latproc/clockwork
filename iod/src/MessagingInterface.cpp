@@ -102,7 +102,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				zmq::message_t message;
 				while (!done) {
 					{
-					if ( (sock.recv(&message, ZMQ_DONTWAIT)) ) {
+					if ( (sock.recv(message, zmq::recv_flags::dontwait)) ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							//{ FileLogger fl(program_name); fl.f() << "Error: unexpected message header\n"; }
 							continue;
@@ -156,7 +156,6 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
-			bool got_response = false;
 #if 0
 			bool got_address = false;
 #endif
@@ -165,7 +164,8 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 				bool done = false;
 				zmq::message_t message;
 				while (!done) {
-					if ( (got_response = sock.recv(&message, ZMQ_DONTWAIT)) ) {
+					auto response = sock.recv(message, zmq::recv_flags::dontwait);
+					if ( response.has_value() ) {
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							memcpy(&header, message.data(), sizeof(MessageHeader));
 #if 0
@@ -221,8 +221,6 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
 
-	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
-
 	response_len = 0;
 	int retries = 5;
 	if (block && timeout == 0)
@@ -235,11 +233,11 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 				usleep(10); continue;
 			}
 			if (items[0].revents & ZMQ_POLLIN) {
-				//{FileLogger fl(program_name); fl.f() << tnam << " safeRecv() collecting data\n"; }
-				response_len = sock.recv(buf, buflen, ZMQ_DONTWAIT);
-				if (response_len > 0 && response_len < (unsigned int)buflen) {
+				zmq::mutable_buffer incoming(buf, buflen);
+				auto response = sock.recv(incoming, zmq::recv_flags::dontwait);
+				response_len = (response.has_value()) ? response->size : 0;
+				if (response_len > 0 && !response->truncated()) {
 					buf[response_len] = 0;
-					//if (response_len>10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data '" << buf << "' with length " << response_len << "\n"; }
 				}
 				else {
 					//if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
@@ -285,13 +283,13 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );
-				sock.send(msg, ZMQ_SNDMORE);
+				sock.send(msg, zmq::send_flags::sndmore);
 				stage = e_sending_data;
 			}
 			if (stage == e_sending_data ) {
 				zmq::message_t msg(buflen);
 				memcpy(msg.data(), buf, buflen );
-				sock.send(msg);
+				sock.send(msg, zmq::send_flags::none);
 			}
 			break;
 		}
@@ -327,7 +325,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 		try {
 			zmq::message_t msg(buflen);
 			memcpy(msg.data(), buf, buflen );
-			sock.send(msg);
+			sock.send(msg, zmq::send_flags::none);
 			break;
 		}
 		catch (zmq::error_t &) {
@@ -498,8 +496,9 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
             checked_ports.insert(res);
             snprintf(address_buf, 40, "tcp://0.0.0.0:%d", res);
             test_bind.bind(address_buf);
-            int linger = 0; // do not wait at socket close time
-            test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            // do not wait at socket close time
+	    int linger = 0;
+            test_bind.set(zmq::sockopt::linger, linger);
             test_bind.disconnect(address_buf);
             DBG_CHANNELS << "found available port " << res << "\n";
             break;
@@ -529,7 +528,7 @@ void MessagingInterface::connect() {
 		DBG_CHANNELS << "calling connect on " << url << "\n";
 		socket->connect(url.c_str());
 		int linger = 0;
-		socket->setsockopt (ZMQ_LINGER, &linger, sizeof (linger));
+		socket->set(zmq::sockopt::linger, linger);
 	}
 	else {
 		char error[ANET_ERR_LEN];
@@ -603,12 +602,12 @@ char *MessagingInterface::send(const char *txt) {
     while (true) {
 	    try {
 		    if (send_state == e_send) {
-			    socket->send(msg);
+			    socket->send(msg, zmq::send_flags::none);
 			    break;
 		    }
 		    else {
 			    zmq::message_t m;
-			    socket->recv(&m, ZMQ_DONTWAIT);
+			    socket->recv(m, zmq::recv_flags::dontwait);
 			    send_state = e_send;
 			    continue;
 		    }
@@ -653,7 +652,7 @@ char *MessagingInterface::send(const char *txt) {
 								if (n == 0) continue;
                 if (n == 1 && items[0].revents & ZMQ_POLLIN) {
                     zmq::message_t reply;
-                    if (socket->recv(&reply)) {
+                    if (socket->recv(reply)) {
                         len = reply.size();
                         char *data = (char *)malloc(len+1);
                         memcpy(data, reply.data(), len);

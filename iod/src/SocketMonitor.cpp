@@ -25,6 +25,7 @@
 #include <math.h>
 #include <zmq.hpp>
 #include <map>
+#include <inttypes.h>
 #include "Logger.h"
 #include "DebugExtra.h"
 #include "cJSON.h"
@@ -43,7 +44,7 @@
 static std::string constructSocketName() {
 	static int sequence = 0;
 	char buf[40];
-	snprintf(buf, 40, "inproc://s_%lld_%d", microsecs(), ++sequence);
+	snprintf(buf, 40, "inproc://s_%" PRId64 "_%d", microsecs(), ++sequence);
 	return buf;
 }
 
