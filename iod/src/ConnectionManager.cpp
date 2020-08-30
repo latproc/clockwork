@@ -310,7 +310,7 @@ bool SubscriptionManager::setupConnections() {
 		int counter = 5;
 		while (counter-- > 0 && !monit_setup->active()) { DBG_CHANNELS << "waiting.." << counter << "\n"; usleep(100); }
 		if (!monit_setup->active()) {
-			char buf[100];
+			char buf[150];
 			snprintf(buf, 150, "Connection monitor for %s failed to activate", url);
 			std::cerr << buf << "\n";
 			return false;
