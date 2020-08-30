@@ -8,7 +8,7 @@
 # row or column with that value.
 
 # The configuration has 9 cells, 
-all LIST c11,c12,c13,c14,c21,c22,c23,c24,c31,c32,c33,c34,c41,c42,c42,c44;
+all LIST c11,c12,c13,c14,c21,c22,c23,c24,c31,c32,c33,c34,c41,c42,c43,c44;
 
 # There are four rows with four cells each
 row1 LIST c11,c12,c13,c14;
