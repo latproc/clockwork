@@ -945,6 +945,18 @@ INTEGERVAL   {
 | MEAN SYMBOL FROM SYMBOL {
 	$$ = new Value(new MeanValue($2,$4));
 }
+| SUM OF SYMBOL {
+	$$ = new Value(new SumValue($3));
+}
+| MIN OF SYMBOL {
+	$$ = new Value(new MinValue($3));
+}
+| MAX OF SYMBOL {
+	$$ = new Value(new MaxValue($3));
+}
+| MEAN OF SYMBOL {
+	$$ = new Value(new MeanValue($3));
+}
 | BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($8,$5));
 }
