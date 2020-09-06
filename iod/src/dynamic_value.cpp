@@ -502,10 +502,7 @@ const Value &SumValue::operator()() {
 	}
 	else {
 		for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
-			if (machine_list->parameters[i].machine)
-				sum = sum + machine_list->parameters[i].machine->getValue(property);
-			else
-				sum = sum + machine_list->parameters[i].val;
+			sum = sum + machine_list->parameters[i].val;
 		}
 	}
 	last_result = sum;
@@ -550,10 +547,7 @@ const Value &MeanValue::operator()() {
 	}
 	else {
 		for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
-			if (machine_list->parameters[i].machine)
-				sum = sum + machine_list->parameters[i].machine->getValue(property);
-			else
-				sum = sum + machine_list->parameters[i].val;
+			sum = sum + machine_list->parameters[i].val;
 			++n;
 		}
 	}
@@ -598,9 +592,7 @@ const Value &MinValue::operator()() {
 	}
 	else {
 		for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
-			const Value &val = (machine_list->parameters[i].machine) 
-				? machine_list->parameters[i].machine->getValue(property)
-				: machine_list->parameters[i].val;
+			const Value &val = machine_list->parameters[i].val;
 			if (unassigned || val < min) {min = val; unassigned = false; }
 		}
 	}
@@ -644,9 +636,7 @@ const Value &MaxValue::operator()() {
 	}
 	else {
 		for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
-			const Value &val = (machine_list->parameters[i].machine)
-			? machine_list->parameters[i].machine->getValue(property)
-			: machine_list->parameters[i].val;
+			const Value &val = machine_list->parameters[i].val;
 			if (unassigned || val > max) { max = val; unassigned = false; }
 		}
 	}
