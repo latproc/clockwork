@@ -1256,6 +1256,9 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi, int positio
 			if (!param.cached_machine) param.cached_machine = mi;
 			p.real_name = mi->fullName();
 		}
+		else {
+			p.val = getValue(param);
+		}
 	}
 	else if (mi) {
 		p.real_name = mi->fullName();

@@ -484,6 +484,15 @@ const Value &SumValue::operator()() {
 		last_result = 0;
 		return last_result;
 	}
+	if (machine_list->_type != "LIST") {
+		char buf[400];
+		snprintf(buf, 400, "%s: attempting to calculate a SUM from a machine (%s) that is not a LIST",
+				 mi->getName().c_str(), machine_list->fullName().c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
 
 	last_process_time = currentTime();
 	if (machine_list->parameters.size() == 0) {
@@ -526,6 +535,15 @@ const Value &MeanValue::operator()() {
 		last_result = 0;
 		return last_result;
 	}
+	if (machine_list->_type != "LIST") {
+		char buf[400];
+		snprintf(buf, 400, "%s: attempting to calculate MEAN from a machine (%s) that is not a LIST",
+				 mi->getName().c_str(), machine_list->fullName().c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
 
 	last_process_time = currentTime();
 	if (machine_list->parameters.size() == 0) {
@@ -557,9 +575,7 @@ const Value &MeanValue::operator()() {
 	return last_result;
 }
 
-MinValue::MinValue(const MinValue &other) {
-	property = other.property;
-}
+MinValue::MinValue(const MinValue &other) : property(other.property), machine_list_name(other.machine_list_name), machine_list(nullptr) { }
 
 const Value &MinValue::operator()() {
 	MachineInstance *mi = scope;
@@ -568,6 +584,14 @@ const Value &MinValue::operator()() {
 		char buf[400];
 		snprintf(buf, 400, "%s: no machine %s for min %s",
 				 mi->getName().c_str(), machine_list_name.c_str(), property.c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+	if (machine_list->_type != "LIST") {
+		char buf[400];
+		snprintf(buf, 400, "%s: attempting to find MIN from a machine (%s) that is not a LIST",
+				 mi->getName().c_str(), machine_list->fullName().c_str());
 		MessageLog::instance()->add(buf);
 		last_result = 0;
 		return last_result;
@@ -600,10 +624,7 @@ const Value &MinValue::operator()() {
 	return last_result;
 }
 
-
-MaxValue::MaxValue(const MaxValue &other) {
-	property = other.property;
-}
+MaxValue::MaxValue(const MaxValue &other) : property(other.property), machine_list_name(other.machine_list_name), machine_list(nullptr) { }
 
 const Value &MaxValue::operator()() {
 	MachineInstance *mi = scope;
@@ -616,6 +637,15 @@ const Value &MaxValue::operator()() {
 		last_result = 0;
 		return last_result;
 	}
+	if (machine_list->_type != "LIST") {
+		char buf[400];
+		snprintf(buf, 400, "%s: attempting to find MAX from a machine (%s) that is not a LIST",
+				 mi->getName().c_str(), machine_list->fullName().c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
 
 	last_process_time = currentTime();
 	if (machine_list->parameters.size() == 0) {
