@@ -38,7 +38,7 @@ configure_file (
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
 FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono date_time REQUIRED)
-FIND_PACKAGE(Mosquitto)
+FIND_PACKAGE(MOSQUITTO)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
@@ -109,8 +109,12 @@ LINK_DIRECTORIES("/opt/local/lib")
 
 # yacc instructions from Andy Cedilnik 2002.
 
-set (FLEX_EXECUTABLE flex)
-set (BISON_EXECUTABLE bison)
+if (${FLEX_EXECUTABLE} STREQUAL "")
+  set (FLEX_EXECUTABLE flex)
+endif()
+if (${BISON_EXECUTABLE} STREQUAL "")
+  set (BISON_EXECUTABLE bison)
+endif()
 
 set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
 set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
