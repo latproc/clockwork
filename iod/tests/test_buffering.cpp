@@ -51,6 +51,19 @@ namespace {
 		EXPECT_EQ(5, bufferLength(buf)) << "returns the capacity of the buffer after lots are added";
 		destroyBuffer(buf);
 	}
+
+	TEST_F(BufferTest, bufferSum) {
+		// double bufferSum(struct CircularBuffer *buf, int n);
+		struct CircularBuffer *buf = createBuffer(3);
+		EXPECT_EQ(0, bufferSum(buf,3)) << "returns zero when there are no samples";
+		addSample(buf, 1, 10.0);
+		addSample(buf, 1, 1.0);
+		addSample(buf, 1, 2.0);
+		addSample(buf, 1, 3.0);
+		EXPECT_EQ(6.0, bufferSum(buf,3)) << "returns the sum of the buffer samples";
+		EXPECT_EQ(6.0, bufferSum(buf,5)) << "returns the sum when the sample count greater than the buffer size";
+		EXPECT_EQ(0, bufferAverage(buf,-1)) << "returns 0 when the sample count is invalid";
+	}
 	
 	TEST_F(BufferTest, bufferAverage) {
 		// double bufferAverage(struct CircularBuffer *buf, int n);
@@ -64,10 +77,6 @@ namespace {
 		EXPECT_EQ(2.0, bufferAverage(buf,5)) << "returns the average when the sample count greater than the buffer size";
 		EXPECT_EQ(0, bufferAverage(buf,-1)) << "returns 0 when the sample count is invalid";
 		destroyBuffer(buf);
-	}
-
-	TEST_F(BufferTest, bufferSum) {
-		// double bufferSum(struct CircularBuffer *buf, int n);
 	}
 
 	TEST_F(BufferTest, getBufferValue) {
