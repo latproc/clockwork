@@ -146,8 +146,7 @@ double bufferSum(struct CircularBuffer *buf, int n) {
 	int i = bufferLength(buf);
 	if (i>n) i = n;
 	double tot = 0.0;
-	while (i) {
-		i--;
+	while (i-- > 0) {
 		tot = tot + getBufferValue(buf, i);
 	}
 	return tot;
