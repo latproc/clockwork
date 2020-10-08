@@ -41,7 +41,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
 					if (tracing() && machine->isTraceable()) {
 						machine->resetTemporaryStringStream();
 						machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
-						machine->setValue("TRACE", machine->ss.str());
+						machine->setValue("TRACE", Value(machine->ss.str(), Value::t_string));
 					}
 					const State *on = flag->state_machine->findState("on");
 					if (!flag->isActive()) {
@@ -58,7 +58,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
 				if (tracing() && machine->isTraceable()) {
 					machine->resetTemporaryStringStream();
 					machine->ss << machine->getCurrentStateString() << " " << *condition.predicate;
-					machine->setValue("TRACE", machine->ss.str());
+					machine->setValue("TRACE", Value(machine->ss.str(), Value::t_string));
 				}
 				const State *off = flag->state_machine->findState("off");
 				if (!flag->isActive()) flag->setState(*off);
@@ -79,9 +79,9 @@ bool ConditionHandler::check(MachineInstance *machine) {
 	}
 	else {
 		DBG_AUTOSTATES <<"condition: " << (*condition.predicate) << "\n";
-		if (!trigger) { DBG_AUTOSTATES << "    condition does not have a timer\n"; }
-		if (triggered) {DBG_AUTOSTATES <<"     condition " << (condition.predicate) << " already triggered\n";}
-		if (condition(machine)) {DBG_AUTOSTATES <<"    condition " << (condition.predicate) << " passes\n";}
+		if (!trigger) { DBG_AUTOSTATES << "		condition does not have a timer\n"; }
+		if (triggered) {DBG_AUTOSTATES <<"		 condition " << (condition.predicate) << " already triggered\n";}
+		if (condition(machine)) {DBG_AUTOSTATES <<"		condition " << (condition.predicate) << " passes\n";}
 	}
 	if (triggered) return true;
 	return false;
