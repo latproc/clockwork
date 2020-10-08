@@ -337,12 +337,12 @@ public:
 	Value is_traceable;
 	int published;
 	static SharedCache *shared;
-	Cache *cache;
 	unsigned int action_errors;
 	bool is_changing;
 	Channel* owner_channel;
 
 private:
+	Cache *cache;
 	static std::map<std::string, HardwareAddress> hw_names;
   MachineInstance &operator=(const MachineInstance &orig);
   MachineInstance(const MachineInstance &other);

@@ -35,6 +35,29 @@ long Transmitter::next_id;
 boost::mutex Receiver::q_mutex;
 unsigned long Message::sequence = 0; // each message has a sequence number
 
+
+CStringHolder::CStringHolder(char *s) : s_str(0), str(s) { }
+
+CStringHolder::CStringHolder(const char *s) : s_str(0), str(strdup(s)) { }
+
+CStringHolder::CStringHolder(const CStringHolder &orig)  : s_str(0), str(0) {
+    if (orig.str) str = strdup(orig.str);
+    s_str = orig.s_str;
+  }
+
+CStringHolder & CStringHolder::operator=(const CStringHolder &orig) {
+    if (str) { free(str); str = 0; }
+    if (orig.str) str = strdup(orig.str);
+    s_str = orig.s_str;
+    return *this;
+}
+CStringHolder::~CStringHolder() { if (str) free(str); }
+
+const char *CStringHolder::get() const { return (str) ? str : s_str; }
+
+//CStringHolder::CStringHolder() { if (str) free( str ); }
+
+
 std::set<Receiver*> Receiver::working_machines; // machines that have non-empty work queues
 
 // in this form, the message takes ownership of the parameters

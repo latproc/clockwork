@@ -107,6 +107,10 @@ public:
 	bool needs_throttle;
 
   Cache() : full_name(0), modbus_name(0), reported_error(false), needs_throttle(false) { }
+  ~Cache() {
+    delete full_name;
+    delete modbus_name;
+  }
 };
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a) {
 	return a.operator<<(out);
@@ -605,9 +609,10 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	next_poll(0),
 	is_traceable(false),
 	published(0),
-	cache(0),
 	action_errors(0),
-	owner_channel(0), expected_authority(0)
+	owner_channel(0), 
+	cache(0),
+  expected_authority(0)
 {
 	if (!shared) shared = new SharedCache;
 	cache = new Cache;
@@ -622,7 +627,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	}
 }
 
-MachineInstance::MachineInstance(CStringHolder name, const char * type, InstanceType instance_type)
+MachineInstance::MachineInstance(const CStringHolder name, const char * type, InstanceType instance_type)
 	: Receiver(name),
 	_type(type),
 	io_interface(0),
@@ -649,9 +654,10 @@ MachineInstance::MachineInstance(CStringHolder name, const char * type, Instance
 	idle_time(0),
 	is_traceable(false),
 	published(0),
-	cache(0),
 	action_errors(0),
-	owner_channel(0), expected_authority(0)
+	owner_channel(0), 
+	cache(0),
+  expected_authority(0)
 {
 	if (!shared) shared = new SharedCache;
 	cache = new Cache;
@@ -671,6 +677,7 @@ MachineInstance::~MachineInstance() {
 	automatic_machines.remove(this);
 	active_machines.remove(this);
 	Dispatcher::instance()->removeReceiver(this);
+  delete cache;
 }
 
 void MachineInstance::describe(std::ostream &out) {

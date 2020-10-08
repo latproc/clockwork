@@ -27,5 +27,5 @@ xcode:
 
 test:
 	[ -d ".test" ] || mkdir .test
-	cd .test && cmake -DRUN_TESTS=ON .. && make $(JOBS)
+	cd .test && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS)
 

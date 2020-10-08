@@ -57,6 +57,24 @@ target_link_libraries(test_bit_ops gmock_main Clockwork ${ZeroMQ_LIBRARY} ${Boos
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
 
+add_executable(test_expressions test_expressions.cpp )
+set_target_properties (test_expressions PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_expressions gmock_main Clockwork cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_expressions COMMAND test_expressions)
+
+add_executable(test_cs_holder test_cs_holder.cpp )
+set_target_properties (test_cs_holder PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_cs_holder gmock_main Clockwork cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_cs_holder COMMAND test_cs_holder)
+
+add_executable(test_expr_eval expr_eval.cpp )
+set_target_properties (test_expr_eval PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_expr_eval gmock_main Clockwork cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_expr_eval COMMAND test_expr_eval)
+
 #add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp )
 #set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
 #add_custom_command(
