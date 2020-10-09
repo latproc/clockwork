@@ -98,7 +98,7 @@ int Tokeniser::getTokenId(const char *name) {
     if (found != tokens.end()) {
         return (*found).second;
     }
-	int n = ++next;
+    int n = ++next;
     tokens[name] = n;
     return n;
 }
@@ -108,7 +108,7 @@ int Tokeniser::getTokenId(const std::string &name) {
     if (found != tokens.end()) {
         return (*found).second;
     }
-	int n = ++next;
+    int n = ++next;
     tokens[name] = n;
     return n;
 }
