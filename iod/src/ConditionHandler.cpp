@@ -16,6 +16,10 @@ ConditionHandler::ConditionHandler(const ConditionHandler &other)
 	if (trigger) trigger->retain();
 }
 
+ConditionHandler::~ConditionHandler() {
+	if (trigger) trigger->release();
+}
+
 ConditionHandler &ConditionHandler::operator=(const ConditionHandler &other) {
 	condition = other.condition;
 	command_name = other.command_name;
