@@ -303,7 +303,7 @@ IODCommand *parseCommandString(const char *data) {
 		std::istringstream iss(data);
 		std::string tmp;
 		iss >> ds;
-		parts.push_back(ds.c_str());
+		parts.push_back(Value(ds.c_str(), Value::t_string));
 		++count;
 		while (iss >> tmp) {
       parts.push_back(Value(tmp.c_str(), Value::t_string));

@@ -955,9 +955,9 @@ void MachineInstance::idle() {
 			}
 			else if (res != Action::Complete) {
 				DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
+			  curr->release();
+			  return;
 			}
-			curr->release();
-			return;
 		}
 		else if (!curr->complete())  {
 			//DBG_M_ACTIONS << "Action " << *curr << " is not still not complete\n";
