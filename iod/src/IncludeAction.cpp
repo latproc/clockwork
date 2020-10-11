@@ -37,7 +37,7 @@ static void debugParameterChange(MachineInstance *dest_machine) {
 		if (n >= 999) break;
 	}
 	snprintf(buf+n, 1000-n, "]");
-	dest_machine->setValue("DEBUG", buf);
+  dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
 }
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val, Value pos, bool insert_before, bool expand_items)
