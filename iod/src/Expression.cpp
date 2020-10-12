@@ -156,6 +156,13 @@ Predicate::~Predicate()
   }
 }
 
+class Evaluator {
+private:
+  Stack stack;
+public:
+  Value evaluate(Predicate *p, MachineInstance *m);
+};
+
 bool Predicate::usesTimer(Value &timer_val) const
 {
   if (left_p) {
@@ -236,19 +243,15 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
   // below, we check the clauses of this predicate and if we find a timer test
   // we set the above variables. At the end of the method, we actually set the timer
 
-  if (left_p) {
-    earliest = left_p->scheduleTimerEvents(earliest, target);
-  }
-
+  Evaluator evaluator;
   // clauses like (machine.TIMER >= 10)
   if (left_p
       && left_p->entry.kind == Value::t_symbol
       && left_p->entry.token_id == ClockworkToken::TIMER
       && right_p) {
     //std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
-    if ((right_p->entry.kind == Value::t_symbol
-            && target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
-        || right_p->entry.asInteger(scheduled_time)) {
+    Value rhs = evaluator.evaluate(right_p, target);
+    if (rhs.asInteger(scheduled_time)) {
       current_time = target->getTimerVal()->iValue;
       if (op == opGT) {
         ++scheduled_time;
@@ -268,16 +271,14 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
   else if (left_p
       && left_p->entry.kind == Value::t_symbol
       && stringEndsWith(left_p->entry.sValue, ".TIMER")) {
-    //std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
-    if ((right_p->entry.kind == Value::t_symbol
-            && target->getValue(right_p->entry.sValue).asInteger(scheduled_time))
-        || right_p->entry.asInteger(scheduled_time)) {
-      // lookup the machine
-      size_t pos = left_p->entry.sValue.find('.');
-      std::string machine_name(left_p->entry.sValue);
-      machine_name.erase(pos);
-      timed_machine = target->lookup(machine_name);
-      if (timed_machine) {
+    // lookup the machine
+    size_t pos = left_p->entry.sValue.find('.');
+    std::string machine_name(left_p->entry.sValue);
+    machine_name.erase(pos);
+    timed_machine = target->lookup(machine_name);
+    if (timed_machine) {
+      Value rhs = evaluator.evaluate(right_p, timed_machine);
+      if (rhs.asInteger(scheduled_time)) {
         current_time = timed_machine->getTimerVal()->iValue;
         if (op == opGT) {
           ++scheduled_time;
@@ -295,16 +296,14 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
       DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
   }
-
   // clauses like (10 <= TIMER)
   else if (right_p
       && right_p->entry.kind == Value::t_symbol
       && right_p->entry.token_id == ClockworkToken::TIMER
       && left_p) {
-    //std::cout << "checking timers on " << left_p->entry << "\n";
-    if ((left_p->entry.kind == Value::t_symbol
-            && target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
-        || left_p->entry.asInteger(scheduled_time)) {
+    Evaluator evaluator;
+    Value lhs = evaluator.evaluate(left_p, target);
+    if (lhs.asInteger(scheduled_time)) {
       current_time = target->getTimerVal()->iValue;
       if (op == opGT) {
         ++scheduled_time;
@@ -326,16 +325,15 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
       && left_p
       && right_p->entry.kind == Value::t_symbol
       && stringEndsWith(right_p->entry.sValue, ".TIMER")) {
-    //std::cout << "checking timers on " << left_p->entry << " " << right_p->entry << "\n";
-    if ((left_p->entry.kind == Value::t_symbol && target->getValue(left_p->entry.sValue).asInteger(scheduled_time))
-        || left_p->entry.asInteger(scheduled_time)
-    ) {
-      // lookup and cache the machine
-      size_t pos = right_p->entry.sValue.find('.');
-      std::string machine_name(right_p->entry.sValue);
-      machine_name.erase(pos);
-      timed_machine = target->lookup(machine_name);
-      if (timed_machine) {
+    // lookup and cache the machine
+    size_t pos = right_p->entry.sValue.find('.');
+    std::string machine_name(right_p->entry.sValue);
+    machine_name.erase(pos);
+    timed_machine = target->lookup(machine_name);
+    Evaluator evaluator;
+    if (timed_machine) {
+      Value lhs = evaluator.evaluate(left_p, timed_machine);
+      if (lhs.asInteger(scheduled_time)) {
         current_time = timed_machine->getTimerVal()->iValue;
         if (op == opGT) {
           ++scheduled_time;
@@ -352,6 +350,12 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
     else {
       DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
     }
+  }
+  else if (left_p) {
+    earliest = left_p->scheduleTimerEvents(earliest, target);
+  }
+  if (right_p) {
+    earliest = right_p->scheduleTimerEvents(earliest, target);
   }
   else {
 
@@ -384,23 +388,16 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
       else {
         DBG_SCHEDULER << "skipping event in " << t << "us as an earlier one exists\n";
       }
-
-      //Trigger *trigger = new Trigger(trigger_name);
-      //Scheduler::instance()->add(new ScheduledItem( t, new FireTriggerAction(target, trigger)));
-      //trigger = trigger->release();
     }
     // to allow for the above processing delays we keep the target runnable
     else if (t >= -2000) {
       target->setNeedsCheck();
     }
   }
-  if (right_p) {
-    earliest = right_p->scheduleTimerEvents(earliest, target);
-  }
   return earliest;
 }
 
-void Predicate::clearTimerEvents(MachineInstance *target) // clear all timer events scheduled for the supplid machine
+void Predicate::clearTimerEvents(MachineInstance *target) // clear all timer events scheduled for the supplied machine
 {
   if (left_p) {
     left_p->clearTimerEvents(target);
@@ -733,25 +730,26 @@ const Value *resolve(Predicate *p, MachineInstance *m, bool left, bool reevaluat
 ExprNode eval_stack();
 void prep(Predicate *p, MachineInstance *m, bool left);
 
-ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter)
-{
-  ExprNode o(*stack_iter++);
-  #if 0
-  std::cout << "popped node: ";
+std::ostream &operator<<(std::ostream &out, const ExprNode &o) {
   if (o.kind == ExprNode::t_int) {
     if (o.node) {
-      std::cout << "val: " << *o.node;
+      out << "val: " << *o.node;
     }
     else {
-      std::cout << "null";
+      out << "null";
     }
 
   }
   else {
-    std::cout << "op: " << o.op;
+    out << "op: " << o.op;
   }
-  std::cout << "\n";
-  #endif
+  return out;
+}
+
+ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter)
+{
+  ExprNode o(*stack_iter++);
+  //std::cout << "popped node: " << o << "\n";
   if (o.kind != ExprNode::t_op) {
     if (o.val && o.val->kind == Value::t_dynamic) {
       o.val->dynamicValue()->operator()(m);
@@ -1036,6 +1034,7 @@ ExprNode::ExprNode(PredicateOperator o) : val(0), node(0), op(o), kind(t_op)
     max_count = count_instances;
   }
 }
+
 ExprNode::ExprNode(const ExprNode &other) : tmpval(other.tmpval), val(other.val), node(other.node), op(other.op), kind(other.kind)
 {
   if (other.val == &other.tmpval) {
@@ -1065,6 +1064,23 @@ ExprNode::~ExprNode()
 void Stack::clear()
 {
   stack.clear();
+}
+
+Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
+  if (!predicate || !m) return SymbolTable::Null;
+  if (stack.stack.size() != 0) {
+    stack.stack.clear();
+  }
+  if (stack.stack.size() == 0)
+    if (!prep(stack, predicate, m, true, true)) {
+      std::stringstream ss;
+      ss << m->getName() << " Predicate failed to resolve: " << *predicate << "\n";
+      MessageLog::instance()->add(ss.str().c_str());
+      return false;
+    }
+  std::list<ExprNode>::const_iterator work = stack.stack.begin();
+  ExprNode evaluated(eval_stack(m, work));
+  return *(evaluated.val);
 }
 
 Value Predicate::evaluate(MachineInstance *m)
