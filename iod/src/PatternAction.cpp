@@ -39,7 +39,7 @@ Action::Status CopyPatternAction::run() {
     rexp_info *info = create_pattern(pattern.c_str());
     find_matches(info, matches, val.asString().c_str());
     if (matches.size()) {
-        owner->setValue(dest, matches[0]);
+      owner->setValue(dest, Value(matches[0], Value::t_string));
     }
     release_pattern(info);
 	status = Complete;
@@ -81,7 +81,7 @@ Action::Status CopyAllPatternAction::run() {
         std::string res;
         for (unsigned int i=0; i<matches.size(); ++i)
             res += matches[i];
-        owner->setValue(dest, res);
+      owner->setValue(dest, Value(res, Value::t_string));
     }
     release_pattern(info);
 	status = Complete;

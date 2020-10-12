@@ -98,7 +98,7 @@ int Tokeniser::getTokenId(const char *name) {
     if (found != tokens.end()) {
         return (*found).second;
     }
-	int n = ++next;
+    int n = ++next;
     tokens[name] = n;
     return n;
 }
@@ -108,7 +108,7 @@ int Tokeniser::getTokenId(const std::string &name) {
     if (found != tokens.end()) {
         return (*found).second;
     }
-	int n = ++next;
+    int n = ++next;
     tokens[name] = n;
     return n;
 }
@@ -244,7 +244,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
                 fmt = "%02d%02d%02d%02d%02d%02d%03llu";
             snprintf(buf, 40, fmt,
                 lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
-            res = buf;
+            res = Value(buf, Value::t_string);
             return res;
         }
         if (strcmp("TIMESTAMP", name) == 0) {
@@ -255,7 +255,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             size_t n = strlen(buf);
             if (n>1 && buf[n-1] == '\n') { --n; buf[n] = 0; }
             if (n + strlen(lt.tm_zone) < 39) snprintf(buf+n,39-n," %s", lt.tm_zone);
-            res = buf;
+            res = Value(buf, Value::t_string);
             return res;
         }
         if (strcmp("UTCTIMESTAMP", name) == 0) {
@@ -266,7 +266,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             size_t n = strlen(buf);
             if (n>1 && buf[n-1] == '\n') { --n; buf[n] = 0; }
             if (n + strlen(lt.tm_zone) < 39) snprintf(buf+n,39-n," %s", lt.tm_zone);
-            res = buf;
+            res = Value(buf, Value::t_string);
             return res;
         }
         if (strcmp("ISOTIMESTAMP", name) == 0) {
@@ -276,7 +276,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             std::stringstream ss;
             ss << to_iso_string(t) << "Z" << std::flush;
             snprintf(buf, 40, "%s", ss.str().c_str());
-            res = buf;
+            res = Value(buf, Value::t_string);
             return res;
         }
 
