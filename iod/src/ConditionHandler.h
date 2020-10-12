@@ -12,6 +12,7 @@ public:
 	ConditionHandler(const ConditionHandler &other);
 	ConditionHandler &operator=(const ConditionHandler &other);
 	ConditionHandler() : timer_val(0), timer_op(opGE), action(0), trigger(0), uses_timer(false), triggered(false) {}
+	~ConditionHandler();
 
     bool check(MachineInstance *machine);
     void reset();

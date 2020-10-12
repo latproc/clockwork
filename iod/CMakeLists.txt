@@ -109,8 +109,13 @@ LINK_DIRECTORIES("/opt/local/lib")
 
 # yacc instructions from Andy Cedilnik 2002.
 
+if ("${FLEX_EXECUTABLE}" STREQUAL "")
 set (FLEX_EXECUTABLE flex)
+endif()
+
+if ("${BISON_EXECUTABLE}" STREQUAL "")
 set (BISON_EXECUTABLE bison)
+endif()
 
 set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
 set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)

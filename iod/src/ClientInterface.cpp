@@ -287,7 +287,7 @@ IODCommand *parseCommandString(const char *data) {
 	std::vector<Value> params;
 	std::list<Value> *param_list = 0;
 	if (MessageEncoding::getCommand(data, ds, &param_list)) {
-		params.push_back(ds);
+    params.push_back(Value(ds, Value::t_string));
 		if (param_list) {
 			std::list<Value>::const_iterator iter = param_list->begin();
 			while (iter != param_list->end()) {
@@ -303,10 +303,10 @@ IODCommand *parseCommandString(const char *data) {
 		std::istringstream iss(data);
 		std::string tmp;
 		iss >> ds;
-		parts.push_back(ds.c_str());
+		parts.push_back(Value(ds.c_str(), Value::t_string));
 		++count;
 		while (iss >> tmp) {
-			parts.push_back(tmp.c_str());
+      parts.push_back(Value(tmp.c_str(), Value::t_string));
 			++count;
 		}
 		std::copy(parts.begin(), parts.end(), std::back_inserter(params));

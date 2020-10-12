@@ -179,6 +179,7 @@ private:
 class SumValue : public DynamicValue {
 public:
 	SumValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	SumValue(const char *list) : property(""), machine_list_name(list), machine_list(0)  { }
 	virtual ~SumValue() {}
 	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
@@ -195,6 +196,7 @@ private:
 class MinValue : public DynamicValue {
 public:
 	MinValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	MinValue(const char *list) : property(""), machine_list_name(list), machine_list(0)  { }
 	virtual ~MinValue() {}
 	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
@@ -211,6 +213,7 @@ private:
 class MaxValue : public DynamicValue {
 public:
 	MaxValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	MaxValue(const char *list) : property(""), machine_list_name(list), machine_list(0)  { }
 	virtual ~MaxValue() {}
 	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;
@@ -228,6 +231,7 @@ private:
 class MeanValue : public DynamicValue {
 public:
 	MeanValue(const char *property_name, const char *list) : property(property_name), machine_list_name(list), machine_list(0)  { }
+	MeanValue(const char *list) : property(""), machine_list_name(list), machine_list(0)  { }
 	virtual ~MeanValue() {}
 	virtual const Value &operator()();
 	virtual DynamicValue *clone() const;

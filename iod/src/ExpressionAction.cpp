@@ -84,7 +84,7 @@ Action::Status ExpressionAction::run() {
 				if (property_v == SymbolTable::Null) {
 					// error no property found using the property name as the value
 					DBG_MSG << owner->getName() << "could not find property " << lookup_v << " for " << *this << "\n";
-					owner->setValue(lhs.get(), rhs.asString());
+					owner->setValue(lhs.get(), Value(rhs.asString(), Value::t_string));
 				}
 				else {
 					DBG_MSG << owner->getName() << " dereferenced property " << lookup_v << " and found " << property_v << "\n";
