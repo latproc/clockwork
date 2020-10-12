@@ -1332,7 +1332,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
 							chn = defn->instantiate(port);
 							assert(chn);
 							if (ch_name == "PERSISTENCE_CHANNEL") {
-								chn->setValue("PersistentStore", persistent_store(), Value::t_string);
+								chn->setValue("PersistentStore", Value(persistent_store(), Value::t_string));
 							}
 							chn->start();
 							chn->enable();

@@ -37,7 +37,7 @@ static void debugParameterChange(MachineInstance *dest_machine) {
 		if (n >= 999) break;
 	}
 	snprintf(buf+n, 1000-n, "]");
-	dest_machine->setValue("DEBUG", buf);
+  dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
 }
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val, Value pos, bool insert_before, bool expand_items)
@@ -52,7 +52,7 @@ Action *IncludeActionTemplate::factory(MachineInstance *mi) {
 }
 
 IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, Value pos, bool insert_before, bool expand_list)
-    : Action(m), list_machine_name(dat->list_machine_name), entry(dat->entry), list_machine(0), entry_machine(0), position(pos), before(insert_before), expand(expand_list) {
+	: Action(m), list_machine_name(dat->list_machine_name), entry(dat->entry), list_machine(0), entry_machine(0), position(pos), before(insert_before), expand(expand_list) {
 }
 
 IncludeAction::IncludeAction() : list_machine(0), entry_machine(0), position(-1), before(false), expand(false) {
@@ -66,7 +66,7 @@ std::ostream &IncludeAction::operator<<(std::ostream &out) const {
 
 Action::Status IncludeAction::run() {
 	owner->start(this);
-    list_machine = owner->lookup(list_machine_name);
+	list_machine = owner->lookup(list_machine_name);
 
 	if (list_machine) {
 		if (list_machine->_type == "REFERENCE") {
@@ -113,7 +113,7 @@ Action::Status IncludeAction::run() {
 				}
 				if (!done) {
 					char buf[400];
-					snprintf(buf, 400, "%s  failed to lookup machine: %s  for assignment. Treating it as a string",
+					snprintf(buf, 400, "%s failed to lookup machine: %s for assignment. Treating it as a string",
 							 owner->fullName().c_str(), entry.asString().c_str());
 					MessageLog::instance()->add(buf);
 					list_machine->addLocal(entry,new_assignment);
@@ -143,8 +143,14 @@ Action::Status IncludeAction::run() {
 				return status;
 		}
 		else {
+			entry_machine = entry.kind == Value::t_symbol ? owner->lookup(entry.sValue) : nullptr;
+			Value to_insert = entry;
+			if (entry.kind == Value::t_symbol && !entry_machine) {
+				const Value &v = owner->getValue(entry);
+				if (v != SymbolTable::Null) to_insert = v;
+			}
 			bool found = false;
-			long pos = -1;
+			long pos = -1; // indicates a search to insert before a given item
 			if (position.kind == Value::t_string || position.kind == Value::t_symbol) {
 				const Value &pos_v = owner->getValue(position.asString());
 				if (pos_v == SymbolTable::Null || !pos_v.asInteger(pos)) {
@@ -164,17 +170,19 @@ Action::Status IncludeAction::run() {
 				status = Failed;
 				return status;
 			}
-			for (unsigned int i=0; i<list_machine->parameters.size(); ++i) {
-				if (list_machine->parameters[i].val == entry
-								|| list_machine->parameters[i].real_name == entry.asString())
-					found = true;
-				// bug: if the item being added is a list and expand is true but the list object itself is already
-				//   on this list then it won't be expanded
+			if (to_insert.kind == Value::t_symbol) {
+				for (unsigned int i=0; i<list_machine->parameters.size(); ++i) {
+					if (list_machine->parameters[i].val == to_insert
+							|| list_machine->parameters[i].real_name == to_insert.asString())
+						found = true;
+					// bug: if the item being added is a list and expand is true but the list object itself is already
+					//  on this list then it won't be expanded
+				}
 			}
 			if (!found) {
-				if (entry.kind == Value::t_symbol) {
-					MachineInstance *machine = owner->lookup(entry);
-					if (!machine) {
+				if (to_insert.kind == Value::t_symbol) {
+					MachineInstance *machine = entry_machine;
+					if (!machine) { // entry may be a property that names a machine
 						Value v = owner->getValue(entry.sValue);
 						if (v.kind == Value::t_symbol) {
 							machine = owner->lookup(v.sValue);
@@ -183,10 +191,10 @@ Action::Status IncludeAction::run() {
 								list_machine->addParameter(v, machine, pos, before);
 							}
 							else
-								list_machine->addParameter(v,0, pos, before);
+								list_machine->addParameter(v,nullptr, pos, before);
 						}
 						else
-							list_machine->addParameter(v, 0, pos, before);
+							list_machine->addParameter(v, nullptr, pos, before);
 					}
 					else {
 						if (machine->_type == "LIST" && expand) {
@@ -197,11 +205,11 @@ Action::Status IncludeAction::run() {
 							}
 						}
 						else
-							list_machine->addParameter(entry, machine, pos, before);
+							list_machine->addParameter(to_insert, machine, pos, before);
 					}
 				}
 				else
-					list_machine->addParameter(entry, 0, pos, before);
+					list_machine->addParameter(to_insert, 0, pos, before);
 			}
 		}
 		debugParameterChange(list_machine);
