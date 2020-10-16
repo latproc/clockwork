@@ -47,6 +47,7 @@
 #include "Parameter.h"
 #include "MachineClass.h"
 #include "ActionList.h"
+#include "dynamic_value.h"
 
 extern SymbolTable globals;
 
@@ -380,7 +381,6 @@ protected:
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
 
-#include "dynamic_value.h"
 class MachineValue : public DynamicValue {
 public:
     MachineValue(MachineInstance *mi, std::string name): machine_instance(mi), local_name(name) { }
