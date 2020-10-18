@@ -134,15 +134,17 @@ std::map<std::string, HardwareAddress> MachineInstance::hw_names;
 
 /* Factory methods */
 
-MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type) {
+MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::string &type, MachineInstance::InstanceType instance_type) {
 	if (instance_type == MachineInstance::MACHINE_SHADOW)
-		return new MachineShadowInstance(name, type, MachineInstance::MACHINE_INSTANCE);
-	if (strcmp(type, "COUNTERRATE") == 0)
-		return new CounterRateInstance(name, type, instance_type);
-	else if (strcmp(type, "RATEESTIMATOR") == 0)
-		return new RateEstimatorInstance(name, type, instance_type);
+		return new MachineShadowInstance(name, type.c_str(), MachineInstance::MACHINE_INSTANCE);
+  if (type == "COUNTERRATE") {
+		return new CounterRateInstance(name, type.c_str(), instance_type);
+  }
+  else if (type == "RATEESTIMATOR") {
+		return new RateEstimatorInstance(name, type.c_str(), instance_type);
+  }
 	else {
-		MachineClass *cls = MachineClass::find(type);
+		MachineClass *cls = MachineClass::find(type.c_str());
 		ChannelDefinition *defn = dynamic_cast<ChannelDefinition*>(cls);
 		if (defn) {
 			MachineInstance *found = MachineInstance::find(name.get());
@@ -152,7 +154,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const char *
 			chn->setDefinition(defn);
 			return chn;
 		}
-		return new MachineInstance(name, type, instance_type);
+		return new MachineInstance(name, type.c_str(), instance_type);
 	}
 }
 
@@ -828,8 +830,8 @@ void MachineInstance::describe(std::ostream &out) {
 					std::list<ConditionHandler>::iterator iter = stable_states[i].subcondition_handlers->begin();
 					while (iter != stable_states[i].subcondition_handlers->end()) {
 						ConditionHandler &ch = *iter++;
-						out << "      " << ch.command_name <<" ";
-						if (ch.command_name != "FLAG" && ch.trigger) out << (ch.trigger->fired() ? "fired" : "not fired");
+						out << "      " << ch.command_name() <<" ";
+						if (ch.command_name() != "FLAG" && ch.trigger) out << (ch.trigger->fired() ? "fired" : "not fired");
 						out << " last: " << ch.condition.last_evaluation << "\n";
 					}
 				}
@@ -1586,7 +1588,7 @@ uint64_t MachineInstance::setupSubconditionTriggers(const StableState &s, uint64
 				if (timer_val < LONG_MAX && timer_val < earliestTimer) result = timer_val;
 			}
 		}
-		else if (ch.command_name == "FLAG") {
+		else if (ch.command_name() == "FLAG") {
 			if (s.state_name == current_state.getName()) {
 				//TBD What was intended here?
 			}
@@ -2912,8 +2914,8 @@ bool MachineInstance::setStableState() {
 				std::list<ConditionHandler>::iterator iter = s.subcondition_handlers->begin();
 				while (iter != s.subcondition_handlers->end()) {
 					ConditionHandler&ch = *iter++;
-					if (ch.command_name == "FLAG" ) {
-						MachineInstance *flag = lookup(ch.flag_name);
+					if (ch.command_name() == "FLAG" ) {
+						MachineInstance *flag = lookup(ch.flag_name());
 						if (flag) {
 							const State *off = flag->state_machine->findState("off");
 							if (strcmp("off", flag->getCurrentStateString())) {
@@ -2922,7 +2924,7 @@ bool MachineInstance::setStableState() {
 							}
 						}
 						else
-							std::cerr << _name << " error: flag " << ch.flag_name << " not found\n";
+							std::cerr << _name << " error: flag " << ch.flag_name() << " not found\n";
 					}
 				}
 			}

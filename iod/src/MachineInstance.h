@@ -408,7 +408,7 @@ protected:
 class MachineInstanceFactory {
 public:
     static MachineInstance *create(MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
-    static MachineInstance *create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
+  static MachineInstance *create(CStringHolder name, const std::string &type, MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
 };
 
 #endif

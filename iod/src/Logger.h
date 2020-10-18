@@ -50,6 +50,7 @@ public:
 class LogState {
 public:
 	static LogState* instance() { if (!state_instance) state_instance = new LogState; return state_instance; }
+  static void cleanup() { delete state_instance; }
 	int define(std::string new_name) {
 		flag_names.push_back(new_name);
 		name_map[new_name] = (int)flag_names.size()-1;
@@ -104,6 +105,7 @@ public:
     std::ostream&log(Level l);
     void setOutputStream(std::ostream *out) { log_stream = out; }
 	static void getTimeString(char *buf, size_t buf_size);
+  static void cleanup() { delete logger_instance; }
 private:
 	Logger();
 	static Logger *logger_instance;

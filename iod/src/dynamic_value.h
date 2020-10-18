@@ -32,7 +32,7 @@ class MachineInstance;
 
 class DynamicValue : public DynamicValueBase {
   public:
-    DynamicValue() : scope(0), refs(0), last_process_time(0) { }
+    DynamicValue() : scope(0), last_process_time(0) { }
     virtual ~DynamicValue()  {}
     virtual const Value &operator()(MachineInstance *scope); // uses the provided machine's scope
     virtual const Value &operator()(); // uses the current scope for evaluation
@@ -43,15 +43,12 @@ class DynamicValue : public DynamicValueBase {
     virtual const Value *lastResult() const { return &last_result; }
     void setScope(MachineInstance *m) { scope = m; }
     MachineInstance *getScope() const { return scope; }
-    static DynamicValue *ref(DynamicValue *dv) { if (!dv) return 0; else dv->refs++; return dv; }
-    DynamicValue *deref() { --refs; if (!refs) delete this; return 0; }
     virtual void flushCache();
   protected:
     Value last_result;
     MachineInstance *scope;
-    int refs;
     uint64_t last_process_time;
-    DynamicValue(const DynamicValue &other) : last_result(other.last_result), scope(0), refs(1) { }
+    DynamicValue(const DynamicValue &other) : last_result(other.last_result), scope(0) { }
   private:
     DynamicValue &operator=(const DynamicValue &other);
 };
