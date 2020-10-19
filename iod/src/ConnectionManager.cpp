@@ -82,10 +82,12 @@ public:
 	virtual ~ConnectionManagerInternals() {}
 };
 
-ConnectionManager::ConnectionManager() : internals(0),owner_thread(pthread_self()), aborted(false) {
+ConnectionManager::ConnectionManager() : owner_thread(pthread_self()), has_aborted(false) {
 }
 
-void ConnectionManager::abort() { aborted = true; }
+ConnectionManager::~ConnectionManager() = default;
+
+void ConnectionManager::abort() { has_aborted = true; }
 
 std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix, const char *default_name) {
 	if (!val)

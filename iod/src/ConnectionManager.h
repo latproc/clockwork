@@ -80,27 +80,30 @@ public:
 	void setState(const std::string);
 };
 
-class ConnectionManagerInternals;
-class ConnectionManager {
+class ConnectionManagerInterface {
+public:
+  virtual ~ConnectionManagerInterface() = default;
+  virtual bool setupConnections() =0;
+  virtual bool checkConnections() =0;
+  virtual bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) =0;
+  virtual int numSocks() =0;
+  virtual bool ready() = 0;
+};
+
+class ConnectionManager : public ConnectionManagerInterface {
 public:
 	ConnectionManager();
-	virtual ~ConnectionManager() {}
-	virtual bool setupConnections() =0;
-	virtual bool checkConnections() =0;
-	virtual bool checkConnections(zmq::pollitem_t *items, int num_items, zmq::socket_t &cmd) =0;
-	
-	virtual int numSocks() =0;
+  virtual ~ConnectionManager();
 	void abort();
+  void aborted();
 	bool ready() { return rate_limiter.ready(); }
 	const pthread_t &ownerThread() const { return owner_thread; }
 protected:
-	ConnectionManagerInternals *internals;
 	pthread_t owner_thread;
-	bool aborted;
+	bool has_aborted;
 	std::map<std::string, MachineShadow *> machines;
 	RateLimiter rate_limiter;
 };
-
 
 class MessageFilterInternals  {
 public:
@@ -162,6 +165,7 @@ private:
  are forwarded remote driver through the command socket.
 
  */
+class SubscriptionManagerInternals;
 class SubscriptionManager : public ConnectionManager {
 public:
 	// RunStatus tracks the state of the connection between the main thread
@@ -233,6 +237,7 @@ public:
 	SingleConnectionMonitor *monit_setup;
 protected:
 	// A server instance will not have a socket for setting up the subscriber
+  SubscriptionManagerInternals *internals;
 	zmq::socket_t *setup_;
 	Status _setup_status;
 	SubStatus sub_status_;
