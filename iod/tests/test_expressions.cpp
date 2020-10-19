@@ -90,9 +90,16 @@ int main(int argc, char *argv[]) {
   MessagingInterface::setContext(context);
   Logger::instance();
   Dispatcher::instance();
+  zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+  dispatch_sync.connect("inproc://dispatcher_sync");
 
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  auto result = RUN_ALL_TESTS();
 
+  MessagingInterface::abort();
+  Dispatcher::instance()->stop();
+  LogState::cleanup();
+  Logger::cleanup();
+  return result;
 }
 

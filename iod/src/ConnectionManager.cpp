@@ -763,9 +763,6 @@ bool SubscriptionManager::checkConnections() {
 }
 
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
 
 	if (!checkConnections() &&isClient()) {
 		/*
@@ -786,7 +783,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			if (idx != -1)
 				rc = zmq::poll( &items[idx], 1, 5);
 			else
-				rc = 0;
+        return false;
 		}
 		else
 			rc = zmq::poll(items, num_items, 5);
@@ -821,12 +818,17 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	// if it is we pass the command to the remote using either the subscriber socket
 	// or the setup socket depending on the circumstances.
 	int command_item = num_items - 1;
-	if (items[command_item].revents & ZMQ_POLLERR) {
-		DBG_CHANNELS << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
-	}
-	else if (items[command_item].revents & ZMQ_POLLIN) {
-		DBG_CHANNELS << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
-	}
+  if (items[command_item].revents & (ZMQ_POLLERR | ZMQ_POLLIN) && LogState::instance()->includes( (DebugExtra::instance()->DEBUG_CHANNELS) )) {
+    char tnam[100];
+    int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+    assert(pgn_rc == 0);
+    if (items[command_item].revents & ZMQ_POLLERR) {
+      DBG_CHANNELS << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
+    }
+    else if (items[command_item].revents & ZMQ_POLLIN) {
+      DBG_CHANNELS << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
+    }
+  }
 
 	// Here we process an incoming message that we may need to forward on and
 	// collect a response for.  If the message is forwarded we change state to
