@@ -221,7 +221,7 @@ bool SubscriptionManager::requestChannel() {
 				smi->sent_request = true;
 				smi->send_time = now;
 			}
-			catch (zmq::error_t ex) {
+			catch (const zmq::error_t &ex) {
 				++error_count;
 				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
@@ -325,7 +325,7 @@ bool SubscriptionManager::setupConnections() {
 			setup_url = strdup(url);
 			setup().connect(url);
 		}
-		catch(zmq::error_t err) {
+		catch(const zmq::error_t &err) {
 			{
 				char buf[200];
 				snprintf(buf, 200, "%s %d %s %s %s\n",
@@ -526,9 +526,6 @@ void MessageRouter::addRemoteSocket(int type, const std::string address) {
 }
 void MessageRouter::operator()() {
 	boost::unique_lock<boost::mutex> lock(internals->data_mutex);
-	int *destinations = 0;
-	size_t saved_num_items = 0;
-	zmq::pollitem_t *items;
 	while (!internals->done) {
 		poll();
 		usleep(20);
@@ -615,7 +612,6 @@ void MessageRouter::poll() {
 
 	char *buf = 0;
 	size_t len = 0;
-	int source = 0;
 	MessageHeader mh;
 
 	// receiving from remote socket

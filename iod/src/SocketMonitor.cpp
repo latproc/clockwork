@@ -79,7 +79,7 @@ void SocketMonitor::operator()() {
 				exit(EXIT_FAILURE);
 			usleep(100);
         }
-        catch (std::exception ex) {
+        catch (const std::exception &ex) {
             NB_MSG << "unknown exception: " << ex.what() << " monitoring a socket\n";
 			++exception_count;
 			if (exception_count > 5)
