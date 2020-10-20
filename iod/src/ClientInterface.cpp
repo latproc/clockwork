@@ -475,7 +475,7 @@ void IODCommandThread::operator()() {
 			cti->socket.bind (url_buf);
 			break;
 		}
-		catch (zmq::error_t zex) {
+		catch (const zmq::error_t &zex) {
 			{	NB_MSG << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
 				FileLogger fl(program_name); usleep(10);
 				fl.f() << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
@@ -527,7 +527,7 @@ void IODCommandThread::operator()() {
 				if (rc == -1 && errno == EAGAIN) continue;
 				if (done) break;
 			}
-			catch (zmq::error_t zex) {
+			catch (const zmq::error_t &zex) {
 				{
 					FileLogger fl(program_name);
 					fl.f() << "Client Interface exception during poll()\n";

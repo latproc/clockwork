@@ -588,7 +588,7 @@ void MessageRouter::poll() {
 		int rc = zmq::poll(items, num_socks, 2);
 		if (rc == 0) { return; }
 	}
-	catch (zmq::error_t zex) {
+	catch (const zmq::error_t &zex) {
 		{FileLogger fl(program_name);
 			fl.f() << "MessageRouter zmq error " << zmq_strerror(zmq_errno()) << "\n";
 		}
@@ -786,7 +786,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 		else
 			rc = zmq::poll(items, num_items, 5);
 	}
-	catch (zmq::error_t zex) {
+	catch (const zmq::error_t &zex) {
 		char buf[200];
 		snprintf(buf, 200, "%s %s %d %s %s",
 				 channel_name.c_str(),

@@ -1006,7 +1006,7 @@ int main(int argc, const char * argv[])
 				exception_count = 0;
 				error_count = 0;
 			}
-			catch (zmq::error_t zex) {
+			catch (const zmq::error_t &zex) {
 					if (zmq_errno() == EINTR) continue;
 					++error_count;
 					{FileLogger fl(program_name); fl.f() << "zmq exception " << zmq_errno()  << " "
