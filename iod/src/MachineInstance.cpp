@@ -2037,7 +2037,7 @@ Action *MachineInstance::findHandler(Message&m, Transmitter *from, bool response
 								char buf[100];
 								snprintf(buf, 100, "%s: Failed Transition from %s to %s",
 												 _name.c_str(), current_state.getName().c_str(), t.dest.getName().c_str());
-								AbortActionTemplate aat(true, buf);
+								AbortActionTemplate aat(true, Value(buf, Value::t_string));
 								MachineCommandTemplate mc2("abort", "");
 								mc2.setActionTemplate(&aat);
 								IfElseCommandActionTemplate ifecat(s.condition.predicate, &mc, &mc2);
