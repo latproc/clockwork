@@ -93,24 +93,19 @@ Tokeniser* Tokeniser::instance() {
     return _instance;
 }
 
-int Tokeniser::getTokenId(const char *name) {
-    std::map<std::string, int>::iterator found = tokens.find(name);
-    if (found != tokens.end()) {
-        return (*found).second;
-    }
-    int n = ++next;
-    tokens[name] = n;
-    return n;
-}
-
 int Tokeniser::getTokenId(const std::string &name) {
     std::map<std::string, int>::iterator found = tokens.find(name);
     if (found != tokens.end()) {
         return (*found).second;
     }
+    std::cout << "adding token " << name << "\n";
     int n = ++next;
     tokens[name] = n;
     return n;
+}
+
+int Tokeniser::getTokenId(const char *name) {
+    return getTokenId(std::string(name));
 }
 
 
