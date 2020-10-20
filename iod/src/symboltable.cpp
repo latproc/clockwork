@@ -98,7 +98,6 @@ int Tokeniser::getTokenId(const std::string &name) {
     if (found != tokens.end()) {
         return (*found).second;
     }
-    std::cout << "adding token " << name << "\n";
     int n = ++next;
     tokens[name] = n;
     return n;
