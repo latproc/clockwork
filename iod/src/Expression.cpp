@@ -147,13 +147,39 @@ Condition::~Condition()
   delete predicate;
 }
 
+Predicate::Predicate(Value *v) : left_p(0), op(opNone), right_p(0), entry(*v), mi(0), dyn_value(0), cached_entry(0),
+last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
+  if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") {
+    priority = 1;
+  }
+}
+
+Predicate::Predicate(Value &v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
+last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
+  if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") {
+    priority = 1;
+  }
+}
+
+Predicate::Predicate(const char *s) : left_p(0), op(opNone), right_p(0), entry(s), mi(0), dyn_value(0), cached_entry(0),
+last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
+  if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") {
+    priority = 1;
+  }
+}
+Predicate::Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
+last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {}
+
+Predicate::Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r),
+mi(0), dyn_value(0), cached_entry(0), last_calculation(0), priority(0),
+lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {}
+
+
 Predicate::~Predicate()
 {
   delete left_p;
   delete right_p;
-  if (dyn_value) {
-    delete dyn_value;
-  }
+  delete dyn_value;
 }
 
 class Evaluator {
@@ -352,10 +378,18 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
     }
   }
   else if (left_p) {
+    PredicateTimerDetails *prev = earliest;
     earliest = left_p->scheduleTimerEvents(earliest, target);
+    if (prev && earliest != prev) {
+      delete prev;
+    }
   }
   if (right_p) {
+    PredicateTimerDetails *prev = earliest;
     earliest = right_p->scheduleTimerEvents(earliest, target);
+    if (prev && earliest != prev) {
+      delete prev;
+    }
   }
   else {
 
@@ -461,12 +495,12 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
     right_p = new Predicate(*(other.right_p));
   }
   entry = other.entry;
-  if (other.entry.dyn_value) {
-    entry.dyn_value = DynamicValueBase::ref(other.entry.dyn_value->clone());
+  if (other.entry.dynamicValue()) {
+    entry.setDynamicValue(other.entry.dynamicValue()->clone());
     //dyn_value = DynamicValueBase::ref(other.dyn_value); // note shared copy, should be a shared pointer
   }
   if (other.dyn_value) {
-    dyn_value = new Value(DynamicValueBase::ref(other.dyn_value->dyn_value));
+    dyn_value = new Value(DynamicValueBase::ref(other.dyn_value->dynamicValue()));
   }
   else {
     dyn_value = 0;
@@ -482,6 +516,9 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
 
 Predicate &Predicate::operator=(const Predicate &other)
 {
+  delete left_p;
+  delete right_p;
+  delete dyn_value;
   if (other.left_p) {
     left_p = new Predicate(*(other.left_p));
   }
@@ -490,12 +527,12 @@ Predicate &Predicate::operator=(const Predicate &other)
     right_p = new Predicate(*(other.right_p));
   }
   entry = other.entry;
-  if (other.entry.dyn_value) {
-    entry.dyn_value = DynamicValueBase::ref(other.entry.dyn_value->clone());
+  if (other.entry.dynamicValue()) {
+    entry.setDynamicValue(other.entry.dynamicValue()->clone());
     //dyn_value = DynamicValueBase::ref(other.dyn_value); // note shared copy, should be a shared pointer
   }
   if (other.dyn_value) {
-    dyn_value = new Value(DynamicValueBase::ref(other.dyn_value->dyn_value));
+    dyn_value = new Value(DynamicValueBase::ref(other.dyn_value->dynamicValue()));
   }
   else {
     dyn_value = 0;
@@ -890,12 +927,14 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
       if (lhm && !rhm) {
         if (lhm->hasState(p->right_p->entry.sValue)) {
           p->right_p->entry.kind = Value::t_string;
+          assert(p->left_p->dyn_value == nullptr);
           p->left_p->dyn_value = new Value(new MachineValue(lhm, p->left_p->entry.sValue));
         }
       }
       else if (rhm && !lhm) {
         if (rhm->hasState(p->left_p->entry.sValue)) {
           p->left_p->entry.kind = Value::t_string;
+          assert(p->left_p->dyn_value == nullptr);
           p->right_p->dyn_value = new Value(new MachineValue(rhm, p->right_p->entry.sValue));
         }
       }
@@ -1068,10 +1107,10 @@ void Stack::clear()
 
 Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
   if (!predicate || !m) return SymbolTable::Null;
-  if (stack.stack.size() != 0) {
+  if (!stack.stack.empty()) {
     stack.stack.clear();
   }
-  if (stack.stack.size() == 0)
+  if (stack.stack.empty())
     if (!prep(stack, predicate, m, true, true)) {
       std::stringstream ss;
       ss << m->getName() << " Predicate failed to resolve: " << *predicate << "\n";
@@ -1085,10 +1124,10 @@ Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
 
 Value Predicate::evaluate(MachineInstance *m)
 {
-  if (stack.stack.size() != 0) {
+  if (!stack.stack.empty()) {
     stack.stack.clear();
   }
-  if (stack.stack.size() == 0)
+  if (stack.stack.empty())
     if (!prep(stack, this, m, true, needs_reevaluation)) {
       std::stringstream ss;
       ss << m->getName() << " Predicate failed to resolve: " << *this << "\n";
@@ -1107,30 +1146,21 @@ Value Predicate::evaluate(MachineInstance *m)
 bool Condition::operator()(MachineInstance *m)
 {
   if (predicate) {
-    //if (predicate->last_evaluation_time < m->lastStateEvaluationTime() ) {
-    //std::cout << "clearing predicate stack\n";
     predicate->stack.stack.clear();
-    //    }
-    if (predicate->stack.stack.size() == 0) {
+    if (predicate->stack.stack.empty()) {
       if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {
         std::stringstream ss;
         ss << m->getName() << " condition failed: predicate failed to resolve: " << *this->predicate << "\n";
         MessageLog::instance()->add(ss.str().c_str());
         return false;
       }
-      //std::cout << "predicate stack prepared ok: " << *predicate << "\n";
     }
-    //else
-    //std::cout << "predicate stack already prepared.. skipping preparation\n";
-    //std::cout << m->getName() << " Expression Stack: " << predicate->stack << "\n";
-    //Stack work(predicate->stack);
     std::list<ExprNode>::const_iterator work = predicate->stack.stack.begin();
     ExprNode res(eval_stack(m, work));
     last_result = *res.val;
     std::stringstream ss;
     ss << last_result << " " << *predicate;
-    long t = microsecs();
-    predicate->last_evaluation_time = t;
+    predicate->last_evaluation_time = microsecs();
     last_evaluation = ss.str();
     if (last_result.kind == Value::t_bool) {
       return last_result.bValue;

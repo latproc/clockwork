@@ -7,7 +7,7 @@
 	modify it under the terms of the GNU General Public License
 	as published by the Free Software Foundation; either version 2
 	of the License, or (at your option) any later version.
-	
+
 	Latproc is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
@@ -55,60 +55,66 @@ void simple_deltat(std::ostream &out, uint64_t dt) {
 DynamicValueBase::~DynamicValueBase() {}
 
 Value::Value() : kind(t_empty), cached_machine(0),
-				dyn_value(0),cached_value(0), token_id(0) { }
+				dyn_value(0), token_id(0),cached_value(0) { }
 
-Value::Value(Kind k) : kind(k), cached_machine(0),
-				dyn_value(0),cached_value(0), token_id(0) { }
+Value::Value(Kind k) : kind(k), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
 
 Value::Value(bool v) : kind(t_bool), bValue(v),
-				cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+				cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
 
 Value::Value(long v) : kind(t_integer), iValue(v),
-				cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+				cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
 
 Value::Value(int v) : kind(t_integer), iValue(v),
-				cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+				cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
 
 Value::Value(unsigned int v) : kind(t_integer),
-				iValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+				iValue(v), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
 
 Value::Value(unsigned long v) : kind(t_integer),
-				iValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) { }
+				iValue(v), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
 
 
 Value::Value(float v) : kind(t_float),
-		fValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
+		fValue(v), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) {
 }
 
 Value::Value(double v) : kind(t_float),
-		fValue(v), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
+		fValue(v), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) {
 }
 
 Value::Value(const char *str, Kind k)
-		: kind(k), sValue(str), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
-				if (kind == t_symbol) token_id = Tokeniser::instance()->getTokenId(str);
+		: kind(k), sValue(str), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) {
+      if (kind == t_symbol && *str != 0) {
+        token_id = Tokeniser::instance()->getTokenId(str);
+      }
 }
 
 Value::Value(std::string str, Kind k)
-		: kind(k), sValue(str), cached_machine(0), dyn_value(0),cached_value(0), token_id(0) {
-				if (kind == t_symbol) token_id = Tokeniser::instance()->getTokenId(str);
+		: kind(k), sValue(str), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) {
+      if (kind == t_symbol && !str.empty()) {
+        token_id = Tokeniser::instance()->getTokenId(str);
+      }
 }
 
 
 void Value::setDynamicValue(DynamicValueBase *dv) {
 		if (kind == t_dynamic && dyn_value) { dyn_value = dyn_value->deref(); }
+    else { assert(dyn_value == nullptr); }
 		kind = t_dynamic;
 		dyn_value = DynamicValueBase::ref(dv);
 }
 
 void Value::setDynamicValue(DynamicValueBase &dv) {
 		if (kind == t_dynamic) { dyn_value = dyn_value->deref(); }
+    else { assert(dyn_value == nullptr); }
 		kind = t_dynamic;
 		dyn_value = DynamicValueBase::ref(&dv);
 }
 
 Value::~Value() {
 		if (kind == t_dynamic) { if (dyn_value) dyn_value = dyn_value->deref(); }
+    else assert(dyn_value == nullptr);
 }
 
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),fValue(other.fValue),
@@ -398,7 +404,7 @@ bool Value::operator==(const Value &other) const {
 	Kind b = other.kind;
 
 		if (a == t_symbol && b == t_symbol) return token_id == other.token_id;
-		
+
 	if (a == t_symbol) a = t_string;
 	if (b == t_symbol) b = t_string;
 
@@ -735,7 +741,7 @@ namespace ValueOperations {
 		std::ostream& operator<<(std::ostream&out) const { out << "AND"; return out; }
 		virtual std::string toString() const { return "AND"; }
 	};
-		
+
 	struct BitOr : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const {
 			return a.iValue | b.iValue;
@@ -743,7 +749,7 @@ namespace ValueOperations {
 		std::ostream& operator<<(std::ostream&out) const { out << "OR"; return out; }
 		virtual std::string toString() const { return "OR"; }
 	};
-		
+
 	struct BitXOr : public ValueOperation {
 		Value operator()(const Value &a, const Value &b) const {
 			return a.iValue ^ b.iValue;
@@ -780,7 +786,7 @@ struct TypeFix {
 				}
 			}
 			else if (a.kind == Value::t_string || a.kind == Value::t_symbol) {
-				return (*op)(a, b.asString());
+        return (*op)(a, Value(b.asString(), Value::t_string));
 			}
 			/*
 			else if (b.kind == Value::t_integer && (a.kind == Value::t_string || a.kind == Value::t_symbol) ){
@@ -1088,7 +1094,7 @@ void Value::addItem(Value next_value) {
 						listValue.push_front(Value(iValue));
 				else if (kind == t_string)
 						listValue.push_front(Value(sValue.c_str()));
-				
+
 				kind = t_list;
 				listValue.push_front(next_value);
 		}

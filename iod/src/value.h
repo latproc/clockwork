@@ -98,7 +98,7 @@ class Value {
     double fValue;
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
-    DynamicValueBase *dyn_value;
+
     Value *cached_value;
     int token_id;
 
@@ -106,6 +106,7 @@ class Value {
     bool identical(const Value &other) const; // bypasses default == for floats
 
     DynamicValueBase *dynamicValue() const { return dyn_value; }
+    void setDynamicValue();
     void setDynamicValue(DynamicValueBase *dv);
     void setDynamicValue(DynamicValueBase &dv);
 
@@ -149,6 +150,7 @@ class Value {
 
     std::ostream &operator<<(std::ostream &out) const;
   private:
+    DynamicValueBase *dyn_value;
     std::string name() const;
 };
 
