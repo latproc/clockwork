@@ -763,7 +763,7 @@ struct TypeFix {
 				}
 			}
 			else if (a.kind == Value::t_string || a.kind == Value::t_symbol) {
-				return Value(a.sValue + b.asString(), a.kind);
+				return Value(a.sValue + b.asString(), Value::t_string);
 			}
 			/*
 			else if (b.kind == Value::t_integer && (a.kind == Value::t_string || a.kind == Value::t_symbol) ){
