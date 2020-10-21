@@ -5,7 +5,8 @@
 #
 # device_connector --serial_port /dev/tty.usbserial-A900ced4 
 # 		--serial_settings 115200:8:9:1:N --property panel.key  
-#		--pattern '[0-9]+' --name control --watch_property control.UpdateRate --channel PanelChannel
+#		--pattern '[0-9]+' --name control --watch_property
+#       control.UpdateRate --channel PanelChannel
 #
 
 Panel MACHINE control {

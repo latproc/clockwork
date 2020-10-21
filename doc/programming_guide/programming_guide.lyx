@@ -906,6 +906,42 @@ So far we have been using FLAG machines as placeholders for machines that
 \end_layout
 
 \begin_layout Section
+EtherCAT
+\end_layout
+
+\begin_layout Standard
+Some machine classes are designed for use with hardware; the classes corresponed
+ with the physical devices being modelled or controlled, for example there
+ are classes called `MODULE' and `POINT'.
+ An instance of an EtherCAT module and a IO point on that module might be
+ declared in the following way.
+\end_layout
+
+\begin_layout LyX-Code
+Beckhoff_2008 MODULE 2
+\end_layout
+
+\begin_layout LyX-Code
+NG_Output POINT Beckhoff_2008 5
+\end_layout
+
+\begin_layout Standard
+The MODULE parameter `2' indicates the position of the module on the bus
+ and the POINT parameter `5' identifies the position of the particular output
+ of the point that we want to call `NG_Output'.
+ With these definitions, the output can be turned on or off using statements
+ in clockwork actions blocks:
+\end_layout
+
+\begin_layout LyX-Code
+SET NG_Output TO on;
+\end_layout
+
+\begin_layout LyX-Code
+SET NG_Output TO off;
+\end_layout
+
+\begin_layout Section
 Examples
 \end_layout
 

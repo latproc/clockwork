@@ -129,56 +129,6 @@ This desribes the Clockwork language, the User Guide and Programming Guide
 Introduction
 \end_layout
 
-\begin_layout Standard
-Clockwork is a language intended to be used to describe systems of interacting
- components using state machines.
- The purpose of the language is to provide a platform for monitoring and
- control and it has currently been implemented as a control system using
- Beckhoff EtherCAT® and The Internet of Things (MQTT).
-\end_layout
-
-\begin_layout Standard
-The language provides the programmer with a means to:
-\end_layout
-
-\begin_layout Itemize
-define the states of a machine in terms of conditions
-\end_layout
-
-\begin_layout Itemize
-define commands that can be invoked on the machine
-\end_layout
-
-\begin_layout Itemize
-define transition rules that determine what actions can be performed and
- what state transtions are allowable
-\end_layout
-
-\begin_layout Itemize
-define state entry functions that execute when a machine enters a state
-\end_layout
-
-\begin_layout Itemize
-monitor the operation of a machine by sampling events as they occur and
- interactively inspecting the state and properties of internal components
-\end_layout
-
-\begin_layout Itemize
-view the state and properties of the machine in a web browser
-\end_layout
-
-\begin_layout Itemize
-view the operation of a machine in a 3D view
-\end_layout
-
-\begin_layout Itemize
-interface to serial devices, network devices and modbus devices
-\end_layout
-
-\begin_layout Itemize
-program embedded devices and microcontrollers (not yet available)
-\end_layout
-
 \begin_layout Subsection
 Elements of a clockwork system
 \end_layout
@@ -207,12 +157,12 @@ hmi whether it is a web application, humid user interface or command interface
 
 \begin_layout Description
 monitors implemented via the external sampler/scope tools or via tools within
- humid
+ the HMI application, humid
 \end_layout
 
 \begin_layout Description
-connections to non-clockwork systems such as TCP/IP connections, MQTT or
- serial devices
+connections to non-clockwork systems such as TCP/IP connections, web application
+s, MQTT or serial devices
 \end_layout
 
 \begin_layout Section
@@ -224,38 +174,28 @@ For a more detailed discussion of programming in clockwork, please refer
  to the Programming Guide or User Guide.
 \end_layout
 
-\begin_layout Standard
-The main components in a Clockwork program are called Machines.
- Machines are the processing component of the latproc suite.
- They are defined as finite state machines that are interconnected by message
- passing.
- A machine will automatically detect its state by polling input conditions
- that are defined to match certain configurations.
- By issuing commands, a machine can change the state of other machines and
- these changes can trigger further state changes.
-\end_layout
-
 \begin_layout Subsection
 Machines
 \end_layout
 
 \begin_layout Standard
-A Machine is similar to a Class in other languages in that it encapsulates
- state and provides methods that implement procedural logic.
- Machines are different to classes in that they execute as independent entities,
+The main processing component in a Clockwork program are called Machines;
+ they are finite state machines that are interconnected by message passing.
+ A Machine is similar to a Class in other languages in that it encapsulates
+ data and provides methods that implement procedural logic but machines
+ are different to Classes in that they execute as independent entities,
  continuously evaluating the state of their environment and reacting to
  it.
- Machines are models of processing components or real-world devices that
- can be interconnected.
- Each Machine has a current state and (normally) several other states that
- the machine may automatically move to or that can be manually set by processing
- steps in the program.
- Normally the state of a system includes all of its properties and their
- current values.
- We make a distinction, however, between the state of a machine and the
- properties of the machine, and let the rules determine how the value of
- a machines properties determine its state.
- 
+ By issuing commands, a machine can change the state of other machines and
+ these changes can trigger further state changes.
+\end_layout
+
+\begin_layout Standard
+Machines are models of processing components or real-world devices that
+ can be interconnected, each Machine has a finite number of states, one
+ of which is the `current' state.
+ We make a distinction, between the identified `state' of a machine and
+ the value of the properties of the machine.
 \end_layout
 
 \begin_layout Standard
@@ -273,7 +213,9 @@ state but these could also be called
 automatic
 \emph default
  states.
- 
+ Machines with automatic states have an active role in controlling a system,
+ other machines are passive, simply holding data and recording a state that
+ other machines monitor.
 \end_layout
 
 \begin_layout Standard
@@ -281,7 +223,7 @@ A machine is defined by a block of code that defines the states and rules
 \end_layout
 
 \begin_layout LyX-Code
-<machine-class-name> 
+machine-class-name 
 \begin_inset Quotes eld
 \end_inset
 
@@ -289,7 +231,7 @@ MACHINE
 \begin_inset Quotes erd
 \end_inset
 
- <parameter> [, parameter] ...
+ parameter [, parameter] ...
 \end_layout
 
 \begin_layout LyX-Code
@@ -305,7 +247,7 @@ MACHINE
 
 \begin_deeper
 \begin_layout LyX-Code
-<state-name> 
+state-name 
 \begin_inset Quotes eld
 \end_inset
 
@@ -313,7 +255,7 @@ WHEN
 \begin_inset Quotes erd
 \end_inset
 
- <rule> 
+ rule 
 \begin_inset Quotes eld
 \end_inset
 
@@ -329,7 +271,15 @@ WHEN
 \end_layout
 
 \begin_layout LyX-Code
-[ <state-name> DEFAULT 
+[ state-name 
+\begin_inset Quotes eld
+\end_inset
+
+DEFAULT
+\begin_inset Quotes erd
+\end_inset
+
+ 
 \begin_inset Quotes eld
 \end_inset
 
@@ -353,8 +303,8 @@ WHEN
 \end_layout
 
 \begin_layout Standard
-A rule is simply a predicate expression that compares various properties
- and values; it evaluates to eithe 
+A rule is simply a boolean expression that compares various properties and
+ values; it evaluates to either 
 \emph on
 true
 \emph default
@@ -362,6 +312,8 @@ true
 \emph on
 false
 \emph default
+ and the rules are laid out in a predetermined order so that the first rule
+ to be `true' identifies the state of the machine.
  For example, here is a definition for a Machine that behaves like an AND
  gate in an electronic circuit; an AND gate is on only when both inputs
  are on:
@@ -390,13 +342,22 @@ off DEFAULT
 \end_layout
 
 \begin_layout Subsection
-Instances of machines
+Grammar
 \end_layout
 
 \begin_layout Standard
 Clockwork deals primarily with definitions of finite state machines (referred
  to as MACHINES in the language) and instance of those definitions.
- There is a common pattern for declaring an instance of a machine; providing
+ When programming in clockwork, the normal statement structure is 
+\end_layout
+
+\begin_layout LyX-Code
+name object-type parameters
+\end_layout
+
+\begin_layout Standard
+where object-type might be STATE, CHANNEL, MACHINE or user defined types.
+ For example, when declaring an instance of a machine the programmer provides
  the name and then the machine class.
  The same pattern of name then element is used in most parts of the language.
 \end_layout
@@ -412,24 +373,7 @@ name machine-class [ '(' property-name ':' property-value ...
 \end_layout
 
 \begin_layout Standard
-For example, given machine classes called `MODULE' and `POINT', an instance
- can be declared in the following way.
-\end_layout
-
-\begin_layout LyX-Code
-Beckhoff_2008 MODULE 2
-\end_layout
-
-\begin_layout LyX-Code
-NG_Output POINT Beckhoff_2008 5
-\end_layout
-
-\begin_layout Standard
-This defines a Module and a point within that module.
- In the example, the number `2' indicates the position of the module on
- the bus and the number `5' defines the particular output id of the point
- that we want to call `NG_Output'.
- After the object-class, a list of property key,value pairs may be given.,
+After the object-class, a list of property key,value pairs may be given.,
  for example
 \end_layout
 
@@ -443,7 +387,7 @@ describes the same point but sets a property called `tab'
 status open
 
 \begin_layout Plain Layout
-The web interface to cw and iod happen to use this property to group various
+The web interface to cw and iod happens to use this property to group various
  items into tabs on the web page
 \end_layout
 
@@ -524,7 +468,7 @@ A machine definition can be instantiated by providing a name, the name of
 \end_layout
 
 \begin_layout LyX-Code
-<instantiated-name> <machine-class-name> [ <parameter> [ , <parameter> ...
+instantiated-name machine-class-name [ parameter [ , parameter ...
  ] ] 
 \begin_inset Quotes eld
 \end_inset
@@ -2924,7 +2868,6 @@ stable WHEN x.VALUE == last.VALUE;
 \family typewriter
 \size footnotesize
 recalculate DEFAULT;
-
 \end_layout
 
 \begin_layout Plain Layout
