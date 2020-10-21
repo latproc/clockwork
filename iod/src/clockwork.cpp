@@ -132,7 +132,7 @@ static void listDirectory( const std::string pathToCheck, std::list<std::string>
             free(path_str);
         }
     }
-    catch (const boost::filesystem::filesystem_error& ex)
+    catch (const boost::filesystem::filesystem_error &ex)
     {
         std::cerr << ex.what() << '\n';
     }

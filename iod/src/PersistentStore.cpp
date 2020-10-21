@@ -155,7 +155,7 @@ void PersistentStore::save() {
 			out << *this << std::flush;
 			out.close();
 		}
-		catch (std::exception e) {
+		catch (const std::exception &e) {
 			std::cerr << "exception " << e.what() << " writing data store\n";
 		}
 	}
