@@ -621,7 +621,7 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
             test_bind.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
             break;
         }
-        catch (zmq::error_t err) {
+        catch (const zmq::error_t &err) {
             if (zmq_errno() != EADDRINUSE) {
                 break;
             }
@@ -930,7 +930,7 @@ void Channel::operator()() {
 					usleep(10);
 				}
 			}
-			catch(zmq::error_t err) {
+			catch (const zmq::error_t &err) {
 				DBG_CHANNELS << "Channel " << name << " ZMQ error: " << errno << ": " << zmq_strerror(errno)
 					<< " trying to create internal channel command listener socket\n";
 				if (--retry == 0) { assert(false); exit(2); }
@@ -1084,13 +1084,13 @@ void Channel::operator()() {
 			}
 
 		}
-		catch (zmq::error_t zex) {
+		catch (const zmq::error_t &zex) {
 			{
 				FileLogger fl(program_name);
 				fl.f() << "zmq exception in Channel " << name << " " << zmq_strerror(zmq_errno()) << "\n";
 			}
 		}
-		catch (std::exception ex) {
+		catch (const std::exception &ex) {
 			NB_MSG << "Channel " << name << " saw exception " << ex.what() << "\n";
 		}
 	}
@@ -1176,7 +1176,7 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 			usleep(100);
 			return sock;
 		}
-		catch(std::exception ex) {
+		catch (const std::exception &ex) {
 			assert(false);
 			return 0;
 		}
@@ -1699,12 +1699,14 @@ bool Channel::patternMatches(const std::string &machine_name) {
         rexp_info *rexp = create_pattern(pattern.c_str());
         if (!rexp->compilation_error) {
             if (execute_pattern(rexp, machine_name.c_str()) == 0) {
+                delete rexp;
                 return true;
             }
         }
         else {
             MessageLog::instance()->add(rexp->compilation_error);
             DBG_CHANNELS << "Channel error: " << name << " " << rexp->compilation_error << "\n";
+            delete rexp;
             return false;
         }
     }
@@ -2314,7 +2316,7 @@ CommandSocketInfo::CommandSocketInfo(Channel* chn) : sock(0), index(0) {
 		sock->bind(buf);
 		usleep(50);
 	}
-	catch (zmq::error_t zex) {
+	catch (const zmq::error_t &zex) {
 		char errmsg[150];
 		snprintf(errmsg, 150, "Exception binding a command socket for %s: %s", chn->getName().c_str(), buf);
 		MessageLog::instance()->add(errmsg);
@@ -2348,7 +2350,7 @@ void Channel::setupCommandSockets() {
 				NB_MSG << tnam << " " << chn->name << " remote end bound to socket " << chn->internals->cmd_sock_info->address << "\n";
 				usleep(50);
 			}
-			catch (std::exception ex) {
+			catch (std::exception &ex) {
 				NB_MSG << "setupCommandSockets " << ex.what() << "\n";
 			}
 		}
@@ -2534,6 +2536,7 @@ void Channel::setupFilters() {
             MessageLog::instance()->add(rexp->compilation_error);
             DBG_CHANNELS << "Channel error: " << definition()->name << " " << rexp->compilation_error << "\n";
         }
+        delete rexp;
     }
     std::map<std::string, Value>::const_iterator prop_iter = definition()->monitors_properties.begin();
     while (prop_iter != definition()->monitors_properties.end()) {
