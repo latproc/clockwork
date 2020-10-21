@@ -385,7 +385,6 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 	if (!updatedComponentsIn.size())
 		return;
 //	std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
-#ifdef USE_EXPERIMENTAL_IDLE_LOOP
 	// look at the components that changed and remove them from the outgoing queue as long as the 
 	// outputs have been sent to the hardware
 	std::set<IOComponent*>::iterator iter = updatedComponentsIn.begin();
@@ -414,15 +413,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
 			}
 		}
 	}
-#else
-	std::list<IOComponent *>::iterator iter = processing_queue.begin();
-	while (iter != processing_queue.end()) {
-		IOComponent *ioc = *iter++;
-		ioc->read_time = io_clock;
-		ioc->idle();
-	}
-#endif
-	}
+	} // scoped lock
 	outputs_waiting = updatedComponentsOut.size();
 }
 
