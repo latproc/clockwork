@@ -54,10 +54,9 @@ void simple_deltat(std::ostream &out, uint64_t dt) {
 
 DynamicValueBase::~DynamicValueBase() {}
 
-Value::Value() : kind(t_empty), cached_machine(0),
-				dyn_value(0), token_id(0),cached_value(0) { }
+Value::Value() : kind(t_empty), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) { }
 
-Value::Value(Kind k) : kind(k), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
+Value::Value(Kind k) : kind(k), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) { }
 
 Value::Value(bool v) : kind(t_bool), bValue(v),
 				cached_machine(0),cached_value(0), token_id(0), dyn_value(0) { }
@@ -118,8 +117,8 @@ Value::~Value() {
 }
 
 Value::Value(const Value&other) :kind(other.kind), bValue(other.bValue), iValue(other.iValue),fValue(other.fValue),
-		sValue(other.sValue), cached_machine(other.cached_machine), dyn_value(DynamicValueBase::ref(other.dyn_value)),
-		cached_value(0), token_id(other.token_id) {
+		sValue(other.sValue), cached_machine(other.cached_machine),
+		cached_value(0), token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
 //		if (kind == t_list) {
 //				std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
 //		}
