@@ -268,14 +268,21 @@ int main(int argc, const char * argv[]) {
         char data[1000];
         size_t len = 0;
         try {
-            len = subscription_manager.subscriber().recv(data, 1000, ZMQ_DONTWAIT);
-            if (!len) continue;
+          MessageHeader mh;
+          char *data = 0;
+          size_t len = 0;
+          if (!safeRecv(subscription_manager.subscriber(), &data, &len, false, 1, mh) ) {
+              std::cout << "failed to receive message\n";
+          }
+          if (!len) continue;
         }
         catch (const zmq::error_t &e) {
-            if (errno == EINTR) continue;
-            
+          if (errno == EINTR) continue;
+          std::cerr << "error: " << e.what() << " receiving data\n";
+          continue;
         }
         data[len] = 0;
+        if (len == 0) continue;
 
         if (verbose) std::cout << data << "\n";
 
