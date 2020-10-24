@@ -13,8 +13,9 @@ cmake_policy(SET CMP0008 NEW)
 cmake_policy(SET CMP0015 NEW)
 
 #set (CMAKE_VERBOSE_MAKEFILE false)
+set (CMAKE_EXPORT_COMPILE_COMMANDS true)
 
-set (CMAKE_CXX_FLAGS "-std=gnu++0x -Wall --std=gnu++0x -DUSE_READLINE ")
+set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -DUSE_READLINE ")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 IF("${CMAKE_SYSTEM}" MATCHES "Linux")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
@@ -201,10 +202,14 @@ set (Clockwork_SRCS
 	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
   src/Configuration.cpp
 	)
-add_executable(cw src/cw.cpp ${Clockwork_SRCS})
+
+add_library(cw_interpreter ${Clockwork_SRCS})
+set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+
+add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-#target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
-target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
+#target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
+target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
@@ -333,6 +338,11 @@ target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 
 add_executable(modbusd src/modbusd.cpp )
 target_link_libraries(modbusd Clockwork ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+
+if (RUN_TESTS)
+enable_testing()
+add_subdirectory(tests)
+endif()
 
 install(TARGETS cw iosh device_connector modbusd persistd
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})

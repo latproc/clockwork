@@ -107,7 +107,6 @@ int Tokeniser::getTokenId(const char *name) {
     return getTokenId(std::string(name));
 }
 
-
 SymbolTable::SymbolTable() {
     if (!initialised) {
         initialised = true;
@@ -138,8 +137,10 @@ SymbolTable::SymbolTable(const SymbolTable &orig) {
     SymbolTableConstIterator iter = orig.st.begin();
     while (iter != orig.st.end()) {
         st[(*iter).first] = (*iter).second;
-        int tok = Tokeniser::instance()->getTokenId((*iter).first.c_str());
-        stok[tok] = (*iter).second;
+      if ((*iter).second.kind == Value::t_symbol) {
+          int tok = Tokeniser::instance()->getTokenId((*iter).first.c_str());
+          stok[tok] = (*iter).second;
+      }
         iter++;
     }
 }
@@ -149,8 +150,10 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
     SymbolTableConstIterator iter = orig.st.begin();
     while (iter != orig.st.end()) {
         st[(*iter).first] = (*iter).second;
+      if ((*iter).second.kind == Value::t_symbol) {
         int tok = Tokeniser::instance()->getTokenId((*iter).first.c_str());
         stok[tok] = (*iter).second;
+      }
         iter++;
     }
     return *this;
@@ -254,7 +257,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("UTCTIMESTAMP", name) == 0) {
             char buf[40];
-	        struct tm lt;
+	          struct tm lt;
             gmtime_r(&now, &lt);
             asctime_r(&lt, buf);
             size_t n = strlen(buf);
@@ -283,7 +286,9 @@ bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mo
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         std::string s(name);
         st[s] = val;
-        stok[Tokeniser::instance()->getTokenId(name)] = val;
+        if (val.kind == Value::t_symbol) {
+            stok[Tokeniser::instance()->getTokenId(name)] = val;
+        }
 		return true;
     }
     else {
@@ -293,15 +298,17 @@ bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mo
 }
 
 bool SymbolTable::add(const std::string name, const Value &val, ReplaceMode replace_mode) {
-    if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
-    	st[name] = val;
+  if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
+    st[name] = val;
+    if (val.kind == Value::t_symbol) {
         stok[Tokeniser::instance()->getTokenId(name)] = val;
-		return true;
-	}
-	else {
-        //std::cerr << "Error: " << name << " already defined\n";
-		return false;
-	}
+    }
+    return true;
+  }
+  else {
+    //std::cerr << "Error: " << name << " already defined\n";
+    return false;
+  }
 }
 
 void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
@@ -311,10 +318,12 @@ void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
             ++iter; continue;
         }
         const std::string &name = (*iter).first;
-        if(name != "NAME" && name != "STATE") { // these reserved words cannot be replaces en mass
+        if(name != "NAME" && name != "STATE") { // these reserved words cannot be replaced en mass
             st[(*iter).first] = (*iter).second;
-            int tok = Tokeniser::instance()->getTokenId(name.c_str());
-            stok[tok] = (*iter).second;
+            if ((*iter).second.kind == Value::t_symbol) {
+                int tok = Tokeniser::instance()->getTokenId(name.c_str());
+                stok[tok] = (*iter).second;
+            }
         }
         iter++;
     }

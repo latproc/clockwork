@@ -47,6 +47,7 @@
 #include "Parameter.h"
 #include "MachineClass.h"
 #include "ActionList.h"
+#include "dynamic_value.h"
 
 extern SymbolTable globals;
 
@@ -337,12 +338,12 @@ public:
 	Value is_traceable;
 	int published;
 	static SharedCache *shared;
-	Cache *cache;
 	unsigned int action_errors;
 	bool is_changing;
 	Channel* owner_channel;
 
 private:
+	Cache *cache;
 	static std::map<std::string, HardwareAddress> hw_names;
   MachineInstance &operator=(const MachineInstance &orig);
   MachineInstance(const MachineInstance &other);
@@ -380,7 +381,6 @@ protected:
 
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
 
-#include "dynamic_value.h"
 class MachineValue : public DynamicValue {
 public:
     MachineValue(MachineInstance *mi, std::string name): machine_instance(mi), local_name(name) { }
@@ -408,7 +408,7 @@ protected:
 class MachineInstanceFactory {
 public:
     static MachineInstance *create(MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
-    static MachineInstance *create(CStringHolder name, const char * type, MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
+  static MachineInstance *create(CStringHolder name, const std::string &type, MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE);
 };
 
 #endif

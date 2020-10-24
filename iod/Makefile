@@ -25,3 +25,7 @@ xcode:
 	[ -d "xcode" ] || mkdir xcode
 	cd xcode && cmake -G Xcode .. && xcodebuild -parallelizeTargets -jobs 6
 
+test:
+	[ -d ".test" ] || mkdir .test
+	cd .test && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS)
+

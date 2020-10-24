@@ -310,7 +310,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 						}
 						break;
 					}
-					catch(zmq::error_t ex) {
+					catch(const zmq::error_t &ex) {
 						if (zmq_errno() == EINTR) {
 							NB_MSG << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 							continue;
@@ -325,7 +325,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 			}
 			break;
 		}
-		catch (std::exception ex)
+		catch (const std::exception &ex)
 		{
 			if (errno == EINTR) continue; // TBD watch for infinite loop here
 			const char *fnam = strrchr(__FILE__, '/');
@@ -577,7 +577,7 @@ void ProcessingThread::operator()()
 			//machines_have_work = MachineInstance::workToDo();
 			{
 				static size_t last_runnable_count = 0;
-				boost::mutex::scoped_lock(runnable_mutex);
+        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
 				machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
 				size_t runnable_count = runnable.size();
 				if (runnable_count != last_runnable_count) {
@@ -800,7 +800,7 @@ void ProcessingThread::operator()()
 									ok  = (*command)();
 									//NB_MSG << "execution result " << command->result() << "\n";
 								}
-								catch (std::exception e) {
+								catch (const std::exception &e) {
 									FileLogger fl(program_name);
 									fl.f() << "command execution threw an exception " << e.what() << "\n";
 								}
@@ -910,7 +910,7 @@ void ProcessingThread::operator()()
 	#endif
 					std::set<MachineInstance *> to_process;
 					{
-						boost::mutex::scoped_lock(runnable_mutex);
+						boost::recursive_mutex::scoped_lock lock(runnable_mutex);
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
@@ -934,7 +934,7 @@ void ProcessingThread::operator()()
 				if (processing_state == eStableStates)
 				{
 					std::set<MachineInstance *> to_process;
-					{	boost::mutex::scoped_lock(runnable_mutex);
+					{	boost::recursive_mutex::scoped_lock lock (runnable_mutex);
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
@@ -998,7 +998,7 @@ void ProcessingThread::operator()()
 					update_state = s_update_sent;
 					break;
 				}
-				catch (zmq::error_t err) {
+				catch (const zmq::error_t &err) {
 					if (zmq_errno() == EINTR) {
 						std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 						continue;
@@ -1078,7 +1078,7 @@ void ProcessingThread::operator()()
 							}
 							break;
 						}
-						catch (zmq::error_t err) {
+						catch (const zmq::error_t &err) {
 							if (zmq_errno() == EINTR) {
 								std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 								//usleep(50); 
@@ -1126,7 +1126,7 @@ void ProcessingThread::operator()()
 				avg_update_time.update();
 #endif
 			}
-			catch (zmq::error_t err) {
+			catch (const zmq::error_t &err) {
 				if (zmq_errno() != EINTR) {
 					NB_MSG << "Exception: " << err.what() << " (" << zmq_strerror(errno) << ")\n";
 				}

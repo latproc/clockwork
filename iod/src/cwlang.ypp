@@ -791,14 +791,14 @@ SYMBOL WHEN predicate {
 	ConditionHandler ch;
 	ch.condition.predicate = $3->predicate;
 	if (strcmp($3->command, "EXECUTE") == 0) {
-		ch.command_name = $3->name;
+		ch.set_command_name($3->name);
 	}
 	else if (strcmp($3->command, "FLAG") == 0) {
-		ch.command_name = "FLAG";
-		ch.flag_name = $3->name;
+		ch.set_command_name("FLAG");
+		ch.set_flag_name($3->name);
 	}
 	delete $3->name;
-	DBG_PARSER << current_machineclass->name << " pushing stable state test " << ch.command_name << "\n";
+	DBG_PARSER << current_machineclass->name << " pushing stable state test " << ch.command_name() << "\n";
 	ss.subcondition_handlers->push_back(ch);
 	delete $3;
 	current_machineclass->stable_states.pop_back();
