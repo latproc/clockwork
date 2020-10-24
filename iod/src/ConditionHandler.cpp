@@ -3,15 +3,16 @@
 #include "Logger.h"
 #include "DebugExtra.h"
 
+ConditionHandler::ConditionHandler() : timer_val(0), timer_op(opGE), trigger(0), uses_timer(false), triggered(false) {}
+
 ConditionHandler::ConditionHandler(const ConditionHandler &other)
 : condition(other.condition),
-	command_name(other.command_name),
-	flag_name(other.flag_name),
 	timer_val(other.timer_val),
-	action(other.action),
 	trigger(other.trigger),
 	uses_timer(other.uses_timer),
-	triggered(other.triggered)
+	triggered(other.triggered),
+_command_name(other._command_name),
+_flag_name(other._flag_name)
 {
 	if (trigger) trigger->retain();
 }
@@ -22,23 +23,22 @@ ConditionHandler::~ConditionHandler() {
 
 ConditionHandler &ConditionHandler::operator=(const ConditionHandler &other) {
 	condition = other.condition;
-	command_name = other.command_name;
-	flag_name = other.flag_name;
 	timer_val = other.timer_val;
-	action = other.action;
 	trigger = other.trigger;
 	if (trigger) trigger->retain();
 	uses_timer = other.uses_timer;
 	triggered = other.triggered;
+  _command_name = other._command_name;
+  _flag_name = other._flag_name;
 	return *this;
 }
 
 bool ConditionHandler::check(MachineInstance *machine) {
 	if (!machine) return false;
-	if (command_name == "FLAG" ) {
-		MachineInstance *flag = machine->lookup(flag_name);
+	if (_command_name == "FLAG" ) {
+		MachineInstance *flag = machine->lookup(_flag_name);
 		if (!flag)
-			std::cerr << machine->getName() << " error: flag " << flag_name << " not found\n";
+			std::cerr << machine->getName() << " error: flag " << _flag_name << " not found\n";
 		else {
 			if (condition(machine)) {
 				if (strcmp("on", flag->getCurrentStateString())) {
@@ -77,8 +77,8 @@ bool ConditionHandler::check(MachineInstance *machine) {
 	}
 	else if (!triggered && ( (trigger && trigger->fired()) || !trigger) && condition(machine)) {
 		triggered = true;
-		DBG_AUTOSTATES << machine->getName() << " subcondition triggered: " << command_name << " " << *(condition.predicate) << "\n";
-		machine->execute(Message(command_name.c_str()),machine);
+		DBG_AUTOSTATES << machine->getName() << " subcondition triggered: " << _command_name << " " << *(condition.predicate) << "\n";
+		machine->execute(Message(_command_name.c_str()),machine);
 		if (trigger) trigger->disable();
 	}
 	else {

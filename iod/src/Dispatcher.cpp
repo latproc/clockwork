@@ -66,7 +66,7 @@ void DispatchThread::operator()()
     Dispatcher::instance()->idle();
 }
 
-Dispatcher::Dispatcher() : socket(0), started(false), dispatch_thread(0), thread_ref(0),
+Dispatcher::Dispatcher() : socket(0), started(false), finished(false), dispatch_thread(0), thread_ref(0),
     sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
 	dispatch_socket(0), owner_thread(0)
 {
@@ -76,8 +76,8 @@ Dispatcher::Dispatcher() : socket(0), started(false), dispatch_thread(0), thread
 
 Dispatcher::~Dispatcher()
 {
-    if (socket) delete socket;
-	if (dispatch_socket) delete dispatch_socket;
+  if (socket) delete socket;
+  if (dispatch_socket) delete dispatch_socket;
 }
 
 Dispatcher *Dispatcher::instance()
@@ -94,9 +94,10 @@ void Dispatcher::start()
 
 void Dispatcher::stop()
 {
-    if (status == e_running) sync.send("done", 4);
+  if (status == e_running) sync.send("done", 4);
 
-    instance()->status = e_aborted;
+  instance()->finished = true;
+  if (thread_ref) thread_ref->join();
 }
 
 std::ostream &Dispatcher::operator<<(std::ostream &out) const
@@ -140,13 +141,13 @@ void Dispatcher::idle()
 	// we get to this point. Note that this thread will then
 	// block until it gets a sync-start from the driver.
     started = true;
-	DBG_MSG << "Dispatcher started\n";
+	DBG_DISPATCHER << "Dispatcher started\n";
 
 	char buf[11];
 	size_t response_len = 0;
 	safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
 	buf[response_len]= 0;
-	NB_MSG << "Dispatcher got sync start: " << buf << "\n";
+	DBG_DISPATCHER << "Dispatcher got sync start: " << buf << "\n";
 
 	/* this module waits for a start from clockwork and then starts looking for input on its
 		command socket and its message socket (e_waiting). When either a command or message is detected
@@ -155,7 +156,7 @@ void Dispatcher::idle()
 	 */
 
     status = e_waiting;
-    while (status != e_aborted)
+    while (!finished)
     {
 		if (status == e_waiting) {
             boost::unique_lock<boost::mutex> lock(dispatcher_mutex);
@@ -165,9 +166,9 @@ void Dispatcher::idle()
 		}
         if (status == e_waiting_cw)
         {
-			sync.send("dispatch",8);
-            safeRecv(sync, buf, 10, true, response_len, 0);
-            status = e_running;
+          sync.send("dispatch",8);
+          safeRecv(sync, buf, 10, true, response_len, 0);
+          status = e_running;
         }
         else if (status == e_running)
         {

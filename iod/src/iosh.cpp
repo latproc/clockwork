@@ -377,7 +377,7 @@ int main(int argc, const char * argv[])
 
 		do yyparse(); while (!cmdline_done);
    }
-    catch(std::exception& e) {
+    catch(const std::exception &e) {
         if (zmq_errno())
             std::cerr << "ZMQ error: " << zmq_strerror(zmq_errno()) << "\n";
         else

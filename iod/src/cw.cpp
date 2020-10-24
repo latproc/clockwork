@@ -418,11 +418,11 @@ int main (int argc, char const *argv[])
         monitor.join();
         delete context;
     }
-    catch (zmq::error_t&) {
-	std::cerr << "zeromq error occured on exit\n";
+    catch (const zmq::error_t&) {
+        std::cerr << "zeromq error occured on exit\n";
     }
     catch (...) {
-	std::cerr << "error occured on exit\n";
+        std::cerr << "error occured on exit\n";
     }
     return 0;
 }

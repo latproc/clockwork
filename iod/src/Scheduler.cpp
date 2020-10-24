@@ -261,7 +261,7 @@ void Scheduler::add(ScheduledItem*item) {
 				notification_sent = nowMicrosecs();
 				break;
 			}		
-			catch(zmq::error_t err) {
+			catch(const zmq::error_t &err) {
 				if (zmq_errno() == EINTR || zmq_errno() == EAGAIN) continue;
 				
 				char errmsg[100];
@@ -331,7 +331,7 @@ void Scheduler::idle() {
 			if (delay>10)
 				boost::this_thread::sleep_for(boost::chrono::microseconds(delay));
 			}
-			catch (boost::thread_interrupted &ex) {
+			catch (const boost::thread_interrupted &ex) {
 				// permit interruption
 			}
 		}

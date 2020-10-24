@@ -35,7 +35,7 @@ std::string MessageEncoding::valueType(const Value &v) {
             break;
         case Value::t_string: return "STRING";
         case Value::t_integer: return "INTEGER";
-		case Value::t_float: return "FLOAT";
+        case Value::t_float: return "FLOAT";
         case Value::t_bool: return "BOOL";
 #ifdef DYNAMIC_VALUES
         case Value::t_dynamic: {
@@ -60,9 +60,9 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
         case Value::t_integer:
             cJSON_AddNumberToObject(obj, name, val.iValue);
             break;
-		case Value::t_float:
-			cJSON_AddItemToObject(obj, name, cJSON_CreateDouble(val.fValue));
-			break;
+        case Value::t_float:
+          cJSON_AddItemToObject(obj, name, cJSON_CreateDouble(val.fValue));
+          break;
         case Value::t_bool:
             if (val.bValue)
                 cJSON_AddTrueToObject(obj, name);

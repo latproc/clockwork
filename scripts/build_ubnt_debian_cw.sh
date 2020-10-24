@@ -1,4 +1,4 @@
-ZMQ_VERSION=4.1.7
+ZMQ_VERSION=4.3.3
 
 echo /usr/local/lib > /etc/ld.so.conf.d/custom.conf ; ldconfig
 
@@ -15,10 +15,12 @@ if [ $? -ne 0 ]; then
 fi
 
 wget https://github.com/stephane/libmodbus/archive/v3.0.4.tar.gz
-if [ "$ZMQ_VERSION" -le "4.1.4" ]; then
+if expr "$ZMQ_VERSION" < "4.1.4"; then
 	wget http://download.zeromq.org/zeromq-${ZMQ_VERSION}.tar.gz || exit 1
-else
+elif [ "$ZMQ_VERSION" = "4.1.5" ]; then
 	wget https://github.com/zeromq/zeromq4-1/releases/download/v${ZMQ_VERSION}/zeromq-${ZMQ_VERSION}.tar.gz || exit 1
+else
+	wget https://github.com/zeromq/libzmq/releases/download/v${ZMQ_VERSION}/zeromq-${ZMQ_VERSION}.tar.gz || exit 1
 fi
 wget https://github.com/zeromq/cppzmq/raw/master/zmq.hpp
 

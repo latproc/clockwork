@@ -82,10 +82,12 @@ public:
 	virtual ~ConnectionManagerInternals() {}
 };
 
-ConnectionManager::ConnectionManager() : internals(0),owner_thread(pthread_self()), aborted(false) {
+ConnectionManager::ConnectionManager() : owner_thread(pthread_self()), has_aborted(false) {
 }
 
-void ConnectionManager::abort() { aborted = true; }
+ConnectionManager::~ConnectionManager() = default;
+
+void ConnectionManager::abort() { has_aborted = true; }
 
 std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix, const char *default_name) {
 	if (!val)
@@ -219,7 +221,7 @@ bool SubscriptionManager::requestChannel() {
 				smi->sent_request = true;
 				smi->send_time = now;
 			}
-			catch (zmq::error_t &ex) {
+			catch (const zmq::error_t &ex) {
 				++error_count;
 				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
@@ -323,7 +325,7 @@ bool SubscriptionManager::setupConnections() {
 			setup_url = strdup(url);
 			setup().connect(url);
 		}
-		catch(zmq::error_t &err) {
+		catch(const zmq::error_t &err) {
 			{
 				char buf[200];
 				snprintf(buf, 200, "%s %d %s %s %s\n",
@@ -524,9 +526,6 @@ void MessageRouter::addRemoteSocket(int type, const std::string address) {
 }
 void MessageRouter::operator()() {
 	boost::unique_lock<boost::mutex> lock(internals->data_mutex);
-	int *destinations = 0;
-	size_t saved_num_items = 0;
-	zmq::pollitem_t *items;
 	while (!internals->done) {
 		poll();
 		usleep(20);
@@ -589,7 +588,7 @@ void MessageRouter::poll() {
 		int rc = zmq::poll(items, num_socks, 2);
 		if (rc == 0) { return; }
 	}
-	catch (zmq::error_t &zex) {
+	catch (const zmq::error_t &zex) {
 		{FileLogger fl(program_name);
 			fl.f() << "MessageRouter zmq error " << zmq_strerror(zmq_errno()) << "\n";
 		}
@@ -613,7 +612,6 @@ void MessageRouter::poll() {
 
 	char *buf = 0;
 	size_t len = 0;
-	int source = 0;
 	MessageHeader mh;
 
 	// receiving from remote socket
@@ -763,9 +761,6 @@ bool SubscriptionManager::checkConnections() {
 }
 
 bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_items, zmq::socket_t &cmd) {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
 
 	if (!checkConnections() &&isClient()) {
 		/*
@@ -786,12 +781,12 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			if (idx != -1)
 				rc = zmq::poll( &items[idx], 1, 5);
 			else
-				rc = 0;
+        return false;
 		}
 		else
 			rc = zmq::poll(items, num_items, 5);
 	}
-	catch (zmq::error_t &zex) {
+	catch (const zmq::error_t &zex) {
 		char buf[200];
 		snprintf(buf, 200, "%s %s %d %s %s",
 				 channel_name.c_str(),
@@ -821,12 +816,17 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	// if it is we pass the command to the remote using either the subscriber socket
 	// or the setup socket depending on the circumstances.
 	int command_item = num_items - 1;
-	if (items[command_item].revents & ZMQ_POLLERR) {
-		DBG_CHANNELS << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
-	}
-	else if (items[command_item].revents & ZMQ_POLLIN) {
-		DBG_CHANNELS << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
-	}
+  if (items[command_item].revents & (ZMQ_POLLERR | ZMQ_POLLIN) && LogState::instance()->includes( (DebugExtra::instance()->DEBUG_CHANNELS) )) {
+    char tnam[100];
+    int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
+    assert(pgn_rc == 0);
+    if (items[command_item].revents & ZMQ_POLLERR) {
+      DBG_CHANNELS << tnam << " SubscriptionManager detected error at index " << command_item << "\n";
+    }
+    else if (items[command_item].revents & ZMQ_POLLIN) {
+      DBG_CHANNELS << tnam << " SubscriptionManager detected command at index " << command_item << "\n";
+    }
+  }
 
 	// Here we process an incoming message that we may need to forward on and
 	// collect a response for.  If the message is forwarded we change state to
