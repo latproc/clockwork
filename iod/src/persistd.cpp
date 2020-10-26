@@ -270,7 +270,6 @@ int main(int argc, const char * argv[]) {
         try {
           MessageHeader mh;
           char *data = 0;
-          size_t len = 0;
           if (!safeRecv(subscription_manager.subscriber(), &data, &len, false, 1, mh) ) {
               std::cout << "failed to receive message\n";
           }
@@ -282,7 +281,6 @@ int main(int argc, const char * argv[]) {
           continue;
         }
         data[len] = 0;
-        if (len == 0) continue;
 
         if (verbose) std::cout << data << "\n";
 
