@@ -279,7 +279,6 @@ int main(int argc, const char * argv[]) {
           std::cerr << "error: " << e.what() << " receiving data\n";
           continue;
         }
-        data[len] = 0;
 
         if (verbose) std::cout << data << "\n";
 
