@@ -265,11 +265,10 @@ int main(int argc, const char * argv[]) {
         }
         if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
         //zmq::message_t update;
-        char data[1000];
+        char *data = 0;
         size_t len = 0;
         try {
           MessageHeader mh;
-          char *data = 0;
           if (!safeRecv(subscription_manager.subscriber(), &data, &len, false, 1, mh) ) {
               std::cout << "failed to receive message\n";
           }
