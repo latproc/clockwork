@@ -54,26 +54,6 @@ Options options;
 void sendMessage(zmq::socket_t &socket, const char *message) {
 	safeSend(socket, message, strlen(message));
 }
-#if 0
-/* Send a message using ZMQ */
-void sendMessage(zmq::socket_t &socket, const char *message) {
-	const char *msg = (message) ? message : "";
-	size_t len = strlen(msg);
-	zmq::message_t reply (len);
-	memcpy ((void *) reply.data (), msg, len);
-	while (true) {
-		try {
-			socket.send (reply);
-			break;
-		}
-		catch (zmq::error_t) {
-			if (zmq_errno() == EINTR) continue;
-			throw;
-		}
-	}
-   
-}
-#endif
 
 std::list<Value> params;
 char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
@@ -82,14 +62,12 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 	params.pop_front();
 	std::string cmd = cmd_val.asString();
 	char *msg = MessageEncoding::encodeCommand(cmd, &params);
-	//{FileLogger fl(program_name); fl.f() << "sending: " << msg << "\n"; }
 	if (options.verbose) std::cerr << " sending: " << msg << "\n";
 	sendMessage(sock, msg);
 	size_t size = strlen(msg);
 	free(msg);
 	zmq::message_t reply;
 	if (sock.recv(&reply)) {
-		//{FileLogger fl(program_name); fl.f() << "got reply:\n"; }
 		size = reply.size();
 		char *data = (char *)malloc(size+1);
 		memcpy(data, reply.data(), size);
@@ -103,7 +81,6 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
 void process_command(zmq::socket_t &sock, std::list<Value> &params) {
 	char * data = send_command(sock, params);
 	if (data) {
-		//{FileLogger fl(program_name); fl.f() << "response " << data << "\n"; }
 		if (options.verbose) std::cerr << data << "\n";
 		free(data);
 	}
@@ -225,7 +202,7 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 			if (options.verbose) std::cerr << mm->name() << " ";
 			mm->set( val, options.verbose );
 			
-			if (sock &&  (mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
+			if (sock &&	(mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
 				sendStateUpdate(sock, mm, (bool)*val);
 			}
 		}
@@ -273,12 +250,15 @@ void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name,
 
 
 	std::list<Value>cmd;
-	char *response;
 	cmd.push_back("REFRESH");
 	cmd.push_back(chn_instance_name.c_str());
-	response = send_command(iod, cmd);
-	if (options.verbose) std::cerr << response << "\n";
-	cJSON *obj = cJSON_Parse(response);
+	cJSON *obj = nullptr;
+	{
+		char *response = send_command(iod, cmd);
+		if (options.verbose) std::cerr << response << "\n";
+		obj = cJSON_Parse(response);
+		free(response);
+	}
 
 	if (obj) {
 		iod_connected = true;
@@ -385,7 +365,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
 			std::list<Value>::const_iterator iter = param_list->begin();
 			while (iter != param_list->end())
 			{
-				const Value &v  = *iter++;
+				const Value &v	= *iter++;
 				params.push_back(v);
 			}
 		}
@@ -448,17 +428,20 @@ int main(int argc, const char *argv[]) {
 		std::list<Value>cmd;
 		cmd.push_back("CHANNEL");
 		cmd.push_back(options.channelName());
-		char *response = send_command(iod, cmd);
-		if ( !response )
-		{FileLogger fl(program_name); fl.f() << "null response to channel request. exiting\n"; sleep(2); exit(1);}
-		else if (!*response)
-		{FileLogger fl(program_name); fl.f() << "empty response to channel request. exiting\n"; sleep(2); exit(2);}
-		//else
-		//{FileLogger fl(program_name); fl.f() << "got channel name " << response << "\n"; }
-		if (options.verbose) std::cerr << response << "\n";
-		cJSON *obj = cJSON_Parse(response);
+		cJSON *obj = nullptr;
+		{
+			char *response = send_command(iod, cmd);
+			if ( !response ) {
+				FileLogger fl(program_name); fl.f() << "null response to channel request. exiting\n"; sleep(2); exit(1);
+			}
+			else if (!*response) {
+				FileLogger fl(program_name); fl.f() << "empty response to channel request. exiting\n"; sleep(2); exit(2);
+			}
+			if (options.verbose) std::cerr << response << "\n";
+			obj = cJSON_Parse(response);
 
-		free(response);
+			free(response);
+		}
 		
 		if (obj) {
 			cJSON *name_js = cJSON_GetObjectItem(obj, "name");
@@ -656,7 +639,7 @@ int main(int argc, const char *argv[]) {
 						}
 					}
 				}
-				//sendPropertyUpdate(&iosh_cmd, &m);  // dont' send the property value back
+				//sendPropertyUpdate(&iosh_cmd, &m);	// dont' send the property value back
 			}
 			catch (std::exception ex) {
 				std::cerr << "Exception when processing PROPERTY command: " << ex.what() << "\n";
