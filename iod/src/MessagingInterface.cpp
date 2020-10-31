@@ -58,9 +58,6 @@ uint64_t nowMicrosecs(const struct timeval &now) {
 }
 
 int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then) {
-	//   uint64_t t = (now->tv_sec - then->tv_sec);
-	//   t = t * 1000000 + (now->tv_usec - then->tv_usec);
-	//	return t;
 	uint64_t now_t = (uint64_t)now->tv_sec * 1000000L + now->tv_usec;
 	uint64_t then_t = (uint64_t)then->tv_sec * 1000000L + then->tv_usec;
 	int64_t t = now_t - then_t;
@@ -81,13 +78,14 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 
-bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout) {
+static std::string thread_name() { 
 	char tnam[100];
 	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
 	assert(pgn_rc == 0);
+	return tnam;
+}
 
-	//{FileLogger fl(program_name); fl.f() << tnam << " receiving\n";}
-
+bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout) {
 	*response_len = 0;
 	if (block && timeout == 0) timeout = 500;
 
@@ -96,8 +94,10 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			zmq::pollitem_t items[] = { { (void*)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 } };
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
+			if (items[0].revents & ZMQ_POLLERR) {
+				std::cerr << thread_name() << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			}
 			if (items[0].revents & ZMQ_POLLIN) {
-
 				bool done = false;
 				zmq::message_t message;
 				while (!done) {
@@ -107,15 +107,10 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 #else
 					if ( (sock.recv(&message, ZMQ_DONTWAIT)) ) {
 #endif
-						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
-							//{ FileLogger fl(program_name); fl.f() << "Error: unexpected message header\n"; }
-							continue;
-						}
 						*response_len = message.size();
 						*buf = new char[*response_len+1];
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
-						//if (*response_len>10){FileLogger fl(program_name); fl.f() << tnam << "received: " << *buf << "\n"; }
 						return true;
 					}
 					else {
@@ -125,12 +120,11 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 					}
 					}
 				}
-				usleep(10000);
 			}
 			return (*response_len == 0) ? false : true;
 		}
 		catch (const zmq::error_t &e) {
-			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			std::cerr << thread_name() << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
 					FileLogger fl(program_name);
@@ -146,11 +140,6 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 }
 
 bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, int64_t timeout, MessageHeader &header) {
-
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-
 	*response_len = 0;
 	if (block && timeout == 0) timeout = 500;
 
@@ -161,9 +150,6 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			int n = zmq::poll( &items[0], 1, timeout);
 			if (!n && block) continue;
       bool got_response = false;
-#if 0
-			bool got_address = false;
-#endif
 			if (items[0].revents & ZMQ_POLLIN) {
 
 				bool done = false;
@@ -177,25 +163,12 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 #endif
 						if ( message.more() && message.size() == sizeof(MessageHeader) ) {
 							memcpy(&header, message.data(), sizeof(MessageHeader));
-#if 0
-							got_address = true;
-#endif
 							continue;
 						}
 						*response_len = message.size();
 						*buf = new char[*response_len+1];
 						memcpy(*buf, message.data(), *response_len);
 						(*buf)[*response_len] = 0;
-
-#if 0
-						if (*response_len > 10) {
-							if (got_address) {
-								{FileLogger fl(program_name); fl.f() << tnam << " received 	addressed message " << header << " " << (*buf) << "\n"; }
-							}
-							else 
-								{FileLogger fl(program_name); fl.f() << tnam << " received: " << *buf << "\n"; }
-						}
-#endif
 
 						return true;
 					}
@@ -210,7 +183,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 			else return false;
 		}
 		catch (const zmq::error_t &e) {
-			std::cerr << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+			std::cerr << thread_name() << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			if (errno == EINTR) {
 				{
 					FileLogger fl(program_name);
@@ -226,10 +199,6 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 }
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len, int64_t timeout) {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-
 	response_len = 0;
 	int retries = 5;
 	if (block && timeout == 0)
@@ -254,7 +223,6 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 					buf[response_len] = 0;
 				}
 				else {
-					//if (response_len > 10){FileLogger fl(program_name); fl.f() << tnam << " saveRecv() collected data with length " << response_len << "\n"; }
 				}
 				if (!response_len && block) continue;
 			}
@@ -263,7 +231,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 		catch (const zmq::error_t &e) {
 			{
 				FileLogger fl(program_name); 
-				fl.f() << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
+				fl.f() << thread_name() << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			}
 			if (--retries == 0) {
 				exit(EXIT_FAILURE);
@@ -279,12 +247,6 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 }
 
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const MessageHeader &header) {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-
-	//if (buflen>10) {FileLogger fl(program_name); fl.f() << tnam << " Sending\n"; }
-
 	enum send_stage {e_sending_dest, e_sending_source, e_sending_data} stage = e_sending_data;
 	if (header.dest || header.source) {
 		stage = e_sending_source;
@@ -293,7 +255,6 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 
 	while (!MessagingInterface::aborted()) {
 		try {
-			//if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " safeSend() sending " << buf << "\n"; }
 			if (stage == e_sending_source) {
 				zmq::message_t msg(sizeof(MessageHeader));
 				memcpy(msg.data(), &header, sizeof(MessageHeader) );
@@ -319,7 +280,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name);
-					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+					fl.f() << thread_name() << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
 				if (zmq_errno() == EFSM || STATE_ERROR == zmq_strerror(errno)) throw;
 				usleep(10);
@@ -327,7 +288,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 			} else {
 				{
 					FileLogger fl(program_name);
-					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+					fl.f() << thread_name() << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
 				usleep(10);
 			}
@@ -336,13 +297,6 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 }
 
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
-
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-
-	//if (buflen>10){FileLogger fl(program_name); fl.f() << tnam << " sending " << buf << "\n"; }
-
 	while (!MessagingInterface::aborted()) {
 		try {
 			zmq::message_t msg(buflen);
@@ -358,7 +312,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name); 
-					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+					fl.f() << thread_name() << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
 				if (zmq_errno() == EFSM || STATE_ERROR == zmq_strerror(errno)) {
 					usleep(1000);
@@ -367,7 +321,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 				usleep(10);
 				continue;
 			} else {
-				std::cerr << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
+				std::cerr << thread_name() << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				usleep(10);
 			}
 		}
@@ -376,12 +330,6 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
 				 int32_t timeout_us, const MessageHeader &header) {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-
-	//{FileLogger fl(program_name); fl.f() << tnam << " sendMessage " << msg << "\n"; }
-
 	safeSend(sock, msg, strlen(msg), header);
 
 	char *buf;
@@ -396,12 +344,6 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
 }
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
-	char tnam[100];
-	int pgn_rc = pthread_getname_np(pthread_self(),tnam, 100);
-	assert(pgn_rc == 0);
-
-	//NB_MSG << tnam << " sendMessage " << msg << "\n";
-
 	safeSend(sock, msg, strlen(msg));
 
 	char *buf = 0;
@@ -414,8 +356,8 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, in
 }
 
 void MessagingInterface::setContext(zmq::context_t *ctx) {
-    zmq_context = ctx;
-    assert(zmq_context);
+	zmq_context = ctx;
+	assert(zmq_context);
 }
 
 MessagingInterface *MessagingInterface::create(std::string host, int port, ProtocolType proto) {
