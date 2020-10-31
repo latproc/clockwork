@@ -235,6 +235,9 @@ endif()
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
   LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
 endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandIp.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandIp.cpp")
+endif()
 add_library (ec_tool
 ${ETHERCAT_DIR}/tool/CommandAlias.cpp
 ${ETHERCAT_DIR}/tool/CommandConfig.cpp
@@ -248,7 +251,6 @@ ${ETHERCAT_DIR}/tool/CommandEoe.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
-${ETHERCAT_DIR}/tool/CommandIp.cpp
 ${ectool_extras}
 ${ETHERCAT_DIR}/tool/CommandMaster.cpp
 ${ETHERCAT_DIR}/tool/CommandPdos.cpp
