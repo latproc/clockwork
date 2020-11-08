@@ -90,7 +90,6 @@ void sendStatus(const char *s) {
 	zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_REQ);
 	sock.connect("tcp://localhost:5555");
 
-
 	{FileLogger fl(program_name); fl.f() << "reporting status " << s << "\n"; }
 	if (options.status_machine.length()) {
 		std::list<Value>cmd;
@@ -266,6 +265,7 @@ void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name,
 			std::cerr << "error. clock response is not an array";
 			char *item = cJSON_Print(obj);
 			std::cerr << item << "\n";
+      free(item);
 		}
 		cJSON *item = obj->child;
 		while (item) {
@@ -313,7 +313,7 @@ void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name,
 			mm->add();
 			item = item->next;
 		}
-		
+		cJSON_Delete(obj);
 	}
 }
 
@@ -402,6 +402,7 @@ int main(int argc, const char *argv[]) {
 		options.usage(program_name);
 	}
 	const ModbusSettings *ms = options.settings();
+  if (!ms) { exit(1); }
 
 	PLCInterface plc;
 	if (!plc.load("modbus_addressing.conf")) {

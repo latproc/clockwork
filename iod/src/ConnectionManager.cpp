@@ -203,7 +203,7 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
 
 bool SubscriptionManager::requestChannel() {
 	SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals*>(internals);
-    size_t len = 0;
+	size_t len = 0;
 	uint64_t now = microsecs();
 	assert(isClient());
 	if (setupStatus() == SubscriptionManager::e_waiting_connect && !monit_setup->disconnected()
@@ -213,16 +213,18 @@ bool SubscriptionManager::requestChannel() {
 			|| smi->send_time - now > SubscriptionManagerInternals::channel_request_timeout) {
 
 			DBG_CHANNELS << "Requesting channel " << channel_name << "\n";
-			char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
+			auto channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
 			try {
 				usleep(200);
 				setSetupStatus(SubscriptionManager::e_waiting_setup);
 				safeSend(setup(), channel_setup, strlen(channel_setup));
 				smi->sent_request = true;
 				smi->send_time = now;
+				free(channel_setup);
 			}
 			catch (const zmq::error_t &ex) {
 				++error_count;
+				free(channel_setup);
 				{FileLogger fl(program_name); fl.f() << channel_name<< " exception " << zmq_errno()  << " "
 					<< zmq_strerror(zmq_errno()) << " requesting channel\n"<<std::flush; }
 				if (zmq_errno() == ETIMEDOUT) {
