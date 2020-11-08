@@ -282,6 +282,7 @@ void close_connection() {
 	assert(ctx);
 	modbus_flush(ctx);
 	modbus_close(ctx);
+	modbus_free(ctx);
 	connected = false;
 	ctx = 0;
 }
