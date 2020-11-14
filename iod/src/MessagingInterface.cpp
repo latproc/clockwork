@@ -366,6 +366,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
 	//bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, int *source) {
 	if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us, response_header)) {
 		response = buf;
+    delete[] buf;
 		return true;
 	}
 	return false;
@@ -384,6 +385,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, in
 	size_t len = 0;
 	if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us)) {
 		response = buf;
+    delete[] buf;
 		return true;
 	}
 	return false;
