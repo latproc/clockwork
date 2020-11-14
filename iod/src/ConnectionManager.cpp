@@ -461,6 +461,10 @@ MessageRouter::MessageRouter()
 	internals = new MessageRouterInternals;
 }
 
+MessageRouter::~MessageRouter() {
+	delete internals;
+}
+
 void MessageRouter::finish() {
 	internals->done = true;
 }

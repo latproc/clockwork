@@ -106,6 +106,7 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
 				if (command->numParams() == 4 && command->param(3) == (long)channel->getAuthority()) {
 					// do nothing, this is an echo of a command we sent
 					{FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
+					delete command;
 					return false;
 				}
 				else {
@@ -116,9 +117,11 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
 					len = strlen(msg)+1;
 					*buf = new char[len];
 					memcpy(*buf, msg, len);
+					free(msg);
 				}
 			}
 		}
+		delete command;
 	}
 	return true;
 }
@@ -195,11 +198,13 @@ Channel::~Channel() {
         machine->unpublish();
     }
 	::machines.erase(_name);
-    this->channel_machines.clear();
+	this->channel_machines.clear();
 	SharedWorkSet::instance()->remove(this);
 	all_machines.remove(this);
 	pending_state_change.erase(this);
-    remove(name);
+	remove(name);
+	delete all;
+	delete internals;
 }
 
 void Channel::addSocket(int route_id, const char *addr) {
