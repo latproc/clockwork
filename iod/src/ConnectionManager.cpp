@@ -657,6 +657,7 @@ void MessageRouter::poll() {
 				DBG_CHANNELS << "Message " << buf << " needed a default route but none has been set\n";
 			}
 #endif
+      delete[] buf;
 		}
 	}
 
@@ -686,10 +687,10 @@ void MessageRouter::poll() {
 				}
 				else
 					DBG_CHANNELS << "dropped message due to filter\n";
+        delete[] buf;
 			}
 		}
 	}
-	delete[] buf;
 	usleep(10);
 }
 
@@ -806,7 +807,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 	}
     if (rc == 0) return true; // no sockets have messages
 
-	char *buf;
+	char *buf = 0;
     size_t msglen = 0;
 #if 0
 	if (items[0].revents & ZMQ_POLLIN) {
@@ -883,7 +884,8 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			else {
 				safeSend(cmd, "failed", 6);
 			}
-        }
+			delete[] buf;
+		}
 	}
 
 	if (run_status == e_waiting_response && !isClient()) {
@@ -925,6 +927,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 						cmd.send(buf, msglen);
 					else
 						cmd.send("", 0);
+					delete[] buf;
 					run_status = e_waiting_cmd;
 				}
 			}
@@ -942,6 +945,6 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
 			}
 		}
 	}
-    return true;
+	return true;
 }
 
