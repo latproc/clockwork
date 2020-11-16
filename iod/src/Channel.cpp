@@ -1054,7 +1054,7 @@ void Channel::operator()() {
 				continue;
 
 			if (items[subscriber_idx].revents & ZMQ_POLLIN) {
-				char *data;
+				char *data = 0;
 				size_t len;
 				MessageHeader mh;
 				//NB_MSG << "CTRL checking for command\n";
@@ -1085,6 +1085,7 @@ void Channel::operator()() {
 						mh.start_time = microsecs();
 						safeSend(remote_sock, "ack", 3, mh);
 					}
+          delete[] data;
 				}
 			}
 
@@ -1128,7 +1129,9 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 		zmq::message_t resp;
 		char *buf;
 		size_t len;
-		safeRecv(sock, &buf, &len, true, 0, header);
+		if (safeRecv(sock, &buf, &len, true, 0, header)) {
+        delete[] buf;
+    }
 	}
 	else {
 		DBG_CHANNELS << "Channel " << name << " sendMessage() sending " << msg << " through a channel thread\n";
@@ -1137,10 +1140,11 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
 		char *response_buf;
 		size_t rlen;\
 		DBG_CHANNELS << "Channel " << name << " sendMessage() waiting for response\n";
-		safeRecv(*cmd_client, &response_buf, &rlen, true, 0, header);
-		response = response_buf;
-		DBG_CHANNELS << "Channel " << name << " sendMessage() got response " << response << " for " << msg << " from a channel thread\n";
-
+		if (safeRecv(*cmd_client, &response_buf, &rlen, true, 0, header)) {
+		  response = response_buf;
+      delete[] response_buf;
+		  DBG_CHANNELS << "Channel " << name << " sendMessage() got response " << response << " for " << msg << " from a channel thread\n";
+    }
 	}
 	return true;
 }
