@@ -90,12 +90,12 @@ int check_states(void *scope)
 		/* automatically switch to idle if active is 0 */
 		if (current && !*data->active && strcmp(current, "idle") != 0) 
 			changeState(scope, "idle");
+    free(current);
 		
 		printf("range check %s initialised\n", data->machine_name);
 	}
 	
 	{
-
 		char *current = getState(scope);
 		long count = *data->count;
 		/* only check position if not idle */

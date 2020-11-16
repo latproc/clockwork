@@ -219,9 +219,9 @@ char **copy_environment()
 PLUGIN_EXPORT
 int check_states(void *scope)
 {
-	struct MyData *data = (struct MyData*)getInstanceData(scope);
 	char *cmd;
 	char *current;
+	struct MyData *data = (struct MyData*)getInstanceData(scope);
 	if (!data) {
 		data = (struct MyData*)malloc(sizeof(struct MyData));
 		setInstanceData(scope, data);
@@ -250,6 +250,7 @@ continue_plugin:
 			int x = changeState(scope, "Running");
 			data->parameters = split_string(cmd);
 			data->environment = copy_environment();
+      free(cmd);
 
 			int child;
 			if ( (child = vfork()) == -1 ) {
