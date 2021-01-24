@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include "boost/thread/mutex.hpp"
+#include <functional>
 
 #include "cJSON.h"
 
@@ -32,6 +33,7 @@ public:
     void add(const char *text);
 		std::string add(const std::string a="", const std::string b="", const std::string c="", const std::string d="");
     void purge();
+    void setFollowupAction(std::function<void (const std::string&)> action);
     
     size_t count() const;
     
@@ -51,6 +53,7 @@ private:
     unsigned int current_memory;
     std::list<LogEntry*> entries;
     static boost::mutex mutex_;
+    std::function<void (const std::string&)> followup;
 };
 
 

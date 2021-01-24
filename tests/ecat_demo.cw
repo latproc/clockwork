@@ -91,7 +91,7 @@ Update MACHINE raw_input, smoothed_input, vel_input, acc_input, stddev_input {
   idle DEFAULT;
 
   ENTER update { 
-    time_input.VALUE := ain.IOTIME; 
+    time.VALUE := ain.IOTIME; 
     raw_input.VALUE := ain.raw; 
     smoothed_input.VALUE := 0.9 * ain.VALUE; 
     vel_input.VALUE := ain.Velocity; 

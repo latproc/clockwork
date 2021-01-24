@@ -202,7 +202,8 @@ set (Clockwork_SRCS
   src/Configuration.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
-set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+#set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_compile_definitions(cw PUBLIC EC_SIMULATOR)
 #target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES})
 target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
 
@@ -230,6 +231,9 @@ endif()
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
   LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
 endif()
+if (EXISTS "${ETHERCAT_DIR}/tool/CommandIp.cpp")
+  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandIp.cpp")
+endif()
 add_library (ec_tool
 ${ETHERCAT_DIR}/tool/CommandAlias.cpp
 ${ETHERCAT_DIR}/tool/CommandConfig.cpp
@@ -243,7 +247,6 @@ ${ETHERCAT_DIR}/tool/CommandEoe.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
-${ETHERCAT_DIR}/tool/CommandIp.cpp
 ${ectool_extras}
 ${ETHERCAT_DIR}/tool/CommandMaster.cpp
 ${ETHERCAT_DIR}/tool/CommandPdos.cpp

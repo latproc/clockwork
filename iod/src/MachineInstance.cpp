@@ -2931,7 +2931,6 @@ bool MachineInstance::setStableState() {
 }
 
 void MachineInstance::setStateMachine(MachineClass *machine_class) {
-	//if (state_machine) return;
 	state_machine = machine_class;
 	DBG_PARSER << _name << " is of class " << machine_class->name << "\n";
 	if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states
@@ -2944,7 +2943,6 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	}
 	std::pair<Message, MachineCommandTemplate*>handler;
 	BOOST_FOREACH(handler, machine_class->receives) {
-		//DBG_M_INITIALISATION << "setting receive handler for " << handler.first << "\n";
 		MachineCommand *mc = new MachineCommand(this, handler.second);
 		receives_functions.insert(std::make_pair(handler.first, mc));
 	}
@@ -2982,6 +2980,8 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
 	// properties already loaded
 	properties.add(state_machine->properties, SymbolTable::NO_REPLACE);
 	properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
+
+  // copy new instances of statemachine local machines to this machine
 	if (locals.size() == 0) {
 		BOOST_FOREACH(Parameter p, state_machine->locals) {
 			Parameter newp(p.val.sValue.c_str());
@@ -3196,7 +3196,7 @@ const Value *MachineInstance::resolve(std::string property) {
 		// use the global value if its name is mentioned in this machine's list of globals
 		if (!state_machine) {
 			resetTemporaryStringStream();
-			ss << _name << " could not find a machine definition: " << _type;
+			ss << __FILE__ << ":" << __LINE__ << " " << _name << " could not find a machine definition: " << _type;
 			DBG_PROPERTIES << ss.str() << "\n";
 			error_messages.push_back(ss.str());
 			MessageLog::instance()->add(ss.str().c_str());
@@ -3354,7 +3354,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 		// use the global value if its name is mentioned in this machine's list of globals
 		if (!state_machine) {
 			resetTemporaryStringStream();
-			ss << _name << " could not find a machine definition: " << _type;
+			ss << __FILE__ << ":" << __LINE__ << " " <<  _name << " could not find a machine definition: " << _type;
 			DBG_PROPERTIES << ss.str() << "\n";
 			error_messages.push_back(ss.str());
 			++num_errors;
@@ -3476,7 +3476,7 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 		// use the global value if its name is mentioned in this machine's list of globals
 		if (!state_machine) {
 			resetTemporaryStringStream();
-			ss << _name << " could not find a machine definition: " << _type;
+			ss << __FILE__ << ":" << __LINE__ << " " << _name << " could not find a machine definition: " << _type << " getting property '" << property_name << "'";
 			DBG_PROPERTIES << ss.str() << "\n";
 			error_messages.push_back(ss.str());
 			++num_errors;

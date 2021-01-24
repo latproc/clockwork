@@ -226,11 +226,9 @@ void SDOEntry::resolveSDOModules() {
 		if (entry->getModule()) {
 			// this occurs when an entry has been automatically setup in the code 
 			// (only done for EL2535 modules as a temporary measure to be removed)
-			std::cout << "Module already linked to SDO entry " << entry->getName() << "\n";
 			iter = new_sdo_entries.erase(iter);
 			continue;
 		}
-		std::cout << "Attempting to prepare SDO entry: " << entry->getName() << "\n";
 		MachineInstance *mi = MachineInstance::find( entry->getModuleName().c_str() );
 		if (mi) {
 			int module_position = mi->properties.lookup("position").iValue;
@@ -238,11 +236,9 @@ void SDOEntry::resolveSDOModules() {
 			if (module_position >= 0)
 				module = ECInterface::findModule(module_position);
 			if (module && entry->prepareRequest(module) ) {
-				std::cout << "Prepared SDO entry: " << entry->getName() << "\n";
 				iter = new_sdo_entries.erase(iter);
 				if (entry->machineInstance() && entry->machineInstance()->properties.exists("default")) {
 					const Value &val = entry->machineInstance()->properties.lookup("default");
-					std::cout << "setting default value of " << entry->getName() << " to " << val << "\n";
 					ECInterface::instance()->queueInitialisationRequest(entry, val);
 				}
 				else {
@@ -301,7 +297,9 @@ bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
 bool ECModule::ecrtSlaveConfigPdos() {
 	int res = ecrt_slave_config_pdos(slave_config, sync_count, syncs);
 	if (res) {
-		std::cerr << "Error: " << res << " attempting to configure slave '" << name << "'\n";
+		char buf[100];
+		snprintf(buf, 100, "Error: %d attempting to configure slave %s", res, name.c_str());
+		MessageLog::instance()->add(buf);
 		assert(false);
 	}
 	return true;
@@ -377,7 +375,6 @@ void ECInterface::queueRuntimeRequest(SDOEntry *entry){
 }
 
 void ECInterface::beginModulePreparation() {
-	std::cerr << "beginning module preparation\n";
 	current_init_entry = initialisation_entries.begin();
 	sdo_entry_state = e_None;
 }
@@ -445,19 +442,16 @@ void ECInterface::checkSDOUpdates()  {
 	if (current_update_entry != sdo_update_entries.end()) {
 		SDOEntry *entry = *current_update_entry;
 		if (!entry) { 
-			//std::cerr << "Skipping null entry when checking SDO updates\n";
 			current_update_entry++; return; 
 		} // odd: no entry at this position
 
 		// disabled entries are not automatically polled for changes unless they were already
 		// in the middle of a poll when they were disabled
 		if (sdo_entry_state == e_None && entry->machineInstance() && !entry->machineInstance()->enabled()) {
-			//std::cerr << "Skipping disabled entry when checking SDO updates\n";
 			current_update_entry++; return; 
 	}
 		ec_sdo_request_t *sdo = entry->getRequest();
 
-		//std::cerr << "checking SDO entry " << entry->getName() << " for updates\n";
 		if (sdo_entry_state == e_None) {
 			if (entry->operation() == SDOEntry::WRITE) {
 			assert( !initialisation_entries.empty() );
@@ -466,16 +460,17 @@ void ECInterface::checkSDOUpdates()  {
 
 			switch (entry->operation()) {
 				case SDOEntry::READ:
-					//std::cerr << "SDO entry updates - trigger read\n";
 					ecrt_sdo_request_read(sdo); // trigger first read
 					sdo_entry_state = e_Busy_Update;
 					break;
 				case SDOEntry::WRITE:
+					MessageLog::instance()->add("Error: SDO entry updates- trigger write");
 					assert(false); // this should not be active
-					std::cerr << "SDO entry updates- trigger write\n";
+#if 0
 					readValue(sdo, entry->getSize(), entry->getOffset());
 					ecrt_sdo_request_write(sdo); // trigger first read
 					sdo_entry_state = e_Busy_Update;
+#endif
 					break;
 				default: assert(false);
 			}
@@ -488,10 +483,9 @@ void ECInterface::checkSDOUpdates()  {
 				sdo_entry_state = e_None;
 	            break;
 	        case EC_REQUEST_BUSY:
-				//std::cerr << "SDO entry in progress\n";
+				// SDO entry in progress
 	            break;
 	        case EC_REQUEST_SUCCESS:
-				//std::cerr << "SDO entry written\n";
 
 				// before updating the value of the object check whether a new value is about to
 				// be written to the io
@@ -504,15 +498,21 @@ void ECInterface::checkSDOUpdates()  {
 				sdo_entry_state = e_None;
 	            break;
 	        case EC_REQUEST_ERROR:
-	            std::cerr << "Failed to read SDO!" << std::hex << "0x" << entry->getIndex() 
-					<< ":" << (int)entry->getSubindex() << std::dec << "\n";
-				entry->failure();
-	            //ecrt_sdo_request_write(sdo); // retry reading
-				current_update_entry++; // move on to the next item and retry soon
-				sdo_entry_state = e_None;
+				{
+					char buf[100];
+					snprintf(buf, 100, "Failed to read SDO! %0x:%0x", entry->getIndex(), entry->getSubindex());
+					MessageLog::instance()->add(buf);
+					entry->failure();
+					current_update_entry++; // move on to the next item and retry soon
+					sdo_entry_state = e_None;
+				}
 	            break;
 			default:
-				std::cerr << "unexpected sdo request state: " << state << "\n";
+				{
+					char buf[100];
+					snprintf(buf, 100, "Error: unexpected SDO state %d", state);
+					MessageLog::instance()->add(buf);
+				}
 	    }
 	}
 }
@@ -529,13 +529,12 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 		std::pair<SDOEntry *, Value> curr = *current_init_entry;
 		SDOEntry *entry = curr.first;
 		if (!entry) { 
-			std::cerr << "Skipping null entry when checking SDO\n";
+			// odd: no entry at this position
 			current_init_entry++; return false; 
-		} // odd: no entry at this position
+		} 
 
 		ec_sdo_request_t *sdo = entry->getRequest();
 
-		//std::cerr << "checking SDO entry " << entry->getName() << "\n";
 		if (sdo_entry_state == e_None) {
 			entry->setOperation(SDOEntry::WRITE);
 			if (entry->getSize() == 1)
@@ -546,7 +545,6 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 				entry->setData( (uint16_t)curr.second.iValue );
 			else if (entry->getSize() == 32)
 				entry->setData( (uint32_t)curr.second.iValue );
-			std::cerr << "SDO entry - trigger write " << curr.second << "\n";
 			readValue(sdo, entry->getSize());
 			ecrt_sdo_request_write(sdo);
 			sdo_entry_state = e_Busy_Initialisation;
@@ -559,13 +557,9 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 				sdo_entry_state = e_None;
 	            break;
 	        case EC_REQUEST_BUSY:
-				//std::cerr << "SDO entry in progress\n";
+				// SDO entry in progress
 	            break;
 	        case EC_REQUEST_SUCCESS:
-				if (entry->operation() == SDOEntry::READ)
-					std::cerr << "SDO entry read\n";
-				else
-					std::cerr << "SDO entry written\n";
 				entry->syncValue();
 				entry->success();
 				// prepare to get the next entry
@@ -573,24 +567,29 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 				sdo_entry_state = e_None;
 	            break;
 	        case EC_REQUEST_ERROR:
-				if (entry->operation() == SDOEntry::READ)
-					std::cerr << "Failed to read SDO entry ";
-				else
-					std::cerr << "Failed to write SDO entry ";
-	            std::cerr << std::hex << "0x" << entry->getIndex() 
-					<< ":" << (int)entry->getSubindex() << std::dec << "\n";
-				entry->failure();
-	            //ecrt_sdo_request_write(sdo); // retry reading
-				if (entry->getErrorCount() < 4) 
-					current_init_entry++; // move on to the next item and retry soon
-				else {
-					current_init_entry = initialisation_entries.erase(current_init_entry);
-					entry->setOperation(SDOEntry::READ);
+				{
+					char buf[100];
+					snprintf(buf, 100, "Falied to %s SDO entry %0x:%0x", 
+						entry->operation() == SDOEntry::READ ? "read" : "write", 
+						entry->getIndex(), entry->getSubindex());
+					MessageLog::instance()->add(buf);
+					entry->failure();
+	            	//ecrt_sdo_request_write(sdo); // retry reading
+					if (entry->getErrorCount() < 4) 
+						current_init_entry++; // move on to the next item and retry soon
+					else {
+						current_init_entry = initialisation_entries.erase(current_init_entry);
+						entry->setOperation(SDOEntry::READ);
+					}
+					sdo_entry_state = e_None;
 				}
-				sdo_entry_state = e_None;
 	            break;
 			default:
-				std::cerr << "unexpected sdo request state: " << state << "\n";
+				{
+					char buf[100];
+					snprintf(buf, 100, "Error: unexpected SDO state %d", state);
+					MessageLog::instance()->add(buf);
+				}
 	    }
 	}
 	return false;
