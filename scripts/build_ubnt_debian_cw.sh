@@ -24,6 +24,7 @@ cd ../
 cd zeromq-3.2.3/
 ./configure
 make && make install
+cd ..
 
 # Put the c++ headers for ZeroMQ into the right place 
 mv zmq.hpp /usr/local/include/
