@@ -1,9 +1,9 @@
 find_path(MOSQUITTO_INCLUDE_DIR
           mosquitto.h
-          PATHS /usr/local/src/mosquitto/mosquitto-1.4.1/include)
+          PATHS /opt/homebrew/include /usr/local/src/mosquitto/mosquitto-1.4.1/include)
 
 find_library(MOSQUITTO_LIBRARY
-             PATHS /usr/local/src/mosquitto/mosquitto-1.4.1/lib
+             PATHS /opt/homebrew/lib /usr/local/src/mosquitto/mosquitto-1.4.1/lib
              NAMES mosquitto)
 
 include(FindPackageHandleStandardArgs)
