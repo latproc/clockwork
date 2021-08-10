@@ -17,7 +17,7 @@ test_list_commands TestListCommands Flags;
 
 BOOL MACHINE { true STATE ; false INITIAL; }
 
-/* A light controller iwth the ability to receive turnOn/turnOff commands
+/* A light controller with the ability to receive turnOn/turnOff commands
  */
 Light MACHINE output {
     OPTION turn_on_delay 2000;
@@ -89,7 +89,7 @@ Copier MACHINE input, output {
 copied LIST;
 copier Copier number_list, copied;
 
-/* and example of how to use a LIST for FIFO queue operations */
+/* An example of how to use a LIST for FIFO queue operations */
 Queue MACHINE {
 queue LIST 1,2,3;
 	nonempty WHEN queue IS nonempty;

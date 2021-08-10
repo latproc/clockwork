@@ -8,6 +8,7 @@ a VARIABLE (tab:Test) 3;
 b VARIABLE (tab:Test) 4;
 VariableTest MACHINE {
 	COMMAND go { a := b }
+  COMMAND inc { a := b + 1 }
 }
 test VariableTest(tab:Test);
 

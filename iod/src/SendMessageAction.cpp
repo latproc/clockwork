@@ -48,6 +48,28 @@ std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
 : Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine) {}
 
+void collect_target_list (MachineInstance *target_machine, std::set<MachineInstance*> & targets) {
+	if (!target_machine->enabled()) {
+		return;
+	}
+	if (targets.count(target_machine)) { return; }
+	targets.insert(target_machine);
+	if (target_machine->_type == "REFERENCE") {
+		if (target_machine->locals.size() > 0) {
+			for (auto & entry : target_machine->locals) {
+				if (entry.machine) { collect_target_list(entry.machine, targets); }
+			}
+		}
+	}
+	else {
+		if (target_machine->_type == "LIST") {
+			for (auto & entry : target_machine->parameters) {
+				if (entry.machine) { collect_target_list(entry.machine, targets); }
+			}
+		}
+	}
+}
+
 Action::Status SendMessageAction::run() {
 	owner->start(this);
 	if (target != 0) {
@@ -69,24 +91,15 @@ Action::Status SendMessageAction::run() {
 				else
 					msg_str = message.asString();
 			}
-			else
+			else {
 				msg_str = message.asString();
-			owner->sendMessageToReceiver(new Message(msg_str.c_str()), target_machine);
-			if (target_machine->_type == "LIST" && target_machine->enabled()) {
-				for (unsigned int i=0; i<target_machine->parameters.size(); ++i) {
-					MachineInstance *entry = target_machine->parameters[i].machine;
-					if (entry) owner->sendMessageToReceiver(new Message(msg_str.c_str()), entry);
-				}
 			}
-			else if (target_machine->_type == "REFERENCE"
-					 && target_machine->enabled()
-					 && target_machine->locals.size()) {
-				for (unsigned int i=0; i<target_machine->locals.size(); ++i) {
-					MachineInstance *entry = target_machine->locals[i].machine;
-					if (entry) owner->sendMessageToReceiver(new Message(msg_str.c_str()), entry);
-				}
+
+			std::set<MachineInstance*> targets;
+			collect_target_list(target_machine, targets);
+			for (auto receiver : targets) {
+				owner->sendMessageToReceiver(new Message(msg_str.c_str()), receiver);
 			}
-			status = Action::Complete;
 		}
 		else {
 			std::stringstream ss;

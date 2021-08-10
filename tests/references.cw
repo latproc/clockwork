@@ -63,4 +63,14 @@ TimeClock MACHINE target{
 }
 clock TimeClock msg;
 
+# using a global reference
+gref REFERENCE;
+
+UseGRef MACHINE ref {
+  a FLAG;
+  ENTER INIT { ASSIGN a TO ref; }
+}
+use_gref UseGRef gref;
+
+
 
