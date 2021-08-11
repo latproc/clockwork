@@ -466,10 +466,11 @@ void ECInterface::checkSDOUpdates()  {
 				case SDOEntry::WRITE:
 					MessageLog::instance()->add("Error: SDO entry updates- trigger write");
 					assert(false); // this should not be active
-					std::cerr << "SDO entry updates- trigger write\n";
+#if 0
 					readValue(sdo, entry->getSize(), entry->getOffset());
 					ecrt_sdo_request_write(sdo); // trigger first read
 					sdo_entry_state = e_Busy_Update;
+#endif
 					break;
 				default: assert(false);
 			}
