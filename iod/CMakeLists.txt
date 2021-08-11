@@ -17,7 +17,7 @@ endif()
 #set (CMAKE_VERBOSE_MAKEFILE false)
 set (CMAKE_EXPORT_COMPILE_COMMANDS true)
 
-set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -DUSE_EXPERIMENTAL_IDLE_LOOP -DUSE_READLINE ")
+set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -DUSE_READLINE ")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 IF("${CMAKE_SYSTEM}" MATCHES "Linux")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
@@ -210,7 +210,8 @@ add_library(cw_interpreter ${Clockwork_SRCS})
 set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 
 add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
-set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+#set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_compile_definitions(cw PUBLIC EC_SIMULATOR)
 target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES} "pthread")
 #target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
 
