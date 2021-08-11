@@ -517,6 +517,26 @@ void predefine_special_machines() {
 	settings->setStateMachine(settings_class);
 	settings->setDefinitionLocation("Internal", 0);
 
+	MachineClass *message_log_class = new MachineClass("MESSAGELOG");
+	message_log_class->properties.add("MESSAGE", "", SymbolTable::ST_REPLACE);
+	message_log_class->addState("ready");
+	message_log_class->initial_state = State("ready");
+
+	MachineInstance *syslog = MachineInstanceFactory::create("LOG", "MESSAGELOG");
+	syslog->setProperties(message_log_class->properties);
+	syslog->setStateMachine(message_log_class);
+	syslog->setDefinitionLocation("Internal", 0);
+//	Parameter p("LOG");
+//	p.machine = syslog;
+//	settings->locals.push_back(p);
+
+	settings->addLocal("LOG", syslog);
+	MessageLog::instance()->setFollowupAction([syslog](const std::string &msg) {
+		if (syslog->enabled()) {
+			syslog->setValue("MESSAGE", msg);
+ 		}
+	});
+
 	MachineInstance *channels = MachineInstanceFactory::create("CHANNELS", "LIST");
 	machines["CHANNELS"] = channels;
 	channels->setProperties(list_class->properties);
