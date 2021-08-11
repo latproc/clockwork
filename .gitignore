@@ -61,6 +61,7 @@ modbus/build/
 modbus/xcode/
 etc/
 bin/
+.cache/
 
 #project runtime scraps
 modbus_mappings.bak
