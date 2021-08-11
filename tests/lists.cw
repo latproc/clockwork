@@ -20,7 +20,7 @@ BOOL MACHINE { true STATE ; false INITIAL; }
 /* A light controller iwth the ability to receive turnOn/turnOff commands
  */
 Light MACHINE output {
-    OPTION turn_on_delay 2000;
+  OPTION turn_on_delay 2000;
 	turning_on BOOL;
 	on WHEN output IS on;
 	waitingOn WHEN SELF IS delayingOn AND TIMER >= turn_on_delay;
@@ -29,7 +29,7 @@ Light MACHINE output {
 	RECEIVE turnOn { SET turning_on TO true; }
 	RECEIVE turnOff { SET turning_on TO false; SET output TO off; }
 	ENTER INIT { SET output TO off; }
-    ENTER on { SET turning_on TO false }
+  ENTER on { SET turning_on TO false }
 	ENTER off { SET turning_on TO false }
 	ENTER waitingOn { SET output TO on; }
 }
@@ -50,7 +50,7 @@ Controller MACHINE outputs {
   waiting WHEN outputs DISABLED;
   on WHEN ALL outputs ARE on AND outputs ENABLED;
   off DEFAULT;
-  
+
   COMMAND turnOn { SEND turnOn TO outputs }
   COMMAND turnOff { SEND turnOff TO outputs }
   COMMAND enable { ENABLE outputs; }
@@ -131,29 +131,29 @@ dt2 DigitTest numbers;
 SetIntersect MACHINE {
 	ready STATE;
 
-p01 FLAG(usage:0,pos:1);
-p02 FLAG(usage:0,pos:2);
-p03 FLAG(usage:0,pos:3);
-p04 FLAG(usage:0,pos:4);
+  p01 FLAG(usage:0,pos:1);
+  p02 FLAG(usage:0,pos:2);
+  p03 FLAG(usage:0,pos:3);
+  p04 FLAG(usage:0,pos:4);
 
-all_positions LIST 3,2,1,4;
-actions LIST p01,p02,p03,p04;
-current_index_pos LIST 1,2;
-reachable LIST; # list of positions reachable at this index pos
-active LIST; # list of the flags that should activate
+  all_positions LIST 3,2,1,4;
+  actions LIST p01,p02,p03,p04;
+  current_index_pos LIST 1,2;
+  reachable LIST; # list of positions reachable at this index pos
+  active LIST; # list of the flags that should activate
 
-COMMAND GetAvailableGrabs {
-	CLEAR reachable;
-   	COPY COMMON 
-		BETWEEN all_positions 
-		AND current_index_pos 
-		TO reachable;
-   	COPY COMMON 
-		BETWEEN actions
-		AND reachable
-		TO active
-		USING pos;
-}
+  COMMAND GetAvailableGrabs {
+    CLEAR reachable;
+    COPY COMMON 
+    BETWEEN all_positions 
+    AND current_index_pos 
+    TO reachable;
+    COPY COMMON 
+    BETWEEN actions
+    AND reachable
+    TO active
+    USING pos;
+  }
 
 }
 intersect SetIntersect;
@@ -161,13 +161,13 @@ intersect SetIntersect;
 SetUnion MACHINE {
 	ready STATE;
 
-front_shallow LIST 4,5,6;
-front_deep LIST 10,11,12;
+  front_shallow LIST 4,5,6;
+  front_deep LIST 10,11,12;
 
-front LIST;
+  front LIST;
 
-COMMAND union {
-	CLEAR front;
+  COMMAND union {
+    CLEAR front;
    	COPY ALL
 		IN front_shallow
 		OR front_deep
