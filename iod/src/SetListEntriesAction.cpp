@@ -69,7 +69,7 @@ Action::Status SetListEntriesAction::run() {
             setListEntries((unsigned long)source.fValue);
         }
         else if (source.kind == Value::t_symbol) {
-            const char *src = source.asString().c_str();
+            std::string src = source.asString();
             
             long val;
             if (owner->getValue(src).asInteger(val) ) {
