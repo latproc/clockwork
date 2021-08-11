@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8.12)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
