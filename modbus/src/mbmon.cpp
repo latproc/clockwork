@@ -175,12 +175,18 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
 		cmd.push_back( *( (float*)xx ));
 	}
 	else if (mm->length() == 2 && mm->format() == "SignedInt") {
-		value = *( (int32_t*)mm->value->getWordData() );
-		cmd.push_back( value );
+		uint16_t modbus_value[2];
+		modbus_value[0] = (mm->value->getWordData())[0];
+		modbus_value[1] = (mm->value->getWordData())[1];
+		value = MODBUS_GET_INT32_FROM_INT16(modbus_value, 0);
+		cmd.push_back( (int32_t)value );
 	}
 	else if (mm->length() == 2) {
-		value = *( (uint32_t*)mm->value->getWordData() );
-		cmd.push_back( value );
+		uint16_t modbus_value[2];
+		modbus_value[0] = (mm->value->getWordData())[0];
+		modbus_value[1] = (mm->value->getWordData())[1];
+		value = MODBUS_GET_INT32_FROM_INT16(modbus_value, 0);
+		cmd.push_back( (uint32_t)value );
 	}
 	else {
 		cmd.push_back(0); // TBD
@@ -633,8 +639,10 @@ int main(int argc, const char *argv[]) {
 									mb->requestRegisterUpdate(m.address(), (uint16_t)value);
 								}
 								else if (m.length() == 2) {
-									m.setRaw( (uint32_t)(value & 0xffffffff) );
-									mb->requestRegisterUpdates(m.address(), (uint16_t*)&value, 2);
+									uint16_t modbus_value[2];
+									MODBUS_SET_INT32_TO_INT16(modbus_value, 0, (uint32_t)(value & 0xffffffff));
+									m.setRaw( modbus_value ,2 );
+									mb->requestRegisterUpdates(m.address(), (uint16_t*)&modbus_value, 2);
 								}
 							}
 						}
