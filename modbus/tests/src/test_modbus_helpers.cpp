@@ -43,3 +43,11 @@ TEST(getSettings, withAValidString) {
     EXPECT_EQ('N', settings.parity) << "sets the parity";
     EXPECT_EQ(1,settings.stop_bits) << "sets the stop bits";
 }
+
+TEST(isPrintable, withAPrintableString) {
+	EXPECT_TRUE(isPrintable("this is a test"));
+}
+
+TEST(isPrintable, withANonPrintableString) {
+	EXPECT_FALSE(isPrintable("this \001 is a test"));
+}

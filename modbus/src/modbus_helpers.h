@@ -30,6 +30,8 @@ struct ModbusSettings {
 
 int getSettings(const char *str, SerialSettings &settings);
 
+bool isPrintable(const char *str);
+
 #if 0
 class ModbusService {
 public:

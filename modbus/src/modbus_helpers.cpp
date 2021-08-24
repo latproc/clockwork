@@ -14,7 +14,7 @@ int getSettings(const char *str, SerialSettings &settings) {
 		fld = strsep(&p, ":");
 		if (!fld) goto done_getSettings; // no more fields
         if (*fld == 0) continue; // skip blank fields
-        
+
 		char *tmp = 0;
 		// most fields are numbers so we usually attempt to convert the field to a number
 		long val = 8;
@@ -59,4 +59,11 @@ int getSettings(const char *str, SerialSettings &settings) {
 done_getSettings:
 	free(buf);
 	return result;
+}
+
+bool isPrintable(const char *str) {
+	if (!str) return false;
+	while (*str)
+		if (!isprint(*str++)) { return false; }
+	return true;
 }
