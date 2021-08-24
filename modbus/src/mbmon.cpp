@@ -25,9 +25,17 @@
 #include <sys/time.h>
 #include <Logger.h>
 #include "options.h"
+#include <ios>
+#include "modbus_client_thread.h"
 
 bool iod_connected = false;
 bool update_status = true;
+
+Options options;
+
+bool & should_update_status() { return update_status; }
+Options & program_options() { return options; }
+
 //const char *program_name;
 
 /*
@@ -44,10 +52,7 @@ void getTimeString(char *buf, size_t buf_size) {
 */
 
 struct UserData {
-	
 };
-
-Options options;
 
 /* Clockwork interface */
 
@@ -86,21 +91,29 @@ void process_command(zmq::socket_t &sock, std::list<Value> &params) {
 	}
 }
 
-void sendStatus(const char *s) {
+void sendProperttValue(const char *property, const char *value) {
 	zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_REQ);
 	sock.connect("tcp://localhost:5555");
 
-	{FileLogger fl(program_name); fl.f() << "reporting status " << s << "\n"; }
+	{FileLogger fl(program_name); fl.f() << "reporting status " << value << "\n"; }
 	if (options.status_machine.length()) {
 		std::list<Value>cmd;
 		cmd.push_back("PROPERTY");
 		cmd.push_back(options.status_machine.c_str());
 		cmd.push_back(options.status_property.c_str());
-		cmd.push_back(s);
+		cmd.push_back(value);
 		process_command(sock, cmd);
 	}
 	else
 		{FileLogger fl(program_name); fl.f() << "no status machine" << "\n"; }
+}
+
+void sendStatus(const char *status) {
+		sendProperttValue(options.status_property.c_str(), status);
+}
+
+void sendError(const char *error) {
+		sendProperttValue("LastError", error);
 }
 
 /*
@@ -108,7 +121,7 @@ void sendStatus(const char *s) {
 class ClockworkClientThread {
 
 public:
-	ClockworkClientThread(): finished(false) { 
+	ClockworkClientThread(): finished(false) {
 		int linger = 0; // do not wait at socket close time
 
 		socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
@@ -118,7 +131,7 @@ public:
 	}
 	void operator()() {
 		while (!finished) {
-			usleep(500000);	
+			usleep(500000);
 		}
 	}
 	zmq::socket_t *socket;
@@ -206,7 +219,7 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 			uint8_t *val = buffer_addr + ( (mm->address() & 0xffff));
 			if (options.verbose) std::cerr << mm->name() << " ";
 			mm->set( val, options.verbose );
-			
+
 			if (sock &&	(mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
 				sendStateUpdate(sock, mm, (bool)*val);
 			}
@@ -230,7 +243,6 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint
 	}
 }
 
-#include "modbus_client_thread.cpp"
 ModbusClientThread *mb = 0;
 
 class SetupDisconnectMonitor : public EventResponder {
@@ -400,8 +412,8 @@ int main(int argc, const char *argv[]) {
 	MessagingInterface::setContext(&context);
 
 	std::cerr << "Modbus version (compile time): " << LIBMODBUS_VERSION_STRING << " ";
-	std::cerr << "(linked): " 
-			<< libmodbus_version_major << "." 
+	std::cerr << "(linked): "
+			<< libmodbus_version_major << "."
 			<< libmodbus_version_minor << "." << libmodbus_version_micro << "\n";
 
 	if (!options.parseArgs(argc, argv)) {
@@ -449,7 +461,7 @@ int main(int argc, const char *argv[]) {
 
 			free(response);
 		}
-		
+
 		if (obj) {
 			cJSON *name_js = cJSON_GetObjectItem(obj, "name");
 			if (name_js) {
@@ -499,7 +511,7 @@ int main(int argc, const char *argv[]) {
 
 	// the local command channel accepts commands from the modbus thread and relays them to iod.
 	const char *local_commands = "inproc://local_cmds";
-	
+
 	zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
 	iosh_cmd.bind(local_commands);
 
@@ -519,7 +531,7 @@ int main(int argc, const char *argv[]) {
 		s_running, // polling for io changes from clockwork
 		s_finished,// about to exit
 	} program_state = s_initialising;
-	
+
 	int exception_count = 0;
 	int error_count = 0;
 	while (program_state != s_finished)
@@ -568,7 +580,12 @@ int main(int argc, const char *argv[]) {
 		char *data = (char *)malloc(len+1);
 		memcpy(data, update.data(), len);
 		data[len] = 0;
-		std::cerr << "received: " << data << " (len == " <<len << " from clockwork\n";
+		if (isPrintable(data)) {
+			std::cerr << "received: " << data << " (len == " <<len << " from clockwork\n";
+		}
+		else {
+			std::cerr << "received: " << std::hex << data << std::dec << "[hex] (len == " <<len << " from clockwork\n";
+		}
 
 		std::vector<Value> params(0);
 		parseIncomingMessage(data, params);

@@ -1,29 +1,19 @@
-#if 0
 #include <iostream>
 #include <zmq.hpp>
 #include <modbus.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <boost/thread.hpp>
-#include <map>
 #include <set>
-#include "plc_interface.h"
-#include <string.h>
-#include "monitor.h"
-#include <zmq.hpp>
-#include <value.h>
-#include <MessageEncoding.h>
+#include <boost/thread.hpp>
 #include <MessagingInterface.h>
-#include "cJSON.h"
-#include "MessagingInterface.h"
-#include "SocketMonitor.h"
-#include "ConnectionManager.h"
-#include "symboltable.h"
-#include <fstream>
-#include <libgen.h>
-#include <sys/time.h>
-#include <Logger.h>
-#endif
+#include "options.h"
+#include "modbus_helpers.h"
+#include "buffer_monitor.h"
+
+Options & program_options();
+bool & should_update_status();
+void sendStatus(const char *s);
+void sendError(const char *error);
+void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint8_t *buffer_addr);
+void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr);
 
 class ModbusClientThread{
 private:
@@ -40,7 +30,12 @@ public:
 
 	bool finished;
 	bool connected;
-	
+
+	struct Error {
+		int error;
+		int addr;
+	};
+
 	BufferMonitor<uint8_t> bits_monitor; //("bits", options);
 	BufferMonitor<uint8_t> robits_monitor; //("robits", options);
 	BufferMonitor<uint16_t> regs_monitor; //("input registers", options);
@@ -85,7 +80,10 @@ public:
 			std::list< std::pair<int, bool> >::iterator iter = bit_changes.begin();
 			while (iter != bit_changes.end()) {
 				std::pair<int, bool>item = *iter;
-				setBit(item.first, item.second);
+				if (!setBit(item.first, item.second)) {
+					std::cerr << "failed to set bit " << item.first << ":" << item.second << "\n";
+					// report failure to clockwork
+				}
 				iter = bit_changes.erase(iter);
 			}
 		}
@@ -123,7 +121,7 @@ public:
 			free(vals);
 		}
 	}
-	
+
 	void refresh() {
 		bits_monitor.refresh();
 		robits_monitor.refresh();
@@ -134,12 +132,12 @@ public:
 	ModbusClientThread(const ModbusSettings &modbus_settings, MonitorConfiguration &modbus_config,
 					   const char *sock_name = 0) :
 			ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0),
-			tab_rq_registers(0), tab_rw_rq_registers(0), 
+			tab_rq_registers(0), tab_rw_rq_registers(0),
 			finished(false), connected(false),
-			bits_monitor("coils", options), 
-			robits_monitor("discrete", options),
-			regs_monitor("registers", options),
-			holdings_monitor("holdings", options), mc(modbus_config),
+			bits_monitor("coils", program_options()),
+			robits_monitor("discrete", program_options()),
+			regs_monitor("registers", program_options()),
+			holdings_monitor("holdings", program_options()), mc(modbus_config),
 			settings(modbus_settings),
 			cmd_interface(0), iod_cmd_socket_name(sock_name)
 	{
@@ -173,8 +171,8 @@ public:
 
 modbus_t *openConnection() {
 	if (settings.mt == mt_TCP) {
-		if (options.verbose) 
-			std::cerr << "opening tcp connection to " << settings.device_name 
+		if (program_options().verbose)
+			std::cerr << "opening tcp connection to " << settings.device_name
 				<< ":" << settings.settings << "\n";
 		int port = 1502;
 		if (!ctx && strToInt(settings.settings.c_str(), port)) {
@@ -185,7 +183,7 @@ modbus_t *openConnection() {
 		}
 		else if (modbus_connect(ctx) == -1) {
 			std::cerr << "Connection to " << settings.device_name
-				<< ":" << settings.settings 
+				<< ":" << settings.settings
 				<< " failed: " << modbus_strerror(errno) << ":" << errno << "\n";
 			modbus_free(ctx);
 			ctx = 0;
@@ -203,7 +201,7 @@ modbus_t *openConnection() {
 	else if (settings.mt == mt_RTU) {
 		int device_id = *settings.devices.begin();
 		std::cerr << "opening rtu connection to " << settings.device_name << ", device " << device_id << "\n";
-		ctx = modbus_new_rtu(settings.device_name.c_str(), settings.serial.baud, 
+		ctx = modbus_new_rtu(settings.device_name.c_str(), settings.serial.baud,
 			settings.serial.parity, settings.serial.bits, settings.serial.stop_bits);
 		if (ctx == NULL) {
 			std::cerr << "Unable to create the libmodbus context\n";
@@ -238,9 +236,9 @@ modbus_t *openConnection() {
 		sendStatus("disconnected");
 	}
 	else {
-		if (options.verbose) std::cerr << "original response timeout: " << secs 
+		if (program_options().verbose) std::cerr << "original response timeout: " << secs
 			<< "." << std::setw(3) << std::setfill('0') << (usecs/1000) << "\n";
-		uint64_t new_timeout = options.getTimeout();
+		uint64_t new_timeout = program_options().getTimeout();
 		uint32_t new_secs = (new_timeout) ? new_timeout / 1000000 : secs * 2;
 		uint32_t new_usecs = (new_timeout) ? new_timeout % 1000000 : usecs * 2;
 		while (new_usecs >= 1000000) { new_usecs -= 1000000; new_secs++; }
@@ -252,8 +250,8 @@ modbus_t *openConnection() {
 			ctx = 0;
 		}
 		else {
-			if (options.verbose) {
-				std::cerr << "new timeout: " << new_secs << "." 
+			if (program_options().verbose) {
+				std::cerr << "new timeout: " << new_secs << "."
 					<< std::setw(3) << std::setfill('0') << (new_usecs/1000) << "\n";
 			}
 		}
@@ -274,9 +272,9 @@ modbus_t *openConnection() {
 }
 
 void close_connection() {
-	if (options.verbose) std::cerr << " closing connection\n";
+	if (program_options().verbose) std::cerr << " closing connection\n";
 	sendStatus("disconnected");
-	update_status = true;
+	should_update_status() = true;
 
 	boost::mutex::scoped_lock lock(update_mutex);
 	assert(ctx);
@@ -287,24 +285,29 @@ void close_connection() {
 	ctx = 0;
 }
 
+// check the error type and return whether to retry
 bool check_error(const char *msg, int entry, int *retry) {
 	std::cerr << "ERROR: " << msg << entry << " retry: " << *retry << "\n";
-	usleep(250);
+	usleep(250); // throttle retries
+	constexpr int BUFLEN=250;
+	char buf[BUFLEN];
+	bool should_retry = true;
 	if (errno == EAGAIN || errno == EINTR) {
-		fprintf(stderr, "%s %s (errno: %d), entry %d retrying %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
-		return true;
+		snprintf(buf, BUFLEN, "%s %s (errno: %d), entry %d retrying %d", msg, modbus_strerror(errno), errno, entry, *retry);
+		std::cerr << buf << "\n";
+		sendError(buf);
+		should_retry = true;
 	}
 	else if (errno == EBADF || errno == ECONNRESET || errno == EPIPE) {
-		fprintf(stderr, "%s %s (errno: %d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
-		if (connected) close_connection();
-		return false;
+		snprintf(buf, BUFLEN, "%s %s (errno: %d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		if (connected) { sendStatus("disconnecting"); close_connection(); }
+		should_retry = false;
 	}
 	else {
-		fprintf(stderr, "%s %s (errno: %d), entry %d reconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
-		if (connected) close_connection();
-		return false;
+		fprintf(stderr, "%s %s (errno: %d), entry %d retrying %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		should_retry = true;
 	}
-	return true;
+	return should_retry;
 }
 
 bool setBit(int addr, bool which) {
@@ -314,8 +317,8 @@ bool setBit(int addr, bool which) {
 	int retries = 3;
 	while ( (rc = modbus_write_bit(ctx, addr, (which) ? 1 : 0) ) == -1) {
 		perror("modbus_write_bit");
-		check_error("modbus_write_bit", addr, &retries);
-		if (!connected) return false;
+		if (!check_error("modbus_write_bit", addr, &retries)) { return false; }
+		if (!connected) { sendStatus("disconnected"); return false; }
 		if (--retries > 0) continue;
 		return false;
 	}
@@ -324,7 +327,7 @@ bool setBit(int addr, bool which) {
 
 bool setRegister(int addr, uint16_t val) {
 	if (!connected) return false;
-	if (options.verbose) std::cerr << "set register " << addr << " to " << val << "\n";
+	if (program_options().verbose) std::cerr << "set register " << addr << " to " << val << "\n";
 	boost::mutex::scoped_lock lock(update_mutex);
 	int rc = 0;
 	int retries = 3;
@@ -334,8 +337,8 @@ bool setRegister(int addr, uint16_t val) {
 		rc = modbus_write_registers(ctx, addr, 1, &val);
 	while ( rc == -1) {
 		perror("modbus_write_register");
-		check_error("modbus_write_register", addr, &retries);
-		if (!connected) return false;
+		if (!check_error("modbus_write_register", addr, &retries)) {return false;}
+		if (!connected) { sendStatus("disconnected"); return false; }
 		if (--retries > 0) {
 			if (settings.support_single_register_write)
 				rc = modbus_write_register(ctx, addr, val);
@@ -350,9 +353,9 @@ bool setRegister(int addr, uint16_t val) {
 
 bool setRegisters(int addr, uint16_t *val, unsigned int n) {
 	if (!connected) return false;
-	if (options.verbose) {
+	if (program_options().verbose) {
 		std::cerr << "set register " << addr << " to ";
-		for (unsigned int i=0; i<n; ++i) std::cerr << val[i] << " "; 
+		for (unsigned int i=0; i<n; ++i) std::cerr << val[i] << " ";
 		std::cerr << "\n";
 	}
 	boost::mutex::scoped_lock lock(update_mutex);
@@ -361,8 +364,8 @@ bool setRegisters(int addr, uint16_t *val, unsigned int n) {
 	rc = modbus_write_registers(ctx, addr, n, val);
 	while ( rc == -1) {
 		perror("modbus_write_registers");
-		check_error("modbus_write_registers", addr, &retries);
-		if (!connected) return false;
+		if (!check_error("modbus_write_registers", addr, &retries)) { return false; }
+		if (!connected) { sendStatus("disconnected"); return false; }
 		if (--retries > 0) {
 			usleep(5000);
 			rc = modbus_write_registers(ctx, addr, n, val);
@@ -373,7 +376,7 @@ bool setRegisters(int addr, uint16_t *val, unsigned int n) {
 	return true;
 }
 
-template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, unsigned int grp, T *dest, 
+template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, unsigned int grp, T *dest,
 	std::map<std::string, ModbusMonitor>&entries,
 	const char *fn_name,
 	int (*read_fn)(modbus_t *ctx, int addr, int nb, T *dest)) {
@@ -392,11 +395,11 @@ template<class T>bool collect_selected_updates(BufferMonitor<T> &bm, unsigned in
 			if (end > max) max = end;
 			int retry = 2;
 			while ( (usleep(5000), rc = read_fn(ctx, offset, item.second.length(), dest+offset)) == -1 ) {
-			    if (options.verbose)
-					std::cerr << "called: read_fn(ctx, " << offset << ", " 
+			    if (program_options().verbose)
+					std::cerr << "called: read_fn(ctx, " << offset << ", "
 						<< item.second.length() << ", " << dest+offset << "))\n";
-				check_error(fn_name, offset, &retry); 
-				if (!connected) return false;
+				check_error(fn_name, offset, &retry);
+				if (!connected) { sendStatus("disconnected"); return false; }
 				if (--retry>0) continue; else break;
 			}
 		}
@@ -419,22 +422,23 @@ void operator()() {
 	while (!finished) {
 		if (!connected) {
 			boost::mutex::scoped_lock lock(update_mutex);
-			if (ctx) { 
+			if (ctx) {
 	    		modbus_close(ctx);
 	    		modbus_free(ctx);
 				ctx = 0;
 			}
 			if (!ctx) {
+				std::cerr << "opening connection\n";
 				ctx = openConnection();
 			}
 			if (ctx) {
 				connected = true;
-				update_status = true;
+				should_update_status() = true;
 			}
 		}
 		else {
 			performUpdates();
-			if (update_status) {
+			if (should_update_status()) {
 				sendStatus("initialising");
 			}
 			if (!collect_selected_updates<uint8_t>(robits_monitor, 1, tab_ro_bits, mc.monitors, "modbus_read_input_bits", modbus_read_input_bits))  {
@@ -445,7 +449,7 @@ void operator()() {
 				std::cerr << "modbus_read_bits failed\n";
 				//goto modbus_loop_end;
 			}
-			if (!collect_selected_updates<uint16_t>(regs_monitor, 3, tab_rq_registers, mc.monitors, "modbus_read_input registers", modbus_read_input_registers)) { 
+			if (!collect_selected_updates<uint16_t>(regs_monitor, 3, tab_rq_registers, mc.monitors, "modbus_read_input registers", modbus_read_input_registers)) {
 				std::cerr << "modbus_read_input_registers failed\n";
 				//goto modbus_loop_end;
 			}
@@ -453,12 +457,12 @@ void operator()() {
 				std::cerr << "modbus_read_registers failed\n";
 				//goto modbus_loop_end;
 			}
-			if ( update_status)  {
+			if ( should_update_status())  {
 				sendStatus("active");
-				update_status = false;
+				should_update_status() = false;
 			}
 		}
-		
+
 //modbus_loop_end:
 		usleep(100000);
 	}
