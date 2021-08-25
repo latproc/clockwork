@@ -288,25 +288,25 @@ void close_connection() {
 // check the error type and return whether to retry
 bool check_error(const char *msg, int entry, int *retry) {
 	std::cerr << "ERROR: " << msg << entry << " retry: " << *retry << "\n";
-	usleep(250); // throttle retries
-	constexpr int BUFLEN=250;
-	char buf[BUFLEN];
+	constexpr int buflen=250;
+	char buf[buflen];
 	bool should_retry = true;
 	if (errno == EAGAIN || errno == EINTR) {
-		snprintf(buf, BUFLEN, "%s %s (errno: %d), entry %d retrying %d", msg, modbus_strerror(errno), errno, entry, *retry);
-		std::cerr << buf << "\n";
-		sendError(buf);
+		snprintf(buf, buflen, "%s %s (errno: %d), entry %d retrying %d", msg, modbus_strerror(errno), errno, entry, *retry);
 		should_retry = true;
 	}
 	else if (errno == EBADF || errno == ECONNRESET || errno == EPIPE) {
-		snprintf(buf, BUFLEN, "%s %s (errno: %d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		snprintf(buf, buflen, "%s %s (errno: %d), entry %d disconnecting %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
 		if (connected) { sendStatus("disconnecting"); close_connection(); }
 		should_retry = false;
 	}
 	else {
-		fprintf(stderr, "%s %s (errno: %d), entry %d retrying %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
+		snprintf(buf, buflen, "%s %s (errno: %d), entry %d retrying %d\n", msg, modbus_strerror(errno), errno, entry, *retry);
 		should_retry = true;
 	}
+	std::cerr << buf << "\n";
+	sendError(buf);
+	usleep(250); // throttle retries
 	return should_retry;
 }
 
@@ -439,7 +439,7 @@ void operator()() {
 		else {
 			performUpdates();
 			if (should_update_status()) {
-				sendStatus("initialising");
+				sendStatus(connected ? "active" : "disconnected");
 			}
 			if (!collect_selected_updates<uint8_t>(robits_monitor, 1, tab_ro_bits, mc.monitors, "modbus_read_input_bits", modbus_read_input_bits))  {
 				std::cerr << "modbus_read_input_bits failed\n";
@@ -458,7 +458,7 @@ void operator()() {
 				//goto modbus_loop_end;
 			}
 			if ( should_update_status())  {
-				sendStatus("active");
+				sendStatus(connected ? "active" : "disconnected");
 				should_update_status() = false;
 			}
 		}

@@ -91,7 +91,7 @@ void process_command(zmq::socket_t &sock, std::list<Value> &params) {
 	}
 }
 
-void sendProperttValue(const char *property, const char *value) {
+void sendPropertyValue(const char *property, const char *value) {
 	zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_REQ);
 	sock.connect("tcp://localhost:5555");
 
@@ -109,11 +109,11 @@ void sendProperttValue(const char *property, const char *value) {
 }
 
 void sendStatus(const char *status) {
-		sendProperttValue(options.status_property.c_str(), status);
+		sendPropertyValue(options.status_property.c_str(), status);
 }
 
 void sendError(const char *error) {
-		sendProperttValue("LastError", error);
+		sendPropertyValue("LastError", error);
 }
 
 /*
