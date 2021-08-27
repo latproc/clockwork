@@ -8,7 +8,6 @@ project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.6)
-#set (RUN_TESTS OFF)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
@@ -41,13 +40,12 @@ configure_file (
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
 FIND_PACKAGE(Boost COMPONENTS system thread program_options filesystem chrono date_time REQUIRED)
-FIND_PACKAGE(MOSQUITTO)
+FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
 
-INCLUDE_DIRECTORIES(${ZeroMQ_INCLUDE_DIR})
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR} ${ZeroMQ_INCLUDE_DIR})
 
 set(HEADER_FILES
 	${CLOCKWORK_DIR}/MessagingInterface.h
@@ -97,19 +95,6 @@ include_directories("${CLOCKWORK_DIR}")
 
 LINK_DIRECTORIES("/usr/local/lib")
 LINK_DIRECTORIES("/opt/local/lib")
-
-#	src/iosh.cpp
-#	src/modbusd.cpp
-#	src/mqttd.cpp
-#	src/iod.cpp
-#	src/beckhoffd.cpp
-#	src/MQTTDCommands.cpp
-#	src/ecat_thread.cpp
-#	src/schedule.cpp
-#	src/test_client.cpp
-#	src/zmq_ecat_monitor.cpp
-#	src/device_connector.cpp
-#	src/persistd.cpp
 
 # yacc instructions from Andy Cedilnik 2002.
 
@@ -202,7 +187,7 @@ set (Clockwork_SRCS
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
-	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
+	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
   src/Configuration.cpp src/bit_ops.cpp
 	)
 
@@ -210,10 +195,8 @@ add_library(cw_interpreter ${Clockwork_SRCS})
 set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 
 add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
-#set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_compile_definitions(cw PUBLIC EC_SIMULATOR)
 target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${MOSQUITTO_LIBRARIES} "pthread")
-#target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "mosquitto" "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)

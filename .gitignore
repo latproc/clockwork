@@ -53,15 +53,18 @@ Thumbs.db
 ._*
 *.lyx?
 .~*
+.vim/
+*.swp
+.cache/
 
 #project build files
 iod/build/
 iod/xcode/
 modbus/build/
+modbus/.test/
 modbus/xcode/
 etc/
 bin/
-.cache/
 
 #project runtime scraps
 modbus_mappings.bak

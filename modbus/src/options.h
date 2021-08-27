@@ -1,6 +1,8 @@
 #ifndef __MB_OPTIONS_H__
 #define __MB_OPTIONS_H__
 
+#include <string>
+
 enum ModbusType {mt_unknown, mt_TCP, mt_RTU, mt_ASCII};
 
 bool strToInt(const char *str, int &val);
