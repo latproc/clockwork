@@ -605,7 +605,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	is_traceable(false),
 	published(0),
 	action_errors(0),
-	owner_channel(0), 
+	owner_channel(0),
 	cache(0),
   expected_authority(0)
 {
@@ -650,7 +650,7 @@ MachineInstance::MachineInstance(const CStringHolder name, const char * type, In
 	is_traceable(false),
 	published(0),
 	action_errors(0),
-	owner_channel(0), 
+	owner_channel(0),
 	cache(0),
   expected_authority(0)
 {
@@ -2771,6 +2771,9 @@ bool MachineInstance::stableStateValid(const std::string state_name) {
 	for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
 		StableState &s = stable_states[ss_idx];
 		if (s.condition(this)) {
+			if (s.state_name != state_name) {
+				std::cerr << "Invalid transition to " << state_name << " due to first matching state " << s.state_name << "\n";
+			}
 			found = s.state_name;
 			break;
 		}
@@ -4365,7 +4368,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			return;
-			
+
 		}
 		else if (addr.getSource() == ModbusAddress::state) {
 			std::string state_name = addr.getName();
