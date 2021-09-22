@@ -612,7 +612,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 	is_traceable(false),
 	published(0),
 	action_errors(0),
-	owner_channel(0), 
+	owner_channel(0),
 	cache(0),
   expected_authority(0)
 {
@@ -657,7 +657,7 @@ MachineInstance::MachineInstance(const CStringHolder name, const char * type, In
 	is_traceable(false),
 	published(0),
 	action_errors(0),
-	owner_channel(0), 
+	owner_channel(0),
 	cache(0),
   expected_authority(0)
 {
@@ -1787,7 +1787,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 					timer_val = trunc(s.timer_val.fValue);
 				else {
 					DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " is not numeric\n";
-					NB_MSG << "timer_val: " << s.timer_val << " type: " << s.timer_val.kind << "\n";
+					NB_MSG << _name << " state: " << s.state_name << " timer_val: " << s.timer_val << " type: " << s.timer_val.kind << "\n";
 					continue;
 				}
 				// note comment above, this is not a correct handling of opGT and opLT
@@ -4355,7 +4355,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 				enqueueAction(ssat.factory(this)); // execute this state change once all other actions are complete
 			}
 			return;
-			
+
 		}
 		else if (addr.getSource() == ModbusAddress::state) {
 			std::string state_name = addr.getName();
