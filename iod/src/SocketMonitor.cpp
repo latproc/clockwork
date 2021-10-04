@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -166,7 +166,7 @@ void SocketMonitor::on_event_disconnected(const zmq_event_t &event_, const char*
 void SocketMonitor::on_event_unknown(const zmq_event_t &event_, const char* addr_) {
         DBG_MSG << monitor_socket_name << " on_event_unknown " << addr_ << "\n";
 }
-    
+
 bool SocketMonitor::disconnected() { return disconnected_;}
 
 void SocketMonitor::addResponder(uint16_t event, EventResponder *responder) {

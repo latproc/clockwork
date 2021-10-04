@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -62,17 +62,21 @@ static uint64_t calcDeliveryTime(long delay) {
 	return res;
 }
 
-std::string Scheduler::getStatus() { 
+std::string Scheduler::getStatus() {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	uint64_t now = microsecs();
 	long wait_duration = 0;
 	if (notification_sent) wait_duration = now - notification_sent;
 	char buf[300];
-	if (state == e_running) 
+	if (state == e_running)
 		snprintf(buf, 300, "busy");
 	else {
 		snprintf(buf, 300, "state: %d, is ready: %d"
+#ifdef __linux__
+			" items: %ld, now: %ld\n"
+#else
 			" items: %ld, now: %lld\n"
+#endif
 			"last notification: %10.6f\nwait time: %10.6f",
 				 state, ready(now), items.size(), (now - ProcessingThread::programStartTime()),
 				(float)notification_sent/1000000.0f, (float)wait_duration/1000000.0f);
@@ -96,32 +100,32 @@ bool ScheduledItem::operator>=(const ScheduledItem& other) const {
 	return delivery_time >= other.delivery_time;
 }
 
-ScheduledItem *Scheduler::next() const { 
+ScheduledItem *Scheduler::next() const {
 	boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
-	if (items.empty()) return 0; else return items.top(); 
+	if (items.empty()) return 0; else return items.top();
 }
 
-void Scheduler::pop() { 
+void Scheduler::pop() {
 	boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
 	//items.check();
-	items.pop(); 
+	items.pop();
 }
 
-ScheduledItem* PriorityQueue::top() const { 
+ScheduledItem* PriorityQueue::top() const {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return queue.front();
 }
-bool PriorityQueue::empty() const { 
+bool PriorityQueue::empty() const {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	return queue.empty();
 }
-void PriorityQueue::pop() { 
+void PriorityQueue::pop() {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
 	queue.pop_front();
 }
-size_t PriorityQueue::size() const { 
+size_t PriorityQueue::size() const {
 	boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
-	return queue.size(); 
+	return queue.size();
 }
 
 void PriorityQueue::push(ScheduledItem *item) {
@@ -260,10 +264,10 @@ void Scheduler::add(ScheduledItem*item) {
 				safeSend(*update_notify,"poke",4);
 				notification_sent = nowMicrosecs();
 				break;
-			}		
+			}
 			catch(const zmq::error_t &err) {
 				if (zmq_errno() == EINTR || zmq_errno() == EAGAIN) continue;
-				
+
 				char errmsg[100];
 				snprintf(errmsg, 100, "Scheduler::add error: %s", zmq_strerror( zmq_errno()));
 				std::cerr << errmsg << "\n";
@@ -272,7 +276,7 @@ void Scheduler::add(ScheduledItem*item) {
 				update_notify = 0;
 				wd->stop();
 				throw;
-			} 
+			}
 		}
 		wd->stop();
 	}
@@ -308,7 +312,7 @@ void Scheduler::stop() {
 	//update_notify.connect("inproc://sch_items");
 	//safeSend(update_notify,"poke",4);
 }
-	
+
 
 void Scheduler::idle() {
 	zmq::socket_t sync(*MessagingInterface::getContext(), ZMQ_REP);
@@ -349,7 +353,7 @@ void Scheduler::idle() {
             DBG_SCHEDULER << "scheduler received ok from driver\n";
 			state = e_running;
 		}
-		
+
 		int items_found = 0;
 		//is_ready = ready();
 		while ( state == e_running && is_ready) {
