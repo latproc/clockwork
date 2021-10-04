@@ -96,6 +96,9 @@ Value::Value(std::string str, Kind k)
       }
 }
 
+bool Value::isNull() const {
+	return kind == t_empty;
+}
 
 void Value::setDynamicValue(DynamicValueBase *dv) {
 		if (kind == t_dynamic && dyn_value) { dyn_value = dyn_value->deref(); }
@@ -335,22 +338,22 @@ bool Value::operator>=(const Value &other) const {
 	}
 
 	if (a != b) return false;
-		switch (kind) {
-				case t_empty: return false;
-						break;
-				case t_integer:
+	switch (kind) {
+		case t_empty: return false;
+			break;
+		case t_integer:
 			return iValue >= other.iValue;
 			break;
 		case t_float:
 			return fValue >= other.fValue;
 			break;
-				case t_symbol:
-				case t_string: return sValue >= other.sValue;
-						break;
-				default:
-						break;
-		}
-		return false;
+		case t_symbol:
+		case t_string: return sValue >= other.sValue;
+			break;
+		default:
+			break;
+	}
+	return false;
 }
 
 bool Value::operator<=(const Value &other) const {
