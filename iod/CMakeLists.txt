@@ -122,7 +122,7 @@ set(cw_lex_output ${CMAKE_BINARY_DIR}/cwlang.yy.cpp)
 set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
-#   SOURCE ${CLOCKWORK_DIR}/cwlang.lpp
+   DEPENDS ${CLOCKWORK_DIR}/cwlang.lpp
    COMMAND ${FLEX_EXECUTABLE}
    ARGS -o${CMAKE_BINARY_DIR}/cwlang.yy.cpp
 		${CLOCKWORK_DIR}/cwlang.lpp
@@ -131,7 +131,7 @@ set(cw_yacc_output ${CMAKE_BINARY_DIR}/cwlang.tab.cpp)
 
 # Create custom command for bison/yacc (note the DEPENDS)
  ADD_CUSTOM_COMMAND(
-#   SOURCE ${CLOCKWORK_DIR}/cwlang.ypp
+   DEPENDS ${CLOCKWORK_DIR}/cwlang.ypp
    COMMAND ${BISON_EXECUTABLE}
    ARGS -y
         -o ${CMAKE_BINARY_DIR}/cwlang.tab.cpp
@@ -199,7 +199,7 @@ set (Clockwork_SRCS
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
-	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
+	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
   src/Configuration.cpp
 	)
 
@@ -306,7 +306,7 @@ set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)
 set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
 # Create custom command for flex/lex (note the outputs)
  ADD_CUSTOM_COMMAND(
-# SOURCE ${CLOCKWORK_DIR}/cmdline.lpp
+   DEPENDS ${CLOCKWORK_DIR}/cmdline.lpp
    COMMAND ${FLEX_EXECUTABLE}
    ARGS -o${CMAKE_BINARY_DIR}/cmdline.yy.cpp
 		${CLOCKWORK_DIR}/cmdline.lpp
@@ -315,7 +315,7 @@ set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
 
 # Create custom command for bison/yacc (note the DEPENDS)
  ADD_CUSTOM_COMMAND(
-#   SOURCE ${CLOCKWORK_DIR}/cmdline.ypp
+   DEPENDS ${CLOCKWORK_DIR}/cmdline.ypp
    COMMAND ${BISON_EXECUTABLE}
    ARGS -y
         -o ${CMAKE_BINARY_DIR}/cmdline.tab.cpp
