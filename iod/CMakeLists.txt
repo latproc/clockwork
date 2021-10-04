@@ -192,7 +192,7 @@ add_library(cw_interpreter ${Clockwork_SRCS})
 set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 
 add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
-target_compile_definitions(cw PUBLIC EC_SIMULATOR)
+set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
