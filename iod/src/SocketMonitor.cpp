@@ -19,6 +19,7 @@
 */
 
 #include <assert.h>
+#include <inttypes.h>
 #include "MessagingInterface.h"
 #include <iostream>
 #include <exception>
