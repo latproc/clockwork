@@ -209,16 +209,25 @@ set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
+set (SUPPORT_EOE false)
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
 set (ectool_extras "")
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
   LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
 endif()
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
-endif()
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
+if (${SUPPORT_EOE})
+  if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
+    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
+  endif()
+  if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
+    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
+  endif()
+  if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoe.cpp")
+    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoe.cpp")
+  endif()
+  if (EXISTS "${ETHERCAT_DIR}/tool/CommandIp.cpp")
+    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandIp.cpp")
+  endif()
 endif()
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandPcap.cpp")
   LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandPcap.cpp")
@@ -232,9 +241,6 @@ endif()
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
   LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
 endif()
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandIp.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandIp.cpp")
-endif()
 add_library (ec_tool
 ${ETHERCAT_DIR}/tool/CommandAlias.cpp
 ${ETHERCAT_DIR}/tool/CommandConfig.cpp
@@ -244,7 +250,6 @@ ${ETHERCAT_DIR}/tool/CommandData.cpp
 ${ETHERCAT_DIR}/tool/CommandDebug.cpp
 ${ETHERCAT_DIR}/tool/CommandDomains.cpp
 ${ETHERCAT_DIR}/tool/CommandDownload.cpp
-${ETHERCAT_DIR}/tool/CommandEoe.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
 ${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
 ${ETHERCAT_DIR}/tool/CommandGraph.cpp
