@@ -4,6 +4,12 @@ project (Latproc)
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.5)
 
+if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
+  # By default support EtherLab builds with EoE enabled
+  # this can be overridden in the LocalCMakeLists.txt file
+  set (SUPPORT_EOE true)
+endif()
+
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
@@ -209,7 +215,6 @@ set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
-set (SUPPORT_EOE false)
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
 set (ectool_extras "")
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
