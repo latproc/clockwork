@@ -10,6 +10,10 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
   set (SUPPORT_EOE true)
 endif()
 
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+		  set(CMAKE_INSTALL_PREFIX "${PROJECT_SOURCE_DIR}/stage" CACHE PATH "..." FORCE)
+endif()
+
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
@@ -50,6 +54,7 @@ FIND_PACKAGE(ZeroMQ REQUIRED)
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR} ${ZeroMQ_INCLUDE_DIR})
 
 set(HEADER_FILES
+	${CLOCKWORK_DIR}/cw_client.h
 	${CLOCKWORK_DIR}/MessagingInterface.h
 	${CLOCKWORK_DIR}/SocketMonitor.h
 	${CLOCKWORK_DIR}/ConnectionManager.h
@@ -68,7 +73,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/Message.h
     )
 
-add_library (Clockwork
+add_library (cw_client
 	${CLOCKWORK_DIR}/MessagingInterface.cpp
 	${CLOCKWORK_DIR}/MessageLog.cpp
 	${CLOCKWORK_DIR}/MessageEncoding.cpp
@@ -155,55 +160,70 @@ SET_SOURCE_FILES_PROPERTIES(${cw_yacc_output} GENERATED)
 INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
 
 set (Clockwork_Headers
-	src/Action.h			src/AbortAction.h	src/Expression.h	src/Transition.h	src/ConditionHandler.h
-  src/MachineInstance.h		src/SetListEntriesAction.h	src/cJSON.h src/StableState.h
+	src/cw_client.h
+	src/Action.h			src/AbortAction.h	src/Expression.h
+	src/Transition.h	src/ConditionHandler.h src/MachineInstance.h
+	src/SetListEntriesAction.h	src/cJSON.h src/StableState.h
 	src/CallMethodAction.h		src/ExpressionAction.h		src/Message.h
-  src/MachineShadowInstance.h src/CounterRateInstance.h src/CounterRateFilterSettings.h
-  src/SetOperationAction.h	src/clockwork.h src/Parameter.h src/MachineClass.h
-  src/SharedWorkSet.h src/MachineInterface.h src/MachineDetails.h src/ActionList.h
-  src/RateEstimatorInstance.h
-	src/Channel.h			src/FireTriggerAction.h		src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
-	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h		src/ShutdownAction.h		src/cwlang.h
-	src/ClientInterface.h		src/IOComponent.h		src/MessagingInterface.h	src/SimulatedRawInput.h		src/domain.h
-	src/CommandManager.h		src/IODCommand.h		src/ModbusInterface.h		src/SimulatedRawOutput.h	src/dynamic_value.h
-	src/ConnectionManager.h		src/IODCommands.h		src/PatternAction.h		src/SocketMonitor.h		src/ecat_thread.h
-	src/ControlSystemMachine.h	src/IfCommandAction.h		src/PersistentStore.h		src/SortListAction.h		src/filtering.h
-	src/CopyPropertiesAction.h	src/IncludeAction.h		src/Plugin.h			src/State.h			src/hw_config.h
-	src/DebugExtra.h		src/LockAction.h		src/PolledMessageHandler.h	src/Statistic.h			src/options.h
-	src/DisableAction.h		src/LogAction.h			src/PopListAction.h		src/Statistics.h		src/rate.h
-	src/Dispatcher.h		src/Logger.h			src/PredicateAction.h		src/UnlockAction.h		src/regular_expressions.h
-	src/ECInterface.h		src/MQTTDCommand.h		src/ProcessingThread.h		src/WaitAction.h		src/symboltable.h
-	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h		src/anet.h			src/value.h
-	src/EtherCATSetup.h		src/MQTTInterface.h		src/Scheduler.h			src/arraystr.h
-	src/ExecuteMessageAction.h	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
-	src/SyncRemoteStatesAction.h src/MachineCommandList.h src/ControlSystemMachine.h
-	src/HandleRequestAction.h src/SDOEntry.h src/AutoStats.h
-  src/Configuration.h
+	src/MachineShadowInstance.h src/CounterRateInstance.h
+	src/CounterRateFilterSettings.h src/SetOperationAction.h	src/clockwork.h
+	src/Parameter.h src/MachineClass.h src/SharedWorkSet.h
+	src/MachineInterface.h src/MachineDetails.h src/ActionList.h
+	src/RateEstimatorInstance.h src/Channel.h			src/FireTriggerAction.h
+	src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
+	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h
+	src/ShutdownAction.h		src/cwlang.h src/ClientInterface.h
+	src/IOComponent.h		src/MessagingInterface.h	src/SimulatedRawInput.h
+	src/domain.h src/CommandManager.h		src/IODCommand.h
+	src/ModbusInterface.h		src/SimulatedRawOutput.h	src/dynamic_value.h
+	src/ConnectionManager.h		src/IODCommands.h		src/PatternAction.h
+	src/SocketMonitor.h		src/ecat_thread.h src/ControlSystemMachine.h
+	src/IfCommandAction.h		src/PersistentStore.h
+	src/SortListAction.h		src/filtering.h src/CopyPropertiesAction.h
+	src/IncludeAction.h		src/Plugin.h			src/State.h
+	src/hw_config.h src/DebugExtra.h		src/LockAction.h
+	src/PolledMessageHandler.h	src/Statistic.h			src/options.h
+	src/DisableAction.h		src/LogAction.h			src/PopListAction.h
+	src/Statistics.h		src/rate.h src/Dispatcher.h		src/Logger.h
+	src/PredicateAction.h		src/UnlockAction.h
+	src/regular_expressions.h src/ECInterface.h		src/MQTTDCommand.h
+	src/ProcessingThread.h		src/WaitAction.h		src/symboltable.h
+	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h
+	src/anet.h			src/value.h src/EtherCATSetup.h		src/MQTTInterface.h
+	src/Scheduler.h			src/arraystr.h src/ExecuteMessageAction.h
+	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
+	src/SyncRemoteStatesAction.h src/MachineCommandList.h
+	src/ControlSystemMachine.h src/HandleRequestAction.h src/SDOEntry.h
+	src/AutoStats.h src/Configuration.h
 )
 
 set (Clockwork_SRCS
 	${Clockwork_Headers}
 	${cw_yacc_output} ${cw_lex_output}
 	src/MachineShadowInstance.cpp src/Transition.cpp src/MachineInstance.cpp
-  src/Action.cpp src/AbortAction.cpp src/CounterRateInstance.cpp
-  src/ConditionHandler.cpp src/StableState.cpp src/Parameter.cpp src/MachineClass.cpp
-	src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp src/cmdline.lpp src/CallMethodAction.cpp
-	src/Channel.cpp src/ClearListAction.cpp src/ClientInterface.cpp src/CopyPropertiesAction.cpp
-	src/DisableAction.cpp src/Dispatcher.cpp src/ECInterface.cpp src/EnableAction.cpp
-	src/ExecuteMessageAction.cpp src/Expression.cpp src/ExpressionAction.cpp
-  src/ActionList.cpp src/RateEstimatorInstance.cpp
-  src/SharedWorkSet.cpp src/MachineInterface.cpp src/MachineDetails.cpp
-	src/FireTriggerAction.cpp src/HandleMessageAction.cpp src/IOComponent.cpp src/IODCommands.cpp
-	src/IfCommandAction.cpp src/IncludeAction.cpp src/LockAction.cpp src/LogAction.cpp
-	src/MQTTInterface.cpp src/MachineCommandAction.cpp src/ModbusInterface.cpp
-	src/PatternAction.cpp src/PersistentStore.cpp src/Plugin.cpp src/PolledMessageHandler.cpp
-	src/PopListAction.cpp src/PredicateAction.cpp src/ProcessingThread.cpp src/ResumeAction.cpp
-	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp src/SetOperationAction.cpp
-	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
-	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
-	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
-	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
-  src/Configuration.cpp
+	src/Action.cpp src/AbortAction.cpp src/CounterRateInstance.cpp
+	src/ConditionHandler.cpp src/StableState.cpp src/Parameter.cpp
+	src/MachineClass.cpp src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp
+	src/cmdline.lpp src/CallMethodAction.cpp src/Channel.cpp
+	src/ClearListAction.cpp src/ClientInterface.cpp
+	src/CopyPropertiesAction.cpp src/DisableAction.cpp src/Dispatcher.cpp
+	src/ECInterface.cpp src/EnableAction.cpp src/ExecuteMessageAction.cpp
+	src/Expression.cpp src/ExpressionAction.cpp src/ActionList.cpp
+	src/RateEstimatorInstance.cpp src/SharedWorkSet.cpp
+	src/MachineInterface.cpp src/MachineDetails.cpp src/FireTriggerAction.cpp
+	src/HandleMessageAction.cpp src/IOComponent.cpp src/IODCommands.cpp
+	src/IfCommandAction.cpp src/IncludeAction.cpp src/LockAction.cpp
+	src/LogAction.cpp src/MQTTInterface.cpp src/MachineCommandAction.cpp
+	src/ModbusInterface.cpp src/PatternAction.cpp src/PersistentStore.cpp
+	src/Plugin.cpp src/PolledMessageHandler.cpp src/PopListAction.cpp
+	src/PredicateAction.cpp src/ProcessingThread.cpp src/ResumeAction.cpp
+	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp
+	src/SetOperationAction.cpp src/SetStateAction.cpp src/ShutdownAction.cpp
+	src/SortListAction.cpp src/State.cpp src/UnlockAction.cpp
+	src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
+	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp
+	src/MachineCommandList.cpp src/ControlSystemMachine.cpp
+	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
 	)
 
 add_library(cw_interpreter ${Clockwork_SRCS})
@@ -211,8 +231,8 @@ set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULAT
 
 add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-#target_link_libraries(cw Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
-target_link_libraries(cw cw_interpreter Clockwork "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
+#target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
+target_link_libraries(cw cw_interpreter cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
@@ -297,7 +317,7 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 )
 #set_target_properties (iod PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
-target_link_libraries(iod Clockwork ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
+target_link_libraries(iod cw_client ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
 add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
@@ -305,7 +325,7 @@ add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 )
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 )
-target_link_libraries(iod_sdo Clockwork ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
+target_link_libraries(iod_sdo cw_client ec_tool "ethercat" "dl" ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread")
 install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
@@ -337,21 +357,24 @@ SET_SOURCE_FILES_PROPERTIES(${iosh_lex_output} GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
 
 add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
-target_link_libraries(iosh Clockwork "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(iosh cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(device_connector src/device_connector.cpp src/options.cpp )
-target_link_libraries(device_connector Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(device_connector cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
-target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(modbusd src/modbusd.cpp )
-target_link_libraries(modbusd Clockwork ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 if (RUN_TESTS)
 enable_testing()
 add_subdirectory(tests)
 endif()
 
-install(TARGETS cw iosh device_connector modbusd persistd
-        RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+install(TARGETS cw iosh device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+
+install(TARGETS cw_client)
+install(TARGETS cw_interpreter)
+install(DIRECTORY src/ DESTINATION include/clockwork FILES_MATCHING PATTERN "*.h")
