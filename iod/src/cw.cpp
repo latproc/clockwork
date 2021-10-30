@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -187,6 +187,7 @@ int main (int argc, char const *argv[])
 	load_result = loadConfig(source_files);
 	if (load_result) {
 		Dispatcher::instance()->stop();
+		Scheduler::instance()->stop();
 		return load_result;
 	}
 	load_debug_config();
@@ -220,11 +221,11 @@ int main (int argc, char const *argv[])
         if (!out) {
             std::cerr << "not able to open " << modbus_map() << " for write\n";
             return 1;
-        }    
+        }
         while (m_iter != MachineInstance::end()) {
             (*m_iter)->exportModbusMapping(out);
             m_iter++;
-        }    
+        }
         out.close();
 
 		return load_result;
@@ -247,7 +248,7 @@ int main (int argc, char const *argv[])
 		}
 		return 0;
 	}
-	
+
 	MQTTInterface::instance()->init();
 	MQTTInterface::instance()->start();
 
@@ -257,7 +258,7 @@ int main (int argc, char const *argv[])
             size_t remaining = machines.size();
             DBG_PARSER << remaining << " Machines\n";
             DBG_INITIALISATION << "Initialising MQTT\n";
-            
+
             // find and process all MQTT Modules as they are required before POINTS that use them
             std::map<std::string, MachineInstance*>::const_iterator iter = machines.begin();
             while (iter != machines.end()) {
@@ -278,7 +279,7 @@ int main (int argc, char const *argv[])
                     }
                 }
             }
-            
+
             iter = machines.begin();
             while (iter != machines.end()) {
                 MachineInstance *m = (*iter).second; iter++;
@@ -297,13 +298,13 @@ int main (int argc, char const *argv[])
                         }
                         if (!module_mi->properties.exists("position")) { // module position not given
                             std::cerr << "Machine " << name << " does not specify a position\n";
-                            continue; 
+                            continue;
                         }
                         std::cerr << module_mi->properties.lookup("position").kind << "\n";
                         int module_position = (int)module_mi->properties.lookup("position").iValue;
                         if (module_position == -1)  { // module position unmapped
                             std::cerr << "Machine " << name << " position not mapped\n";
-                            continue; 
+                            continue;
                         }
                 }
                 else {
@@ -332,7 +333,7 @@ int main (int argc, char const *argv[])
                             }
                         }
                         else std::cerr << "Error defining instance " << m->getName() << "\n";
-                        
+
                     }
                 }
             }
@@ -353,7 +354,7 @@ int main (int argc, char const *argv[])
 
 	zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
 	sim_io.bind("inproc://ethercat_sync");
-    
+
 	DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
 	boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
 	Scheduler::instance()->setThreadRef(scheduler_thread);
@@ -368,7 +369,7 @@ int main (int argc, char const *argv[])
 
 	processMonitor.setProcessingThreadInstance(&processMonitor);
 	boost::thread process(boost::ref(processMonitor));
-    
+
     MQTTInterface::instance()->activate();
 
     char buf[100];
@@ -386,7 +387,7 @@ int main (int argc, char const *argv[])
         //sim_io.send("ecat", 4);
         safeRecv(sim_io, buf, 10, false, response_len, 100);
         uint64_t now = microsecs();
-        
+
         int64_t delta = now - then;
         // use the clockwork interpreter's current cycle delay
         const Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
@@ -405,7 +406,7 @@ int main (int argc, char const *argv[])
                 sleep_time = remaining;
             }
         }
-         
+
         then = now;
     }
     try {
@@ -419,7 +420,7 @@ int main (int argc, char const *argv[])
         delete context;
     }
     catch (const zmq::error_t &) {
-        
+
     }
 	return 0;
 }
