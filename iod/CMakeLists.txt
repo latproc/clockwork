@@ -377,4 +377,4 @@ install(TARGETS cw iosh device_connector modbusd persistd RUNTIME DESTINATION ${
 
 install(TARGETS cw_client)
 install(TARGETS cw_interpreter)
-install(DIRECTORY src/ DESTINATION include/clockwork FILES_MATCHING PATTERN "*.h")
+#install(DIRECTORY src/ DESTINATION include/clockwork FILES_MATCHING PATTERN "*.h")
