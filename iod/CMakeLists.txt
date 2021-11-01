@@ -95,13 +95,17 @@ add_library (cw_client
 )
 
 include_directories("/usr/local/include")
+if (EXISTS "/opt/local/include")
 include_directories("/opt/local/include")
+endif()
 include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${CLOCKWORK_DIR}")
 
 LINK_DIRECTORIES("/usr/local/lib")
+if (EXISTS "/opt/local/lib")
 LINK_DIRECTORIES("/opt/local/lib")
+endif()
 
 #	src/iosh.cpp
 #	src/modbusd.cpp
@@ -375,6 +379,6 @@ endif()
 
 install(TARGETS cw iosh device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
-install(TARGETS cw_client)
-install(TARGETS cw_interpreter)
+install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
+install(TARGETS cw_interpreter ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
 #install(DIRECTORY src/ DESTINATION include/clockwork FILES_MATCHING PATTERN "*.h")
