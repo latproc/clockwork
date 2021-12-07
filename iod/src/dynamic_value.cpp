@@ -112,6 +112,14 @@ std::ostream &SumValue::operator<<(std::ostream &out ) const {
 }
 std::ostream &operator<<(std::ostream &out, const SumValue &val) { return val.operator<<(out); }
 
+DynamicValue *SerialiseValue::clone() const { return new SerialiseValue(*this); }
+std::ostream &SerialiseValue::operator<<(std::ostream &out ) const {
+	out << "CONCAT ";
+	if (!property.empty()) out << property << " FROM ";
+	return out << machine_list_name << " SEPARATED BY \"" << delim << "\" (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const SerialiseValue &val) { return val.operator<<(out); }
+
 DynamicValue *MinValue::clone() const { return new MinValue(*this); }
 std::ostream &MinValue::operator<<(std::ostream &out ) const {
 	return display_list_op(out, "MIN", property, machine_list_name, last_result);
@@ -515,6 +523,57 @@ const Value &SumValue::operator()() {
 		}
 	}
 	last_result = sum;
+	return last_result;
+}
+
+SerialiseValue::SerialiseValue(const SerialiseValue &other) {
+	property = other.property;
+	machine_list_name = other.machine_list_name;
+	delim = other.delim;
+	machine_list = 0;
+}
+
+const Value &SerialiseValue::operator()() {
+	MachineInstance *mi = scope;
+	machine_list = mi->lookup(machine_list_name);
+	if (!machine_list) {
+		char buf[400];
+		snprintf(buf, 400, "%s: no machine %s for concatenation %s",
+				 mi->getName().c_str(), machine_list_name.c_str(), property.c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+	if (machine_list->_type != "LIST") {
+		char buf[400];
+		snprintf(buf, 400, "%s: attempting to concatenate from a machine (%s) that is not a LIST",
+				 mi->getName().c_str(), machine_list->fullName().c_str());
+		MessageLog::instance()->add(buf);
+		last_result = 0;
+		return last_result;
+	}
+
+	last_process_time = currentTime();
+	if (machine_list->parameters.size() == 0) {
+		last_result = 0;
+		return last_result;
+	}
+
+	std::stringstream ss;
+	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		if (!property.empty() || machine_list->parameters[i].val.kind == Value::t_symbol) {
+			if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
+			if (!machine_list->parameters[i].machine) continue;
+
+			ss << machine_list->parameters[i].machine->getValue(property.empty() ? "VALUE" : property);
+		}
+		else {
+			ss << machine_list->parameters[i].val;
+		}
+		if (i < machine_list->parameters.size()-1) ss << delim;
+	}
+	last_result = ss.str();
+	last_result.toString();
 	return last_result;
 }
 

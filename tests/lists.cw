@@ -50,12 +50,12 @@ Controller MACHINE outputs {
   waiting WHEN outputs DISABLED;
   on WHEN ALL outputs ARE on AND outputs ENABLED;
   off DEFAULT;
-  
+
   COMMAND turnOn { SEND turnOn TO outputs }
   COMMAND turnOff { SEND turnOff TO outputs }
   COMMAND enable { ENABLE outputs; }
   COMMAND disable { DISABLE outputs; }
-  
+
 }
 controller Controller lights;
 
@@ -70,7 +70,7 @@ numbers LIST two,four,three,one;
 
 number_list LIST two,four,three,one;
 
-/* A sorting machine to sort its parameter into 
+/* A sorting machine to sort its parameter into
 	numeric order
 */
 Sorter MACHINE input {
@@ -118,7 +118,11 @@ DigitTest MACHINE list {
     done WHEN 5 == LAST OF list;
     nonempty WHEN SIZE OF list > 0;
     empty DEFAULT;
-    ENTER INIT { xx := LAST OF list; }
+    ENTER INIT {
+      xx := LAST OF list;
+      LOG SERIALISE list SEPARATED BY " ";
+      LOG list AS STRING;
+    }
     ENTER changed { sz := SIZE OF list; LOG "items in list: " + sz; }
     ENTER nonempty { val := TAKE LAST FROM list; LOG "Value popped: " + val; }
 }
