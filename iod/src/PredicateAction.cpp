@@ -103,6 +103,7 @@ Value eval(Predicate *p, MachineInstance *m){
             case opNegate: res = ~r; break;
 			case opInteger: res = r.trunc(); break;
 			case opFloat: res = r.toFloat(); break;
+			case opString: res = r.asString(); break;
 			case opAssign: res = r; break; // TBD
             case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
             case opAny:
@@ -120,7 +121,7 @@ Value eval(Predicate *p, MachineInstance *m){
 	    }
 		
 		if (m && m->debug()) {
-			if (p->op == opNOT || p->op == opInteger || p->op == opFloat) {
+			if (p->op == opNOT || p->op == opInteger || p->op == opFloat || p->op == opString) {
 				DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
 			}
 			else {

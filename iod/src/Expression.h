@@ -31,7 +31,7 @@ class MachineInstance;
 enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR, opNOT,
     opUnaryMinus, opPlus, opMinus, opTimes, opDivide, opMod, opAssign, opMatch,
     opBitAnd, opBitOr, opBitXOr, opNegate, opAny, opAll, opCount, opIncludes,
-    opInteger, opFloat, opAbsoluteValue
+    opInteger, opFloat, opAbsoluteValue, opString
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 

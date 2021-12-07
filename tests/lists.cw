@@ -81,8 +81,8 @@ sorter Sorter number_list;
 /* A test of what happens when a COPY is done an no values match */
 Copier MACHINE input, output {
 	OPTION VALUE 3;
-	COMMAND copy { 
-		CLEAR output; 
+	COMMAND copy {
+		CLEAR output;
 		COPY ALL FROM input TO output WHERE input.ITEM == VALUE;
 	}
 }
@@ -144,11 +144,11 @@ active LIST; # list of the flags that should activate
 
 COMMAND GetAvailableGrabs {
 	CLEAR reachable;
-   	COPY COMMON 
-		BETWEEN all_positions 
-		AND current_index_pos 
+   	COPY COMMON
+		BETWEEN all_positions
+		AND current_index_pos
 		TO reachable;
-   	COPY COMMON 
+   	COPY COMMON
 		BETWEEN actions
 		AND reachable
 		TO active
@@ -201,9 +201,9 @@ Logger MACHINE names {
 	working WHEN SIZE OF names > 0;
 	idle DEFAULT;
 
-	ENTER working { 
-		val := TAKE FIRST FROM names; 
-		LOG val; 
+	ENTER working {
+		val := TAKE FIRST FROM names;
+		LOG val;
 		SET SELF TO task_done;
 		IF ( val == "ted" ) { INCLUDE "mary" IN names; }
 	}
@@ -237,7 +237,7 @@ l LIST a,b,c;
 PopAndPushTest MACHINE list {
 	l2 LIST;
 
-	ENTER INIT { 
+	ENTER INIT {
 		s := ITEM 0 OF list;
 		PUSH s TO l2;
 		s := ITEM 1 OF list;
@@ -256,7 +256,7 @@ SelectAllTest MACHINE list {
 	temp LIST;
 	two LIST;
 	saved LIST;
-	COMMAND run { 
+	COMMAND run {
 		CLEAR temp;
 		CLEAR two;
 		COPY ALL FROM list TO temp WHERE list.ITEM IS on;
@@ -299,10 +299,10 @@ DependancyTest MACHINE items {
 	off DEFAULT;
 
 	COMMAND clear { CLEAR items; }
-	COMMAND setup { 
-		PUSH dept1 TO items; 
-		PUSH dept2 TO items; 
-		PUSH dept3 TO items; 
+	COMMAND setup {
+		PUSH dept1 TO items;
+		PUSH dept2 TO items;
+		PUSH dept3 TO items;
 	}
 }
 dependancy_test DependancyTest depts;
@@ -331,7 +331,7 @@ Other MACHINE a,b {
 
 CopyFromOther MACHINE other {
   local LIST;
-  
+
   ENTER INIT {
     WAIT 2000;
     COPY ALL FROM other.list TO local;
