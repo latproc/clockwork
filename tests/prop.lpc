@@ -4,14 +4,13 @@ g1 CONSTANT(tab:vars) 7;
 g2 CONSTANT(tab:vars) 9;
 s1 CONSTANT(tab:vars) "Hello";
 v1 VARIABLE(tab:vars) 13;
-v2 VARIABLE(tab:vars) 0;
-v3 VARIABLE(tab:vars) 0;
 
 Testbed MACHINE (tab:s1, x:3, y) p1(A:7) {
     GLOBAL g1, v1;
     OPTION z g1;
     OPTION tab tab; # dereferences machine property 'tab'
-    OPTION x "";
+    v2 VARIABLE(tab:vars) 0;
+    v3 VARIABLE(tab:vars) 0;
 
 	OPTION pname "p1";
 	OPTION p1 "up";
@@ -20,33 +19,16 @@ Testbed MACHINE (tab:s1, x:3, y) p1(A:7) {
 
 	up WHEN pvalue IS "up";
 	down WHEN pvalue IS "down";
-
+    
     ENTER INIT {
+		SET pvalue TO PROPERTY pname;
         v1 := 11;
         v2.VALUE := 12;
         v3 := 13;
         g1 := 1;
-        x := "VALUE";
-
-        pname := "v1";
-		SET pvalue TO PROPERTY pname; # set a value by looking up a value indirectly
-        LOG "pvalue set to " + pvalue + " (should be " + v1.VALUE + ")";
-
-        pname := "v2";
-		pvalue := PROPERTY pname OF SELF; # set a value by looking up a value indirectly
-        LOG "pvalue set to " + pvalue + " (should be " + v2.VALUE + ")";
-
-        v2 := PROPERTY x OF v3; # set a value by looking up a value indirectly
-        LOG "v2 set to " + v3;
-        PROPERTY x OF v3 := 17;
-        LOG "v3." + x + " set to " + PROPERTY x OF v3 + " (should be 17)";
-
-        x := "xxx"; # add a new property
-        PROPERTY x OF SELF := "hello " + x;
-        LOG "added new property " + x + ": " + xxx + " (should be 'hello xxx')";
     }
     a WHEN v1 == 11;
-
+    
 }
 
 f FLAG;

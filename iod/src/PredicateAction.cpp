@@ -25,7 +25,6 @@
 #include "regular_expressions.h"
 #include "value.h"
 #include "dynamic_value.h"
-#include "MessageLog.h"
 
 void breakpoint() {}
 
@@ -152,49 +151,33 @@ Action::Status PredicateAction::run() {
 	
 	DBG_M_PREDICATES << " processing expression: " << *predicate << "\n";
 	status = Running;
-	Value *dest = nullptr;
-	auto dest_type = predicate->left_p->entry.kind;
-	Value val;
-	if (predicate->right_p)
-		val = eval(predicate->right_p, owner);
-	else
-		val = owner->getValue(predicate->entry.sValue);
-	if (predicate->left_p && (dest_type == Value::t_symbol || dest_type == Value::t_dynamic)) {
-		std::string name;
-		if (dest_type == Value::t_symbol) {
-			name = predicate->left_p->entry.sValue;
-			dest = owner->getMutableValue(name.c_str());
-		}
-		else if (dest_type == Value::t_dynamic) {
-			PropertyLookupValue *lhs = dynamic_cast<PropertyLookupValue*>(predicate->left_p->entry.dynamicValue());
-			if (lhs) {
-				dest = lhs->getMutable(owner);
-				if (!dest) {
-					name = lhs->resolvedName(owner);
-				}
+	if (predicate->left_p && predicate->left_p->entry.kind == Value::t_symbol) {
+		std::string &name = predicate->left_p->entry.sValue;
+		Value val;
+		if (predicate->right_p)
+			val = eval(predicate->right_p, owner);
+		else
+			val = owner->getValue(predicate->entry.sValue);
+		if (owner->getStateMachine()->global_references.count(name)) {
+			MachineInstance *global_machine = owner->getStateMachine()->global_references[name];
+			if (!global_machine) {
+				std::cerr << owner->getName() << " Error, can't find machine for global " 
+					<< name << "\n" << std::flush;
+				abort();
+			}
+			else {
+				if (global_machine->_type != "CONSTANT") global_machine->setValue("VALUE", val);
 			}
 		}
-		if (!dest && !name.empty()) {
-			DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to "
-				<< val << " (type: " << val.kind << ")\n";
+		else {
+            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to " 
+							<< val << " (type: " << val.kind << ")\n";
 			owner->setValue(name, val);
-			status = Complete;
-			owner->stop(this);
-			return status;
-		}
-		if (dest) {
-			*dest = val;
-			status = Complete;
-			owner->stop(this);
-			return status;
 		}
 	}
-	if (predicate->left_p) {
-		std::stringstream ss;
-		ss << "invalid value type " << predicate->left_p->entry.kind << " for " << predicate->left_p->entry << "\n";
-		MessageLog::instance()->add(ss.str());
-	}
-	status = Failed;
+	else
+	  assert(false);
+	status = Complete;
 	owner->stop(this);
 	return status;
 }

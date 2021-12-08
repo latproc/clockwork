@@ -1030,9 +1030,6 @@ INTEGERVAL   {
 | FORMAT SYMBOL WITH STRINGVAL {
     $$ = new Value(new AsFormattedStringValue($2, $4));
 }
-| PROPERTY SYMBOL OF SYMBOL {
-    $$ = new Value(new PropertyLookupValue($4, $2));
-}
 
 command:
 enter_command
@@ -1370,10 +1367,6 @@ SET SYMBOL TO value error_clause  {
 | SYMBOL BECOMES expression /* set the value of a property */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
-}
-| PROPERTY SYMBOL OF SYMBOL BECOMES expression {
-    if (current_action) current_actions->push_back(current_action);
-    current_action = new PredicateActionTemplate(new Predicate(new Predicate(new Value(new PropertyLookupValue($4, $2))), opAssign, $6));
 }
 | SET SYMBOL TO PROPERTY SYMBOL OF SYMBOL error_clause /* set the state based on the value of a property */ {
     if (current_action) current_actions->push_back(current_action);
