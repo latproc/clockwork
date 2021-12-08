@@ -407,6 +407,24 @@ class EnabledValue : public DynamicValue {
     MachineInstance *machine;
 };
 
+class PropertyLookupValue : public DynamicValue {
+  public:
+    PropertyLookupValue(const char *machine, const char *property) : machine_name(machine), property_name(property), machine(0) { }
+    virtual ~PropertyLookupValue() { }
+    virtual const Value &operator()();
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    PropertyLookupValue(const PropertyLookupValue &);
+    Value *getMutable(MachineInstance *scope);
+    std::string resolvedName(MachineInstance *scope);
+
+  private:
+    PropertyLookupValue(const DynamicValue &);
+    std::string machine_name;
+    std::string property_name;
+    MachineInstance *machine = nullptr;
+};
+
 class DisabledValue : public DynamicValue {
   public:
     DisabledValue(const char *name) : machine_name(name), machine(0) { }
