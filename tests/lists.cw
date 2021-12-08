@@ -4,9 +4,9 @@
 
 /* check whether lists can turn members on and off */
 Flags LIST f1, f2, f3;
-f1 FLAG;
-f2 FLAG;
-f3 FLAG;
+f1 FLAG(name: "flag 1");
+f2 FLAG(name: "flag 2");
+f3 FLAG(name: "flag 3");
 
 TestListCommands MACHINE list {
 	COMMAND TurnOn { SEND turnOn TO list; }
@@ -120,14 +120,21 @@ DigitTest MACHINE list {
     empty DEFAULT;
     ENTER INIT {
       xx := LAST OF list;
-      LOG SERIALISE list SEPARATED BY " ";
-      LOG list AS STRING;
     }
     ENTER changed { sz := SIZE OF list; LOG "items in list: " + sz; }
     ENTER nonempty { val := TAKE LAST FROM list; LOG "Value popped: " + val; }
 }
 dt DigitTest digits;
 dt2 DigitTest numbers;
+
+
+SerialiseDemo MACHINE list_of_machines, list_of_numbers {
+  ENTER INIT {
+    LOG "Flag names: " + (SERIALISE name FROM list_of_machines SEPARATED BY ",");
+    LOG SERIALISE list_of_numbers SEPARATED BY " ";
+  }
+}
+serialise SerialiseDemo Flags, digits;
 
 /* Demonstration of set functions using LISTs */
 

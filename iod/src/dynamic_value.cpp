@@ -114,7 +114,7 @@ std::ostream &operator<<(std::ostream &out, const SumValue &val) { return val.op
 
 DynamicValue *SerialiseValue::clone() const { return new SerialiseValue(*this); }
 std::ostream &SerialiseValue::operator<<(std::ostream &out ) const {
-	out << "CONCAT ";
+	out << "SERIALISE ";
 	if (!property.empty()) out << property << " FROM ";
 	return out << machine_list_name << " SEPARATED BY \"" << delim << "\" (" << last_result << ")";
 }
@@ -561,15 +561,18 @@ const Value &SerialiseValue::operator()() {
 
 	std::stringstream ss;
 	for (unsigned int i=0; i<machine_list->parameters.size(); ++i) {
+		Value val;
 		if (!property.empty() || machine_list->parameters[i].val.kind == Value::t_symbol) {
 			if (!machine_list->parameters[i].machine) mi->lookup(machine_list->parameters[i]);
 			if (!machine_list->parameters[i].machine) continue;
 
-			ss << machine_list->parameters[i].machine->getValue(property.empty() ? "VALUE" : property);
+			val = machine_list->parameters[i].machine->getValue(property.empty() ? "VALUE" : property);
 		}
 		else {
-			ss << machine_list->parameters[i].val;
+			val = machine_list->parameters[i].val;
 		}
+		if (val.kind == Value::t_string) { val.toSymbol(); }
+		ss << val;
 		if (i < machine_list->parameters.size()-1) ss << delim;
 	}
 	last_result = ss.str();
