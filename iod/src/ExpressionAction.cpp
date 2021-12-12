@@ -47,16 +47,32 @@ static const Value &resolve(MachineInstance *scope, const Value &v) {
 	return target_v;
 }
 
+ExpressionAction::ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat)
+	: Action(mi), lhs(eat.lhs), rhs(eat.rhs), op(eat.op), extra(eat.extra) {
+		if (eat.expr) { expr = new Predicate(*eat.expr); }
+}
+
+
 Action::Status ExpressionAction::run() {
 	owner->start(this);
 	status = Running;
+	if (expr) {
+		owner->setValue(lhs.get(), expr->evaluate(owner));
+		status = Complete;
+		owner->setNeedsCheck();
+		owner->stop(this);
+		return status;
+	}
+
 	const Value &v = owner->getValue(lhs.get());
 	if (v != SymbolTable::Null) {
 		switch(op) {
 		case ExpressionActionTemplate::opInc:
 		case ExpressionActionTemplate::opDec:
-			if (v.kind != Value::t_integer || rhs.kind != Value::t_integer)
+			if (v.kind != Value::t_integer || rhs.kind != Value::t_integer) {
 				status = Failed;
+				error_str = "INC and DEC require an integer property";
+			}
 			else
 				owner->setValue(lhs.get(), v.iValue + rhs.iValue);
 			break;
@@ -76,6 +92,7 @@ Action::Status ExpressionAction::run() {
 								owner->getName().c_str(), lhs.get(), rhs.asString().c_str(), extra.asString().c_str());
 						MessageLog::instance()->add(buf);
 						DBG_MSG << buf << "\n";
+						error_str = strdup(buf);
 						status = Failed;
 						goto finished_run;
 					}

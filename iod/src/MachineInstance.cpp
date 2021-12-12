@@ -2669,7 +2669,6 @@ void MachineInstance::disable() {
 	const Value &val = properties.lookup("default");
 	if (val != SymbolTable::Null) {
 		if (val.kind == Value::t_integer) {
-			std::cout << "Initialising value for " << _name << " to " << val << "\n";
 			long i_val = 0;
 			if (val.asInteger(i_val)) {
 				setValue("VALUE", i_val);
@@ -3234,7 +3233,7 @@ const Value *MachineInstance::resolve(std::string property) {
 				++num_errors;
 			}
 		}
-		DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
+		DBG_M_PROPERTIES << getName() << " MachineInstance::resolve() looking up property " << property << "\n";
 		if ( (res = lookupState(property_val)) != &SymbolTable::Null ) {
 			return res;
 		}
@@ -3247,14 +3246,14 @@ const Value *MachineInstance::resolve(std::string property) {
 				if (state_machine) {
 					const Value *class_property = &state_machine->properties.lookup(property.c_str());
 					if (class_property == &SymbolTable::Null) {
-						DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+						DBG_M_PROPERTIES << "MachineInstance::resolve: no property " << property << " found in class, looking in globals\n";
 						if (globals.exists(property.c_str()))
 							return &globals.lookup(property.c_str());
 					}
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " (type: " << res->kind << ") " << res->asString() << "\n";
+				DBG_M_PROPERTIES << "3257 found property " << property << " (type: " << res->kind << ") " << res->asString() << "\n";
 				return res;
 			}
 		}
@@ -3279,10 +3278,6 @@ const Value *MachineInstance::resolve(std::string property) {
 			return &m->current_value_holder;
 		}
 	}
-	char buf[200];
-	snprintf(buf,200,"%s: no such property or machine: %s",fullName().c_str(), property.c_str());
-	MessageLog::instance()->add(buf);
-	NB_MSG << buf << "\n";
 	return &SymbolTable::Null;
 }
 
@@ -3383,7 +3378,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 				++num_errors;
 			}
 		}
-		DBG_M_PROPERTIES << getName() << " looking up property " << property << "\n";
+		DBG_M_PROPERTIES << getName() << " MachineInstance::getValue() looking up property " << property << "\n";
 		if (property_val.token_id == ClockworkToken::TIMER) {
 			// we do not use the precalculated timer here since this may be being accessed
 			// within an action handler of a nother machine and will not have been updated
@@ -3401,7 +3396,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 			if (x == SymbolTable::Null) {
 				if (state_machine) {
 					if (!state_machine->properties.exists(property.c_str())) {
-						DBG_M_PROPERTIES << "no property " << property << " found in class, looking in globals\n";
+						DBG_M_PROPERTIES << getName() << " MachineInstance::getValue no property " << property << " found in class, looking in globals\n";
 						if (globals.exists(property.c_str())) {
 							DBG_PROPERTIES << _name << " found global for " << property << "\n";
 							return globals.lookup(property.c_str());
@@ -3414,7 +3409,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " (type: " << x.kind << ") "<< x.asString() << "\n";
+				DBG_M_PROPERTIES << " found property " << property << " (type: " << x.kind << ") "<< x.asString() << "\n";
 				return x;
 			}
 		}
@@ -3527,7 +3522,12 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 				}
 			}
 			else {
-				DBG_M_PROPERTIES << "found property " << property << " (type: "
+				if (x.sValue == "off") {
+					int yy = 1;
+					int xx = 1 / (yy-1);
+				}
+
+				DBG_M_PROPERTIES << "3526 found property " << property << " (type: "
 						<< x.kind << ") " << x.asString() << "\n";
 				return &x;
 			}

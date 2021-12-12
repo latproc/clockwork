@@ -36,7 +36,10 @@ Action *SetStateActionTemplate::factory(MachineInstance *mi)
 }
 
 std::ostream &SetStateActionTemplate::operator<<(std::ostream &out) const {
-	return out << target.get() << " " << new_state;
+	if (expr)
+		return out << target.get() << " " << *expr;
+	else 
+		return out << target.get() << " " << new_state;
 }
 
 Action *MoveStateActionTemplate::factory(MachineInstance *mi)
@@ -45,7 +48,9 @@ Action *MoveStateActionTemplate::factory(MachineInstance *mi)
 }
 
 SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth)
-: Action(mi), target(t.target), saved_state(t.new_state), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) { }
+: Action(mi), target(t.target), saved_state(t.new_state), new_state(t.new_state), value(t.new_state.sValue.c_str()), machine(0), authority(auth) {
+	if (t.expression()) { expr = new Predicate(*t.expression()); }
+}
 
 Action::Status SetStateAction::executeStateChange(bool use_transitions)
 {
@@ -53,6 +58,19 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 	new_state = saved_state;
 	value = saved_state.sValue.c_str();
 	owner->start(this);
+
+	machine = owner->lookup(target.get());
+	if (expr) {
+		if (machine) {
+			new_state = expr->evaluate(owner);
+		}
+		else {
+			error_str = "need a machine target for set state";
+			status = Failed;
+			owner->stop(this);
+			return status;
+		}
+	}
 
 	if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
 		std::stringstream ss;
@@ -66,7 +84,6 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		return status; 
 	}
 
-	machine = owner->lookup(target.get());
 	if (machine) {
 		if (machine->getName() != target.get()) {
 			DBG_M_ACTIONS << owner->getName() << " lookup for " << target.get() << " returned " << machine->getName() << "\n"; 
@@ -74,8 +91,8 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions)
 		// the new 'state' may be a symbol that provides the state, it may even be the name of a
 		// VARIABLE or CONSTANT that contains the name. If we have a state that coincides with
 		// new_state, we ignore such subtleties.
+		value = new_state.sValue.c_str();
 		if (!machine->hasState(new_state.sValue)) {
-			value = new_state.sValue.c_str();
 			const Value &deref = owner->getValue(new_state.sValue.c_str());
 			if (deref != SymbolTable::Null) {
 				DBG_M_ACTIONS << *this << " dereferenced " << new_state << " to " << deref << "\n";
@@ -339,7 +356,14 @@ Action::Status SetStateAction::checkComplete() {
 	// NOTE:  this may never finish
 }
 std::ostream &SetStateAction::operator<<(std::ostream &out) const {
-	return out << "SetStateAction " << target.get() << " to " << value;
+	out << "SetStateAction " << target.get() << " to ";
+	if (expr) {
+		out << *expr;
+	}
+	else {
+		out << new_state;
+	}
+	return out;
 }
 
 Action::Status MoveStateAction::run()

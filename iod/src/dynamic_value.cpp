@@ -458,7 +458,6 @@ Value &FindValue::operator()(MachineInstance *scope) {
 		machine_list->locals[idx].real_name = a.sValue;
 
 		if (condition.predicate) {
-			//std::cout << "flushing predicate cache\n";
 			condition.predicate->flushCache();
 			machine_list->localised_names["ITEM"] = mi;
 		}
@@ -1080,6 +1079,7 @@ const Value &PropertyLookupValue::operator()() {
         last_result = false; return last_result;
     }
     last_result = machine->getValue(prop.asString());
+	if (last_result.isNull()) last_result = prop; // machine couldn't resolve the property symbol; return the symbol
     return last_result;
 }
 Value *PropertyLookupValue::getMutable(MachineInstance *current_scope) {

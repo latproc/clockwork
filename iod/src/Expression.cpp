@@ -697,7 +697,11 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
       }
       #if 1
       else {
-        return m->resolve(v->sValue);
+        p->cached_entry = m->resolve(v->sValue);
+        if (p->cached_entry->isNull()) {
+          p->cached_entry = v;
+        }
+        return p->cached_entry;
       }
       #else
       else if ((prop = &m->properties.lookup(v->sValue.c_str()))) {
@@ -950,18 +954,15 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
     if (!prep(stack, p->right_p, m, false, reevaluate)) {
       return false;
     }
-    //std::cout << " pushing operator " << p->op << "\n";
     stack.push(p->op);
   }
   else {
     const Value *result = resolve(p, m, left, reevaluate);
-    //std::cout << "prep: resolved " << *result << "\n";
     if (*result == SymbolTable::Null) {
-      return false; //result = &p->entry;
+      result = &p->entry;
     }
     p->last_calculation = result;
     p->cached_entry = result;
-    //std::cout << "pushing result: " << *result << "\n";
     if (p->dyn_value) {
       stack.push(ExprNode(result, p->dyn_value));
     }

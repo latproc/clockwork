@@ -25,6 +25,10 @@
 #include "Expression.h"
 #include "Action.h"
 #include "symboltable.h"
+#include "Expression.h"
+
+class MachineInstance;
+class Action;
 
 struct ExpressionActionTemplate : public ActionTemplate {
 	enum opType { opInc, opDec, opSet };
@@ -43,6 +47,8 @@ struct ExpressionActionTemplate : public ActionTemplate {
 	ExpressionActionTemplate(CStringHolder var, opType oper, const char *a) : lhs(var), rhs(a), op(oper) { 
 		assert(op == opSet);
 	}
+	ExpressionActionTemplate(CStringHolder var, Predicate *predicate) : lhs(var), op(opSet), expr(predicate) {	}
+
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
 		switch(op) {
@@ -55,11 +61,12 @@ struct ExpressionActionTemplate : public ActionTemplate {
 	CStringHolder lhs;
 	Value rhs;
 	opType op;
-  Value extra;
+	Value extra;
+	Predicate *expr;
 };
 
 struct ExpressionAction : public Action {
-	ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat) : Action(mi), lhs(eat.lhs), rhs(eat.rhs), op(eat.op), extra(eat.extra) { }
+	ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat);
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
@@ -67,7 +74,8 @@ struct ExpressionAction : public Action {
 	Value rhs;
 	ExpressionActionTemplate::opType op;
 	Value extra;
-	MachineInstance *machine;
+	Predicate *expr = nullptr;
+	MachineInstance *machine = nullptr;
 };
 
 #endif

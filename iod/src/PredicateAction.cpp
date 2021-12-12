@@ -43,7 +43,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
 	p->clearError();
 	if (v.kind == Value::t_symbol) {
 		if (v.sValue == "TIMER") {
-      v = *m->getTimerVal();
+			v = *m->getTimerVal();
 		}
 		else {
 			Value prop = m->getValue(v.sValue); // property lookup
@@ -154,19 +154,29 @@ Action::Status PredicateAction::run() {
 	if (predicate->left_p && predicate->left_p->entry.kind == Value::t_symbol) {
 		std::string &name = predicate->left_p->entry.sValue;
 		Value val;
-		if (predicate->right_p)
+		if (predicate->right_p) {
 			val = eval(predicate->right_p, owner);
-		else
-			val = owner->getValue(predicate->entry.sValue);
+		}
+		else {
+			val = owner->getValue(predicate->entry);
+		}
 		if (owner->getStateMachine()->global_references.count(name)) {
 			MachineInstance *global_machine = owner->getStateMachine()->global_references[name];
 			if (!global_machine) {
-				std::cerr << owner->getName() << " Error, can't find machine for global " 
+				std::stringstream ss;
+				ss << owner->getName() << " Error, can't find machine for global " 
 					<< name << "\n" << std::flush;
+				MessageLog::instance()->add(ss.str().c_str());
 				abort();
 			}
+			else if (global_machine->_type == "CONSTANT") {
+				error_str = "cannot change the value of a constant";
+			}
 			else {
-				if (global_machine->_type != "CONSTANT") global_machine->setValue("VALUE", val);
+				global_machine->setValue("VALUE", val);
+				status = Complete;
+				owner->stop(this);
+				return status;
 			}
 		}
 		else {
@@ -203,6 +213,7 @@ Action::Status PredicateAction::run() {
 	}
 
 	status = Failed;
+	std::cout << "predicate action failed: " << error_str.get() << " executing " << *this << "\n";
 	owner->stop(this);
 	return status;
 }
@@ -212,6 +223,6 @@ Action::Status PredicateAction::checkComplete() {
 }
 
 std::ostream &PredicateAction::operator<<(std::ostream &out) const {
-	out << "Assignment " << predicate->left_p->entry << " := " << *(predicate->right_p);
+	out << predicate->left_p->entry << " := " << *(predicate->right_p);
 	return out;
 }

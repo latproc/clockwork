@@ -32,12 +32,15 @@ class MachineInstance;
 
 struct SetStateActionTemplate : public ActionTemplate {
     SetStateActionTemplate(CStringHolder targ, Value newstate) : target(targ), new_state(newstate) { }
+    SetStateActionTemplate(CStringHolder targ, Predicate *expr) : target(targ), expr(expr) { }
     virtual Action *factory(MachineInstance *mi);
 		std::ostream &operator<<(std::ostream &out) const;
+    const Predicate *expression() { return expr; }
     CStringHolder target;
     Value new_state;
     std::string trigger_event;
 private:
+    Predicate *expr = nullptr;
 	Condition condition;
 };
 
@@ -56,6 +59,7 @@ struct SetStateAction : public Action {
     State value;
     MachineInstance *machine;
 private:
+    Predicate *expr = nullptr;
 	Condition condition;
 protected:
 	uint64_t authority;

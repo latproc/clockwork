@@ -1033,6 +1033,9 @@ INTEGERVAL   {
 | PROPERTY SYMBOL OF SYMBOL {
     $$ = new Value(new PropertyLookupValue($4, $2));
 }
+| PROPERTY SYMBOL {
+    $$ = new Value(new PropertyLookupValue("SELF", $2));
+}
 
 command:
 enter_command
@@ -1269,12 +1272,11 @@ action  {
 ;
 
 action:
-SET SYMBOL TO value error_clause  {
+SET SYMBOL TO expression error_clause  {
     DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetStateActionTemplate($2, *$4);
-    delete $4;
-	free(error_message_name); error_message_name = 0;
+    current_action = new SetStateActionTemplate($2, $4);
+	cleanupErrorClause(true);
 }
 | ABORT {
 	DBG_PARSER << " abort action\n";
@@ -1375,16 +1377,6 @@ SET SYMBOL TO value error_clause  {
 | PROPERTY SYMBOL OF SYMBOL BECOMES expression {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate(new Value(new PropertyLookupValue($4, $2))), opAssign, $6));
-}
-| SET SYMBOL TO PROPERTY SYMBOL OF SYMBOL error_clause /* set the state based on the value of a property */ {
-    if (current_action) current_actions->push_back(current_action);
-    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
-	cleanupErrorClause(true);
-}
-| SET SYMBOL TO PROPERTY SYMBOL error_clause /* set the state based on the value of a property */ {
-    if (current_action) current_actions->push_back(current_action);
-    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5);
-	cleanupErrorClause(true);
 }
 | CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
