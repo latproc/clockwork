@@ -60,23 +60,23 @@ struct WaitAction : public Action {
 };
 
 struct WaitForActionTemplate : public ActionTemplate {
-    WaitForActionTemplate(CStringHolder targ, State value) : target(targ), state(value) { }
+    WaitForActionTemplate(CStringHolder targ, Value value);
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
-        return out << target.get() << " to be " << state.getName();
+        return out << target.get() << " to be " << value;
     }
     CStringHolder target;
-    State state;
+    Value value;
 };
 
 struct WaitForAction : public Action {
     WaitForAction(MachineInstance *mi, WaitForActionTemplate &wat) 
-    : Action(mi), target(wat.target), state(wat.state) {}
+    : Action(mi), target(wat.target), value(wat.value) {}
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
     CStringHolder target;
-    State state;
+    Value value;
     MachineInstance *machine;
 };
 

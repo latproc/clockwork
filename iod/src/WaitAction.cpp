@@ -125,32 +125,49 @@ std::ostream &WaitAction::operator<<(std::ostream &out) const {
 		return out << "WAIT " << wait_time;
 }
 
+WaitForActionTemplate::WaitForActionTemplate(CStringHolder targ, Value value) : target(targ), value(value) {
+	std::cout << "Waitfor temlplate: " << *this << "\n";
+}
 
 Action::Status WaitForAction::run() {
 	owner->start(this);
     machine = owner->lookup(target.get());
-    if (!machine) {
-        //DBG_M_ACTIONS << "failed to find machine " << target.get() << "\n";
-		status = Failed;
-		owner->stop(this);
-        return status;
-    }
 	status = Running;
 	return checkComplete();
 }
 
 Action::Status WaitForAction::checkComplete() {
     if (status == Complete || status == Failed) return status;
-	if ( machine->getCurrent().getName() == state.getName()) {
-		status = Complete;
+	if (machine && value.kind == Value::t_symbol) {
+		if ( machine->getCurrent().getName() == value.asString()) {
+			status = Complete;
+			owner->stop(this);
+		}
+		else
+			status = Running;
+	}
+	else if (!machine) {
+		const Value & val = owner->getValue(target.get());
+		const Value & test = value.kind == Value::t_symbol ? owner->getValue(value) : value;
+		if (val == test) {
+			status = Complete;
+			owner->stop(this);
+		}
+		else {
+			status = Running;
+		}
+	}
+	else {
+		std::stringstream ss;
+		ss << owner->getName() << " unexpected parameters in " << *this;
+		error_str = strdup(ss.str().c_str());
+		status = Failed;
 		owner->stop(this);
 	}
-	else
-		status = Running;
     return status;
 }
 
 std::ostream &WaitForAction::operator<<(std::ostream &out) const {
-    return out << "WaitForAction " << target << " IS " << state.getName();
+    return out << "WaitForAction " << target << " IS " << value;
 }
 

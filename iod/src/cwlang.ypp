@@ -1348,10 +1348,11 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ShutdownActionTemplate();
 }
-| WAITFOR SYMBOL EQ SYMBOL /* wait for object to be in a state */ {
-    DBG_PARSER << " wait for action: wait for " << $2 << " to be " << $4 << "\n";
+| WAITFOR SYMBOL EQ basic_value /* wait for object to be in a state */ {
+    DBG_PARSER << " wait for action: wait for " << $2 << " to be " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new WaitForActionTemplate($2, $4);
+    current_action = new WaitForActionTemplate($2, *$4);
+    delete $4;
 }
 | INC SYMBOL /* increment a property */ {
     if (current_action) current_actions->push_back(current_action);
