@@ -277,7 +277,6 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(PredicateTimerDetails *ear
       && left_p->entry.kind == Value::t_symbol
       && left_p->entry.token_id == ClockworkToken::TIMER
       && right_p) {
-    //std::cout << "checking timers on " << right_p->entry << " " << left_p->entry << "\n";
     Value rhs = evaluator.evaluate(right_p, target);
     if (rhs.asInteger(scheduled_time)) {
       current_time = target->getTimerVal()->iValue;
@@ -797,14 +796,6 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
   }
   Value lhs, rhs;
   ExprNode b(eval_stack(m, stack_iter));
-  #if 0
-  if (b.node) {
-    std::cout << " eval stack (b): " << *b.node << "\n";
-  }
-  else {
-    std::cout << " evaluated b: null\n";
-  }
-  #endif
   assert(b.kind != ExprNode::t_op);
   if (b.val && b.val->kind == Value::t_dynamic) {
     rhs = b.val->dynamicValue()->operator()(m);
@@ -819,14 +810,6 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     rhs = *b.val;
   }
   ExprNode a(eval_stack(m, stack_iter));
-  #if 0
-  if (a.node) {
-    std::cout << " eval stack (a): " << *a.node << "\n";
-  }
-  else {
-    std::cout << " evaluated a: null\n";
-  }
-  #endif
   assert(a.kind != ExprNode::t_op);
   if (a.val && a.val->kind == Value::t_dynamic) {
     lhs = a.val->dynamicValue()->operator()(m);
@@ -946,26 +929,20 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
 
   if (p->left_p) {
     // binary operator: push left, right and op
-    //std::cout << " resolving left tree\n";
     if (!prep(stack, p->left_p, m, true, reevaluate)) {
       return false;
     }
 
-    //std::cout << " resolving right tree\n";
     if (!prep(stack, p->right_p, m, false, reevaluate)) {
       return false;
     }
-    //std::cout << " pushing operator " << p->op << "\n";
     stack.push(p->op);
   }
   else if (p->op == opNOT) {
-    //std::cout << " pushing 'true'\n";
     stack.push(ExprNode(SymbolTable::True));
-    //std::cout << " resolving right tree\n";
     if (!prep(stack, p->right_p, m, false, reevaluate)) {
       return false;
     }
-    //std::cout << " pushing operator " << p->op << "\n";
     stack.push(p->op);
   }
   else if (p->op == opInteger || p->op == opFloat || p->op == opString) {

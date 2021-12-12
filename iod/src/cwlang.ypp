@@ -1455,10 +1455,12 @@ SET SYMBOL TO value error_clause  {
 | ADD SYMBOL AFTER ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($7, $2, *$5, false);
+    delete $5;
 }
 | ADD SYMBOL BEFORE ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($7, $2, *$5, true);
+    delete $5;
 }
 
 | ADD ITEMS FROM SYMBOL AFTER LAST OF SYMBOL {
@@ -1472,10 +1474,12 @@ SET SYMBOL TO value error_clause  {
 | ADD ITEMS FROM SYMBOL AFTER ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($9, $4, *$7, false, true);
+    delete $7;
 }
 | ADD ITEMS FROM SYMBOL BEFORE ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($9, $4, *$7, true, true);
+    delete $7;
 }
 
 | INCLUDE SYMBOL IN SYMBOL {
