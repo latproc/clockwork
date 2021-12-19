@@ -163,6 +163,13 @@ last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true),
   }
 }
 
+Predicate::Predicate(const Value &v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
+last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
+  if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") {
+    priority = 1;
+  }
+}
+
 Predicate::Predicate(const char *s) : left_p(0), op(opNone), right_p(0), entry(s), mi(0), dyn_value(0), cached_entry(0),
 last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true), last_evaluation_time(0) {
   if (entry.kind == Value::t_symbol && entry.sValue == "DEFAULT") {
@@ -170,6 +177,8 @@ last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true),
   }
 }
 Predicate::Predicate(int v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
+last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {}
+Predicate::Predicate(bool v) : left_p(0), op(opNone), right_p(0), entry(v), mi(0), dyn_value(0), cached_entry(0),
 last_calculation(0), priority(0), lookup_error(false), needs_reevaluation(true) {}
 
 Predicate::Predicate(Predicate *l, PredicateOperator o, Predicate *r) : left_p(l), op(o), right_p(r),

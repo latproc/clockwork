@@ -91,10 +91,12 @@ class Predicate {
     void clearError() { lookup_error = false; }
     void setErrorString(const std::string &err) { error_str = err; lookup_error = true; }
 
-    Predicate(Value *v);
+    explicit Predicate(Value *v);
     Predicate(Value &v);
-    Predicate(const char *s);
-    Predicate(int v);
+    Predicate(const Value &v);
+    explicit Predicate(const char *s);
+    explicit Predicate(int v);
+    explicit Predicate(bool v);
 
     Predicate(Predicate *l, PredicateOperator o, Predicate *r);
     ~Predicate();
