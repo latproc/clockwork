@@ -876,8 +876,11 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
       return ~ rhs;
     case opBitXOr:
       return lhs ^ rhs;
-    case opInteger:
-      return rhs.trunc();
+    case opInteger:{
+				long val;
+				if (rhs.asInteger(val)) { return val; }
+				return Value(0);
+			}
     case opFloat:
       return rhs.toFloat();
     case opString:

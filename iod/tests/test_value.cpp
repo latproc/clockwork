@@ -7,8 +7,8 @@ namespace {
 	class ValueTest : public ::testing::Test {
 		protected:
 
-    const int X_VALUE = 413;
-    const int Y_VALUE = 101;
+	const int X_VALUE = 413;
+	const int Y_VALUE = 101;
 
 		void SetUp() override {
 			x = X_VALUE;
@@ -24,6 +24,10 @@ namespace {
 		EXPECT_TRUE(val == true) << "Value is true when assigned a true";
 		val = false;
 		EXPECT_TRUE(val == false) << "Value is false when assigned a false";
+		val = "FALSE";
+		EXPECT_EQ(val.kind, Value::t_bool) << "symbol FALSE evaluates as a bool";
+		val = "TRUE";
+		EXPECT_EQ(val.kind, Value::t_bool) << "symbol TRUE evaluates as a bool";
 	}
 
 	TEST(Value, SymbolTableNullIsNull) {

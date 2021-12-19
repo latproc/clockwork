@@ -102,7 +102,11 @@ Value eval(Predicate *p, MachineInstance *m){
             case opBitOr: res = l | r; break;
             case opBitXOr: res = l ^ r; break;
             case opNegate: res = ~r; break;
-			case opInteger: res = r.trunc(); break;
+			case opInteger: {
+				long val;
+				if (r.asInteger(val)) { res = val; }
+				break;
+			}
 			case opFloat: res = r.toFloat(); break;
 			case opString: res = r.asString(); break;
 			case opAssign: res = r; break; // TBD
