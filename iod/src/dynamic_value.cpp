@@ -1007,6 +1007,12 @@ const Value &BitsetValue::operator()() {
                 val += 1;
             }
         }
+		else {
+			bool x;
+			if (machine_list->parameters[i].val.asBoolean(x)) {
+				val += x ? 1 : 0;
+			}
+		}
     }
     last_result = val;
     return last_result;

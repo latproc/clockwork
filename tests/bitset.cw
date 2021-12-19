@@ -10,6 +10,7 @@ l1 LIST f1,f2;
 x1 FLAG;
 x2 FLAG;
 l2 LIST x1,x2;
+l3 LIST 1, 1, 0, 1;
 
 BitsetTest MACHINE a,b{
     both WHEN BITSET FROM a == 3 && BITSET FROM a == BITSET FROM b;
@@ -36,6 +37,8 @@ BTTestScript MACHINE test {
         WAITFOR test IS both;
         SET f1 TO off; SET f2 TO off; SET x1 TO off; SET x2 TO off;
         WAITFOR test IS none;
+        x := BITSET FROM l3;
+        WAITFOR x == 13;
         SET SELF TO ok;
     }
 }
