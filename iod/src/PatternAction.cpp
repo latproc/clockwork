@@ -25,7 +25,7 @@
 #include "regular_expressions.h"
 
 Action *CopyPatternActionTemplate::factory(MachineInstance *mi) {
-    return new CopyPatternAction(mi, *this);
+	return new CopyPatternAction(mi, *this);
 }
 
 Action::Status CopyPatternAction::run() {
@@ -33,20 +33,20 @@ Action::Status CopyPatternAction::run() {
 
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
-    Value val;
-    val = owner->getValue(property);
-    std::vector<std::string>matches;
-    rexp_info *info = create_pattern(pattern.c_str());
-    find_matches(info, matches, val.asString().c_str());
-    if (matches.size()) {
+	Value val;
+	val = owner->getValue(property);
+	std::vector<std::string>matches;
+	rexp_info *info = create_pattern(pattern.c_str());
+	find_matches(info, matches, val.asString().c_str());
+	if (matches.size()) {
 		if (matches.size() > 1) {
 			owner->setValue(dest, Value(matches[1], Value::t_string));
 		}
 		else {
 			owner->setValue(dest, Value(matches[0], Value::t_string));
 		}
-    }
-    release_pattern(info);
+	}
+	release_pattern(info);
 	status = Complete;
 	owner->stop(this);
 	return status;
@@ -63,13 +63,13 @@ std::ostream &CopyPatternAction::operator<<(std::ostream &out) const {
 
 
 Action *CopyAllPatternActionTemplate::factory(MachineInstance *mi) {
-    return new CopyAllPatternAction(mi, *this);
+	return new CopyAllPatternAction(mi, *this);
 }
 
 static int matched(const char *match, int index, void *user_data) {
-    std::vector<std::string> *matches = static_cast<std::vector<std::string> *>(user_data);
-    if (index == 0) matches->push_back(match);
-    return 0;
+	std::vector<std::string> *matches = static_cast<std::vector<std::string> *>(user_data);
+	if (index == 0) matches->push_back(match);
+	return 0;
 }
 
 Action::Status CopyAllPatternAction::run() {
@@ -77,18 +77,18 @@ Action::Status CopyAllPatternAction::run() {
 
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
-    Value val;
-    val = owner->getValue(property);
-    std::vector<std::string>matches;
-    rexp_info *info = create_pattern(pattern.c_str());
-    each_match(info, val.asString().c_str(), 0, matched, &matches);
-    if (matches.size()) {
-        std::string res;
-        for (unsigned int i=0; i<matches.size(); ++i)
-            res += matches[i];
-      owner->setValue(dest, Value(res, Value::t_string));
-    }
-    release_pattern(info);
+	Value val;
+	val = owner->getValue(property);
+	std::vector<std::string>matches;
+	rexp_info *info = create_pattern(pattern.c_str());
+	each_match(info, val.asString().c_str(), 0, matched, &matches);
+	if (matches.size()) {
+		std::string res;
+		for (unsigned int i=0; i<matches.size(); ++i)
+			res += matches[i];
+	  owner->setValue(dest, Value(res, Value::t_string));
+	}
+	release_pattern(info);
 	status = Complete;
 	owner->stop(this);
 	return status;
@@ -107,7 +107,7 @@ std::ostream &CopyAllPatternAction::operator<<(std::ostream &out) const {
 
 
 Action *ExtractPatternActionTemplate::factory(MachineInstance *mi) {
-    return new ExtractPatternAction(mi, *this);
+	return new ExtractPatternAction(mi, *this);
 }
 
 Action::Status ExtractPatternAction::run() {
@@ -115,6 +115,22 @@ Action::Status ExtractPatternAction::run() {
 
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
+	Value val;
+	val = owner->getValue(property);
+	std::vector<std::string>matches;
+	rexp_info *info = create_pattern(pattern.c_str());
+	char *result = substitute_pattern(info, matches, val.asString().c_str(), "");
+	if (matches.size()) {
+		if (matches.size() > 1) {
+			owner->setValue(dest, Value(matches[1], Value::t_string));
+		}
+		else {
+			owner->setValue(dest, Value(matches[0], Value::t_string));
+		}
+	}
+	owner->setValue(property, Value(result, Value::t_string));
+	free(result);
+	release_pattern(info);
 	status = Complete;
 	owner->stop(this);
 	return status;
@@ -131,7 +147,7 @@ std::ostream &ExtractPatternAction::operator<<(std::ostream &out) const {
 
 
 Action *ExtractAllPatternActionTemplate::factory(MachineInstance *mi) {
-    return new ExtractAllPatternAction(mi, *this);
+	return new ExtractAllPatternAction(mi, *this);
 }
 
 Action::Status ExtractAllPatternAction::run() {
@@ -157,7 +173,7 @@ std::ostream &ExtractAllPatternAction::operator<<(std::ostream &out) const {
 
 
 Action *ReplacePatternActionTemplate::factory(MachineInstance *mi) {
-    return new ReplacePatternAction(mi, *this);
+	return new ReplacePatternAction(mi, *this);
 }
 
 Action::Status ReplacePatternAction::run() {
@@ -181,7 +197,7 @@ std::ostream &ReplacePatternAction::operator<<(std::ostream &out) const {
 
 
 Action *ReplaceAllPatternActionTemplate::factory(MachineInstance *mi) {
-    return new ReplaceAllPatternAction(mi, *this);
+	return new ReplaceAllPatternAction(mi, *this);
 }
 
 Action::Status ReplaceAllPatternAction::run() {
