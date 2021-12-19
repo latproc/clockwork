@@ -84,8 +84,24 @@ Value::Value(double v) : kind(t_float),
 
 Value::Value(const char *str, Kind k)
 		: kind(k), sValue(str), cached_machine(0),cached_value(0), token_id(0), dyn_value(0) {
-      if (kind == t_symbol && *str != 0) {
-        token_id = Tokeniser::instance()->getTokenId(str);
+      if (kind == t_symbol && !sValue.empty()) {
+		if (sValue == "FALSE") {
+			sValue = "";
+			kind = t_bool;
+			bValue = false;
+		}
+		else if (sValue == "TRUE") {
+			sValue = "";
+			kind = t_bool;
+			bValue = true;
+		}
+		else if (sValue == "NULL") {
+			kind = t_empty;
+			sValue = "";
+		}
+		else {
+	        token_id = Tokeniser::instance()->getTokenId(str);
+		}
       }
 }
 
