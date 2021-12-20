@@ -1,0 +1,39 @@
+These examples are a bit of a test to see how hard it is to use
+clockwork for everyday problems. The 'everyday' problems come from
+the 2021 Advent of code (https://adventofcode.com).
+
+The data files for the examples aren't included here because they
+aren't my work. Please have a look through the adventofcode site if
+you want to try these.
+
+Solving these with clockwork isn't trivial. The examples here
+are fairly advanced use of the tools and not for the feint hearted.
+
+At the time of writing, clockwork doesn't have the FILESTREAM or READER 
+machines so reading data is done by directing it into netcat; on macos:
+
+    nc -l 10001 -k <input.txt
+
+this data is read by the device connector, running in another terminal:
+
+    ./device_connector --host localhost --port 10001\
+           --pattern '.*' --name data --queue queue \
+            --client -- channel DeviceConnector --no_timeout_disconnect
+
+clockwork itelf can run the examples here using something like:
+
+    ../../iod/cw ../stdchannels.cw ./puzzle1.cw
+
+It's handy (and fun) to have the sampler (see https://github.com/latproc/scope)
+running in another window to watch the internals and
+observe how the calculations work.
+
+Some of the examples output a result in a LOG message but some need you
+to connect using iosh (../../iod/iosh) and SEND analyzer.calculate or
+similar to see the result.
+
+Enjoy.
+
+Martin Dec 2021.
+
+
