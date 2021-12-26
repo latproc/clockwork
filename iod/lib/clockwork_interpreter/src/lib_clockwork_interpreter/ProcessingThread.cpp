@@ -891,7 +891,7 @@ void ProcessingThread::operator()()
 	#endif
 					std::set<MachineInstance *> to_process;
 					{
-						boost::mutex::scoped_lock(runnable_mutex);
+						boost::recursive_mutex::scoped_lock lock(runnable_mutex);
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
@@ -922,7 +922,7 @@ void ProcessingThread::operator()()
 				if (processing_state == eStableStates)
 				{
 					std::set<MachineInstance *> to_process;
-					{	boost::mutex::scoped_lock(runnable_mutex);
+					{	boost::recursive_mutex::scoped_lock lock(runnable_mutex);
 						std::set<MachineInstance *>::iterator iter = runnable.begin();
 						while (iter != runnable.end()) {
 							MachineInstance *mi = *iter;
