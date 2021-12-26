@@ -1,8 +1,9 @@
 cmake_policy(SET CMP0048 NEW)
 project(Clockwork)
 
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 2.8.12)
 cmake_policy(SET CMP0048 NEW)
+cmake_policy(SET CMP0057 NEW)
 project(latproc VERSION 0.9.6 LANGUAGES CXX C)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.cmake")
