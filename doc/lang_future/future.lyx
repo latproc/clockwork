@@ -1,5 +1,5 @@
-#LyX 2.2 created this file. For more info see http://www.lyx.org/
-\lyxformat 508
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
 \begin_document
 \begin_header
 \save_transient_properties true
@@ -21,14 +21,28 @@
 \font_osf false
 \font_sf_scale 100 100
 \font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
 \graphics default
 \default_output_format default
 \output_sync 0
 \bibtex_command default
 \index_command default
-\paperfontsize default
+\paperfontsize 12
 \spacing single
-\use_hyperref false
+\use_hyperref true
+\pdf_title "Clockwork Futures"
+\pdf_author "Martin Leadbeater"
+\pdf_subject "Discussion of current and possible features"
+\pdf_bookmarks true
+\pdf_bookmarksnumbered false
+\pdf_bookmarksopen false
+\pdf_bookmarksopenlevel 1
+\pdf_breaklinks false
+\pdf_pdfborder false
+\pdf_colorlinks false
+\pdf_backref false
+\pdf_pdfusetitle true
 \papersize a4paper
 \use_geometry true
 \use_package amsmath 1
@@ -50,13 +64,14 @@
 \suppress_date false
 \justification true
 \use_refstyle 1
+\use_minted 0
 \index Index
 \shortcut idx
 \color #008000
 \end_index
-\leftmargin 1cm
-\topmargin 1cm
-\rightmargin 1cm
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
 \bottommargin 2cm
 \headheight 1cm
 \headsep 1cm
@@ -65,7 +80,10 @@
 \tocdepth 3
 \paragraph_separation indent
 \paragraph_indentation default
-\quotes_language english
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
 \papercolumns 1
 \papersides 1
 \paperpagestyle default
@@ -469,12 +487,18 @@ Properties of a machine can be declared using the OPTION keyword:
  ]_
 \end_layout
 
-\begin_layout Standard
-the word 'PROPERTY' can be used as an alternative to 'OPTION'
+\begin_layout Itemize
+The word 'PROPERTY' can be used as an alternative to 'OPTION'
 \end_layout
 
-\begin_layout Standard
+\begin_layout Itemize
 If a value is not given to a property, a value must be provided at instantiation
+\end_layout
+
+\begin_layout Itemize
+The value of a property can be an expression; this value is evaluated when
+ the machine is enabled, prior to executing the actions in the ENTER method
+ for the initial state.
 \end_layout
 
 \begin_layout Subsubsection
@@ -1070,8 +1094,8 @@ test
 \end_layout
 
 \begin_layout LyX-Code
-OPTION c REFER TO a.b; ## the when update is used the target machine will
- read its c value from its local/param a.b
+OPTION c REFER TO a.b; # when used the target machine will read its c value
+ from its local/param a.b
 \end_layout
 
 \end_deeper
@@ -1778,6 +1802,49 @@ When a machine is bound to a reference, the fields in the referenced item
  an unassigned reference?
 \end_layout
 
+\begin_layout Standard
+Perhaps some syntactic sugar might make it simlper to access the referenced
+ item.
+ Conceivably an arrow operator could be used, for example or *ref might
+ refer to ref.ITEM.
+ One of the problems is that expressions refer to items but doing so is
+ invalid when the reference is not assigned.
+ Perhaps a simple way to deal with that is to have any predicate that has
+ tests that need the referenced item simply return false.
+ In the case of stable state tests, these tests would effectively be skipped
+ if the item doesn't have a reference.
+\end_layout
+
+\begin_layout LyX-Code
+Sample MACHINE {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+current REFERENCE;
+\end_layout
+
+\begin_layout LyX-Code
+detected WHEN current.ITEM.name = 'sally';
+\end_layout
+
+\begin_layout LyX-Code
+idle DEFAULT;
+\end_layout
+
+\begin_layout LyX-Code
+[...]
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+There is no need to check whether current is assigned in the above.
+\end_layout
+
 \begin_layout Subsubsection
 Properties that refer to other properties
 \end_layout
@@ -2093,6 +2160,145 @@ block_terminated: (character)
 \end_layout
 
 \begin_layout Subsection
+≥÷
+\end_layout
+
+\begin_layout Subsection
+ator
+\end_layout
+
+\begin_layout Standard
+The idea of a generator is to make it easier to instantiate a large number
+ of machines, potentially with automatic linking.
+ In general the generator will be able to generate a directed graph but
+ initially it will generate lists or sets.
+\end_layout
+
+\begin_layout LyX-Code
+cells GENERATE LIST OF Cell {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+INDEX i RANGE 0..9;
+\end_layout
+
+\begin_layout LyX-Code
+INDEX j RANGE 0..2;
+\end_layout
+
+\begin_layout LyX-Code
+NAME 
+\begin_inset Quotes eld
+\end_inset
+
+cell_${i}${j}
+\begin_inset Quotes erd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION row i;
+\end_layout
+
+\begin_layout LyX-Code
+OPTION col j;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+The above example generates a list, cells, of machines named cell_00, cell_01,
+ cell_02, cell_10,...; as if the following code was written:
+\end_layout
+
+\begin_layout LyX-Code
+cell_00 Cell(row:0, col:0);
+\end_layout
+
+\begin_layout LyX-Code
+cell_01 Cell(row:0, col:1);
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+cells LIST cell_00, cell_01, ...;
+\end_layout
+
+\begin_layout Standard
+The options on each cell are intended to be used with SELECT statements.
+\end_layout
+
+\begin_layout Standard
+Along with GENERATE, there is a COLLECT statement that can be used at setup
+ time to collect subsets of machines from one list or set to another.
+\end_layout
+
+\begin_layout Standard
+A simpler expression of generate is to define a TEMPLATE that injects variable
+ values and a GENERATE command that instantiates the template for a range
+ of variable values.
+\end_layout
+
+\begin_layout LyX-Code
+keyboard_key TEMPLATE
+\end_layout
+
+\begin_layout LyX-Code
+  keyboard_$letter KeyButton(value: $letter) field;
+\end_layout
+
+\begin_layout LyX-Code
+GENERATE keyboard_key USING {
+\end_layout
+
+\begin_layout LyX-Code
+  letter RANGE 
+\begin_inset Quotes eld
+\end_inset
+
+A
+\begin_inset Quotes erd
+\end_inset
+
+ ..
+ 
+\begin_inset Quotes eld
+\end_inset
+
+Z
+\begin_inset Quotes erd
+\end_inset
+
+ }
+\end_layout
+
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+There is less magic in the latter, however how should we distinguish between
+ A and 
+\begin_inset Quotes eld
+\end_inset
+
+A
+\begin_inset Quotes erd
+\end_inset
+
+?
+\end_layout
+
+\begin_layout Subsection
 Data
 \end_layout
 
@@ -2374,6 +2580,31 @@ Should we use the 'WITHIN' syntax:
 
 \size small
 WITHIN value x := 3, y:= 7;
+\end_layout
+
+\begin_layout Standard
+Structures look like machines:
+\end_layout
+
+\begin_layout LyX-Code
+pos STRUCTURE { OPTION x = 3; OPTION y = 4; }
+\end_layout
+
+\begin_layout Standard
+Structures can be nested or extended:
+\end_layout
+
+\begin_layout LyX-Code
+pos3D STRUCTURE EXTENDS pos { OPTION z = 0; }
+\end_layout
+
+\begin_layout Standard
+An extended structure behaves as if the options in the base were also declared
+ in the new structure.
+\end_layout
+
+\begin_layout Standard
+TBD determine behaviour for extension of nested structures.
 \end_layout
 
 \begin_layout Subsubsection
