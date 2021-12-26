@@ -1,5 +1,9 @@
 # for parallel compile, use JOBS=-jN make ..
 # where N is the number of parallel jobs to use
+
+ASTYLE := $(shell command -v astyle 2>/dev/null)
+CLANGFORMAT := $(shell command -v clang-format 2>/dev/null)
+
 all:	
 	[ -d "build" ] || mkdir build
 	cd build && cmake .. && make $(JOBS) install
@@ -39,3 +43,11 @@ xcode:
 
 clean:
 	rm -rf build
+
+style:
+ifdef ASTYLE
+	astyle --project --recursive lib/clockwork_interpreter/src/*.c,*.cpp,*.h,*.hpp
+endif
+ifdef CLANGFORMAT
+	clang-format -i --verbose `find lib/clockwork_interpreter/src -name \*.c -o -name \*.cpp -o -name \*.h -o -name \*.hpp`
+endif

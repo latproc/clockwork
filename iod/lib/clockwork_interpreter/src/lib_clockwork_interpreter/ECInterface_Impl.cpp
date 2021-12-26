@@ -148,6 +148,15 @@ bool ECModule::operational() { return slave_config_state.operational; }
 
 int ECModule::state() { return slave_config_state.al_state; }
 
+void set_slave_info(SlaveInfo &si, ec_slave_info_t &info) {
+    //memcpy(ec_info, &info, sizeof(ec_slave_info_t));
+    si.position = info.position;
+    product_code = info.product_code;
+    vendor_id = info.vendor_id;
+    revision = info.revision_number;
+    name = info.name;
+}
+
 #ifdef USE_SDO
 SDOEntry::SDOEntry(std::string nam, uint16_t index, uint8_t subindex,
                    const uint8_t *data, size_t size, uint8_t offset)

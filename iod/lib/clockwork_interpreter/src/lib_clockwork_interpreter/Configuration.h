@@ -18,21 +18,23 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef cwlang_h
-#define cwlang_h
+#ifndef __cwlang_configuration_h__
+#define __cwlang_configuration_h__
 
-#include <lib_clockwork_client/includes.hpp>
-#include <list>
-// // #include "symboltable.h"
-#include "Expression.h"
-#include "MachineInstance.h"
+#include <map>
+#include <string>
 
-void yyerror(const char *str);
+typedef std::map<std::string, std::string> ConfigurationMap;
 
-#ifndef __MAIN__
-extern int line_num;
-extern SymbolTable globals;
-extern const char *yyfilename;
-#endif
+class Configuration {
+  public:
+    Configuration(std::string configuration_filename);
+    const std::string &setting(std::string name) const;
+    int asInt(std::string name) const;
+
+  private:
+    ConfigurationMap settings;
+    std::string missing;
+};
 
 #endif

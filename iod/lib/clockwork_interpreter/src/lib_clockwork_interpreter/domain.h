@@ -1,5 +1,5 @@
 // /*
-// 	NOTE: This file is an editted version of ../ethercat/master/domain.h
+//  NOTE: This file is an editted version of ../ethercat/master/domain.h
 //  */
 // /******************************************************************************
 //  *
