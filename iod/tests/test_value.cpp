@@ -18,13 +18,19 @@ namespace {
 		Value y;
 	};
 
-  TEST(Value, CompareBool) {
-    Value val(true);
-    EXPECT_EQ(val.kind, Value::t_bool) << "Value has a bool kind when assigned a bool";
-    EXPECT_TRUE(val == true) << "Value is true when assigned a true";
-    val = false;
-    EXPECT_TRUE(val == false) << "Value is false when assigned a false";
-  }
+	TEST(Value, CompareBool) {
+		Value val(true);
+		EXPECT_EQ(val.kind, Value::t_bool) << "Value has a bool kind when assigned a bool";
+		EXPECT_TRUE(val == true) << "Value is true when assigned a true";
+		val = false;
+		EXPECT_TRUE(val == false) << "Value is false when assigned a false";
+	}
+
+	TEST(Value, SymbolTableNullIsNull) {
+		Value val;
+		EXPECT_TRUE(val.isNull());
+		EXPECT_EQ(val, SymbolTable::Null);
+	}
 
 	TEST_F(ValueTest, Integer) {
 		EXPECT_EQ(Value::t_integer, x.kind) << "Value has an integer kind when assigned an integer";

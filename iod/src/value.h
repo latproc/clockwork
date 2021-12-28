@@ -76,6 +76,7 @@ class Value {
     virtual ~Value();
     std::string asString(const char *format = 0) const;
     std::string quoted() const;
+	bool isNull() const;
     bool asFloat(double &val) const;
     bool asInteger(long &val) const;
     bool asBoolean(bool &val) const;

@@ -68,7 +68,8 @@ void DispatchThread::operator()()
 
 Dispatcher::Dispatcher() : socket(0), started(false), finished(false), dispatch_thread(0), thread_ref(0),
     sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
-	dispatch_socket(0), owner_thread(0)
+    self(*MessagingInterface::getContext(), ZMQ_REP),
+	owner_thread(0)
 {
     dispatch_thread = new DispatchThread;
     thread_ref = new boost::thread(boost::ref(*dispatch_thread));
@@ -77,7 +78,6 @@ Dispatcher::Dispatcher() : socket(0), started(false), finished(false), dispatch_
 Dispatcher::~Dispatcher()
 {
   if (socket) delete socket;
-  if (dispatch_socket) delete dispatch_socket;
 }
 
 Dispatcher *Dispatcher::instance()
@@ -94,10 +94,13 @@ void Dispatcher::start()
 
 void Dispatcher::stop()
 {
-  if (status == e_running) sync.send("done", 4);
+    instance()->finished = true;
+    package_available.notify_one();
+    zmq::socket_t to_self(*MessagingInterface::getContext(), ZMQ_REQ);
+    to_self.connect("inproc://dispatcher_self");
+    to_self.send("exit", 4);
 
-  instance()->finished = true;
-  if (thread_ref) thread_ref->join();
+    if (thread_ref) thread_ref->join();
 }
 
 std::ostream &Dispatcher::operator<<(std::ostream &out) const
@@ -131,11 +134,30 @@ void Dispatcher::deliver(Package *p)
     package_available.notify_one();
 }
 
+bool Dispatcher::wait() {
+    zmq::pollitem_t items[] = {
+        { (void*)self, 0, ZMQ_POLLIN, 0 },
+        { (void*)sync, 0, ZMQ_POLLIN, 0 }
+    };
+    while (!finished) {
+        for (;;) {
+            int res = zmq::poll(&items[0], 2, 0);
+            if (res) { break; } 
+        }
+        if (items[1].revents & ZMQ_POLLIN) {
+            if (!finished) { return true; }
+        }
+    }
+    return false;
+}
+
 void Dispatcher::idle()
 {
 	// this sync socket is used to request access to shared resources from
 	// the driver
     sync.bind("inproc://dispatcher_sync");
+
+    self.bind("inproc://dispatcher_self"); // receive notifications (see stop)
 
 	// the clockwork driver calls our start() method and that blocks until
 	// we get to this point. Note that this thread will then
@@ -145,6 +167,7 @@ void Dispatcher::idle()
 
 	char buf[11];
 	size_t response_len = 0;
+    if (!wait()) { return; } // stopped before being started
 	safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
 	buf[response_len]= 0;
 	DBG_DISPATCHER << "Dispatcher got sync start: " << buf << "\n";
@@ -160,15 +183,18 @@ void Dispatcher::idle()
     {
 		if (status == e_waiting) {
             boost::unique_lock<boost::mutex> lock(dispatcher_mutex);
-            if (to_deliver.empty()) 
+            if (to_deliver.empty()) {
                 package_available.wait(lock);
+            }
 			status = e_waiting_cw;
 		}
+        if (finished) { break; }
         if (status == e_waiting_cw)
         {
-          sync.send("dispatch",8);
-          safeRecv(sync, buf, 10, true, response_len, 0);
-          status = e_running;
+            sync.send("dispatch",8);
+            if (!wait()) break;
+            safeRecv(sync, buf, 10, true, response_len, 0);
+            status = e_running;
         }
         else if (status == e_running)
         {
@@ -298,7 +324,8 @@ void Dispatcher::idle()
                 }
             }
             sync.send("done", 4);
-			safeRecv(sync, buf, 10, true, response_len, 0); // wait for ack from cw
+            if (!wait()) break;
+            safeRecv(sync, buf, 10, true, response_len, 0); // wait for ack from cw
 			DBG_DISPATCHER << "Dispatcher done\n";
             status = e_waiting;
         }

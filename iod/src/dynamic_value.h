@@ -226,6 +226,24 @@ class MaxValue : public DynamicValue {
     MachineInstance *machine_list;
 };
 
+class SerialiseValue : public DynamicValue {
+  public:
+    SerialiseValue(const char *property_name, const char *list, const char *delimeter) : property(property_name), machine_list_name(list), delim(delimeter), machine_list(0)  { }
+    SerialiseValue(const char *list, const char *delimeter) : property(""), machine_list_name(list), delim(delimeter), machine_list(0)  { }
+    virtual ~SerialiseValue() {}
+    virtual const Value &operator()();
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    SerialiseValue(const SerialiseValue &);
+
+  private:
+    SerialiseValue(const DynamicValue &);
+    std::string property;
+    std::string machine_list_name;
+    std::string delim;
+    MachineInstance *machine_list;
+};
+
 
 class MeanValue : public DynamicValue {
   public:

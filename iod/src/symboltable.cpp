@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -111,20 +111,22 @@ SymbolTable::SymbolTable() {
     if (!initialised) {
         initialised = true;
         keywords = new SymbolTable();
-        keywords->add("NOW", 0L);
-        keywords->add("SECONDS", 0L);
-        keywords->add("MINUTE", 0L);
-        keywords->add("HOUR", 0L);
-        keywords->add("DAY", 0L);
-        keywords->add("MONTH", 0L);
-        keywords->add("YR", 0L);
-        keywords->add("YEAR", 0L);
-				keywords->add("TIMESEQ", Value("",Value::t_string));
-        keywords->add("TIMEZONE", Value("",Value::t_string));
-        keywords->add("TIMESTAMP", Value("",Value::t_string));
-        keywords->add("UTCTIMESTAMP", Value("",Value::t_string));
-        keywords->add("ISOTIMESTAMP", Value("",Value::t_string));
-        keywords->add("RANDOM", 0L);
+        keywords->add("NOW", "");
+        keywords->add("SECONDS", "");
+        keywords->add("MINUTE", "");
+        keywords->add("HOUR", "");
+        keywords->add("DAY", "");
+        keywords->add("MONTH", "");
+        keywords->add("YR", "");
+        keywords->add("YEAR", "");
+        keywords->add("TIMESEQ", "");
+        keywords->add("LOCALTIME", "");
+        keywords->add("UTCTIME", "");
+        keywords->add("TIMEZONE", "");
+        keywords->add("TIMESTAMP", "");
+        keywords->add("UTCTIMESTAMP", "");
+        keywords->add("ISOTIMESTAMP", "");
+        keywords->add("RANDOM", "");
         reserved = new std::set<std::string>;
         reserved->insert("NAME");
         reserved->insert("PERSISTENT");
@@ -161,10 +163,8 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
 
 bool SymbolTable::isKeyword(const Value &name) {
 	if (name.kind == Value::t_symbol || name.kind == Value::t_string) {
-		if (name.token_id)
-			return keywords->exists(name.token_id);
-		else
-			return keywords->exists(name.sValue.c_str());
+        if (name.token_id && keywords->exists(name.token_id)) { return true; }
+		return keywords->exists(name.sValue.c_str());
 	}
     return false;
 
@@ -181,24 +181,30 @@ bool SymbolTable::isKeyword(const char *name)
 const Value &SymbolTable::getKeyValue(const char *name) {
     if (!name) return Null;
     if (keywords->exists(name)) {
+        using namespace boost::posix_time;
         Value &res = keywords->find(name);
         if (strcmp("NOW", name) == 0) {
-            struct timeval now;
-            gettimeofday(&now,0);
             unsigned long msecs = (microsecs() + 500) / 1000;
             res = msecs;
             return res;
         }
-		else if (strcmp("RANDOM", name) == 0) {
+		if (strcmp("RANDOM", name) == 0) {
 			unsigned long val = random();
-			std::cout << " random value " << val << "\n";
 			res = val;
 			return res;
 		}
+        ptime utc(microsec_clock::universal_time());
+        ptime local(microsec_clock::local_time());
+        struct tm lt = to_tm(local);
+        if (strcmp("ISOTIMESTAMP", name) == 0) {
+            char buf[40];
+            std::stringstream ss;
+            ss << to_iso_string(utc) << "Z" << std::flush;
+            snprintf(buf, 40, "%s", ss.str().c_str());
+            res = Value(buf, Value::t_string);
+            return res;
+        }
         // the remaining values are all time fields
-        time_t now = time(0);
-        struct tm lt;
-        localtime_r(&now, &lt);
         if (strcmp("SECONDS", name) == 0) {
             res = lt.tm_sec;
             return res;
@@ -228,25 +234,45 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
         if (strcmp("TIMEZONE", name) == 0) {
+            time_t now = time(0);
+            localtime_r(&now, &lt);
             res = lt.tm_zone;
             return res;
         }
+        if (strcmp("LOCALTIME", name) == 0) {
+            char buf[40];
+            const char *fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
+            if (sizeof(long long) == sizeof(uint64_t))
+                fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
+            snprintf(buf, 40, fmt,
+                lt.tm_year + 1900, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
+            res = Value(buf, Value::t_string);
+           return res;
+        }
+        if (strcmp("UTCTIME", name) == 0) {
+            char buf[40];
+            const char *fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
+            if (sizeof(long long) == sizeof(uint64_t))
+                fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
+            lt = to_tm(utc);
+            snprintf(buf, 40, fmt,
+                lt.tm_year + 1900, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
+            res = Value(buf, Value::t_string);
+           return res;
+        }
         if (strcmp("TIMESEQ", name) == 0) {
-            //struct timeval t;
-            //gettimeofday(&t,0);
-            uint64_t msecs = (microsecs() / 1000) % 1000;
             char buf[40];
             const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
             if (sizeof(long long) == sizeof(uint64_t))
                 fmt = "%02d%02d%02d%02d%02d%02d%03llu";
             snprintf(buf, 40, fmt,
-                lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, msecs);
+                lt.tm_year-100, lt.tm_mon+1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
             res = Value(buf, Value::t_string);
             return res;
         }
         if (strcmp("TIMESTAMP", name) == 0) {
             char buf[40];
-	        struct tm lt;
+            time_t now = time(0);
             localtime_r(&now, &lt);
             asctime_r(&lt, buf);
             size_t n = strlen(buf);
@@ -257,22 +283,11 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("UTCTIMESTAMP", name) == 0) {
             char buf[40];
-	          struct tm lt;
-            gmtime_r(&now, &lt);
-            asctime_r(&lt, buf);
+            tm ut;
+            ut = to_tm(utc);
+            asctime_r(&ut, buf);
             size_t n = strlen(buf);
             if (n>1 && buf[n-1] == '\n') { --n; buf[n] = 0; }
-            if (n + strlen(lt.tm_zone) < 39) snprintf(buf+n,39-n," %s", lt.tm_zone);
-            res = Value(buf, Value::t_string);
-            return res;
-        }
-        if (strcmp("ISOTIMESTAMP", name) == 0) {
-            using namespace boost::posix_time;
-            char buf[40];
-            ptime t = microsec_clock::universal_time();
-            std::stringstream ss;
-            ss << to_iso_string(t) << "Z" << std::flush;
-            snprintf(buf, 40, "%s", ss.str().c_str());
             res = Value(buf, Value::t_string);
             return res;
         }
@@ -389,7 +404,7 @@ void Value::addItem(Value next_value) {
             listValue.push_front(Value(fValue));
         else if (kind == t_string)
             listValue.push_front(Value(sValue.c_str()));
-        
+
         kind = t_list;
         listValue.push_front(next_value);
     }

@@ -116,6 +116,8 @@ std::ostream &operator<<(std::ostream &out, const PredicateOperator op)
     case opFloat:
       opstr = "AS FLOAT";
       break;
+    case opString:
+      opstr = "AS STRING";
     case opAny:
       opstr = "ANY";
       break;
@@ -451,7 +453,7 @@ std::ostream &Predicate::operator <<(std::ostream &out) const
 {
   if (left_p) {
     out << "(";
-    if (op != opNOT && op != opInteger && op != opFloat) {
+    if (op != opNOT && op != opInteger && op != opFloat && op != opString) {
       left_p->operator<<(out);  // ignore the lhs for NOT operators
     }
     out << " " << op << " ";
@@ -786,7 +788,6 @@ std::ostream &operator<<(std::ostream &out, const ExprNode &o) {
 ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter)
 {
   ExprNode o(*stack_iter++);
-  //std::cout << "popped node: " << o << "\n";
   if (o.kind != ExprNode::t_op) {
     if (o.val && o.val->kind == Value::t_dynamic) {
       o.val->dynamicValue()->operator()(m);
@@ -883,6 +884,8 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
       return rhs.trunc();
     case opFloat:
       return rhs.toFloat();
+    case opString:
+      return Value(rhs.asString(), Value::t_string);
     case opAssign:
       return rhs;
     case opMatch: {
@@ -965,10 +968,8 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
     //std::cout << " pushing operator " << p->op << "\n";
     stack.push(p->op);
   }
-  else if (p->op == opInteger || p->op == opFloat) {
-    //std::cout << " pushing 'true'\n";
+  else if (p->op == opInteger || p->op == opFloat || p->op == opString) {
     stack.push(ExprNode(SymbolTable::True));
-    //std::cout << " resolving right tree\n";
     if (!prep(stack, p->right_p, m, false, reevaluate)) {
       return false;
     }
