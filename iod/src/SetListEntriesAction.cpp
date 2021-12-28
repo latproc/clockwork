@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -28,7 +28,7 @@ SetListEntriesActionTemplate::SetListEntriesActionTemplate(Value source, Value d
 
 SetListEntriesActionTemplate::~SetListEntriesActionTemplate() {
 }
-                                           
+
 Action *SetListEntriesActionTemplate::factory(MachineInstance *mi) {
 	return new SetListEntriesAction(mi, this);
 }
@@ -55,7 +55,7 @@ void SetListEntriesAction::setListEntries(unsigned long bitmap) {
         }
         bitmap /= 2;
     }
-    
+
 }
 
 Action::Status SetListEntriesAction::run() {
@@ -69,18 +69,18 @@ Action::Status SetListEntriesAction::run() {
             setListEntries((unsigned long)source.fValue);
         }
         else if (source.kind == Value::t_symbol) {
-            std::string src = source.asString();
-            
+            const std::string src = source.asString();
+
             long val;
-            if (owner->getValue(src).asInteger(val) ) {
+            if (owner->getValue(source.asString().c_str()).asInteger(val) ) {
                 unsigned long bitmap = (unsigned long) val;
                 setListEntries(bitmap);
             }
         }
-        
+
         status = Complete;
 	}
-    else
+	else
         status = Failed;
     owner->stop(this);
 	return status;

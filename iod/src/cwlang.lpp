@@ -140,6 +140,8 @@ READONLY            return READONLY;
 READWRITE           return READWRITE;
 REPLACE             return REPLACE;
 REPORTS				return REPORTS;
+SERIALISE			return SERIALISE;
+SERIALIZE			return SERIALISE;
 STATE_CHANGES		return STATE_CHANGES;
 SUM					return SUM;
 PRIVATE				{
@@ -161,6 +163,7 @@ SDO					return SDO;
 SELECT              return SELECT;
 SEND                return SEND;
 SENDS               return SENDS;
+SEPARATED           return SEPARATED;
 SET                 return SET;
 SIZE                return SIZE;
 SHARES              return SHARES;

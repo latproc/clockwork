@@ -1777,7 +1777,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 					timer_val = trunc(s.timer_val.fValue);
 				else {
 					DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name << " is not numeric\n";
-					NB_MSG << "timer_val: " << s.timer_val << " type: " << s.timer_val.kind << "\n";
+					NB_MSG << _name << " state: " << s.state_name << " timer_val: " << s.timer_val << " type: " << s.timer_val.kind << "\n";
 					continue;
 				}
 				// note comment above, this is not a correct handling of opGT and opLT
@@ -2604,7 +2604,7 @@ void MachineInstance::enable() {
 	}
 
 #if 1
-	if (isActive() && !isShadow()) {
+	if (isActive() && !isShadow() && getStateMachine()->token_id != ClockworkToken::EXTERNAL) {
 		std::string msgstr(_name);
 		msgstr += "_enabled";
 		Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);

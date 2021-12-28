@@ -55,6 +55,7 @@ private:
   Dispatcher();
   Dispatcher(const Dispatcher &orig);
   Dispatcher &operator=(const Dispatcher &other);
+  bool wait();
   typedef std::list<Receiver*> ReceiverList;
   ReceiverList all_receivers;
   static Dispatcher *instance_;
@@ -72,7 +73,7 @@ private:
     e_aborted,
     e_handling_dispatch
   } status;
-  zmq::socket_t *dispatch_socket;
+  zmq::socket_t self;
   pthread_t owner_thread;
 };
 
