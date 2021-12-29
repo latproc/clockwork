@@ -162,8 +162,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                     ++num_errors;
                     continue;
                 }
-                if (!module_mi->properties.exists("position")) {
-                    // module position not given
+                if (!module_mi->properties.exists("position")) { // module position not given
                     snprintf(error_buf, error_buf_size, "Machine %s does not specify a position",
                              module_mi->getName().c_str());
                     MessageLog::instance()->add(error_buf);
@@ -184,8 +183,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                     }
                 }
                 int module_position = module_mi->properties.lookup("position").iValue;
-                if (module_position == -1) {
-                    // module position unmapped
+                if (module_position == -1) { // module position unmapped
                     snprintf(error_buf, error_buf_size, "Machine %s position not mapped",
                              name.c_str());
                     MessageLog::instance()->add(error_buf);

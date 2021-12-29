@@ -108,14 +108,12 @@ double rateDebug(struct CircularBuffer *buf) {
     double ds = v2 - v1;
     double dt = t2 - t1;
     if (dt == 0) {
-        printf("error calculating rate: (%5.2f - %5.2f)/(%5.2f - %5.2f) = "
-               "%5.2f / %5.2f \n",
-               v2, v1, t2, t1, ds, dt);
+        printf("error calculating rate: (%5.2f - %5.2f)/(%5.2f - %5.2f) = %5.2f / %5.2f \n", v2, v1,
+               t2, t1, ds, dt);
     }
     else {
-        printf("calculated rate: (%5.2f - %5.2f)/(%5.2f - %5.2f) = %5.2f / "
-               "%5.2f = %5.2f\n",
-               v2, v1, t2, t1, ds, dt, ds / dt);
+        printf("calculated rate: (%5.2f - %5.2f)/(%5.2f - %5.2f) = %5.2f / %5.2f = %5.2f\n", v2, v1,
+               t2, t1, ds, dt, ds / dt);
     }
     if (dt == 0) {
         return 0;
@@ -303,8 +301,7 @@ int run_buffer_tests(int argc, const char *argv[]) {
     if (sum(mybuf, size(mybuf)) / test_buffer_size != average(mybuf, size(mybuf))) {
         fail(tests);
     }
-    if (test_buffer_size == 4) {
-        /* this test only works if the buffer is of bufferLength 4 */
+    if (test_buffer_size == 4) { /* this test only works if the buffer is of bufferLength 4 */
         ++tests;
         if (sum(mybuf, size(mybuf)) != (6 + 7 + 8 + 9) * 1.5) {
             fail(tests);
@@ -390,10 +387,10 @@ int run_buffer_tests(int argc, const char *argv[]) {
     /*
         mybuf = createBuffer(4);
         for (i=0; i<70; i++) {
-        double x = i/4.0;
-        double y = sin( x );
-        addSample(mybuf, i, y);
-        if (i>mybuf->bufsize) printf("%d,%lf,%lf,%lf\n",i, cos(x)/4.0, rate(mybuf), slope(mybuf));
+            double x = i/4.0;
+            double y = sin( x );
+            addSample(mybuf, i, y);
+            if (i>mybuf->bufsize) printf("%d,%lf,%lf,%lf\n",i, cos(x)/4.0, rate(mybuf), slope(mybuf));
         }
         destroyBuffer(mybuf);
     */

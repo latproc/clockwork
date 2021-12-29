@@ -67,9 +67,8 @@ class DeviceStatus {
     State current() { return status; }
     State previous() { return status; }
     static DeviceStatus *instance() {
-        if (!instance_) {
+        if (!instance_)
             instance_ = new DeviceStatus;
-        }
         return instance_;
     }
     void setStatus(State s) {
@@ -113,15 +112,13 @@ static const char *stringFromDeviceStatus(DeviceStatus::State status) {
 }
 
 void usage(int argc, const char *argv[]) {
-    std::cout << "Usage: " << argv[0] << "\n (--host hostname [--port port]) \n"
-              << " | (--serial_port portname --serial_settings "
-                 "baud:bits:parity:stop_bits:flow_control )\n"
-              << " --property property_name [--client] [--name device_name]\n"
-              << " --watch_property property_name --collect_repeats [ "
-                 "--no_timeout_disconnect | --disconnect_on_timeout ]\n"
-              << " --no_json --queue queue_name --channel channel_name "
-                 "[--cw_port port] "
-              << "\n";
+    std::cout
+        << "Usage: " << argv[0] << "\n (--host hostname [--port port]) \n"
+        << " | (--serial_port portname --serial_settings baud:bits:parity:stop_bits:flow_control )\n"
+        << " --property property_name [--client] [--name device_name]\n"
+        << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ]\n"
+        << " --no_json --queue queue_name --channel channel_name [--cw_port port] "
+        << "\n";
 }
 
 std::string escapeNonprintables(const char *buf) {
@@ -167,9 +164,8 @@ class Options {
 
   public:
     static Options *instance() {
-        if (!instance_) {
+        if (!instance_)
             instance_ = new Options;
-        }
         return instance_;
     }
     ~Options() {
@@ -197,21 +193,17 @@ class Options {
             msg << "\nError:\n";
             if ((got_serial && !got_serial_settings) || (got_serial_settings && !got_serial)) {
                 if (got_serial_settings) {
-                    msg << "  specifying serial_settings requires "
-                           "--serial_port is also given\n";
+                    msg << "  specifying serial_settings requires --serial_port is also given\n";
                 }
                 if (got_serial) {
-                    msg << "  specifying serial_port requires "
-                           "--serial_port_settings is also given\n";
+                    msg << "  specifying serial_port requires --serial_port_settings is also given\n";
                 }
             }
             else if (!got_host && !got_serial) {
-                msg << "  --host is required unless serial port is being "
-                       "used\n";
+                msg << "  --host is required unless serial port is being used\n";
             }
             if (!got_property && !got_queue) {
-                msg << "  no property name or queue name detected (--property "
-                       "machine.property or --queue queue_name)\n";
+                msg << "  no property name or queue name detected (--property machine.property or --queue queue_name)\n";
             }
             if (!got_pattern) {
                 msg << "  no pattern detected (--pattern text)\n";
@@ -220,8 +212,7 @@ class Options {
                 msg << "  no name given (--name)\n";
             }
             if (!sendJSON() && got_queue) {
-                msg << " structure message (JSON) mode is required for sending "
-                       "to a queue\n";
+                msg << " structure message (JSON) mode is required for sending to a queue\n";
             }
             std::cerr << msg.str() << "\n";
         }
@@ -251,9 +242,8 @@ class Options {
 
     const char *name() const { return name_; }
     void setName(const char *n) {
-        if (name_) {
+        if (name_)
             free(name_);
-        }
         name_ = strdup(n);
     }
 
@@ -262,9 +252,8 @@ class Options {
 
     const char *iodHost() const { return iod_host_; }
     void setIODHost(const char *h) {
-        if (iod_host_) {
+        if (iod_host_)
             free(iod_host_);
-        }
         iod_host_ = strdup(h);
     }
 
@@ -319,8 +308,7 @@ class Options {
             char *buf = strdup(machine_property);
             char *dot = (strchr(buf, '.'));
             if (!dot) {
-                std::cerr << "Warning: property should be in the form "
-                             "'machine.property'\n";
+                std::cerr << "Warning: property should be in the form 'machine.property'\n";
                 free(buf);
                 return;
             }
@@ -339,12 +327,10 @@ class Options {
         channel_ = strdup(chan);
     }
     const char *getChannelName() const {
-        if (channel_) {
+        if (channel_)
             return channel_;
-        }
-        else {
+        else
             return "DeviceConnector";
-        }
     }
 
     const char *pattern() { return pattern_; }
@@ -457,8 +443,8 @@ int getSettings(const char *str, struct termios *settings) {
         if (state != cs_parity && state != cs_flow) {
             val = strtol(fld, &tmp, 10);
         }
-        if ((tmp && *tmp == 0) || ((state == cs_parity || state == cs_flow) && *fld != ':')) {
-            // config included the field
+        if ((tmp && *tmp == 0) || ((state == cs_parity || state == cs_flow) &&
+                                   *fld != ':')) { // config included the field
             switch (state) {
             case cs_baud:
                 if ((err = cfsetspeed(settings, val))) {
@@ -581,9 +567,8 @@ static const char *iod_connection = "inproc://iod_interface";
 
 struct MatchFunction {
     static MatchFunction *instance() {
-        if (!instance_) {
+        if (!instance_)
             instance_ = new MatchFunction;
-        }
         return instance_;
     }
     static int match_func(const char *match, int index, void *data) {
@@ -869,8 +854,8 @@ struct ConnectionThread {
                             break;
                         }
                         if (n == -1) {
-                            if (!done && errno != EINTR && errno != EAGAIN) {
-                                // stop() may cause a read error that we ignore
+                            if (!done && errno != EINTR &&
+                                errno != EAGAIN) { // stop() may cause a read error that we ignore
                                 std::cerr << "error: " << strerror(errno)
                                           << " reading from connection\n";
                                 close(connection);

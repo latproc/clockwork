@@ -47,8 +47,7 @@ static const Value &resolve(MachineInstance *scope, const Value &v) {
     if (target_v.kind != Value::t_symbol && target_v.kind != Value::t_string) {
         char buf[400];
         snprintf(buf, 400,
-                 "%s: SET x TO PROPERTY... expected a symbol for a property "
-                 "name but found type %d",
+                 "%s: SET x TO PROPERTY... expected a symbol for a property name but found type %d",
                  scope->getName().c_str(), (int)target_v.kind);
         MessageLog::instance()->add(buf);
         DBG_MSG << buf << "\n";
@@ -84,8 +83,7 @@ Action::Status ExpressionAction::run() {
                         // error no machine for the property source
                         char buf[400];
                         snprintf(buf, 400,
-                                 "%s: no machine can be found for SET %s TO "
-                                 "PROPERTY %s OF %s",
+                                 "%s: no machine can be found for SET %s TO PROPERTY %s OF %s",
                                  owner->getName().c_str(), lhs.get(), rhs.asString().c_str(),
                                  extra.asString().c_str());
                         MessageLog::instance()->add(buf);
@@ -111,9 +109,7 @@ Action::Status ExpressionAction::run() {
                 if (extra != SymbolTable::Null) {
                     // error, need a property name to lookup a propert of another machine
                     char buf[400];
-                    snprintf(buf, 400,
-                             "%s: no property name given for SET %s TO "
-                             "PROPERTY %s OF %s",
+                    snprintf(buf, 400, "%s: no property name given for SET %s TO PROPERTY %s OF %s",
                              owner->getName().c_str(), lhs.get(), rhs.asString().c_str(),
                              extra.asString().c_str());
                     MessageLog::instance()->add(buf);

@@ -529,8 +529,7 @@ void IODCommandThread::operator()() {
     command_sync.bind("inproc://command_sync");
 
     char start_cli[20];
-    do {
-        // wait to start
+    do { // wait to start
         size_t len;
         safeRecv(access_req, start_cli, 19, true, len, -1);
         if (len > 20) {

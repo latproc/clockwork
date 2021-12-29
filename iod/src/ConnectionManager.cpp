@@ -108,8 +108,7 @@ std::string constructAlphaNumericString(const char *prefix, const char *val, con
         ++p;
     }
     *q = 0;
-    if (q == buf) {
-        // no alpha/num found in the input string
+    if (q == buf) { // no alpha/num found in the input string
         return default_name;
     }
     if (suffix) {
@@ -177,8 +176,7 @@ void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
 }
 
 void SubscriptionManager::init() {
-    if (protocol == eCLOCKWORK) {
-        // start the subscriber if necessary
+    if (protocol == eCLOCKWORK) { // start the subscriber if necessary
         subscriber_.setsockopt(ZMQ_SUBSCRIBE, "", 0);
     }
     boost::thread subscriber_monitor(boost::ref(monit_subs));
@@ -814,8 +812,7 @@ bool SubscriptionManager::checkConnections() {
 #if 1
         {
             FileLogger fl(program_name);
-            fl.f() << "SubscriptionManager disconnected from server publisher "
-                      "with setup status: "
+            fl.f() << "SubscriptionManager disconnected from server publisher with setup status: "
                    << setupStatus() << "\n"
                    << std::flush;
         }
@@ -937,8 +934,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
                             {
                                 FileLogger fl(program_name);
                                 fl.f() << "received " << buf << "to pass on and get response"
-                                       << " but the channel is not completely "
-                                          "setup yet\n"
+                                       << " but the channel is not completely setup yet\n"
                                        << std::flush;
                             }
                             safeSend(cmd, "failed", 6);
@@ -962,8 +958,7 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
             else if (!monit_subs.disconnected()) {
                 DBG_CHANNELS << " forwarding message " << buf << " to subscriber\n";
                 subscriber().send(buf, strlen(buf));
-                if (protocol == eCLOCKWORK) {
-                    // require a response
+                if (protocol == eCLOCKWORK) { // require a response
                     {
                         FileLogger fl(program_name);
                         fl.f() << "forwarding " << buf << " to client and waiting response\n"
@@ -1041,9 +1036,9 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
                 }
                 {
                     FileLogger fl(program_name);
-                    fl.f() << "incoming response from setup channel not "
-                              "already caught. run_status: "
-                           << run_status << "\n";
+                    fl.f()
+                        << "incoming response from setup channel not already caught. run_status: "
+                        << run_status << "\n";
                     //assert(false);
                 }
                 delete[] buf;

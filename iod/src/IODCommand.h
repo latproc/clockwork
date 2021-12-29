@@ -83,21 +83,17 @@ class IODCommand {
     }
     void setParameters(std::vector<Value> &);
     const Value &name() {
-        if (parameters.empty()) {
+        if (parameters.empty())
             return SymbolTable::Null;
-        }
-        else {
+        else
             return parameters[0];
-        }
     }
     size_t numParams() { return parameters.size(); }
     const Value &param(size_t which) {
-        if (which < parameters.size()) {
+        if (which < parameters.size())
             return parameters[which];
-        }
-        else {
+        else
             return SymbolTable::Null;
-        }
     }
 
     std::ostream &operator<<(std::ostream &) const;

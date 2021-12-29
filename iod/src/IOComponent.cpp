@@ -360,8 +360,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
         //          std::cout<<"warning: incoming_data == process_data but mask indicates a change at byte "
         //          << (int)(m-mask) << std::setw(2) <<  std::hex << " value: 0x" << (int)(*m) << std::dec << "\n";
         //      }
-        if (*p != *q && *m) {
-            // copy masked bits if any
+        if (*p != *q && *m) { // copy masked bits if any
             uint8_t bitmask = 0x01;
             int j = 0;
             // check each bit against the mask and if the mask if
@@ -404,9 +403,8 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
                     }
                     else {
                         if (!ioc) {
-                            std::cout << "IOComponent::processAll(): no io "
-                                         "component at "
-                                      << i << ":" << j << " but mask bit is set\n";
+                            std::cout << "IOComponent::processAll(): no io component at " << i
+                                      << ":" << j << " but mask bit is set\n";
                         }
                         if ((*p & bitmask) != (*q & bitmask)) {
                             if (*p & bitmask) {
@@ -823,8 +821,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
 
     // prepare config->last_sent by filtering the input value
     addSample(config->positions, (long)read_time, (double)raw);
-    if (config->filter_type && *config->filter_type == 0) {
-        //TBD wrong?
+    if (config->filter_type && *config->filter_type == 0) { //TBD wrong?
         config->last_sent = raw;
     }
     else if (!config->filter_type || (config->filter_type && *config->filter_type == 1)) {
@@ -1559,8 +1556,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
         int32_t value = (*offset & (1 << bitpos)) ? 1 : 0;
 
         const char *evt;
-        if (address.value != value) {
-            // TBD is this test necessary?
+        if (address.value != value) { // TBD is this test necessary?
             std::list<MachineInstance *>::iterator iter;
 #ifndef DISABLE_LEAVE_FUNCTIONS
             if (address.value) {
@@ -1638,8 +1634,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             //std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
             raw_value = val;
             int32_t new_val = filter(val);
-            if (hardware_state == s_operational) {
-                //&& address.value != new_val) {
+            if (hardware_state == s_operational) { //&& address.value != new_val) {
                 address.value = new_val;
             }
         }

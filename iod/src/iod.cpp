@@ -139,8 +139,7 @@ class ClockworkDeviceConfigurator : public DeviceConfigurator {
 
 bool setupEtherCatThread() {
     if (!ECInterface::instance()->initialised) {
-        std::cout << "Cannect setup the EtherCAT thread until the interface is "
-                     "initialised\n";
+        std::cout << "Cannect setup the EtherCAT thread until the interface is initialised\n";
         return false;
     }
 #ifndef EC_SIMULATOR
@@ -209,8 +208,7 @@ bool setupEtherCatThread() {
                     parser.xml_configured.push_back(dev);
                     parser.init();
                     if (!parser.loadDeviceConfigurationXML(xml_filename.sValue.c_str())) {
-                        std::cerr << "Warning: failed to load module "
-                                     "configuration from "
+                        std::cerr << "Warning: failed to load module configuration from "
                                   << xml_filename << "\n";
                     }
                     else {
@@ -524,8 +522,7 @@ int main(int argc, char const *argv[]) {
         ethercat.stop();
         delete context;
     }
-    catch (zmq::error_t) {
-        // expected error when we remove the zmq context
+    catch (zmq::error_t) { // expected error when we remove the zmq context
     }
     //monitor.join();
     return 0;

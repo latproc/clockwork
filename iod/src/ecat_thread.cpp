@@ -378,8 +378,7 @@ uint64_t updateClock(uint64_t global_clock) {
     if (ref_time) {
         uint32_t last_ref32 = last_ref_time % 0x100000000;
         int64_t delta_ref = 0;
-        if (last_ref32 > ref_time) {
-            // rollover
+        if (last_ref32 > ref_time) { // rollover
             //std::cerr << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n";
             delta_ref = 0x100000000 + (uint64_t)ref_time;
             //std::cerr << std::hex << std::setw(8) << ref_time << std::dec << "\n";
@@ -420,8 +419,7 @@ bool EtherCATThread::getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t glob
                 }
                 last_ping = this_ping_time;
             }
-            DBG_ETHERCAT << "ecat_thread in state e_update got response from "
-                            "clockwork, len = "
+            DBG_ETHERCAT << "ecat_thread in state e_update got response from clockwork, len = "
                          << len << "\n";
             return true;
         }
@@ -563,8 +561,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
     else if (packet_type == PROCESS_DATA) {
         if (driver_state == s_driver_init) {
             if (!default_data) {
-                std::cerr << "WARNING: Getting process data from driver with "
-                             "no default set\n";
+                std::cerr << "WARNING: Getting process data from driver with no default set\n";
             }
             else {
                 driver_state = s_driver_operational;
@@ -580,8 +577,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             std::cout << "\n";
         }
 #endif
-        if (ec_ok && default_data) {
-            // only update the domain if default data has been setup
+        if (ec_ok && default_data) { // only update the domain if default data has been setup
             ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 #if VERBOSE_DEBUG
             // check if our mask is not the same as the data that cw has
@@ -606,8 +602,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 #endif
         }
         else if (!default_data) {
-            std::cout << "ecat_thread: no default data set yet, cannot update "
-                         "domain\n";
+            std::cout << "ecat_thread: no default data set yet, cannot update domain\n";
         }
         delete[] cw_mask;
         delete[] cw_data;

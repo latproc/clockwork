@@ -725,9 +725,8 @@ void ECInterface::configureModules() {
             if (res < 0) {
                 char buf[100];
                 snprintf(buf, 100,
-                         "Error %d setting WD enable state on sync manager %d "
-                         "for module %d\n",
-                         res, i, m->position);
+                         "Error %d setting WD enable state on sync manager %d for module %d\n", res,
+                         i, m->position);
                 MessageLog::instance()->add(buf);
                 std::cout << buf << "\n";
             }
@@ -1266,12 +1265,10 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
             uint8_t bitmask = 0x01;
             int count = 0;
             while (bitmask) {
-                if (*mask & bitmask) {
-                    // we care about this bit
+                if (*mask & bitmask) { // we care about this bit
                     uint8_t pdb = *pd & bitmask;
                     uint8_t db = *data & bitmask;
-                    if (pdb != db) {
-                        // changed
+                    if (pdb != db) { // changed
                         //std::cout << "bit " << i << ":" << count << " changed to ";
                         if (db) {
                             *pd |= bitmask;
@@ -1415,9 +1412,8 @@ int ECInterface::collectState() {
     assert(pm);
     assert(min == 0);
     for (unsigned int i = 0; i < domain_size; ++i) {
-        update_mask[i] = 0; // assume no updates in this octet
-        if (!last_pd) {
-            // first time through, copy all the domain data and mask
+        update_mask[i] = 0;                 // assume no updates in this octet
+        if (!last_pd) {                     // first time through, copy all the domain data and mask
             update_data[i] = domain1_pd[i]; //TBD & *pm;
             update_mask[i] = *pm;
             affected_bits++;
@@ -1435,11 +1431,9 @@ int ECInterface::collectState() {
                       << " process mask: 0x" << (int)*pm << std::dec << "\n";
 #endif
             while (bitmask) {
-                if (*pm & bitmask) {
-                    // we care about this bit
+                if (*pm & bitmask) { // we care about this bit
                     //if (i == 24) std::cout << "caring about bit " << (int)bitmask <<  "\n";
-                    if (((*pd) & bitmask) != ((last_pd[i]) & bitmask)) {
-                        // changed
+                    if (((*pd) & bitmask) != ((last_pd[i]) & bitmask)) { // changed
 #if VERBOSE_DEBUG
                         //if (i == 24 ) // ignore analog changes on our machine
                         std::cout << "incoming bit " << i << ":" << count << " changed to "
@@ -1694,8 +1688,7 @@ void ECInterface::check_master_state(void) {
             }
 #endif
         }
-        else {
-            // assume that now the link is back up we can reset the errors
+        else { // assume that now the link is back up we can reset the errors
             failure_count = 0;
             link_was_up = true;
             //ecrt_master_deactivate(master);
@@ -1784,11 +1777,11 @@ void ECInterface::check_slave_config_states(void) {
         if (s.operational != m->slave_config_state.operational) {
             //MEMCHECK();
             std::cout << m->name << ": " << (s.operational ? "" : "Not ") << "operational\n";
-            snprintf(buf, BUFSIZE,
-                     "Slave %d (%s) changed operational state: was %s "
-                     "operational, now %s operational",
-                     i, m->name.c_str(), m->slave_config_state.operational ? "" : "not ",
-                     s.operational ? "" : "not ");
+            snprintf(
+                buf, BUFSIZE,
+                "Slave %d (%s) changed operational state: was %s operational, now %s operational",
+                i, m->name.c_str(), m->slave_config_state.operational ? "" : "not ",
+                s.operational ? "" : "not ");
             MessageLog::instance()->add(buf);
             //MEMCHECK();
         }

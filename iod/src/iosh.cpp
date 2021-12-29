@@ -366,10 +366,10 @@ int main(int argc, const char *argv[]) {
         ss << "tcp://" << host << ":" << port;
         std::string url(ss.str());
         if (!quiet) {
-            std::cout << "Connecting to " << url << "\n"
-                      << "\nEnter HELP; for help. Note that ';' is required at "
-                         "the end of each command\n"
-                      << "  use exit; or ctrl-D to exit this program\n\n";
+            std::cout
+                << "Connecting to " << url << "\n"
+                << "\nEnter HELP; for help. Note that ';' is required at the end of each command\n"
+                << "  use exit; or ctrl-D to exit this program\n\n";
         }
         zmq::socket_t socket(*context, ZMQ_REQ);
         int linger = 0; // do not wait at socket close time

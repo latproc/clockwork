@@ -234,8 +234,7 @@ double FloatBuffer::movingAverage(unsigned int n) const {
 
 float ButterworthFilter::filter(float x) {
     signal_buf.append(x);
-    double s2 = signal_buf.inner_product(c_coefficients,
-                                         num_c_coefficients); // convolved input
+    double s2 = signal_buf.inner_product(c_coefficients, num_c_coefficients); // convolved input
     double s1 =
         filtered_buf.inner_product(d_coefficients + 1, num_d_coefficients - 1); // convolved output
 

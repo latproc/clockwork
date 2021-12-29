@@ -120,11 +120,7 @@ std::ostream &SerialiseValue::operator<<(std::ostream &out) const {
     if (!property.empty()) {
         out << property << " FROM ";
     }
-    return out << machine_list_name << " SEPARATED BY \"" << delim;
-    if (!last_result.isNull()) {
-        out << " (" << last_result << ")";
-    }
-    out << "\n";
+    return out << machine_list_name << " SEPARATED BY \"" << delim << "\" (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const SerialiseValue &val) {
     return val.operator<<(out);
@@ -563,8 +559,7 @@ const Value &SumValue::operator()() {
     if (machine_list->_type != "LIST") {
         char buf[400];
         snprintf(buf, 400,
-                 "%s: attempting to calculate a SUM from a machine (%s) that "
-                 "is not a LIST",
+                 "%s: attempting to calculate a SUM from a machine (%s) that is not a LIST",
                  mi->getName().c_str(), machine_list->fullName().c_str());
         MessageLog::instance()->add(buf);
         last_result = 0;
@@ -619,9 +614,7 @@ const Value &SerialiseValue::operator()() {
     }
     if (machine_list->_type != "LIST") {
         char buf[400];
-        snprintf(buf, 400,
-                 "%s: attempting to concatenate from a machine (%s) that is "
-                 "not a LIST",
+        snprintf(buf, 400, "%s: attempting to concatenate from a machine (%s) that is not a LIST",
                  mi->getName().c_str(), machine_list->fullName().c_str());
         MessageLog::instance()->add(buf);
         last_result = 0;
@@ -630,7 +623,7 @@ const Value &SerialiseValue::operator()() {
 
     last_process_time = currentTime();
     if (machine_list->parameters.size() == 0) {
-        last_result = Value("", Value::t_string);
+        last_result = 0;
         return last_result;
     }
 
@@ -684,8 +677,7 @@ const Value &MeanValue::operator()() {
     if (machine_list->_type != "LIST") {
         char buf[400];
         snprintf(buf, 400,
-                 "%s: attempting to calculate MEAN from a machine (%s) that is "
-                 "not a LIST",
+                 "%s: attempting to calculate MEAN from a machine (%s) that is not a LIST",
                  mi->getName().c_str(), machine_list->fullName().c_str());
         MessageLog::instance()->add(buf);
         last_result = 0;

@@ -341,14 +341,14 @@ bool SymbolTable::add(const std::string name, const Value &val, ReplaceMode repl
 void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
     SymbolTableConstIterator iter = orig.st.begin();
     while (iter != orig.st.end()) {
-        if (replace_mode != ST_REPLACE && st.find((*iter).first) != st.end()) {
-            // skip entries we already have if not replace mode
+        if (replace_mode != ST_REPLACE &&
+            st.find((*iter).first) !=
+                st.end()) { // skip entries we already have if not replace mode
             ++iter;
             continue;
         }
         const std::string &name = (*iter).first;
-        if (name != "NAME" && name != "STATE") {
-            // these reserved words cannot be replaced en mass
+        if (name != "NAME" && name != "STATE") { // these reserved words cannot be replaced en mass
             st[(*iter).first] = (*iter).second;
             if ((*iter).second.kind == Value::t_symbol) {
                 int tok = Tokeniser::instance()->getTokenId(name.c_str());

@@ -238,8 +238,7 @@ int main(int argc, char const *argv[]) {
         const char *export_path = "/tmp/cw_export";
         std::list<MachineClass *>::iterator iter = MachineClass::all_machine_classes.begin();
         if (mkdir(export_path, 0770) == -1 && errno != EEXIST) {
-            std::cerr << "failed to create export directory /tmp/cw_export.. "
-                         "aborting\n";
+            std::cerr << "failed to create export directory /tmp/cw_export.. aborting\n";
             return 1;
         }
         while (iter != MachineClass::all_machine_classes.end()) {
@@ -308,15 +307,13 @@ int main(int argc, char const *argv[]) {
                         std::cerr << "No machine called " << name << "\n";
                         continue;
                     }
-                    if (!module_mi->properties.exists("position")) {
-                        // module position not given
+                    if (!module_mi->properties.exists("position")) { // module position not given
                         std::cerr << "Machine " << name << " does not specify a position\n";
                         continue;
                     }
                     std::cerr << module_mi->properties.lookup("position").kind << "\n";
                     int module_position = (int)module_mi->properties.lookup("position").iValue;
-                    if (module_position == -1) {
-                        // module position unmapped
+                    if (module_position == -1) { // module position unmapped
                         std::cerr << "Machine " << name << " position not mapped\n";
                         continue;
                     }
@@ -434,8 +431,7 @@ int main(int argc, char const *argv[]) {
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
         processMonitor.stop();
-        kill(0,
-             SIGTERM); // interrupt select() and poll()s to enable termination
+        kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
         process.join();
         stateMonitor->stop();
         monitor.join();

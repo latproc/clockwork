@@ -254,8 +254,7 @@ std::string getIODSyncCommand(int group, int addr, unsigned int new_value);
 struct ModbusServerThread {
 
     void operator()() {
-        std::cout << "------------------ Modbus Server Thread Started "
-                     "-----------------\n"
+        std::cout << "------------------ Modbus Server Thread Started -----------------\n"
                   << std::flush;
         cmd_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
         cmd_interface->connect(local_commands);
@@ -333,8 +332,7 @@ struct ModbusServerThread {
                 usleep(100);
                 continue; // TBD
             }
-            if (nfds == 0) {
-                /*if (debug) std::cout << "idle\n"; */
+            if (nfds == 0) { /*if (debug) std::cout << "idle\n"; */
                 usleep(1000);
                 continue;
             }
@@ -342,8 +340,7 @@ struct ModbusServerThread {
                 if (!FD_ISSET(conn, &activity)) {
                     continue;
                 }
-                if (conn == socket) {
-                    // new connection
+                if (conn == socket) { // new connection
                     std::cout << "new modbus connection on socket " << socket << "\n" << std::flush;
                     struct sockaddr_in panel_in;
                     socklen_t addr_size = sizeof(panel_in);
@@ -392,8 +389,7 @@ struct ModbusServerThread {
                         int fc = query[function_code_offset];
                         // ensure changes to coils are not sent to iod if they are not required
                         bool ignore_coil_change = false;
-                        if (fc == 3) {
-                            // register read - why are we keeping the previous value?
+                        if (fc == 3) { // register read - why are we keeping the previous value?
 #if 0
                             int num_regs = query[function_code_offset + 4];
                             char *src = (char *) &modbus_mapping->tab_registers[addr]; //(char*) &query[function_code_offset+6];
@@ -406,8 +402,7 @@ struct ModbusServerThread {
                             }
 #endif
                         }
-                        else if (fc == 5) {
-                            // coil write function
+                        else if (fc == 5) { // coil write function
                             ignore_coil_change = (query_backup[function_code_offset + 3] &&
                                                   modbus_mapping->tab_bits[addr]);
                             if (DEBUG_BASIC && ignore_coil_change)
@@ -432,15 +427,13 @@ struct ModbusServerThread {
 
                                     if (active_addresses.find(addr_str) != active_addresses.end()) {
                                         if (DEBUG_BASIC)
-                                            std::cout << "updating cw with new "
-                                                         "discrete: "
-                                                      << addr << " ("
-                                                      << (int)(modbus_mapping->tab_bits[addr])
-                                                      << ")"
-                                                      << " ("
-                                                      << (int)(modbus_mapping->tab_input_bits[addr])
-                                                      << ")"
-                                                      << "\n";
+                                            std::cout
+                                                << "updating cw with new discrete: " << addr << " ("
+                                                << (int)(modbus_mapping->tab_bits[addr]) << ")"
+                                                << " ("
+                                                << (int)(modbus_mapping->tab_input_bits[addr])
+                                                << ")"
+                                                << "\n";
                                         unsigned char val = (*data) & (1 << bit);
 
                                         if (!initialised_address[addr_str] ||
@@ -892,8 +885,7 @@ bool setup_signals() {
     return true;
 }
 
-size_t parseIncomingMessage(const char *data,
-                            std::vector<Value> &params) // fillin params
+size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fillin params
 {
     size_t count = 0;
     std::list<Value> parts;
@@ -1181,8 +1173,7 @@ int main(int argc, const char *argv[]) {
 #if 1
                 {
                     FileLogger fl(program_name);
-                    fl.f() << " iod startup detected. restarting to reload "
-                              "modbus\n";
+                    fl.f() << " iod startup detected. restarting to reload modbus\n";
                 }
                 try {
                     active_addresses.clear();

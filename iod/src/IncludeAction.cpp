@@ -122,10 +122,10 @@ Action::Status IncludeAction::run() {
                 }
                 if (!done) {
                     char buf[400];
-                    snprintf(buf, 400,
-                             "%s failed to lookup machine: %s for assignment. "
-                             "Treating it as a string",
-                             owner->fullName().c_str(), entry.asString().c_str());
+                    snprintf(
+                        buf, 400,
+                        "%s failed to lookup machine: %s for assignment. Treating it as a string",
+                        owner->fullName().c_str(), entry.asString().c_str());
                     MessageLog::instance()->add(buf);
                     list_machine->addLocal(entry, new_assignment);
                 }
@@ -200,8 +200,7 @@ Action::Status IncludeAction::run() {
             if (!found) {
                 if (to_insert.kind == Value::t_symbol) {
                     MachineInstance *machine = entry_machine;
-                    if (!machine) {
-                        // entry may be a property that names a machine
+                    if (!machine) { // entry may be a property that names a machine
                         Value v = owner->getValue(entry.sValue);
                         if (v.kind == Value::t_symbol) {
                             machine = owner->lookup(v.sValue);

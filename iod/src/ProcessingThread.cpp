@@ -237,8 +237,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                     MEMCHECK();
                     try {
                         switch (stage) {
-                        case 1: {
-                            // global clock
+                        case 1: { // global clock
                             zmq::message_t message;
                             // clock
                             ecat_sync.recv(&message);
@@ -250,8 +249,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             memcpy(&global_clock, message.data(), msglen);
                             ++stage;
                         }
-                        case 2: {
-                            // data size
+                        case 2: { // data size
                             zmq::message_t message;
                             // data length
                             ecat_sync.recv(&message);
@@ -268,8 +266,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             }
                             ++stage;
                         }
-                        case 3: {
-                            // data
+                        case 3: { // data
                             ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
                             assert(more);
                             zmq::message_t message;
@@ -290,8 +287,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 #endif
                             ++stage;
                         }
-                        case 4: {
-                            // mask
+                        case 4: { // mask
                             zmq::message_t message;
                             ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
                             assert(more);
@@ -386,8 +382,7 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
         ++mask_p;
         --n;
     }
-    if (n) {
-        // io has indicated a change
+    if (n) { // io has indicated a change
         if (machine_is_ready) {
 #if VERBOSE_DEBUG
             std::cout << "Processing got masked EtherCAT data at byte " << (incoming_data_size - n)
@@ -400,8 +395,7 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
                                     incoming_process_data, io_work_queue);
         }
         else {
-            std::cout << "Processing received EtherCAT data but machine is not "
-                         "ready\n";
+            std::cout << "Processing received EtherCAT data but machine is not ready\n";
         }
     }
     if (curr_t - last_sample_poll >= 10000) {
@@ -730,10 +724,10 @@ void ProcessingThread::operator()() {
                 size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
                 if (len) {
                     char msgbuf[200];
-                    snprintf(msgbuf, 100,
-                             "Warning: processing thread ignoring incoming "
-                             "data '%.*s' from client\n",
-                             (int)len, msgbuf);
+                    snprintf(
+                        msgbuf, 100,
+                        "Warning: processing thread ignoring incoming data '%.*s' from client\n",
+                        (int)len, msgbuf);
                     MessageLog::instance()->add(msgbuf);
                 }
             }
@@ -857,9 +851,8 @@ void ProcessingThread::operator()() {
                                 }
                                 catch (const std::exception &e) {
                                     FileLogger fl(program_name);
-                                    fl.f() << "command execution threw an "
-                                              "exception "
-                                           << e.what() << "\n";
+                                    fl.f() << "command execution threw an exception " << e.what()
+                                           << "\n";
                                 }
                                 delete[] buf;
 

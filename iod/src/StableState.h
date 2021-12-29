@@ -31,8 +31,7 @@ class StableState : public TriggerOwner {
 
     ~StableState();
 
-    bool operator<(const StableState &other) const {
-        // used for std::sort
+    bool operator<(const StableState &other) const { // used for std::sort
         if (!condition.predicate || !other.condition.predicate) {
             return false;
         }

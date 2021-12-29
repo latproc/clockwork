@@ -159,8 +159,7 @@ void Dispatcher::idle() {
     if (!wait()) {
         return; // stopped before being started
     }
-    safeRecv(sync, buf, 10, true, response_len,
-             0); // wait for an ok to start from cw
+    safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
     buf[response_len] = 0;
     DBG_DISPATCHER << "Dispatcher got sync start: " << buf << "\n";
 
@@ -208,8 +207,7 @@ void Dispatcher::idle() {
                         if (!mi->getStateMachine()) {
                             char buf[100];
                             snprintf(buf, 100,
-                                     "Warning: Machine %s does not have a "
-                                     "valid state machine",
+                                     "Warning: Machine %s does not have a valid state machine",
                                      mi->getName().c_str());
                             MessageLog::instance()->add(buf);
                             NB_MSG << buf << "\n";
@@ -225,10 +223,10 @@ void Dispatcher::idle() {
                                     remote = mi->lookup(mi->parameters[0]);
                                     // the host and port properties are specifed by the first parameter
                                     char buf[100];
-                                    snprintf(buf, 100,
-                                             "Error dispatching message,  EXTERNAL "
-                                             "configuration: %s not found",
-                                             mi->parameters[0].val.sValue.c_str());
+                                    snprintf(
+                                        buf, 100,
+                                        "Error dispatching message,  EXTERNAL configuration: %s not found",
+                                        mi->parameters[0].val.sValue.c_str());
                                     MessageLog::instance()->add(buf);
                                     NB_MSG << buf << "\n";
                                 }
@@ -317,8 +315,7 @@ void Dispatcher::idle() {
             if (!wait()) {
                 break;
             }
-            safeRecv(sync, buf, 10, true, response_len,
-                     0); // wait for ack from cw
+            safeRecv(sync, buf, 10, true, response_len, 0); // wait for ack from cw
             DBG_DISPATCHER << "Dispatcher done\n";
             status = e_waiting;
         }

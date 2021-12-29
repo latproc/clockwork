@@ -252,8 +252,7 @@ Action::Status MachineCommand::checkComplete() {
             return status; // an action failed
         }
         else if (a->getStatus() == Running || a->getStatus() == Suspended) {
-            if (a->complete()) {
-                // check current status
+            if (a->complete()) { // check current status
                 if (a->getStatus() == Failed) {
                     NB_MSG << command_name.get() << " " << a->error() << "\n";
                     owner->stop(this);

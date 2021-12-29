@@ -149,8 +149,7 @@ Action::Status SyncRemoteStatesAction::execute() {
                     internals->iter = 0;
                 }
             }
-            if (!internals->iter) {
-                // finished sending messages
+            if (!internals->iter) { // finished sending messages
                 if (internals->process_state ==
                     SyncRemoteStatesActionInternals::ps_sending_messages) {
                     //safeSend(*cmd_client, "done", 4);

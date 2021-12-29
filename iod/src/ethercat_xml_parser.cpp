@@ -59,9 +59,8 @@ void ConfigurationDetails::init() {
 
 SmMapping::SmMapping() : num(0), n_pdos(0), pdos(0) { init(); }
 SmMapping::~SmMapping() {
-    if (pdos) {
+    if (pdos)
         delete pdos;
-    }
 }
 
 void SmMapping::init() {
@@ -337,8 +336,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     capturing_pdo = false;
                     current_pdo_start_entry = current_device->config.num_entries;
                 }
-                else if (matched_device && smKey == name) {
-                    // Active SM
+                else if (matched_device && smKey == name) { // Active SM
                     // TBD if no alt sm has been selected, choose the one marked as default
                     enter(in_sm);
                     if (xmlTextReaderHasAttributes(reader)) {
@@ -518,6 +516,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 }
                 std::cout << "\n";
             }
+
         } break;
         case in_pdo_index: {
             if (kind == XML_READER_TYPE_END_ELEMENT) {
@@ -544,8 +543,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                             }
                         }
                     }
-                    else if (attributes.find("Sm") != attributes.end()) {
-                        // have a SM number
+                    else if (attributes.find("Sm") != attributes.end()) { // have a SM number
                         current_sm_index = intFromStr(attributes["Sm"].c_str());
                         capturing_pdo = true;
                     }

@@ -649,8 +649,8 @@ const Value *resolveCacheMiss(Predicate *p, MachineInstance *m, bool left, bool 
             const Value *prop = 0;
 #endif
             // before looking up machines, check for specific keywords
-            if (left && v->sValue == "DEFAULT") {
-                // default state has a low priority but always returns true
+            if (left && v->sValue ==
+                            "DEFAULT") { // default state has a low priority but always returns true
                 p->cached_entry = &SymbolTable::True;
                 return p->cached_entry;
             }

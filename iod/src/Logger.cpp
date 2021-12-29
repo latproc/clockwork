@@ -59,11 +59,9 @@ class Internals {
         return *(std::ofstream *)f;
     }
     Internals() : allocated(false), f(0) {}
-    ~Internals() {
-        /**f << std::flush;*/
-        if (allocated) {
+    ~Internals() { /**f << std::flush;*/
+        if (allocated)
             delete f;
-        }
     }
 };
 

@@ -499,8 +499,7 @@ void MessagingInterface::connect() {
         if (pthread_equal(owner_thread, pthread_self())) {
             FileLogger fl(program_name);
             fl.f() << hostname << ":" << port
-                   << " attempt to call socket connect from a thread that "
-                      "isn't the owner\n";
+                   << " attempt to call socket connect from a thread that isn't the owner\n";
             // return; // no longer returning here, we have some evidence this is not a good test. TBD
         }
         DBG_CHANNELS << "calling connect on " << url << "\n";
@@ -595,8 +594,7 @@ char *MessagingInterface::send(const char *txt) {
                 std::cerr << "MessagingInterface::send " << strerror(errno);
                 if (--retries <= 0) {
                     FileLogger fl(program_name);
-                    fl.f() << "MessagingInterface::send aborting after too "
-                              "many errors\n";
+                    fl.f() << "MessagingInterface::send aborting after too many errors\n";
                     exit(2);
                 }
                 continue;
@@ -604,8 +602,7 @@ char *MessagingInterface::send(const char *txt) {
             if (zmq_errno() == EFSM) {
                 if (--fsm_retries <= 0) {
                     FileLogger fl(program_name);
-                    fl.f() << "MessagingInterface::send aborting due to failed "
-                              "EFSM recovery\n";
+                    fl.f() << "MessagingInterface::send aborting due to failed EFSM recovery\n";
                     exit(2);
                 }
                 send_state = e_recover;

@@ -980,8 +980,7 @@ void Channel::operator()() {
             try {
                 cmd_server = createCommandSocket(false);
                 if (!cmd_server) {
-                    DBG_CHANNELS << "failed to create internal channel command "
-                                    "listener socket\n";
+                    DBG_CHANNELS << "failed to create internal channel command listener socket\n";
                     if (--retry == 0) {
                         assert(false);
                         exit(2);
@@ -992,8 +991,7 @@ void Channel::operator()() {
             catch (const zmq::error_t &err) {
                 DBG_CHANNELS << "Channel " << name << " ZMQ error: " << errno << ": "
                              << zmq_strerror(errno)
-                             << " trying to create internal channel command "
-                                "listener socket\n";
+                             << " trying to create internal channel command listener socket\n";
                 if (--retry == 0) {
                     assert(false);
                     exit(2);
@@ -1138,8 +1136,7 @@ void Channel::operator()() {
                         checkStateChange(data);
                         if (isClient() && !mh.needsReply()) {
                             snprintf(buf, 100,
-                                     "Error: Channel %s detected missing need "
-                                     "reply on %s message",
+                                     "Error: Channel %s detected missing need reply on %s message",
                                      name.c_str(), (data) ? data : "<empty>");
                             MessageLog::instance()->add(buf);
                             mh.needReply(true);
@@ -1335,8 +1332,7 @@ void ChannelDefinition::instantiateInterfaces() {
         while (updated_machines != item.second->updates_names.end()) {
             const std::pair<std::string, Value> &instance_name = *updated_machines++;
             MachineInstance *found = MachineInstance::find(instance_name.first.c_str());
-            if (!found) {
-                // instantiate a shadow to represent this machine
+            if (!found) { // instantiate a shadow to represent this machine
                 if (item.second) {
                     DBG_CHANNELS << "Instantiating SHADOW " << instance_name.first
                                  << " for Channel " << item.second->name << "\n";
@@ -1366,8 +1362,7 @@ void ChannelDefinition::instantiateInterfaces() {
         while (i_shared != item.second->shares_names.end()) {
             const std::pair<std::string, Value> &instance_name = *i_shared++;
             MachineInstance *found = MachineInstance::find(instance_name.first.c_str());
-            if (!found) {
-                // instantiate a shadow to represent this machine
+            if (!found) { // instantiate a shadow to represent this machine
                 if (item.second) {
                     DBG_CHANNELS << "instantiating shadow machine " << instance_name.second << "\n";
                     MachineInstance *m = MachineInstanceFactory::create(
@@ -1651,8 +1646,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
                                                      (long)definition()->getAuthority());
             }
         }
-        else {
-            // publishers do not use the authority system
+        else { // publishers do not use the authority system
             cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val);
         }
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
@@ -1675,9 +1669,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
         }
         else {
             char buf[150];
-            snprintf(buf, 150,
-                     "Warning: property %s.%s changed  but the channel is not "
-                     "connected",
+            snprintf(buf, 150, "Warning: property %s.%s changed  but the channel is not connected",
                      m->getName().c_str(), key.asString().c_str());
             MessageLog::instance()->add(buf);
         }
@@ -1686,8 +1678,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &n
     else if (mif) {
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
-        char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key,
-                                                   val); // send command
+        char *cmd = MessageEncoding::encodeCommand("PROPERTY", name, key, val); // send command
         safeSend(*mif->getSocket(), cmd, strlen(cmd), mh);
         //mif->send(cmd);
         free(cmd);
@@ -2045,8 +2036,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
                         MessageEncoding::encodeState(machine_name, new_state, chn->getAuthority());
                 }
             }
-            else {
-                // publisher channels do not use the authority parameter on state changes
+            else { // publisher channels do not use the authority parameter on state changes
                 cmdstr = MessageEncoding::encodeState(machine_name, new_state);
             }
 
@@ -2075,8 +2065,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
             else {
                 char buf[150];
                 snprintf(buf, 150,
-                         "Warning: machine %s changed state but the channel is "
-                         "not connected",
+                         "Warning: machine %s changed state but the channel is not connected",
                          machine->getName().c_str());
                 MessageLog::instance()->add(buf);
             }
@@ -2126,8 +2115,7 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
                 cmdstr = MessageEncoding::encodeState(machine_name, new_state, chn->getAuthority());
             }
         }
-        else {
-            // publisher channels do not use the authority parameter on state changes
+        else { // publisher channels do not use the authority parameter on state changes
             cmdstr = MessageEncoding::encodeState(machine_name, new_state);
         }
 
@@ -2158,9 +2146,7 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
         }
         else {
             char buf[150];
-            snprintf(buf, 150,
-                     "Warning: machine %s changed state but the channel is not "
-                     "connected",
+            snprintf(buf, 150, "Warning: machine %s changed state but the channel is not connected",
                      machine->getName().c_str());
             MessageLog::instance()->add(buf);
         }
@@ -2258,8 +2244,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
                 else {
                     char buf[150];
                     snprintf(buf, 150,
-                             "Warning: machine %s should send %s but the "
-                             "channel is not connected",
+                             "Warning: machine %s should send %s but the channel is not connected",
                              machine->getName().c_str(), command.c_str());
                     MessageLog::instance()->add(buf);
                     //NB_MSG << buf << "\n";
@@ -2506,8 +2491,7 @@ void Channel::setupShadows() {
         const std::pair<std::string, Value> item = *iter++;
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance *>(m);
-        if (m && !ms) {
-            // this machine is not a shadow.
+        if (m && !ms) { // this machine is not a shadow.
             if (!channel_machines.count(m)) {
                 m->publish();
                 channel_machines.insert(m);
@@ -2529,8 +2513,7 @@ void Channel::setupShadows() {
         const std::pair<std::string, Value> item = *iter++;
         MachineInstance *m = MachineInstance::find(item.first.c_str());
         MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance *>(m);
-        if (m && !ms) {
-            // this machine is not a shadow.
+        if (m && !ms) { // this machine is not a shadow.
             if (!channel_machines.count(m)) {
                 m->publish();
                 channel_machines.insert(m);

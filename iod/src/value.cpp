@@ -670,9 +670,7 @@ static bool stringToLong(const std::string &s, long &x) {
         }
 
         char buf[200];
-        snprintf(buf, 200,
-                 "str to long parsed %ld chars but did not hit the end of "
-                 "string '%s'",
+        snprintf(buf, 200, "str to long parsed %ld chars but did not hit the end of string '%s'",
                  end - str, str);
         MessageLog::instance()->add(buf);
         DBG_PREDICATES << buf << "'\n";
@@ -686,9 +684,7 @@ static bool stringToFloat(const std::string &s, double &x) {
     x = strtod(str, &end);
     if (*end) {
         char buf[200];
-        snprintf(buf, 200,
-                 "str to float parsed %ld chars but did not hit the end of "
-                 "string '%s'",
+        snprintf(buf, 200, "str to float parsed %ld chars but did not hit the end of string '%s'",
                  end - str, str);
         MessageLog::instance()->add(buf);
         DBG_PREDICATES << buf << "'\n";
@@ -979,8 +975,7 @@ struct TypeFix {
                 else {
                     char buf[200];
                     snprintf(buf, 200,
-                             "Trying to %s %s and %s but the string does not "
-                             "contain a number",
+                             "Trying to %s %s and %s but the string does not contain a number",
                              op->toString().c_str(), a.asString().c_str(), b.asString().c_str());
                     MessageLog::instance()->add(buf);
                     DBG_PREDICATES << buf << "\n";

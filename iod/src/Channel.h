@@ -48,9 +48,8 @@ struct MachineRef {
     }
     void release() {
         --refs;
-        if (!refs) {
+        if (!refs)
             delete this;
-        }
     }
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const MachineRef &other);

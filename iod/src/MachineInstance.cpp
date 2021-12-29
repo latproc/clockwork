@@ -195,8 +195,7 @@ void MachineInstance::setNeedsCheck() {
         std::set<MachineInstance *>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            if (dep->is_enabled && dep->needs_check < 2) {
-                // <2 is an anti-recursion check
+            if (dep->is_enabled && dep->needs_check < 2) { // <2 is an anti-recursion check
                 dep->setNeedsCheck();
             }
         }
@@ -205,8 +204,7 @@ void MachineInstance::setNeedsCheck() {
         std::set<MachineInstance *>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
-            if (dep->is_enabled && dep->needs_check < 2) {
-                // <2 is an anti-recursion check
+            if (dep->is_enabled && dep->needs_check < 2) { // <2 is an anti-recursion check
                 dep->setNeedsCheck();
             }
         }
@@ -544,9 +542,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
                 else {
                     if (i >= parameters.size()) {
                         char buf[200];
-                        snprintf(buf, 200,
-                                 "Error: machine %s does not have a parameter "
-                                 "%d (%s)",
+                        snprintf(buf, 200, "Error: machine %s does not have a parameter %d (%s)",
                                  _name.c_str(), i, seek_machine_name.c_str());
                         MessageLog::instance()->add(buf);
                         ++num_errors;
@@ -1010,8 +1006,7 @@ void MachineInstance::idle() {
             cache->reported_error = true;
             if (executingCommand()) {
                 snprintf(buf, 100,
-                         "Error: %s::idle() machine is not active but is "
-                         "executing a command",
+                         "Error: %s::idle() machine is not active but is executing a command",
                          _name.c_str());
                 MessageLog::instance()->add(buf);
             }
@@ -1079,8 +1074,7 @@ void MachineInstance::idle() {
         curr = executingCommand();
         if (curr && curr == last) {
             DBG_M_ACTIONS << "Action " << *curr
-                          << " failed to remove itself when complete. doing so "
-                             "manually\n";
+                          << " failed to remove itself when complete. doing so manually\n";
             stop(curr);
             curr->release();
             curr = executingCommand();
@@ -1783,8 +1777,7 @@ uint64_t MachineInstance::setupSubconditionTriggers(const StableState &s,
 }
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
-    if (expected_authority != 0 && authority == 0) {
-        //expected_authority != authority ) {
+    if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
         //FileLogger fl(program_name);
         //fl.f() << _name << " refused to change state to " << new_state << " due to authority mismatch. "
         //<< " needed: " << expected_authority << " got " << authority << "\n";
@@ -1895,17 +1888,12 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                 ModbusAddress ma = modbus_exports[_name];
                 if (ma.getSource() == ModbusAddress::machine &&
                     (ma.getGroup() != ModbusAddress::none)) {
-                    if (new_state.getName() == "on") {
-                        // just turned on
-                        DBG_MODBUS << _name
-                                   << " machine came on; triggering a modbus "
-                                      "message\n";
+                    if (new_state.getName() == "on") { // just turned on
+                        DBG_MODBUS << _name << " machine came on; triggering a modbus message\n";
                         ma.update(this, 1);
                     }
                     else if (current_state.getName() == "on") {
-                        DBG_MODBUS << _name
-                                   << " machine went off; triggering a modbus "
-                                      "message\n";
+                        DBG_MODBUS << _name << " machine went off; triggering a modbus message\n";
                         ma.update(this, 0);
                     }
                 }
@@ -1985,8 +1973,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                     if (v.kind != Value::t_integer) {
                         char buf[200];
                         snprintf(buf, 200,
-                                 "%s Error: timer value for state %s is not "
-                                 "numeric. "
+                                 "%s Error: timer value for state %s is not numeric. "
                                  "timer_val: %s lookup value: %s type: %d",
                                  _name.c_str(), s.state_name.c_str(), s.timer_val.sValue.c_str(),
                                  v.asString().c_str(), v.kind);
@@ -2372,8 +2359,8 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                     }
                     else
 #endif
-                        DBG_M_MESSAGING << "No linked command for the transition, "
-                                           "performing state change\n";
+                        DBG_M_MESSAGING
+                            << "No linked command for the transition, performing state change\n";
                 }
                 if (response_required) {
                     prepareCompletionMessage(from, t.trigger.getText());
@@ -2521,10 +2508,10 @@ Action::Status MachineInstance::execute(const Message &m, Transmitter *from, Act
                                         << " arrived but condition "
                                         << *(ssa->getCondition().predicate) << " failed\n";
                         char buf[150];
-                        snprintf(buf, 150,
-                                 "%s dropped set state trigger without firing since "
-                                 "the state condition on %s is no longer valid",
-                                 fullName().c_str(), event_name.c_str());
+                        snprintf(
+                            buf, 150,
+                            "%s dropped set state trigger without firing since the state condition on %s is no longer valid",
+                            fullName().c_str(), event_name.c_str());
                         MessageLog::instance()->add(buf);
                         DBG_MSG << buf << "\n";
                     }
@@ -2539,11 +2526,10 @@ Action::Status MachineInstance::execute(const Message &m, Transmitter *from, Act
                                         << " arrived but condition "
                                         << *(ssa->getCondition().predicate) << " failed\n";
                         char buf[150];
-                        snprintf(buf, 150,
-                                 "%s dropped move state trigger without firing "
-                                 "since the state condition on %s is no longer "
-                                 "valid",
-                                 fullName().c_str(), event_name.c_str());
+                        snprintf(
+                            buf, 150,
+                            "%s dropped move state trigger without firing since the state condition on %s is no longer valid",
+                            fullName().c_str(), event_name.c_str());
                         MessageLog::instance()->add(buf);
                         DBG_MSG << buf << "\n";
                     }
@@ -2652,8 +2638,7 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
         if (mi) {
             MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
             mh.start_time = microsecs();
-            Channel::sendCommand(mi, "SEND", params,
-                                 mh); // empty command parameter list
+            Channel::sendCommand(mi, "SEND", params, mh); // empty command parameter list
         }
         else {
             char buf[150];
@@ -2664,8 +2649,8 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
     }
     else {
         DBG_MESSAGING << _name << " sending message " << *m << " to " << r->getName() << "\n";
-        if (r->enabled() || expect_reply) {
-            // allow the call to hang here, this will change when throw works TBD
+        if (r->enabled() ||
+            expect_reply) { // allow the call to hang here, this will change when throw works TBD
             DBG_M_MESSAGING << _name << " message " << m->getText()
                             << " expect reply: " << expect_reply << "\n";
             Package *p = new Package(this, r, m, expect_reply);
@@ -2869,9 +2854,7 @@ void MachineInstance::setInitialState(bool resume) {
             }
             else {
                 char buf[100];
-                snprintf(buf, 100,
-                         "Warning: setting initial state on %s to unknown "
-                         "state: %s\n",
+                snprintf(buf, 100, "Warning: setting initial state on %s to unknown state: %s\n",
                          _name.c_str(), io_interface->getStateString());
                 MessageLog::instance()->add(buf);
                 NB_MSG << buf << "\n";
@@ -2889,9 +2872,7 @@ void MachineInstance::setInitialState(bool resume) {
     }
     else {
         char buf[100];
-        snprintf(buf, 100,
-                 "Warning: setting initial state on %s when it has no state "
-                 "machine\n",
+        snprintf(buf, 100, "Warning: setting initial state on %s when it has no state machine\n",
                  _name.c_str());
         MessageLog::instance()->add(buf);
         NB_MSG << buf << "\n";
@@ -4112,8 +4093,7 @@ void MachineInstance::sendModbusUpdate(const std::string &property_name, const V
             long val;
             char *res;
             val = strtol(new_value.sValue.c_str(), &res, 10);
-            if (errno == 0 && *res == 0) {
-                // complete string parsed as a number
+            if (errno == 0 && *res == 0) { // complete string parsed as a number
                 ma.update(this, (int)val);
             }
             else {
@@ -4163,9 +4143,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         }
         else {
             char buf[150];
-            snprintf(buf, 150,
-                     "%s  setValue() could not find machine named %s for "
-                     "property %s",
+            snprintf(buf, 150, "%s  setValue() could not find machine named %s for property %s",
                      _name.c_str(), name.c_str(), property.c_str());
             MessageLog::instance()->add(buf);
             DBG_PROPERTIES << buf << "\n";
@@ -4180,8 +4158,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         // was not called with the
         // right authority, the request is forwarded to
         // the channel that owns the current machine.
-        if (expected_authority != 0 && authority == 0) {
-            //expected_authority != authority ) {
+        if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
             //FileLogger fl(program_name);
             //fl.f() << _name << " refused to set property " << property << " to " << new_value << " due to authority mismatch. "
             //<< " needed: " << expected_authority << " got " << authority << "\n";
@@ -4667,8 +4644,8 @@ void MachineInstance::setupModbusInterface() {
             }
         }
     }
-    if (_type != "VARIABLE" && _type != "CONSTANT") {
-        // export property refers to VALUE export type, not the machine
+    if (_type != "VARIABLE" &&
+        _type != "CONSTANT") { // export property refers to VALUE export type, not the machine
         modbus_exported = export_type;
     }
 
@@ -4869,10 +4846,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
             // crosscheck - the machine must have been exported read/write
             if (!properties.exists("export")) {
                 char buf[100];
-                snprintf(buf, 100,
-                         "received a modbus update for machine %s but that "
-                         "machine has no export property",
-                         name.c_str());
+                snprintf(
+                    buf, 100,
+                    "received a modbus update for machine %s but that machine has no export property",
+                    name.c_str());
                 MessageLog::instance()->add(buf);
             }
 
@@ -4897,10 +4874,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
                 std::string name = state_name.erase(found);
                 if (_name != name) {
                     char buf[100];
-                    snprintf(buf, 100,
-                             "%s: Warning: modbus object name %s does not "
-                             "match the machine receiving the event %s",
-                             _name.c_str(), name.c_str(), state_name.c_str());
+                    snprintf(
+                        buf, 100,
+                        "%s: Warning: modbus object name %s does not match the machine receiving the event %s",
+                        _name.c_str(), name.c_str(), state_name.c_str());
                     MessageLog::instance()->add(buf);
                 }
                 SetStateActionTemplate ssat(CStringHolder("SELF"), state);

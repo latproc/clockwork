@@ -104,13 +104,12 @@ void ClockworkInterpreter::setup(MachineInstance *new_settings) {
 MachineInstance *ClockworkInterpreter::settings() { return _settings; }
 
 void usage(int argc, char const *argv[]) {
-    std::cerr << "Usage: " << argv[0] << " [-v] [-t] [-l logfilename] [-i persistent_store]\n"
-              << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] "
-                 "[-s maxlogfilesize]\n"
-              << "[-mp modbus_port] [-ps persistent_store_port]"
-              << "[-cp command/iosh port] [--name device_name] [--stats | "
-                 "--nostats] enable/disable statistics"
-              << "\n";
+    std::cerr
+        << "Usage: " << argv[0] << " [-v] [-t] [-l logfilename] [-i persistent_store]\n"
+        << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
+        << "[-mp modbus_port] [-ps persistent_store_port]"
+        << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics"
+        << "\n";
 }
 
 static void listDirectory(const std::string pathToCheck, std::list<std::string> &file_list) {
@@ -630,8 +629,7 @@ void semantic_analysis() {
             BOOST_FOREACH (node, mc->global_references) {
                 if (machines.count(node.first) == 0) {
                     std::stringstream ss;
-                    ss << "## - Warning: Cannot find a global machine or "
-                          "variable named "
+                    ss << "## - Warning: Cannot find a global machine or variable named "
                        << node.first << "\n";
                     error_messages.push_back(ss.str());
                     ++num_errors;
@@ -943,8 +941,7 @@ char *getFilePath(const char *fname, char *buf, size_t buf_size) {
         return 0;
     }
     buf[0] = 0;
-    if (fname[0] == '/') {
-        /* absolute path already given */
+    if (fname[0] == '/') { /* absolute path already given */
         if (buf_size > strlen(fname)) {
             strncpy(buf, fname, buf_size);
         }
@@ -987,8 +984,7 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
         /*        else if (strcmp(argv[i], "-s") == 0 && i < argc-1)
                     maxlogsize = strtol(argv[++i], NULL, 10);
         */
-        else if (strcmp(argv[i], "-i") == 0 && i < argc - 1) {
-            // initialise from persistent store
+        else if (strcmp(argv[i], "-i") == 0 && i < argc - 1) { // initialise from persistent store
             char buf[200];
             //if (getFilePath(argv[++i], buf, 200))
             set_persistent_store(argv[++i] /*strdup(buf)*/);
@@ -1003,52 +999,40 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
                 }
             */
         }
-        else if (strcmp(argv[i], "-c") == 0 && i < argc - 1) {
-            // debug config file
+        else if (strcmp(argv[i], "-c") == 0 && i < argc - 1) { // debug config file
             set_debug_config(argv[++i]);
         }
-        else if (strcmp(argv[i], "-m") == 0 && i < argc - 1) {
-            // modbus mapping file
+        else if (strcmp(argv[i], "-m") == 0 && i < argc - 1) { // modbus mapping file
             set_modbus_map(argv[++i]);
         }
-        else if (strcmp(argv[i], "-g") == 0 && i < argc - 1) {
-            // dependency graph file
+        else if (strcmp(argv[i], "-g") == 0 && i < argc - 1) { // dependency graph file
             set_dependency_graph(argv[++i]);
         }
-        else if (strcmp(argv[i], "-p") == 0 && i < argc - 1) {
-            // publisher port
+        else if (strcmp(argv[i], "-p") == 0 && i < argc - 1) { // publisher port
             set_publisher_port((int)strtol(argv[++i], 0, 10), true);
         }
-        else if (strcmp(argv[i], "-ps") == 0 && i < argc - 1) {
-            // persistent store port
+        else if (strcmp(argv[i], "-ps") == 0 && i < argc - 1) { // persistent store port
             set_persistent_store_port((int)strtol(argv[++i], 0, 10));
         }
-        else if (strcmp(argv[i], "-mp") == 0 && i < argc - 1) {
-            // modbus port
+        else if (strcmp(argv[i], "-mp") == 0 && i < argc - 1) { // modbus port
             set_modbus_port((int)strtol(argv[++i], 0, 10));
         }
-        else if (strcmp(argv[i], "-cp") == 0 && i < argc - 1) {
-            // command port
+        else if (strcmp(argv[i], "-cp") == 0 && i < argc - 1) { // command port
             set_command_port((int)strtol(argv[++i], 0, 10), true);
         }
-        else if (strcmp(argv[i], "--name") == 0 && i < argc - 1) {
-            // command port
+        else if (strcmp(argv[i], "--name") == 0 && i < argc - 1) { // command port
             set_device_name(argv[++i]);
         }
-        else if (strcmp(argv[i], "--stats") == 0) {
-            // command port
+        else if (strcmp(argv[i], "--stats") == 0) { // command port
             enable_statistics(true);
         }
-        else if (strcmp(argv[i], "--nostats") == 0) {
-            // do not keep stats
+        else if (strcmp(argv[i], "--nostats") == 0) { // do not keep stats
             enable_statistics(false);
         }
-        else if (strcmp(argv[i], "--export_c") == 0) {
-            // generate c code
+        else if (strcmp(argv[i], "--export_c") == 0) { // generate c code
             set_export_to_c(true);
         }
-        else if (strcmp(argv[i], "--config") == 0) {
-            // use a config file
+        else if (strcmp(argv[i], "--config") == 0) { // use a config file
             Configuration conf(argv[++i]);
             int ecat_cpu = conf.asInt("ethercat_thread_cpu_affinity");
             if (ecat_cpu) {
@@ -1151,8 +1135,7 @@ int loadConfig(std::list<std::string> &files) {
                 ++num_errors;
             }
         }
-        else if (strlen(filename) == 1) {
-            /* '-' means stdin */
+        else if (strlen(filename) == 1) { /* '-' means stdin */
             opened_file = 1;
             NB_MSG << "\nProcessing stdin\n";
             yyfilename = "stdin";
@@ -1240,8 +1223,7 @@ void initialise_machines() {
             }
         }
     }
-    else {
-        // enable 'contant' machines and marked as persistent
+    else { // enable 'contant' machines and marked as persistent
 #if 0
         m_iter = MachineInstance::begin();
         while (m_iter != MachineInstance::end()) {

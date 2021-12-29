@@ -96,8 +96,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
     std::string ds;
     std::string state_name;
     uint64_t auth = 0;
-    if (params.size() == 5 || (params.size() == 4 && params[2] == "TO")) {
-        // SET machine TO state
+    if (params.size() == 5 || (params.size() == 4 && params[2] == "TO")) { // SET machine TO state
         ds = params[1].asString();
         state_name = params[3].asString();
         if (params.size() == 5) {
@@ -107,8 +106,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
             }
         }
     }
-    else if (params.size() == 3 || params.size() == 4) {
-        // STATE machine state
+    else if (params.size() == 3 || params.size() == 4) { // STATE machine state
         ds = params[1].asString();
         state_name = params[2].asString();
         if (params.size() == 4) {
@@ -1461,8 +1459,7 @@ bool IODCommandChannel::run(std::vector<Value> &params) {
         return true;
     }
     std::stringstream ss;
-    ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [ ( PATTERN string | "
-          "PROPERTY string string ) ]  ]";
+    ss << "usage: CHANNEL name [ REMOVE| ADD MONITOR [ ( PATTERN string | PROPERTY string string ) ]  ]";
     for (unsigned int i = 0; i < params.size() - 1; ++i) {
         ss << params[i] << " ";
     }

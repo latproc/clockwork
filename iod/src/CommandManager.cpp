@@ -77,8 +77,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
         if (setup_status != e_waiting_connect) {
             {
                 FileLogger fl(program_name);
-                fl.f() << "CommandManagercheckConnections() attempting to "
-                          "setup connection "
+                fl.f() << "CommandManagercheckConnections() attempting to setup connection "
                        << " setup status is " << setup_status << "\n"
                        << std::flush;
             }
@@ -88,8 +87,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
         }
         else {
             FileLogger fl(program_name);
-            fl.f() << "CommandManager has no client or setup connection: setup "
-                      "status is "
+            fl.f() << "CommandManager has no client or setup connection: setup status is "
                    << setup_status << "\n"
                    << std::flush;
         }

@@ -264,8 +264,7 @@ void Scheduler::add(ScheduledItem *item) {
     top = next();
     next_time = top->delivery_time;
     long delay = next_time - nowMicrosecs();
-    if (delay <= next_delay_time || next_delay_time <= 0) {
-        // && delay>=0 && next_delay_time>=0) {
+    if (delay <= next_delay_time || next_delay_time <= 0) { // && delay>=0 && next_delay_time>=0) {
         next_delay_time = delay;
         if (internals->thread_ptr) {
             internals->thread_ptr->interrupt();
@@ -373,8 +372,7 @@ void Scheduler::idle() {
 
         if (state == e_waiting && is_ready) {
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
-            safeSend(sync, "sched",
-                     5); // tell clockwork we have something to do
+            safeSend(sync, "sched", 5); // tell clockwork we have something to do
             state = e_waiting_cw;
         }
         if (state == e_waiting_cw) {

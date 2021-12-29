@@ -49,9 +49,8 @@ class FileLogger {
 class LogState {
   public:
     static LogState *instance() {
-        if (!state_instance) {
+        if (!state_instance)
             state_instance = new LogState;
-        }
         return state_instance;
     }
     static void cleanup() { delete state_instance; }
@@ -108,9 +107,8 @@ std::ostream &operator<<(std::ostream &, const LogState &);
 class Logger {
   public:
     static Logger *instance() {
-        if (!logger_instance) {
+        if (!logger_instance)
             logger_instance = new Logger;
-        }
         return logger_instance;
     }
     typedef int Level;

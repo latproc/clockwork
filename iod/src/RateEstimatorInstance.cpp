@@ -31,8 +31,7 @@ void RateEstimatorInstance::idle() {
             settings = new CounterRateFilterSettings(8);
         }
     }
-    if (is_enabled) {
-        // && hasWork()) {
+    if (is_enabled) { // && hasWork()) {
         double delta = 0;
         uint64_t curr_t =
             (pos_m->io_interface) ? pos_m->io_interface->read_time : rate_calc_process_time;

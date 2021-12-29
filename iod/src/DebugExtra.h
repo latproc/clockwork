@@ -24,9 +24,8 @@
 class DebugExtra {
   public:
     static DebugExtra *instance() {
-        if (!instance_) {
+        if (!instance_)
             instance_ = new DebugExtra;
-        }
         return instance_;
     }
     int DEBUG_PARSER;
