@@ -946,17 +946,17 @@ INTEGERVAL   {
 | MEAN SYMBOL FROM SYMBOL {
 	$$ = new Value(new MeanValue($2,$4));
 }
-| SERIALISE SYMBOL FROM SYMBOL {
-    $$ = new Value(new SerialiseValue($2, $4, ","));
-}
 | SERIALISE SYMBOL FROM SYMBOL SEPARATED BY STRINGVAL {
     $$ = new Value(new SerialiseValue($2, $4, $7));
 }
-| SERIALISE SYMBOL {
-    $$ = new Value(new SerialiseValue($2, ","));
-}
 | SERIALISE SYMBOL SEPARATED BY STRINGVAL {
     $$ = new Value(new SerialiseValue($2, $5));
+}
+| SERIALISE SYMBOL FROM SYMBOL {
+    $$ = new Value(new SerialiseValue($2, $4, ","));
+}
+| SERIALISE SYMBOL {
+    $$ = new Value(new SerialiseValue($2, ","));
 }
 | SUM OF SYMBOL {
 	$$ = new Value(new SumValue($3));

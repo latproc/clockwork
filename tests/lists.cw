@@ -128,13 +128,22 @@ dt DigitTest digits;
 dt2 DigitTest numbers;
 
 
-SerialiseDemo MACHINE list_of_machines, list_of_numbers {
-  ENTER INIT {
-    LOG "Flag names: " + (SERIALISE name FROM list_of_machines SEPARATED BY ",");
-    LOG SERIALISE list_of_numbers SEPARATED BY " ";
+SerialiseDemo MACHINE list_of_machines, list_of_numbers, list_of_strings {
+  OPTION names "";
+  OPTION numbers "";
+  run DEFAULT;
+  ENTER run {
+    names := SERIALISE name FROM list_of_machines; # SEPARATED BY ",";
+    LOG "Serialised Names: " + names;
+    names := SERIALISE name FROM list_of_machines SEPARATED BY "|";
+    LOG "Serialised Names: " + names;
+    numbers := SERIALISE list_of_numbers;
+    LOG "numbers: " + numbers;
+    LOG "strings: " + (SERIALISE list_of_strings SEPARATED BY " ") + "...";
   }
 }
-serialise SerialiseDemo Flags, digits;
+strings LIST "now","is","the","time";
+serialise SerialiseDemo Flags, digits, strings;
 
 /* Demonstration of set functions using LISTs */
 
