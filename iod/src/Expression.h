@@ -1,37 +1,63 @@
 /*
-  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+    Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
-  This file is part of Latproc
+    This file is part of Latproc
 
-  Latproc is free software; you can redistribute it and/or
-  modify it under the terms of the GNU General Public License
-  as published by the Free Software Foundation; either version 2
-  of the License, or (at your option) any later version.
+    Latproc is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
 
-  Latproc is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+    Latproc is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-  You should have received a copy of the GNU General Public License
-  along with Latproc; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+    You should have received a copy of the GNU General Public License
+    along with Latproc; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 #ifndef __Expression_h__
 #define __Expression_h__ 1
 
-#include <iostream>
 #include "symboltable.h"
+#include <iostream>
 #include <list>
-
 
 class MachineInstance;
 
-enum PredicateOperator { opNone, opGE, opGT, opLE, opLT, opEQ, opNE, opAND, opOR, opNOT,
-    opUnaryMinus, opPlus, opMinus, opTimes, opDivide, opMod, opAssign, opMatch,
-    opBitAnd, opBitOr, opBitXOr, opNegate, opAny, opAll, opCount, opIncludes,
-    opInteger, opFloat, opAbsoluteValue, opString
+enum PredicateOperator {
+    opNone,
+    opGE,
+    opGT,
+    opLE,
+    opLT,
+    opEQ,
+    opNE,
+    opAND,
+    opOR,
+    opNOT,
+    opUnaryMinus,
+    opPlus,
+    opMinus,
+    opTimes,
+    opDivide,
+    opMod,
+    opAssign,
+    opMatch,
+    opBitAnd,
+    opBitOr,
+    opBitXOr,
+    opNegate,
+    opAny,
+    opAll,
+    opCount,
+    opIncludes,
+    opInteger,
+    opFloat,
+    opAbsoluteValue,
+    opString
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 
@@ -52,28 +78,40 @@ struct ExprNode {
     const Value *node;
     PredicateOperator op;
     enum { t_int, t_op } kind;
+
   private:
     ExprNode &operator=(const ExprNode &other);
 };
 
 struct Stack {
-    ExprNode pop() { ExprNode v = stack.front(); stack.pop_front(); return v; }
+    ExprNode pop() {
+        ExprNode v = stack.front();
+        stack.pop_front();
+        return v;
+    }
     void push(ExprNode v) { stack.push_front(v); }
     void clear();
-    std::list<ExprNode>stack;
-    std::ostream &operator<<(std::ostream &out)const;
-    std::ostream &traverse(std::ostream &out, std::list<ExprNode>::const_iterator &iter, std::list<ExprNode>::const_iterator &end) const;
-    Stack(const Stack &other) { std::copy(other.stack.begin(), other.stack.end(), std::back_inserter(stack)); }
-    Stack() { }
+    std::list<ExprNode> stack;
+    std::ostream &operator<<(std::ostream &out) const;
+    std::ostream &traverse(std::ostream &out, std::list<ExprNode>::const_iterator &iter,
+                           std::list<ExprNode>::const_iterator &end) const;
+    Stack(const Stack &other) {
+        std::copy(other.stack.begin(), other.stack.end(), std::back_inserter(stack));
+    }
+    Stack() {}
+
   private:
     Stack &operator=(const Stack &other);
 };
 
 struct PredicateTimerDetails {
-  int64_t delay;
-  std::string label;
-  PredicateTimerDetails(int64_t dly, const std::string &lbl) :  delay(dly), label(lbl) { }
-  void setup(int64_t dly, const std::string &lbl) { delay = dly; label = lbl; }
+    int64_t delay;
+    std::string label;
+    PredicateTimerDetails(int64_t dly, const std::string &lbl) : delay(dly), label(lbl) {}
+    void setup(int64_t dly, const std::string &lbl) {
+        delay = dly;
+        label = lbl;
+    }
 };
 
 class Predicate {
@@ -89,7 +127,10 @@ class Predicate {
     bool error() { return lookup_error; }
     const std::string &errorString() { return error_str; }
     void clearError() { lookup_error = false; }
-    void setErrorString(const std::string &err) { error_str = err; lookup_error = true; }
+    void setErrorString(const std::string &err) {
+        error_str = err;
+        lookup_error = true;
+    }
 
     Predicate(Value *v);
     Predicate(Value &v);
@@ -101,16 +142,19 @@ class Predicate {
     Predicate(const Predicate &other);
     Predicate &operator=(const Predicate &other);
     const Value &getTimerValue();
-    std::ostream &operator <<(std::ostream &out) const;
+    std::ostream &operator<<(std::ostream &out) const;
     Value evaluate(MachineInstance *m);
     void flushCache();
-    /* predicate clauses may involve timers that need to be scheduled or cleared
-       whenever a machine changes state.
+    /*  predicate clauses may involve timers that need to be scheduled or cleared
+        whenever a machine changes state.
     */
     bool usesTimer(Value &val) const; // recursively search for use of TIMER
     void findTimerClauses(std::list<Predicate *> &clauses);
-    PredicateTimerDetails *scheduleTimerEvents(PredicateTimerDetails *earliest, MachineInstance *target); // setup timer events that trigger the supplied machine
-    void clearTimerEvents(MachineInstance *target); // clear all timer events scheduled for the supplid machine
+    PredicateTimerDetails *scheduleTimerEvents(
+        PredicateTimerDetails *earliest,
+        MachineInstance *target); // setup timer events that trigger the supplied machine
+    void clearTimerEvents(
+        MachineInstance *target); // clear all timer events scheduled for the supplid machine
 
     int priority; // used for the default predicate
     bool lookup_error;
@@ -120,7 +164,7 @@ class Predicate {
     uint64_t last_evaluation_time;
 };
 
-std::ostream &operator <<(std::ostream &out, const Predicate &p);
+std::ostream &operator<<(std::ostream &out, const Predicate &p);
 
 class Condition {
   public:
