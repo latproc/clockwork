@@ -120,7 +120,11 @@ std::ostream &SerialiseValue::operator<<(std::ostream &out) const {
     if (!property.empty()) {
         out << property << " FROM ";
     }
-    return out << machine_list_name << " SEPARATED BY \"" << delim << "\" (" << last_result << ")";
+    return out << machine_list_name << " SEPARATED BY \"" << delim;
+    if (!last_result.isNull()) {
+        out << " (" << last_result << ")";
+    }
+    out << "\n";
 }
 std::ostream &operator<<(std::ostream &out, const SerialiseValue &val) {
     return val.operator<<(out);
@@ -623,7 +627,7 @@ const Value &SerialiseValue::operator()() {
 
     last_process_time = currentTime();
     if (machine_list->parameters.size() == 0) {
-        last_result = 0;
+        last_result = Value("", Value::t_string);
         return last_result;
     }
 
