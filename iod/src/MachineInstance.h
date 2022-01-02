@@ -245,16 +245,18 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     // basic lock functionality
     bool lock(MachineInstance *requester) {
-        if (locked && locked != requester)
+        if (locked && locked != requester) {
             return false;
+        }
         else {
             locked = requester;
             return true;
         }
     }
     bool unlock(MachineInstance *requester) {
-        if (locked != requester)
+        if (locked != requester) {
             return false;
+        }
         else {
             locked = 0;
             return true;

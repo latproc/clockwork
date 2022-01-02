@@ -38,16 +38,19 @@ class DynamicValueBase {
   public:
     virtual ~DynamicValueBase();
     static DynamicValueBase *ref(DynamicValueBase *dv) {
-        if (!dv)
+        if (!dv) {
             return 0;
-        else
+        }
+        else {
             dv->refs++;
+        }
         return dv;
     }
     DynamicValueBase *deref() {
         --refs;
-        if (!refs)
+        if (!refs) {
             delete this;
+        }
         return 0;
     }
     virtual DynamicValueBase *clone() const = 0;
@@ -187,8 +190,9 @@ class ListValue : public Value {
     void addItem(Value next_value);
     void addItem(std::string key, Value next_value);
     void push_back(Value *value) {
-        if (list)
+        if (list) {
             list->push_back(value);
+        }
     }
 };
 

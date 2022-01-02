@@ -60,8 +60,9 @@ class Internals {
     }
     Internals() : allocated(false), f(0) {}
     ~Internals() { /**f << std::flush;*/
-        if (allocated)
+        if (allocated) {
             delete f;
+        }
     }
 };
 

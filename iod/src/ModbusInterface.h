@@ -50,10 +50,12 @@ class ModbusAddress {
     enum Group { coil, discrete, none, input_register, holding_register, string };
     enum Source { unknown, machine, state, command, property };
     static Group toGroup(int g) {
-        if (g < 0 || g > 4)
+        if (g < 0 || g > 4) {
             return none;
-        else
+        }
+        else {
             return (Group)g;
+        }
     }
 
     static const int first_auto_address = 1000;

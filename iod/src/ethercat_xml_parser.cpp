@@ -59,8 +59,9 @@ void ConfigurationDetails::init() {
 
 SmMapping::SmMapping() : num(0), n_pdos(0), pdos(0) { init(); }
 SmMapping::~SmMapping() {
-    if (pdos)
+    if (pdos) {
         delete pdos;
+    }
 }
 
 void SmMapping::init() {

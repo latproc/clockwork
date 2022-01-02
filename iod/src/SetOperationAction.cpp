@@ -100,8 +100,9 @@ bool CompareValues(Value a, Value &b) {
 
 bool CompareSymbolAndValue(MachineInstance *scope, Value &sym, std::string &prop, Value &b) {
     MachineInstance *mi = scope->lookup(sym);
-    if (!mi)
+    if (!mi) {
         throw new SetOperationException();
+    }
     return CompareValues(mi->getValue(prop), b);
 }
 
