@@ -4,9 +4,9 @@
 
 /* check whether lists can turn members on and off */
 Flags LIST f1, f2, f3;
-f1 FLAG;
-f2 FLAG;
-f3 FLAG;
+f1 FLAG(name: "flag 1");
+f2 FLAG(name: "flag 2");
+f3 FLAG(name: "flag 3");
 
 TestListCommands MACHINE list {
 	COMMAND TurnOn { SEND turnOn TO list; }
@@ -50,12 +50,12 @@ Controller MACHINE outputs {
   waiting WHEN outputs DISABLED;
   on WHEN ALL outputs ARE on AND outputs ENABLED;
   off DEFAULT;
-  
+
   COMMAND turnOn { SEND turnOn TO outputs }
   COMMAND turnOff { SEND turnOff TO outputs }
   COMMAND enable { ENABLE outputs; }
   COMMAND disable { DISABLE outputs; }
-  
+
 }
 controller Controller lights;
 
@@ -70,7 +70,7 @@ numbers LIST two,four,three,one;
 
 number_list LIST two,four,three,one;
 
-/* A sorting machine to sort its parameter into 
+/* A sorting machine to sort its parameter into
 	numeric order
 */
 Sorter MACHINE input {
@@ -81,8 +81,8 @@ sorter Sorter number_list;
 /* A test of what happens when a COPY is done an no values match */
 Copier MACHINE input, output {
 	OPTION VALUE 3;
-	COMMAND copy { 
-		CLEAR output; 
+	COMMAND copy {
+		CLEAR output;
 		COPY ALL FROM input TO output WHERE input.ITEM == VALUE;
 	}
 }
@@ -118,12 +118,23 @@ DigitTest MACHINE list {
     done WHEN 5 == LAST OF list;
     nonempty WHEN SIZE OF list > 0;
     empty DEFAULT;
-    ENTER INIT { xx := LAST OF list; }
+    ENTER INIT {
+      xx := LAST OF list;
+    }
     ENTER changed { sz := SIZE OF list; LOG "items in list: " + sz; }
     ENTER nonempty { val := TAKE LAST FROM list; LOG "Value popped: " + val; }
 }
 dt DigitTest digits;
 dt2 DigitTest numbers;
+
+
+SerialiseDemo MACHINE list_of_machines, list_of_numbers {
+  ENTER INIT {
+    LOG "Flag names: " + (SERIALISE name FROM list_of_machines SEPARATED BY ",");
+    LOG SERIALISE list_of_numbers SEPARATED BY " ";
+  }
+}
+serialise SerialiseDemo Flags, digits;
 
 /* Demonstration of set functions using LISTs */
 
@@ -144,11 +155,11 @@ active LIST; # list of the flags that should activate
 
 COMMAND GetAvailableGrabs {
 	CLEAR reachable;
-   	COPY COMMON 
-		BETWEEN all_positions 
-		AND current_index_pos 
+   	COPY COMMON
+		BETWEEN all_positions
+		AND current_index_pos
 		TO reachable;
-   	COPY COMMON 
+   	COPY COMMON
 		BETWEEN actions
 		AND reachable
 		TO active
@@ -201,9 +212,9 @@ Logger MACHINE names {
 	working WHEN SIZE OF names > 0;
 	idle DEFAULT;
 
-	ENTER working { 
-		val := TAKE FIRST FROM names; 
-		LOG val; 
+	ENTER working {
+		val := TAKE FIRST FROM names;
+		LOG val;
 		SET SELF TO task_done;
 		IF ( val == "ted" ) { INCLUDE "mary" IN names; }
 	}
@@ -237,7 +248,7 @@ l LIST a,b,c;
 PopAndPushTest MACHINE list {
 	l2 LIST;
 
-	ENTER INIT { 
+	ENTER INIT {
 		s := ITEM 0 OF list;
 		PUSH s TO l2;
 		s := ITEM 1 OF list;
@@ -256,7 +267,7 @@ SelectAllTest MACHINE list {
 	temp LIST;
 	two LIST;
 	saved LIST;
-	COMMAND run { 
+	COMMAND run {
 		CLEAR temp;
 		CLEAR two;
 		COPY ALL FROM list TO temp WHERE list.ITEM IS on;
@@ -299,10 +310,10 @@ DependancyTest MACHINE items {
 	off DEFAULT;
 
 	COMMAND clear { CLEAR items; }
-	COMMAND setup { 
-		PUSH dept1 TO items; 
-		PUSH dept2 TO items; 
-		PUSH dept3 TO items; 
+	COMMAND setup {
+		PUSH dept1 TO items;
+		PUSH dept2 TO items;
+		PUSH dept3 TO items;
 	}
 }
 dependancy_test DependancyTest depts;
@@ -324,5 +335,23 @@ tc testcopy aa;
 StringList LIST "a,b,c", "one two three", "house rabbit tree";
 
 pop_and_push_strings PopAndPushTest StringList;
+
+Other MACHINE a,b {
+  list LIST a,b;
+}
+
+CopyFromOther MACHINE other {
+  local LIST;
+
+  ENTER INIT {
+    WAIT 2000;
+    COPY ALL FROM other.list TO local;
+    LOG "local list size: " + (SIZE OF local);
+  }
+}
+ff1 FLAG;
+ff2 FLAG;
+other Other ff1,ff2;
+copy_from_other CopyFromOther other;
 
 

@@ -21,11 +21,11 @@ extern char *yytext;
 %}
 
 %union {
-	int iVal;
+	long iVal;
 	double fVal;
 	const char *sVal;
 	const char *symbol;
-    const char *pVal;
+	const char *pVal;
 	Value *val;
 };
 

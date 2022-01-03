@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -51,7 +51,7 @@ SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value
 
 SetOperationActionTemplate::~SetOperationActionTemplate() {
 }
-                                           
+
 Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
     switch (operation) {
         case soIntersect: return new IntersectSetOperation(mi, this);
@@ -63,7 +63,7 @@ Action *SetOperationActionTemplate::factory(MachineInstance *mi) {
 }
 
 SetOperationAction::SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat)
-    : Action(m), scope(m), count(dat->count), 
+    : Action(m), scope(m), count(dat->count),
         source_a(dat->src_a_name), source_b(dat->src_b_name), dest(dat->dest_name),
         condition(dat->condition), property_name(dat->property_name),
 				source_a_machine(0), source_b_machine(0),
@@ -85,7 +85,7 @@ std::ostream &SetOperationAction::operator<<(std::ostream &out) const {
 }
 
 class SetOperationException : public std::exception {
-    
+
 };
 
 bool CompareValues(Value a, Value &b){
@@ -211,7 +211,7 @@ Action::Status IntersectSetOperation::doOperation() {
         status = Failed;
         return status;
     }
-    if (count == -1 || !count.asInteger(to_copy)) 
+    if (count == -1 || !count.asInteger(to_copy))
 			to_copy = source_a_machine->parameters.size();
 #ifdef DEPENDENCYFIX
     MachineInstance *last_machine_a = 0;
@@ -239,7 +239,7 @@ Action::Status IntersectSetOperation::doOperation() {
         }
         last_a = a;
         last_machine_a = mi;
-        
+
 #endif
         for (unsigned int j = 0; j < source_b_machine->parameters.size(); ++j) {
             Value &b(source_b_machine->parameters.at(j).val);
@@ -282,7 +282,7 @@ Action::Status IntersectSetOperation::doOperation() {
                 if (matched) break; // already matched this item, no need to keep looking
             }
             else {
-                if (v1.kind == Value::t_symbol 
+                if (v1.kind == Value::t_symbol
 					&& (b.kind == Value::t_string || b.kind == Value::t_integer)) {
                     if (CompareSymbolAndValue(owner, v1, property_name, b)) {
                         dest_machine->addParameter(a, v1.cached_machine);
@@ -343,7 +343,7 @@ doneIntersectOperation:
 UnionSetOperation::UnionSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat)
 : SetOperationAction(m, dat)
 {
-    
+
 }
 
 Action::Status UnionSetOperation::doOperation() {
@@ -381,7 +381,7 @@ Action::Status UnionSetOperation::doOperation() {
 DifferenceSetOperation::DifferenceSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat)
 : SetOperationAction(m, dat)
 {
-    
+
 }
 
 Action::Status DifferenceSetOperation::doOperation() {
@@ -413,7 +413,7 @@ Action::Status DifferenceSetOperation::doOperation() {
         delim = ",";
     }
     ss << "]";
-  dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
+    dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
     status = Complete;
     return status;
 }
@@ -519,7 +519,7 @@ Action::Status SelectSetOperation::doOperation() {
 						condition.predicate->flushCache();
 						source_a_machine->localised_names["ITEM"] = mi;
 					}
-				
+
 					if ( (!condition.predicate || condition(owner)) ){
 						if (dest_machine->_type == "LIST") {
 							if (!MachineIncludesParameter(dest_machine,a)) {
@@ -539,7 +539,7 @@ Action::Status SelectSetOperation::doOperation() {
 						if (remove_selected) continue; // skip the increment to next parameter
 					}
 					else if (condition.predicate) {
-					//std::cout << "evaluation of " << condition.last_evaluation 
+					//std::cout << "evaluation of " << condition.last_evaluation
 					//	<< " gave " << condition.last_result << "\n";
 					}
 				}
@@ -571,7 +571,7 @@ Action::Status SelectSetOperation::doOperation() {
         delim = ",";
     }
     ss << "]";
-	  source_a_machine->localised_names.erase("ITEM");
+    source_a_machine->localised_names.erase("ITEM");
     dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
     status = Complete;
     return status;

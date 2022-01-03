@@ -119,16 +119,16 @@ char *send_command(std::list<Value> &params) {
 	}
 	sendMessage(*psocket, msg);
 	size_t size = strlen(msg);
-    free(msg);
+	free(msg);
 	zmq::message_t reply;
 	if (psocket->recv(&reply)) {
 		size = reply.size();
 		char *data = (char *)malloc(size+1);
 		memcpy(data, reply.data(), size);
 		data[size] = 0;
-        
-        if (cmd == "LIST") initialise_machine_names(data);
-        return data;
+
+		if (cmd == "LIST") initialise_machine_names(data);
+		return data;
 	}
     return 0;
 }
@@ -267,6 +267,7 @@ void initialise_machine_names(char *data) {
 
 void initialise_commands() {
 	commands.push_back("CHANNELS");
+	commands.push_back("CLEAR");
 	commands.push_back("DESCRIBE");
 	commands.push_back("DISABLE");
 	commands.push_back("ENABLE");
@@ -283,9 +284,34 @@ void initialise_commands() {
 	commands.push_back("RESUME");
 	commands.push_back("SCHEDULER");
 	commands.push_back("SEND");
+	commands.push_back("SHOW");
+	commands.push_back("SHUTDOWN");
 	commands.push_back("SET");
 	commands.push_back("TOGGLE");
 	commands.push_back("TRACING");
+}
+
+void check_messages() {
+	std::list<Value> params;
+	params.push_back("MESSAGES");
+	char * data = send_command(params);
+	if (data) {
+		char *p = data + strlen(data);
+		int num_lines = 0;
+		while (p != data) {
+			if (*p == '\n') {
+				if (++num_lines>10) {
+					++p;
+					break;
+				}
+			}
+			--p;
+		}
+		if (*p)
+			std::cout << "recent messages:\n" << p << "\n";
+		free(data);
+	}
+
 }
 
 const char *program_name;
@@ -343,12 +369,15 @@ int main(int argc, const char * argv[])
         
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
-				if (!quiet) initialise_machine_names(0);
+				if (!quiet) {
+					initialise_machine_names(0);
+					check_messages();
+				}
         initialise_commands();
 
 		do yyparse(); while (!cmdline_done);
    }
-    catch(std::exception& e) {
+    catch(const std::exception &e) {
         if (zmq_errno())
             std::cerr << "ZMQ error: " << zmq_strerror(zmq_errno()) << "\n";
         else

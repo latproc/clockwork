@@ -21,7 +21,6 @@ MessageLog *MessageLog::instance() {
 }
 
 std::string MessageLog::add(const std::string a, const std::string b, const std::string c, const std::string d) {
-	size_t len = 50 + a.length() + b.length() + c.length() + d.length();
 	char buf[50];
 	Logger::getTimeString(buf, 50);
 	std::string msg(buf);

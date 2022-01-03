@@ -132,12 +132,13 @@ public:
 
 class ModbusMonitor {
 	public:
-	    ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format, bool read_only = true);
-	    ModbusMonitor(const ModbusMonitor &orig);
-	    ModbusMonitor &operator=(const ModbusMonitor &other);
-	    std::ostream &operator<<(std::ostream &out) const;
-	    bool operator==(const ModbusMonitor &other);
-	
+		ModbusMonitor(std::string name, unsigned int group, unsigned int address, unsigned int len, const std::string &format, bool read_only = true);
+		ModbusMonitor(const ModbusMonitor &orig);
+		~ModbusMonitor();
+		ModbusMonitor &operator=(const ModbusMonitor &other);
+		std::ostream &operator<<(std::ostream &out) const;
+		bool operator==(const ModbusMonitor &other);
+
 		std::string &name() { return name_; }
 		const std::string &name() const { return name_; }
 

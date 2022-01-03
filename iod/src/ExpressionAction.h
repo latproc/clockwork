@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -30,6 +30,7 @@ struct ExpressionActionTemplate : public ActionTemplate {
 	enum opType { opInc, opDec, opSet };
   ExpressionActionTemplate(CStringHolder var, opType oper);
   ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v);
+  ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v, const Value &e);
   ExpressionActionTemplate(CStringHolder var, opType oper, int a);
   ExpressionActionTemplate(CStringHolder var, opType oper, const char *a);
   virtual Action *factory(MachineInstance *mi);
@@ -39,16 +40,18 @@ struct ExpressionActionTemplate : public ActionTemplate {
 	CStringHolder lhs;
 	Value rhs;
 	opType op;
+  Value extra;
 };
 
 struct ExpressionAction : public Action {
-	ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat) : Action(mi), lhs(eat.lhs), rhs(eat.rhs), op(eat.op) { }
+	ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat) : Action(mi), lhs(eat.lhs), rhs(eat.rhs), op(eat.op), extra(eat.extra) { }
 	Status run();
 	Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
 	CStringHolder lhs;
 	Value rhs;
 	ExpressionActionTemplate::opType op;
+	Value extra;
 	MachineInstance *machine;
 };
 

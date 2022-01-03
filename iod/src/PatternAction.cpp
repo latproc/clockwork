@@ -1,18 +1,18 @@
 /*
  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
- 
+
  This file is part of Latproc
- 
+
  Latproc is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
  as published by the Free Software Foundation; either version 2
  of the License, or (at your option) any later version.
- 
+
  Latproc is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with Latproc; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -30,7 +30,7 @@ Action *CopyPatternActionTemplate::factory(MachineInstance *mi) {
 
 Action::Status CopyPatternAction::run() {
 	owner->start(this);
-	
+
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
     Value val;
@@ -39,7 +39,12 @@ Action::Status CopyPatternAction::run() {
     rexp_info *info = create_pattern(pattern.c_str());
     find_matches(info, matches, val.asString().c_str());
     if (matches.size()) {
-        owner->setValue(dest, matches[0]);
+		if (matches.size() > 1) {
+			owner->setValue(dest, Value(matches[1], Value::t_string));
+		}
+		else {
+			owner->setValue(dest, Value(matches[0], Value::t_string));
+		}
     }
     release_pattern(info);
 	status = Complete;
@@ -69,7 +74,7 @@ static int matched(const char *match, int index, void *user_data) {
 
 Action::Status CopyAllPatternAction::run() {
 	owner->start(this);
-	
+
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
     Value val;
@@ -81,7 +86,7 @@ Action::Status CopyAllPatternAction::run() {
         std::string res;
         for (unsigned int i=0; i<matches.size(); ++i)
             res += matches[i];
-        owner->setValue(dest, res);
+      owner->setValue(dest, Value(res, Value::t_string));
     }
     release_pattern(info);
 	status = Complete;
@@ -107,7 +112,7 @@ Action *ExtractPatternActionTemplate::factory(MachineInstance *mi) {
 
 Action::Status ExtractPatternAction::run() {
 	owner->start(this);
-	
+
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
 	status = Complete;
@@ -131,7 +136,7 @@ Action *ExtractAllPatternActionTemplate::factory(MachineInstance *mi) {
 
 Action::Status ExtractAllPatternAction::run() {
 	owner->start(this);
-	
+
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
 	status = Complete;
@@ -157,7 +162,7 @@ Action *ReplacePatternActionTemplate::factory(MachineInstance *mi) {
 
 Action::Status ReplacePatternAction::run() {
 	owner->start(this);
-	
+
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
 	status = Complete;
@@ -181,7 +186,7 @@ Action *ReplaceAllPatternActionTemplate::factory(MachineInstance *mi) {
 
 Action::Status ReplaceAllPatternAction::run() {
 	owner->start(this);
-	
+
 	DBG_M_ACTIONS << " processing " << *this << "\n";
 	status = Running;
 	status = Complete;
