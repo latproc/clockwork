@@ -3,12 +3,11 @@
 #include <stdlib.h>
 #include "buffering.h"
 #include <assert.h>
-#ifdef TEST
 #include <math.h>
-#endif
 
 struct CircularBuffer *createBuffer(int size)
 {
+    if (size <= 0) return 0;
     struct CircularBuffer *buf = (struct CircularBuffer *)malloc(sizeof(struct CircularBuffer));
     buf->bufsize = size;
     buf->front = -1;
@@ -147,8 +146,7 @@ double bufferSum(struct CircularBuffer *buf, int n) {
 	int i = bufferLength(buf);
 	if (i>n) i = n;
 	double tot = 0.0;
-	while (i) {
-		i--;
+	while (i-- > 0) {
 		tot = tot + getBufferValue(buf, i);
 	}
 	return tot;
@@ -199,17 +197,21 @@ double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len
 	return sum / normal;
 }
 
-#ifdef TEST
+#ifdef TESTING
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int failures = 0;
-
 
 void fail(int test) {
 	++failures;
 	printf("test %d failed\n", test);
 }
 
-int main(int argc, const char *argv[]) {
+
+int run_buffer_tests(int argc, const char *argv[]) {
 	double (*sum)(struct CircularBuffer *buf, int n) = bufferSum;
 	double (*average)(struct CircularBuffer *buf, int n) = bufferAverage;
 	
@@ -269,18 +271,19 @@ int main(int argc, const char *argv[]) {
 	for (i=2; i<10; ++i) addSample(mybuf, i, 2000);
 	for (; i<20; ++i) addSample(mybuf, i, 2020);
 	{ int n;
-	if ( ( n=findMovement(mybuf, 10)) != 10 ) {
+	if ( ( n=findMovement(mybuf, 0.0f, 10)) != 10 ) {
 		fail(tests); printf("findMovement(..,10) expected 10, got %d\n", n);
 	}
 	++tests;
-	if ( ( n=findMovement(mybuf, 100)) != 18 ) {
+	for (; i<28; ++i) addSample(mybuf, i, 2020);
+	if ( ( n=findMovement(mybuf, 0.0f, 100)) != 18 ) {
 		/*2200,2200,2000,2000,2000,2000,2000,2000,2000,2000,
 		2020,2020,2020,2020,2020,2020,2020,2020,2020,2020 */
 		fail(tests); printf("findMovement(..,100) expected 18, got %d\n", n);
 	}
 	}
 	destroyBuffer(mybuf);
-	
+
 	printf("tests:\t%d\nfailures:\t%d\n", tests, failures );
 
 	/* 
@@ -301,6 +304,10 @@ int main(int argc, const char *argv[]) {
   mybuf = createBuffer(6);
   for (i=0; i<6; ++i) { double x = i*22+10; double y = i*20 + 30; addSample(mybuf, x, y); }
   for (i=10; i<300; i+=10) { printf ("%4ld\t%8.3f\n", (long)i, getBufferValueAt(mybuf, i)); }
-   return 0;
+  return failures;
 }
+#ifdef __cplusplus
+}
+#endif
+
 #endif

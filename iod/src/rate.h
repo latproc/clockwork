@@ -1,6 +1,8 @@
 #ifndef __rate_limiter_cw__
 #define __rate_limiter_cw__
 
+#include <stdint.h>
+
 class RateLimiter {
 public:
 	enum BackOffAlgorithm { boaNone, boaStep, boaGeometric };

@@ -165,6 +165,10 @@ ModbusMonitor::ModbusMonitor(const ModbusMonitor &other)
 	}
 }
 
+ModbusMonitor::~ModbusMonitor() {
+	delete value;
+}
+
 /*
 ModbusMonitor &ModbusMonitor::operator=(const ModbusMonitor &other) 
 {

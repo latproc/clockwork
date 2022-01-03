@@ -85,7 +85,10 @@ vel Value;
 acc Value;
 stddev Value;
 
-Update MACHINE raw_input, smoothed_input, vel_input, acc_input, stddev_input {
+Time MACHINE { OPTION VALUE 0; }
+time Time;
+
+Update MACHINE raw_input, smoothed_input, vel_input, acc_input, stddev_input, time_input {
   LOCAL OPTION delay 100;
   update WHEN SELF IS idle AND TIMER >= delay;
   idle DEFAULT;
@@ -99,4 +102,4 @@ Update MACHINE raw_input, smoothed_input, vel_input, acc_input, stddev_input {
     stddev_input.VALUE := ain.stddev; 
   }
 }
-update Update raw, pos, vel, acc, stddev;
+update Update raw, pos, vel, acc, stddev, time;

@@ -1,6 +1,8 @@
 #ifndef __AUTO_STATS_H__
 #define __AUTO_STATS_H__
 
+#include <stdint.h>
+
 class AutoStatStorage {
 public:
 	// auto stats are linked to system properties

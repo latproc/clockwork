@@ -1,5 +1,7 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 2.8.12)
 project (MBM)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 set (MBM_VERSION_MAJOR 0)
 set (MBM_VERSION_MINOR 1)
@@ -9,7 +11,7 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake_modules/")
 
-set (CMAKE_CXX_FLAGS "-g -Wall --std=gnu++0x -Wno-deprecated-declarations")
+set (CMAKE_CXX_FLAGS "-g -Wall --std=c++11 -Wno-deprecated-declarations")
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 
 if (RUN_TESTS)

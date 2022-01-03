@@ -282,6 +282,7 @@ void close_connection() {
 	assert(ctx);
 	modbus_flush(ctx);
 	modbus_close(ctx);
+	modbus_free(ctx);
 	connected = false;
 	ctx = 0;
 }
@@ -417,7 +418,7 @@ void operator()() {
 
 	while (!finished) {
 		if (!connected) {
-			boost::mutex::scoped_lock(update_mutex);
+			boost::mutex::scoped_lock lock(update_mutex);
 			if (ctx) { 
 	    		modbus_close(ctx);
 	    		modbus_free(ctx);

@@ -110,28 +110,28 @@ void usage(int argc, char const *argv[])
 
 static void listDirectory( const std::string pathToCheck, std::list<std::string> &file_list)
 {
-  boost::filesystem::path dir(pathToCheck.c_str());
-  try {
-    for (boost::filesystem::directory_iterator iter = boost::filesystem::directory_iterator(dir); iter != boost::filesystem::directory_iterator(); iter++)
-    {
-      boost::filesystem::directory_entry file = *iter;
-      char *path_str = strdup(file.path().native().c_str());
-      struct stat file_stat;
-      int err = stat(path_str, &file_stat);
-      if (err == -1) {
-        std::cerr << "Error: " << strerror(errno) << " checking file type for " << path_str << "\n";
-      }
-      else if (file_stat.st_mode & S_IFDIR){
-        listDirectory(path_str, file_list);
-      }
-      else if (boost::filesystem::exists(file.path()) &&
-               (file.path().extension() == ".lpc" || file.path().extension() == ".cw") )
-      {
-        file_list.push_back( file.path().native() );
-      }
-      free(path_str);
+    boost::filesystem::path dir(pathToCheck.c_str());
+    try {
+        for (boost::filesystem::directory_iterator iter = boost::filesystem::directory_iterator(dir); iter != boost::filesystem::directory_iterator(); iter++)
+        {
+            boost::filesystem::directory_entry file = *iter;
+            char *path_str = strdup(file.path().native().c_str());
+            struct stat file_stat;
+            int err = stat(path_str, &file_stat);
+            if (err == -1) {
+                std::cerr << "Error: " << strerror(errno) << " checking file type for " << path_str << "\n";
+            }
+            else if (file_stat.st_mode & S_IFDIR){
+                listDirectory(path_str, file_list);
+            }
+            else if (boost::filesystem::exists(file.path()) &&
+				(file.path().extension() == ".lpc" || file.path().extension() == ".cw") )
+            {
+                file_list.push_back( file.path().native() );
+            }
+            free(path_str);
+        }
     }
-  }
   catch (const boost::filesystem::filesystem_error& ex)
   {
     std::cerr << ex.what() << '\n';
@@ -1019,7 +1019,7 @@ int loadConfig(std::list<std::string> &files) {
   if (!cw_framework_initialised) {
     int modbus_result = load_preset_modbus_mappings();
     if (modbus_result) return modbus_result;
-    
+
     predefine_special_machines();
     cw_framework_initialised = true;
   }

@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -34,22 +34,15 @@
 
 class CStringHolder {
 public:
-    CStringHolder(char *s) : s_str(0), str(s) { }
-	  CStringHolder(const char *s) : s_str(0), str(strdup(s)) { }
-	  CStringHolder(const CStringHolder &orig)  : s_str(0), str(0) {
-		if (orig.str) str = strdup(orig.str);
-		s_str = orig.s_str;
-	}
-	CStringHolder & operator=(const CStringHolder &orig) {
-    if (str) { free(str); str = 0; }
-		if (orig.str) str = strdup(orig.str);
-		s_str = orig.s_str;
-		return *this;
-	}
-    ~CStringHolder() { if (str) free(str); }
-    const char *get() const { return (str) ? str : s_str; }
-    CStringHolder() { if (str) free( str ); }
-    const char *s_str;
+  CStringHolder(char *s);
+  CStringHolder(const char *s);
+  CStringHolder(const CStringHolder &orig);
+  CStringHolder & operator=(const CStringHolder &orig);
+  ~CStringHolder();
+  const char *get() const;
+  CStringHolder();
+private:
+  const char *s_str;
 	char *str;
 };
 
@@ -116,9 +109,9 @@ struct Package {
     Receiver *receiver;
     Message *message;
 	bool needs_receipt;
-    Package(Transmitter *t, Receiver *r, Message *m, bool need_receipt = false) 
+    Package(Transmitter *t, Receiver *r, Message *m, bool need_receipt = false)
 		: transmitter(t), receiver(r), message(m), needs_receipt(need_receipt) {}
-    Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false) 
+    Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false)
 		: transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
 	Package(const Package &);
     ~Package();
@@ -137,7 +130,7 @@ public:
 	bool hasPending(const Message &msg);
     long getId() const { return id; }
 protected:
-		
+
 std::list<Package> mail_queue;
 static boost::mutex q_mutex;
 bool has_work;

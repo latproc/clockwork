@@ -1,18 +1,18 @@
 /*
  Copyright (C) 2014 Martin Leadbeater, Michael O'Connor
- 
+
  This file is part of Latproc
- 
+
  Latproc is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
  as published by the Free Software Foundation; either version 2
  of the License, or (at your option) any later version.
- 
+
  Latproc is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with Latproc; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -20,6 +20,7 @@
 
 #include <string>
 #include <string.h>
+#include <inttypes.h>
 #include "cJSON.h"
 #include "MessageEncoding.h"
 #include "value.h"
@@ -34,7 +35,7 @@ std::string MessageEncoding::valueType(const Value &v) {
             break;
         case Value::t_string: return "STRING";
         case Value::t_integer: return "INTEGER";
-		case Value::t_float: return "FLOAT";
+        case Value::t_float: return "FLOAT";
         case Value::t_bool: return "BOOL";
 #ifdef DYNAMIC_VALUES
         case Value::t_dynamic: {
@@ -59,9 +60,9 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
         case Value::t_integer:
             cJSON_AddNumberToObject(obj, name, val.iValue);
             break;
-		case Value::t_float:
-			cJSON_AddItemToObject(obj, name, cJSON_CreateDouble(val.fValue));
-			break;
+        case Value::t_float:
+          cJSON_AddItemToObject(obj, name, cJSON_CreateDouble(val.fValue));
+          break;
         case Value::t_bool:
             if (val.bValue)
                 cJSON_AddTrueToObject(obj, name);
@@ -154,7 +155,7 @@ char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value 
 char *MessageEncoding::encodeState(const std::string &machine, const std::string &state, uint64_t authority) {
 	size_t msglen = machine.length() + state.length() + 80;
 	char *buf = (char *)malloc(msglen);
-	snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\", %lld]} ", machine.c_str(), state.c_str(), authority);
+	snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\", %" PRId64 "]} ", machine.c_str(), state.c_str(), authority);
 	return buf;
 /*
     cJSON *msg = cJSON_CreateObject();

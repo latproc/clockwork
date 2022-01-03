@@ -63,12 +63,12 @@ MachineCommand::~MachineCommand() {
 		owner->active_actions.remove(a); 
 		if (a->getTrigger() && a->getTrigger()->enabled() && !a->getTrigger()->fired() )
 			a->disableTrigger();
-        a->release();
+		a->release();
 	}
-    if (timeout_trigger) {
-        timeout_trigger->disable();
-        timeout_trigger = timeout_trigger->release();
-    }
+	if (timeout_trigger) {
+			timeout_trigger->disable();
+			timeout_trigger = timeout_trigger->release();
+	}
 }
 
 void MachineCommand::addAction(Action *a, ActionParameterList *params) { 
@@ -118,7 +118,8 @@ Action::Status MachineCommand::runActions() {
 				error_str = a->error();
 			owner->stop(a);
 			last_step = current_step; // remember the command that aborted
-			current_step = actions.size();
+			current_step = actions.size(); // jump to the end of the action list
+			a->release();
 			setBlocker(0);
 			return Complete;
 		}
@@ -141,11 +142,13 @@ Action::Status MachineCommand::runActions() {
 			MessageLog::instance()->add(ss.str().c_str());
 			NB_MSG << ss.str() << "\n";
 			owner->stop(a);
+			a->release();
 			status = Running; // the current action needs a restart so overall this command list is still running
 			return status;
 		}
 		if (!a->complete()) {
 			DBG_M_ACTIONS << "leaving action: " << *a << " to run for a while\n";
+			a->release();
 			return stat; // currently running at curent_step
 		}
 		Action *x = owner->executingCommand();
@@ -159,10 +162,11 @@ Action::Status MachineCommand::runActions() {
 		}
 		setBlocker(0);
 		last_step = current_step++;
-        DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
-    }
-    DBG_M_ACTIONS << owner->getName() << " " << *this <<" completed all actions\n";
-    return Complete;
+		DBG_M_ACTIONS << owner->getName() <<  " completed action: " << *a << "\n";
+		a->release();
+	}
+	DBG_M_ACTIONS << owner->getName() << " " << *this <<" completed all actions\n";
+	return Complete;
 }
 
 Action::Status MachineCommand::run() { 

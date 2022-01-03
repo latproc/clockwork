@@ -2,7 +2,7 @@ PatternTest MACHINE {
 
 	found WHEN message MATCHES `c..l`;
 	not_found DEFAULT;
-	
+
 	OPTION tab Test;
 
 	ENTER found {
@@ -14,6 +14,17 @@ PatternTest MACHINE {
     }
 }
 pattern_test PatternTest;
+
+# remove the last character of a property
+RemoveLast MACHINE {
+	OPTION input "A message.";
+	ENTER INIT {
+		# COPY will only copy first matched pattern or the whole match if
+		# there are no subexpressions
+		input := COPY `(.*).` FROM input;
+	}
+}
+remove_last RemoveLast;
 
 TimeSeq MACHINE {
 

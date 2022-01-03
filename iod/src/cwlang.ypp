@@ -154,7 +154,7 @@ struct Subcondition {
 %token ASCENDING ASC DESCENDING DESC INDEX
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
-%token FORMAT
+%token FORMAT SEPARATED SERIALISE
 
 %union {
 	bool bVal;
@@ -878,14 +878,14 @@ SYMBOL WHEN predicate {
 	ConditionHandler ch;
 	ch.condition.predicate = $3->predicate;
 	if (strcmp($3->command, "EXECUTE") == 0) {
-		ch.command_name = $3->name;
+		ch.set_command_name($3->name);
 	}
 	else if (strcmp($3->command, "FLAG") == 0) {
-		ch.command_name = "FLAG";
-		ch.flag_name = $3->name;
+		ch.set_command_name("FLAG");
+		ch.set_flag_name($3->name);
 	}
 	delete $3->name;
-	DBG_PARSER << current_machineclass->name << " pushing stable state test " << ch.command_name << "\n";
+	DBG_PARSER << current_machineclass->name << " pushing stable state test " << ch.command_name() << "\n";
 	ss.subcondition_handlers->push_back(ch);
 	delete $3;
 	current_machineclass->stable_states.pop_back();
@@ -962,6 +962,7 @@ value {
 | expression '^' expression { $$ = new Predicate($1, opBitXOr, $3);}
 | expression AS INTEGER { $$ = new Predicate(0, opInteger, $1); }
 | expression AS FLOAT { $$ = new Predicate(0, opFloat, $1); }
+| expression AS STRINGTYPE { $$ = new Predicate(0, opString, $1); }
 | '!' expression { $$ = new Predicate(0, opNegate, $2);}
 | '-' expression { $$ = new Predicate(new Predicate(-1), opTimes, $2);}
 | expression MATCHES PATTERN {
@@ -1031,6 +1032,30 @@ INTEGERVAL   {
 }
 | MEAN SYMBOL FROM SYMBOL {
 	$$ = new Value(new MeanValue($2,$4));
+}
+| SERIALISE SYMBOL FROM SYMBOL {
+    $$ = new Value(new SerialiseValue($2, $4, ","));
+}
+| SERIALISE SYMBOL FROM SYMBOL SEPARATED BY STRINGVAL {
+    $$ = new Value(new SerialiseValue($2, $4, $7));
+}
+| SERIALISE SYMBOL {
+    $$ = new Value(new SerialiseValue($2, ","));
+}
+| SERIALISE SYMBOL SEPARATED BY STRINGVAL {
+    $$ = new Value(new SerialiseValue($2, $5));
+}
+| SUM OF SYMBOL {
+	$$ = new Value(new SumValue($3));
+}
+| MIN OF SYMBOL {
+	$$ = new Value(new MinValue($3));
+}
+| MAX OF SYMBOL {
+	$$ = new Value(new MaxValue($3));
+}
+| MEAN OF SYMBOL {
+	$$ = new Value(new MeanValue($3));
 }
 | BITSET FROM ENTRIES OF SYMBOL WITH STATES SYMBOL {
     $$ = new Value(new BitsetValue($8,$5));
@@ -1430,6 +1455,11 @@ SET SYMBOL TO value error_clause  {
 | SYMBOL BECOMES expression /* set the value of a property */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
+}
+| SET SYMBOL TO PROPERTY SYMBOL OF SYMBOL error_clause /* set the state based on the value of a property */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
+	cleanupErrorClause(true);
 }
 | SET SYMBOL TO PROPERTY SYMBOL error_clause /* set the state based on the value of a property */ {
     if (current_action) current_actions->push_back(current_action);

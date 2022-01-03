@@ -287,7 +287,7 @@ IODCommand *parseCommandString(const char *data) {
 	std::vector<Value> params;
 	std::list<Value> *param_list = 0;
 	if (MessageEncoding::getCommand(data, ds, &param_list)) {
-		params.push_back(ds);
+    params.push_back(Value(ds, Value::t_string));
 		if (param_list) {
 			std::list<Value>::const_iterator iter = param_list->begin();
 			while (iter != param_list->end()) {
@@ -303,10 +303,10 @@ IODCommand *parseCommandString(const char *data) {
 		std::istringstream iss(data);
 		std::string tmp;
 		iss >> ds;
-		parts.push_back(ds.c_str());
+		parts.push_back(Value(ds.c_str(), Value::t_string));
 		++count;
 		while (iss >> tmp) {
-			parts.push_back(tmp.c_str());
+      parts.push_back(Value(tmp.c_str(), Value::t_string));
 			++count;
 		}
 		std::copy(parts.begin(), parts.end(), std::back_inserter(params));
@@ -475,7 +475,7 @@ void IODCommandThread::operator()() {
 			cti->socket.bind (url_buf);
 			break;
 		}
-		catch (zmq::error_t zex) {
+		catch (const zmq::error_t &zex) {
 			{	NB_MSG << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
 				FileLogger fl(program_name); usleep(10);
 				fl.f() << "Error: trying port " << port << ": " << zmq_strerror(zmq_errno()) << "\n";
@@ -530,7 +530,7 @@ void IODCommandThread::operator()() {
 				if (rc == -1 && errno == EAGAIN) continue;
 				if (done) break;
 			}
-			catch (zmq::error_t zex) {
+			catch (const zmq::error_t &zex) {
 				{
 					FileLogger fl(program_name);
 					fl.f() << "Client Interface exception during poll() " << zex.what() << "\n";
@@ -600,7 +600,7 @@ void IODCommandThread::operator()() {
 			}
 
 		}
-		catch (std::exception e) {
+		catch (const std::exception &e) {
 			// when processing is stopped, we expect to get an exception on this interface
 			// otherwise, we fail since something strange has happened
 			if (!done) {

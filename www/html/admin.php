@@ -227,7 +227,7 @@ print <<<EOD
   table { width:100%; }
   th, td {text-align: left; }
   </style>
-  <title>Wooltech WebIO Controller</title>
+  <title>Clockwork WebIO Controller</title>
 </head>
 <body>
 $error_messages $page_body $debug_messages 

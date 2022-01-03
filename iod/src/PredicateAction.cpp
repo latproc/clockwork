@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -70,8 +70,8 @@ void PredicateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
   }
 }
 
-Action *PredicateActionTemplate::factory(MachineInstance *mi) { 
-  return new PredicateAction(mi, *this); 
+Action *PredicateActionTemplate::factory(MachineInstance *mi) {
+  return new PredicateAction(mi, *this);
 }
 
 Value resolve(Predicate *p, MachineInstance *m) {
@@ -85,7 +85,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
 			Value prop = m->getValue(v.sValue); // property lookup
 			if (prop != SymbolTable::Null) {
 				if (m && m->debug() ) {
-					DBG_PREDICATES << "Using property " << p->entry 
+					DBG_PREDICATES << "Using property " << p->entry
 						<< " to resolve search (" << prop << ", type: " << prop.kind << ")"
 						<< ")\n";
 				}
@@ -97,7 +97,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
 		}
 	}
     else if (v.kind == Value::t_dynamic) {
-        DynamicValue *dv = v.dynamicValue();
+        DynamicValueBase *dv = v.dynamicValue();
         if (dv) return dv->operator()(m);
         return false;
     }
@@ -108,7 +108,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
 
 Value eval(Predicate *p, MachineInstance *m){
 	if (!p) return SymbolTable::Null;
-	if (p->left_p || p->right_p) { 
+	if (p->left_p || p->right_p) {
 		Value l;
 		Value r;
 		if (p->left_p) l = eval(p->left_p, m);
@@ -140,13 +140,14 @@ Value eval(Predicate *p, MachineInstance *m){
       case opNegate: res = ~r; break;
 			case opInteger: res = r.trunc(); break;
 			case opFloat: res = r.toFloat(); break;
+			case opString: res = r.asString(); break;
 			case opAssign: res = r; break; // TBD
       case opMatch: return matches(l.asString().c_str(), r.asString().c_str());
       case opAny:
       case opAll:
       case opIncludes:
       case opCount: {
-          DynamicValue *dyn_v = r.dynamicValue();
+          DynamicValueBase *dyn_v = r.dynamicValue();
           if (dyn_v) return dyn_v->operator()(m);
       }
       break;
@@ -155,9 +156,9 @@ Value eval(Predicate *p, MachineInstance *m){
         default:
             std::cerr << "Error: unhandled operator " << p->op << " in evaluating predicate\n";
 	    }
-		
+
 		if (m && m->debug()) {
-			if (p->op == opNOT || p->op == opInteger || p->op == opFloat) {
+			if (p->op == opNOT || p->op == opInteger || p->op == opFloat || p->op == opString) {
 				DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res << "\n";
 			}
 			else {
@@ -184,7 +185,7 @@ PredicateAction::~PredicateAction() {
 
 Action::Status PredicateAction::run() {
 	owner->start(this);
-	
+
 	DBG_M_PREDICATES << " processing expression: " << *predicate << "\n";
 	status = Running;
 	if (predicate->left_p && predicate->left_p->entry.kind == Value::t_symbol) {
@@ -197,7 +198,7 @@ Action::Status PredicateAction::run() {
 		if (owner->getStateMachine()->global_references.count(name)) {
 			MachineInstance *global_machine = owner->getStateMachine()->global_references[name];
 			if (!global_machine) {
-				std::cerr << owner->getName() << " Error, can't find machine for global " 
+				std::cerr << owner->getName() << " Error, can't find machine for global "
 					<< name << "\n" << std::flush;
 				abort();
 			}
@@ -206,7 +207,7 @@ Action::Status PredicateAction::run() {
 			}
 		}
 		else {
-            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to " 
+            DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name << " to "
 							<< val << " (type: " << val.kind << ")\n";
 			owner->setValue(name, val);
 		}

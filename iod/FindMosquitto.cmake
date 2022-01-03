@@ -1,21 +1,21 @@
-find_path(MOSQUITTO_INCLUDE_DIR
+find_path(Mosquitto_INCLUDE_DIR
           mosquitto.h
           PATHS /usr/local/src/mosquitto/mosquitto-1.4.1/include)
 
-find_library(MOSQUITTO_LIBRARY
+find_library(Mosquitto_LIBRARY
              PATHS /usr/local/src/mosquitto/mosquitto-1.4.1/lib
              NAMES mosquitto)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(MOSQUITTO DEFAULT_MSG MOSQUITTO_LIBRARY MOSQUITTO_INCLUDE_DIR)
+find_package_handle_standard_args(Mosquitto DEFAULT_MSG Mosquitto_LIBRARY Mosquitto_INCLUDE_DIR)
 
-if(MOSQUITTO_FOUND)
-  set(MOSQUITTO_LIBRARIES ${MOSQUITTO_LIBRARY})
-else(MOSQUITTO_FOUND)
-  set(MOSQUITTO_LIBRARIES)
-endif(MOSQUITTO_FOUND)
+if(Mosquitto_FOUND)
+  set(Mosquitto_LIBRARIES ${Mosquitto_LIBRARY})
+else(Mosquitto_FOUND)
+  set(Mosquitto_LIBRARIES)
+endif(Mosquitto_FOUND)
 
-mark_as_advanced(MOSQUITTO_INCLUDE_DIR MOSQUITTO_LIBRARY)
+mark_as_advanced(Mosquitto_INCLUDE_DIR Mosquitto_LIBRARY)
 
 # This file is based on a file in the changeling package https://github.com/JamesHarrison/changeling
 #

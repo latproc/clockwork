@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<EtherCATInfo Version="1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EtherCATInfo.xsd">
+  <Vendor>
+    <Id>#xff</Id>
+    <Name>Testing Co</Name>
+  </Vendor>
+  <Descriptions>
+    <Devices>
+      <Device Physics="YY">
+        <Type ProductCode="#x0000ffff" RevisionNo="#x00010000">TEST-DEV</Type>
+        <Name LcId="1033">TEST-DEV</Name>
+        <Fmmu Sm="2">Outputs</Fmmu>
+        <Fmmu Sm="3">Inputs</Fmmu>
+        <Sm MinSize="40" MaxSize="100" DefaultSize="100" StartAddress="#x1800" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+        <Sm MinSize="40" MaxSize="100" DefaultSize="100" StartAddress="#x1C00" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+        <Sm StartAddress="#x1100" ControlByte="#x64" Enable="1">Outputs</Sm>
+        <Sm StartAddress="#x1200" ControlByte="#x20" Enable="1">Inputs</Sm>
+        <RxPdo Sm="2">
+          <Index>#x1701</Index>
+          <Name LcId="1033">PDO mapping 2 in</Name>
+          <Exclude>#x1700</Exclude>
+          <Entry>
+            <Index>#x4000</Index>
+            <SubIndex>0</SubIndex>
+            <BitLen>16</BitLen>
+            <Name>Command</Name>
+            <DataType>UINT</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x4010</Index>
+            <SubIndex>0</SubIndex>
+            <BitLen>16</BitLen>
+            <Name>Setting</Name>
+            <DataType>UINT</DataType>
+          </Entry>
+        </RxPdo>
+        <TxPdo Sm="3">
+          <Index>#x1B00</Index>
+          <Name LcId="1033">PDO mapping 3 out</Name>
+          <Entry>
+            <Index>#x4100</Index>
+            <SubIndex>0</SubIndex>
+            <BitLen>16</BitLen>
+            <Name>Status</Name>
+            <DataType>UINT</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x4110</Index>
+            <SubIndex>0</SubIndex>
+            <BitLen>16</BitLen>
+            <Name>Level</Name>
+            <DataType>UINT</DataType>
+          </Entry>
+        </TxPdo>
+      </Device>
+    </Devices>
+  </Descriptions>
+</EtherCATInfo>

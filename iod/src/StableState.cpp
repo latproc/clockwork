@@ -39,3 +39,7 @@ void StableState::collectTimerPredicates() {
     std::cout << "subcondition on " << state_name << " timer clause: " << *(*ti++) << "\n";
   }
 }
+
+void StableState::triggerFired(Trigger *trig) {
+    if (owner) owner->setNeedsCheck();
+}

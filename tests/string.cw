@@ -9,7 +9,10 @@ OPTION result "";
 		LOG "Octal 2,3,8,255: \002\003\010\377";
         x := SELF.NAME + " test";
         LOG x; # this needs to be fixed
-        
+        LOG -(1 + 1);
+        LOG (1 + 1) AS FLOAT;
+        LOG (1 + 1) AS STRING;
+
         v := 123;
         d := 3;
         buf := "z       " + v + "." + d;

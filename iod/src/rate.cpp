@@ -13,12 +13,12 @@ last(0), step(20000), max_delay(4000000), scale(1.05)  {
 }
 
 RateLimiter::RateLimiter(int msec, BackOffAlgorithm boa) : back_off(boa), delay(msec*1000), start_delay(msec*1000),
-	last(0), step(20000), max_delay(4000000)  {
+  last(0), step(20000), max_delay(4000000), scale(1.0)  {
 }
 
 bool RateLimiter::ready() {
 	uint64_t now = microsecs();
-	if (now >= last + delay) {
+	if (now - last >= delay) {
 		last = now; 
 		if (back_off == boaStep)
 			delay += step;

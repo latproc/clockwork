@@ -23,21 +23,22 @@
     to its device and that device is responding.
     ... and the rest..
  */
-#include <iostream>
 #include "anet.h"
+#include "regular_expressions.h"
+#include <boost/bind.hpp>
 #include <boost/thread.hpp>
-#include <sys/time.h>
-#include <signal.h>
-#include <errno.h>
-#include <cassert>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
-#include <sys/socket.h>
-#include <zmq.hpp>
-#include "regular_expressions.h"
-#include <functional>
+#include <cassert>
+#include <errno.h>
 #include <exception>
-#include <boost/bind.hpp>
+#include <functional>
+#include <iostream>
+#include <signal.h>
+#include <stddef.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <zmq.hpp>
 
 #include <stdio.h>
 #include <sys/select.h>
@@ -181,60 +182,60 @@ public:
         }
         return result;
     }
-    
+
     void clientMode(bool which = true) { is_server = !which; }
     void serverMode(bool which = true) { is_server = which; }
-    
+
     bool server() const { return is_server; }
     bool client() const { return !is_server; }
 
     int port() const { return port_; }
     void setPort(int p) { port_ = p; got_port = true; }
-    
+
     char *host() const { return host_; }
     void setHost(const char *h) {
         if (host_) free(host_);
         host_ = strdup(h); got_host = true;
     }
-    
+
     const char *name() const { return name_; }
     void setName(const char *n) { if(name_) free(name_); name_ = strdup(n); }
-    
+
     const char *property() const { return property_; }
     const char *machine() const { return machine_; }
-    
+
     const char *iodHost() const { return iod_host_; }
     void setIODHost(const char *h) { if (iod_host_) free(iod_host_); iod_host_ = strdup(h); }
-    
+
     const char *serialPort() const { return serial_port_name_; }
     const char *serialSettings() const { return serial_settings_; }
-    
+
     bool skippingRepeats() const { return !collect_duplicates; }
     void doNotSkipRepeats() { collect_duplicates = true; }
-    
+
     bool disconnectOnTimeout() { return disconnect_on_timeout; }
     void setDisconnectOnTimeout(bool which) { disconnect_on_timeout = which; }
-    
+
     void setSerialPort(const char *port_name) {
         if (serial_port_name_) free(serial_port_name_);
         serial_port_name_ = strdup(port_name);
         got_serial = true;
         clientMode(true);
     }
-    
+
     void setSerialSettings(const char *settings) {
         if (serial_settings_) free(serial_settings_);
         serial_settings_ = strdup(settings);
         got_serial_settings = true;
         clientMode(true);
     }
-    
+
     const char *watchProperty() const { return watch_; }
     void setWatch(const char*new_watch) {
         if (watch_) free(watch_);
         watch_ = strdup(new_watch);
     }
-    
+
     // properties are provided in dot form, we split it into machine and property for the iod
     void setProperty(const char* machine_property) {
         if (machine_) free(machine_);
@@ -258,13 +259,13 @@ public:
             got_property = true;
         }
     }
-	
+
 	void setChannelName(const char *chan) {
 		if (channel_) free(channel_);
 		channel_ = strdup(chan);
 	}
 	const char *getChannelName() const { if (channel_) return channel_; else return "DeviceConnector"; }
-	
+
     const char *pattern() { return pattern_; }
     void setPattern(const char *p) {
         if (pattern_) free(pattern_);
@@ -273,11 +274,11 @@ public:
         got_pattern = (compiled_pattern->compilation_result == 0) ? true : false;
         if (!got_pattern)
             std::cerr << compiled_pattern->compilation_error << "\n";
-    
+
     }
     rexp_info *regexpInfo() { return compiled_pattern;}
     rexp_info *regexpInfo() const { return compiled_pattern;}
-    
+
     bool sendJSON() const { return structured_messaging; }
     void setSendJSON(bool which) { structured_messaging = which; }
     void setQueue(const char *q) {
@@ -286,11 +287,11 @@ public:
         got_queue = true;
     }
     const char *queue() const { return queue_; }
-    
+
     int publisher_port() const { return cw_publisher; }
     void set_publisher_port(int port) { cw_publisher = port; }
 
-    
+
 protected:
     bool is_server;    // if true, listen for connections, otherwise, connect to a device
     int port_;          // network port number
@@ -309,7 +310,7 @@ protected:
     bool collect_duplicates;
     bool disconnect_on_timeout;
     int cw_publisher;
-    
+
     // validation
     bool got_host;
     bool got_port;
@@ -342,11 +343,11 @@ int getSettings(const char *str, struct termios *settings) {
 	char *buf = strdup(str);
 	char *fld, *p = buf;
 	enum config_state state = cs_baud;
-	
+
 	while (state != cs_end) {
 		fld = strsep(&p, ":");
 		if (!fld) goto done_getSettings; // no more fields
-        
+
 		char *tmp = 0;
 		// most fields are numbers so we usually attempt to convert the field to a number
 		long val = 8;
@@ -423,7 +424,7 @@ int setupSerialPort(const char *portname, const char *setting_str) {
             goto closePort;
 		}
 		flags |= O_NONBLOCK;
-        
+
 		int ec = 0;
 		ec = fcntl(serial, F_SETFL, flags);
 		if (ec == -1) {
@@ -511,7 +512,7 @@ struct MatchFunction {
                     MatchFunction::instance()->result = match;
                 else
                     MatchFunction::instance()->result = MatchFunction::instance()->result + " " +match;
-                
+
                 std::string res = MatchFunction::instance()->result;
                 if (index == num_sub && (Options::instance()->skippingRepeats() == false
                                             || last_message != res || last_send.tv_sec +5 <  now.tv_sec)) {
@@ -531,7 +532,7 @@ struct MatchFunction {
         }
         return 0;
     }
-    
+
 protected:
     static MatchFunction *instance_;
     std::list<Value> params;
@@ -548,12 +549,12 @@ MatchFunction *MatchFunction::instance_;
 
 /** The ConnectionThread maintains a connection to the device, either on a network
     (tcp) stream or a serial port.
- 
+
    Device Status is used to report the connection state to clockwork via the status property
 */
 
 struct ConnectionThread {
-    
+
     void operator()() {
 
 		char thread_name_buf[100];
@@ -567,7 +568,7 @@ struct ConnectionThread {
 
         try {
             gettimeofday(&last_active, 0);
-            
+
             if (Options::instance()->server()) {
                 listener = anetTcpServer(msg_buffer, Options::instance()->port(), Options::instance()->host());
                 if (listener == ANET_ERR) {
@@ -578,18 +579,18 @@ struct ConnectionThread {
                     return;
                 }
             }
-            
+
             const int buffer_size = 100;
             char buf[buffer_size];
             size_t offset = 0;
             useconds_t retry_delay = 50000; // usec delay before trying to setup
                                                // the connection initialy 50ms with a back-off algorithim
-            
+
             DeviceStatus::instance()->setStatus(DeviceStatus::e_disconnected);
             updateProperty();
             while (!done) {
 //				std::cout << "c." << std::flush;
-                
+
                 // connect or accept connection
                 if (DeviceStatus::instance()->current() == DeviceStatus::e_disconnected && Options::instance()->client()) {
                     if (Options::instance()->serialPort()) {
@@ -616,7 +617,7 @@ struct ConnectionThread {
                     DeviceStatus::instance()->setStatus(DeviceStatus::e_connected);
                     updateProperty();
                 }
-                
+
                 fd_set read_ready;
 				const unsigned long wait_time = 2000000L;
 				unsigned long select_start;
@@ -634,13 +635,13 @@ struct ConnectionThread {
                 	    FD_SET(listener, &read_ready);
                 	    nfds = listener+1;
                 	}
-                
+
                 	struct timeval select_timeout;
                 	select_timeout.tv_sec = 0;
                 	select_timeout.tv_usec = 200000L;
 	                err = select(nfds, &read_ready, NULL, NULL, &select_timeout);
 					if (err != 0) break;
-				
+
 					if (microsecs() - select_start >= wait_time) {
 						std::cerr << "\ntimeout\n";
 						break;
@@ -661,7 +662,7 @@ struct ConnectionThread {
                         updateProperty();
                         std::cerr << "select timeout " << (wait_time /1000000L) << "."
                         << std::setfill('0') << std::setw(3) << ( (wait_time%1000000) / 1000) << "\n";
-                        
+
                         // we disconnect from a TCP connection on a timeout but do nothing in the case of a serial port
                         if (!Options::instance()->serialPort() && Options::instance()->disconnectOnTimeout()) {
                             std::cerr << "Closing device connection due to timeout\n";
@@ -672,28 +673,28 @@ struct ConnectionThread {
                         continue;
                     }
                 }
-                
+
 				if (done) break;
-                if (Options::instance()->server() 
-						&& DeviceStatus::instance()->current() == DeviceStatus::e_disconnected 
+                if (Options::instance()->server()
+						&& DeviceStatus::instance()->current() == DeviceStatus::e_disconnected
 						&& FD_ISSET(listener, &read_ready)) {
                     // Accept and setup a connection
                     int port;
                     char hostip[16]; // dot notation
                     connection = anetAccept(msg_buffer, listener, hostip, &port);
-                    
+
                     if (anetTcpKeepAlive(msg_buffer, connection) == -1) {
                         std::cerr << msg_buffer << "\n";
                         close(connection);
                         continue;
                     }
-                    
+
                     if (anetTcpNoDelay(msg_buffer, connection) == -1) {
                         std::cerr << msg_buffer << "\n";
                         close(connection);
                         continue;
                     }
-                    
+
                     if (anetNonBlock(msg_buffer, connection) == -1) {
                         std::cerr << msg_buffer << "\n";
                         close(connection);
@@ -717,7 +718,7 @@ struct ConnectionThread {
                         else if (n) {
                             DeviceStatus::instance()->setStatus( DeviceStatus::e_up );
                             updateProperty();
-                            
+
                             buf[offset+n] = 0;
                             {
                                 boost::mutex::scoped_lock lock(connection_mutex);
@@ -732,7 +733,7 @@ struct ConnectionThread {
                             std::cerr << "connection lost\n";
                             connection = -1;
                         }
-                        
+
                         // recalculate offset as we step through matches
                         offset = 0;
                         each_match(Options::instance()->regexpInfo(), buf, &offset, &MatchFunction::match_func, 0);
@@ -745,7 +746,7 @@ struct ConnectionThread {
 	                        }
 	                        std::cout << "\n";
 	                        std::cout << "     ";
-	                        
+
 	                        for (unsigned int i=0; i<offset; ++i) {
 	                            std::cout << std::hex << "   ";
 	                        }
@@ -768,21 +769,21 @@ struct ConnectionThread {
             }
 			std::cout << "Connection Thread Done\n";
 			is_shutdown = true;
-			
-        }catch (std::exception e) {
+
+        }catch (const std::exception &e) {
             if (zmq_errno())
                 std::cerr << zmq_strerror(zmq_errno()) << "\n";
             else
                 std::cerr << e.what() << "\n";
         }
     }
-    
+
     void send(const char *msg) {
         boost::mutex::scoped_lock lock(connection_mutex);
         to_send += msg;
         if (connection != -1 && !to_send.empty()) {
             //boost::mutex::scoped_lock lock(connection_mutex);
-            
+
             size_t n = write(connection, to_send.c_str(), to_send.length());
             if ((long)n == -1) {
                 std::cerr << "write error sending data to current connection\n";
@@ -792,8 +793,8 @@ struct ConnectionThread {
             }
         }
     }
-    
-    ConnectionThread() 
+
+    ConnectionThread()
 	: done(false), is_shutdown(false),
 		connection(-1), cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ), msg_buffer(0)
     {
@@ -805,19 +806,19 @@ struct ConnectionThread {
         last_status = DeviceStatus::e_unknown;
         cmd_interface.connect(iod_connection);
     }
-    
+
 	bool stopped() { return is_shutdown; }
     void stop() {
         if(done) {
-			std::cout << "connection thread is already done\n"; 
+			std::cout << "connection thread is already done\n";
 			return;
 		}
 		done = true;
         DeviceStatus::State dev_state = DeviceStatus::instance()->current();
-		std::cout << "device connector connection thread got stop when status == " 
+		std::cout << "device connector connection thread got stop when status == "
 			<< stringFromDeviceStatus(dev_state) << "\n";
-        if (dev_state == DeviceStatus::e_connected 
-				|| dev_state == DeviceStatus::e_up 
+        if (dev_state == DeviceStatus::e_connected
+				|| dev_state == DeviceStatus::e_up
 				|| dev_state == DeviceStatus::e_disconnected) {
 			std::cout << "closing connection\n";
             close(connection);
@@ -826,14 +827,14 @@ struct ConnectionThread {
 			updateProperty();
         }
     }
-    
+
     // returns the last received message and the time it arrived
     void get_last_message(std::string &msg, struct timeval &msg_time) {
         boost::mutex::scoped_lock lock(connection_mutex);
         msg = last_msg;
         msg_time = last_active;
     }
-    
+
     void updateProperty() {
         struct timeval now;
         gettimeofday(&now, 0);
@@ -930,8 +931,8 @@ public:
 	bool done;
 	bool is_shutdown;
 
-	void stop() { 
-		done = true; 
+	void stop() {
+		done = true;
 		std::cout << "device connector processing thread got stop\n";
 	}
 	bool stopped() { return is_shutdown; }
@@ -981,7 +982,7 @@ public:
 				if (!connection_manager->checkConnections(items, num_items, cmd)) { usleep(500); continue;}
 				error_count = 0;
 			}
-			catch (std::exception e) {
+			catch (const std::exception &e) {
                 std::cerr << e.what() << "\n";
 				++error_count;
 				if (zmq_errno()) {
@@ -1044,7 +1045,7 @@ public:
 						if (params) delete params;
 					}
 				}
-				catch (zmq::error_t e) {
+				catch (const zmq::error_t &e) {
                 	std::cerr << e.what() << "\n";
 					if (errno == EINTR) continue;
 
@@ -1053,7 +1054,7 @@ public:
 			}
 			else usleep(500);
 		}
-		
+
 		if (connection_thread) connection_thread->stop();
 //		std::cout << "p.done\n" << std::flush;
 		is_shutdown = true;
@@ -1166,7 +1167,7 @@ int main(int argc, const char * argv[])
 		catch(zmq::error_t io) {
 			std::cout << "zmq error: " << zmq_strerror(errno) << "\n"<<std::flush;
 		}
-		catch(std::exception ex) {
+		catch(const std::exception &ex) {
 			std::cout << " unknown exception: " << zmq_strerror(errno) << "\n";
 		}
 		assert(connection_manager);
@@ -1199,18 +1200,18 @@ int main(int argc, const char * argv[])
 			if (!processing_thread.stopped() && !connection_thread->stopped() ){
 				std::cout << "Waiting for threads to stop\n" << std::flush;
 			}
-			else if (!processing_thread.stopped()) 
+			else if (!processing_thread.stopped())
 				std::cout << "Waiting for processing thread to stop\n" << std::flush;
 			else
 				std::cout << "Waiting for connection thread to stop\n" << std::flush;
 		}
-			
+
         monitor.join();
 		processing.join();
 		std::cout << "done\n" << std::flush;
     }
-    catch (std::exception e) {
-        if (zmq_errno()) 
+    catch (const std::exception &e) {
+        if (zmq_errno())
             std::cerr << "error: " << zmq_strerror(zmq_errno()) << "\n";
         else
             std::cerr << e.what() << "\n";

@@ -11,20 +11,25 @@ class ConditionHandler {
 public:
 	ConditionHandler(const ConditionHandler &other);
 	ConditionHandler &operator=(const ConditionHandler &other);
-	ConditionHandler() : timer_val(0), timer_op(opGE), action(0), trigger(0), uses_timer(false), triggered(false) {}
+  ConditionHandler();
+	~ConditionHandler();
 
     bool check(MachineInstance *machine);
     void reset();
+  const std::string &command_name() const { return _command_name; }
+  void set_command_name(const std::string &cmd) { _command_name = cmd; }
+  const std::string &flag_name() const { return _flag_name; }
+  void set_flag_name(const std::string &flag) { _flag_name = flag; }
 
 	Condition condition;
-	std::string command_name;
-	std::string flag_name;
 	Value timer_val;
   PredicateOperator timer_op;
-	Action *action;
 	Trigger *trigger;
 	bool uses_timer;
 	bool triggered;
+private:
+  std::string _command_name;
+  std::string _flag_name;
 };
 
 #endif

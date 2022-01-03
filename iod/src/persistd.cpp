@@ -244,73 +244,81 @@ int main(int argc, const char * argv[]) {
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
     
     while (!done) {
-        zmq::pollitem_t items[] = {
-            { (void*)subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
-            { (void*)subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
-        };
-		if (!subscription_manager.checkConnections()) {
-			usleep(100);
-			continue;
-		}
-        try {
-            int rc = zmq::poll( &items[0], 2, 500);
-            if (need_refresh) {
-                CollectPersistentStatus(store);
-                need_refresh = false;
-            }
-            if (rc == 0) continue;
-        }
-        catch(zmq::error_t e) {
-            if (errno == EINTR || errno == EAGAIN) continue;
-        }
-        if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
-        //zmq::message_t update;
-        char data[1000];
-        size_t len = 0;
-        try {
-            len = subscription_manager.subscriber().recv(data, 1000, ZMQ_DONTWAIT);
-            if (!len) continue;
-        }
-        catch (zmq::error_t e) {
-            if (errno == EINTR) continue;
-            
-        }
-        data[len] = 0;
+			zmq::pollitem_t items[] = {
+					{ (void*)subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+					{ (void*)subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 },
+			};
+			if (!subscription_manager.checkConnections()) {
+				usleep(100);
+				continue;
+			}
+			try {
+					int rc = zmq::poll( &items[0], 2, 500);
+					if (need_refresh) {
+							CollectPersistentStatus(store);
+							need_refresh = false;
+					}
+					if (rc == 0) continue;
+			}
+			catch(const zmq::error_t &e) {
+					if (errno == EINTR || errno == EAGAIN) continue;
+			}
+			if ( !(items[1].revents & ZMQ_POLLIN) ) continue;
+			//zmq::message_t update;
+			char *data = 0;
+			size_t len = 0;
+			try {
+				MessageHeader mh;
+				if (!safeRecv(subscription_manager.subscriber(), &data, &len, false, 1, mh) ) {
+						std::cout << "failed to receive message\n";
+				}
+				if (!len) {
+					if (data != nullptr) { delete[] data; }
+					continue;
+				}
+			}
+			catch (const zmq::error_t &e) {
+				if (errno == EINTR) continue;
+				std::cerr << "error: " << e.what() << " receiving data\n";
+				if (data != nullptr) { delete[] data; }
+				continue;
+			}
 
-        if (verbose) std::cout << data << "\n";
+			if (verbose) std::cout << data << "\n";
 
-        try {
-            std::string cmd;
-            std::list<Value> *param_list = 0;
-            if (MessageEncoding::getCommand(data, cmd, &param_list)) {
-                if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
-                    std::string property;
-                    std::list<Value>::const_iterator iter = param_list->begin();
-                    Value machine_name = *iter++;
-                    Value property_name = *iter++;
-                    Value value = *iter++;
-                    store.insert(machine_name.asString(), property_name.asString(), value);
-                    store.save();
-                }
-						else
-							std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
-            }
-            else {
-                std::istringstream iss(data);
-                std::string property, op, value;
-                iss >> property >> op >> value;
-                std::string machine_name;
-                store.split(machine_name, property);
-                store.insert(machine_name, property, value.c_str());
-                store.save();
-            }
-						if (param_list) { delete param_list; param_list = 0; }
-        }
-        catch(std::exception e) {
-            std::cerr << "exception " <<e.what() << " processing: " << data << "\n";
-        }
-    }
+			try {
+				std::string cmd;
+				std::list<Value> *param_list = 0;
+				if (MessageEncoding::getCommand(data, cmd, &param_list)) {
+					if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
+						std::string property;
+						std::list<Value>::const_iterator iter = param_list->begin();
+						Value machine_name = *iter++;
+						Value property_name = *iter++;
+						Value value = *iter++;
+						store.insert(machine_name.asString(), property_name.asString(), value);
+						store.save();
+					}
+					else
+						std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
+				}
+				else {
+						std::istringstream iss(data);
+						std::string property, op, value;
+						iss >> property >> op >> value;
+						std::string machine_name;
+						store.split(machine_name, property);
+						store.insert(machine_name, property, value.c_str());
+						store.save();
+				}
+				if (param_list) { delete param_list; param_list = 0; }
+			}
+			catch(const std::exception &e) {
+					std::cerr << "exception " <<e.what() << " processing: " << data << "\n";
+			}
+			delete[] data;
+	}
 
-    return 0;
+	return 0;
 }
 
