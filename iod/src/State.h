@@ -1,32 +1,32 @@
 /*
-  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+    Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
-  This file is part of Latproc
+    This file is part of Latproc
 
-  Latproc is free software; you can redistribute it and/or
-  modify it under the terms of the GNU General Public License
-  as published by the Free Software Foundation; either version 2
-  of the License, or (at your option) any later version.
-  
-  Latproc is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+    Latproc is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
 
-  You should have received a copy of the GNU General Public License
-  along with Latproc; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+    Latproc is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Latproc; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 #ifndef cwlang_State_h
 #define cwlang_State_h
 
+#include "value.h"
 #include <ostream>
 #include <string>
-#include "value.h"
 
 class State {
-public:
+  public:
     State(const char *name);
     State(int val);
     State(const State &orig);
@@ -39,21 +39,19 @@ public:
     int getId() const { return token_id; }
     bool is(int tok) { return token_id == tok; }
     Value *getNameValue() { return &name; }
-	int getIntValue() { return val; }
+    int getIntValue() { return val; }
 
-	void enter(void *data) const;
-	void setEnterFunction( void (*f)(void *) );
+    void enter(void *data) const;
+    void setEnterFunction(void (*f)(void *));
 
-private:
+  private:
     std::string text;
     int val;
     Value name;
     int token_id;
-	void (*enter_proc)(void *);
+    void (*enter_proc)(void *);
 };
 
 std::ostream &operator<<(std::ostream &out, const State &m);
-
-
 
 #endif

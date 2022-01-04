@@ -8,7 +8,7 @@ Sample MACHINE {
 	OPTION z1 1.E4;
 	OPTION K1 1000.34;
 
-	COMMAND float { 
+	COMMAND float {
 		y := ( (i+1) AS FLOAT );
 	}
 	COMMAND calc {
@@ -29,6 +29,7 @@ Sample MACHINE {
 
 		LOG "1+1=" + (1 + 1);
 		LOG "x as int: " + (x AS INTEGER);
+		LOG "'6' as int: " + ("6" AS INTEGER);
 		LOG "i as float: " + (i AS FLOAT);
 	}
 
@@ -75,7 +76,7 @@ sample Sample;
 Settings MACHINE {
 	OPTION k1 10000.0, k2 100.0;
 }
-	
+
 Cast MACHINE settings{
 	OPTION x 1.1;
 	OPTION y 0, z 0;

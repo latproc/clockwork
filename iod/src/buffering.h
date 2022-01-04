@@ -29,14 +29,16 @@ void addSample(struct CircularBuffer *buf, long time, double val);
 /* overwrite the last sample value */
 void setBufferValue(struct CircularBuffer *buf, double val);
 
-/* seek back along the buffer to find the number of samples 
+/*  seek back along the buffer to find the number of samples
     before a total movement of amount occurred, ignoring direction */
 int findMovement(struct CircularBuffer *buf, double amount, int max_len);
 
-double getBufferValueAt(struct CircularBuffer *buf, unsigned long t); /* return an estimate of the value at time t */
+double getBufferValueAt(struct CircularBuffer *buf,
+                        unsigned long t); /* return an estimate of the value at time t */
 
 /* return the current head of buffer, smoothed using the given coefficients */
-double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len, double *coefficients, float normal );
+double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len,
+                             double *coefficients, float normal);
 
 /* calculate the rate of change by a direct method */
 double rate(struct CircularBuffer *buf, int n);

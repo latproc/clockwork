@@ -1,4 +1,4 @@
-// this test evaluates expressions without using the googletest framework 
+// this test evaluates expressions without using the googletest framework
 // because valgrind complains about some googletest issues
 //
 #include <Expression.h>
@@ -61,6 +61,7 @@ public:
     tests_.push_back(TestCase([this](){ return evaluates_a_local_property(); }));
     tests_.push_back(TestCase([this](){ return evaluates_comparison_of_properties(); }));
     tests_.push_back(TestCase([this](){ return condition_evaluates_expressions(); }));
+    tests_.push_back(TestCase([this](){ return evaluates_false_eq_false(); }));
   }
   ~ExpressionTests() { delete scope_; }
   std::list<TestCase> tests() { return tests_; }
@@ -154,6 +155,14 @@ private:
     EXPECT_TRUE(res);
     PASS;
   }
+
+  TestResult evaluates_false_eq_false() {
+    Condition cond(new Predicate(new Predicate(Value("FALSE")),opEQ,new Predicate(false)));
+    Value res = cond(scope_);
+    EXPECT_BOOL(res);
+    EXPECT_TRUE(res);
+    PASS;
+  }
 };
 
 int main(int argc, char *argv[]) {
@@ -164,12 +173,14 @@ int main(int argc, char *argv[]) {
   zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
   dispatch_sync.connect("inproc://dispatcher_sync");
 
+  int result = 0;
   {
     TestRunner tests;
     ExpressionTests expression_tests;
     tests.add(expression_tests.tests());
     auto success_pct = tests.run_all() * 100;
     std::cout << std::fixed << std::setprecision(2) << success_pct << "% passed (" << tests.count() << " cases)\n";
+    result = success_pct == 100 ? 0 : 1;
   }
 
   MessagingInterface::abort();
@@ -177,6 +188,6 @@ int main(int argc, char *argv[]) {
   LogState::cleanup();
   Logger::cleanup();
 
-  return 0;
+  return result;
 }
 

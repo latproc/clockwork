@@ -249,23 +249,23 @@ option_setting:
 SYMBOL value {
 	std::string name($1);
 	Value v(*$2);
-  if (v.kind == Value::t_symbol)
-    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
+//  if (v.kind == Value::t_symbol)
+//    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->options[name] = v;
 	delete $2;
 }
-| SYMBOL REFERS TO SYMBOL {
-  std::string name($1);
-  Value v($4);
-  current_machineclass->options[name] = v;
-}
+//| SYMBOL REFERS TO SYMBOL {
+//  std::string name($1);
+//  Value v($4);
+//  current_machineclass->options[name] = v;
+//}
 
 local_option_setting:
 SYMBOL value {
 	std::string name($1);
 	Value v(*$2);
-  if (v.kind == Value::t_symbol)
-    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
+//  if (v.kind == Value::t_symbol)
+//    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->options[name] = v;
 	current_machineclass->addPrivateProperty(name);
 //	NB_MSG << current_machineclass->name << " local option: "
@@ -1117,6 +1117,12 @@ INTEGERVAL   {
 | FORMAT SYMBOL WITH STRINGVAL {
     $$ = new Value(new AsFormattedStringValue($2, $4));
 }
+| PROPERTY SYMBOL OF SYMBOL {
+    $$ = new Value(new PropertyLookupValue($4, $2));
+}
+| PROPERTY SYMBOL {
+    $$ = new Value(new PropertyLookupValue("SELF", $2));
+}
 
 command:
 enter_command
@@ -1354,12 +1360,11 @@ action  {
 ;
 
 action:
-SET SYMBOL TO value error_clause  {
+SET SYMBOL TO expression error_clause  {
     DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetStateActionTemplate($2, *$4);
-    delete $4;
-	free(error_message_name); error_message_name = 0;
+    current_action = new SetStateActionTemplate($2, $4);
+	cleanupErrorClause(true);
 }
 | ABORT {
 	DBG_PARSER << " abort action\n";
@@ -1433,10 +1438,11 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ShutdownActionTemplate();
 }
-| WAITFOR SYMBOL EQ SYMBOL /* wait for object to be in a state */ {
-    DBG_PARSER << " wait for action: wait for " << $2 << " to be " << $4 << "\n";
+| WAITFOR SYMBOL EQ basic_value /* wait for object to be in a state */ {
+    DBG_PARSER << " wait for action: wait for " << $2 << " to be " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new WaitForActionTemplate($2, $4);
+    current_action = new WaitForActionTemplate($2, *$4);
+    delete $4;
 }
 | INC SYMBOL /* increment a property */ {
     if (current_action) current_actions->push_back(current_action);
@@ -1456,15 +1462,15 @@ SET SYMBOL TO value error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
 }
-| SET SYMBOL TO PROPERTY SYMBOL OF SYMBOL error_clause /* set the state based on the value of a property */ {
+// TBD: Fix setting state from property name
+//| SET SYMBOL TO PROPERTY SYMBOL OF SYMBOL error_clause /* set the state based on the value of a property */ {
+//    if (current_action) current_actions->push_back(current_action);
+//    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
+//	cleanupErrorClause(true);
+//}
+| PROPERTY SYMBOL OF SYMBOL BECOMES expression {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
-	cleanupErrorClause(true);
-}
-| SET SYMBOL TO PROPERTY SYMBOL error_clause /* set the state based on the value of a property */ {
-    if (current_action) current_actions->push_back(current_action);
-    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5);
-	cleanupErrorClause(true);
+    current_action = new PredicateActionTemplate(new Predicate(new Predicate(new Value(new PropertyLookupValue($4, $2))), opAssign, $6));
 }
 | CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
@@ -1536,10 +1542,12 @@ SET SYMBOL TO value error_clause  {
 | ADD SYMBOL AFTER ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($7, $2, *$5, false);
+    delete $5;
 }
 | ADD SYMBOL BEFORE ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($7, $2, *$5, true);
+    delete $5;
 }
 
 | ADD ITEMS FROM SYMBOL AFTER LAST OF SYMBOL {
@@ -1553,10 +1561,12 @@ SET SYMBOL TO value error_clause  {
 | ADD ITEMS FROM SYMBOL AFTER ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($9, $4, *$7, false, true);
+    delete $7;
 }
 | ADD ITEMS FROM SYMBOL BEFORE ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new IncludeActionTemplate($9, $4, *$7, true, true);
+    delete $7;
 }
 
 | INCLUDE SYMBOL IN SYMBOL {
@@ -2191,11 +2201,15 @@ property:
 SYMBOL PROPSEP value
 {
     DBG_PARSER << "property: " << $1 << " = " << *$3 << "\n";
+#if 1
+    properties.add($1, *$3);
+#else
     Value v(*$3);
     if (v.kind == Value::t_symbol)
       v.toString(); // the only way to define symbol properties is via 'REFERS TO'
     // TODO: bug here; if the machine has OPTION x REFERS TO y; then it should be valid to override the default value with another symbol
     properties.add($1, v);
+#endif
     delete $3;
 }
 | SYMBOL {

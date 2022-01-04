@@ -1,31 +1,31 @@
 /*
-  Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
+    Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 
-  This file is part of Latproc
+    This file is part of Latproc
 
-  Latproc is free software; you can redistribute it and/or
-  modify it under the terms of the GNU General Public License
-  as published by the Free Software Foundation; either version 2
-  of the License, or (at your option) any later version.
+    Latproc is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
 
-  Latproc is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+    Latproc is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-  You should have received a copy of the GNU General Public License
-  along with Latproc; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+    You should have received a copy of the GNU General Public License
+    along with Latproc; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 #ifndef cwlang_value_h
 #define cwlang_value_h
 
-#include <stdint.h>
-#include <map>
-#include <string>
 #include <iostream>
 #include <list>
+#include <map>
+#include <stdint.h>
+#include <string>
 
 class MachineInstance;
 class DynamicValue;
@@ -37,16 +37,31 @@ void simple_deltat(std::ostream &out, uint64_t dt);
 class DynamicValueBase {
   public:
     virtual ~DynamicValueBase();
-    static DynamicValueBase *ref(DynamicValueBase *dv) { if (!dv) return 0; else dv->refs++; return dv; }
-    DynamicValueBase *deref() { --refs; if (!refs) delete this; return 0; }
+    static DynamicValueBase *ref(DynamicValueBase *dv) {
+        if (!dv) {
+            return 0;
+        }
+        else {
+            dv->refs++;
+        }
+        return dv;
+    }
+    DynamicValueBase *deref() {
+        --refs;
+        if (!refs) {
+            delete this;
+        }
+        return 0;
+    }
     virtual DynamicValueBase *clone() const = 0;
     virtual const Value *lastResult() const = 0;
     virtual void setScope(MachineInstance *m) = 0;
     virtual MachineInstance *getScope() const = 0;
 
     virtual std::ostream &operator<<(std::ostream &) const = 0;
-    virtual const Value &operator()(MachineInstance *scope) = 0; // uses the provided machine's scope
-    virtual const Value &operator()() = 0; // uses the current scope for evaluation
+    virtual const Value &
+    operator()(MachineInstance *scope) = 0; // uses the provided machine's scope
+    virtual const Value &operator()() = 0;  // uses the current scope for evaluation
   protected:
     int refs;
 };
@@ -54,7 +69,15 @@ std::ostream &operator<<(std::ostream &, const DynamicValue &);
 
 class Value {
   public:
-    enum Kind { t_empty, t_integer, t_string, t_bool, t_symbol, t_dynamic, t_float /*, t_list, t_map */};
+    enum Kind {
+        t_empty,
+        t_integer,
+        t_string,
+        t_bool,
+        t_symbol,
+        t_dynamic,
+        t_float /*, t_list, t_map */
+    };
 
     typedef std::list<Value *> List;
     //    typedef std::map<std::string, Value> Map;
@@ -63,7 +86,7 @@ class Value {
     Value(Kind k);
     Value(bool v);
     Value(long v);
-    Value(int v) ;
+    Value(int v);
     Value(unsigned int v);
     Value(unsigned long v);
     Value(float v);
@@ -76,7 +99,7 @@ class Value {
     virtual ~Value();
     std::string asString(const char *format = 0) const;
     std::string quoted() const;
-	bool isNull() const;
+    bool isNull() const;
     bool asFloat(double &val) const;
     bool asInteger(long &val) const;
     bool asBoolean(bool &val) const;
@@ -130,26 +153,27 @@ class Value {
     bool operator&&(const Value &other) const;
     bool operator||(const Value &other) const;
     bool operator!() const;
-    Value operator -(void) const;
-    Value operator +(const Value &other);
-    Value &operator +=(const Value &other);
-    Value operator -(const Value &other);
-    Value &operator -=(const Value &other);
-    Value operator *(const Value &other);
-    Value &operator *=(const Value &other);
-    Value operator /(const Value &other);
-    Value &operator /=(const Value &other);
-    Value operator %(const Value &other);
-    Value &operator %=(const Value &other);
-    Value operator &(const Value &other);
-    Value &operator &=(const Value &other);
-    Value operator |(const Value &other);
-    Value &operator |=(const Value &other);
-    Value operator ^(const Value &other);
-    Value &operator ^=(const Value &other);
-    Value &operator ~();
+    Value operator-(void) const;
+    Value operator+(const Value &other);
+    Value &operator+=(const Value &other);
+    Value operator-(const Value &other);
+    Value &operator-=(const Value &other);
+    Value operator*(const Value &other);
+    Value &operator*=(const Value &other);
+    Value operator/(const Value &other);
+    Value &operator/=(const Value &other);
+    Value operator%(const Value &other);
+    Value &operator%=(const Value &other);
+    Value operator&(const Value &other);
+    Value &operator&=(const Value &other);
+    Value operator|(const Value &other);
+    Value &operator|=(const Value &other);
+    Value operator^(const Value &other);
+    Value &operator^=(const Value &other);
+    Value &operator~();
 
     std::ostream &operator<<(std::ostream &out) const;
+
   private:
     DynamicValueBase *dyn_value;
     std::string name() const;
@@ -165,7 +189,11 @@ class ListValue : public Value {
     void addItem(const char *next_value);
     void addItem(Value next_value);
     void addItem(std::string key, Value next_value);
-    void push_back(Value *value) { if (list) list->push_back(value); }
+    void push_back(Value *value) {
+        if (list) {
+            list->push_back(value);
+        }
+    }
 };
 
 #endif
