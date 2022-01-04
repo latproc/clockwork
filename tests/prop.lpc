@@ -4,32 +4,101 @@ g1 CONSTANT(tab:vars) 7;
 g2 CONSTANT(tab:vars) 9;
 s1 CONSTANT(tab:vars) "Hello";
 v1 VARIABLE(tab:vars) 13;
+v2 VARIABLE(tab:vars) 0;
+v3 VARIABLE(tab:vars) 0;
 
-Testbed MACHINE (tab:s1, x:3, y) p1(A:7) {
+# PropertyTests is intended to stall indefinitely in the run command
+# if a test fails. If this happens the test driver will enter an error
+# state.
+PropertyTests MACHINE (tab:s1, x:3, y) p1(A:7) {
     GLOBAL g1, v1;
     OPTION z g1;
     OPTION tab tab; # dereferences machine property 'tab'
-    v2 VARIABLE(tab:vars) 0;
-    v3 VARIABLE(tab:vars) 0;
+    OPTION x "";
+    OPTION test_step 0;
 
-	OPTION pname "p1";
-	OPTION p1 "up";
-	OPTION p2 "down";
-	OPTION pvalue "";
+    OPTION pname "p1";
+    OPTION p1 "up";
+    OPTION p2 "down";
+    OPTION pvalue "";
+    OPTION state_name "";
 
-	up WHEN pvalue IS "up";
-	down WHEN pvalue IS "down";
-    
-    ENTER INIT {
-		SET pvalue TO PROPERTY pname;
+    idle DEFAULT;
+    ok WHEN SELF IS ok OR SELF IS working;
+
+    working DURING run {
+
+        INC test_step;
         v1 := 11;
+        WAITFOR v1.VALUE == 11;
+
+        INC test_step;
         v2.VALUE := 12;
+        WAITFOR v2 == 12;
+
+        INC test_step;
         v3 := 13;
+        WAITFOR v3.VALUE == 13;
+
+        INC test_step;
         g1 := 1;
+        WAITFOR g1.VALUE == 7; # g1 is a constant
+
+        INC test_step;
+        z := 23;
+        SET z TO 1+1;
+        WAITFOR z == 23; # z is not a machine so SET z... should fail
+
+        INC test_step;
+        SET p1 TO on;
+        WAITFOR p1 IS on;
+
+        state_name := "off";
+        SET p1 TO PROPERTY state_name;
+        WAITFOR p1 IS off;
+
+        SET p1 TO ("o" + "n");
+        WAITFOR p1 IS on;
+
+        INC test_step;
+        pname := "v1";
+        pvalue := PROPERTY pname; # set a value by looking up a value indirectly
+        WAITFOR pvalue == v1.VALUE;
+
+        INC test_step;
+        pname := "v2";
+    	pvalue := PROPERTY pname OF SELF; # set a value by looking up a value indirectly
+        WAITFOR pvalue == v2.VALUE;
+
+        INC test_step;
+        x := "VALUE";
+        v2 := PROPERTY x OF v3; # set a value by looking up a value indirectly
+        WAITFOR v2.VALUE == v3;
+
+        INC test_step;
+        PROPERTY x OF v3 := 17;
+        WAITFOR v3.VALUE == 17;
+
+        INC test_step;
+        x := "xxx"; # add a new property
+        PROPERTY x OF SELF := "hello " + x;
+        WAITFOR xxx == "hello xxx";
     }
-    a WHEN v1 == 11;
-    
 }
 
 f FLAG;
-test Testbed(pname:"p1") f;
+property_tests PropertyTests(pname:"p1") f;
+
+Driver MACHINE script {
+    OPTION execution_timeout 10000;
+    error WHEN  SELF IS error || SELF IS waiting && TIMER > execution_timeout;
+    ok WHEN script IS ok ;
+    waiting WHEN script IS working;
+    idle DEFAULT;
+
+    COMMAND run { SEND run TO script; WAITFOR script IS working }
+    COMMAND abort { DISABLE script; ENABLE script; }
+    ENTER error { LOG "error"; CALL abort ON SELF }
+}
+driver Driver property_tests;
+

@@ -1,7 +1,7 @@
 /** arith.cw
 
-This script performs tests of various arithmetic operations 
-and demonstrates and experimental system for running test 
+This script performs tests of various arithmetic operations
+and demonstrates and experimental system for running test
 cases.
 */
 
@@ -21,9 +21,9 @@ arith Arithmetic;
 
 BadMultiply MACHINE {
 	LOCAL OPTION x 3;
-	COMMAND test { 
-		x := aa * 2; 
-		x := 2 * "2.01 "; 
+	COMMAND test {
+		x := aa * 2;
+		x := 2 * "2.01 ";
 	}
 }
 failed_test BadMultiply;
@@ -45,17 +45,17 @@ x VARIABLE 1;
 y VARIABLE 2;
 test_machine ComparisonTest x, y;
 
-/* Now we define a test driver that runs tests in the machine given by parameter 
+/* Now we define a test driver that runs tests in the machine given by parameter
 
     Note that the driver waits for a run command (eg from iosh: SEND driver.run)
-    
+
     The test machine is expected to enter a working state while its run
     command executes and then to enter an error or ok state when the
     tests are completed.
-    
+
     To reset the test script, it is disabled and reenabled; this process
     causes a machine to reinitialise.
-    
+
     If the machine under test does not change state within 10 seconds (10000ms),
     it is assumed to have stalled and the driver regards this as an error.
 */
@@ -76,13 +76,13 @@ driver Driver test_machine;
 /* Here is the TestScript; during the working state, the machine
     changes the values of the inputs to the test and monitors
     the system output.
-    
+
     The test we are using is the above ComparisonTest machine and
     this machine should enter the state of lt, gt or eq by comparing
     its inputs.  If the machine moves to an error state, the
     script stalls and the driver will soon notice this and raise
     the error.
-    
+
     For convenience, the test machine keeps a step property as a
     trace variable to indicate to the driver which step has failed.
 */
@@ -101,7 +101,7 @@ TestScript MACHINE test {
 		INC step;
 		x.VALUE := 1;
 		WAITFOR test IS lt;
-		
+
 		INC step;
 		x.VALUE := 1; y.VALUE:=1;
 		WAITFOR test IS eq;
@@ -151,7 +151,7 @@ TestScript MACHINE test {
 		y.VALUE := 1.1;
 		WAITFOR test IS eq;
 
-		
+
         SET SELF TO ok;
     }
 }

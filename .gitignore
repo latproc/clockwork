@@ -60,11 +60,13 @@ Thumbs.db
 #project build files
 iod/build/
 iod/xcode/
+iod/.test/
 modbus/build/
 modbus/.test/
 modbus/xcode/
 etc/
 bin/
+iod/stage
 
 #project runtime scraps
 modbus_mappings.bak
@@ -83,7 +85,7 @@ private_tests/
 iod/old/
 plugins/
 
-#build tools
+#built tools
 iod/cw
 iod/modbusd
 iod/iod

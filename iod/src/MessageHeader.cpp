@@ -18,37 +18,36 @@ const int MessageHeader::SOCK_CTRL = 3;
 
 uint32_t MessageHeader::last_id = 0;
 
-std::ostream &MessageHeader::operator<<(std::ostream &out) const  {
-	out << start_time << " " << dest<<":" << source<<":" << options;
-	return out;
+std::ostream &MessageHeader::operator<<(std::ostream &out) const {
+    out << start_time << " " << dest << ":" << source << ":" << options;
+    return out;
 }
 
-std::ostream &operator<<(std::ostream &out, const MessageHeader&mh) {
-	return mh.operator<<(out);
-}
-
+std::ostream &operator<<(std::ostream &out, const MessageHeader &mh) { return mh.operator<<(out); }
 
 MessageHeader::MessageHeader(uint32_t dst, uint32_t src, bool need_reply)
-: msgid(++last_id), dest(dst), source(src), start_time(0), arrival_time(0), options(0)
-{
-	if (need_reply) options |= NEED_REPLY;
+    : msgid(++last_id), dest(dst), source(src), start_time(0), arrival_time(0), options(0) {
+    if (need_reply) {
+        options |= NEED_REPLY;
+    }
 }
 
-MessageHeader::MessageHeader() : msgid(++last_id), dest(0), source(0), start_time(0), arrival_time(0), options(0){
-}
+MessageHeader::MessageHeader()
+    : msgid(++last_id), dest(0), source(0), start_time(0), arrival_time(0), options(0) {}
 
 void MessageHeader::needReply(bool needs) {
-	if (needs) options|=NEED_REPLY;
-	else options &= (-1 ^ NEED_REPLY);
+    if (needs) {
+        options |= NEED_REPLY;
+    }
+    else {
+        options &= (-1 ^ NEED_REPLY);
+    }
 }
 
-bool MessageHeader::needsReply() {
-	return ((options & NEED_REPLY) == NEED_REPLY);
-}
+bool MessageHeader::needsReply() { return ((options & NEED_REPLY) == NEED_REPLY); }
 
 void MessageHeader::reply() {
-	uint32_t tmp = dest;
-	dest = source;
-	source = tmp;
+    uint32_t tmp = dest;
+    dest = source;
+    source = tmp;
 }
-
