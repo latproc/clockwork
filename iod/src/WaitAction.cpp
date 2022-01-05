@@ -164,9 +164,7 @@ std::ostream &WaitAction::operator<<(std::ostream &out) const {
 }
 
 WaitForActionTemplate::WaitForActionTemplate(CStringHolder targ, Value value)
-    : target(targ), value(value) {
-    std::cout << "Waitfor template: " << *this << "\n";
-}
+    : target(targ), value(value) { }
 
 Action::Status WaitForAction::run() {
     owner->start(this);

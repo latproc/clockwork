@@ -23,11 +23,14 @@
 
 #include "cJSON.h"
 #include "options.h"
+#include <inttypes.h>
 #include <limits.h>
 #include <list>
 #include <ostream>
 #include <string>
 #include <sys/time.h>
+
+uint64_t microsecs();
 
 class Statistic {
   public:

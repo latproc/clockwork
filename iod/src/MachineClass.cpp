@@ -312,10 +312,6 @@ void MachineClass::collectTimerPredicates() {
         stable_states[i].condition.predicate->findTimerClauses(timer_clauses);
         stable_states[i].collectTimerPredicates();
     }
-    std::list<Predicate *>::const_iterator ti = timer_clauses.begin();
-    while (ti != timer_clauses.end()) {
-        std::cout << "MACHINE " << name << " timer clause: " << *(*ti++) << "\n";
-    }
 }
 
 void MachineClass::exportCommands(std::ostream &ofs) {
