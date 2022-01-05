@@ -38,11 +38,11 @@ target_link_libraries(test_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_value COMMAND test_value)
 
-#add_executable(test_disable_action test_disable_action.cpp )
-#target_link_libraries(test_disable_action gmock_main cw_client cw_interpreter
-#  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} mosquitto pthread)
-#include_directories("${PROJECT_SOURCE_DIR}/tests")
-#add_test(NAME test_disable_action COMMAND test_disable_action)
+add_executable(test_disable_action iod_mock.h test_disable_action.cpp )
+target_link_libraries(test_disable_action gmock_main cw_client cw_interpreter
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_disable_action COMMAND test_disable_action)
 
 add_executable(test_buffering test_buffering.cpp )
 target_link_libraries(test_buffering gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
