@@ -1,32 +1,25 @@
-#include <DisableAction.h>
+#define EC_SIMULATOR
 #include "gtest/gtest.h"
+#include <DisableAction.h>
+#include <MachineInstance.h>
+#include <MessageLog.h>
 #include <Statistic.h>
 #include <Statistics.h>
-#include <Dispatcher.h>
-#include <MessageLog.h>
-#include <MachineInstance.h>
-#include <MessagingInterface.h>
-#include <Logger.h>
-#include <clockwork.h>
-#include <list>
+#include "iod_mock.h"
 
 #include "library_globals.c"
 
 namespace {
 	class DisableActionTest : public ::testing::Test {
 		void SetUp() override {
-			// TODO: lots of setup needed here...
-			zmq::context_t *context = new zmq::context_t;
-			MessagingInterface::setContext(context);
-			Logger::instance();
-			Dispatcher::instance();
-			MessageLog::setMaxMemory(10000);
 			MachineClass *fc = new MachineClass("FLAG");
 			flag = MachineInstanceFactory::create("flag", "FLAG");
-			std::list<std::string> files;
-			loadConfig(files);
-			initialise_machines();
+            flag->setStateMachine(fc);
+            system.activate();
 		}
+    private:
+        MockSystemSetup system;
+
 	protected:
 	    MachineInstance *flag;
 	};
