@@ -21,6 +21,8 @@
 #ifndef __ClientInterface_h__
 #define __ClientInterface_h__
 
+#include <string>
+
 class IODCommand;
 
 struct ClientInterfaceInternals {

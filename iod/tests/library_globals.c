@@ -1,6 +1,6 @@
-#include <value.h>
-#include <Statistics.h>
 #include <Statistic.h>
+#include <Statistics.h>
+#include <value.h>
 
 // TODO: the library still needs some globals...
 bool program_done = false;
