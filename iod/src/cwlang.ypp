@@ -83,6 +83,7 @@ Channel *current_channel = 0;
 std::list<ChannelDefinition> all_channeldefs;
 ChannelDefinition::Feature current_feature;
 std::set<ChannelDefinition::Feature> *current_features = 0;
+std::set<std::string> all_machine_types;
 
 static MachineInstance *addMachine(const char *name, const char *type,
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
@@ -100,6 +101,7 @@ static MachineInstance *addMachine(const char *name, const char *type,
 						<< "Error: machine " << name << " already defined "
 						<< " at " << orig->definition_file << ":" << orig->definition_line << "\n";
 				error_messages.push_back(ss.str());
+		        ++num_errors;
 				NB_MSG << ss.str() << "\n";
 			}
     }
@@ -116,6 +118,19 @@ static void cleanupErrorClause(bool deallocate = false) {
 		if (deallocate) free(error_message_name);
 		error_message_name = 0;
 	}
+}
+
+static bool check_machine_type(const std::string &name) {
+    if (all_machine_types.count(name) > 0) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno << " Machine class " << name << " already exists";
+	    error_messages.push_back(ss.str());
+	    NB_MSG << ss.str() << "\n";
+		++num_errors;
+        return false;
+    }
+    all_machine_types.insert(name);
+    return true;
 }
 
 struct Subcondition {
@@ -378,6 +393,7 @@ chn_definition_header '{' chn_definition_body '}' {
 chn_definition_header:
 SYMBOL CHANNEL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
+    check_machine_type($1);
     current_channelclass = new ChannelDefinition($1);
 
     channel_definitions.push_back( current_channelclass );
@@ -394,6 +410,7 @@ SYMBOL CHANNEL {
 }*/
 | SYMBOL CHANNEL EXTENDS SYMBOL {
     DBG_PARSER << " channel definition "  << $1 << "\n";
+    check_machine_type($1);
     current_channelclass = new ChannelDefinition($1);
     channel_definitions.push_back( current_channelclass );
     current_name_list.clear();
@@ -401,6 +418,7 @@ SYMBOL CHANNEL {
 }
 /*| SYMBOL CHANNEL property_block EXTENDS SYMBOL {
     DBG_PARSER << " channel definition with parameters "  << $1 << "\n";
+    check_machine_type($1);
     current_machineclass = new MachineClass($1);
     properties = property_stack.back();
     property_stack.pop_back();
@@ -556,12 +574,14 @@ SYMBOL value {
 definition_header:
 SYMBOL STATEMACHINE parameters {
     DBG_PARSER << " machine class "  << $1 << "\n";
+    check_machine_type($1);
     current_machineclass = new MachineClass($1);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();
 }
 | SYMBOL STATEMACHINE property_block parameters  {
     DBG_PARSER << " machine class (with properties)  "  << $1 << "\n";
+    check_machine_type($1);
     current_machineclass = new MachineClass($1);
     properties = property_stack.back();
     property_stack.pop_back();
@@ -572,6 +592,7 @@ SYMBOL STATEMACHINE parameters {
 }
 | SYMBOL CPU {
   DBG_PARSER << " machine class  "  << $1 << "\n";
+  check_machine_type($1);
   current_machineclass = new MachineClass($1);
   MachineClass *cpu_class = MachineClass::find("CPU");
   if (!cpu_class) cpu_class = new MachineClass("CPU");
@@ -580,6 +601,7 @@ SYMBOL STATEMACHINE parameters {
 }
 | SYMBOL BOARD parameters {
   DBG_PARSER << " machine class   "  << $1 << "\n";
+  check_machine_type($1);
   current_machineclass = new MachineClass($1);
   MachineClass *board_class = MachineClass::find("BOARD");
   if (!board_class) board_class = new MachineClass("BOARD");
