@@ -41,7 +41,7 @@ struct ExpressionActionTemplate : public ActionTemplate {
     Value rhs;
     opType op;
     Value extra;
-    Predicate *expr;
+    Predicate *expr = nullptr;
 };
 
 class MachineInstance;
