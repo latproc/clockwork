@@ -59,7 +59,7 @@ test_machine ComparisonTest x, y;
     If the machine under test does not change state within 10 seconds (10000ms),
     it is assumed to have stalled and the driver regards this as an error.
 */
-Driver MACHINE test {
+Test_ArithDriver MACHINE test {
 	OPTION execution_timeout 10000;
     script TestScript test;
     error WHEN  SELF IS error || SELF IS waiting && TIMER > execution_timeout;
@@ -69,9 +69,9 @@ Driver MACHINE test {
 
     COMMAND run { SEND run TO script; WAITFOR script IS working }
     COMMAND abort { DISABLE script; ENABLE script; }
-    ENTER error { LOG "error"; CALL abort ON SELF }
+    ENTER error { LOG "error at step: " + script.step; CALL abort ON SELF }
 }
-driver Driver test_machine;
+test_arith_driver Test_ArithDriver test_machine;
 
 /* Here is the TestScript; during the working state, the machine
     changes the values of the inputs to the test and monitors

@@ -28,27 +28,40 @@ SetPropertyTest MACHINE {
   lookup FLAG (key: "lookup value");
 
   COMMAND reset { SET SELF TO INIT; }
-  COMMAND one { SET x TO PROPERTY y; SET SELF TO ready; }
-  COMMAND two { SET x TO PROPERTY z OF lookup; SET SELF TO ready; }
-  COMMAND three { SET x TO PROPERTY z OF unknown; SET SELF TO ready; }
+  busy DURING one {
+    x := PROPERTY y;
+    WAITFOR x == "y value";
+    SET SELF TO ready;
+  }
+  busy DURING two {
+    x := PROPERTY z OF lookup;
+    WAITFOR x == lookup.key;
+    SET SELF TO ready;
+  }
+  busy DURING three {
+    SET x TO PROPERTY z OF unknown;
+    SET SELF TO ready;
+  }
 
   CATCH invalid_param { SET SELF TO error; }
-
-  off DEFAULT;
 }
-test_machine SetPropertyTest;
+test_set_prop_machine SetPropertyTest;
 
-TestScript MACHINE test {
+SetPropTestScript MACHINE test {
+    OPTION step 0;
 
     ok WHEN SELF IS ok || SELF IS working;
     idle DEFAULT;
     working DURING run {
+        INC step;
         CALL test.reset;
-        SEND one TO test;
+        CALL one ON test;
         WAITFOR test IS ready;
+        INC step;
         CALL test.reset;
-        SEND two TO test;
+        CALL two ON test;
         WAITFOR test IS ready;
+        INC step;
         CALL test.reset;
         # Expression failures do not currently throw errors (TODO)
         #SEND three TO test;
@@ -58,8 +71,8 @@ TestScript MACHINE test {
     }
 }
 
-Driver MACHINE test {
-    script TestScript test;
+Test_SetPropDriver MACHINE test {
+    script SetPropTestScript test;
     error WHEN  SELF IS error || SELF IS waiting && TIMER > 10000;
     ok WHEN script IS ok;
     waiting WHEN script IS working;
@@ -70,4 +83,4 @@ Driver MACHINE test {
     ENTER error { LOG "error"; CALL abort ON SELF }
 }
 
-driver Driver test_machine;
+test_set_prop_driver Test_SetPropDriver test_set_prop_machine;
