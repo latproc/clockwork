@@ -1,7 +1,7 @@
 # this script tests various combinations of bitset comparisons
 # It drives the flags on and off and checks that the test machine
 # performs the correct state changes.
-# If the test machine fails to change state it is reset and the 
+# If the test machine fails to change state it is reset and the
 # driver locks itself into an error state.
 
 f1 FLAG;
@@ -21,7 +21,7 @@ BitsetTest MACHINE a,b{
 bitset_test BitsetTest l1,l2;
 
 BTTestScript MACHINE test {
-
+    OPTION step 0;
     ok WHEN SELF IS ok;
     idle DEFAULT;
     working DURING run {
