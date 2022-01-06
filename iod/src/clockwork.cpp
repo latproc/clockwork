@@ -1166,10 +1166,11 @@ int loadConfig(std::list<std::string> &files) {
     semantic_analysis();
 
     // display errors and warnings
-    BOOST_FOREACH (std::string &error, error_messages) { std::cerr << error << "\n"; }
-    // abort if there were errors
-    if (num_errors > 0) {
-        printf("Errors detected. Aborting\n");
+    if (!error_messages.empty()) {
+        std::cerr << "Errors detected\n";
+        BOOST_FOREACH (std::string &error, error_messages) { std::cerr << error << "\n"; }
+        // abort if there were errors
+        std::cerr << "Aborting\n";
         return 2;
     }
 
