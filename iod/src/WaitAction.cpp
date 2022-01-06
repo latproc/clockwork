@@ -164,17 +164,11 @@ std::ostream &WaitAction::operator<<(std::ostream &out) const {
 }
 
 WaitForActionTemplate::WaitForActionTemplate(CStringHolder targ, Value value)
-    : target(targ), value(value) { }
+    : target(targ), value(value) {}
 
 Action::Status WaitForAction::run() {
     owner->start(this);
     machine = owner->lookup(target.get());
-    if (!machine) {
-        //DBG_M_ACTIONS << "failed to find machine " << target.get() << "\n";
-        status = Failed;
-        owner->stop(this);
-        return status;
-    }
     status = Running;
     return checkComplete();
 }
@@ -183,13 +177,29 @@ Action::Status WaitForAction::checkComplete() {
     if (status == Complete || status == Failed) {
         return status;
     }
-    if (machine && value.kind == Value::t_symbol) {
+    const Value &target_prop = owner->getValue(target.get());
+    if (!target_prop.isNull()) {
+        Value source = value.kind == Value::t_symbol ? owner->getValue(value) : value;
+        bool equal =
+            value.kind == Value::t_float ? source.identical(target_prop) : source == target_prop;
+        if (equal) {
+            status = Complete;
+            owner->stop(this);
+        }
+    }
+    else if (machine && value.kind == Value::t_symbol) {
         if (machine->getCurrent().getName() == value.asString()) {
             status = Complete;
             owner->stop(this);
         }
-        else {
-            status = Running;
+    }
+    else if (machine && (value.kind == Value::t_string || value.kind == Value::t_integer ||
+                         value.kind == Value::t_float)) {
+        const Value &val = machine->getValue("VALUE");
+        bool equal = value.kind == Value::t_float ? value.identical(val) : value == val;
+        if (equal) {
+            status = Complete;
+            owner->stop(this);
         }
     }
     else if (!machine) {
@@ -199,14 +209,12 @@ Action::Status WaitForAction::checkComplete() {
             status = Complete;
             owner->stop(this);
         }
-        else {
-            status = Running;
-        }
     }
     else {
         std::stringstream ss;
-        ss << owner->getName() << " unexpected parameters in " << *this;
+        ss << owner->getName() << " unexpected parameters in " << *this << "\n";
         error_str = strdup(ss.str().c_str());
+        DBG_ACTIONS << *this << " failed: " << ss.str();
         status = Failed;
         owner->stop(this);
     }
