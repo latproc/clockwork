@@ -585,7 +585,7 @@ SYMBOL STATEMACHINE parameters {
     current_machineclass = new MachineClass($1);
     properties = property_stack.back();
     property_stack.pop_back();
-    current_machineclass->properties = properties;
+    current_machineclass->setProperties(properties);
     properties.clear();
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();

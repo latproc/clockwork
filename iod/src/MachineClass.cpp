@@ -89,6 +89,14 @@ MachineClass *MachineClass::find(const char *name) {
     return 0;
 }
 
+bool MachineClass::setProperty(const char *name, const Value &val) {
+    return properties.add(name, val, SymbolTable::ST_REPLACE);
+}
+
+bool MachineClass::setProperty(const std::string name, const Value &val) {
+    return properties.add(name, val, SymbolTable::ST_REPLACE);
+}
+
 void MachineClass::addProperty(const char *p) {
     //NB_MSG << "Warning: ignoring OPTION " << p << " in " << name << "\n";
     property_names.insert(p);

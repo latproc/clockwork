@@ -85,13 +85,13 @@ class SymbolTable {
     bool add(const std::string name, const Value &val, ReplaceMode replace_mode = ST_REPLACE);
     void add(const SymbolTable &orig,
              ReplaceMode replace_mode = ST_REPLACE); // load symbols optionally with replacement
-    const Value &lookup(const Value &name);
-    const Value &lookup(const char *name);
+    const Value &lookup(const Value &name) const;
+    const Value &lookup(const char *name) const;
     const Value &find(const char *name) const;
     Value &find(const char *name);
     size_t count(const char *name) { return st.count(name); }
-    bool exists(const char *name);
-    bool exists(int token_id);
+    bool exists(const char *name) const;
+    bool exists(int token_id) const;
     void clear();
 
     SymbolTableConstIterator begin() const { return st.begin(); }
