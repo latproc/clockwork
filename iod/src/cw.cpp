@@ -163,7 +163,7 @@ void collect_connected_machines(std::set<MachineInstance *> &included_machines,
                                 MachineInstance *mi) {
     if (mi) {
         included_machines.insert(mi);
-        for (int i = 0; i < mi->parameters.size(); ++i) {
+        for (size_t i = 0; i < mi->parameters.size(); ++i) {
             if (mi->parameters[i].machine) {
                 collect_connected_machines(included_machines, mi->parameters[i].machine);
             }
@@ -249,7 +249,7 @@ int main(int argc, char const *argv[]) {
                 if (graph_root() && included_machines.find(mi) == included_machines.end()) {
                     continue;
                 }
-                for (int i = 0; i < mi->parameters.size(); ++i) {
+                for (size_t i = 0; i < mi->parameters.size(); ++i) {
                     if (mi->parameters[i].machine) {
                         graph << mi->parameters[i].machine->getName() << " -> " << mi->getName()
                               << ";\n";

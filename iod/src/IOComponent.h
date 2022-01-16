@@ -201,7 +201,7 @@ class IOComponent : public Transmitter {
     int getStatus();
     int io_index; // the index of the first bit in this component's address space
     uint32_t raw_value;
-    static int outputs_waiting; // this many outputs are waiting to change
+    static unsigned int outputs_waiting; // this many outputs are waiting to change
     static size_t process_data_size;
     static uint8_t *io_process_data;
     static uint8_t *io_process_mask;
