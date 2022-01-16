@@ -78,7 +78,7 @@ uint8_t *IOComponent::update_data = 0;
 uint8_t *IOComponent::default_data = 0;
 uint8_t *IOComponent::default_mask = 0;
 static uint8_t *last_process_data = 0;
-int IOComponent::outputs_waiting = 0;
+unsigned int IOComponent::outputs_waiting = 0;
 
 boost::recursive_mutex processing_queue_mutex;
 boost::recursive_mutex IOComponent::io_names_mutex;

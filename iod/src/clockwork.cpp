@@ -686,7 +686,7 @@ void semantic_analysis() {
             continue;
         }
 
-        int num_sm_params = mi->getStateMachine()->parameters.size();
+        size_t num_sm_params = mi->getStateMachine()->parameters.size();
         if (mi->getStateMachine() && mi->parameters.size() != num_sm_params) {
             // the POINT class is special; it can have either 2 or 3 parameters
             const std::string &sm_name = mi->getStateMachine()->name;
