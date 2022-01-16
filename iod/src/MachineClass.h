@@ -34,9 +34,9 @@ class MachineInstance;
 class Plugin;
 
 class MachineClass {
-  public:
-    MachineClass(const char *class_name);
     SymbolTable properties;
+
+  public:
     std::set<std::string> local_properties;
     std::vector<Parameter> parameters;
     std::vector<Parameter> locals;
@@ -56,6 +56,7 @@ class MachineClass {
     std::vector<std::string> state_exports_rw;
     std::vector<std::string> command_exports;
     static std::map<std::string, MachineClass> machine_classes;
+    explicit MachineClass(const char *class_name);
     void defaultState(State state);
     bool isStableState(State &state);
     void addState(const char *name);
@@ -68,6 +69,10 @@ class MachineClass {
     static MachineClass *find(const char *name);
     void collectTimerPredicates();
 
+    const SymbolTable &getProperties() const { return properties; }
+    void setProperties(const SymbolTable &props) { properties = props; }
+    bool setProperty(const char *name, const Value &val);
+    bool setProperty(const std::string name, const Value &val);
     virtual void addProperty(const char *name); // used in interfaces to list synced properties
     virtual void
     addPrivateProperty(const char *name); // used in interfaces to list synced properties

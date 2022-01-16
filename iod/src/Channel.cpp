@@ -1344,7 +1344,7 @@ void ChannelDefinition::instantiateInterfaces() {
                     DBG_CHANNELS << "shadow " << instance_name.first << " requires authority "
                                  << item.second->authority << "\n";
                     MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
-                    m->setProperties(mc->properties);
+                    m->setProperties(mc->getProperties());
                     m->setStateMachine(mc);
                     m->setValue("startup_enabled", false);
                     machines[instance_name.first] = m;
@@ -1373,7 +1373,7 @@ void ChannelDefinition::instantiateInterfaces() {
                     DBG_CHANNELS << "shadow " << instance_name.first << " requires authority "
                                  << item.second->authority << "\n";
                     MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
-                    m->setProperties(mc->properties);
+                    m->setProperties(mc->getProperties());
                     m->setStateMachine(mc);
                     m->setValue("startup_enabled", false);
                     machines[instance_name.first] = m;

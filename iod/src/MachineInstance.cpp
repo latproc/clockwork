@@ -151,8 +151,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
         if (defn) {
             MachineInstance *found = MachineInstance::find(name.get());
             Channel *chn = new Channel(name.get(), type);
-            chn->properties.add(defn->properties); // load default properties
-            chn->properties.add(defn->properties); // overwrite with instance properties
+            chn->properties.add(defn->getProperties()); // load default properties
             chn->setDefinition(defn);
             return chn;
         }
@@ -3369,7 +3368,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     }
     // clone properties from the class into this instance but don't replace
     // properties already loaded
-    properties.add(state_machine->properties, SymbolTable::NO_REPLACE);
+    properties.add(state_machine->getProperties(), SymbolTable::NO_REPLACE);
     properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
     if (locals.size() == 0) {
         BOOST_FOREACH (Parameter p, state_machine->locals) {
@@ -3644,7 +3643,7 @@ const Value *MachineInstance::resolve(std::string property) {
             if (*res == SymbolTable::Null) {
                 if (state_machine) {
                     const Value *class_property =
-                        &state_machine->properties.lookup(property.c_str());
+                        &state_machine->getProperties().lookup(property.c_str());
                     if (class_property == &SymbolTable::Null) {
                         DBG_M_PROPERTIES << "MachineInstance::resolve: no property " << property
                                          << " found in class, looking in globals\n";
@@ -3809,7 +3808,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
             const Value &x = properties.lookup(property.c_str());
             if (x == SymbolTable::Null) {
                 if (state_machine) {
-                    if (!state_machine->properties.exists(property.c_str())) {
+                    if (!state_machine->getProperties().exists(property.c_str())) {
                         DBG_M_PROPERTIES << getName() << " MachineInstance::getValue no property "
                                          << property << " found in class, looking in globals\n";
                         if (globals.exists(property.c_str())) {
@@ -3819,7 +3818,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
                     }
                     else {
                         DBG_M_PROPERTIES << "using property " << property << "from class\n";
-                        return state_machine->properties.lookup(property.c_str());
+                        return state_machine->getProperties().lookup(property.c_str());
                     }
                 }
             }
@@ -3930,7 +3929,7 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
             Value &x = properties.find(property.c_str());
             if (x == SymbolTable::Null) {
                 if (state_machine) {
-                    if (!state_machine->properties.exists(property.c_str())) {
+                    if (!state_machine->getProperties().exists(property.c_str())) {
                         DBG_M_PROPERTIES << "no property " << property
                                          << " found in class, looking in globals\n";
                         if (globals.exists(property.c_str())) {

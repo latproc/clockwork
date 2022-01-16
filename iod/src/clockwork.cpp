@@ -292,20 +292,20 @@ void predefine_special_machines() {
     settings_class->default_state = State("ready");
     settings_class->initial_state = State("ready");
     settings_class->disableAutomaticStateChanges();
-    settings_class->properties.add("INFO", "Clockwork host", SymbolTable::ST_REPLACE);
-    settings_class->properties.add("HOST", host_name, SymbolTable::ST_REPLACE);
-    settings_class->properties.add("VERSION", "0.9", SymbolTable::ST_REPLACE);
-    settings_class->properties.add("CYCLE_DELAY", 2000, SymbolTable::ST_REPLACE);
-    settings_class->properties.add("POLLING_DELAY", 2000, SymbolTable::ST_REPLACE);
+    settings_class->setProperty("INFO", "Clockwork host");
+    settings_class->setProperty("HOST", host_name);
+    settings_class->setProperty("VERSION", "0.9");
+    settings_class->setProperty("CYCLE_DELAY", 2000);
+    settings_class->setProperty("POLLING_DELAY", 2000);
 
     MachineClass *cw_class = new MachineClass("CLOCKWORK");
     cw_class->addState("ready");
     cw_class->default_state = State("ready");
     cw_class->initial_state = State("ready");
     cw_class->disableAutomaticStateChanges();
-    cw_class->properties.add("PROTOCOL", "CLOCKWORK", SymbolTable::ST_REPLACE);
-    cw_class->properties.add("HOST", "localhost", SymbolTable::ST_REPLACE);
-    cw_class->properties.add("PORT", 5600, SymbolTable::ST_REPLACE);
+    cw_class->setProperty("PROTOCOL", "CLOCKWORK");
+    cw_class->setProperty("HOST", "localhost");
+    cw_class->setProperty("PORT", 5600);
 
     MachineClass *point_class = new MachineClass("POINT");
     point_class->parameters.push_back(Parameter("module"));
@@ -335,11 +335,11 @@ void predefine_special_machines() {
     ain_class->default_state = State("stable");
     ain_class->initial_state = State("stable");
     ain_class->disableAutomaticStateChanges();
-    ain_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
-    ain_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    ain_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
-    ain_class->properties.add("Velocity", Value(0.0), SymbolTable::ST_REPLACE);
-    ain_class->properties.add("Acceleration", Value(0.0), SymbolTable::ST_REPLACE);
+    ain_class->setProperty("IOTIME", Value(0));
+    ain_class->setProperty("VALUE", Value(0));
+    ain_class->setProperty("Position", Value(0));
+    ain_class->setProperty("Velocity", Value(0.0));
+    ain_class->setProperty("Acceleration", Value(0.0));
 
     MachineClass *cnt_class = new MachineClass("COUNTER");
     cnt_class->parameters.push_back(Parameter("module"));
@@ -350,10 +350,10 @@ void predefine_special_machines() {
     cnt_class->default_state = State("off");
     cnt_class->initial_state = State("off");
     cnt_class->disableAutomaticStateChanges();
-    cnt_class->properties.add("IOTIME", Value(0), SymbolTable::ST_REPLACE);
-    cnt_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    cnt_class->properties.add("Position", Value(0), SymbolTable::ST_REPLACE);
-    cnt_class->properties.add("Velocity", Value(0), SymbolTable::ST_REPLACE);
+    cnt_class->setProperty("IOTIME", Value(0));
+    cnt_class->setProperty("VALUE", Value(0));
+    cnt_class->setProperty("Position", Value(0));
+    cnt_class->setProperty("Velocity", Value(0));
 
     MachineClass *re_class = new MachineClass("RATEESTIMATOR");
     re_class->parameters.push_back(Parameter("position_input"));
@@ -364,8 +364,8 @@ void predefine_special_machines() {
     re_class->default_state = State("off");
     re_class->initial_state = State("off");
     re_class->disableAutomaticStateChanges();
-    re_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    re_class->properties.add("position", Value(0), SymbolTable::ST_REPLACE);
+    re_class->setProperty("VALUE", Value(0));
+    re_class->setProperty("position", Value(0));
 
     MachineClass *cr_class = new MachineClass("COUNTERRATE");
     cr_class->parameters.push_back(Parameter("position_output"));
@@ -377,8 +377,8 @@ void predefine_special_machines() {
     cr_class->default_state = State("off");
     cr_class->initial_state = State("off");
     cr_class->disableAutomaticStateChanges();
-    cr_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
-    cr_class->properties.add("position", Value(0), SymbolTable::ST_REPLACE);
+    cr_class->setProperty("VALUE", Value(0));
+    cr_class->setProperty("position", Value(0));
 
     MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
     aout_class->parameters.push_back(Parameter("module"));
@@ -387,7 +387,7 @@ void predefine_special_machines() {
     aout_class->addState("unstable");
     aout_class->default_state = State("stable");
     aout_class->initial_state = State("stable");
-    aout_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+    aout_class->setProperty("VALUE", Value(0));
 
 #if 0
     MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
@@ -400,7 +400,7 @@ void predefine_special_machines() {
     pid_class->addState("unstable");
     pid_class->default_state = State("stable");
     pid_class->initial_state = State("stable");
-    pid_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+    pid_class->setProperty("VALUE", Value(0));
 #endif
 
     MachineClass *list_class = new MachineClass("LIST");
@@ -409,7 +409,7 @@ void predefine_special_machines() {
     list_class->default_state = State("empty");
     list_class->initial_state = State("empty");
     //list_class->disableAutomaticStateChanges();
-    list_class->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+    list_class->setProperty("VALUE", Value(0));
 
     MachineClass *ref_class = new MachineClass("REFERENCE");
     ref_class->addState("ASSIGNED");
@@ -484,7 +484,7 @@ void predefine_special_machines() {
     mcwc->addState("COMPLETE");
     mcwc->initial_state = State("ZERO");
     mcwc->disableAutomaticStateChanges();
-    mcwc->properties.add("VALUE", Value(0), SymbolTable::ST_REPLACE);
+    mcwc->setProperty("VALUE", Value(0));
 
     MachineClass *mcls = new MachineClass("ETHERCAT_LINKSTATUS");
     mcls->addState("DOWN");
@@ -507,7 +507,7 @@ void predefine_special_machines() {
     mcec->addState("ACTIVE");
     mcec->addState("ERROR");
     mcec->initial_state = State("INIT");
-    mcec->properties.add("tolerance", Value(10), SymbolTable::ST_REPLACE);
+    mcec->setProperty("tolerance", Value(10));
     mcec->disableAutomaticStateChanges();
     MachineCommandTemplate *mc = new MachineCommandTemplate("activate", "");
     mcec->receives.insert(std::make_pair(Message("activate"), mc));
@@ -518,19 +518,19 @@ void predefine_special_machines() {
 
     MachineInstance *miwc =
         MachineInstanceFactory::create("ETHERCAT_WC", "ETHERCAT_WORKINGCOUNTER");
-    miwc->setProperties(mcwc->properties);
+    miwc->setProperties(mcwc->getProperties());
     miwc->setStateMachine(mcwc);
     miwc->setDefinitionLocation("Internal", 0);
     machines["ETHERCAT_WC"] = miwc;
 
     MachineInstance *mils = MachineInstanceFactory::create("ETHERCAT_LS", "ETHERCAT_LINKSTATUS");
-    mils->setProperties(mcls->properties);
+    mils->setProperties(mcls->getProperties());
     mils->setStateMachine(mcls);
     mils->setDefinitionLocation("Internal", 0);
     machines["ETHERCAT_LS"] = mils;
 
     MachineInstance *miec = MachineInstanceFactory::create("ETHERCAT", "ETHERCAT_BUS");
-    miec->setProperties(mcec->properties);
+    miec->setProperties(mcec->getProperties());
     miec->setStateMachine(mcec);
     miec->addLocal("counter", miwc);
     miec->addLocal("link", mils);
@@ -558,13 +558,13 @@ void predefine_special_machines() {
 
     MachineInstance *settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
     machines["SYSTEM"] = settings;
-    settings->setProperties(settings_class->properties);
+    settings->setProperties(settings_class->getProperties());
     settings->setStateMachine(settings_class);
     settings->setDefinitionLocation("Internal", 0);
 
     MachineInstance *channels = MachineInstanceFactory::create("CHANNELS", "LIST");
     machines["CHANNELS"] = channels;
-    channels->setProperties(list_class->properties);
+    channels->setProperties(list_class->getProperties());
     channels->setStateMachine(list_class);
 
     ClockworkInterpreter::instance()->setup(settings);

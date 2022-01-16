@@ -359,9 +359,9 @@ void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
     }
 }
 
-bool SymbolTable::exists(const char *name) { return st.find(name) != st.end(); }
+bool SymbolTable::exists(const char *name) const { return st.find(name) != st.end(); }
 
-bool SymbolTable::exists(int tok) { return stok.find(tok) != stok.end(); }
+bool SymbolTable::exists(int tok) const { return stok.find(tok) != stok.end(); }
 
 const Value &SymbolTable::find(const char *name) const {
     if (this != keywords) {
@@ -391,28 +391,28 @@ Value &SymbolTable::find(const char *name) {
     return NullValue;
 }
 
-const Value &SymbolTable::lookup(const char *name) {
+const Value &SymbolTable::lookup(const char *name) const {
     if (this != keywords) {
         const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) {
             return res;
         }
     }
-    SymbolTableIterator iter = st.find(name);
+    SymbolTableConstIterator iter = st.find(name);
     if (iter != st.end()) {
         return (*iter).second;
     }
     return SymbolTable::Null;
 }
 
-const Value &SymbolTable::lookup(const Value &name) {
+const Value &SymbolTable::lookup(const Value &name) const {
     if (this != keywords) {
         const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) {
             return res;
         }
     }
-    TokenTableIterator iter = stok.find(name.token_id);
+    TokenTableConstIterator iter = stok.find(name.token_id);
     if (iter != stok.end()) {
         return (*iter).second;
     }
