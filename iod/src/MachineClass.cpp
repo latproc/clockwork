@@ -89,6 +89,8 @@ MachineClass *MachineClass::find(const char *name) {
     return 0;
 }
 
+void MachineClass::setOption(const std::string &name, const Value &value) { options[name] = value; }
+
 bool MachineClass::setProperty(const char *name, const Value &val) {
     return properties.add(name, val, SymbolTable::ST_REPLACE);
 }

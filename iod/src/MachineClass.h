@@ -35,6 +35,7 @@ class Plugin;
 
 class MachineClass {
     SymbolTable properties;
+    std::map<std::string, Value> options;
 
   public:
     std::set<std::string> local_properties;
@@ -49,7 +50,6 @@ class MachineClass {
     std::map<Message, MachineCommandTemplate *> enter_functions;
     std::multimap<Message, MachineCommandTemplate *> receives;
     std::map<std::string, MachineInstance *> global_references;
-    std::map<std::string, Value> options;
     std::list<Transition> transitions;
     std::list<ModbusAddressTemplate> exports;
     std::vector<std::string> state_exports;
@@ -73,6 +73,10 @@ class MachineClass {
     void setProperties(const SymbolTable &props) { properties = props; }
     bool setProperty(const char *name, const Value &val);
     bool setProperty(const std::string name, const Value &val);
+
+    const std::map<std::string, Value> &getOptions() const { return options; }
+    void setOption(const std::string &name, const Value &value);
+
     virtual void addProperty(const char *name); // used in interfaces to list synced properties
     virtual void
     addPrivateProperty(const char *name); // used in interfaces to list synced properties

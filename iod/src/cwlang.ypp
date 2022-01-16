@@ -266,13 +266,13 @@ SYMBOL value {
 	Value v(*$2);
 //  if (v.kind == Value::t_symbol)
 //    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
-	current_machineclass->options[name] = v;
+	current_machineclass->setOption(name, v);
 	delete $2;
 }
 //| SYMBOL REFERS TO SYMBOL {
 //  std::string name($1);
 //  Value v($4);
-//  current_machineclass->options[name] = v;
+//  current_machineclass->setOption(name, v);
 //}
 
 local_option_setting:
@@ -281,7 +281,7 @@ SYMBOL value {
 	Value v(*$2);
 //  if (v.kind == Value::t_symbol)
 //    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
-	current_machineclass->options[name] = v;
+	current_machineclass->setOption(name, v);
 	current_machineclass->addPrivateProperty(name);
 //	NB_MSG << current_machineclass->name << " local option: "
 //		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
@@ -359,14 +359,14 @@ interface_defn_section:
 | OPTION SYMBOL value ';' {
 	std::string name($2);
 	Value v(*$3);
-	current_machineclass->options[name] = *$3;
+	current_machineclass->setOption(name, *$3);
 	current_machineclass->addProperty(name.c_str());
 	DBG_PARSER << current_machineclass->name << " option: " << name << ": " << *$3 << "\n";
 	delete $3;
 }
 | LOCAL OPTION SYMBOL value ';' {
 	std::string name($3);
-	current_machineclass->options[name] = *$4;
+	current_machineclass->setOption(name, *$4);
 	current_machineclass->addPrivateProperty(name.c_str());
 	DBG_PARSER << current_machineclass->name << " private option: " << name << ": " << *$4 << "\n";
 	delete $4;
@@ -803,62 +803,62 @@ pin_definition:
 SYMBOL DIGITALIO INTEGERVAL ';'{
   std::string name($1);
   int x = $3;
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL DIGITALIN INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL ADC INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL TOUCH INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL SDIO INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL ETHERNET INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL DAC INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL SPI INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL PIN INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL PIN SYMBOL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL JTAG INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL UART INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->options[name] = $3;
+  current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }
 

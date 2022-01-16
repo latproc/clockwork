@@ -441,8 +441,7 @@ void predefine_special_machines() {
     MachineClass *subscriber_class = new MachineClass("MQTTSUBSCRIBER");
     subscriber_class->parameters.push_back(Parameter("broker"));
     subscriber_class->parameters.push_back(Parameter("topic"));
-    subscriber_class->options["message"] =
-        0; // Value("", Value::t_string); //TODO: exported code cannot handle string messages
+    subscriber_class->setOption("message", 0); //TODO: exported code cannot handle string messages
 
     MachineClass *broker_class = new MachineClass("MQTTBROKER");
     broker_class->parameters.push_back(Parameter("host"));
@@ -468,14 +467,14 @@ void predefine_special_machines() {
     mc_variable->initial_state = State("ready");
     mc_variable->disableAutomaticStateChanges();
     mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
-    mc_variable->options["VALUE"] = "VAL_PARAM1";
+    mc_variable->setOption("VALUE", "VAL_PARAM1");
 
     MachineClass *mc_constant = new MachineClass("CONSTANT");
     mc_constant->addState("ready");
     mc_constant->initial_state = State("ready");
     mc_constant->disableAutomaticStateChanges();
     mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
-    mc_constant->options["VALUE"] = "VAL_PARAM1";
+    mc_constant->setOption("VALUE", "VAL_PARAM1");
 
 #ifndef EC_SIMULATOR
     MachineClass *mcwc = new MachineClass("ETHERCAT_WORKINGCOUNTER");
@@ -548,13 +547,13 @@ void predefine_special_machines() {
     mc_sdo->parameters.push_back(Parameter("SUBINDEX"));
     mc_sdo->parameters.push_back(Parameter("SIZE"));
     mc_sdo->parameters.push_back(Parameter("OFFSET"));
-    mc_sdo->options["VALUE"] = 0;
+    mc_sdo->setOption("VALUE", 0);
 #endif //USE_SDO
 
     MachineClass *mc_external = new MachineClass("EXTERNAL");
-    mc_external->options["HOST"] = "localhost";
-    mc_external->options["PORT"] = 5600;
-    mc_external->options["PROTOCOL"] = "ZMQ";
+    mc_external->setOption("HOST", "localhost");
+    mc_external->setOption("PORT", 5600);
+    mc_external->setOption("PROTOCOL", "ZMQ");
 
     MachineInstance *settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
     machines["SYSTEM"] = settings;

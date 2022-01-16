@@ -408,8 +408,8 @@ int main(int argc, char const *argv[]) {
         while (iter != MachineClass::all_machine_classes.end()) {
             MachineClass *mc = *iter++;
             if (mc->parent && mc->parent->name == "CPU") {
-                std::map<std::string, Value>::iterator iter = mc->options.begin();
-                while (iter != mc->options.end()) {
+                auto iter = mc->getOptions().begin();
+                while (iter != mc->getOptions().end()) {
                     const std::pair<std::string, Value> &item = *iter++;
                     pin_definitions << "#define cw_" << mc->name << "_" << item.first << " ";
                     size_t n = item.first.length();
@@ -421,8 +421,8 @@ int main(int argc, char const *argv[]) {
             }
             else if (mc->parent && mc->parent->name == "BOARD") {
                 std::map<std::string, Value> pins;
-                std::map<std::string, Value>::iterator iter = mc->options.begin();
-                while (iter != mc->options.end()) {
+                auto iter = mc->getOptions().begin();
+                while (iter != mc->getOptions().end()) {
                     const std::pair<std::string, Value> &item = *iter++;
                     pin_definitions << "#define cw_" << mc->name << "_" << item.first << " ";
                     size_t n = item.first.length();

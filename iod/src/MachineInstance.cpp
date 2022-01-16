@@ -3344,7 +3344,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         commands.insert(std::make_pair(node.first, mc));
     }
     std::pair<std::string, Value> option;
-    BOOST_FOREACH (option, machine_class->options) {
+    BOOST_FOREACH (option, machine_class->getOptions()) {
         DBG_INITIALISATION << _name << " initialising property " << option.first << " ("
                            << option.second << ")\n";
         if (option.second.kind == Value::t_symbol) {

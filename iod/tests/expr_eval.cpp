@@ -52,7 +52,7 @@ Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
 class ExpressionTests {
   public:
     ExpressionTests() : machine_class_{new MachineClass("ExprTest")} {
-        machine_class_->options["x"] = 7;
+        machine_class_->setOption("x", 7);
         scope_ = MachineInstanceFactory::create("test", machine_class_->name);
         scope_->setStateMachine(machine_class_);
         tests_.push_back(TestCase([this]() { return evalates_a_simple_equality(); }));
