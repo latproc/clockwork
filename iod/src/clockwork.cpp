@@ -683,35 +683,31 @@ void semantic_analysis() {
         MachineInstance *mi = *m_iter++;
         DBG_PARSER << "Machine " << mi->getName() << " (" << mi->_type << ") has "
                    << mi->parameters.size() << " parameters\n";
+        if (!mi->getStateMachine()) {
+            continue;
+        }
 
-        if (mi->getStateMachine() &&
-            mi->parameters.size() != mi->getStateMachine()->parameters.size()) {
-            // the POINT class special; it can have either 2 or 3 parameters (yuk)
-            if (mi->getStateMachine()->name == "LIST") {
-                DBG_PARSER << "List has " << mi->parameters.size() << " parameters\n";
+        int num_sm_params = mi->getStateMachine()->parameters.size();
+        if (mi->getStateMachine() && mi->parameters.size() != num_sm_params) {
+            // the POINT class is special; it can have either 2 or 3 parameters
+            const std::string &sm_name = mi->getStateMachine()->name;
+            if (sm_name == "LIST") {
+                DBG_PARSER << "List has " << num_sm_params << " parameters\n";
             }
-            else if (((mi->getStateMachine()->name == "POINT" ||
-                       mi->getStateMachine()->name == "INPUTBIT" ||
-                       mi->getStateMachine()->name == "OUTPUTBIT" ||
-                       mi->getStateMachine()->name == "INPUTREGISTER" ||
-                       mi->getStateMachine()->name == "OUTPUTREGISTER") &&
-                      mi->getStateMachine()->parameters.size() >= 2 &&
-                      mi->getStateMachine()->parameters.size() <= 3) ||
-                     (mi->getStateMachine()->name == "COUNTERRATE" &&
-                      (mi->getStateMachine()->parameters.size() == 3 ||
-                       mi->getStateMachine()->parameters.size() == 1))
+            else if (((sm_name == "POINT" || sm_name == "INPUTBIT" || sm_name == "OUTPUTBIT" ||
+                       sm_name == "INPUTREGISTER" || sm_name == "OUTPUTREGISTER") &&
+                      num_sm_params >= 2 && num_sm_params <= 3) ||
+                     (sm_name == "COUNTERRATE" && (num_sm_params == 3 || num_sm_params == 1))
 #ifdef USE_SDO
-                     || (mi->getStateMachine()->name == "SDOENTRY" &&
-                         (mi->getStateMachine()->parameters.size() == 4 ||
-                          mi->getStateMachine()->parameters.size() == 5))
+                     || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
 #endif //USE_SDO
             ) {
             }
             else {
                 std::stringstream ss;
-                ss << "## - Error: Machine " << mi->getStateMachine()->name << " requires "
-                   << mi->getStateMachine()->parameters.size() << " parameters but instance "
-                   << mi->getName() << " has " << mi->parameters.size() << std::flush;
+                ss << "## - Error: Machine " << sm_name << " requires " << num_sm_params
+                   << " parameters but instance " << mi->getName() << " has "
+                   << mi->parameters.size() << std::flush;
                 std::string s = ss.str();
                 ++num_errors;
                 error_messages.push_back(s);
@@ -741,6 +737,8 @@ void semantic_analysis() {
                         error_messages.push_back(s);
                     }
                     else {
+                        DBG_PARSER << " linked machine " << found->getName() << " as parameter "
+                                   << i << "\n";
                         mi->parameters[i].machine = found;
                         found->addDependancy(mi);
                         mi->listenTo(found);

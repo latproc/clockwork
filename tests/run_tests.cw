@@ -1,7 +1,5 @@
 # Run a list of tests
 #
-# This is a work in progress, not currently runnable
-#
 # This file uses the SYSTEM machine to build a list of
 # testable machines. It assumes that machines matching a
 # certain interface are testable
