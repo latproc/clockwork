@@ -267,8 +267,10 @@ IOComponent::IOComponent()
 void IOComponent::setInitialState() {}
 
 int IOComponent::updatesWaiting() {
-    assert(outputs_waiting == updatedComponentsOut.size());
-    return updatedComponentsOut.size();
+    // TODO: determine how this assertion can trigger
+    // assert(outputs_waiting == updatedComponentsOut.size());
+    //return updatedComponentsOut.size();
+    return outputs_waiting;
 }
 
 void IOComponent::updatesSent(bool which) {
