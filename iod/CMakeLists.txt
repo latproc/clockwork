@@ -373,6 +373,9 @@ SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
 add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
 target_link_libraries(iosh cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
+add_executable(iocmd src/iocmd.cpp)
+target_link_libraries(iocmd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+
 add_executable(device_connector src/device_connector.cpp src/options.cpp )
 target_link_libraries(device_connector cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
@@ -387,7 +390,7 @@ enable_testing()
 add_subdirectory(tests)
 endif()
 
-install(TARGETS cw iosh device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+install(TARGETS cw iosh iocmd device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
 install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
 install(TARGETS cw_interpreter ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
