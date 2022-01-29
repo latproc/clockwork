@@ -990,6 +990,10 @@ value {
 | expression MATCHES PATTERN {
     Value pat($3, Value::t_string);
     $$ = new Predicate($1, opMatch, new Predicate( pat )); }
+| expression MATCHES value { 
+    $$ = new Predicate($1, opMatch, new Predicate( $3 ));
+    delete $3;
+}
 ;
 
 value:

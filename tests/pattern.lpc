@@ -15,6 +15,15 @@ PatternTest MACHINE {
 }
 pattern_test PatternTest;
 
+PatternFromProperty MACHINE {
+    OPTION pattern "t..t";
+    found WHEN message MATCHES pattern;
+    ENTER INIT {
+        message := "test";
+    }
+}
+pattern_from_property PatternFromProperty;
+
 # remove the last character of a property
 RemoveLast MACHINE {
 	OPTION input "A message.";
