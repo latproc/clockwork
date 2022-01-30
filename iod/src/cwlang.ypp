@@ -1133,6 +1133,7 @@ INTEGERVAL   {
 }
 | ITEM value OF SYMBOL {
     $$ = new Value(new ItemAtPosValue($4, $2, false));
+    delete $2;
 }
 | LAST OF SYMBOL {
     $$ = new Value(new PopListBackValue($3, false));
@@ -1433,6 +1434,7 @@ SET SYMBOL TO expression error_clause  {
     DBG_PARSER << " enable action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
     current_action = new EnableActionTemplate($2, $4, $6);
+    delete $6;
 }
 | RESUME SYMBOL /* resume a machine */ {
     DBG_PARSER << " resume action: " << $2 << "\n";
@@ -1443,6 +1445,7 @@ SET SYMBOL TO expression error_clause  {
     DBG_PARSER << " resume action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
     current_action = new ResumeActionTemplate($2, "", $4, $6);
+    delete $6;
 }
 | RESUME SYMBOL AT SYMBOL /* resume a machine from a given state */ {
     DBG_PARSER << " resume action: " << $2 << "\n";
@@ -1458,6 +1461,7 @@ SET SYMBOL TO expression error_clause  {
     DBG_PARSER << " disable action: " << $2 << "\n";
     if (current_action) current_actions->push_back(current_action);
     current_action = new DisableActionTemplate($2, $4, $6);
+    delete $6;
 }
 | SHUTDOWN /* cause the interpreter to exit */ {
     DBG_PARSER << " shutdown action " << "\n";
