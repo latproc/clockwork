@@ -24,6 +24,23 @@ PatternFromProperty MACHINE {
 }
 pattern_from_property PatternFromProperty;
 
+Matches MACHINE {
+    OPTION message "";
+    OPTION sep ",";
+    vowels LIST;
+
+    found WHEN message MATCHES `..*`;
+    ENTER INIT {
+        message := "and so,.. they cried. ";
+    }
+    ENTER found {
+        LOG MATCHES OF "[a-z]+" IN message SEPARATED BY sep;
+        LOG MATCHES OF "[aeiou]+" IN message SEPARATED BY ";";
+        PUSH MATCHES OF "[aeiou]" IN message TO vowels;
+    }
+}
+matches Matches;
+
 # remove the last character of a property
 RemoveLast MACHINE {
 	OPTION input "A message.";

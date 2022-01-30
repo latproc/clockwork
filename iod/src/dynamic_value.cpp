@@ -4,6 +4,7 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "symboltable.h"
+#include "regular_expressions.h"
 #include <boost/foreach.hpp>
 #include <functional>
 #include <iostream>
@@ -11,6 +12,16 @@
 #include <numeric>
 #include <sstream>
 #include <utility>
+
+namespace {
+
+    void LogMissingMachine(MachineInstance *current_scope, const std::string & name, const std::string source) {
+            std::stringstream ss;
+            ss << current_scope->getName() << " no machine " << name << " " << source;
+            MessageLog::instance()->add(ss.str().c_str());
+    }
+
+}
 
 static uint64_t currentTime() { return microsecs(); }
 
@@ -184,6 +195,14 @@ std::ostream &BitsetValue::operator<<(std::ostream &out) const {
     return out;
 }
 std::ostream &operator<<(std::ostream &out, const BitsetValue &val) { return val.operator<<(out); }
+
+PatternMatchValue::PatternMatchValue(Predicate *pattern, const char *prop) : pattern(pattern), property_name(prop), separator(";", Value::t_string) {}
+PatternMatchValue::PatternMatchValue(Predicate *pattern, const char *prop, const Value & sep) : pattern(pattern), property_name(prop), separator(sep) {}
+DynamicValue *PatternMatchValue::clone() const { return new PatternMatchValue(*this); }
+std::ostream &PatternMatchValue::operator<<(std::ostream &out) const {
+    out << "MATCHES OF " << pattern << " IN " << property_name << " SEPARATED BY " << separator;
+    return out;
+}
 
 AssignmentValue::AssignmentValue(const AssignmentValue &other) {
     src = other.src;
@@ -1215,6 +1234,42 @@ std::ostream &operator<<(std::ostream &out, const DisabledValue &val) {
     return val.operator<<(out);
 }
 
+static int matched(const char *match, int index, void *user_data) {
+    std::vector<std::string> *matches = static_cast<std::vector<std::string> *>(user_data);
+    if (index == 0) {
+        matches->push_back(match);
+    }
+    return 0;
+}
+
+const Value &PatternMatchValue::operator()() {
+    MachineInstance *mi = scope;
+    Value text = mi->getValue(property_name);
+    if (text != SymbolTable::Null) {
+        Value to_find = pattern->evaluate(mi);
+        auto regex = create_pattern(to_find.asString().c_str());
+        std::vector<std::string> matches;
+        each_match(regex, text.asString().c_str(), 0, matched, &matches);
+        if (!matches.empty()) {
+            if (matches.size() == 1) {
+                last_result = matches[0];
+            }
+            else {
+                std::stringstream ss;
+                std::string sep = "";
+                for (auto i = matches.begin(); i != matches.end(); i++) {
+                    ss << sep << *i;
+                    if (sep.empty()) { sep = separator.kind == Value::t_symbol ? mi->getValue(separator).asString() : separator.asString(); }
+                }
+                last_result = Value(ss.str(), Value::t_string);
+            }
+            return last_result;
+        }
+    }
+    last_result = "";
+    return last_result;
+}
+
 PropertyLookupValue::PropertyLookupValue(const PropertyLookupValue &other) {
     machine_name = other.machine_name;
     property_name = other.property_name;
@@ -1251,9 +1306,7 @@ const Value &PropertyLookupValue::operator()() {
 Value *PropertyLookupValue::getMutable(MachineInstance *current_scope) {
     machine = current_scope->lookup(machine_name);
     if (!machine) {
-        std::stringstream ss;
-        ss << current_scope->getName() << " no machine " << machine_name << " for property lookup";
-        MessageLog::instance()->add(ss.str().c_str());
+        LogMissingMachine(current_scope, machine_name, "for property lookup");
         last_result = false;
         return nullptr;
     }

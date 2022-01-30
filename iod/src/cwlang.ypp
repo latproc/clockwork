@@ -1150,6 +1150,13 @@ INTEGERVAL   {
 | PROPERTY SYMBOL {
     $$ = new Value(new PropertyLookupValue("SELF", $2));
 }
+| MATCHES OF expression IN SYMBOL SEPARATED BY value {
+    $$ = new Value(new PatternMatchValue($3, $5, *$8));
+    delete $8;
+}
+| MATCHES OF expression IN SYMBOL {
+    $$ = new Value(new PatternMatchValue($3, $5));
+}
 
 command:
 enter_command
