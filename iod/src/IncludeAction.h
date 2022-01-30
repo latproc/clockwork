@@ -45,8 +45,8 @@ struct IncludeActionTemplate : public ActionTemplate {
     std::string list_machine_name; // name of the list to include the machine into
     Value entry;
     Value position;
-    bool before;
-    bool expand;
+    bool before = false;
+    bool expand = false;
 };
 
 struct IncludeAction : public Action {

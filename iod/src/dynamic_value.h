@@ -436,6 +436,20 @@ class PropertyLookupValue : public DynamicValue {
     MachineInstance *machine = nullptr;
 };
 
+class PatternMatchValue : public DynamicValue {
+  public:
+    PatternMatchValue(Predicate *pattern, const char *prop);
+    PatternMatchValue(Predicate *pattern, const char *prop, const Value & separator);
+    virtual ~PatternMatchValue() {}
+    virtual const Value &operator()();
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+  private:
+    Predicate *pattern;
+    const std::string property_name;
+    Value separator;
+};
+
 class DisabledValue : public DynamicValue {
   public:
     DisabledValue(const char *name) : machine_name(name), machine(0) {}
