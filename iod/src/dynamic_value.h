@@ -439,11 +439,12 @@ class PropertyLookupValue : public DynamicValue {
 class PatternMatchValue : public DynamicValue {
   public:
     PatternMatchValue(Predicate *pattern, const char *prop);
-    PatternMatchValue(Predicate *pattern, const char *prop, const Value & separator);
+    PatternMatchValue(Predicate *pattern, const char *prop, const Value &separator);
     virtual ~PatternMatchValue() {}
     virtual const Value &operator()();
     virtual DynamicValue *clone() const;
     virtual std::ostream &operator<<(std::ostream &) const;
+
   private:
     Predicate *pattern;
     const std::string property_name;

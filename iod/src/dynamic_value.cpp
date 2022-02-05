@@ -3,8 +3,8 @@
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
-#include "symboltable.h"
 #include "regular_expressions.h"
+#include "symboltable.h"
 #include <boost/foreach.hpp>
 #include <functional>
 #include <iostream>
@@ -15,13 +15,14 @@
 
 namespace {
 
-    void LogMissingMachine(MachineInstance *current_scope, const std::string & name, const std::string source) {
-            std::stringstream ss;
-            ss << current_scope->getName() << " no machine " << name << " " << source;
-            MessageLog::instance()->add(ss.str().c_str());
-    }
-
+void LogMissingMachine(MachineInstance *current_scope, const std::string &name,
+                       const std::string source) {
+    std::stringstream ss;
+    ss << current_scope->getName() << " no machine " << name << " " << source;
+    MessageLog::instance()->add(ss.str().c_str());
 }
+
+} // namespace
 
 static uint64_t currentTime() { return microsecs(); }
 
@@ -196,8 +197,10 @@ std::ostream &BitsetValue::operator<<(std::ostream &out) const {
 }
 std::ostream &operator<<(std::ostream &out, const BitsetValue &val) { return val.operator<<(out); }
 
-PatternMatchValue::PatternMatchValue(Predicate *pattern, const char *prop) : pattern(pattern), property_name(prop), separator(";", Value::t_string) {}
-PatternMatchValue::PatternMatchValue(Predicate *pattern, const char *prop, const Value & sep) : pattern(pattern), property_name(prop), separator(sep) {}
+PatternMatchValue::PatternMatchValue(Predicate *pattern, const char *prop)
+    : pattern(pattern), property_name(prop), separator(";", Value::t_string) {}
+PatternMatchValue::PatternMatchValue(Predicate *pattern, const char *prop, const Value &sep)
+    : pattern(pattern), property_name(prop), separator(sep) {}
 DynamicValue *PatternMatchValue::clone() const { return new PatternMatchValue(*this); }
 std::ostream &PatternMatchValue::operator<<(std::ostream &out) const {
     out << "MATCHES OF " << pattern << " IN " << property_name << " SEPARATED BY " << separator;
@@ -1259,7 +1262,10 @@ const Value &PatternMatchValue::operator()() {
                 std::string sep = "";
                 for (auto i = matches.begin(); i != matches.end(); i++) {
                     ss << sep << *i;
-                    if (sep.empty()) { sep = separator.kind == Value::t_symbol ? mi->getValue(separator).asString() : separator.asString(); }
+                    if (sep.empty()) {
+                        sep = separator.kind == Value::t_symbol ? mi->getValue(separator).asString()
+                                                                : separator.asString();
+                    }
                 }
                 last_result = Value(ss.str(), Value::t_string);
             }
