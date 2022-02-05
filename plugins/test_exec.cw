@@ -1,7 +1,7 @@
 
 Test MACHINE {
 	exec SystemExec;
-	
+
 	update WHEN SELF IS idle AND TIMER > 1000;
 	idle DEFAULT;
 

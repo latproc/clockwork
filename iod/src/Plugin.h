@@ -25,6 +25,8 @@ void setStringValue(cwpi_Scope, const char *property_name, const char *new_value
 int changeState(cwpi_Scope, const char *new_state);
 char *getState(cwpi_Scope);
 void log_message(cwpi_Scope, const char *);
+void log_message_2(cwpi_Scope, const char *, const char *);
+void log_message_3(cwpi_Scope, const char *, const char *, const char *);
 uint64_t getIOClock();
 
 void *getInstanceData(cwpi_Scope);

@@ -83,7 +83,8 @@ hmi/
 libclockwork/
 private_tests/
 iod/old/
-plugins/
+plugins/*.c
+plugins/*.so*
 
 #built tools
 iod/cw

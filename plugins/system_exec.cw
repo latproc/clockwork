@@ -1,4 +1,4 @@
-# This plugin attempts to execute the command set in its Command property 
+# This plugin attempts to execute the command set in its Command property
 # when it is in the Start state.
 # While the command is running the machine stays in the Running state until
 # eventually it moved to Error or Done at which time CommandStatus reflects
@@ -8,13 +8,13 @@ SystemExec MACHINE {
 	OPTION Command "";
 	OPTION CommandStatus 0;
 	PLUGIN "system_exec.so.1.0";
-	
+
 	Running STATE;
 	Start STATE;
 	Error STATE;
 	Done STATE;
 	Idle INITIAL;
-	
+
 	COMMAND start { SET SELF TO Start; }
 }
 
@@ -42,32 +42,32 @@ char ** split_string(const char *str)
 	enum toks { CHAR, SPC, TERM};
 	int QUOTE = 0x27;
 	int DBLQUOTE = '"';
-	
+
 	int state = START;
 	int tok;
 	const char *p = str;
-	
+
 	/* buffer to collect individual parameters into */
 
-	/* start bufsize with a reasonable guess at the length of individual 
+	/* start bufsize with a reasonable guess at the length of individual
 	    parameters within the string this value will grow it turns out to be too small
 	*/
-	int bufsize = 30; 
+	int bufsize = 30;
 	char *buf = malloc(bufsize);
 	char *out = buf;
-	
+
 	char **params = malloc( 50 * sizeof(char*) ); /* TBD might need extra parameters here */
 	memset(params, 0, 50 * sizeof(char*));
 	int cur_param = 0;
 	char **result = NULL;
-	
+
 	while (*p)
 	{
-		if (state == IN_QUOTE) 
+		if (state == IN_QUOTE)
 		{
 		    if (*p != QUOTE)
 				tok = CHAR;
-			else 
+			else
 				tok = TERM;
 		}
 		else if (state == IN_DBLQUOTE) {
@@ -88,13 +88,13 @@ char ** split_string(const char *str)
 					state = IN_QUOTE;
 				else if (*p == DBLQUOTE)
 					state = IN_DBLQUOTE;
-				else if (tok == CHAR) 
+				else if (tok == CHAR)
 				{
 					*out++ = *p;
 					state = IN;
 				}
 				else if (tok == SPC)
-					state = BETWEEN;					
+					state = BETWEEN;
 				break;
 			case IN:
 				if (*p == QUOTE)
@@ -138,7 +138,7 @@ char ** split_string(const char *str)
 			default:
 			    printf("Error: unknown state %d when parsing a string.\n", state);
 		}
-		if ( (out - buf) == bufsize ) 
+		if ( (out - buf) == bufsize )
 		{
 			/* make more space for parameters */
 			char *saved = buf;
@@ -155,7 +155,7 @@ char ** split_string(const char *str)
 		params[cur_param] = strdup (buf);
 		cur_param++;
 	}
-	else if (state == IN_QUOTE || state == IN_DBLQUOTE) 
+	else if (state == IN_QUOTE || state == IN_DBLQUOTE)
 	{
 		printf("Warning: unterminated string '%s' is ignored while parsing: '%s'\n", buf, str);
 	}
@@ -178,7 +178,7 @@ void display_params(char *argv[])
 		printf("%s:", val);
 		val = *(++curr);
 		count++;
-	} 
+	}
 	printf("\n");
 	fflush(stdout);
 }
@@ -247,7 +247,9 @@ continue_plugin:
 	if (current && strcmp(current, "Start") == 0 && data->child == 0 ) {
 		cmd = getStringValue(scope, "Command");
 		if (cmd && *cmd) {
-			int x = changeState(scope, "Running");
+			if (!changeState(scope, "Running")) {
+				goto CommandFinished;
+      }
 			data->parameters = split_string(cmd);
 			data->environment = copy_environment();
 
@@ -255,7 +257,7 @@ continue_plugin:
 			if ( (child = vfork()) == -1 ) {
 				perror("vfork");
 				setIntValue(scope, "CommandStatus", errno);
-				x = changeState(scope, "Error");
+				changeState(scope, "Error");
 				data->child = 0;
 				goto CommandFinished;
 			}
@@ -273,12 +275,12 @@ continue_plugin:
 			return PLUGIN_COMPLETED; // child still running
 		}
 		else {
-			int x = changeState(scope, "Error");
+			changeState(scope, "Error");
 			data->child = 0;
 			return PLUGIN_COMPLETED; // child still running
 		}
 	}
-	else if (current && strcmp(current, "Running") == 0 ) { 
+	else if (current && strcmp(current, "Running") == 0 ) {
 		int stat = 0;
 		int err = waitpid(data->child, &stat, WNOHANG);
 		if (err == -1)
@@ -293,21 +295,21 @@ continue_plugin:
 		if (stat == 0)
 		{
 			setIntValue(scope, "CommandStatus", 0);
-			int x = changeState(scope, "Done");
+			changeState(scope, "Done");
 			data->child = 0;
 			goto CommandFinished;
 		}
 		else if (WIFEXITED(stat))
 		{
 			setIntValue(scope, "CommandStatus", WEXITSTATUS(stat));
-			int x = changeState(scope, "Error");
+			changeState(scope, "Error");
 			data->child = 0;
 			goto CommandFinished;
 		}
 		else if (WIFSIGNALED(stat))
 		{
 			setIntValue(scope, "CommandStatus", WTERMSIG(stat));
-			int x = changeState(scope, "Error");
+			changeState(scope, "Error");
 			data->child = 0;
 			goto CommandFinished;
 		}
