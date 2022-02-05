@@ -21,6 +21,8 @@
 #ifndef __DebugExtra_H__
 #define __DebugExtra_H__
 
+#include "Logger.h"
+
 class DebugExtra {
   public:
     static DebugExtra *instance() {
@@ -44,6 +46,7 @@ class DebugExtra {
     int DEBUG_DISPATCHER;
     int DEBUG_CHANNELS;
     int DEBUG_ETHERCAT;
+    int DEBUG_PROCESSING;
 
   private:
     DebugExtra();
@@ -65,6 +68,7 @@ class DebugExtra {
 #define DBG_DISPATCHER MSG(DebugExtra::instance()->DEBUG_DISPATCHER)
 #define DBG_CHANNELS MSG(DebugExtra::instance()->DEBUG_CHANNELS)
 #define DBG_ETHERCAT MSG(DebugExtra::instance()->DEBUG_ETHERCAT)
+#define DBG_PROCESSING MSG(DebugExtra::instance()->DEBUG_PROCESSING)
 
 #define DBG_M_PARSER M_MSG(DebugExtra::instance()->DEBUG_PARSER, this)
 #define DBG_M_PREDICATES M_MSG(DebugExtra::instance()->DEBUG_PREDICATES, this)

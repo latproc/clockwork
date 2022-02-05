@@ -19,6 +19,7 @@
 */
 
 #include "IOComponent.h"
+#include "DebugExtra.h"
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
@@ -185,7 +186,7 @@ void IOComponent::setHardwareState(IOComponent::HardwareState state) {
     else if (state == s_operational) {
         hw_state_str = "Operational";
     }
-    NB_MSG << "Hardware state  set to " << hw_state_str << "\n";
+    DBG_INITIALISATION << "Hardware state  set to " << hw_state_str << "\n";
     hardware_state = state;
 }
 

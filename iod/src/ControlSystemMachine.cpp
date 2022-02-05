@@ -19,9 +19,11 @@
 */
 
 #include "ControlSystemMachine.h"
+#include "DebugExtra.h"
 #include "ECInterface.h"
 #include "IOComponent.h"
 #include "LatprocConfig.h"
+#include "Logger.h"
 #include "MachineInstance.h"
 #include "SetStateAction.h"
 #include "zmq.h"
@@ -207,7 +209,7 @@ void ControlSystemMachine::sync_slaves() {
 void ControlSystemMachine::enter_connected() {
     state = s_connected;
     ecat_last_synced = 0; // state changes requires followup sync
-    std::cout << "Control System is connected\n ";
+    DBG_PROCESSING << "Control System is connected\n ";
     if (ethercat_machine) {
         {
             SetStateActionTemplate ssat = SetStateActionTemplate("ETHERCAT_LS", "UP");
@@ -223,12 +225,12 @@ void ControlSystemMachine::enter_connected() {
 void ControlSystemMachine::enter_disconnected() {
     state = s_disconnected;
     ecat_last_synced = 0; // state changes requires followup sync
-    std::cout << "Control System is disconnected "
+    DBG_PROCESSING << "Control System is disconnected "
 #ifndef EC_SIMULATOR
-              << " wc_state: 0x" << std::hex << (int)ECInterface::domain1_state.wc_state << std::dec
-              << " link up: " << ECInterface::master_state.link_up
+                   << " wc_state: 0x" << std::hex << (int)ECInterface::domain1_state.wc_state
+                   << std::dec << " link up: " << ECInterface::master_state.link_up
 #endif
-              << "\n";
+                   << "\n";
     if (ethercat_machine) {
         {
             SetStateActionTemplate ssat = SetStateActionTemplate("ETHERCAT_LS", "DOWN");
@@ -244,7 +246,7 @@ void ControlSystemMachine::enter_disconnected() {
 void ControlSystemMachine::enter_slaves_online() {
     state = s_slaves_online;
     ecat_last_synced = 0; // state changes requires followup sync
-    std::cout << "Control System slaves are online\n ";
+    DBG_PROCESSING << "Control System slaves are online\n ";
 
     if (ethercat_machine) {
         SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "CONFIG");
@@ -256,7 +258,7 @@ void ControlSystemMachine::enter_slaves_online() {
 void ControlSystemMachine::enter_operational() {
     state = s_operational;
     ecat_last_synced = 0; // state changes requires followup sync
-    std::cout << "Control System is operational\n ";
+    DBG_PROCESSING << "Control System is operational\n ";
 #ifndef EC_SIMULATOR
     //if (!ECInterface::active) ECInterface::instance()->activate();
 #endif
@@ -270,10 +272,10 @@ void ControlSystemMachine::enter_operational() {
 void ControlSystemMachine::enter_unknown() {
     state = s_unknown;
     ecat_last_synced = 0; // state changes requires followup sync
-    std::cout << "Control System is in an unknown state. "
+    DBG_PROCESSING << "Control System is in an unknown state. "
 #ifndef EC_SIMULATOR
-              << " wc_state: 0x" << std::hex << (int)ECInterface::domain1_state.wc_state << std::dec
-              << " link up: " << ECInterface::master_state.link_up
+                   << " wc_state: 0x" << std::hex << (int)ECInterface::domain1_state.wc_state
+                   << std::dec << " link up: " << ECInterface::master_state.link_up
 #endif
-              << "\n ";
+                   << "\n ";
 }

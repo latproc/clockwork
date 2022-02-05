@@ -19,7 +19,9 @@
 */
 
 #include "MQTTInterface.h"
+#include "DebugExtra.h"
 #include "IOComponent.h"
+#include "Logger.h"
 #include "MachineInstance.h"
 #include <boost/thread/condition.hpp>
 #include <errno.h>
@@ -289,9 +291,8 @@ bool MQTTInterface::addModule(MQTTModule *module, bool reset_io) {
 }
 
 bool MQTTInterface::activate() {
-    std::cerr << "Activating MQTT Interface...";
+    DBG_INITIALISATION << "Activating MQTT Interface...";
     active = true;
-    std::cerr << "done\n";
 
     return true;
 }

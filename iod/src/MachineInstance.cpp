@@ -683,6 +683,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
         Dispatcher::instance()->addReceiver(this);
         gettimeofday(&start_time, 0);
     }
+    else {
+        DBG_INITIALISATION << "not a machine instance\n";
+    }
 }
 
 MachineInstance::MachineInstance(const CStringHolder name, const char *type,
@@ -710,6 +713,9 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
         gettimeofday(&start_time, 0);
+    }
+    else {
+        DBG_INITIALISATION << "not a machine instance\n";
     }
 }
 
@@ -2945,14 +2951,12 @@ void MachineInstance::enable() {
         b->enable();
     }
 
-#if 1
     if (isActive() && !isShadow() && getStateMachine()->token_id != ClockworkToken::EXTERNAL) {
         std::string msgstr(_name);
         msgstr += "_enabled";
         Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);
         sendMessageToReceiver(msg, this, false);
     }
-#endif
 
     if (_type == "LIST") {
         fixListState(*this);
@@ -3374,6 +3378,8 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         for (Parameter p : state_machine->locals) {
             Parameter newp(p.val.sValue.c_str());
             if (!p.machine) {
+                MessageLog::instance()->add(_name,
+                                            ": no clonable instance for parameter: ", p.val.sValue);
                 DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter "
                                      << p.val.sValue << "\n";
             }
@@ -3452,6 +3458,9 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
             }
             locals.push_back(newp);
         }
+    }
+    else {
+        NB_MSG << _name << " has locals, state machine not initialised\n";
     }
     // a list has many parameters but the list class does not.
     // nevertheless, the parameters and dependencies still need to be setup.

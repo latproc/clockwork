@@ -29,6 +29,7 @@
 #include <zmq.hpp>
 
 #include "ClientInterface.h"
+#include "DebugExtra.h"
 #include "Dispatcher.h"
 #include "IODCommand.h"
 #include "IODCommands.h"
@@ -486,7 +487,7 @@ void IODCommandThread::operator()() {
     wd = new Watchdog("Command Thread Watchdog", 600, false);
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals *>(internals);
 
-    NB_MSG << "------------------ Command Thread Started -----------------\n";
+    DBG_INITIALISATION << "------------------ Command Thread Started -----------------\n";
 
     int linger = 0; // do not wait at socket close time
     cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
@@ -541,7 +542,7 @@ void IODCommandThread::operator()() {
         if (len < 20) {
             start_cli[len] = 0;
         };
-        NB_MSG << "client thread received: " << start_cli << "\n";
+        DBG_INITIALISATION << "client thread received: " << start_cli << "\n";
         usleep(100000);
     } while (strcmp(start_cli, "start") != 0);
 

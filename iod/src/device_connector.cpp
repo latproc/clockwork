@@ -1414,7 +1414,6 @@ int main(int argc, const char *argv[]) {
 
         monitor.join();
         processing.join();
-        std::cout << "done\n" << std::flush;
     }
     catch (const std::exception &e) {
         if (zmq_errno()) {

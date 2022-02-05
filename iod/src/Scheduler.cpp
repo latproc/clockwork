@@ -345,7 +345,7 @@ void Scheduler::idle() {
     while (!safeRecv(sync, buf, 10, true, response_len, 0)) {
         boost::this_thread::sleep_for(boost::chrono::microseconds(100));
     }
-    NB_MSG << "Scheduler started\n";
+    DBG_INITIALISATION << "Scheduler started\n";
 
     state = e_waiting;
     bool is_ready;

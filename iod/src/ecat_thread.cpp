@@ -101,7 +101,7 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 bool EtherCATThread::checkAndUpdateCycleDelay() {
     if (cycle_delay != get_cycle_time()) {
         cycle_delay = get_cycle_time();
-        std::cout << "setting cycle time to " << cycle_delay << "\n";
+        DBG_INITIALISATION << "setting cycle time to " << cycle_delay << "\n";
         ECInterface::FREQUENCY = 1000000 / cycle_delay;
         return true;
     }

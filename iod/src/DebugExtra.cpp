@@ -38,4 +38,5 @@ DebugExtra::DebugExtra() {
     DEBUG_DISPATCHER = LogState::instance()->define("DEBUG_DISPATCHER");
     DEBUG_CHANNELS = LogState::instance()->define("DEBUG_CHANNELS");
     DEBUG_ETHERCAT = LogState::instance()->define("DEBUG_ETHERCAT");
+    DEBUG_PROCESSING = LogState::instance()->define("DEBUG_PROCESSING");
 }
