@@ -3387,9 +3387,15 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                 newp.machine->addDependancy(this);
                 std::map<std::string, MachineClass *>::iterator c_iter =
                     machine_classes.find(newp.machine->_type);
-                if (c_iter == machine_classes.end())
-                    DBG_M_INITIALISATION << "Warning: class " << newp.machine->_type
-                                         << " not found\n";
+                if (c_iter == machine_classes.end()) {
+                    auto &ss = MessageLog::instance()->get_stream();
+                    ss << _name << ": " << newp.machine->_type << " not found";
+                    auto error = MessageLog::instance()->access_stream_message();
+                    error_messages.push_back(error);
+                    DBG_M_INITIALISATION << error << "\n";
+                    MessageLog::instance()->release_stream();
+                    ++num_errors;
+                }
                 else if ((*c_iter).second) {
                     newp.machine->owner = this;
                     MachineClass *newsm = (*c_iter).second;
