@@ -137,7 +137,7 @@ bool setup_signals() {
 class IODHardwareActivation : public HardwareActivation {
   public:
     void operator()(void) {
-        NB_MSG << "----------- Initialising machines ------------\n";
+        DBG_INITIALISATION << "----------- Initialising machines ------------\n";
         initialise_machines();
     }
 };
@@ -225,13 +225,13 @@ int main(int argc, char const *argv[]) {
     IODCommandListJSON::no_display.insert("default");
 
     statistics = new Statistics;
+    load_debug_config();
     load_result = loadConfig(source_files);
     if (load_result) {
         Dispatcher::instance()->stop();
         Scheduler::instance()->stop();
         return load_result;
     }
-    load_debug_config();
 
     if (dependency_graph()) {
         std::ofstream graph(dependency_graph());
@@ -732,7 +732,8 @@ int main(int argc, char const *argv[]) {
                     }
                     else {
                         std::string name = m->parameters[0].real_name;
-                        //DBG_MSG << "Setting up " << m->_type << " " << m->getName() << " \n";
+                        DBG_INITIALISATION << "Setting up " << m->_type << " " << m->getName()
+                                           << " \n";
                         MQTTModule *module =
                             MQTTInterface::instance()->findModule(m->parameters[0].real_name);
                         if (!module) {
@@ -762,10 +763,6 @@ int main(int argc, char const *argv[]) {
             assert(remaining == 0);
         }
     }
-    //MachineInstance::displayAll();
-#ifdef EC_SIMULATOR
-    wiring["EL2008_OUT_3"].push_back("EL1008_IN_1");
-#endif
 
     bool sigok = setup_signals();
     assert(sigok);
@@ -799,10 +796,10 @@ int main(int argc, char const *argv[]) {
     size_t response_len;
     if (safeRecv(sim_io, buf, 100, true, response_len, 0)) {
         buf[(response_len < 100) ? response_len : 99] = 0;
-        NB_MSG << "simulated io got start message: " << buf << "\n";
+        DBG_INITIALISATION << "simulated io got start message: " << buf << "\n";
     }
 
-    NB_MSG << "processing has started\n";
+    DBG_INITIALISATION << "processing has started\n";
     uint64_t then = microsecs();
     while (!program_done) {
         MQTTInterface::instance()->collectState();

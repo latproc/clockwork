@@ -160,7 +160,6 @@ int load_preset_modbus_mappings() {
         while (modbus_mappings_file.getline(buf, 200, '\n')) {
             ++lineno;
             std::stringstream line(buf);
-            //NB_MSG << buf << "\n";
             std::string group_addr, group, addr, name, type;
             int length = 1;
             line >> group_addr;
@@ -172,7 +171,6 @@ int load_preset_modbus_mappings() {
                     generate_length = true;
                 }
                 group.erase(pos);
-                //NB_MSG << "$$$$$$$$$$$$ " << group << " " << name << "\n";
                 addr = group_addr;
                 addr = group_addr.substr(pos + 1);
                 std::string lookup_name(name);
@@ -180,7 +178,6 @@ int load_preset_modbus_mappings() {
                     size_t pos = lookup_name.rfind("cmd_");
                     if (pos != std::string::npos) {
                         lookup_name = lookup_name.replace(pos, 4, "");
-                        //NB_MSG << "fixed name " << name << " to " << lookup_name << "\n";
                         name = lookup_name;
                     }
                 }
@@ -622,7 +619,7 @@ void semantic_analysis() {
                 if (machines.count(node.first) == 0) {
                     std::stringstream ss;
                     ss << "## - Warning: Cannot find a global machine or variable named "
-                       << node.first << "\n";
+                       << node.first;
                     error_messages.push_back(ss.str());
                     ++num_errors;
                 }
@@ -641,8 +638,7 @@ void semantic_analysis() {
         std::map<std::string, MachineClass *>::iterator c_iter = machine_classes.find(m->_type);
         if (c_iter == machine_classes.end()) {
             std::stringstream ss;
-            ss << "## - Error: class " << m->_type << " not found for machine " << m->getName()
-               << "\n";
+            ss << "## - Error: class " << m->_type << " not found for machine " << m->getName();
             error_messages.push_back(ss.str());
             ++num_errors;
         }
@@ -670,7 +666,6 @@ void semantic_analysis() {
             ss << "Error: no state machine defined for instance " << (*c_iter).first;
             error_messages.push_back(ss.str());
             ++num_errors;
-            NB_MSG << ss.str() << "\n";
         }
     }
 
@@ -729,8 +724,7 @@ void semantic_analysis() {
                         found->_type != "MQTTBROKER") {
                         std::stringstream ss;
                         ss << "Error: in the definition of " << mi->getName() << ", " << p_i.sValue
-                           << " has type " << found->_type
-                           << " but should be MODULE or MQTTBROKER\n";
+                           << " has type " << found->_type << " but should be MODULE or MQTTBROKER";
                         std::string s = ss.str();
                         ++num_errors;
                         error_messages.push_back(s);
@@ -817,7 +811,7 @@ void semantic_analysis() {
                         std::stringstream ss;
                         ss << "## - Error: local " << m->getName() << " for machine "
                            << mi->getName() << " sends an unknown parameter " << p.val
-                           << " at position: " << j << "\n";
+                           << " at position: " << j;
                         error_messages.push_back(ss.str());
                         ++num_errors;
                     }
@@ -885,8 +879,8 @@ void semantic_analysis() {
                     snprintf(buf, 100, "machine %s cannot find a global machine called: %s\n",
                              mi->getName().c_str(), node.first.c_str());
                     MessageLog::instance()->add(buf);
-                    DBG_MSG << "Warning: " << node.first
-                            << " has no machine when settingup globals\n";
+                    DBG_INITIALISATION << "Warning: " << node.first
+                                       << " has no machine when settingup globals\n";
                 }
             }
         }
@@ -917,8 +911,12 @@ void semantic_analysis() {
             event = event.substr(event.find('.') + 1);
             MachineInstance *source = mi->lookup(machine);
             if (!source) {
-                DBG_MSG << "Unknown machine when checking to duplicate " << rcv.first.getText()
-                        << "\n";
+                std::stringstream ss;
+                ss << machine << ": Unknown machine " << machine << " when preparing statement "
+                   << rcv.first.getText() << "\n";
+                error_messages.push_back(ss.str());
+                ++num_errors;
+                DBG_INITIALISATION << ss.str() << "\n";
             }
 
             if (source && source->getName() != machine) {
@@ -1092,7 +1090,7 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
         set_debug_config("iod.conf");
     }
 
-    NB_MSG << (argc - 1) << " arguments\n";
+    DBG_PARSER << (argc - 1) << " arguments\n";
     return 0;
 }
 
@@ -1121,7 +1119,7 @@ int loadConfig(std::list<std::string> &files) {
             opened_file = 1;
             yyin = fopen(filename, "r");
             if (yyin) {
-                NB_MSG << "Processing file: " << filename << "\n";
+                DBG_PARSER << "Processing file: " << filename << "\n";
                 yylineno = 1;
                 yycharno = 1;
                 yyfilename = filename;
@@ -1137,7 +1135,7 @@ int loadConfig(std::list<std::string> &files) {
         }
         else if (strlen(filename) == 1) { /* '-' means stdin */
             opened_file = 1;
-            NB_MSG << "\nProcessing stdin\n";
+            DBG_PARSER << "\nProcessing stdin\n";
             yyfilename = "stdin";
             yyin = stdin;
             yylineno = 1;
@@ -1152,7 +1150,9 @@ int loadConfig(std::list<std::string> &files) {
     }
 
     if (num_errors > 0) {
-        BOOST_FOREACH (std::string &error, error_messages) { std::cerr << error << "\n"; }
+        for (std::string &error : error_messages) {
+            std::cerr << error << "\n";
+        }
         printf("Errors detected. Aborting\n");
         return 2;
     }
@@ -1171,8 +1171,8 @@ int loadConfig(std::list<std::string> &files) {
         return 2;
     }
 
-    NB_MSG << " Configuration loaded. " << MachineInstance::countAutomaticMachines()
-           << " automatic machines\n";
+    DBG_PARSER << " Configuration loaded. " << MachineInstance::countAutomaticMachines()
+               << " automatic machines\n";
     //MachineInstance::displayAutomaticMachines();
     return 0;
 }
@@ -1192,10 +1192,6 @@ void initialise_machines() {
             MachineInstance *m = *m_iter++;
             if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")) {
                 std::string name(m->fullName());
-                //if (m->owner) name += m->owner->getName() + ".";
-                //name += m->getName();
-                //if (!m->isShadow())
-                //  m->enable();
                 std::map<std::string, std::map<std::string, Value>>::iterator found =
                     store.init_values.find(name);
                 if (found != store.init_values.end()) {
@@ -1224,17 +1220,6 @@ void initialise_machines() {
             }
         }
     }
-    else { // enable 'contant' machines and marked as persistent
-#if 0
-        m_iter = MachineInstance::begin();
-        while (m_iter != MachineInstance::end()) {
-            MachineInstance *m = *m_iter++;
-            if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")) {
-                m->enable();
-            }
-        }
-#endif
-    }
 
     // prepare the list of machines that will be processed at idle time
     m_iter = MachineInstance::begin();
@@ -1243,35 +1228,9 @@ void initialise_machines() {
     while (m_iter != MachineInstance::end()) {
         MachineInstance *mi = *m_iter++;
         mi->markActive();
-#if 0
-        if (!mi->receives_functions.empty() || mi->commands.size()
-                || (mi->getStateMachine() && !mi->getStateMachine()->transitions.empty())
-                || mi->isModbusExported()
-                || mi->uses_timer
-                || mi->mq_interface
-                || mi->stable_states.size() > 0
-                || mi->_type == "LIST"
-                || mi->_type == "REFERENCE"
-                || mi->_type == "CONDITION"
-                || mi->_type == "COUNTERRATE"
-                || mi->_type == "RATEESTIMATOR"
-                || (mi->getStateMachine() && mi->getStateMachine()->plugin)
-                || mi->isActive() // constructor marked this machine type as active
-        ) {
-            mi->markActive();
-            DBG_INITIALISATION << mi->getName() << " is active\n";
-            ++num_active;
-        }
-        else {
-            mi->markPassive();
-            DBG_INITIALISATION << mi->getName() << " is passive\n";
-            ++num_passive;
-        }
-#endif
     }
-    NB_MSG << num_passive << " passive and " << num_active << " active machines\n";
 
-    // enable all other machines
+    // enable all machines
 
     bool only_startup = machine_classes.count("STARTUP") > 0;
     m_iter = MachineInstance::begin();

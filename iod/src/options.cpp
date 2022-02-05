@@ -116,10 +116,7 @@ void enable_tracing(bool which) { is_tracing = which; }
 
 bool tracing() { return is_tracing; }
 
-void set_cycle_time(unsigned long new_time) {
-    std::cout << "cycle time changed to " << new_time << "\n";
-    cycle_time_ = new_time;
-}
+void set_cycle_time(unsigned long new_time) { cycle_time_ = new_time; }
 unsigned long get_cycle_time() { return cycle_time_; }
 
 bool export_to_c() { return c_export; }

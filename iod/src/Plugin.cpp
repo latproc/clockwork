@@ -9,9 +9,7 @@
 
 uint64_t getIOClock() { return IOComponent::getClock(); }
 
-void log_message(cwpi_Scope, const char *m) {
-    MessageLog::instance()->add(m);
-}
+void log_message(cwpi_Scope, const char *m) { MessageLog::instance()->add(m); }
 
 void log_message_2(cwpi_Scope, const char *m1, const char *m2) {
     MessageLog::instance()->add(m1, m2);
@@ -73,7 +71,8 @@ int changeState(cwpi_Scope s, const char *new_state) {
         return 0;
     }
     if (!scope->hasState(State(new_state))) {
-        MessageLog::instance()->add("Machine ", scope->getName(), " does not have state ", new_state);
+        MessageLog::instance()->add("Machine ", scope->getName(), " does not have state ",
+                                    new_state);
         return 0;
     }
     SetStateActionTemplate ssat("SELF", new_state);

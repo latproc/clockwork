@@ -457,9 +457,7 @@ void ProcessingThread::operator()() {
     safeSend(dispatch_sync, "go", 2); //  permit handling of events
     usleep(10000);
 
-    std::cout << "----------- Enabling client access --------\n";
-    FileLogger fl(program_name);
-    fl.f() << "Enabling client access\n";
+    DBG_INITIALISATION << "----------- Enabling client access --------\n";
     safeSend(resource_mgr, "start", 5);
 
     safeSend(ecat_sync, "go", 2); // collect state
@@ -513,8 +511,6 @@ void ProcessingThread::operator()() {
             }
             if (activate_hardware.initialiseHardware()) {
                 IOComponent::setHardwareState(IOComponent::s_hardware_init);
-                //std::cout << "Activating hardware\n";
-                //activate_hardware();
             }
         }
 
@@ -525,13 +521,13 @@ void ProcessingThread::operator()() {
         // only process io components if the machine is operational
         if (machine.c_operational()) {
             if (!machine_is_ready) {
-                std::cout << "machine is becoming ready\n";
+                DBG_INITIALISATION << "machine is becoming ready\n";
                 machine_is_ready = true;
             }
         }
         else {
             if (machine_is_ready) {
-                std::cout << "machine is no longer ready\n";
+                DBG_INITIALISATION << "machine is no longer ready\n";
                 machine_is_ready = false;
             }
         }
@@ -768,21 +764,18 @@ void ProcessingThread::operator()() {
             // check the command interface and any command channels for activity
             bool have_command = false;
             if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
-                //NB_MSG << "Processing thread has a command from the client interface\n";
                 have_command = true;
             }
             else {
                 for (unsigned int i = dynamic_poll_start_idx;
                      i < dynamic_poll_start_idx + num_channels; ++i) {
                     if (items[i].revents & ZMQ_POLLIN) {
-                        //NB_MSG << "Processing thread has a command from a channel command interface\n";
                         have_command = true;
                         break;
                     }
                 }
             }
             if (have_command) {
-                //NB_MSG << "processing incoming commands\n";
                 uint64_t start_time = microsecs();
                 uint64_t now = start_time;
 #ifdef KEEPSTATS
@@ -813,11 +806,6 @@ void ProcessingThread::operator()() {
                             ++i;
                             continue;
                         }
-#if 0
-                        if (i > 5) {
-                            NB_MSG << "Processing thread has activity on poll item " << i << " of 0.." << CommandSocketInfo::lastIndex() << "\n";
-                        }
-#endif
                         have_command = true;
 
                         zmq::message_t msg;
@@ -845,9 +833,7 @@ void ProcessingThread::operator()() {
                             if (command) {
                                 bool ok = false;
                                 try {
-                                    //NB_MSG << "processing thread executing " << buf << "\n";
                                     ok = (*command)();
-                                    //NB_MSG << "execution result " << command->result() << "\n";
                                 }
                                 catch (const std::exception &e) {
                                     FileLogger fl(program_name);
@@ -900,7 +886,6 @@ void ProcessingThread::operator()() {
                     usleep(0);
                     now = microsecs();
                 }
-                //NB_MSG << " @@@@@@@@@@@ " << count << " Processed\n";
             }
         }
 
@@ -1030,7 +1015,7 @@ void ProcessingThread::operator()() {
         // or deactivation of the master
         if (status == e_waiting && !IOComponent::devices.empty() && update_state == s_update_idle &&
             (machine.activationRequested() || machine.deactivationRequested())) {
-            std::cout << "activation/deactivation requested\n";
+            DBG_INITIALISATION << "activation/deactivation requested\n";
             uint32_t size = 0;
             uint8_t stage = 1;
             while (true) {
@@ -1056,8 +1041,8 @@ void ProcessingThread::operator()() {
                 }
                 catch (const zmq::error_t &err) {
                     if (zmq_errno() == EINTR) {
-                        std::cout << "interrupted when sending update (" << (unsigned int)stage
-                                  << ")\n";
+                        DBG_PROCESSING << "interrupted when sending update (" << (unsigned int)stage
+                                       << ")\n";
                         continue;
                     }
                     else {
@@ -1073,13 +1058,10 @@ void ProcessingThread::operator()() {
 #ifdef KEEPSTATS
             avg_update_time.start();
 #endif
-            //          if (IOComponent::updatesWaiting() && IOComponent::updatesToSend())
-            //              std::cout << "ProcessingThread has new updates to send\n";
-
             if (update_state == s_update_idle) {
                 IOUpdate *upd = 0;
                 if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
-                    std::cout << "Sending defaults to EtherCAT\n";
+                    DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
                     upd = IOComponent::getDefaults();
                     assert(upd);
 #if VERBOSE_DEBUG
@@ -1135,9 +1117,8 @@ void ProcessingThread::operator()() {
                         }
                         catch (const zmq::error_t &err) {
                             if (zmq_errno() == EINTR) {
-                                std::cout << "interrupted when sending update ("
-                                          << (unsigned int)stage << ")\n";
-                                //usleep(50);
+                                DBG_PROCESSING << "interrupted when sending update ("
+                                               << (unsigned int)stage << ")\n";
                                 continue;
                             }
                             else {
@@ -1146,22 +1127,17 @@ void ProcessingThread::operator()() {
                             assert(false);
                         }
                     }
-                    //                  std::cout << "update sent. Waiting for ack\n";
                     MEMCHECK();
                     delete upd;
                     update_state = s_update_sent;
                     IOComponent::updatesSent(true);
                 }
-                //else std::cout << "warning: getUpdate/getDefault returned null\n";
             }
-            //else
-            //  NB_MSG << "have updates but update state is not idle yet\n";
         }
         if (update_state == s_update_sent) {
             char buf[10];
             try {
                 if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
-                    //                  std::cout << "update acknowledged\n";
                     update_state = s_update_idle;
                     if (machine.activationRequested()) {
                         if (strncmp(buf, "ok", 2) == 0) {
@@ -1176,7 +1152,6 @@ void ProcessingThread::operator()() {
                     else {
                         if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                             IOComponent::setHardwareState(IOComponent::s_operational);
-                            //activate_hardware();
                         }
                     }
                 }
@@ -1206,9 +1181,5 @@ void ProcessingThread::operator()() {
             break;
         }
     }
-    //      std::cout << std::flush;
-    //      model_mutex.lock();
-    //      model_updated.notify_one();
-    //      model_mutex.unlock();
-    std::cout << "processing done\n";
+    DBG_INITIALISATION << "processing done\n";
 }

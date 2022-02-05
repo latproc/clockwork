@@ -309,7 +309,7 @@ class IODHardwareActivation : public HardwareActivation {
         }
     }
     void operator()(void) {
-        NB_MSG << "----------- Initialising machines ------------\n";
+        DBG_INITIALISATION << "----------- Initialising machines ------------\n";
         initialise_machines();
     }
 
@@ -383,6 +383,7 @@ int main(int argc, char const *argv[]) {
     IODCommandListJSON::no_display.insert("TRACEABLE");
     IODCommandListJSON::no_display.insert("default");
 
+    load_debug_config();
     statistics = new Statistics;
     load_result = loadConfig(source_files);
     if (load_result) {
@@ -453,9 +454,9 @@ int main(int argc, char const *argv[]) {
         return 2;
     }
 
-    std::cout << "-------- Initialising ---------\n";
+    DBG_INITIALISATION << "-------- Initialising ---------\n";
 
-    std::cout << "-------- Starting EtherCAT Interface ---------\n";
+    DBG_INITIALISATION << "-------- Starting EtherCAT Interface ---------\n";
     EtherCATThread ethercat;
     boost::thread ecat_thread(boost::ref(ethercat));
 #ifdef __linux__
@@ -476,7 +477,7 @@ int main(int argc, char const *argv[]) {
         }
     }
 #endif
-    std::cout << "-------- Starting Scheduler ---------\n";
+    DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
     boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
     Scheduler::instance()->setThreadRef(scheduler_thread);
 
@@ -484,7 +485,6 @@ int main(int argc, char const *argv[]) {
     usleep(50000); // give time before starting the processin g thread
 
     // Inform the modbus interface we have started
-    load_debug_config();
     ModbusAddress::message("STARTUP");
     Dispatcher::start();
 
