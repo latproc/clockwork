@@ -57,10 +57,10 @@ IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *da
                              bool insert_before, bool expand_list)
     : Action(m), list_machine_name(dat->list_machine_name), entry(dat->entry), list_machine(0),
       entry_machine(0), position(pos), before(insert_before), expand(expand_list) {
-          if (entry.dynamicValue()) {
-              entry.dynamicValue()->setScope(m);
-          }
-      }
+    if (entry.dynamicValue()) {
+        entry.dynamicValue()->setScope(m);
+    }
+}
 
 IncludeAction::IncludeAction()
     : list_machine(0), entry_machine(0), position(-1), before(false), expand(false) {}
