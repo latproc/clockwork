@@ -10,8 +10,15 @@
 uint64_t getIOClock() { return IOComponent::getClock(); }
 
 void log_message(cwpi_Scope, const char *m) {
-    std::cout << m << "\n";
     MessageLog::instance()->add(m);
+}
+
+void log_message_2(cwpi_Scope, const char *m1, const char *m2) {
+    MessageLog::instance()->add(m1, m2);
+}
+
+void log_message_3(cwpi_Scope, const char *m1, const char *m2, const char *m3) {
+    MessageLog::instance()->add(m1, m2, m3);
 }
 
 int getIntValue(cwpi_Scope s, const char *property_name, const long **res) {
@@ -65,6 +72,10 @@ int changeState(cwpi_Scope s, const char *new_state) {
         MessageLog::instance()->add("changeState was passed a null instance from a plugin");
         return 0;
     }
+    if (!scope->hasState(State(new_state))) {
+        MessageLog::instance()->add("Machine ", scope->getName(), " does not have state ", new_state);
+        return 0;
+    }
     SetStateActionTemplate ssat("SELF", new_state);
     if (scope->isActive()) {
         scope->enqueueAction(
@@ -89,13 +100,13 @@ char *getState(cwpi_Scope s) {
 void *getNamedScope(cwpi_Scope s, const char *name) {
     MachineInstance *scope = static_cast<MachineInstance *>(s);
     if (!scope) {
-        MessageLog::instance()->add("getInstanceData was passed a null instance from a plugin");
+        MessageLog::instance()->add("getNamedScope was passed a null instance from a plugin");
         return 0;
     }
 
     MachineInstance *res = scope->lookup(name);
     if (!res) {
-        MessageLog::instance()->add("getNamedScope failed lookup");
+        MessageLog::instance()->add("getNamedScope failed lookup of ", name);
     }
     return res;
 }
