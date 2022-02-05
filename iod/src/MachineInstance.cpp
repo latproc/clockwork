@@ -3321,30 +3321,30 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
          (machine_class->plugin && machine_class->plugin->state_check))) {
         automatic_machines.push_back(this);
     }
-    BOOST_FOREACH (StableState &s, machine_class->stable_states) {
+    for (StableState &s : machine_class->stable_states) {
         stable_states.push_back(s);
         stable_states[stable_states.size() - 1].setOwner(this); //
     }
     std::pair<Message, MachineCommandTemplate *> handler;
-    BOOST_FOREACH (handler, machine_class->receives) {
+    for (auto &handler : machine_class->receives) {
         //DBG_M_INITIALISATION << "setting receive handler for " << handler.first << "\n";
         MachineCommand *mc = new MachineCommand(this, handler.second);
         receives_functions.insert(std::make_pair(handler.first, mc));
     }
     // Warning: enter_functions are not used. TBD
-    BOOST_FOREACH (handler, machine_class->enter_functions) {
+    for (auto &handler : machine_class->enter_functions) {
         MachineCommand *mc = new MachineCommand(this, handler.second);
         mc->retain();
         enter_functions[handler.first] = mc;
     }
     std::pair<std::string, MachineCommandTemplate *> node;
-    BOOST_FOREACH (node, state_machine->commands) {
+    for (auto &node : state_machine->commands) {
         MachineCommand *mc = new MachineCommand(this, node.second);
         mc->retain();
         commands.insert(std::make_pair(node.first, mc));
     }
     std::pair<std::string, Value> option;
-    BOOST_FOREACH (option, machine_class->getOptions()) {
+    for (auto &option : machine_class->getOptions()) {
         DBG_INITIALISATION << _name << " initialising property " << option.first << " ("
                            << option.second << ")\n";
         if (option.second.kind == Value::t_symbol) {
@@ -3371,7 +3371,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     properties.add(state_machine->getProperties(), SymbolTable::NO_REPLACE);
     properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
     if (locals.size() == 0) {
-        BOOST_FOREACH (Parameter p, state_machine->locals) {
+        for (Parameter p : state_machine->locals) {
             Parameter newp(p.val.sValue.c_str());
             if (!p.machine) {
                 DBG_M_INITIALISATION << "failed to clone. no instance defined for parameter "
