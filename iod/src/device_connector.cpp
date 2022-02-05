@@ -67,8 +67,9 @@ class DeviceStatus {
     State current() { return status; }
     State previous() { return status; }
     static DeviceStatus *instance() {
-        if (!instance_)
+        if (!instance_) {
             instance_ = new DeviceStatus;
+        }
         return instance_;
     }
     void setStatus(State s) {
@@ -164,8 +165,9 @@ class Options {
 
   public:
     static Options *instance() {
-        if (!instance_)
+        if (!instance_) {
             instance_ = new Options;
+        }
         return instance_;
     }
     ~Options() {
@@ -242,8 +244,9 @@ class Options {
 
     const char *name() const { return name_; }
     void setName(const char *n) {
-        if (name_)
+        if (name_) {
             free(name_);
+        }
         name_ = strdup(n);
     }
 
@@ -252,8 +255,9 @@ class Options {
 
     const char *iodHost() const { return iod_host_; }
     void setIODHost(const char *h) {
-        if (iod_host_)
+        if (iod_host_) {
             free(iod_host_);
+        }
         iod_host_ = strdup(h);
     }
 
@@ -327,10 +331,12 @@ class Options {
         channel_ = strdup(chan);
     }
     const char *getChannelName() const {
-        if (channel_)
+        if (channel_) {
             return channel_;
-        else
+        }
+        else {
             return "DeviceConnector";
+        }
     }
 
     const char *pattern() { return pattern_; }
@@ -567,8 +573,9 @@ static const char *iod_connection = "inproc://iod_interface";
 
 struct MatchFunction {
     static MatchFunction *instance() {
-        if (!instance_)
+        if (!instance_) {
             instance_ = new MatchFunction;
+        }
         return instance_;
     }
     static int match_func(const char *match, int index, void *data) {

@@ -83,8 +83,9 @@ class SchedulerInternals;
 class Scheduler {
   public:
     static Scheduler *instance() {
-        if (!instance_)
+        if (!instance_) {
             instance_ = new Scheduler();
+        }
         return instance_;
     }
     //std::ostream &operator<<(std::ostream &out) const;

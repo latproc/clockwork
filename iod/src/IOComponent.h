@@ -123,13 +123,16 @@ class IOComponent : public Transmitter {
     bool isOff();
     int32_t value() {
         if (address.bitlen == 1) {
-            if (isOn())
+            if (isOn()) {
                 return 1;
-            else
+            }
+            else {
                 return 0;
+            }
         }
-        else
+        else {
             return address.value;
+        }
     }
     void setValue(uint32_t new_value);
     void setValue(int32_t new_value);

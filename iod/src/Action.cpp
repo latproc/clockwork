@@ -172,8 +172,9 @@ void Action::cleanupTrigger() {
 Trigger *Action::getTrigger() const { return trigger; }
 
 void Action::disableTrigger() {
-    if (trigger)
+    if (trigger) {
         trigger->disable();
+    }
 }
 
 bool Action::started() { return started_; }

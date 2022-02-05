@@ -47,8 +47,9 @@ class IODString {
     }
     const char *get() const { return (str) ? str : s_str; }
     ~IODString() {
-        if (str)
+        if (str) {
             free(str);
+        }
     }
     const char *s_str;
     char *str;

@@ -57,8 +57,9 @@ CStringHolder &CStringHolder::operator=(const CStringHolder &orig) {
     return *this;
 }
 CStringHolder::~CStringHolder() {
-    if (str)
+    if (str) {
         free(str);
+    }
 }
 
 const char *CStringHolder::get() const { return (str) ? str : s_str; }
