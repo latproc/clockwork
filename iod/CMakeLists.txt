@@ -115,19 +115,6 @@ if (EXISTS "/opt/local/lib")
 LINK_DIRECTORIES("/opt/local/lib")
 endif()
 
-#	src/iosh.cpp
-#	src/modbusd.cpp
-#	src/mqttd.cpp
-#	src/iod.cpp
-#	src/beckhoffd.cpp
-#	src/MQTTDCommands.cpp
-#	src/ecat_thread.cpp
-#	src/schedule.cpp
-#	src/test_client.cpp
-#	src/zmq_ecat_monitor.cpp
-#	src/device_connector.cpp
-#	src/persistd.cpp
-
 # yacc instructions from Andy Cedilnik 2002.
 
 if ("${FLEX_EXECUTABLE}" STREQUAL "")
@@ -208,6 +195,7 @@ set (Clockwork_Headers
 	src/ControlSystemMachine.h src/HandleRequestAction.h src/SDOEntry.h
     src/ExportState.h
 	src/AutoStats.h src/Configuration.h
+	src/ResetAction.h
 )
 
 set (Clockwork_SRCS
@@ -238,6 +226,7 @@ set (Clockwork_SRCS
 	src/MachineCommandList.cpp src/ControlSystemMachine.cpp
     src/ExportState.cpp
 	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
+	src/ResetAction.cpp
 	)
 
 add_library(cw_interpreter ${Clockwork_SRCS})

@@ -1177,6 +1177,36 @@ int loadConfig(std::list<std::string> &files) {
     return 0;
 }
 
+void enable_all_machines() {
+    // enable all machines
+
+    bool only_startup = machine_classes.count("STARTUP") > 0;
+    auto m_iter = MachineInstance::begin();
+    while (m_iter != MachineInstance::end()) {
+        MachineInstance *m = *m_iter++;
+        Value enable = m->getValue("startup_enabled");
+        if (enable == SymbolTable::Null || enable == true) {
+            if (!only_startup || (only_startup && m->_type == "STARTUP"))
+                if (!m->isShadow()) {
+                    m->enable();
+                }
+        }
+        else {
+            DBG_INITIALISATION << m->getName() << " is disabled at startup\n";
+        }
+    }
+}
+
+void disable_all_machines() {
+    auto m_iter = MachineInstance::begin();
+    while (m_iter != MachineInstance::end()) {
+        MachineInstance *m = *m_iter++;
+        if (!m->isShadow()) {
+            m->disable();
+        }
+    }
+}
+
 void initialise_machines() {
 
     std::list<MachineInstance *>::iterator m_iter;
@@ -1230,23 +1260,7 @@ void initialise_machines() {
         mi->markActive();
     }
 
-    // enable all machines
-
-    bool only_startup = machine_classes.count("STARTUP") > 0;
-    m_iter = MachineInstance::begin();
-    while (m_iter != MachineInstance::end()) {
-        MachineInstance *m = *m_iter++;
-        Value enable = m->getValue("startup_enabled");
-        if (enable == SymbolTable::Null || enable == true) {
-            if (!only_startup || (only_startup && m->_type == "STARTUP"))
-                if (!m->isShadow()) {
-                    m->enable();
-                }
-        }
-        else {
-            DBG_INITIALISATION << m->getName() << " is disabled at startup\n";
-        }
-    }
+    enable_all_machines();
 
     // let channels start processing messages
     Channel::startChannels();
