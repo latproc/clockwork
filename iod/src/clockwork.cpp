@@ -1228,7 +1228,8 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
                     double d;
                     DBG_INITIALISATION << name << " initialising " << node.first << " to "
                                         << node.second << " " << node.second.kind << "\n";
-                    if (node.second.kind == Value::t_integer ||
+                    if (node.second.kind == Value::t_bool 
+                        || node.second.kind == Value::t_integer ||
                         node.second.kind == Value::t_float) {
                         m->setValue(node.first, node.second);
                     }

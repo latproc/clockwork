@@ -57,21 +57,25 @@ void PersistentStore::load() {
         else {
             value_str = vp;
         }
-
-        long i_value;
-        double d_value;
-        char *endp;
-        i_value = strtol(value_str.c_str(), &endp, 10);
-        if (*endp == 0) {
-            insert(name, property, i_value);
+        if (value_str == "FALSE" || value_str == "TRUE") {
+            insert(name, property, Value(value_str));
         }
         else {
-            d_value = strtod(value_str.c_str(), &endp);
+            long i_value;
+            double d_value;
+            char *endp;
+            i_value = strtol(value_str.c_str(), &endp, 10);
             if (*endp == 0) {
-                insert(name, property, d_value);
+                insert(name, property, i_value);
             }
             else {
-                insert(name, property, Value(value_str.c_str(), kind));
+                d_value = strtod(value_str.c_str(), &endp);
+                if (*endp == 0) {
+                    insert(name, property, d_value);
+                }
+                else {
+                    insert(name, property, Value(value_str.c_str(), kind));
+                }
             }
         }
     }
