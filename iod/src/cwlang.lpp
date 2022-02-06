@@ -124,6 +124,7 @@ IS[ ]*NOT           return NE;
 KEY                 return KEY;
 LAST                return LAST;
 LENGTH              return LENGTH;
+LOAD                return LOAD;
 LOCK				return LOCK;
 LOG                 return LOG;
 MACHINE             return STATEMACHINE;

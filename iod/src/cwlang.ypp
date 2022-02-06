@@ -44,6 +44,7 @@
 #include "SDOEntry.h"
 #include "MachineInterface.h"
 #include "ResetAction.h"
+#include "LoadPropertiesAction.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -170,7 +171,7 @@ struct Subcondition {
 %token ASCENDING ASC DESCENDING DESC INDEX
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
-%token FORMAT SEPARATED SERIALISE RESET
+%token FORMAT SEPARATED SERIALISE RESET LOAD
 
 %union {
 	bool bVal;
@@ -1651,6 +1652,14 @@ SET SYMBOL TO expression error_clause  {
 | REPLACE ALL PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ReplaceAllPatternActionTemplate($3, $5, $7);
+}
+| LOAD PROPERTIES FROM STRINGVAL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LoadPropertiesActionTemplate($4, Value{});
+}
+| LOAD PROPERTIES FROM SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new LoadPropertiesActionTemplate("", $4);
 }
 | COPY PROPERTIES FROM SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
