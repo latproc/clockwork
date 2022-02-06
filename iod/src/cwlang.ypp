@@ -43,6 +43,7 @@
 #include "AbortAction.h"
 #include "SDOEntry.h"
 #include "MachineInterface.h"
+#include "ResetAction.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -169,7 +170,7 @@ struct Subcondition {
 %token ASCENDING ASC DESCENDING DESC INDEX
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
-%token FORMAT SEPARATED SERIALISE
+%token FORMAT SEPARATED SERIALISE RESET
 
 %union {
 	bool bVal;
@@ -1469,6 +1470,11 @@ SET SYMBOL TO expression error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new DisableActionTemplate($2, $4, $6);
     delete $6;
+}
+| RESET /* cause the interpreter disable all machines and restart all machines. */ {
+    DBG_PARSER << " reset action " << "\n";
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new ResetActionTemplate();
 }
 | SHUTDOWN /* cause the interpreter to exit */ {
     DBG_PARSER << " shutdown action " << "\n";
