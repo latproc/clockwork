@@ -113,6 +113,20 @@ Value::Value(const char *str, Kind k)
 Value::Value(std::string str, Kind k)
     : kind(k), sValue(str), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
     if (kind == t_symbol && !str.empty()) {
+        if (sValue == "FALSE") {
+            sValue = "";
+            kind = t_bool;
+            bValue = false;
+        }
+        else if (sValue == "TRUE") {
+            sValue = "";
+            kind = t_bool;
+            bValue = true;
+        }
+        else if (sValue == "NULL") {
+            kind = t_empty;
+            sValue = "";
+        }
         token_id = Tokeniser::instance()->getTokenId(str);
     }
 }
