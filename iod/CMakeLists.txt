@@ -195,7 +195,7 @@ set (Clockwork_Headers
 	src/ControlSystemMachine.h src/HandleRequestAction.h src/SDOEntry.h
     src/ExportState.h
 	src/AutoStats.h src/Configuration.h
-	src/ResetAction.h
+	src/ResetAction.h src/LoadPropertiesAction.h
 )
 
 set (Clockwork_SRCS
@@ -226,7 +226,7 @@ set (Clockwork_SRCS
 	src/MachineCommandList.cpp src/ControlSystemMachine.cpp
     src/ExportState.cpp
 	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
-	src/ResetAction.cpp
+	src/ResetAction.cpp src/LoadPropertiesAction.cpp
 	)
 
 add_library(cw_interpreter ${Clockwork_SRCS})

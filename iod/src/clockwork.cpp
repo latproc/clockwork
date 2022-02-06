@@ -1207,48 +1207,52 @@ void disable_all_machines() {
     }
 }
 
+void load_properties_file(const std::string &filename, bool only_persistent) {
+    PersistentStore store(filename);
+    store.load();
+
+    // enable all persistent variables and set their value to the
+    // value in the map.
+    auto m_iter = MachineInstance::begin();
+    while (m_iter != MachineInstance::end()) {
+        MachineInstance *m = *m_iter++;
+        if (m && (!only_persistent || (only_persistent && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")))) {
+            std::string name(m->fullName());
+            std::map<std::string, std::map<std::string, Value>>::iterator found =
+                store.init_values.find(name);
+            if (found != store.init_values.end()) {
+                std::map<std::string, Value> &list((*found).second);
+                PersistentStore::PropertyPair node;
+                BOOST_FOREACH (node, list) {
+                    long v;
+                    double d;
+                    DBG_INITIALISATION << name << " initialising " << node.first << " to "
+                                        << node.second << " " << node.second.kind << "\n";
+                    if (node.second.kind == Value::t_integer ||
+                        node.second.kind == Value::t_float) {
+                        m->setValue(node.first, node.second);
+                    }
+                    else if (node.second.asFloat(d)) {
+                        m->setValue(node.first, d);
+                    }
+                    else if (node.second.asInteger(v)) {
+                        m->setValue(node.first, v);
+                    }
+                    else {
+                        m->setValue(node.first, node.second);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void initialise_machines() {
 
     std::list<MachineInstance *>::iterator m_iter;
 
     if (persistent_store()) {
-        PersistentStore store(persistent_store());
-        store.load();
-
-        // enable all persistent variables and set their value to the
-        // value in the map.
-        m_iter = MachineInstance::begin();
-        while (m_iter != MachineInstance::end()) {
-            MachineInstance *m = *m_iter++;
-            if (m && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")) {
-                std::string name(m->fullName());
-                std::map<std::string, std::map<std::string, Value>>::iterator found =
-                    store.init_values.find(name);
-                if (found != store.init_values.end()) {
-                    std::map<std::string, Value> &list((*found).second);
-                    PersistentStore::PropertyPair node;
-                    BOOST_FOREACH (node, list) {
-                        long v;
-                        double d;
-                        DBG_INITIALISATION << name << " initialising " << node.first << " to "
-                                           << node.second << "\n";
-                        if (node.second.kind == Value::t_integer ||
-                            node.second.kind == Value::t_float) {
-                            m->setValue(node.first, node.second);
-                        }
-                        else if (node.second.asFloat(d)) {
-                            m->setValue(node.first, d);
-                        }
-                        else if (node.second.asInteger(v)) {
-                            m->setValue(node.first, v);
-                        }
-                        else {
-                            m->setValue(node.first, node.second);
-                        }
-                    }
-                }
-            }
-        }
+        load_properties_file(persistent_store(), true);
     }
 
     // prepare the list of machines that will be processed at idle time
