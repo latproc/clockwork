@@ -4373,7 +4373,7 @@ void MachineInstance::refreshModbus(cJSON *json_array) {
                 (properties.exists("VALUE") && (group == 3 || group == 4))) {
                 value = properties.lookup("VALUE");
             }
-            else if (current_state.getName() == "on") {
+            else if (current_state.getName() == "on" || current_state.getName() == "true") {
                 value = 1;
             }
             else {
