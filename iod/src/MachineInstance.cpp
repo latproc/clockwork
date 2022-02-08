@@ -1890,14 +1890,17 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                 NB_MSG << buf << "\n";
             }
             else {
+                auto is_on = [](const std::string &state) -> bool {
+                    return state == "on" || state == "true";
+                };
                 ModbusAddress ma = modbus_exports[_name];
                 if (ma.getSource() == ModbusAddress::machine &&
                     (ma.getGroup() != ModbusAddress::none)) {
-                    if (new_state.getName() == "on") { // just turned on
+                    if (is_on(new_state.getName())) { // just turned on
                         DBG_MODBUS << _name << " machine came on; triggering a modbus message\n";
                         ma.update(this, 1);
                     }
-                    else if (current_state.getName() == "on") {
+                    else if (is_on(current_state.getName())) {
                         DBG_MODBUS << _name << " machine went off; triggering a modbus message\n";
                         ma.update(this, 0);
                     }
