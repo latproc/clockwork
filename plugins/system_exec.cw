@@ -30,12 +30,16 @@ SystemExec MACHINE {
 #include <errno.h>
 #include <sys/wait.h>
 #include <Plugin.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 struct MyData {
 	char **environment;
 	char **parameters;
 	const long *cmd_status;
 	int child;
+  char *stdout;
+  char *stderr;
 };
 
 char ** split_string(const char *str)
@@ -217,6 +221,42 @@ char **copy_environment()
   return result;
 }
 
+char * new_temp_filename(const char *prefix, const char *suffix)
+{
+  char tmp_filename[80];
+  int res;
+
+  do {
+    struct stat fs;
+    sprintf(tmp_filename, "%s%04ld%s", prefix, random() % 10000, suffix);
+    res = stat(tmp_filename, &fs);
+  }
+  while (res != -1);
+  return strdup(tmp_filename);
+}
+
+static void read_file_to(void *scope, const char *property, const char *filename) {
+  struct stat fs;
+  int res = stat(filename, &fs);
+  if (res == 0) {
+    const size_t bufsize = fs.st_size+1;
+    char *buf = malloc(bufsize);
+    FILE *f = fopen(filename, "r");
+    if (f) {
+      size_t nread = fread(buf, 1, bufsize, f);
+      if (nread != bufsize-1) {
+        fprintf(stderr, "read %ld bytes, expected %ld\n", nread, bufsize);
+      }
+      if (ferror(f)) {
+        fprintf(stderr, "error during read of %s: %d\n", filename, ferror(f));
+        clearerr(f);
+      }
+      buf[nread] = 0;
+      setStringValue(scope, property, buf);
+    }
+    free(buf);
+  }
+}
 
 PLUGIN_EXPORT
 int check_states(void *scope)
@@ -255,15 +295,35 @@ continue_plugin:
 			data->parameters = split_string(cmd);
 			data->environment = copy_environment();
 
+      data->stdout = new_temp_filename("/tmp/sysexec_o_", ".txt");
+      data->stderr = new_temp_filename("/tmp/sysexec_e_", ".txt");
+
 			int child;
-			if ( (child = vfork()) == -1 ) {
-				perror("vfork");
+			if ( (child = fork()) == -1 ) {
+				perror("fork");
 				setIntValue(scope, "CommandStatus", errno);
 				changeState(scope, "Error");
 				data->child = 0;
 				goto CommandFinished;
 			}
 			else if (child == 0) {  /* child */
+          // Redirect stdout and stderr
+          int out_fd = open(data->stdout, O_CREAT | O_TRUNC | O_WRONLY, 0640);
+          if (out_fd == -1) {
+            perror("create stdout");
+            exit(3);
+          }
+          int err_fd = open(data->stderr, O_CREAT | O_TRUNC | O_WRONLY, 0640);
+          if (err_fd == -1) {
+            perror("create stderr");
+            exit(3);
+          }
+          close(1);
+          dup(out_fd);
+          close(out_fd);
+          close(2);
+          dup(err_fd);
+          close(err_fd);
           int res = execve(data->parameters[0], data->parameters, data->environment);
           if (res == -1)
           {
@@ -325,6 +385,14 @@ CommandFinished:
 		if (data->environment) { release_params(data->environment); }
 		data->parameters = 0;
 		data->environment = 0;
+    if (data->stdout) {
+      read_file_to(scope, "Result", data->stdout);
+      unlink(data->stdout); free(data->stdout); data->stdout = 0;
+    }
+    if (data->stderr) {
+      read_file_to(scope, "Errors", data->stderr);
+      unlink(data->stderr); free(data->stderr); data->stderr = 0;
+    }
 	}
 	free(current);
 	return PLUGIN_COMPLETED;
