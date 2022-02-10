@@ -7,6 +7,8 @@
 SystemExec MACHINE {
 	OPTION Command "";
 	OPTION CommandStatus 0;
+  OPTION Result "";
+  OPTION Errors "";
 	PLUGIN "system_exec.so.1.0";
 
 	Running STATE;
@@ -221,7 +223,7 @@ int check_states(void *scope)
 {
 	struct MyData *data = (struct MyData*)getInstanceData(scope);
 	char *cmd;
-	char *current;
+	char *current = 0;
 	if (!data) {
 		data = (struct MyData*)malloc(sizeof(struct MyData));
 		setInstanceData(scope, data);
@@ -280,7 +282,7 @@ continue_plugin:
 			return PLUGIN_COMPLETED; // child still running
 		}
 	}
-	else if (current && strcmp(current, "Running") == 0 ) {
+	else if (data->child && current && strcmp(current, "Running") == 0 ) {
 		int stat = 0;
 		int err = waitpid(data->child, &stat, WNOHANG);
 		if (err == -1)
@@ -319,11 +321,10 @@ continue_plugin:
 		}
 		return PLUGIN_COMPLETED;
 CommandFinished:
-		release_params(data->parameters);
-		release_params(data->environment);
+		if (data->parameters) { release_params(data->parameters); }
+		if (data->environment) { release_params(data->environment); }
 		data->parameters = 0;
 		data->environment = 0;
-		return PLUGIN_COMPLETED;
 	}
 	free(current);
 	return PLUGIN_COMPLETED;

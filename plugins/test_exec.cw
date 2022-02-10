@@ -6,7 +6,7 @@ Test MACHINE {
 	idle DEFAULT;
 
 	COMMAND test {
-		exec.Command := "sleep 5";
+		exec.Command := "/bin/sleep 5";
 		SEND start TO exec;
 	}
 }
