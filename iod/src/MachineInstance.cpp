@@ -4065,6 +4065,14 @@ void MachineInstance::discard() {
     is_changing = false;
 }
 
+bool MachineInstance::isPersistent() {
+    const Value &persistent = getValue("PERSISTENT");
+    if (persistent == SymbolTable::Null) {
+        return false;
+    }
+    return persistent == "true";
+}
+
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
     if (false) {
         FileLogger fl(program_name);
