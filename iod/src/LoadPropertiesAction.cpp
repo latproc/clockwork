@@ -4,17 +4,20 @@
 
 void load_properties_file(const std::string &filename, bool only_persistent);
 
-Action *LoadPropertiesActionTemplate::factory(MachineInstance *mi) { return new LoadPropertiesAction(mi, *this); }
+Action *LoadPropertiesActionTemplate::factory(MachineInstance *mi) {
+    return new LoadPropertiesAction(mi, *this);
+}
 
 std::ostream &LoadPropertiesAction::operator<<(std::ostream &out) const {
-    return out << "Load Properties Action " << "\n";
+    return out << "Load Properties Action "
+               << "\n";
 }
 
 Action::Status LoadPropertiesAction::run() {
     owner->start(this);
     std::string filename = values_file;
     if (machine && property_name.kind == Value::t_symbol) {
-        const Value & val = machine->getValue(property_name.sValue);
+        const Value &val = machine->getValue(property_name.sValue);
         if (val.kind == Value::t_string) {
             filename = val.sValue;
         }

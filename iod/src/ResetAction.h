@@ -7,16 +7,17 @@
 class MachineInstance;
 
 class ResetActionTemplate : public ActionTemplate {
-    public:
+  public:
     ResetActionTemplate() {}
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
-        return out << "ResetAction template " << "\n";
+        return out << "ResetAction template "
+                   << "\n";
     }
 };
 
 class ResetAction : public Action {
-    public:
+  public:
     ResetAction(MachineInstance *m) : Action(m) {}
     Status run();
     Status checkComplete();

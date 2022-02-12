@@ -1216,7 +1216,8 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
     auto m_iter = MachineInstance::begin();
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;
-        if (m && (!only_persistent || (only_persistent && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")))) {
+        if (m && (!only_persistent ||
+                  (only_persistent && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")))) {
             std::string name(m->fullName());
             std::map<std::string, std::map<std::string, Value>>::iterator found =
                 store.init_values.find(name);
@@ -1227,9 +1228,8 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
                     long v;
                     double d;
                     DBG_INITIALISATION << name << " initialising " << node.first << " to "
-                                        << node.second << " " << node.second.kind << "\n";
-                    if (node.second.kind == Value::t_bool 
-                        || node.second.kind == Value::t_integer ||
+                                       << node.second << " " << node.second.kind << "\n";
+                    if (node.second.kind == Value::t_bool || node.second.kind == Value::t_integer ||
                         node.second.kind == Value::t_float) {
                         m->setValue(node.first, node.second);
                     }

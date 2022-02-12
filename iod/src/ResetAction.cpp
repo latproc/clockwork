@@ -8,7 +8,8 @@ void enable_all_machines();
 Action *ResetActionTemplate::factory(MachineInstance *mi) { return new ResetAction(mi); }
 
 std::ostream &ResetAction::operator<<(std::ostream &out) const {
-    return out << "Reset Action " << "\n";
+    return out << "Reset Action "
+               << "\n";
 }
 
 Action::Status ResetAction::run() {
