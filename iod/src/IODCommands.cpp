@@ -1181,7 +1181,7 @@ bool IODCommandPersistentState::run(std::vector<Value> &params) {
     m_iter = MachineInstance::begin();
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;
-        if (m && (m->getValue("PERSISTENT") == "true")) {
+        if (m && m->isPersistent()) {
             std::string fnam = m->fullName();
             SymbolTableConstIterator props_i = m->properties.begin();
             while (props_i != m->properties.end()) {

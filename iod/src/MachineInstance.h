@@ -222,6 +222,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void markPassive();
     void markPlugin();
 
+    bool isPersistent();
+
     MachineClass *getStateMachine() const { return state_machine; }
     void setInitialState(bool resume = false);
     Trigger *setupTrigger(const std::string &machine_name, const std::string &message,

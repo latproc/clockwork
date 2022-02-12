@@ -1217,7 +1217,7 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;
         if (m && (!only_persistent ||
-                  (only_persistent && (m->_type == "CONSTANT" || m->getValue("PERSISTENT") == "true")))) {
+                  (only_persistent && (m->_type == "CONSTANT" || m->isPersistent())))) {
             std::string name(m->fullName());
             std::map<std::string, std::map<std::string, Value>>::iterator found =
                 store.init_values.find(name);
