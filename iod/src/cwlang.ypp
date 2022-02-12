@@ -1546,19 +1546,19 @@ SET SYMBOL TO expression error_clause  {
 	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
 	current_action = new AbortActionTemplate(true, $2);
 }
-| SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+| SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy matching chars */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new CopyPatternActionTemplate($1, $4, $6);
 }
-| SYMBOL BECOMES COPY ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+| SYMBOL BECOMES COPY ALL PATTERN FROM SYMBOL /* non-descructive copy matching chars */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new CopyAllPatternActionTemplate($1, $5, $7);
 }
-| SYMBOL BECOMES EXTRACT PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+| SYMBOL BECOMES EXTRACT PATTERN FROM SYMBOL /* non-descructive copy matching chars */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExtractPatternActionTemplate($1, $4, $6);
 }
-| SYMBOL BECOMES EXTRACT ALL PATTERN FROM SYMBOL /* non-descructive copy mathing chars */ {
+| SYMBOL BECOMES EXTRACT ALL PATTERN FROM SYMBOL /* non-descructive copy matching chars */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ExtractAllPatternActionTemplate($1, $5, $7);
 }

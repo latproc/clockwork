@@ -94,3 +94,4 @@ iod/iod_sdo
 iod/persistd
 iod/iosh
 iod/device_connector
+iod/iocmd

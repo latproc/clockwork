@@ -2001,8 +2001,9 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                 else {
                     DBG_M_SCHEDULER << _name << " Warning: timer value for state " << s.state_name
                                     << " is not numeric\n";
-                    NB_MSG << _name << " state: " << s.state_name << " timer_val: " << s.timer_val
-                           << " type: " << s.timer_val.kind << "\n";
+                    DBG_M_SCHEDULER << _name << " state: " << s.state_name
+                                    << " timer_val: " << s.timer_val
+                                    << " type: " << s.timer_val.kind << "\n";
                     continue;
                 }
                 // note comment above, this is not a correct handling of opGT and opLT

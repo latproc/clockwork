@@ -486,10 +486,10 @@ void generateIOComponentMappings() {
     std::list<Output *>::const_iterator iter = output_list.begin();
     while (iter != output_list.end()) {
         Output *o = *iter++;
-        std::cout << *o << "\n";
+        //std::cout << *o << "\n";
         o->turnOff();
     }
-    std::cout << std::flush;
+    //std::cout << std::flush;
 }
 
 void displayEtherCATModulePDOOffsets() {
