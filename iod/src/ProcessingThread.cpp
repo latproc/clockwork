@@ -545,7 +545,6 @@ void ProcessingThread::operator()() {
         memset((void *)items, 0, max_poll_sockets * sizeof(zmq::pollitem_t));
         int dynamic_poll_start_idx = 6;
 
-        char buf[100];
         int poll_wait = internals->cycle_delay / 1000; // millisecs
         machine_check_delay = internals->cycle_delay / 5;
         int systems_waiting = 0;
@@ -712,19 +711,18 @@ void ProcessingThread::operator()() {
         if (program_done) {
             break;
         }
+        char buf[200];
         if (status == e_waiting) {
             if (items[internals->CMD_ITEM].revents & ZMQ_POLLIN) {
 #ifdef KEEPSTATS
                 AutoStat stats(avg_cmd_processing);
 #endif
-                size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
+                size_t len = resource_mgr.recv(buf, 200, ZMQ_NOBLOCK);
                 if (len) {
-                    char msgbuf[200];
-                    snprintf(
-                        msgbuf, 100,
-                        "Warning: processing thread ignoring incoming data '%.*s' from client\n",
-                        (int)len, msgbuf);
-                    MessageLog::instance()->add(msgbuf);
+                    MessageLog::instance()->get_stream()
+                        << "Warning: processing thread ignoring incoming data '" << buf
+                        << "' from client";
+                    MessageLog::instance()->release_stream();
                 }
             }
         }
