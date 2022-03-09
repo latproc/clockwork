@@ -29,7 +29,7 @@ class SimulatedRawOutput : public IOComponent {
   public:
     SimulatedRawOutput(int io_address = 0, int bit_offset = 0) {
         state = s_unknown;
-        gettimeofday(&last, 0);
+        last = microsecs();
         std::stringstream ss;
         ss < "DEV_" << addr.io_offset << "_" << addr.io_bitpos << std::flush;
         io_name = ss.str();
@@ -42,7 +42,7 @@ class SimulatedRawOutput : public IOComponent {
     void turnOn() {
         last_event = e_on;
         if (state != s_turning_on) {
-            gettimeofday(&last, 0);
+            last = microsecs();
             state = s_turning_on;
         }
     }
@@ -50,7 +50,7 @@ class SimulatedRawOutput : public IOComponent {
     void turnOff() {
         last_event = e_off;
         if (state != s_turning_off) {
-            gettimeofday(&last, 0);
+            last = microsecs();
             state = s_turning_off;
         }
     }
@@ -66,8 +66,8 @@ class SimulatedRawOutput : public IOComponent {
             return;
         }
         struct timeval now;
-        gettimeofday(&now, 0);
-        uint64_t t = get_diff_in_microsecs(&now, &last);
+        now = microsecs();
+        uint64_t t = now - last;
         if (t >= switch_time_usec) {
             if (last_event == e_on) {
                 state = s_on;
@@ -79,7 +79,7 @@ class SimulatedRawOutput : public IOComponent {
     }
 
     static const long switch_time_usec = 1000;
-    struct timeval last;
+    uint64_t last;
     enum events { e_on, e_off, e_read };
     enum states { s_on, s_off, s_turning_on, s_turning_off, s_unknown };
     events last_event;

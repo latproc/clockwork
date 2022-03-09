@@ -1,12 +1,7 @@
 #include "rate.h"
+#include "value.h"
 #include <iostream>
 #include <sys/time.h>
-
-static uint64_t microsecs() {
-    struct timeval now;
-    gettimeofday(&now, 0);
-    return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
-}
 
 RateLimiter::RateLimiter()
     : back_off(boaGeometric), delay(100000), start_delay(100000), last(0), step(20000),

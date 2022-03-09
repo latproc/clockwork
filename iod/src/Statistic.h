@@ -147,8 +147,6 @@ class CaptureDuration {
 
     ~CaptureDuration() {
         if (keep_statistics()) {
-            struct timeval now;
-            gettimeofday(&now, 0);
             uint64_t duration = microsecs() - start;
             statistic.add(duration);
         }

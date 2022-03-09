@@ -50,6 +50,7 @@ bool MessagingInterface::abort_all = false;
 
 uint64_t nowMicrosecs() { return microsecs(); }
 
+#if 0
 uint64_t nowMicrosecs(const struct timeval &now) {
     return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
 }
@@ -72,6 +73,7 @@ int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
     int64_t t = now_t - then_t;
     return t;
 }
+#endif
 
 zmq::context_t *MessagingInterface::getContext() { return zmq_context; }
 

@@ -150,9 +150,8 @@ std::ostream &operator<<(std::ostream &out, const PersistentStore &store) {
 
 void PersistentStore::save() {
     std::stringstream ss;
-    struct timeval now;
-    gettimeofday(&now, 0);
-    ss << "persist_scratch_" << now.tv_usec;
+    uint64_t now = microsecs();
+    ss << "persist_scratch_" << now;
     std::string scratchfile = ss.str();
     std::ofstream out(scratchfile.c_str());
     if (!out) {

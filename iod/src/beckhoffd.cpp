@@ -550,9 +550,9 @@ int main(int argc, char const *argv[]) {
     std::cout << "-------- running ---------\n";
     ecat_sync.send("go", 2); // collect state
     while (!program_done) {
-        struct timeval start_t, end_t;
-        gettimeofday(&start_t, 0);
-        gettimeofday(&end_t, 0);
+        uint64_t start_t, end_t;
+        start_t = microsecs();
+        end_t = microsecs();
         //  long delta = get_diff_in_microsecs(&end_t, &start_t);
         //  if (delta < 100) usleep(100-delta);
         while (!program_done) {
@@ -574,7 +574,7 @@ int main(int argc, char const *argv[]) {
 #endif
             std::set<IOComponent *> io_work_queue;
             std::list<Package *> dummy;
-            uint64_t clock = start_t.tv_sec * 1000000 + start_t.tv_usec;
+            uint64_t clock = start_t;
             IOComponent::processAll(clock, 0, 0, 0, io_work_queue);
             std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
             while (io_work != io_work_queue.end()) {

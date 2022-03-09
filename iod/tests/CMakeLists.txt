@@ -57,6 +57,12 @@ target_link_libraries(test_bit_ops gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boos
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
 
+add_executable(test_clock test_clock.cpp )
+set_target_properties (test_clock PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_clock gmock_main cw_client cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_clock COMMAND test_clock)
+
 add_executable(test_msg_encoding test_msg_encoding.cpp)
 set_target_properties (test_msg_encoding PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_msg_encoding gmock_main cw_client cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)

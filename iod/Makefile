@@ -29,7 +29,7 @@ debug-install:	debug
 
 xcode:
 	[ -d "xcode" ] || mkdir xcode
-	cd xcode && cmake -G Xcode .. && xcodebuild -parallelizeTargets -jobs 6
+	cd xcode && cmake -G Xcode .. && xcodebuild -parallelizeTargets $(JOBS)
 
 test:
 	[ -d ".test" ] || mkdir .test

@@ -129,7 +129,7 @@ class IOComponent : public Transmitter {
   protected:
     enum event { e_on, e_off, e_change, e_none };
     event last_event;
-    struct timeval last;
+    uint64_t last;
 
   public:
     IOComponent(IOAddress addr);

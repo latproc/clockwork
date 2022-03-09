@@ -127,12 +127,6 @@ struct CommandThread {
 
 void usage(int argc, char const *argv[]) { fprintf(stderr, "Usage: %s\n", argv[0]); }
 
-long get_diff_in_microsecs(struct timeval *now, struct timeval *then) {
-    uint64_t t = (now->tv_sec - then->tv_sec);
-    t = t * 1000000 + (now->tv_usec - then->tv_usec);
-    return t;
-}
-
 bool program_done = false;
 
 int main(int argc, char const *argv[]) {
@@ -147,11 +141,11 @@ int main(int argc, char const *argv[]) {
     boost::thread monitor(boost::ref(stateMonitor));
 
     while (!program_done) {
-        struct timeval start_t, end_t;
-        gettimeofday(&start_t, 0);
+        uint64_t start_t, end_t;
+        start_t = microsecs();
         pause();
-        gettimeofday(&end_t, 0);
-        long delta = get_diff_in_microsecs(&end_t, &start_t);
+        end_t = microsecs();
+        long delta = end_t - start_t;
         if (delta < 100) {
             usleep(100 - delta);
         }

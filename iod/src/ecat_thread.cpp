@@ -245,7 +245,7 @@ void sync() {
             sleep_time = remaining;
         }
     }
-    gettimeofday(&then, 0);
+    then = microsecs();
 }
 #endif
 #endif

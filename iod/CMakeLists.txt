@@ -72,6 +72,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/regular_expressions.h
 	${CLOCKWORK_DIR}/Logger.h
 	${CLOCKWORK_DIR}/anet.h
+	${CLOCKWORK_DIR}/clock.h
 	${CLOCKWORK_DIR}/cJSON.h
 	${CLOCKWORK_DIR}/DebugExtra.h
 	${CLOCKWORK_DIR}/value.h
@@ -92,6 +93,7 @@ add_library (cw_client
 	${CLOCKWORK_DIR}/ConnectionManager.cpp
 	${CLOCKWORK_DIR}/Logger.cpp
 	${CLOCKWORK_DIR}/anet.c
+	${CLOCKWORK_DIR}/clock.cpp
 	${CLOCKWORK_DIR}/cJSON.c
 	${CLOCKWORK_DIR}/DebugExtra.cpp
 	${CLOCKWORK_DIR}/value.cpp
