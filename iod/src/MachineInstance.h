@@ -314,8 +314,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     SymbolTable properties;
     std::string definition_file;
     int definition_line;
-    struct timeval start_time;    // time the current state started
-    struct timeval disabled_time; // time the current state started
+    uint64_t start_time;    // time the current state started
+    uint64_t disabled_time; // time the current state started
 
     static void sort();
 

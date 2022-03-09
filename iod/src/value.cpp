@@ -33,14 +33,13 @@
 #include <sstream>
 #include <stdio.h>
 #include <utility>
+#include "clock.h"
 
 static bool stringToLong(const std::string &s, long &x);
 static bool stringToFloat(const std::string &s, double &x);
 
 uint64_t microsecs() {
-    struct timeval now;
-    gettimeofday(&now, 0);
-    return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
+    return Clock::clock();
 }
 
 static const double ZERO_DISTANCE = 1.0E-8;

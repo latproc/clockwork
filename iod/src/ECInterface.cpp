@@ -1485,11 +1485,10 @@ int ECInterface::collectState() {
     return affected_bits;
 }
 void ECInterface::sendUpdates() {
-    static time_t last_warning = 0;
-    struct timeval now;
-    gettimeofday(&now, 0);
+    static uint64_t last_warning = 0;
+    uint64_t now = microsecs();
     if (!master || !initialised || !active || !all_ok || !domain1) {
-        if (now.tv_sec + 5 < last_warning) {
+        if (now + 5000000 < last_warning) {
             std::cerr << "master not ready to send updates\n" << std::flush;
             char buf[100];
             snprintf(buf, 100, "EtherCAT master is not ready to send updates\n");

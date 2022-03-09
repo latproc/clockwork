@@ -1653,7 +1653,7 @@ void IOComponent::turnOn() {}
 void IOComponent::turnOff() {}
 
 void Output::turnOn() {
-    gettimeofday(&last, 0);
+    last = microsecs();
     last_event = e_on;
     updatedComponentsOut.insert(this);
     updatesSent(false);
@@ -1662,7 +1662,7 @@ void Output::turnOn() {
 }
 
 void Output::turnOff() {
-    gettimeofday(&last, 0);
+    last = microsecs();
     last_event = e_off;
     updatedComponentsOut.insert(this);
     updatesSent(false);
@@ -1673,7 +1673,7 @@ void Output::turnOff() {
 void IOComponent::setValue(uint32_t new_value) {
     assert(!address.is_signed);
     pending_value = new_value;
-    gettimeofday(&last, 0);
+    last = microsecs();
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
@@ -1684,7 +1684,7 @@ void IOComponent::setValue(uint32_t new_value) {
 void IOComponent::setValue(int32_t new_value) {
     assert(address.is_signed);
     pending_value = new_value;
-    gettimeofday(&last, 0);
+    last = microsecs();
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);

@@ -109,14 +109,15 @@ SymbolTable::SymbolTable() {
     if (!initialised) {
         initialised = true;
         keywords = new SymbolTable();
-        keywords->add("NOW", "");
-        keywords->add("SECONDS", "");
-        keywords->add("MINUTE", "");
-        keywords->add("HOUR", "");
-        keywords->add("DAY", "");
-        keywords->add("MONTH", "");
-        keywords->add("YR", "");
-        keywords->add("YEAR", "");
+        keywords->add("NOW", 0);
+        keywords->add("CLOCK", 0);
+        keywords->add("SECONDS", 0);
+        keywords->add("MINUTE", 0);
+        keywords->add("HOUR", 0);
+        keywords->add("DAY", 0);
+        keywords->add("MONTH", 0);
+        keywords->add("YR", 0);
+        keywords->add("YEAR", 0);
         keywords->add("TIMESEQ", "");
         keywords->add("LOCALTIME", "");
         keywords->add("UTCTIME", "");
@@ -189,7 +190,12 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             res = msecs;
             return res;
         }
-        if (strcmp("RANDOM", name) == 0) {
+        else if (strcmp("CLOCK", name) == 0) {
+            Value &res = keywords->find(name);
+            res = (long)microsecs();
+            return res;
+        }
+        else if (strcmp("RANDOM", name) == 0) {
             unsigned long val = random();
             res = val;
             return res;

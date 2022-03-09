@@ -56,9 +56,9 @@ class LogState {
     }
     static void cleanup() { delete state_instance; }
     int define(std::string new_name) {
+        int logid = name_map[new_name] = flag_names.size();
         flag_names.push_back(new_name);
-        name_map[new_name] = (int)flag_names.size() - 1;
-        return (int)flag_names.size() - 1;
+        return logid;
     }
     int lookup(const std::string &name) {
         NameMapIterator iter = name_map.find(name);

@@ -1,6 +1,7 @@
 #include "watchdog.h"
 #include "Logger.h"
 #include "boost/thread/mutex.hpp"
+#include "value.h"
 #include <iostream>
 #include <map>
 #include <string>
@@ -75,9 +76,7 @@ int64_t Watchdog::last() { return last_time; }
 static boost::mutex time_mutex;
 int64_t Watchdog::now() {
     boost::mutex::scoped_lock lock(time_mutex);
-    struct timeval now;
-    gettimeofday(&now, 0);
-    return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
+    return microsecs();
 }
 
 bool Watchdog::running() const { return is_running; }

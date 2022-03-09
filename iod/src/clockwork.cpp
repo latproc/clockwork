@@ -1097,8 +1097,7 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
 int loadConfig(std::list<std::string> &files) {
     struct timeval now_tv;
     tzset(); /* this initialises the tz info required by ctime().  */
-    gettimeofday(&now_tv, NULL);
-    srandom(now_tv.tv_usec);
+    srandom(microsecs());
 
     if (!cw_framework_initialised) {
         int modbus_result = load_preset_modbus_mappings();

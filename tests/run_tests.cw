@@ -15,7 +15,7 @@ TestDriver INTERFACE {
 }
 
 # run this with:
-# cw run_tests.cw arith.cw bitset.cw anyon.cw test_set_prop.cw
+# cw run_tests.cw arith.cw bitset.cw anyon.cw prop.lpc test_set_prop.cw
 
 all_tests LIST
   test_arith_driver

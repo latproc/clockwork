@@ -629,9 +629,8 @@ class MachineTimerValue : public DynamicValue {
             return last_result;
         }
         if (machine_instance->enabled()) {
-            struct timeval now;
-            gettimeofday(&now, NULL);
-            long msecs = (long)get_diff_in_microsecs(&now, &machine_instance->start_time) / 1000;
+            uint64_t now = microsecs();
+            long msecs = (long)(now - machine_instance->start_time) / 1000;
             last_result = msecs;
         }
         return last_result;
@@ -642,9 +641,7 @@ class MachineTimerValue : public DynamicValue {
     }
     Value *getLastResult() { return &last_result; }
     void resume() {
-        uint64_t now_v = microsecs() - last_result.iValue * 1000;
-        machine_instance->start_time.tv_sec = now_v / 1000000;
-        machine_instance->start_time.tv_usec = now_v % 1000000;
+        machine_instance->start_time = microsecs() - last_result.iValue * 1000;
     }
     DynamicValue *clone() const;
 
@@ -681,7 +678,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     if (instance_type == MACHINE_INSTANCE) {
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
-        gettimeofday(&start_time, 0);
+        start_time = microsecs();
     }
     else {
         DBG_INITIALISATION << "not a machine instance\n";
@@ -712,7 +709,7 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
     if (instance_type == MACHINE_INSTANCE) {
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
-        gettimeofday(&start_time, 0);
+        start_time = microsecs();
     }
     else {
         DBG_INITIALISATION << "not a machine instance\n";
@@ -1912,7 +1909,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
             }
         }
 #endif
-        gettimeofday(&start_time, 0);
+        start_time = microsecs();
         disabled_time = start_time;
         DBG_STATECHANGES << fullName() << " changing from " << current_state << " to " << new_state
                          << "\n";
@@ -3032,7 +3029,7 @@ void MachineInstance::disable() {
         }
     }
 
-    gettimeofday(&disabled_time, 0);
+    disabled_time = microsecs();
     std::list<MachineInstance *> sorted;
     sortDependentMachines(this, sorted);
     std::list<MachineInstance *>::reverse_iterator oi = sorted.rbegin();

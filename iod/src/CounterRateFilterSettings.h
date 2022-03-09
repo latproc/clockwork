@@ -21,8 +21,7 @@ class CounterRateFilterSettings {
     CounterRateFilterSettings(unsigned int sz)
         : position(0), velocity(0), property_changed(false), noise_tolerance(20), last_sent(0),
           last_pos(0), start_t(0), update_t(0), last_update_t(0), readings(sz), zero_count(0) {
-        struct timeval now;
-        gettimeofday(&now, 0);
+        uint64_t now = microsecs();
         update_t = start_t;
     }
 };

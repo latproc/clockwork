@@ -191,7 +191,7 @@ int main(int argc, char const *argv[]) {
 #else
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
-
+    auto dbg_instance = DebugExtra::instance();
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -838,6 +838,7 @@ int main(int argc, char const *argv[]) {
         process.join();
         stateMonitor->stop();
         monitor.join();
+        delete dbg_instance;
         delete context;
     }
     catch (const zmq::error_t &) {
