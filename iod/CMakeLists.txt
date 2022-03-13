@@ -198,7 +198,7 @@ set (Clockwork_SRCS
 	src/SetStateAction.cpp src/ShutdownAction.cpp src/SortListAction.cpp src/State.cpp
 	src/UnlockAction.cpp src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp src/MachineCommandList.cpp
-	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp 
+	src/ControlSystemMachine.cpp src/HandleRequestAction.cpp src/AutoStats.cpp
   src/Configuration.cpp
 	)
 add_executable(cw src/cw.cpp ${Clockwork_SRCS})
@@ -328,6 +328,9 @@ SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
 add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
 target_link_libraries(iosh Clockwork "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
+add_executable(iocmd src/iocmd.cpp)
+target_link_libraries(iocmd Clockwork "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+
 add_executable(device_connector src/device_connector.cpp src/options.cpp )
 target_link_libraries(device_connector Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
@@ -337,5 +340,6 @@ target_link_libraries(persistd Clockwork ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 add_executable(modbusd src/modbusd.cpp )
 target_link_libraries(modbusd Clockwork ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
-install(TARGETS cw iosh device_connector modbusd persistd
+install(TARGETS cw iosh iocmd device_connector modbusd persistd
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+
