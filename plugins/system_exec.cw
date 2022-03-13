@@ -17,7 +17,9 @@ SystemExec MACHINE {
 	Done STATE;
 	Idle INITIAL;
 
-	COMMAND start { SET SELF TO Start; }
+	COMMAND start WITHIN Error { SET SELF TO Start; }
+	COMMAND start WITHIN Done { SET SELF TO Start; }
+	COMMAND start WITHIN Idle { SET SELF TO Start; }
 }
 
 %BEGIN_PLUGIN
