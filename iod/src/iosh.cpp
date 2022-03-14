@@ -52,7 +52,7 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
             socket.send(reply);
             break;
         }
-        catch (zmq::error_t) {
+        catch (const zmq::error_t &) {
             if (zmq_errno() == EINTR) {
                 continue;
             }
