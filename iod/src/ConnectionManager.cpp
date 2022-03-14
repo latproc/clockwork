@@ -245,7 +245,7 @@ bool SubscriptionManager::requestChannel() {
                     fl.f() << channel_name << " got unexpected: " << buf << "\n" << std::flush;
                 }
             }
-            catch (zmq::error_t ex) {
+            catch (const zmq::error_t & ex) {
                 {
                     FileLogger fl(program_name);
                     fl.f() << channel_name << " exception " << zmq_errno() << " "
