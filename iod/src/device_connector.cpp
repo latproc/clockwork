@@ -1368,7 +1368,7 @@ int main(int argc, const char *argv[]) {
                 connection_manager = new CommandManager(options.iodHost(), 5555);
             }
         }
-        catch (zmq::error_t io) {
+        catch (const zmq::error_t & io) {
             std::cout << "zmq error: " << zmq_strerror(errno) << "\n" << std::flush;
         }
         catch (const std::exception &ex) {

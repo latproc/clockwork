@@ -7,7 +7,7 @@
 void yyerror(const char *str);
 #define YY_INPUT(buf, result, max_size) result = get_input(buf, max_size);
 
-extern int get_input(char *buf, int size);
+extern int get_input(char *buf, unsigned int size);
 
 #ifndef _MAIN_
 extern std::list<Value> params;
