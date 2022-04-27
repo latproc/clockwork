@@ -194,7 +194,7 @@ double FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf) {
     boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);
     ;
     double sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f;
-    double sumXsquared = 0.0f, sumYsquared = 0.0f;
+    double sumXsquared = 0.0f;
     int n = length() - 1;
     if (n <= 0) {
         return 0;
@@ -206,7 +206,6 @@ double FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf) {
         sumX += x;
         sumY += y;
         sumXsquared += x * x;
-        sumYsquared += y * y;
         sumXY += x * y;
     }
     double denom = (double)n * sumXsquared - sumX * sumX;

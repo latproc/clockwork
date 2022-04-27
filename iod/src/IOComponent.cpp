@@ -524,10 +524,14 @@ void IOComponent::add_subscriber(const char *name, const char *topic) {
 
 void IOComponent::setupProperties(MachineInstance *m) {}
 
+std::ostream & operator<<(std::ostream & out, const IOAddress &address) {
+    return out << " [" << address.description << ", " << address.module_position << " "
+               << address.io_offset << ':' << address.io_bitpos << "." << address.bitlen
+               << "]=" << address.value;
+}
+
 std::ostream &IOComponent::operator<<(std::ostream &out) const {
-    out << "readtime: " << (io_clock - read_time) << " [" << address.description << ", "
-        << address.module_position << " " << address.io_offset << ':' << address.io_bitpos << "."
-        << address.bitlen << "]=" << address.value;
+    out << "readtime: " << (io_clock - read_time) << address;
     if (address.bitlen == 1 && io_process_data) {
         out << " (" << (bool)(io_process_data[address.io_offset] & (1 << address.io_bitpos)) << ")";
     }
