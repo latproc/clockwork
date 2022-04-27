@@ -34,6 +34,13 @@
 #include <iostream>
 #include <zmq.hpp>
 
+// TODO: consider moving from boost to the std library, use
+// std::condition_variable and wait on a notification for a time rather
+// than the boost interruptible wait. Notifying the condition:
+// { std::unique_lock<std::mutex> lock(m);
+//   cond.wait_for(lock, std::chrono::seconds(5)); }
+// .. cond.notify_all()
+
 Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000L;
 static Watchdog *wd = 0;
@@ -65,6 +72,7 @@ static uint64_t calcDeliveryTime(long delay) {
 
 std::string Scheduler::getStatus() {
     boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
+    assert(scoped_lock.owns_lock());
     uint64_t now = microsecs();
     long wait_duration = 0;
     if (notification_sent) {

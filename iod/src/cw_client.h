@@ -7,6 +7,7 @@
 #include <MessageEncoding.h>
 #include <MessagingInterface.h>
 #include <SocketMonitor.h>
+#include <clock.h>
 #include <symboltable.h>
 #include <value.h>
 
