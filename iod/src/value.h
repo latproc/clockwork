@@ -18,13 +18,12 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef cwlang_value_h
-#define cwlang_value_h
+#pragma once
 
 #include <iostream>
 #include <list>
 #include <map>
-#include <stdint.h>
+#include <cstdint>
 #include <string>
 
 class MachineInstance;
@@ -39,7 +38,7 @@ class DynamicValueBase {
     virtual ~DynamicValueBase();
     static DynamicValueBase *ref(DynamicValueBase *dv) {
         if (!dv) {
-            return 0;
+            return nullptr;
         }
         else {
             dv->refs++;
@@ -51,7 +50,7 @@ class DynamicValueBase {
         if (!refs) {
             delete this;
         }
-        return 0;
+        return nullptr;
     }
     virtual DynamicValueBase *clone() const = 0;
     virtual const Value *lastResult() const = 0;
@@ -63,7 +62,7 @@ class DynamicValueBase {
     operator()(MachineInstance *scope) = 0; // uses the provided machine's scope
     virtual const Value &operator()() = 0;  // uses the current scope for evaluation
   protected:
-    int refs;
+    int refs = 0;
 };
 std::ostream &operator<<(std::ostream &, const DynamicValue &);
 
@@ -97,7 +96,7 @@ class Value {
     Value(DynamicValueBase *dv);
     Value(DynamicValueBase &dv);
     virtual ~Value();
-    std::string asString(const char *format = 0) const;
+    std::string asString(const char *format = nullptr) const;
     std::string quoted() const;
     bool isNull() const;
     bool asFloat(double &val) const;
@@ -106,10 +105,10 @@ class Value {
     long trunc() const;
     long round(int digits = 0) const;
     double toFloat() const;
-    explicit operator long() { return iValue; }
-    explicit operator int() { return (int)iValue; }
-    explicit operator float() { return (float)fValue; }
-    explicit operator double() { return fValue; }
+    explicit operator long() const { return iValue; }
+    explicit operator int() const { return (int)iValue; }
+    explicit operator float() const { return (float)fValue; }
+    explicit operator double() const { return fValue; }
     //  Value operator[](int index);
     //  Value operator[](std::string index);
 
@@ -153,7 +152,7 @@ class Value {
     bool operator&&(const Value &other) const;
     bool operator||(const Value &other) const;
     bool operator!() const;
-    Value operator-(void) const;
+    Value operator-() const;
     Value operator+(const Value &other);
     Value &operator+=(const Value &other);
     Value operator-(const Value &other);
@@ -189,11 +188,9 @@ class ListValue : public Value {
     void addItem(const char *next_value);
     void addItem(Value next_value);
     void addItem(std::string key, Value next_value);
-    void push_back(Value *value) {
+    void push_back(Value *value) const {
         if (list) {
             list->push_back(value);
         }
     }
 };
-
-#endif

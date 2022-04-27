@@ -56,17 +56,19 @@ struct IOAddress {
     std::string description;
 };
 
+std::ostream & operator<<(std::ostream & out, const IOAddress &address);
+
 struct MQTTTopic {
     std::string topic;
     std::string message;
-    bool publisher;
+    bool publisher = false;
     MQTTTopic(const char *t, const char *m) : topic(t), message(m) {}
-    MQTTTopic(const std::string &t, const std::string &m) : topic(t), message(m) {}
+    MQTTTopic(std::string &&t, std::string &&m) : topic(std::move(t)), message(std::move(m)) {}
 };
 
 class IOUpdate {
   public:
-    IOUpdate() : size_(0), data_(0), mask_(0) {}
+    IOUpdate() : size_(0), data_(nullptr), mask_(nullptr) {}
     ~IOUpdate();
 
     uint32_t size() const { return size_; }
@@ -132,7 +134,7 @@ class IOComponent : public Transmitter {
     uint64_t last;
 
   public:
-    IOComponent(IOAddress addr);
+    explicit IOComponent(IOAddress addr);
     IOComponent();
     virtual ~IOComponent() { processing_queue.remove(this); }
     virtual void setInitialState();
@@ -176,7 +178,7 @@ class IOComponent : public Transmitter {
 
     virtual int32_t filter(int32_t);
 
-    void setName(std::string new_name) { io_name = new_name; }
+    void setName(std::string && new_name) { io_name = std::move(new_name); }
     std::string io_name;
 
     typedef std::map<std::string, IOComponent *> DeviceList;

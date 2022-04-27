@@ -25,8 +25,8 @@
 #include "Message.h"
 #include <boost/foreach.hpp>
 #include <set>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 #include <sys/types.h>
 #include <vector>
 
@@ -36,8 +36,8 @@ class MachineInstance;
 class Action;
 class ActionTemplate {
   public:
-    ActionTemplate() {}
-    virtual ~ActionTemplate() {}
+    ActionTemplate() = default;
+    virtual ~ActionTemplate() = default;
     virtual void toC(std::ostream &out, std::ostream &vars) const;
     virtual Action *factory(MachineInstance *mi) = 0;
     virtual std::ostream &operator<<(std::ostream &out) const { return out << "(ActionTemplate)"; }
@@ -48,13 +48,13 @@ std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 class TriggerInternals;
 class Trigger;
 struct TriggerOwner {
-    virtual ~TriggerOwner() {}
-    virtual void triggerFired(Trigger *trigger) {}
+    virtual ~TriggerOwner() = default;
+    virtual void triggerFired(Trigger *trigger) {};
 };
 
 class Trigger {
   public:
-    Trigger(const std::string &n);
+    explicit Trigger(const std::string &n);
     Trigger(TriggerOwner *, const std::string &n);
 
     virtual ~Trigger();
@@ -75,7 +75,7 @@ class Trigger {
 
     uint64_t startTime();
     void report(const char *message);
-    int getRefs() { return refs; }
+    int getRefs() const { return refs; }
 
     std::ostream &operator<<(std::ostream &out) const;
 
@@ -90,11 +90,12 @@ class Trigger {
   private:
     bool is_active;
 
+  public:
     // None of these constructors and assignment operators are
     // implemented because they are not supported
-    Trigger();
-    Trigger(const Trigger &o);
-    Trigger &operator=(const Trigger &o);
+    Trigger() = delete;
+    Trigger(const Trigger &o)= delete;
+    Trigger &operator=(const Trigger &o) = delete;
 };
 std::ostream &operator<<(std::ostream &out, const Trigger &t);
 
@@ -103,15 +104,15 @@ std::ostream &operator<<(std::ostream &out, const Trigger &t);
 // return true;
 class Action : public TriggerOwner {
   public:
-    Action(MachineInstance *m = 0);
+    explicit Action(MachineInstance *m = nullptr);
     Action(MachineInstance *m, Trigger *t);
-    virtual ~Action();
+    ~Action() override;
 
     Action *retain() {
         ++refs;
         return this;
     }
-    int references() { return refs; }
+    int references() const { return refs; }
     virtual void release();
 
     const char *error() {
@@ -134,7 +135,7 @@ class Action : public TriggerOwner {
     void resume();
     void recover(); // debug TBD
     void abort();
-    virtual void reset(); // reinitialise an action for reexecution
+    virtual void reset(); // reinitialise an action for re-execution
 
     bool debug();
 
@@ -181,7 +182,7 @@ const char *actionStatusName(const Action::Status &state);
 class IOComponent;
 class TriggeredAction : public Action {
   public:
-    TriggeredAction(MachineInstance *m) : Action(m), has_triggered(false) {}
+    explicit TriggeredAction(MachineInstance *m) : Action(m), has_triggered(false) {}
     enum TriggerType { TT_ON, TT_OFF };
     void addComponent(IOComponent *ioc, TriggerType which) {
         switch (which) {
@@ -203,7 +204,7 @@ class TriggeredAction : public Action {
             break;
         }
     }
-    bool depends(IOComponent *iod) { return trigger_on.count(iod) || trigger_off.count(iod); }
+    bool depends(IOComponent *iod) const { return trigger_on.count(iod) || trigger_off.count(iod); }
     // active() indicates the action has triggered. It will automatically
     // reset the trigger only when one of the dependent inputs changes
     bool active();
@@ -215,7 +216,7 @@ class TriggeredAction : public Action {
         has_triggered = active();
         return true;
     }
-    void reset() { has_triggered = false; }
+    void reset() override { has_triggered = false; }
     virtual bool usesTimer() { return false; }
 
     std::set<IOComponent *> trigger_on;

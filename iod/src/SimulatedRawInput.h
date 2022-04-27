@@ -23,7 +23,7 @@
 
 #include "IOComponent.h"
 #include <iostream>
-#include <sys/time.h>
+#include <ctime>
 
 class SimulatedRawInput : public IOComponent {
   public:
@@ -31,26 +31,26 @@ class SimulatedRawInput : public IOComponent {
         state = s_unknown;
         last = microsecs();
         std::stringstream ss;
-        ss < "DEV_" << addr.io_offset << "_" << addr.io_bitpos << std::flush;
+        ss << "DEV_" << io_address << "_" << bit_offset << std::flush;
         io_name = ss.str();
     }
     void setIOAddress(int io_address, int bit_offset) {
         std::stringstream ss;
-        ss < "DEV_" << addr.io_offset << "_" << addr.io_bitpos << std::flush;
+        ss << "DEV_" << io_address << "_" << bit_offset << std::flush;
         io_name = ss.str();
     }
-    void turnOn() {
+    void turn_on() {
         last_event = e_on;
         last = microsecs();
     }
 
-    void turnOff() {
+    void turn_off() {
         last_event = e_off;
         last = microsecs();
     }
 
-    bool isOn() { return state == s_on; }
-    bool isOff() { return state == s_off; }
+    bool is_on() { return state == s_on; }
+    bool is_off() { return state == s_off; }
 
     void idle() { checkState(); }
 
@@ -59,8 +59,7 @@ class SimulatedRawInput : public IOComponent {
         if ((last_event == e_on && state == s_on) || (last_event == e_off && state == s_off)) {
             return;
         }
-        struct timeval now;
-        nos = microsecs()
+        uint8_t now = microsecs();
         uint64_t t = now - last;
         if (t >= switch_time_usec) {
             if (last_event == e_on) {
@@ -76,8 +75,8 @@ class SimulatedRawInput : public IOComponent {
     uint64_t last;
     enum events { e_read, e_on, e_off };
     enum states { s_on, s_off, s_turning_on, s_turning_off, s_unknown };
-    events last_event;
-    states state;
+    events last_event = e_read;
+    states state = s_unknown;
 };
 
 #endif
