@@ -27,7 +27,7 @@ void destroyBuffer(struct CircularBuffer *buf) {
 
 int bufferIndexFor(struct CircularBuffer *buf, int i) {
     int l = bufferLength(buf);
-    /*  it is a non recoverable error to access the buffer without
+    /*  it is a non-recoverable error to access the buffer without
         adding a value */
     if (l == 0) {
         assert(0);
@@ -211,7 +211,7 @@ double getTime(struct CircularBuffer *buf, int n) {
 
 double slope(struct CircularBuffer *buf) {
     double sumX = 0.0, sumY = 0.0, sumXY = 0.0;
-    double sumXsquared = 0.0, sumYsquared = 0.0;
+    double sumXsquared = 0.0;
     int n = bufferLength(buf) - 1;
     double t0 = getTime(buf, n);
     int i = 0;
@@ -221,7 +221,6 @@ double slope(struct CircularBuffer *buf) {
         sumX += x;
         sumY += y;
         sumXsquared += x * x;
-        sumYsquared += y * y;
         sumXY += x * y;
     }
     double denom = (double)n * sumXsquared - sumX * sumX;
