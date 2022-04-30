@@ -31,8 +31,8 @@ struct CallMethodActionTemplate : public ActionTemplate {
     CallMethodActionTemplate(CStringHolder msg, CStringHolder dest,
                              CStringHolder timeout = "CALL_TIMEOUT",
                              CStringHolder error = "CALL_ERROR");
-    virtual Action *factory(MachineInstance *mi);
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder message;
     CStringHolder target;
     CStringHolder timeout_symbol;
@@ -41,9 +41,9 @@ struct CallMethodActionTemplate : public ActionTemplate {
 
 struct CallMethodAction : public Action {
     CallMethodAction(MachineInstance *mi, CallMethodActionTemplate &eat);
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder message;
     CStringHolder target;
     MachineInstance *target_machine;

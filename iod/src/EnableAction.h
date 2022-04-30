@@ -18,9 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __ENABLEACTION_H__
-#define __ENABLEACTION_H__ 1
-
+#pragma once
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -29,12 +27,13 @@
 class MachineInstance;
 
 struct EnableActionTemplate : public ActionTemplate {
-    EnableActionTemplate(const std::string &name, const char *property = 0, const Value *val = 0);
-    EnableActionTemplate(std::list<std::string> &names, const char *property = 0,
-                         const Value *val = 0);
-    ~EnableActionTemplate();
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const;
+    explicit EnableActionTemplate(const std::string &name, const char *property = nullptr,
+                                  const Value *val = nullptr);
+    EnableActionTemplate(std::list<std::string> &names, const char *property = nullptr,
+                         const Value *val = nullptr);
+    ~EnableActionTemplate() override;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     std::list<std::string> machine_name;
     char *property_name;
@@ -44,9 +43,9 @@ struct EnableActionTemplate : public ActionTemplate {
 struct EnableAction : public Action {
     EnableAction(MachineInstance *m, const EnableActionTemplate *dat);
     EnableAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     std::list<std::pair<std::string, MachineInstance *>> machines;
     //std::string machine_name;
@@ -54,5 +53,3 @@ struct EnableAction : public Action {
     char *property_name;
     char *property_value;
 };
-
-#endif

@@ -18,9 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __SENDMESSAGE_ACTION
-#define __SENDMESSAGE_ACTION 1
-
+#pragma once
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -31,9 +29,9 @@ class ExportState;
 struct SendMessageActionTemplate : public ActionTemplate {
     SendMessageActionTemplate(Value msg, Value dest);
     SendMessageActionTemplate(Value msg, MachineInstance *dest);
-    virtual Action *factory(MachineInstance *mi) override;
-    virtual std::ostream &operator<<(std::ostream &out) const override;
-    virtual void toC(std::ostream &out, std::ostream &vars) const override;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
+    void toC(std::ostream &out, std::ostream &vars) const override;
     Value message;
     Value target;
     MachineInstance *target_machine;
@@ -41,12 +39,10 @@ struct SendMessageActionTemplate : public ActionTemplate {
 
 struct SendMessageAction : public Action {
     SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat);
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
     Value message;
     Value target;
     MachineInstance *target_machine;
 };
-
-#endif

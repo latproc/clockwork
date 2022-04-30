@@ -38,7 +38,12 @@ RunAllTests MACHINE all_tests {
 	inactive WHEN active IS off; # used in the stop command to abort execution of the test
 
   completed_successfully WHEN ALL all_tests ARE ok;
+  ENTER completed_successfully {
+    LOG "Completed all tests. Exiting";
+    SHUTDOWN;
+  }
 
+  ENTER INIT { SEND setup TO SELF; }
 	complete WHEN tests IS empty AND stage IS NOT ASSIGNED;
 	waiting WHEN tests IS nonempty AND stage IS NOT ASSIGNED;
 	unknown WHEN stage.ITEM IS Unknown;
@@ -54,6 +59,7 @@ RunAllTests MACHINE all_tests {
 	}
 
 	ENTER ready { SEND run TO stage; }
+
 	ENTER done {
     LOG "completed " + stage.ITEM.NAME + ": " + stage.ITEM;
 		SEND reset TO stage;

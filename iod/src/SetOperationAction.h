@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __SetOperationAction_H__
-#define __SetOperationAction_H__ 1
+#pragma once
 
 #include "Action.h"
 #include "Expression.h"
@@ -40,10 +39,10 @@ struct SetOperationActionTemplate : public ActionTemplate {
     SetOperationActionTemplate(Value num, Value a, Value b, Value destination, Value property,
                                SetOperation op, Predicate *pred, bool remove, Value start = -1,
                                Value end = -1);
-    ~SetOperationActionTemplate();
+    ~SetOperationActionTemplate() override;
 
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "SetOperationAction " << src_a_name << ", src_b_name "
                    << " to " << dest_name << " using " << property_name << "\n";
     }
@@ -63,10 +62,10 @@ struct SetOperationActionTemplate : public ActionTemplate {
 struct SetOperationAction : public Action {
     SetOperationAction(MachineInstance *m, const SetOperationActionTemplate *dat);
     SetOperationAction();
-    Status run();
-    Status checkComplete();
+    Status run() override;
+    Status checkComplete() override;
     virtual Status doOperation();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    std::ostream &operator<<(std::ostream &out) const override;
 
   protected:
     MachineInstance *scope;
@@ -89,22 +88,20 @@ struct SetOperationAction : public Action {
 
 struct IntersectSetOperation : public SetOperationAction {
     IntersectSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
-    Status doOperation();
+    Status doOperation() override;
 };
 
 struct UnionSetOperation : public SetOperationAction {
     UnionSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
-    Status doOperation();
+    Status doOperation() override;
 };
 
 struct DifferenceSetOperation : public SetOperationAction {
     DifferenceSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
-    Status doOperation();
+    Status doOperation() override;
 };
 
 struct SelectSetOperation : public SetOperationAction {
     SelectSetOperation(MachineInstance *m, const SetOperationActionTemplate *dat);
-    Status doOperation();
+    Status doOperation() override;
 };
-
-#endif

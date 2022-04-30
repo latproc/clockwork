@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __SYNCREMOTESTATES_ACTION__
-#define __SYNCREMOTESTATES_ACTION__ 1
+#pragma once
 
 #include "Action.h"
 #include "Expression.h"
@@ -34,8 +33,10 @@ class MachineInstance;
 
 struct SyncRemoteStatesActionTemplate : public ActionTemplate {
     SyncRemoteStatesActionTemplate(Channel *channel, zmq::socket_t *socket);
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const { return out << "SyncRemoteStatesAction"; }
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
+        return out << "SyncRemoteStatesAction";
+    }
     std::string trigger_event;
     Channel *chn;
     zmq::socket_t *sock;
@@ -45,13 +46,11 @@ class SyncRemoteStatesActionInternals;
 class SyncRemoteStatesAction : public Action {
   public:
     SyncRemoteStatesAction(MachineInstance *mi, SyncRemoteStatesActionTemplate &t);
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
   protected:
     Status execute();
     SyncRemoteStatesActionInternals *internals;
 };
-
-#endif

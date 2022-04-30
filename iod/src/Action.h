@@ -24,9 +24,9 @@
 #include "Expression.h"
 #include "Message.h"
 #include <boost/foreach.hpp>
-#include <set>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 #include <sys/types.h>
 #include <vector>
 
@@ -49,7 +49,7 @@ class TriggerInternals;
 class Trigger;
 struct TriggerOwner {
     virtual ~TriggerOwner() = default;
-    virtual void triggerFired(Trigger *trigger) {};
+    virtual void triggerFired(Trigger *trigger){};
 };
 
 class Trigger {
@@ -94,7 +94,7 @@ class Trigger {
     // None of these constructors and assignment operators are
     // implemented because they are not supported
     Trigger() = delete;
-    Trigger(const Trigger &o)= delete;
+    Trigger(const Trigger &o) = delete;
     Trigger &operator=(const Trigger &o) = delete;
 };
 std::ostream &operator<<(std::ostream &out, const Trigger &t);

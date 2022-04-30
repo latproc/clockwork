@@ -53,7 +53,7 @@ Action *IncludeActionTemplate::factory(MachineInstance *mi) {
     return new IncludeAction(mi, this, position, before, expand);
 }
 
-IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, Value pos,
+IncludeAction::IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, const Value &pos,
                              bool insert_before, bool expand_list)
     : Action(m), list_machine_name(dat->list_machine_name), entry(dat->entry), list_machine(0),
       entry_machine(0), position(pos), before(insert_before), expand(expand_list) {
