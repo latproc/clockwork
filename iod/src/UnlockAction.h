@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __EnableACTION_H__
-#define __ENABLEACTION_H__ 1
+#pragma once
 
 #include "Action.h"
 #include <iostream>
@@ -28,8 +27,8 @@ class MachineInstance;
 
 struct UnlockActionTemplate : public ActionTemplate {
     UnlockActionTemplate(const std::string &name) : machine_name(name) {}
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "Unlock action template " << machine_name << "\n";
     }
 
@@ -38,13 +37,11 @@ struct UnlockActionTemplate : public ActionTemplate {
 
 struct UnlockAction : public Action {
     UnlockAction(MachineInstance *m, const UnlockActionTemplate *dat)
-        : Action(m), machine_name(dat->machine_name), machine(0) {}
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+        : Action(m), machine_name(dat->machine_name), machine(nullptr) {}
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     std::string machine_name;
     MachineInstance *machine;
 };
-
-#endif

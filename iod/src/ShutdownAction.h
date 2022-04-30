@@ -18,9 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __SHUTDOWNACTION_H__
-#define __SHUTDOWNACTION_H__ 1
-
+#pragma once
 #include "Action.h"
 #include <iostream>
 
@@ -28,8 +26,8 @@ class MachineInstance;
 
 struct ShutdownActionTemplate : public ActionTemplate {
     ShutdownActionTemplate() {}
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "ShutdownAction template "
                    << "\n";
     }
@@ -37,9 +35,7 @@ struct ShutdownActionTemplate : public ActionTemplate {
 
 struct ShutdownAction : public Action {
     ShutdownAction(MachineInstance *m) : Action(m) {}
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 };
-
-#endif

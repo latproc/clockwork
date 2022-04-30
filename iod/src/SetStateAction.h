@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __SETSTATE_ACTION__
-#define __SETSTATE_ACTION__ 1
+#pragma once
 
 #include "Action.h"
 #include "Expression.h"
@@ -31,13 +30,13 @@
 class MachineInstance;
 
 struct SetStateActionTemplate : public ActionTemplate {
-    SetStateActionTemplate(CStringHolder targ, Value newstate)
-        : target(targ), new_state(newstate) {}
-    SetStateActionTemplate(CStringHolder targ, Predicate *expr) : target(targ), expr(expr) {}
-    virtual Action *factory(MachineInstance *mi) override;
-    virtual std::ostream &operator<<(std::ostream &out) const override;
-    virtual void toC(std::ostream &out, std::ostream &vars) const override;
-    virtual bool canBlock() const override { return true; }
+    SetStateActionTemplate(CStringHolder target, Value newstate)
+        : target(target), new_state(newstate) {}
+    SetStateActionTemplate(CStringHolder target, Predicate *expr) : target(target), expr(expr) {}
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
+    void toC(std::ostream &out, std::ostream &vars) const override;
+    bool canBlock() const override { return true; }
 
     const Predicate *expression() { return expr; }
     CStringHolder target;
@@ -51,16 +50,16 @@ struct SetStateActionTemplate : public ActionTemplate {
 
 struct SetStateAction : public Action {
     SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth = 0);
-    Status run();
-    Status checkComplete();
+    Status run() override;
+    Status checkComplete() override;
     void setAuthority(uint64_t auth) { authority = auth; }
 
     Condition &getCondition() { return condition; }
 
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder target;
     Value saved_state;
-    Value new_state; // new state as given by the program (may be a property name)
+    Value new_state; // new state as given by the program (could be a property name)
     State value;
     MachineInstance *machine;
 
@@ -74,30 +73,28 @@ struct SetStateAction : public Action {
 };
 
 struct MoveStateActionTemplate : public SetStateActionTemplate {
-    MoveStateActionTemplate(CStringHolder targ, Value newstate)
-        : SetStateActionTemplate(targ, newstate) {}
-    virtual Action *factory(MachineInstance *mi);
+    MoveStateActionTemplate(CStringHolder target, Value newstate)
+        : SetStateActionTemplate(target, newstate) {}
+    Action *factory(MachineInstance *mi) override;
 };
 
 struct MoveStateAction : public SetStateAction {
     MoveStateAction(MachineInstance *mi, MoveStateActionTemplate &t, uint64_t auth = 0)
         : SetStateAction(mi, t, auth) {}
-    ~MoveStateAction();
-    std::ostream &operator<<(std::ostream &out) const;
-    Status run();
+    ~MoveStateAction() override;
+    std::ostream &operator<<(std::ostream &out) const override;
+    Status run() override;
 };
 
 struct SetIOStateAction : public Action {
     SetIOStateAction(MachineInstance *mi, IOComponent *io, const State &new_state,
                      uint64_t auth = 0)
         : Action(mi), io_interface(io), state(new_state), authority(auth) {}
-    Status run();
-    Status checkComplete();
+    Status run() override;
+    Status checkComplete() override;
     void setAuthority(uint64_t auth) { authority = auth; }
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    std::ostream &operator<<(std::ostream &out) const override;
     IOComponent *io_interface;
     State state;
     uint64_t authority;
 };
-
-#endif

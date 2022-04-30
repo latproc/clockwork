@@ -17,10 +17,7 @@
     along with Latproc; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-
-#ifndef __ResumeACTION_H__
-#define __RESUMEACTION_H__ 1
-
+#pragma once
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -29,10 +26,10 @@ class MachineInstance;
 
 struct ResumeActionTemplate : public ActionTemplate {
     ResumeActionTemplate(const std::string &name, const std::string &state,
-                         const char *property = 0, const Value *val = 0);
-    ~ResumeActionTemplate();
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+                         const char *property = nullptr, const Value *val = nullptr);
+    ~ResumeActionTemplate() override;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "ResumeAction template " << machine_name << "\n";
     }
 
@@ -44,10 +41,10 @@ struct ResumeActionTemplate : public ActionTemplate {
 
 struct ResumeAction : public Action {
     ResumeAction(MachineInstance *m, const ResumeActionTemplate *dat);
-    ~ResumeAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    ~ResumeAction() override;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     std::string machine_name;
     std::string resume_state;
@@ -55,5 +52,3 @@ struct ResumeAction : public Action {
     const char *property_name;
     const char *property_value;
 };
-
-#endif

@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef _WAIT_ACTION_H
-#define _WAIT_ACTION_H 1
+#pragma once
 
 #include "Action.h"
 #include "State.h"
@@ -32,9 +31,9 @@ struct WaitActionTemplate : public ActionTemplate {
     WaitActionTemplate(CStringHolder property);
     WaitActionTemplate(Value &val);
     WaitActionTemplate(long delta);
-    virtual Action *factory(MachineInstance *mi) override;
-    virtual void toC(std::ostream &out, std::ostream &vars) const override;
-    virtual bool canBlock() const override { return true; }
+    Action *factory(MachineInstance *mi) override;
+    void toC(std::ostream &out, std::ostream &vars) const override;
+    bool canBlock() const override { return true; }
     std::ostream &operator<<(std::ostream &out) const override;
     long wait_time;
     std::string property_name;
@@ -42,10 +41,10 @@ struct WaitActionTemplate : public ActionTemplate {
 
 struct WaitAction : public Action {
     WaitAction(MachineInstance *mi, WaitActionTemplate &wat);
-    ~WaitAction();
+    ~WaitAction() override;
     Status run() override;
     Status checkComplete() override;
-    virtual std::ostream &operator<<(std::ostream &out) const override;
+    std::ostream &operator<<(std::ostream &out) const override;
     virtual bool usesTimer() { return true; }
 
     long wait_time;
@@ -54,9 +53,9 @@ struct WaitAction : public Action {
 };
 
 struct WaitForActionTemplate : public ActionTemplate {
-    WaitForActionTemplate(CStringHolder targ, Value value);
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    WaitForActionTemplate(CStringHolder target, Value value);
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << target.get() << " to be " << value;
     }
     CStringHolder target;
@@ -66,12 +65,10 @@ struct WaitForActionTemplate : public ActionTemplate {
 struct WaitForAction : public Action {
     WaitForAction(MachineInstance *mi, WaitForActionTemplate &wat)
         : Action(mi), target(wat.target), value(wat.value) {}
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder target;
     Value value;
-    MachineInstance *machine;
+    MachineInstance *machine = nullptr;
 };
-
-#endif

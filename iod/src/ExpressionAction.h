@@ -18,9 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __EXPRESSIONACTION_H__
-#define __EXPRESSIONACTION_H__ 1
-
+#pragma once
 #include "Action.h"
 #include "Expression.h"
 #include "symboltable.h"
@@ -28,14 +26,14 @@
 
 struct ExpressionActionTemplate : public ActionTemplate {
     enum opType { opInc, opDec, opSet };
-    ExpressionActionTemplate(CStringHolder var, opType oper);
-    ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v);
-    ExpressionActionTemplate(CStringHolder var, opType oper, const Value &v, const Value &e);
-    ExpressionActionTemplate(CStringHolder var, opType oper, int a);
-    ExpressionActionTemplate(CStringHolder var, opType oper, const char *a);
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const;
-    void toC(std::ostream &out, std::ostream &vars) const;
+    ExpressionActionTemplate(CStringHolder var, opType op);
+    ExpressionActionTemplate(CStringHolder var, opType op, const Value &v);
+    ExpressionActionTemplate(CStringHolder var, opType op, const Value &v, const Value &e);
+    ExpressionActionTemplate(CStringHolder var, opType op, int a);
+    ExpressionActionTemplate(CStringHolder var, opType op, const char *a);
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
+    void toC(std::ostream &out, std::ostream &vars) const override;
 
     CStringHolder lhs;
     Value rhs;
@@ -49,9 +47,9 @@ class Action;
 
 struct ExpressionAction : public Action {
     ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat);
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     CStringHolder lhs;
     Value rhs;
@@ -60,5 +58,3 @@ struct ExpressionAction : public Action {
     Predicate *expr = nullptr;
     MachineInstance *machine = nullptr;
 };
-
-#endif

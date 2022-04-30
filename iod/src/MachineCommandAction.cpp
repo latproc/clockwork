@@ -29,7 +29,9 @@
 #include <sstream>
 
 void MachineCommandTemplate::setActionTemplates(std::list<ActionTemplate *> &new_actions) {
-    BOOST_FOREACH (ActionTemplate *at, new_actions) { action_templates.push_back(at); }
+    BOOST_FOREACH (ActionTemplate *at, new_actions) {
+        action_templates.push_back(at);
+    }
 }
 void MachineCommandTemplate::setActionTemplate(ActionTemplate *at) {
     action_templates.push_back(at);

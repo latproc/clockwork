@@ -18,9 +18,6 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __IfComandAction_h__
-#define __IfComandAction_h__ 1
-
 #include "Action.h"
 #include "Expression.h"
 #include <iostream>
@@ -30,11 +27,11 @@ class MachineCommand;
 class MachineInstance;
 
 struct IfCommandActionTemplate : public ActionTemplate {
-    ~IfCommandActionTemplate() {}
+    ~IfCommandActionTemplate() override = default;
     IfCommandActionTemplate(Predicate *pred, MachineCommandTemplate *mct)
         : condition(pred), command(mct) {}
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Condition condition;
     MachineCommandTemplate *command;
@@ -42,11 +39,10 @@ struct IfCommandActionTemplate : public ActionTemplate {
 
 struct IfCommandAction : public Action {
     IfCommandAction(MachineInstance *mi, IfCommandActionTemplate *t);
-    ~IfCommandAction();
-    Status runActions();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    ~IfCommandAction() override;
+    Status run() override;
+    Status checkComplete() override;
+    virtual std::ostream &operator<<(std::ostream &out) const override;
 
     Condition condition;
     MachineCommand *command;
@@ -56,8 +52,8 @@ struct IfElseCommandActionTemplate : public ActionTemplate {
     IfElseCommandActionTemplate(Predicate *pred, MachineCommandTemplate *mct,
                                 MachineCommandTemplate *else_clause)
         : condition(pred), command(mct), else_command(else_clause) {}
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Condition condition;
     MachineCommandTemplate *command;
@@ -66,14 +62,12 @@ struct IfElseCommandActionTemplate : public ActionTemplate {
 
 struct IfElseCommandAction : public Action {
     IfElseCommandAction(MachineInstance *mi, IfElseCommandActionTemplate *t);
-    ~IfElseCommandAction();
-    Status runActions();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    ~IfElseCommandAction() override;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Condition condition;
     MachineCommand *command;
     MachineCommand *else_command;
 };
-#endif

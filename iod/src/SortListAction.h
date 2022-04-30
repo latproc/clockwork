@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __SortListAction_H__
-#define __SortListAction_H__ 1
+#pragma once
 
 #include "Action.h"
 #include "symboltable.h"
@@ -30,10 +29,10 @@ class MachineInstance;
 struct SortListActionTemplate : public ActionTemplate {
 
     SortListActionTemplate(Value list_machine, Value property_name, bool ascending = true);
-    ~SortListActionTemplate();
+    ~SortListActionTemplate() override;
 
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "SortListAction " << list_machine_name << " from " << property_name << "\n";
     }
 
@@ -45,14 +44,12 @@ struct SortListActionTemplate : public ActionTemplate {
 struct SortListAction : public Action {
     SortListAction(MachineInstance *m, const SortListActionTemplate *dat, bool ascending);
     SortListAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Value list_machine_name;
     Value property_name;
     MachineInstance *list_machine;
     bool ascending;
 };
-
-#endif
