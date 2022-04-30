@@ -18,9 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __DISABLEACTION_H__
-#define __DISABLEACTION_H__ 1
-
+#pragma once
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -28,10 +26,11 @@
 class MachineInstance;
 
 struct DisableActionTemplate : public ActionTemplate {
-    DisableActionTemplate(const std::string &name, const char *property = 0, const Value *val = 0);
-    virtual ~DisableActionTemplate();
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    DisableActionTemplate(const std::string &name, const char *property = nullptr,
+                          const Value *val = nullptr);
+    ~DisableActionTemplate() override;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "DisableAction template " << machine_name << "\n";
     }
 
@@ -42,15 +41,13 @@ struct DisableActionTemplate : public ActionTemplate {
 
 struct DisableAction : public Action {
     DisableAction(MachineInstance *m, const DisableActionTemplate *dat);
-    virtual ~DisableAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    ~DisableAction() override;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     std::string machine_name;
     MachineInstance *machine;
     char *property_name;
     char *property_value;
 };
-
-#endif

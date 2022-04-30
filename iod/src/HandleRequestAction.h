@@ -18,9 +18,6 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __HANDLEREQUEST_ACTION__
-#define __HANDLEREQUEST_ACTION__ 1
-
 #include "Action.h"
 #include "Expression.h"
 #include "Message.h"
@@ -33,9 +30,9 @@
 class MachineInstance;
 
 struct HandleRequestActionTemplate : public ActionTemplate {
-    HandleRequestActionTemplate(zmq::socket_t *s, const char *msg) {}
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const { return out; }
+    HandleRequestActionTemplate(zmq::socket_t *, const char *) {}
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override { return out; }
     zmq::socket_t *sock;
     std::string request;
 };
@@ -43,16 +40,14 @@ struct HandleRequestActionTemplate : public ActionTemplate {
 struct HandleRequestAction : public Action {
     HandleRequestAction(MachineInstance *mi, HandleRequestActionTemplate &t)
         : Action(mi), sock(t.sock), request(t.request) {}
-    Status run();
-    Status checkComplete();
+    Status run() override;
+    Status checkComplete() override;
     void setAuthority(uint64_t auth) { authority = auth; }
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    std::ostream &operator<<(std::ostream &out) const override;
 
   protected:
-    uint64_t authority;
-    zmq::socket_t *sock;
+    uint64_t authority = 0;
+    zmq::socket_t *sock = nullptr;
     std::string request;
     MessageHeader header;
 };
-
-#endif

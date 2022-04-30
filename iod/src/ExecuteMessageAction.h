@@ -18,9 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __EXECUTEMESSAGE_ACTION
-#define __EXECUTEMESSAGE_ACTION 1
-
+#pragma once
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -30,8 +28,8 @@ class MachineInstance;
 struct ExecuteMessageActionTemplate : public ActionTemplate {
     ExecuteMessageActionTemplate(CStringHolder msg, CStringHolder dest);
     ExecuteMessageActionTemplate(CStringHolder msg, MachineInstance *dest);
-    virtual Action *factory(MachineInstance *mi);
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder message;
     CStringHolder target;
     MachineInstance *target_machine;
@@ -39,12 +37,10 @@ struct ExecuteMessageActionTemplate : public ActionTemplate {
 
 struct ExecuteMessageAction : public Action {
     ExecuteMessageAction(MachineInstance *mi, ExecuteMessageActionTemplate &eat);
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder message;
     CStringHolder target;
     MachineInstance *target_machine;
 };
-
-#endif

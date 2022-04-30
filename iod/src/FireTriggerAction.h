@@ -28,10 +28,10 @@ class MachineInstance;
 
 struct FireTriggerAction : public Action {
     FireTriggerAction(MachineInstance *m, Trigger *t);
-    ~FireTriggerAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    ~FireTriggerAction() override;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Trigger *pending_trigger; // the trigger is held here and loaded into the action on run()
 };

@@ -18,9 +18,6 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __HANDLE_MESSAGE_ACTION
-#define __HANDLE_MESSAGE_ACTION 1
-
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -28,11 +25,11 @@
 class MachineInstance;
 
 struct HandleMessageActionTemplate : public ActionTemplate {
-    HandleMessageActionTemplate(const Package &p) : package(p) {}
+    explicit HandleMessageActionTemplate(const Package &p) : package(p) {}
     HandleMessageActionTemplate(Transmitter *t, Receiver *r, const Message &m, bool needs_receipt)
         : package(t, r, new Message(m), needs_receipt) {}
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "Message: " << package.message;
     }
     Package package;
@@ -41,13 +38,11 @@ struct HandleMessageActionTemplate : public ActionTemplate {
 struct HandleMessageAction : public Action {
     HandleMessageAction(MachineInstance *mi, HandleMessageActionTemplate &hmt)
         : Action(mi), package(hmt.package), machine(0), handler(0) {}
-    ~HandleMessageAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    ~HandleMessageAction() override;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
     Package package;
     MachineInstance *machine;
     Action *handler;
 };
-
-#endif

@@ -18,9 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __CopyPropertiesAction_H__
-#define __CopyPropertiesAction_H__ 1
-
+#pragma once
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -36,10 +34,10 @@ struct CopyPropertiesActionTemplate : public ActionTemplate {
     CopyPropertiesActionTemplate(Value source, Value destination);
     CopyPropertiesActionTemplate(Value source, Value destination,
                                  const std::list<std::string> &properties);
-    ~CopyPropertiesActionTemplate();
+    ~CopyPropertiesActionTemplate() override;
 
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const;
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     std::string source_name;
     std::string dest_name;
@@ -49,9 +47,9 @@ struct CopyPropertiesActionTemplate : public ActionTemplate {
 struct CopyPropertiesAction : public Action {
     CopyPropertiesAction(MachineInstance *m, const CopyPropertiesActionTemplate *dat);
     CopyPropertiesAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Value source;
     Value dest;
@@ -59,5 +57,3 @@ struct CopyPropertiesAction : public Action {
     MachineInstance *dest_machine;
     std::list<std::string> property_list;
 };
-
-#endif

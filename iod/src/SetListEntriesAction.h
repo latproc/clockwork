@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __SetListEntriesAction_H__
-#define __SetListEntriesAction_H__ 1
+#pragma once
 
 #include "Action.h"
 #include "symboltable.h"
@@ -35,10 +34,10 @@ struct SetListEntriesActionTemplate : public ActionTemplate {
     // scope where the command is used.
 
     SetListEntriesActionTemplate(Value source, Value destination);
-    ~SetListEntriesActionTemplate();
+    ~SetListEntriesActionTemplate() override;
 
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "SetListEntriesAction " << source_name << " from " << dest_name << "\n";
     }
 
@@ -50,9 +49,9 @@ class SetListEntriesAction : public Action {
   public:
     SetListEntriesAction(MachineInstance *m, const SetListEntriesActionTemplate *dat);
     SetListEntriesAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Value source;
     Value dest;
@@ -61,5 +60,3 @@ class SetListEntriesAction : public Action {
   private:
     void setListEntries(unsigned long val);
 };
-
-#endif

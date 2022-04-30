@@ -18,9 +18,6 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __IncludeAction_H__
-#define __IncludeAction_H__ 1
-
 #include "Action.h"
 #include "symboltable.h"
 #include <iostream>
@@ -35,10 +32,10 @@ struct IncludeActionTemplate : public ActionTemplate {
 
     IncludeActionTemplate(const std::string &name, Value val, Value pos = -1, bool before = false,
                           bool expand = false);
-    ~IncludeActionTemplate();
+    ~IncludeActionTemplate() override;
 
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "IncludeAction template " << list_machine_name << " " << entry << "\n";
     }
 
@@ -50,12 +47,12 @@ struct IncludeActionTemplate : public ActionTemplate {
 };
 
 struct IncludeAction : public Action {
-    IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, const Value pos,
+    IncludeAction(MachineInstance *m, const IncludeActionTemplate *dat, const Value &pos,
                   bool before, bool expand = false);
     IncludeAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     std::string list_machine_name;
     Value entry;
@@ -65,5 +62,3 @@ struct IncludeAction : public Action {
     bool before;
     bool expand;
 };
-
-#endif

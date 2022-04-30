@@ -34,11 +34,11 @@ struct ClearListActionTemplate : public ActionTemplate {
     // The names are to be evaluated in the
     // scope where the command is used.
 
-    ClearListActionTemplate(Value destination);
-    ~ClearListActionTemplate();
+    explicit ClearListActionTemplate(Value destination);
+    ~ClearListActionTemplate() override;
 
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "Clear List or Reference " << dest_name << "\n";
     }
 
@@ -48,9 +48,9 @@ struct ClearListActionTemplate : public ActionTemplate {
 struct ClearListAction : public Action {
     ClearListAction(MachineInstance *m, const ClearListActionTemplate *dat);
     ClearListAction();
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
 
     Value dest;
     MachineInstance *dest_machine;
