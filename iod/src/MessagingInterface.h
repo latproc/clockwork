@@ -39,9 +39,9 @@ uint64_t nowMicrosecs(); // deprecated
 uint64_t nowMicrosecs(const struct timeval &now);
 
 #if 0
-int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then);
-int64_t get_diff_in_microsecs(uint64_t now, const struct timeval *then);
-int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then);
+    int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then);
+    int64_t get_diff_in_microsecs(uint64_t now, const struct timeval *then);
+    int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then);
 #endif
 
 enum ProtocolType { eCLOCKWORK, eRAW, eZMQ, eCHANNEL };

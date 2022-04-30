@@ -20,10 +20,10 @@
 
 #pragma once
 
+#include <cstdint>
 #include <iostream>
 #include <list>
 #include <map>
-#include <cstdint>
 #include <string>
 
 class MachineInstance;

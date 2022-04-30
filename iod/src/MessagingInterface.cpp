@@ -51,24 +51,28 @@ bool MessagingInterface::abort_all = false;
 uint64_t nowMicrosecs() { return microsecs(); }
 
 #if 0
-uint64_t nowMicrosecs(const struct timeval &now) {
+uint64_t nowMicrosecs(const struct timeval &now)
+{
     return (uint64_t)now.tv_sec * 1000000L + (uint64_t)now.tv_usec;
 }
 
-int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then) {
+int64_t get_diff_in_microsecs(const struct timeval *now, const struct timeval *then)
+{
     uint64_t now_t = (uint64_t)now->tv_sec * 1000000L + now->tv_usec;
     uint64_t then_t = (uint64_t)then->tv_sec * 1000000L + then->tv_usec;
     int64_t t = now_t - then_t;
     return t;
 }
 
-int64_t get_diff_in_microsecs(uint64_t now_t, const struct timeval *then) {
+int64_t get_diff_in_microsecs(uint64_t now_t, const struct timeval *then)
+{
     uint64_t then_t = (uint64_t)then->tv_sec * 1000000L + then->tv_usec;
     int64_t t = now_t - then_t;
     return t;
 }
 
-int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t) {
+int64_t get_diff_in_microsecs(const struct timeval *now, uint64_t then_t)
+{
     uint64_t now_t = (uint64_t)now->tv_sec * 1000000L + now->tv_usec;
     int64_t t = now_t - then_t;
     return t;

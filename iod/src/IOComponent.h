@@ -56,7 +56,7 @@ struct IOAddress {
     std::string description;
 };
 
-std::ostream & operator<<(std::ostream & out, const IOAddress &address);
+std::ostream &operator<<(std::ostream &out, const IOAddress &address);
 
 struct MQTTTopic {
     std::string topic;
@@ -178,7 +178,7 @@ class IOComponent : public Transmitter {
 
     virtual int32_t filter(int32_t);
 
-    void setName(std::string && new_name) { io_name = std::move(new_name); }
+    void setName(std::string &&new_name) { io_name = std::move(new_name); }
     std::string io_name;
 
     typedef std::map<std::string, IOComponent *> DeviceList;

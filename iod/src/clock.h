@@ -11,4 +11,3 @@ class Clock {
         return std::chrono::duration_cast<std::chrono::microseconds>(delta).count();
     };
 };
-

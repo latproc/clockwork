@@ -21,6 +21,7 @@
 #include "DebugExtra.h"
 #include "Logger.h"
 #include "MessageLog.h"
+#include "clock.h"
 #include "symboltable.h"
 #include <boost/foreach.hpp>
 #include <functional>
@@ -33,14 +34,11 @@
 #include <sstream>
 #include <stdio.h>
 #include <utility>
-#include "clock.h"
 
 static bool stringToLong(const std::string &s, long &x);
 static bool stringToFloat(const std::string &s, double &x);
 
-uint64_t microsecs() {
-    return Clock::clock();
-}
+uint64_t microsecs() { return Clock::clock(); }
 
 static const double ZERO_DISTANCE = 1.0E-8;
 

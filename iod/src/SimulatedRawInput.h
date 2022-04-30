@@ -22,8 +22,8 @@
 #define cwlang_SimulatedRawInput_h
 
 #include "IOComponent.h"
-#include <iostream>
 #include <ctime>
+#include <iostream>
 
 class SimulatedRawInput : public IOComponent {
   public:
