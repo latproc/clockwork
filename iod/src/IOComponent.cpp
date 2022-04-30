@@ -524,7 +524,7 @@ void IOComponent::add_subscriber(const char *name, const char *topic) {
 
 void IOComponent::setupProperties(MachineInstance *m) {}
 
-std::ostream & operator<<(std::ostream & out, const IOAddress &address) {
+std::ostream &operator<<(std::ostream &out, const IOAddress &address) {
     return out << " [" << address.description << ", " << address.module_position << " "
                << address.io_offset << ':' << address.io_bitpos << "." << address.bitlen
                << "]=" << address.value;
