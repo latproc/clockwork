@@ -39,6 +39,8 @@ nohup.out
 # local configuration
 iod.conf
 .vscode/
+.idea
+.vim
 LocalCMakeLists.txt
 LocalCMakeLists.cmake
 
