@@ -1164,7 +1164,9 @@ int loadConfig(std::list<std::string> &files) {
     // display errors and warnings
     if (!error_messages.empty()) {
         std::cerr << "Errors detected\n";
-        BOOST_FOREACH (std::string &error, error_messages) { std::cerr << error << "\n"; }
+        BOOST_FOREACH (std::string &error, error_messages) {
+            std::cerr << error << "\n";
+        }
         // abort if there were errors
         std::cerr << "Aborting\n";
         return 2;

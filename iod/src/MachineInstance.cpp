@@ -640,9 +640,7 @@ class MachineTimerValue : public DynamicValue {
         return out << machine_instance->getName() << ".TIMER (" << last_result << ")";
     }
     Value *getLastResult() { return &last_result; }
-    void resume() {
-        machine_instance->start_time = microsecs() - last_result.iValue * 1000;
-    }
+    void resume() { machine_instance->start_time = microsecs() - last_result.iValue * 1000; }
     DynamicValue *clone() const;
 
   protected:
