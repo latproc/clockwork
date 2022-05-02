@@ -760,7 +760,7 @@ state_definition ';'
 transitory_state:
 SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
-    current_machineclass->addState($1);
+    current_machineclass->addState($1, true);
     current_machineclass->state_names.insert($1);
 
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
@@ -773,7 +773,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
 }
 | SYMBOL /*state name */ DURING SYMBOL /* command */ property_block error_clause action  {
     DBG_PARSER << "command handler for command " << $3 << "\n";
-    current_machineclass->addState($1);
+    current_machineclass->addState($1, true);
     current_machineclass->state_names.insert($1);
 
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
@@ -866,7 +866,7 @@ SYMBOL DIGITALIO INTEGERVAL ';'{
 
 state_definition:
 SYMBOL STATE {
-    current_machineclass->addState($1); // add to states to permit changes to this state
+    current_machineclass->addState($1, true); // add to states to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
 | SYMBOL DEFAULT {
@@ -875,13 +875,13 @@ SYMBOL STATE {
     ss.condition.predicate = new Predicate("DEFAULT");
     ss.state_name = $1;
     current_machineclass->stable_states.push_back(ss);
-    current_machineclass->addState($1);// add to states to permit changes to this state
+    current_machineclass->addState($1, true);// add to states to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
 | SYMBOL INITSTATE {
     DBG_PARSER << " default state " << $1 << "\n" ;
     current_machineclass->initial_state = $1;
-    current_machineclass->addState($1);// add to states list to permit changes to this state
+    current_machineclass->addState($1, true);// add to states list to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
 ;

@@ -30,9 +30,9 @@
 class MachineInstance;
 
 struct SetStateActionTemplate : public ActionTemplate {
-    SetStateActionTemplate(CStringHolder target, Value newstate)
-        : target(target), new_state(newstate) {}
-    SetStateActionTemplate(CStringHolder target, Predicate *expr) : target(target), expr(expr) {}
+    SetStateActionTemplate(CStringHolder target, Value newstate);
+    SetStateActionTemplate(CStringHolder target, Predicate *expr);
+
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override;
     void toC(std::ostream &out, std::ostream &vars) const override;

@@ -3122,6 +3122,28 @@ void MachineInstance::updateLastEvaluationTime() {
     }
 }
 
+bool MachineInstance::isStableState(const std::string state_name) {
+    for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+        StableState &s = stable_states[ss_idx];
+        if (s.state_name == state_name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string MachineInstance::firstValidStableState(const std::string state_name) {
+    std::string found;
+    for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
+        StableState &s = stable_states[ss_idx];
+        if (s.condition(this)) {
+            found = s.state_name;
+            break;
+        }
+    }
+    return found;
+}
+
 bool MachineInstance::setStableState() {
     bool changed_state = false;
     ProcessingThread::suspend(
