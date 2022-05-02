@@ -307,8 +307,8 @@ void predefine_special_machines() {
     MachineClass *point_class = new MachineClass("POINT");
     point_class->parameters.push_back(Parameter("module"));
     point_class->parameters.push_back(Parameter("offset"));
-    point_class->addState("on");
-    point_class->addState("off");
+    point_class->addState("on", true);
+    point_class->addState("off", true);
     point_class->default_state = State("off");
     point_class->initial_state = State("off");
     point_class->disableAutomaticStateChanges();
