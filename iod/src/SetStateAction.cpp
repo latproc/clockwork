@@ -33,9 +33,10 @@
 #define ABORT_INVALID_TRANSITIONS false
 #endif
 SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Value newstate)
-: target(target), new_state(newstate) { }
+    : target(target), new_state(newstate) {}
 
-SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Predicate *expr) : target(target), expr(expr) {}
+SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Predicate *expr)
+    : target(target), expr(expr) {}
 
 Action *SetStateActionTemplate::factory(MachineInstance *mi) {
     return new SetStateAction(mi, *this);

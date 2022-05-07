@@ -91,7 +91,7 @@ TEST_F(BufferTest, addSample) {
 
 TEST_F(BufferTest, findMovement) {
     /*  seek back along the buffer to find the number of samples
-                                            before a total movement of amount occurred, ignoring direction */
+                                                before a total movement of amount occurred, ignoring direction */
     // int findMovement(struct CircularBuffer *buf, double amount, int max_len);
 }
 
