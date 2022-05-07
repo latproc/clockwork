@@ -1179,7 +1179,7 @@ void ProcessingThread::operator()() {
             break;
         }
     }
-    const auto & log = MessageLog::instance();
+    const auto &log = MessageLog::instance();
     if (log->count() > 0) {
         std::cerr << "Messages at shutdown:\n" << log->toString(log->count()) << "\n";
     }
