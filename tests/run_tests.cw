@@ -39,7 +39,7 @@ RunAllTests MACHINE all_tests {
 
   completed_successfully WHEN ALL all_tests ARE ok;
   ENTER completed_successfully {
-    LOG "Completed all tests. Exiting";
+    LOG "All tests PASSED.";
     SHUTDOWN;
   }
 
@@ -61,7 +61,7 @@ RunAllTests MACHINE all_tests {
 	ENTER ready { SEND run TO stage; }
 
 	ENTER done {
-    LOG "completed " + stage.ITEM.NAME + ": " + stage.ITEM;
+        LOG "completed " + stage.ITEM.NAME + ": " + stage.ITEM;
 		SEND reset TO stage;
 		CLEAR stage;
 	}
