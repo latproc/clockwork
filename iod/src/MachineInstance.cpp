@@ -673,13 +673,11 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     if (_type == "MODULE") {
         io_modules.push_back(this);
     }
+    // Initialise machines but skip shadows and templates (local machines and CONDITIONs)
     if (instance_type == MACHINE_INSTANCE) {
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
-    }
-    else {
-        DBG_INITIALISATION << "not a machine instance\n";
     }
 }
 
@@ -704,13 +702,11 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
     if (_type == "MODULE") {
         io_modules.push_back(this);
     }
+    // Initialise machines but skip shadows and templates (local machines and CONDITIONs)
     if (instance_type == MACHINE_INSTANCE) {
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
-    }
-    else {
-        DBG_INITIALISATION << "not a machine instance\n";
     }
 }
 
