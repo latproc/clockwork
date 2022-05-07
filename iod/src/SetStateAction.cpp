@@ -72,8 +72,15 @@ SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, u
 
 Action::Status SetStateAction::executeStateChange(bool use_transitions) {
     // restore the name of the state we are seeking in case it was updated by a prior invocation
-    new_state = saved_state;
-    value = saved_state.sValue.c_str();
+    if (saved_state.kind == Value::t_empty) {
+        if (expr) {
+            new_state = expr->evaluate(owner);
+        }
+    }
+    else {
+        new_state = saved_state;
+    }
+    value = new_state.sValue.c_str();
     owner->start(this);
     MachineClass *owner_state_machine = owner->getStateMachine();
     const std::string &new_state_str(new_state.asString());
