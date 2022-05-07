@@ -21,6 +21,7 @@
 #include "ClearListAction.h"
 #include "Logger.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
 
 ClearListActionTemplate::ClearListActionTemplate(Value destination)
     : dest_name(destination.asString()) {}
@@ -42,6 +43,13 @@ std::ostream &ClearListAction::operator<<(std::ostream &out) const {
 
 Action::Status ClearListAction::run() {
     owner->start(this);
+    // Handle the special case: CLEAR MESSAGES if needed
+    if (dest == "MESSAGES") {
+        MessageLog::instance()->purge();
+        status = Complete;
+        owner->stop(this);
+        return status;
+    }
     dest_machine = owner->lookup(dest);
     if (dest_machine && dest_machine->_type == "LIST") {
 #if 1
