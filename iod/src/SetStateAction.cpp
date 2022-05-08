@@ -27,16 +27,15 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "Scheduler.h"
+#include "options.h"
 
-// TODO: Remove this flag
-#ifndef ABORT_INVALID_TRANSITIONS
-#define ABORT_INVALID_TRANSITIONS false
-#endif
-SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Value newstate)
-    : target(target), new_state(newstate) {}
+SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Value newstate,
+                                               StateChangeReason reason)
+    : target(target), new_state(newstate), reason(reason) {}
 
-SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Predicate *expr)
-    : target(target), expr(expr) {}
+SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Predicate *expr,
+                                               StateChangeReason reason)
+    : target(target), reason(reason), expr(expr) {}
 
 Action *SetStateActionTemplate::factory(MachineInstance *mi) {
     return new SetStateAction(mi, *this);
@@ -65,7 +64,7 @@ void SetStateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
 
 SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth)
     : Action(mi), target(t.target), saved_state(t.new_state), new_state(t.new_state),
-      value(t.new_state.sValue.c_str()), machine(0), authority(auth) {
+      value(t.new_state.sValue.c_str()), machine(0), reason(t.reason), authority(auth) {
     if (t.expression()) {
         expr = new Predicate(*t.expression());
     }
@@ -86,34 +85,39 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
     MachineClass *owner_state_machine = owner->getStateMachine();
     const std::string &new_state_str(new_state.asString());
 
-    if (owner_state_machine->default_state.getName() != new_state_str &&
-        !owner_state_machine->isStaticState(new_state_str) && owner->isStableState(new_state_str)) {
+    // Automatic changes to stable states may become invalid due to other
+    // intermediate changes in related machines. If this is an automatic
+    // state change, check that it is still valid and if not, use the
+    // correct state instead.
+    if (reason == StateChangeReason::automatic) {
+        assert(owner->isStableState(new_state_str));
         auto first_valid_stable_state = owner->firstValidStableState(new_state_str);
         if (first_valid_stable_state != new_state_str) {
             auto &ss = MessageLog::instance()->get_stream();
             ss << owner->definition_file << ":" << owner->definition_line << " " << owner->getName()
-               << ": Applying invalid automatic transition to " << new_state_str
-               << "; correct state is " << first_valid_stable_state;
-            if (ABORT_INVALID_TRANSITIONS) {
-                std::string str = MessageLog::instance()->access_stream_message();
-                error_str = strdup(str.c_str());
-                MessageLog::instance()->close_stream();
-                error_msg = new CStringHolder("InvalidStableStateException");
-                status = Failed;
-                owner->stop(this);
-                return status;
+               << ": ";
+            if (fix_invalid_transitions()) {
+                ss << "Detected invalid transition request to '" << new_state_str << "' using '"
+                   << first_valid_stable_state << "' instead";
+            }
+            else {
+                ss << "Applying invalid automatic transition to '" << new_state_str
+                   << "'; correct state is '" << first_valid_stable_state << "'";
             }
             MessageLog::instance()->release_stream();
+            if (fix_invalid_transitions()) {
+                new_state = first_valid_stable_state.empty() ? Value{} : first_valid_stable_state;
+            }
         }
     }
 
     if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
-        std::stringstream ss;
+        auto &ss = MessageLog::instance()->get_stream();
         ss << *this << " failed. " << owner->fullName() << " " << new_state
            << " must be a symbol or string" << std::flush;
-        char *msg = strdup(ss.str().c_str());
-        MessageLog::instance()->add(msg);
-        error_str = msg;
+        error_str = strdup(MessageLog::instance()->access_stream_message().c_str());
+        MessageLog::instance()->release_stream();
+        error_msg = new CStringHolder("InvalidStableStateException");
         status = Failed;
         cleanupTrigger();
         owner->stop(this);

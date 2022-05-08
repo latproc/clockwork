@@ -3235,7 +3235,8 @@ bool MachineInstance::setStableState() {
                                        << ") should be in state " << s.state_name
                                        << " due to condition: " << *s.condition.predicate << "\n";
                         char *sn = strdup(s.state_name.c_str());
-                        SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name);
+                        SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name,
+                                                    StateChangeReason::automatic);
                         enqueueAction(ssat.factory(
                             this)); // execute this state change next time actions are processed
                         free(sn);
