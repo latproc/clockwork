@@ -3138,7 +3138,8 @@ std::string MachineInstance::firstValidStableState(const std::string state_name)
             break;
         }
     }
-    return found;
+    // TODO: Investigate whether the default state can be empty and how that affects things
+    return found.empty() ? this->state_machine->default_state.getName() : found;
 }
 
 bool MachineInstance::setStableState() {
