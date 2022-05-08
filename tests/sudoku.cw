@@ -62,23 +62,22 @@ Cell MACHINE row, col, grp {
     three WHEN SELF IS three OR (SELF IS tentative_three AND NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
     four  WHEN SELF IS four  OR (SELF IS tentative_four  AND NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
 
-	tentative_one WHEN NOT ANY related ARE blocked
-			AND	( SELF IS unknown AND COUNT tentative_one FROM related == 0 AND COUNT one FROM related == 0
+	tentative_one WHEN
+			( SELF IS unknown AND COUNT tentative_one FROM related == 0 AND COUNT one FROM related == 0
 	            OR SELF IS tentative_one AND COUNT tentative_one FROM related == 1);
 
-    tentative_two WHEN NOT ANY related ARE blocked
-			AND ( SELF IS unknown AND COUNT tentative_two FROM related == 0 AND COUNT two FROM related == 0
+    tentative_two WHEN
+			 ( SELF IS unknown AND COUNT tentative_two FROM related == 0 AND COUNT two FROM related == 0
 	            OR SELF IS tentative_two AND COUNT tentative_two FROM related == 1);
 
-    tentative_three WHEN NOT ANY related ARE blocked
-			AND	( SELF IS unknown AND COUNT tentative_three FROM related == 0 AND COUNT three FROM related == 0
+    tentative_three WHEN
+			( SELF IS unknown AND COUNT tentative_three FROM related == 0 AND COUNT three FROM related == 0
 	            OR SELF IS tentative_three AND COUNT tentative_three FROM related == 1);
 
-    tentative_four WHEN NOT ANY related ARE blocked
-			AND	( SELF IS unknown AND COUNT tentative_four FROM related == 0 AND COUNT four FROM related == 0
+    tentative_four WHEN
+				( SELF IS unknown AND COUNT tentative_four FROM related == 0 AND COUNT four FROM related == 0
 	            OR SELF IS tentative_four AND COUNT tentative_four FROM related == 1);
 
-	blocked WHEN TIMER < 40; # yuk. we need to sit in blocked long enough for the other machines to stabilise 
 	unknown DEFAULT;
 
 	ENTER INIT {

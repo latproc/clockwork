@@ -27,14 +27,12 @@ Philosopher MACHINE left, right {
     OPTION eat_time 20;  # time it takes to eat
     OPTION timer 20;     # time spent between meals
     
-    full FLAG;
     okToStart FLAG;
     okToStop FLAG;
 
     finished WHEN SELF IS finishing || SELF IS finished && TIMER < timer;
-	finishing WHEN left.owner == SELF.NAME && right.owner == SELF.NAME  && TIMER >= eat_time;
-	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME,
-        TAG full WHEN TIMER > 10;
+	finishing WHEN left.owner == SELF.NAME && right.owner == SELF.NAME && SELF == eating && TIMER >= eat_time;
+	eating WHEN left.owner == SELF.NAME && right.owner == SELF.NAME;
 	starting WHEN left.owner == "noone" && right.owner == "noone";
 	waiting DEFAULT;
     

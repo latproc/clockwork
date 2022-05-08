@@ -43,6 +43,7 @@ static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
 static unsigned long cycle_time_ = 1000;
 static bool c_export = false;
+static bool fix_invalid_auto_transitions = false;
 
 static std::map<std::string, int> thread_cpu_affinities;
 
@@ -137,3 +138,6 @@ void set_cpu_affinity(const char *thread_name, int cpu) {
     property_name += "_thread_cpu_affinity";
     thread_cpu_affinities[property_name] = cpu;
 }
+
+bool fix_invalid_transitions() { return fix_invalid_auto_transitions; }
+void set_fix_invalid_transitions(bool which) { fix_invalid_auto_transitions = which; }

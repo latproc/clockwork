@@ -29,9 +29,13 @@
 
 class MachineInstance;
 
+enum class StateChangeReason { forced, automatic, transition };
+
 struct SetStateActionTemplate : public ActionTemplate {
-    SetStateActionTemplate(CStringHolder target, Value newstate);
-    SetStateActionTemplate(CStringHolder target, Predicate *expr);
+    SetStateActionTemplate(CStringHolder target, Value newstate,
+                           StateChangeReason reason = StateChangeReason::forced);
+    SetStateActionTemplate(CStringHolder target, Predicate *expr,
+                           StateChangeReason reason = StateChangeReason::forced);
 
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override;
@@ -42,6 +46,7 @@ struct SetStateActionTemplate : public ActionTemplate {
     CStringHolder target;
     Value new_state;
     std::string trigger_event;
+    StateChangeReason reason;
 
   private:
     Predicate *expr = nullptr;
@@ -66,6 +71,7 @@ struct SetStateAction : public Action {
   private:
     Predicate *expr = nullptr;
     Condition condition;
+    StateChangeReason reason;
 
   protected:
     uint64_t authority;
