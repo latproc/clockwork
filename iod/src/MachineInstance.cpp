@@ -1037,6 +1037,7 @@ void MachineInstance::idle() {
                 ss << _name << ": Action " << *curr << " failed: " << curr->error();
                 MessageLog::instance()->add(ss.str().c_str());
                 NB_MSG << ss.str() << "\n";
+                has_work = true; // TODO: Need more testing aroud this.
             }
             else if (res != Action::Complete) {
                 DBG_M_ACTIONS << "Action " << *curr << " is not complete, waiting...\n";
