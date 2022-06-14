@@ -55,6 +55,7 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/cJSON.c
     ${CLOCKWORK_DIR}/DebugExtra.cpp
     ${CLOCKWORK_DIR}/value.cpp
+    ${CLOCKWORK_DIR}/clock.cpp
     ${CLOCKWORK_DIR}/symboltable.cpp
     ${CLOCKWORK_DIR}/options.cpp
     ${CLOCKWORK_DIR}/SocketMonitor.cpp
