@@ -737,6 +737,12 @@ struct ConnectionThread {
                         if (!done) {
                             connection = anetTcpConnect(msg_buffer, Options::instance()->host(),
                                                         Options::instance()->port());
+                            if (connection != -1) {
+                                char err_buf[100];
+                                if (anetTcpKeepAlive(err_buf, connection) == ANET_ERR) {
+                                    std::cerr << "Warning: error setting keep alive: " << err_buf << "\n";
+                                }
+                            }
                         }
                         if (connection == -1) {
                             std::cerr << msg_buffer << " retrying in " << (retry_delay / 1000)
