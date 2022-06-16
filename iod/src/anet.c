@@ -1,3 +1,4 @@
+/* Based on code per the following */
 /*  anet.c -- Basic TCP socket stuff made a bit less boring
 
     Copyright (c) 2006-2010, Salvatore Sanfilippo <antirez at gmail dot com>
@@ -104,6 +105,21 @@ int anetTcpKeepAlive(char *err, int fd) {
     int yes = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes)) == -1) {
         anetSetError(err, "setsockopt SO_KEEPALIVE: %s\n", strerror(errno));
+        return ANET_ERR;
+    }
+    int idle = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle)) == -1) {
+        anetSetError(err, "setsockopt TCP_KEEPALIVE: %s\n", strerror(errno));
+        return ANET_ERR;
+    }
+    int interval = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval)) == -1) {
+        anetSetError(err, "setsockopt TCP_KEEPINTVL: %s\n", strerror(errno));
+        return ANET_ERR;
+    }
+    int maxpkt = 10;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &maxpkt, sizeof(maxpkt)) == -1) {
+        anetSetError(err, "setsockopt TCP_KEEPCNT: %s\n", strerror(errno));
         return ANET_ERR;
     }
     return ANET_OK;
