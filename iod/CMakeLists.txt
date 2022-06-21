@@ -25,7 +25,11 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
-		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+	include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
+endif()
+
+if (USE_SOEM)
+	add_subdirectory(ext/SOEM)
 endif()
 
 
