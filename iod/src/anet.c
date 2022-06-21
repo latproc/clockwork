@@ -108,8 +108,8 @@ int anetTcpKeepAlive(char *err, int fd) {
         return ANET_ERR;
     }
     int idle = 1;
-    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle)) == -1) {
-        anetSetError(err, "setsockopt TCP_KEEPALIVE: %s\n", strerror(errno));
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) == -1) {
+        anetSetError(err, "setsockopt TCP_KEEPIDLE: %s\n", strerror(errno));
         return ANET_ERR;
     }
     int interval = 1;
