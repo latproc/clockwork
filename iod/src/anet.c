@@ -107,11 +107,19 @@ int anetTcpKeepAlive(char *err, int fd) {
         anetSetError(err, "setsockopt SO_KEEPALIVE: %s\n", strerror(errno));
         return ANET_ERR;
     }
+#ifdef __APPLE__
+    int alive = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &alive, sizeof(alive)) == -1) {
+        anetSetError(err, "setsockopt TCP_KEEPALIVE: %s\n", strerror(errno));
+        return ANET_ERR;
+    }
+#else
     int idle = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) == -1) {
         anetSetError(err, "setsockopt TCP_KEEPIDLE: %s\n", strerror(errno));
         return ANET_ERR;
     }
+#endif
     int interval = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval)) == -1) {
         anetSetError(err, "setsockopt TCP_KEEPINTVL: %s\n", strerror(errno));
