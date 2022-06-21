@@ -1,0 +1,4 @@
+[submodule "SOEM"]
+	path = iod/ext/SOEM
+	url = https://github.com/OpenEtherCATsociety/SOEM.git
+	branch = master
