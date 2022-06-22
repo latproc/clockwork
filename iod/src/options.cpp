@@ -44,6 +44,7 @@ static bool is_tracing = false;
 static unsigned long cycle_time_ = 1000;
 static bool c_export = false;
 static bool fix_invalid_auto_transitions = false;
+static std::string ethercat_adapter_name;
 
 static std::map<std::string, int> thread_cpu_affinities;
 
@@ -141,3 +142,11 @@ void set_cpu_affinity(const char *thread_name, int cpu) {
 
 bool fix_invalid_transitions() { return fix_invalid_auto_transitions; }
 void set_fix_invalid_transitions(bool which) { fix_invalid_auto_transitions = which; }
+
+void set_ethercat_adapter(const char *adapter) {
+    ethercat_adapter_name = adapter;
+}
+
+const char *ethercat_adapter() {
+    return ethercat_adapter_name.c_str();
+}
