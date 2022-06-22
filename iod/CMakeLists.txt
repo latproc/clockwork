@@ -30,6 +30,13 @@ endif()
 
 if (USE_SOEM)
 	add_subdirectory(ext/SOEM)
+	set(CW_ETHERCAT_DIR "${CMAKE_BINARY_DIR}/ext/SOEM")
+	if("${CMAKE_SYSTEM}" MATCHES "Linux")
+		set(CW_ETHERCAT_LIB "-lsoem -lpthread -lrt")
+	else()
+		set(CW_ETHERCAT_LIB "-lsoem -lpthread -lpcap")
+	endif()
+
 endif()
 
 
@@ -202,7 +209,11 @@ set (Clockwork_Headers
     src/ExportState.h
 	src/AutoStats.h src/Configuration.h
 	src/ResetAction.h src/LoadPropertiesAction.h
+
 )
+if (USE_SOEM)
+	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
+endif()
 
 set (Clockwork_SRCS
 	${Clockwork_Headers}
@@ -234,7 +245,20 @@ set (Clockwork_SRCS
 	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
 	src/ResetAction.cpp src/LoadPropertiesAction.cpp
 	)
+if (USE_SOEM)
+	include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/soem")
+	include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/osal")
+	include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/oshw")
+	if("${CMAKE_SYSTEM}" MATCHES "Linux")
+		include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/osal/linux")
+		include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/oshw/linux")
+	else()
+		include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/osal/macosx")
+		include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/oshw/macosx")
+	endif()
 
+	LIST (APPEND Clockwork_SRCS "src/EtherCATthread.cpp")
+endif()
 add_library(cw_interpreter ${Clockwork_SRCS})
 set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 
@@ -242,6 +266,15 @@ add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 #target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
 target_link_libraries(cw cw_interpreter cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
+
+# Experimental cw with SOEM EtherCAT library support
+if(USE_SOEM)
+add_executable(cw_ecat src/cw.cpp) # ${Clockwork_SRCS})
+set_target_properties (cw_ecat PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR;SOEM_ETHERCAT" )
+target_link_directories(cw_ecat PRIVATE "${CW_ETHERCAT_DIR}")
+target_link_libraries(cw_ecat cw_interpreter cw_client "dl" ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
+endif()
+
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
@@ -386,7 +419,9 @@ add_subdirectory(tests)
 endif()
 
 install(TARGETS cw iosh iocmd device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
-
+if(USE_SOEM)
+	install(TARGETS cw_ecat RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+endif()
 install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
 install(TARGETS cw_interpreter ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
 #install(DIRECTORY src/ DESTINATION include/clockwork FILES_MATCHING PATTERN "*.h")

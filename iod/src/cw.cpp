@@ -19,7 +19,7 @@
 */
 
 #include <unistd.h>
-//#include "ECInterface.h"
+#include "EtherCATthread.h"
 #include "ControlSystemMachine.h"
 #include "IOComponent.h"
 #include <sstream>
@@ -41,6 +41,9 @@
 #include "cJSON.h"
 #ifndef EC_SIMULATOR
 #include "tool/MasterDevice.h"
+#endif
+#ifdef SOEM_ETHERCAT
+#include "EtherCATthread.h"
 #endif
 
 #define __MAIN__
@@ -790,6 +793,17 @@ int main(int argc, char const *argv[]) {
     boost::thread process(boost::ref(processMonitor));
 
     MQTTInterface::instance()->activate();
+
+#ifdef SOEM_ETHERCAT
+    if (strlen(ethercat_adapter()) > 0 ) {
+        std::cout << "Using SOEM EtherCAT on interface " << ethercat_adapter() << "\n";
+        EtherCATthread::instance()->activate(ethercat_adapter());
+        EtherCATthread::instance()->stop();
+    }
+    else {
+        std::cout << "Requires ethernet interface name: -e name\n";
+    }
+#endif
 
     char buf[100];
     size_t response_len;

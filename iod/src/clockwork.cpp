@@ -107,8 +107,9 @@ void usage(int argc, char const *argv[]) {
     std::cerr
         << "Usage: " << argv[0] << " [-v] [-t] [-l logfilename] [-i persistent_store]\n"
         << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
-        << "[-mp modbus_port] [-ps persistent_store_port]"
-        << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics"
+        << "[-mp modbus_port] [-ps persistent_store_port] "
+        << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics\n"
+        << "[--fix-invalid true [-e ethernet_interface]"
         << "\n";
 }
 
@@ -993,6 +994,9 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
                 MessageLog::instance()->add(err);
                 }
             */
+        }
+        else if (strcmp(argv[i], "-e") == 0 && i < argc - 1) {
+            set_ethercat_adapter(argv[++i]);
         }
         else if (strcmp(argv[i], "-c") == 0 && i < argc - 1) { // debug config file
             set_debug_config(argv[++i]);

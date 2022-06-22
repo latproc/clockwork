@@ -79,6 +79,9 @@ void set_cpu_affinity(const char *thread_name, int cpu);
 bool fix_invalid_transitions();
 void set_fix_invalid_transitions(bool which);
 
+void set_ethercat_adapter(const char *adapter);
+const char *ethercat_adapter();
+
 #ifdef __cplusplus
 }
 #endif

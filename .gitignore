@@ -90,6 +90,7 @@ plugins/*.so*
 
 #built tools
 iod/cw
+iod/cw_ecat
 iod/modbusd
 iod/iod
 iod/iod_sdo
