@@ -1152,8 +1152,7 @@ CATCH SYMBOL action {
 	if (current_machineclass->receives.count(Message($2)) == 0) {
 		MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
 		mc->setActionTemplates(*current_actions);
-		current_actions->clear();
-		current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
+		current_machineclass->receives.insert(std::make_pair(Message($2), mc));
 	}
 	else {
 		std::stringstream ss;
@@ -1162,6 +1161,7 @@ CATCH SYMBOL action {
 		error_messages.push_back(ss.str());
 		++num_errors;
 	}
+	current_actions->clear();
 }
 |
 RECEIVE SYMBOL /* message */ error_clause action  {
@@ -1174,7 +1174,7 @@ RECEIVE SYMBOL /* message */ error_clause action  {
         MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
         mc->setActionTemplates(*current_actions);
         current_actions->clear();
-        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
+        current_machineclass->receives.insert(std::make_pair(Message($2), mc));
     }
     else {
         std::stringstream ss;
@@ -1192,11 +1192,11 @@ RECEIVE SYMBOL /* message */ WITHIN SYMBOL error_clause action  {
         DBG_PARSER << *at << ", ";
     }
     DBG_PARSER << "\n";
-    if (current_machineclass->receives.count(Message($2)) == 0) {
-        MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
-        mc->setActionTemplates(*current_actions);
-        current_actions->clear();
-        current_machineclass->receives.insert(std::make_pair(Message(strdup($2)), mc));
+    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
+    mc->setActionTemplates(*current_actions);
+	MachineCommandTemplate *handler = current_machineclass->findMatchingCommand($2, $4);
+    if (!handler) {
+        current_machineclass->receives.insert(std::make_pair(Message($2), mc));
     }
     else {
         std::stringstream ss;
@@ -1205,6 +1205,7 @@ RECEIVE SYMBOL /* message */ WITHIN SYMBOL error_clause action  {
         error_messages.push_back(ss.str());
         ++num_errors;
     }
+    current_actions->clear();
 	cleanupErrorClause(true);
 }
 |

@@ -1918,25 +1918,46 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
 			const std::string short_name, bool response_required) {
 	std::map<Message, MachineCommand*>::iterator receive_handler_i = receives_functions.find(Message(m.getText().c_str()));
 	if (receive_handler_i != receives_functions.end()) {
-		if (debug()) {
-			DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
-				<< "handler: " << *((*receive_handler_i).second) << "\n";
-		}
+        while (receive_handler_i->first == m) {
+
+            if (debug()) {
+                DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first
+                                << "\n"
+                                << "handler: " << *((*receive_handler_i).second) << "\n";
+            }
 #ifndef EC_SIMULATOR
-		if (state_machine && state_machine->name == "ETHERCAT_BUS") {
-			if (short_name == "activate"
-					&& (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED") ) {
-				ProcessingThread::instance()->machine.requestActivation(true);
-			}
-			else if (short_name == "deactivate" && current_state.getName() == "ACTIVE")
-				ProcessingThread::instance()->machine.requestDeactivation(true);
-			return NULL;
-		}
+            if (state_machine && state_machine->name == "ETHERCAT_BUS") {
+                if (short_name == "activate" &&
+                    (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED")) {
+                    ProcessingThread::instance()->machine.requestActivation(true);
+                }
+                else if (short_name == "deactivate" && current_state.getName() == "ACTIVE") {
+                    ProcessingThread::instance()->machine.requestDeactivation(true);
+                }
+                return NULL;
+            }
 #endif
-		if (response_required)
-			prepareCompletionMessage(from, short_name);
-		return (*receive_handler_i).second->retain();
-	}
+            auto handler = receive_handler_i->second;
+            if (strlen(handler->getStateName().get()) > 0) {
+                DBG_M_MESSAGING << "handler has state requirement " << handler->getStateName().get() << "\n";
+                if ( current_state.getName() != handler->getStateName().get()) {
+                    receive_handler_i++;
+                    continue;
+                }
+            }
+            else {
+                DBG_M_MESSAGING << "no state requirement for " << receive_handler_i->first << "\n";
+            }
+            if (response_required) {
+                prepareCompletionMessage(from, short_name);
+            }
+            return (*receive_handler_i).second->retain();
+        }
+        if (response_required) {
+            prepareCompletionMessage(from, short_name);
+        }
+        return nullptr;
+    }
 	else if (from == this) {
 		if (short_name == m.getText()) {
 			if (response_required)
