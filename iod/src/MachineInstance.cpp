@@ -2189,6 +2189,7 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                 DBG_M_MESSAGING << "handler has state requirement " << handler->getStateName().get() << "\n";
                 if ( current_state.getName() != handler->getStateName().get()) {
                     receive_handler_i++;
+                    continue;
                 }
             }
             else {
@@ -2199,6 +2200,10 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
             }
             return (*receive_handler_i).second->retain();
         }
+        if (response_required) {
+            prepareCompletionMessage(from, short_name);
+        }
+        return nullptr;
     }
     else if (from == this) {
         if (short_name == m.getText()) {
