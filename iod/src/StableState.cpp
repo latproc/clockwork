@@ -2,6 +2,8 @@
 #include "StableState.h"
 #include "MachineInstance.h"
 #include <algorithm>
+#include "Logger.h"
+#include "DebugExtra.h"
 
 std::ostream &operator<<(std::ostream &out, const StableState &ss) { return ss.operator<<(out); }
 
@@ -40,9 +42,11 @@ void StableState::collectTimerPredicates() {
         const ConditionHandler &ch = *iter++;
         ch.condition.predicate->findTimerClauses(timer_predicates);
     }
-    std::list<Predicate *>::const_iterator ti = timer_predicates.begin();
-    while (ti != timer_predicates.end()) {
-        std::cout << "subcondition on " << state_name << " timer clause: " << *(*ti++) << "\n";
+    if (LogState::instance()->includes((DebugExtra::instance()->DEBUG_AUTOSTATES))) {
+        std::list<Predicate *>::const_iterator ti = timer_predicates.begin();
+        while (ti != timer_predicates.end()) {
+            DBG_AUTOSTATES << "subcondition on " << state_name << " timer clause: " << *(*ti++) << "\n";
+        }
     }
 }
 
