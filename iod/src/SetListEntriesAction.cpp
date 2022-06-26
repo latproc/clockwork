@@ -69,10 +69,10 @@ Action::Status SetListEntriesAction::run() {
             setListEntries((unsigned long)source.fValue);
         }
         else if (source.kind == Value::t_symbol) {
-            const char *src = source.asString().c_str();
+            std::string source_str = source.asString();
             
             long val;
-            if (owner->getValue(src).asInteger(val) ) {
+            if (owner->getValue(source_str.c_str()).asInteger(val) ) {
                 unsigned long bitmap = (unsigned long) val;
                 setListEntries(bitmap);
             }
