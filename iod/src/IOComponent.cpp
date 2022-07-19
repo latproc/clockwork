@@ -1438,6 +1438,10 @@ void IOComponent::setupIOMap() {
         unsigned int offset = ioc->address.io_offset;
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
+
+        if (offset < min_offset) {
+            min_offset = offset;
+        }
         //bitpos = bitpos % 8;
         if (ioc->address.bitlen >= 8) {
             offset += ioc->address.bitlen / 8 - 1;
@@ -1446,9 +1450,6 @@ void IOComponent::setupIOMap() {
             max_offset = offset;
         }
         assert(max_offset < 10000);
-        if (offset < min_offset) {
-            min_offset = offset;
-        }
     }
     if (min_offset > max_offset) {
         min_offset = max_offset;
