@@ -1045,6 +1045,8 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
                 set_cpu_affinity("processing", proc_cpu);
             }
         }
+#if 0
+        // disabled this code as it isn't working properly yet
         else if (strcmp(argv[i], "--fix-invalid") == 0) {
             std::string abort = argv[++i];
             bool val = fix_invalid_transitions();
@@ -1056,6 +1058,7 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
             }
             set_fix_invalid_transitions(val);
         }
+#endif
         else if (*(argv[i]) == '-' && strlen(argv[i]) > 1) {
             usage(argc, argv);
             return 2;

@@ -85,6 +85,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
     MachineClass *owner_state_machine = owner->getStateMachine();
     const std::string &new_state_str(new_state.asString());
 
+#if 0
+    // Disabled this code as this is the wrong place to execute it (i.e., it's too late)
+    //
     // Automatic changes to stable states may become invalid due to other
     // intermediate changes in related machines. If this is an automatic
     // state change, check that it is still valid and if not, use the
@@ -110,6 +113,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
             }
         }
     }
+#endif
 
     if (new_state.kind != Value::t_symbol && new_state.kind != Value::t_string) {
         auto &ss = MessageLog::instance()->get_stream();
