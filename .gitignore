@@ -1,3 +1,6 @@
+# CW Code
+code/*
+
 # Compiled source #
 ###################
 *.com
@@ -87,6 +90,8 @@ private_tests/
 iod/old/
 plugins/*.c
 plugins/*.so*
+ethercat
+ec_tool
 
 #built tools
 iod/cw
