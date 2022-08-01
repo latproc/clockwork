@@ -2165,7 +2165,8 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
     std::map<Message, MachineCommand *>::iterator receive_handler_i =
         receives_functions.find(Message(m.getText().c_str()));
     if (receive_handler_i != receives_functions.end()) {
-        while (receive_handler_i->first == m) {
+
+        while (receive_handler_i != receives_functions.end() && receive_handler_i->first == m) {
 
             if (debug()) {
                 DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first
@@ -2184,7 +2185,7 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                 return NULL;
             }
 #endif
-            auto handler = receive_handler_i->second;
+            auto & handler = receive_handler_i->second;
             if (strlen(handler->getStateName().get()) > 0) {
                 DBG_M_MESSAGING << "handler has state requirement " << handler->getStateName().get() << "\n";
                 if ( current_state.getName() != handler->getStateName().get()) {
