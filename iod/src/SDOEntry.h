@@ -21,7 +21,6 @@
 #ifndef __SDOEntry
 #define __SDOEntry
 
-#include <iostream>
 #include <sys/types.h>
 
 #ifndef EC_SIMULATOR

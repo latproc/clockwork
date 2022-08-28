@@ -20,7 +20,6 @@
 
 #include "Action.h"
 #include "Expression.h"
-#include <iostream>
 
 class MachineCommandTemplate;
 class MachineCommand;

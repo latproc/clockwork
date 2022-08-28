@@ -1,7 +1,7 @@
 #ifndef __FILTERING_H__
 #define __FILTERING_H__
 
-#include <boost/thread.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 
 class Buffer {
   public:

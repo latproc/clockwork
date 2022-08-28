@@ -20,7 +20,6 @@
 #pragma once
 #include "Action.h"
 #include "symboltable.h"
-#include <iostream>
 
 class MachineInstance;
 

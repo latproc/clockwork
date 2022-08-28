@@ -10,6 +10,7 @@
 #include <fstream>
 #include <list>
 #include <vector>
+#include <iostream>
 
 std::list<MachineClass *> MachineClass::all_machine_classes;
 std::map<std::string, MachineClass> MachineClass::machine_classes;

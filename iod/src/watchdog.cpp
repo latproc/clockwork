@@ -4,7 +4,6 @@
 #include "value.h"
 #include <iostream>
 #include <map>
-#include <string>
 #include <sys/time.h>
 #include <unistd.h>
 

@@ -36,6 +36,8 @@
 #include <fstream>
 #include <list>
 #include <stdlib.h>
+#include <iostream>
+
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
 #ifdef USE_SDO

@@ -22,7 +22,6 @@
 #define __SimulaterRawOutput
 
 #include "IOComponent.h"
-#include <iostream>
 #include <sys/time.h>
 
 class SimulatedRawOutput : public IOComponent {

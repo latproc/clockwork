@@ -21,9 +21,9 @@
 #ifndef __MODBUSINTERFACE_H__
 #define __MODBUSINTERFACE_H__ 1
 
-#include <iostream>
 #include <list>
 #include <map>
+#include <string>
 
 /*  when a Modbus addressable object changes value, it informs the interface by calling update()
 

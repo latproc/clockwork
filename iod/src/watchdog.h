@@ -2,7 +2,6 @@
 #define __WATCHDOG__H__
 
 #include "boost/thread/mutex.hpp"
-#include <iostream>
 #include <map>
 #include <string>
 
@@ -27,8 +26,8 @@ class Watchdog {
     static std::map<std::string, Watchdog *> all;
     static bool anyTriggered(int64_t now = 0);
     static bool anyTriggered(uint64_t now);
-    static bool showTriggered(int64_t now = 0, bool reset = false, std::ostream &out = std::cerr);
-    static bool showTriggered(uint64_t now, bool reset = false, std::ostream &out = std::cerr);
+    static bool showTriggered(int64_t now, bool reset, std::ostream &out);
+    static bool showTriggered(uint64_t now, bool reset, std::ostream &out);
 
   private:
     boost::mutex mutex;

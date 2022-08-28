@@ -23,7 +23,6 @@
 
 #include "Action.h"
 #include "symboltable.h"
-#include <iostream>
 
 /*
     A MachineCommand executes a list of actions,

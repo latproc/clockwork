@@ -1,7 +1,6 @@
 #ifndef __STABLESTATE_H_
 #define __STABLESTATE_H_
 
-#include <iostream>
 #include <list>
 #include <string>
 

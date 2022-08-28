@@ -23,7 +23,7 @@
 
 #include "IOComponent.h"
 #include <ctime>
-#include <iostream>
+#include <sstream>
 
 class SimulatedRawInput : public IOComponent {
   public:

@@ -22,7 +22,6 @@
 #include "Action.h"
 #include "Expression.h"
 #include "symboltable.h"
-#include <iostream>
 
 struct ExpressionActionTemplate : public ActionTemplate {
     enum opType { opInc, opDec, opSet };

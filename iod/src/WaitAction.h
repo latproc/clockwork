@@ -23,7 +23,6 @@
 #include "Action.h"
 #include "State.h"
 #include "symboltable.h"
-#include <iostream>
 
 class MachineInstance;
 

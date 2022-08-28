@@ -9,8 +9,8 @@
 #ifndef MessageHeader_hpp
 #define MessageHeader_hpp
 
-#include <iostream>
 #include <stdint.h>
+#include <ostream>
 
 struct MessageHeader {
     uint32_t msgid;

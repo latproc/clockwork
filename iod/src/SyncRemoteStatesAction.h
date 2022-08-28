@@ -25,7 +25,6 @@
 #include "Message.h"
 #include "State.h"
 #include "symboltable.h"
-#include <iostream>
 #include <zmq.hpp>
 
 class Channel;

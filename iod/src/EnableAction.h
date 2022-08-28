@@ -21,7 +21,6 @@
 #pragma once
 #include "Action.h"
 #include "symboltable.h"
-#include <iostream>
 #include <list>
 
 class MachineInstance;

@@ -23,7 +23,6 @@
 
 #include "ExportState.h"
 #include "symboltable.h"
-#include <iostream>
 #include <list>
 
 class MachineInstance;

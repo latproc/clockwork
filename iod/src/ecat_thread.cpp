@@ -25,7 +25,6 @@
 #include <unistd.h>
 #include <zmq.hpp>
 
-#include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 #include <fstream>

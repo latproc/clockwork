@@ -22,7 +22,6 @@
 #define cwlang_symboltable_h
 
 #include "value.h"
-#include <iostream>
 #include <list>
 #include <map>
 #include <set>

@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <ecrt.h>
 #include <fstream>
-#include <iostream>
+#include <ostream>
 #include <iterator>
 #include <libxml/xmlreader.h>
 #include <map>

@@ -141,6 +141,8 @@ class ChannelInternals {
     boost::thread *router_thread;
     ChannelInternals() : command_sock(0), cmd_sock_info(0), router_thread(0) {}
     std::string getCommandSocketName(bool client_endpoint);
+    boost::thread *monitor_thread = nullptr;
+    boost::thread *subscriber_thread = nullptr;
 };
 
 MachineRef::MachineRef() : refs(1) {}
@@ -157,8 +159,8 @@ ChannelImplementation::~ChannelImplementation() {}
 Channel::Channel(const std::string ch_name, const std::string type)
     : MachineInstance(ch_name.c_str(), type.c_str()), ChannelImplementation(), internals(0),
       name(ch_name), port(0), mif(0), communications_manager(0), monit_subs(0), monit_pubs(0),
-      connect_responder(0), disconnect_responder(0), monitor_thread(0), throttle_time(0),
-      connections(0), aborted(false), subscriber_thread(0), started_(false), cmd_client(0),
+      connect_responder(0), disconnect_responder(0), throttle_time(0),
+      connections(0), aborted(false), started_(false), cmd_client(0),
       cmd_server(0), last_throttled_send(0), does_monitor(false), does_share(false),
       does_update(false) {
     internals = new ChannelInternals();
@@ -773,7 +775,7 @@ void Channel::startServer(ProtocolType proto) {
         DBG_CHANNELS << "Channel::startServer() called when mif is already allocated\n";
         return;
     }
-    if (monitor_thread) {
+    if (internals->monitor_thread) {
         DBG_CHANNELS << "Channel " << name << " already prepared as a server\n";
         return;
     }
@@ -785,7 +787,7 @@ void Channel::startServer(ProtocolType proto) {
     disconnect_responder = new ChannelDisconnectMonitor(this);
     monit_subs->addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
     monit_subs->addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
-    monitor_thread = new boost::thread(boost::ref(*monit_subs));
+    internals->monitor_thread = new boost::thread(boost::ref(*monit_subs));
     mif->start();
 }
 
@@ -822,7 +824,7 @@ void Channel::startClient() {
     //cmd_socket = &subscription_manager.setup;
     monit_subs->addResponder(ZMQ_EVENT_ACCEPTED, connect_responder);
     monit_subs->addResponder(ZMQ_EVENT_DISCONNECTED, disconnect_responder);
-    monitor_thread = new boost::thread(boost::ref(*monit_subs));
+    internals->monitor_thread = new boost::thread(boost::ref(*monit_subs));
     mif->start();
 }
 
@@ -832,10 +834,10 @@ void Channel::startClient() {
 void Channel::stopServer() {
     return;
 
-    if (monitor_thread) {
+    if (internals->monitor_thread) {
         monit_subs->abort();
-        delete monitor_thread;
-        monitor_thread = 0;
+        delete internals->monitor_thread;
+        internals->monitor_thread = nullptr;
     }
     if (monit_subs) {
         if (connect_responder) {
@@ -1177,7 +1179,7 @@ void Channel::sendMessage(const char *msg, zmq::socket_t &sock) {
     char tnam[100];
     int pgn_rc = pthread_getname_np(pthread_self(), tnam, 100);
     assert(pgn_rc == 0);
-    if (!subscriber_thread) {
+    if (!internals->subscriber_thread) {
         //return ::sendMessage(msg, sock);
         safeSend(sock, msg, strlen(msg));
     }
@@ -1192,7 +1194,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
     int pgn_rc = pthread_getname_np(pthread_self(), tnam, 100);
     assert(pgn_rc == 0);
 
-    if (!subscriber_thread) {
+    if (!internals->subscriber_thread) {
         DBG_CHANNELS << tnam << " Channel " << name << " sendMessage() sending " << msg
                      << " directly\n";
         //return ::sendMessage(msg, sock, response, source);
@@ -1280,7 +1282,7 @@ void Channel::startSubscriber() {
     assert(pgn_rc == 0);
     //DBG_CHANNELS << "Channel " << name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
 
-    subscriber_thread = new boost::thread(boost::ref(*this));
+    internals->subscriber_thread = new boost::thread(boost::ref(*this));
 
     // create a socket to communicate with the newly started subscriber thread
     cmd_client = createCommandSocket(true);

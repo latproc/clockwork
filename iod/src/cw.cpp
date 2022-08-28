@@ -18,20 +18,15 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <iostream>
 #include <unistd.h>
-#include "EtherCATthread.h"
 #include "ControlSystemMachine.h"
 #include "IOComponent.h"
-#include <sstream>
 #include <stdio.h>
 #include <zmq.hpp>
 
-#include "boost/filesystem/operations.hpp"
-#include "boost/filesystem/path.hpp"
-#include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
-#include <fstream>
 #include <list>
 #include <map>
 #include <signal.h>
@@ -51,7 +46,6 @@
 #include "ClientInterface.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
-#include "IODCommand.h"
 #include "IODCommands.h"
 #include "Logger.h"
 #include "MQTTInterface.h"
@@ -67,7 +61,6 @@
 #include "cwlang.h"
 #include "symboltable.h"
 #include <libgen.h>
-#include <stdio.h>
 
 bool program_done = false;
 bool machine_is_ready = false;

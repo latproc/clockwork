@@ -1,8 +1,7 @@
 #ifndef __SHAREDWORKSET_H
 #define __SHAREDWORKSET_H
 
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 #include <set>
 
 class MachineInstance;

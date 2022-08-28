@@ -1,7 +1,6 @@
 #ifndef __PersistentStore_h__
 #define __PersistentStore_h__
 
-#include <iostream>
 #include <map>
 #include <string>
 #include <utility>

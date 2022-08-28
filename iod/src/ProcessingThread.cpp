@@ -22,41 +22,28 @@
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
 #include <assert.h>
-#include <sstream>
 #include <stdio.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #include <zmq.hpp>
 
 #include "cJSON.h"
-#include <boost/thread.hpp>
-#include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
-#include <fstream>
 #include <list>
-#include <map>
 #include <set>
-#include <utility>
 
 #include "ClientInterface.h"
 #include "DebugExtra.h"
-#include "Dispatcher.h"
 #include "IODCommand.h"
 #include "IODCommands.h"
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
-#include "ModbusInterface.h"
-#include "PredicateAction.h"
-#include "Scheduler.h"
 #include "Statistic.h"
 #include "Statistics.h"
 #include "clockwork.h"
 #include "options.h"
 #include "symboltable.h"
-#include <signal.h>
-#include <stdio.h>
 
 #include "Channel.h"
 #include "ControlSystemMachine.h"
@@ -64,7 +51,7 @@
 #include "watchdog.h"
 #include <pthread.h>
 
-#include <boost/foreach.hpp>
+#include <iostream>
 
 extern bool program_done;
 extern bool machine_is_ready;
@@ -601,7 +588,7 @@ void ProcessingThread::operator()() {
             }
 
             //if (Watchdog::anyTriggered(curr_t))
-            //  Watchdog::showTriggered(curr_t, true);
+            //  Watchdog::showTriggered(curr_t, true, std::cerr);
             systems_waiting = pollZMQItems(poll_wait, items, 6 + num_channels, ecat_sync,
                                            resource_mgr, dispatch_sync, sched_sync, ecat_out);
 

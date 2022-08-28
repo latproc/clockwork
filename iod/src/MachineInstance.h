@@ -28,6 +28,7 @@
 #include "MachineClass.h"
 #include "MachineCommandAction.h"
 #include "Message.h"
+#include "Receiver.h"
 #include "ModbusInterface.h"
 #include "Parameter.h"
 #include "Plugin.h"
@@ -39,7 +40,7 @@
 #include "dynamic_value.h"
 #include "symboltable.h"
 #include <boost/foreach.hpp>
-#include <boost/thread.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 #include <boost/thread/mutex.hpp>
 #include <cassert>
 #include <list>

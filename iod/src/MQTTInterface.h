@@ -23,7 +23,6 @@
 
 #include "Message.h"
 #include "symboltable.h"
-#include <iostream>
 #include <mosquitto.h>
 #include <sys/types.h>
 
