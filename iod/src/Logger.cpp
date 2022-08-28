@@ -18,27 +18,85 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <fstream>
 #include "Logger.h"
 #include "boost/thread/mutex.hpp"
 #include <cassert>
-#include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <stdio.h>
 #include <string>
 #include <sys/time.h>
 
+class Logger::Internals {
+public:
+    static Logger *logger_instance;
+    Level log_level;
+    std::stringstream *dummy_output;
+    std::ostream *log_stream;
+    boost::mutex mutex_;
+
+    Internals() : log_level(None), dummy_output(0), log_stream(&std::cout) {}
+};
+
+Logger::Internals * Logger::internals = nullptr;
 LogState *LogState::state_instance = 0;
 static std::string header;
-Logger *Logger::logger_instance = 0;
+Logger *Logger::Internals::logger_instance = 0;
 struct timeval last_time;
+
+LogState *LogState::instance() {
+    if (!state_instance) {
+        state_instance = new LogState;
+    }
+    return state_instance;
+}
+
+void LogState::cleanup() { delete state_instance; }
+
+int LogState::define(std::string new_name) {
+    int logid = name_map[new_name] = flag_names.size();
+    flag_names.push_back(new_name);
+    return logid;
+}
+int LogState::lookup(const std::string &name) {
+    NameMapIterator iter = name_map.find(name);
+    if (iter != name_map.end()) {
+        return (*iter).second;
+    }
+    else {
+        return 0;
+    }
+}
+int LogState::insert(int flag_num) {
+    state_flags.insert(flag_num);
+    return flag_num;
+}
+int LogState::insert(std::string name) {
+    NameMapIterator iter = name_map.find(name);
+    if (iter != name_map.end()) {
+        int n = (*iter).second;
+        state_flags.insert(n);
+        return n;
+    }
+    return -1;
+}
+void LogState::erase(int flag_num) { state_flags.erase(flag_num); }
+void LogState::erase(std::string name) {
+    NameMapIterator iter = name_map.find(name);
+    if (iter != name_map.end()) {
+        state_flags.insert((*iter).second);
+    }
+}
+bool LogState::includes(std::string name) { return name_map.find(name) != name_map.end(); }
+
 
 int Logger::None;
 int Logger::Debug;
 int Logger::Important;
 int Logger::Everything;
 
-Logger::Logger() : log_level(None), dummy_output(0), log_stream(&std::cout) {
+Logger::Logger() {
+    internals = new Internals();
     last_time.tv_sec = 0;
     last_time.tv_usec = 0;
     None = LogState::instance()->insert(LogState::instance()->define("None"));
@@ -47,8 +105,31 @@ Logger::Logger() : log_level(None), dummy_output(0), log_stream(&std::cout) {
     Everything = LogState::instance()->insert(LogState::instance()->define("Everything"));
 }
 
-class Internals {
+Logger::~Logger() {
+    delete internals;
+}
+
+Logger *Logger::instance() {
+    if (!internals->logger_instance) {
+        internals->logger_instance = new Logger;
+    }
+    return internals->logger_instance;
+}
+Logger::Level Logger::level() { return internals->log_level; }
+
+void Logger::setLevel(Level n) { internals->log_level = n; }
+
+void Logger::setOutputStream(std::ostream *out) { internals->log_stream = out; }
+
+void Logger::cleanup() {
+    delete internals->logger_instance;
+    Logger::instance()->internals->logger_instance = nullptr;
+}
+
+class FileLogger::Internals {
   public:
+    boost::mutex mutex_;
+    boost::unique_lock<boost::mutex> lock;
     bool allocated;
     std::ostream *f;
     std::ofstream &file() {
@@ -58,7 +139,7 @@ class Internals {
         }
         return *(std::ofstream *)f;
     }
-    Internals() : allocated(false), f(0) {}
+    Internals() : lock(mutex_),allocated(false), f(0) {}
     ~Internals() { /**f << std::flush;*/
         if (allocated) {
             delete f;
@@ -66,7 +147,8 @@ class Internals {
     }
 };
 
-FileLogger::FileLogger(const char *fname) : internals(0), lock(mutex_) {
+
+FileLogger::FileLogger(const char *fname) : internals(0) {
     internals = new Internals;
     char buf[40];
     getTimeString(buf, 40);
@@ -92,7 +174,7 @@ std::ostream &FileLogger::f() {
 
 FileLogger::~FileLogger() {
     delete internals;
-    lock.unlock();
+    internals->lock.unlock();
 }
 
 void FileLogger::getTimeString(char *buf, size_t buf_size) {
@@ -132,21 +214,21 @@ void Logger::getTimeString(char *buf, size_t buf_size) {
 bool LogState::includes(int flag_num) { return state_flags.count(flag_num); }
 
 std::ostream &Logger::log(Level l) {
-    boost::mutex::scoped_lock lock(mutex_);
-    if (!dummy_output) {
-        dummy_output = new std::stringstream;
+    boost::mutex::scoped_lock lock(internals->mutex_);
+    if (!internals->dummy_output) {
+        internals->dummy_output = new std::stringstream;
     }
 
     if (LogState::instance()->includes(l)) {
         char buf[50];
         getTimeString(buf, 50);
-        *log_stream << buf;
-        return *log_stream;
+        *internals->log_stream << buf;
+        return *internals->log_stream;
     }
     else {
-        dummy_output->clear();
-        dummy_output->seekp(0);
-        return *dummy_output;
+        internals->dummy_output->clear();
+        internals->dummy_output->seekp(0);
+        return *internals->dummy_output;
     }
 }
 std::ostream &LogState::operator<<(std::ostream &out) const {

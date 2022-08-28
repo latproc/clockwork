@@ -21,8 +21,7 @@
 #ifndef cwlang_Logger_h
 #define cwlang_Logger_h
 
-#include <boost/thread/mutex.hpp>
-#include <fstream>
+#include <ostream>
 #include <libgen.h>
 #include <map>
 #include <set>
@@ -32,64 +31,30 @@
 #include <vector>
 
 extern const char *program_name;
-class Internals;
 class FileLogger {
   public:
-    Internals *internals;
     std::ostream &f();
     FileLogger(const char *fname);
     ~FileLogger();
 
     void getTimeString(char *buf, size_t buf_size);
-    boost::mutex mutex_;
-    boost::unique_lock<boost::mutex> lock;
+private:
+    class Internals;
+    Internals *internals;
 };
 
 class LogState {
   public:
-    static LogState *instance() {
-        if (!state_instance) {
-            state_instance = new LogState;
-        }
-        return state_instance;
-    }
-    static void cleanup() { delete state_instance; }
-    int define(std::string new_name) {
-        int logid = name_map[new_name] = flag_names.size();
-        flag_names.push_back(new_name);
-        return logid;
-    }
-    int lookup(const std::string &name) {
-        NameMapIterator iter = name_map.find(name);
-        if (iter != name_map.end()) {
-            return (*iter).second;
-        }
-        else {
-            return 0;
-        }
-    }
-    int insert(int flag_num) {
-        state_flags.insert(flag_num);
-        return flag_num;
-    }
-    int insert(std::string name) {
-        NameMapIterator iter = name_map.find(name);
-        if (iter != name_map.end()) {
-            int n = (*iter).second;
-            state_flags.insert(n);
-            return n;
-        }
-        return -1;
-    }
-    void erase(int flag_num) { state_flags.erase(flag_num); }
-    void erase(std::string name) {
-        NameMapIterator iter = name_map.find(name);
-        if (iter != name_map.end()) {
-            state_flags.insert((*iter).second);
-        }
-    }
+    static LogState *instance();
+    static void cleanup();
+    int define(std::string new_name);
+    int lookup(const std::string &name);
+    int insert(int flag_num);
+    int insert(std::string name);
+    void erase(int flag_num);
+    void erase(std::string name);
     bool includes(int flag_num);
-    bool includes(std::string name) { return name_map.find(name) != name_map.end(); }
+    bool includes(std::string name);
     std::ostream &operator<<(std::ostream &out) const;
 
     typedef std::map<std::string, int>::iterator NameMapIterator;
@@ -106,34 +71,27 @@ std::ostream &operator<<(std::ostream &, const LogState &);
 
 class Logger {
   public:
-    static Logger *instance() {
-        if (!logger_instance) {
-            logger_instance = new Logger;
-        }
-        return logger_instance;
-    }
+    static Logger *instance();
+
     typedef int Level;
     static int None;
     static int Important;
     static int Debug;
     static int Everything;
-    Level level() { return log_level; }
-    void setLevel(Level n) { log_level = n; }
+    Level level();
+    void setLevel(Level n);
     void setLevel(std::string level_name);
     std::ostream &log(Level l);
-    void setOutputStream(std::ostream *out) { log_stream = out; }
+    void setOutputStream(std::ostream *out);
     static void getTimeString(char *buf, size_t buf_size);
-    static void cleanup() { delete logger_instance; }
+    static void cleanup();
+
+    class Internals;
+    static Internals *internals;
 
   private:
+    ~Logger();
     Logger();
-    static Logger *logger_instance;
-    Level log_level;
-    std::stringstream *dummy_output;
-    Logger(const Logger &);
-    Logger &operator=(const Logger &);
-    std::ostream *log_stream;
-    boost::mutex mutex_;
 };
 
 #define LOGS(l) (LogState::instance()->includes((l)))
